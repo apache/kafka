@@ -276,7 +276,7 @@ public class RemoteLogMetadataCache {
     /**
      * Returns all the segments stored in this cache.
      *
-     * @return
+     * @return Iterator over all RemoteLogSegmentMetadata instances in the cache
      */
     Iterator<RemoteLogSegmentMetadata> listAllRemoteLogSegments() {
         // Return all the segments including unreferenced metadata.

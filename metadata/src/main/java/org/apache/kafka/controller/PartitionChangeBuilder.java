@@ -109,14 +109,15 @@ public class PartitionChangeBuilder {
         int partitionId,
         IntPredicate isAcceptableLeader,
         MetadataVersion metadataVersion,
-        int minISR
+        int minISR,
+        boolean eligibleLeaderReplicasEnabled
     ) {
         this.partition = partition;
         this.topicId = topicId;
         this.partitionId = partitionId;
         this.isAcceptableLeader = isAcceptableLeader;
         this.metadataVersion = metadataVersion;
-        this.eligibleLeaderReplicasEnabled = false;
+        this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
         this.minISR = minISR;
 
         this.targetIsr = Replicas.toList(partition.isr);
@@ -173,11 +174,6 @@ public class PartitionChangeBuilder {
 
     public PartitionChangeBuilder setTargetLeaderRecoveryState(LeaderRecoveryState targetLeaderRecoveryState) {
         this.targetLeaderRecoveryState = targetLeaderRecoveryState;
-        return this;
-    }
-
-    public PartitionChangeBuilder setEligibleLeaderReplicasEnabled(boolean eligibleLeaderReplicasEnabled) {
-        this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
         return this;
     }
 
@@ -494,12 +490,10 @@ public class PartitionChangeBuilder {
 
     private void maybeUpdateLastKnownLeader(PartitionChangeRecord record) {
         if (!useLastKnownLeaderInBalancedRecovery || !eligibleLeaderReplicasEnabled) return;
-        if (record.isr() != null && record.isr().isEmpty() && (partition.lastKnownElr.length != 1 ||
-            partition.lastKnownElr[0] != partition.leader)) {
+        if (record.leader() == NO_LEADER && partition.lastKnownElr.length == 0) {
             // Only update the last known leader when the first time the partition becomes leaderless.
             record.setLastKnownElr(List.of(partition.leader));
-        } else if ((record.leader() >= 0 || (partition.leader != NO_LEADER && record.leader() != NO_LEADER))
-            && partition.lastKnownElr.length > 0) {
+        } else if (record.leader() >= 0 && partition.lastKnownElr.length > 0) {
             // Clear the LastKnownElr field if the partition will have or continues to have a valid leader.
             record.setLastKnownElr(List.of());
         }

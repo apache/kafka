@@ -17,7 +17,6 @@
 
 package org.apache.kafka.server;
 
-import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
@@ -25,20 +24,18 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfig;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfigCollection;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.RequestContext;
-import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
-import org.apache.kafka.server.common.ControllerRequestCompletionHandler;
-import org.apache.kafka.server.common.NodeToControllerChannelManager;
 import org.apache.kafka.server.config.AbstractKafkaConfig;
+import org.apache.kafka.server.config.ReplicationConfigs;
+import org.apache.kafka.server.config.ServerLogConfigs;
+import org.apache.kafka.server.quota.ControllerMutationQuota;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,36 +53,59 @@ import java.util.stream.Stream;
 
 public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager {
 
-    public static final int DEFAULT_TOPIC_ERROR_CACHE_CAPACITY = 1000;
+    private static final int DEFAULT_TOPIC_ERROR_CACHE_CAPACITY = 1000;
     private static final Logger LOGGER = LoggerFactory.getLogger(DefaultAutoTopicCreationManager.class);
 
     private final AbstractKafkaConfig config;
-    private final NodeToControllerChannelManager channelManager;
+    private final TopicCreator topicCreator;
     private final Supplier<Properties> groupCoordinator;
     private final Supplier<Properties> shareCoordinator;
     private final Supplier<Properties> transactionTopicConfigsSupplier;
+    private final Time time;
     private final Set<String> inflightTopics = ConcurrentHashMap.newKeySet();
     private final ExpiringErrorCache topicCreationErrorCache;
 
     public DefaultAutoTopicCreationManager(
             AbstractKafkaConfig config,
-            NodeToControllerChannelManager channelManager,
+            Supplier<Properties> groupCoordinatorConfigsSupplier,
+            Supplier<Properties> transactionTopicConfigsSupplier,
+            Supplier<Properties> shareCoordinatorConfigsSupplier,
+            TopicCreator topicCreator,
+            Time time
+    ) {
+        this(
+                config,
+                groupCoordinatorConfigsSupplier,
+                transactionTopicConfigsSupplier,
+                shareCoordinatorConfigsSupplier,
+                time,
+                topicCreator,
+                // Hardcoded default capacity; can be overridden in tests via constructor param
+                DEFAULT_TOPIC_ERROR_CACHE_CAPACITY
+        );
+    }
+
+    // VisibleForTesting
+    DefaultAutoTopicCreationManager(
+            AbstractKafkaConfig config,
             Supplier<Properties> groupCoordinatorConfigsSupplier,
             Supplier<Properties> transactionTopicConfigsSupplier,
             Supplier<Properties> shareCoordinatorConfigsSupplier,
             Time time,
+            TopicCreator topicCreator,
             int topicErrorCacheCapacity
     ) {
         this.config = config;
-        this.channelManager = channelManager;
         this.groupCoordinator = groupCoordinatorConfigsSupplier;
         this.shareCoordinator = shareCoordinatorConfigsSupplier;
         this.transactionTopicConfigsSupplier = transactionTopicConfigsSupplier;
+        this.time = time;
+        this.topicCreator = topicCreator;
         this.topicCreationErrorCache = new ExpiringErrorCache(topicErrorCacheCapacity, time);
     }
 
     @Override
-    public List<MetadataResponseTopic> createTopics(Set<String> topics, Optional<RequestContext> metadataRequestContext) {
+    public List<MetadataResponseTopic> createTopics(Set<String> topics, ControllerMutationQuota controllerMutationQuota, Optional<RequestContext> metadataRequestContext) {
         var creatableTopics = new HashMap<String, CreatableTopic>();
         var uncreatableTopicResponses = new ArrayList<MetadataResponseTopic>();
         topics.forEach(topic -> {
@@ -117,8 +137,25 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
             RequestContext requestContext,
             long timeoutMs
     ) {
-        if (!topics.isEmpty()) {
-            sendCreateTopicRequestWithErrorCaching(topics, Optional.of(requestContext), timeoutMs);
+        if (topics.isEmpty()) {
+            return;
+        }
+
+        var currentTimeMs = time.milliseconds();
+
+        // Filter out topics that are:
+        // 1. Already in error cache (back-off period)
+        // 2. Already in-flight (concurrent request)
+        var topicsToCreate = new HashMap<String, CreatableTopic>();
+        topics.forEach((topicName, creatableTopic) -> {
+            if (!topicCreationErrorCache.hasError(topicName, currentTimeMs)
+                    && inflightTopics.add(topicName)) {
+                topicsToCreate.put(topicName, creatableTopic);
+            }
+        });
+
+        if (!topicsToCreate.isEmpty()) {
+            sendCreateTopicRequestWithErrorCaching(topicsToCreate, requestContext, timeoutMs);
         }
     }
 
@@ -131,66 +168,28 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
             Map<String, CreatableTopic> creatableTopics,
             Optional<RequestContext> requestContext
     ) {
-        var topicsToCreate = new CreateTopicsRequestData.CreatableTopicCollection(creatableTopics.size());
-        topicsToCreate.addAll(creatableTopics.values());
-        var createTopicsRequest = new CreateTopicsRequest.Builder(
-                new CreateTopicsRequestData()
-                        .setTimeoutMs(config.requestTimeoutMs())
-                        .setTopics(topicsToCreate)
-        );
+        var createTopicsRequest = makeCreateTopicsRequestBuilder(creatableTopics);
 
-        var requestCompletionHandler = new ControllerRequestCompletionHandler() {
-            @Override
-            public void onTimeout() {
-                clearInflightRequests(creatableTopics);
-                LOGGER.debug("Auto topic creation timed out for {}.", creatableTopics.keySet());
-            }
+        var responseFuture = requestContext
+                .map(context -> topicCreator.createTopicWithPrincipal(context, createTopicsRequest))
+                .orElseGet(() -> topicCreator.createTopicWithoutPrincipal(createTopicsRequest));
 
-            @Override
-            public void onComplete(ClientResponse response) {
-                clearInflightRequests(creatableTopics);
-                if (response.authenticationException() != null) {
-                    LOGGER.warn("Auto topic creation failed for {} with authentication exception.", creatableTopics.keySet());
-                } else if (response.versionMismatch() != null) {
-                    LOGGER.warn("Auto topic creation failed for {} with invalid version exception.", creatableTopics.keySet());
-                } else {
-                    if (response.hasResponse()) {
-                        if (response.responseBody() instanceof CreateTopicsResponse createTopicsResponse) {
-                            createTopicsResponse.data().topics().forEach(topicResult -> {
-                                var error = Errors.forCode(topicResult.errorCode());
-                                if (error != Errors.NONE) {
-                                    LOGGER.warn("Auto topic creation failed for {} with error '{}': {}.", topicResult.name(), error.name(), topicResult.errorMessage());
-                                }
-                            });
-                        } else {
-                            LOGGER.warn("Auto topic creation request received unexpected response type: {}.", response.responseBody().getClass().getSimpleName());
-                        }
+        responseFuture.whenComplete((response, throwable) -> {
+            clearInflightRequests(creatableTopics);
+            if (throwable != null) {
+                logError(creatableTopics, throwable);
+            } else if (response != null) {
+                response.data().topics().forEach(topicResult -> {
+                    var error = Errors.forCode(topicResult.errorCode());
+                    if (error != Errors.NONE) {
+                        LOGGER.warn("Auto topic creation failed for {} with error '{}': {}.",
+                                topicResult.name(), error.name(), topicResult.errorMessage());
                     }
-                    LOGGER.debug("Auto topic creation completed for {} with response {}.", creatableTopics.keySet(), response.responseBody());
-                }
+                });
+            } else {
+                LOGGER.warn("CreateTopicsResponse future completed with null response and no exception");
             }
-        };
-
-        var request = requestContext.<AbstractRequest.Builder<? extends AbstractRequest>>map(context -> {
-            short requestVersion = channelManager.controllerApiVersions()
-                    .map(nodeApiVersions -> nodeApiVersions.latestUsableVersion(ApiKeys.CREATE_TOPICS))
-                    // We will rely on the Metadata request to be retried in the case
-                    // that the latest version is not usable by the controller.
-                    .orElseGet(ApiKeys.CREATE_TOPICS::latestVersion);
-
-            // Borrow client information such as client id and correlation id from the original request,
-            // in order to correlate the create request with the original metadata request.
-            var requestHeader = new RequestHeader(
-                    ApiKeys.CREATE_TOPICS,
-                    requestVersion,
-                    context.clientId(),
-                    context.correlationId()
-            );
-
-            return ForwardingManagerUtils.buildEnvelopeRequest(context, createTopicsRequest.build(requestVersion).serializeWithHeader(requestHeader));
-        }).orElse(createTopicsRequest);
-
-        channelManager.sendRequest(request, requestCompletionHandler);
+        });
 
         var creatableTopicResponses = creatableTopics.keySet().stream()
                 .map(topic -> new MetadataResponseTopic()
@@ -206,6 +205,28 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
     private void clearInflightRequests(Map<String, CreatableTopic> creatableTopics) {
         creatableTopics.keySet().forEach(inflightTopics::remove);
         LOGGER.debug("Cleared inflight topic creation state for {}.", creatableTopics);
+    }
+
+    private CreateTopicsRequest.Builder makeCreateTopicsRequestBuilder(Map<String, CreatableTopic> creatableTopics) {
+        var topicsToCreate = new CreateTopicsRequestData.CreatableTopicCollection(creatableTopics.size());
+        topicsToCreate.addAll(creatableTopics.values());
+        return new CreateTopicsRequest.Builder(
+                new CreateTopicsRequestData()
+                        .setTimeoutMs(config.requestTimeoutMs())
+                        .setTopics(topicsToCreate)
+        );
+    }
+
+    private static void logError(Map<String, CreatableTopic> creatableTopics, Throwable throwable) {
+        if (throwable instanceof org.apache.kafka.common.errors.TimeoutException) {
+            LOGGER.debug("Auto topic creation timed out for {}.", creatableTopics.keySet());
+        } else if (throwable instanceof org.apache.kafka.common.errors.AuthenticationException) {
+            LOGGER.warn("Auto topic creation failed for {} with authentication exception.", creatableTopics.keySet());
+        } else if (throwable instanceof org.apache.kafka.common.errors.UnsupportedVersionException) {
+            LOGGER.warn("Auto topic creation failed for {} with invalid version exception.", creatableTopics.keySet());
+        } else {
+            LOGGER.warn("Auto topic creation failed for {} with exception.", creatableTopics.keySet(), throwable);
+        }
     }
 
     private CreatableTopic creatableTopic(String topic) {
@@ -234,10 +255,18 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
                     .setReplicationFactor(shareCoordinatorConfig.shareCoordinatorStateTopicReplicationFactor())
                     .setConfigs(convertToTopicConfigCollections(shareCoordinator.get()));
             }
-            default -> new CreatableTopic()
-                    .setName(topic)
-                    .setNumPartitions(config.numPartitions())
-                    .setReplicationFactor((short) config.defaultReplicationFactor());
+            default -> {
+                int numPartitions = config.originals().containsKey(ServerLogConfigs.NUM_PARTITIONS_CONFIG)
+                        ? config.numPartitions()
+                        : CreateTopicsRequest.NO_NUM_PARTITIONS;
+                short replicationFactor = config.originals().containsKey(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG)
+                        ? (short) config.defaultReplicationFactor()
+                        : CreateTopicsRequest.NO_REPLICATION_FACTOR;
+                yield new CreatableTopic()
+                        .setName(topic)
+                        .setNumPartitions(numPartitions)
+                        .setReplicationFactor(replicationFactor);
+            }
         };
     }
 
@@ -261,76 +290,30 @@ public class DefaultAutoTopicCreationManager implements AutoTopicCreationManager
         }
     }
 
-    private List<MetadataResponseTopic> sendCreateTopicRequestWithErrorCaching(
-            Map<String, CreateTopicsRequestData.CreatableTopic> creatableTopics,
-            Optional<RequestContext> requestContext,
+    private void sendCreateTopicRequestWithErrorCaching(
+            Map<String, CreatableTopic> creatableTopics,
+            RequestContext requestContext,
             long timeoutMs
     ) {
-        var topicsToCreate = new CreateTopicsRequestData.CreatableTopicCollection(creatableTopics.size());
-        topicsToCreate.addAll(creatableTopics.values());
+        var createTopicsRequest = makeCreateTopicsRequestBuilder(creatableTopics);
 
-        var createTopicsRequest = new CreateTopicsRequest.Builder(
-                new CreateTopicsRequestData()
-                        .setTimeoutMs(config.requestTimeoutMs())
-                        .setTopics(topicsToCreate)
-        );
+        var responseFuture = topicCreator.createTopicWithPrincipal(requestContext, createTopicsRequest);
 
-        var requestCompletionHandler = new ControllerRequestCompletionHandler() {
-            @Override
-            public void onTimeout() {
-                clearInflightRequests(creatableTopics);
-                LOGGER.debug("Auto topic creation timed out for {}.", creatableTopics.keySet());
-                cacheTopicCreationErrors(creatableTopics.keySet(), "Auto topic creation timed out.", timeoutMs);
+        responseFuture.whenComplete((response, throwable) -> {
+            clearInflightRequests(creatableTopics);
+            if (throwable != null) {
+                logError(creatableTopics, throwable);
+                var errorMessage = throwable.getMessage() != null ? throwable.getMessage() : throwable.toString();
+                cacheTopicCreationErrors(creatableTopics.keySet(), errorMessage, timeoutMs);
+            } else if (response != null) {
+                LOGGER.debug("Auto topic creation completed for {} with response {}.", creatableTopics.keySet(), response);
+                cacheTopicCreationErrorsFromResponse(response, timeoutMs);
+            } else {
+                var ex = new IllegalStateException("CreateTopicsResponse future completed with null response and no exception");
+                LOGGER.error("Auto topic creation failed for {} due to unexpected future completion state.", creatableTopics.keySet(), ex);
+                cacheTopicCreationErrors(creatableTopics.keySet(), ex.getMessage(), timeoutMs);
             }
-
-            @Override
-            public void onComplete(ClientResponse response) {
-                clearInflightRequests(creatableTopics);
-                if (response.authenticationException() != null) {
-                    var authException = response.authenticationException();
-                    LOGGER.warn("Auto topic creation failed for {} with authentication exception: {}", creatableTopics.keySet(), authException.getMessage());
-                    cacheTopicCreationErrors(creatableTopics.keySet(), authException.getMessage(), timeoutMs);
-                } else if (response.versionMismatch() != null) {
-                    var versionException = response.versionMismatch();
-                    LOGGER.warn("Auto topic creation failed for {} with version mismatch exception: {}", creatableTopics.keySet(), versionException.getMessage());
-                    cacheTopicCreationErrors(creatableTopics.keySet(), versionException.getMessage(), timeoutMs);
-                } else {
-                    var body = response.responseBody();
-                    if (body instanceof CreateTopicsResponse) {
-                        cacheTopicCreationErrorsFromResponse((CreateTopicsResponse) body, timeoutMs);
-                    } else {
-                        LOGGER.debug("Auto topic creation completed for {} with response {}.", creatableTopics.keySet(), response.responseBody());
-                    }
-                }
-            }
-        };
-
-        var request = requestContext.<AbstractRequest.Builder<? extends AbstractRequest>>map(context -> {
-            short requestVersion = channelManager.controllerApiVersions()
-                    .map(nodeApiVersions -> nodeApiVersions.latestUsableVersion(ApiKeys.CREATE_TOPICS))
-                    // We will rely on the Metadata request to be retried in the case
-                    // that the latest version is not usable by the controller.
-                    .orElseGet(ApiKeys.CREATE_TOPICS::latestVersion);
-
-            // Borrow client information such as client id and correlation id from the original request,
-            // in order to correlate the create request with the original metadata request.
-            var requestHeader = new RequestHeader(
-                    ApiKeys.CREATE_TOPICS,
-                    requestVersion,
-                    context.clientId(),
-                    context.correlationId());
-            return ForwardingManagerUtils.buildEnvelopeRequest(context,
-                    createTopicsRequest.build(requestVersion).serializeWithHeader(requestHeader));
-        }).orElse(createTopicsRequest);
-
-        channelManager.sendRequest(request, requestCompletionHandler);
-
-        return creatableTopics.keySet().stream()
-                .map(topic -> new MetadataResponseTopic()
-                        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                        .setName(topic)
-                        .setIsInternal(Topic.isInternal(topic)))
-                .toList();
+        });
     }
 
     private void cacheTopicCreationErrors(Set<String> topicNames, String errorMessage, long ttlMs) {

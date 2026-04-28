@@ -317,7 +317,7 @@ public class StandbyTaskEOSIntegrationTest {
         );
         waitForCondition(
             () -> streamInstanceOneRecovery.state() == KafkaStreams.State.ERROR,
-            "Stream instance 1 did not go into error state. Is in " + streamInstanceOneRecovery.state() + " state."
+                () -> "Stream instance 1 did not go into error state. Is in " + streamInstanceOneRecovery.state() + " state."
         );
     }
 
@@ -358,7 +358,6 @@ public class StandbyTaskEOSIntegrationTest {
                         }
 
                         store.put(key, value);
-                        store.flush();
 
                         if (key == KEY_1) {
                             // after error injection, we need to avoid a consecutive error after rebalancing

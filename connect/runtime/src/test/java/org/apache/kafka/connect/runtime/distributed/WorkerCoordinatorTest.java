@@ -140,8 +140,7 @@ public class WorkerCoordinatorTest {
                                                         Optional.empty(),
                                                         null,
                                                         retryBackoffMs,
-                                                        retryBackoffMaxMs,
-                                                        true);
+                                                        retryBackoffMaxMs);
         this.coordinator = new WorkerCoordinator(rebalanceConfig,
                                                  logContext,
                                                  consumerClient,

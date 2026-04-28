@@ -63,23 +63,52 @@ def hard_bounce(test, topic, broker_type):
         prev_broker_node = broker_node(test, topic, broker_type)
         test.kafka.signal_node(prev_broker_node, sig=signal.SIGKILL)
 
-        # Since this is a hard kill, we need to make sure the process is down and that
-        # zookeeper has registered the loss by expiring the broker's session timeout.
-
-        wait_until(lambda: not test.kafka.pids(prev_broker_node) and
-                           not (quorum.for_test(test.test_context) == quorum.zk and test.kafka.is_registered(prev_broker_node)),
+        wait_until(lambda: not test.kafka.pids(prev_broker_node),
                    timeout_sec=test.kafka.zk_session_timeout + 5,
                    err_msg="Failed to see timely deregistration of hard-killed broker %s" % str(prev_broker_node.account))
 
         test.kafka.start_node(prev_broker_node)
-    
 
-    
+
+def bulk_clean_shutdown(test, num_failures):
+    for num in range(0, num_failures - 1):
+        signal_node(test, test.kafka.nodes[num], signal.SIGTERM)
+
+def bulk_hard_shutdown(test, num_failures):
+    for num in range(0, num_failures - 1):
+        signal_node(test, test.kafka.nodes[num], signal.SIGKILL)
+
+def bulk_clean_bounce(test, num_failures):
+    for i in range(5):
+        for num in range(0, num_failures - 1):
+            prev_broker_node = test.kafka.nodes[num]
+            test.kafka.restart_node(prev_broker_node, clean_shutdown=True)
+
+def bulk_hard_bounce(test, num_failures):
+    for i in range(5):
+        for num in range(0, num_failures - 1):
+            prev_broker_node = test.kafka.nodes[num]
+            test.kafka.signal_node(prev_broker_node, sig=signal.SIGKILL)
+
+            wait_until(lambda: not test.kafka.pids(prev_broker_node),
+                       timeout_sec=test.kafka.zk_session_timeout + 5,
+                       err_msg="Failed to see timely deregistration of hard-killed broker %s" % str(prev_broker_node.account))
+
+            test.kafka.start_node(prev_broker_node)
+
+
 failures = {
     "clean_shutdown": clean_shutdown,
     "hard_shutdown": hard_shutdown,
     "clean_bounce": clean_bounce,
     "hard_bounce": hard_bounce
+}
+
+many_failures = {
+    "clean_shutdown": bulk_clean_shutdown,
+    "hard_shutdown": bulk_hard_shutdown,
+    "clean_bounce": bulk_clean_bounce,
+    "hard_bounce": bulk_hard_bounce
 }
         
 class StreamsBrokerBounceTest(Test):
@@ -123,14 +152,7 @@ class StreamsBrokerBounceTest(Test):
         failures[failure_mode](self, topic, broker_type)
 
     def fail_many_brokers(self, failure_mode, num_failures):
-        sig = signal.SIGTERM
-        if (failure_mode == "clean_shutdown"):
-            sig = signal.SIGTERM
-        else:
-            sig = signal.SIGKILL
-            
-        for num in range(0, num_failures - 1):
-            signal_node(self, self.kafka.nodes[num], sig)
+        many_failures[failure_mode](self, num_failures)
 
     def confirm_topics_on_all_brokers(self, expected_topic_set):
         for node in self.kafka.nodes:

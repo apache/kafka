@@ -282,7 +282,7 @@ public class ClientsTestUtils {
         TestUtils.waitForCondition(() -> {
             consumer.poll(Duration.ofMillis(100));
             return consumer.assignment().equals(expectedAssignment);
-        }, "Timed out while awaiting expected assignment " + expectedAssignment + ". " +
+        }, () -> "Timed out while awaiting expected assignment " + expectedAssignment + ". " +
                 "The current assignment is " + consumer.assignment()
         );
     }

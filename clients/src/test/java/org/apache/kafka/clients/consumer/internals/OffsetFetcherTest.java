@@ -58,7 +58,6 @@ import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -246,7 +245,7 @@ public class OffsetFetcherTest {
         assertTrue(subscriptions.hasValidPosition(tp0));
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(subscriptions.isFetchable(tp0));
-        assertEquals(subscriptions.position(tp0).offset, 5L);
+        assertEquals(5L, subscriptions.position(tp0).offset);
     }
 
     @Test
@@ -395,7 +394,7 @@ public class OffsetFetcherTest {
 
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(metadata.updateRequested());
-        assertOptional(metadata.lastSeenLeaderEpoch(tp0), epoch -> assertEquals((long) epoch, 2));
+        assertOptional(metadata.lastSeenLeaderEpoch(tp0), epoch -> assertEquals(2, (long) epoch));
     }
 
     @Test
@@ -851,12 +850,12 @@ public class OffsetFetcherTest {
 
             Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap =
                 offsetFetcher.offsetsForTimes(
-                    Utils.mkMap(Utils.mkEntry(tp0, fetchTimestamp),
-                    Utils.mkEntry(tp1, fetchTimestamp)), time.timer(Integer.MAX_VALUE));
+                    Map.of(tp0, fetchTimestamp, tp1, fetchTimestamp),
+                    time.timer(Integer.MAX_VALUE));
 
-            assertEquals(Utils.mkMap(
-                Utils.mkEntry(tp0, new OffsetAndTimestamp(4L, fetchTimestamp)),
-                Utils.mkEntry(tp1, new OffsetAndTimestamp(5L, fetchTimestamp))), offsetAndTimestampMap);
+            assertEquals(Map.of(
+                tp0, new OffsetAndTimestamp(4L, fetchTimestamp),
+                tp1, new OffsetAndTimestamp(5L, fetchTimestamp)), offsetAndTimestampMap);
 
             // The NOT_LEADER exception future should not be cleared as we already refreshed the metadata before
             // first retry, thus never hitting.
@@ -902,7 +901,7 @@ public class OffsetFetcherTest {
                 ListOffsetsRequest offsetRequest = (ListOffsetsRequest) body;
                 int epoch = offsetRequest.topics().get(0).partitions().get(0).currentLeaderEpoch();
                 assertTrue(epoch != ListOffsetsResponse.UNKNOWN_EPOCH, "Expected Fetcher to set leader epoch in request");
-                assertEquals(epoch, 99, "Expected leader epoch to match epoch from metadata update");
+                assertEquals(99, epoch, "Expected leader epoch to match epoch from metadata update");
                 return true;
             } else {
                 fail("Should have seen ListOffsetRequest");

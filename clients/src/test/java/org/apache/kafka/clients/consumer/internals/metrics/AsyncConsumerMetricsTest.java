@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class AsyncConsumerMetricsTest {
+public class AsyncConsumerMetricsTest extends AbstractConsumerMetricsManagerTest {
     private static final long METRIC_VALUE = 123L;
 
     private final Metrics metrics = new Metrics();
@@ -51,6 +51,11 @@ public class AsyncConsumerMetricsTest {
             consumerMetrics.close();
         }
         metrics.close();
+    }
+
+    @Override
+    protected AbstractConsumerMetricsManager metricsManager(Metrics metrics, String groupDescription) {
+        return new AsyncConsumerMetrics(metrics, groupDescription);
     }
 
     @ParameterizedTest
@@ -113,13 +118,13 @@ public class AsyncConsumerMetricsTest {
 
         // Then:
         assertEquals(
+            (double) 10,
             metrics.metric(
                 metrics.metricName(
                     "application-event-queue-size",
                     groupName
                 )
-            ).metricValue(),
-            (double) 10
+            ).metricValue()
         );
     }
 
@@ -156,13 +161,13 @@ public class AsyncConsumerMetricsTest {
 
         // Then:
         assertEquals(
+            (double) 10,
             metrics.metric(
                 metrics.metricName(
                     "unsent-requests-queue-size",
                     groupName
                 )
-            ).metricValue(),
-            (double) 10
+            ).metricValue()
         );
     }
 
@@ -187,13 +192,13 @@ public class AsyncConsumerMetricsTest {
 
         // Then:
         assertEquals(
+            (double) 10,
             metrics.metric(
                 metrics.metricName(
                     "background-event-queue-size",
                     groupName
                 )
-            ).metricValue(),
-            (double) 10
+            ).metricValue()
         );
     }
 
@@ -223,13 +228,13 @@ public class AsyncConsumerMetricsTest {
 
     private void assertMetricValue(final String name, final String groupName) {
         assertEquals(
+            (double) METRIC_VALUE,
             metrics.metric(
                 metrics.metricName(
                     name,
                     groupName
                 )
-            ).metricValue(),
-            (double) METRIC_VALUE
+            ).metricValue()
         );
     }
 }

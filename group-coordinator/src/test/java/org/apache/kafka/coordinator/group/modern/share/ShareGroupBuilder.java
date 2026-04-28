@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.modern.share;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
+import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 
 import java.util.ArrayList;
@@ -31,6 +32,7 @@ public class ShareGroupBuilder {
     private final String groupId;
     private final int groupEpoch;
     private int assignmentEpoch;
+    private long assignmentTimestamp;
     private final Map<String, ShareGroupMember> members = new HashMap<>();
     private final Map<String, Assignment> assignments = new HashMap<>();
     private long metadataHash = 0L;
@@ -38,7 +40,8 @@ public class ShareGroupBuilder {
     public ShareGroupBuilder(String groupId, int groupEpoch) {
         this.groupId = groupId;
         this.groupEpoch = groupEpoch;
-        this.assignmentEpoch = 0;
+        this.assignmentEpoch = TargetAssignmentMetadata.INITIAL.assignmentEpoch();
+        this.assignmentTimestamp = TargetAssignmentMetadata.INITIAL.assignmentTimestamp();
     }
 
     public ShareGroupBuilder withMember(ShareGroupMember member) {
@@ -61,6 +64,11 @@ public class ShareGroupBuilder {
         return this;
     }
 
+    public ShareGroupBuilder withAssignmentTimestamp(long assignmentTimestamp) {
+        this.assignmentTimestamp = assignmentTimestamp;
+        return this;
+    }
+
     public List<CoordinatorRecord> build() {
         List<CoordinatorRecord> records = new ArrayList<>();
 
@@ -78,7 +86,7 @@ public class ShareGroupBuilder {
         );
 
         // Add target assignment epoch.
-        records.add(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochRecord(groupId, assignmentEpoch));
+        records.add(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(groupId, assignmentEpoch, assignmentTimestamp));
 
         // Add current assignment records for members.
         members.forEach((memberId, member) ->

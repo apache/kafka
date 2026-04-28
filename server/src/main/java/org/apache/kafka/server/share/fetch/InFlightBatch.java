@@ -23,6 +23,8 @@ import org.apache.kafka.server.util.timer.Timer;
 import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
+import static org.apache.kafka.server.share.fetch.InFlightState.EMPTY_MEMBER_ID;
+
 /**
  * The InFlightBatch maintains the in-memory state of the fetched records i.e. in-flight records.
  * <p>
@@ -186,6 +188,32 @@ public class InFlightBatch {
         String newMemberId
     ) {
         return inFlightState().startStateTransition(newState, ops, maxDeliveryCount, newMemberId);
+    }
+
+    /**
+     * This method initializes the offset states in two ranges:
+     * [firstOffset to targetOffset]: initialize each offset using the current batch state and schedule
+     * an acquisition lock timeout task for each offset.
+     * (targetOffset to lastOffset]: initialize each offset to {@link RecordState#AVAILABLE}
+     * and do not schedule any timer task for these offsets.
+     *
+     * @param targetOffset The target offset up to which the offset states are initialized using the current batch state.
+     * @param delayMs The delay in milliseconds for the acquisition lock timeout task.
+     */
+    public void maybeInitializeOffsetStateUpdate(long targetOffset, int delayMs) {
+        if (offsetState == null) {
+            offsetState = new ConcurrentSkipListMap<>();
+            for (long offset = this.firstOffset; offset <= this.lastOffset; offset++) {
+                if (offset <= targetOffset) {
+                    AcquisitionLockTimerTask timerTask = acquisitionLockTimerTask(batchState.memberId(), offset, offset, delayMs);
+                    offsetState.put(offset, new InFlightState(batchState.state(), batchState.deliveryCount(), batchState.memberId(), timerTask));
+                    timer.add(timerTask);
+                } else {
+                    offsetState.put(offset, new InFlightState(RecordState.AVAILABLE, batchState.deliveryCount() - 1, EMPTY_MEMBER_ID));
+                }
+            }
+            batchState = null;
+        }
     }
 
     /**

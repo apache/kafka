@@ -16,8 +16,11 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.metrics.ShareRebalanceMetricsManager;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -31,6 +34,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Group manager for a single consumer that has a group id defined in the config
@@ -81,7 +85,7 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
                                   String groupId,
                                   String rackId,
                                   SubscriptionState subscriptions,
-                                  ConsumerMetadata metadata,
+                                  Metadata metadata,
                                   Time time,
                                   Metrics metrics) {
         this(logContext,
@@ -98,7 +102,7 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
                            String groupId,
                            String rackId,
                            SubscriptionState subscriptions,
-                           ConsumerMetadata metadata,
+                           Metadata metadata,
                            Time time,
                            ShareRebalanceMetricsManager metricsManager) {
         super(groupId,
@@ -174,6 +178,19 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
         }
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * For the ShareConsumer, assignment changes are applied immediately in the background thread.
+     */
+    @Override
+    protected CompletableFuture<Void> signalPartitionsAssigned(TopicIdPartitionSet assignedPartitions,
+                                                               SortedSet<TopicPartition> addedPartitions) {
+        subscriptions.assignFromSubscribedAwaitingCallback(assignedPartitions.topicPartitions(), addedPartitions);
+        notifyAssignmentChange(assignedPartitions.topicPartitions());
+        return CompletableFuture.completedFuture(null);
+    }
+
     @Override
     public int joinGroupEpoch() {
         return ShareGroupHeartbeatRequest.JOIN_GROUP_MEMBER_EPOCH;
@@ -182,5 +199,17 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
     @Override
     public int leaveGroupEpoch() {
         return ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * For the ShareConsumer, full reconciliations can always be triggered from the background thread
+     * (fully updates assignment).
+     */
+    @Override
+    public PollResult poll(final long currentTimeMs) {
+        maybeReconcile(true);
+        return PollResult.EMPTY;
     }
 }

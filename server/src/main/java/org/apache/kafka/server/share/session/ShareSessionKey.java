@@ -17,11 +17,9 @@
 
 package org.apache.kafka.server.share.session;
 
-import org.apache.kafka.common.Uuid;
-
 import java.util.Objects;
 
-public record ShareSessionKey(String groupId, Uuid memberId) {
+public record ShareSessionKey(String groupId, String memberId) {
     public ShareSessionKey {
         Objects.requireNonNull(groupId);
         Objects.requireNonNull(memberId);

@@ -64,13 +64,18 @@ class ExpiringErrorCache {
                     (expiryQueue.peek().expirationTimeMs <= currentTimeMs || byTopic.size() > maxSize)) {
                 var evicted = expiryQueue.poll();
                 var current = byTopic.get(evicted.topicName);
-                if (current != null && current.equals(evicted)) {
+                if (current != null && current == evicted) {
                     byTopic.remove(evicted.topicName);
                 }
             }
         } finally {
             lock.unlock();
         }
+    }
+
+    boolean hasError(String topicName, long currentTimeMs) {
+        var entry = byTopic.get(topicName);
+        return entry != null && entry.expirationTimeMs > currentTimeMs;
     }
 
     Map<String, String> getErrorsForTopics(Set<String> topicNames, long currentTimeMs) {

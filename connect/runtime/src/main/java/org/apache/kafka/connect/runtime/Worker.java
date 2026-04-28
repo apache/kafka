@@ -45,10 +45,10 @@ import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.internals.Plugin;
-import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
@@ -1248,7 +1248,7 @@ public final class Worker {
         final String version = connProps.get(ConnectorConfig.CONNECTOR_VERSION);
 
         try {
-            return plugins.pluginLoader(klass, PluginUtils.connectorVersionRequirement(version));
+            return plugins.connectorLoader(klass, PluginUtils.connectorVersionRequirement(version));
         } catch (InvalidVersionSpecificationException  | VersionedPluginLoadingException e) {
             throw new ConnectException(
                     String.format("Failed to get class loader for connector %s, class %s", klass, connProps.get(ConnectorConfig.NAME_CONFIG)), e);
@@ -2396,8 +2396,8 @@ public final class Worker {
         protected synchronized void recordTaskRemoved(ConnectorTaskId connectorTaskId) {
             // Unregister connector task count metric if we remove the last task of the connector
             if (tasks.keySet().stream().noneMatch(id -> id.connector().equals(connectorTaskId.connector()))) {
-                connectorStatusMetrics.get(connectorTaskId.connector()).close();
-                connectorStatusMetrics.remove(connectorTaskId.connector());
+                MetricGroup metricGroup = connectorStatusMetrics.remove(connectorTaskId.connector());
+                if (metricGroup != null) metricGroup.close();
             }
         }
 

@@ -100,11 +100,11 @@ public class DelegationTokenControlManager {
             if (logContext == null) logContext = new LogContext();
             if (tokenCache == null) tokenCache = new DelegationTokenCache(Set.of());
             return new DelegationTokenControlManager(
-              logContext,
-              tokenCache,
-              tokenSecretKeyString,
-              tokenDefaultMaxLifetimeMs,
-              tokenDefaultRenewLifetimeMs);
+                logContext,
+                tokenCache,
+                tokenSecretKeyString,
+                tokenDefaultMaxLifetimeMs,
+                tokenDefaultRenewLifetimeMs);
         }
     }
 

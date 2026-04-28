@@ -27,6 +27,7 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -38,7 +39,7 @@ public class KRaftCoordinatorMetadataImage implements CoordinatorMetadataImage {
     private final MetadataImage metadataImage;
 
     public KRaftCoordinatorMetadataImage(MetadataImage metadataImage) {
-        this.metadataImage = metadataImage;
+        this.metadataImage = Objects.requireNonNull(metadataImage, "metadataImage must be provided");
     }
 
     @Override
@@ -75,7 +76,13 @@ public class KRaftCoordinatorMetadataImage implements CoordinatorMetadataImage {
 
     @Override
     public CoordinatorMetadataDelta emptyDelta() {
-        return new KRaftCoordinatorMetadataDelta(new MetadataDelta(metadataImage));
+        // Note: supportedConfigChecker is not set because CoordinatorMetadataDelta only exposes topic-related methods.
+        // No ConfigRecord replay happens through this path, so the checker is never invoked.
+        return new KRaftCoordinatorMetadataDelta(
+            new MetadataDelta.Builder()
+                .setImage(metadataImage)
+                .build()
+        );
     }
 
     @Override

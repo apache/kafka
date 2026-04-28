@@ -27,12 +27,11 @@ import org.apache.kafka.common.errors.OffsetNotAvailableException;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
-import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.fetch.ShareFetch;
@@ -112,6 +111,7 @@ public class ShareFetchUtils {
             } else {
                 ShareAcquiredRecords shareAcquiredRecords = sharePartition.acquire(
                     shareFetch.memberId(),
+                    shareFetch.shareAcquireMode(),
                     shareFetch.batchSize(),
                     shareFetch.maxFetchRecords() - acquiredRecordsCount,
                     shareFetchPartitionData.fetchOffset(),
@@ -259,18 +259,45 @@ public class ShareFetchUtils {
     }
 
     /**
-     * The method is used to get the record lock duration for the group. If the group config is present,
-     * then the record lock duration is returned. Otherwise, the default value is returned.
+     * Merges contiguous AcquiredRecords with the same delivery count into single records.
+     * <p>
+     * This method takes a list of AcquiredRecords where firstOffset and lastOffset typically are the
+     * same (representing single offsets), but not necessarily required, and merges contiguous offsets
+     * that have the same delivery count into ranges.
      *
-     * @param groupConfigManager The group config manager.
-     * @param groupId The group id for which the record lock duration is to be fetched.
-     * @param defaultValue The default value to be returned if the group config is not present.
-     * @return The record lock duration for the group.
+     * @param result the list to accumulate merged AcquiredRecords into
+     * @param acquiredRecords the sorted list of AcquiredRecords to merge
      */
-    public static int recordLockDurationMsOrDefault(GroupConfigManager groupConfigManager, String groupId, int defaultValue) {
-        if (groupConfigManager.groupConfig(groupId).isPresent()) {
-            return groupConfigManager.groupConfig(groupId).get().shareRecordLockDurationMs();
+    static void accumulateAcquiredRecords(List<AcquiredRecords> result, List<AcquiredRecords> acquiredRecords) {
+        if (acquiredRecords.isEmpty()) {
+            return;
         }
-        return defaultValue;
+
+        long firstOffset = acquiredRecords.get(0).firstOffset();
+        long lastOffset = acquiredRecords.get(0).lastOffset();
+        short deliveryCount = acquiredRecords.get(0).deliveryCount();
+
+        for (int i = 1; i < acquiredRecords.size(); i++) {
+            AcquiredRecords current = acquiredRecords.get(i);
+            if (current.firstOffset() == lastOffset + 1 && deliveryCount == current.deliveryCount()) {
+                // Extend the last offset.
+                lastOffset = current.lastOffset();
+            } else {
+                // Append the current accumulated batch and start a new batch.
+                result.add(new AcquiredRecords()
+                    .setFirstOffset(firstOffset)
+                    .setLastOffset(lastOffset)
+                    .setDeliveryCount(deliveryCount));
+                // Reset the accumulation variables to the current acquired records.
+                firstOffset = current.firstOffset();
+                lastOffset = current.lastOffset();
+                deliveryCount = current.deliveryCount();
+            }
+        }
+        // Add the last accumulated batch.
+        result.add(new AcquiredRecords()
+            .setFirstOffset(firstOffset)
+            .setLastOffset(lastOffset)
+            .setDeliveryCount(deliveryCount));
     }
 }

@@ -53,7 +53,7 @@ import org.apache.kafka.connect.util.clusters.ConnectAssertions;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.network.SocketServerConfigs;
-import org.apache.kafka.server.config.KRaftConfigs;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.test.NoRetryException;
 

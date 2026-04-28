@@ -17,8 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import kafka.admin.ConfigCommand;
-
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -31,7 +29,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -40,13 +37,12 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.server.telemetry.ClientTelemetry;
-import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
+import org.apache.kafka.server.telemetry.ClientTelemetryExporter;
+import org.apache.kafka.server.telemetry.ClientTelemetryExporterProvider;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -56,21 +52,19 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
-import static java.util.Arrays.asList;
 import static org.apache.kafka.clients.admin.AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientTelemetryTest {
 
     @ClusterTest(
-            types = Type.KRAFT, 
+            types = Type.KRAFT,
             brokers = 3,
             serverProperties = {
-                @ClusterConfigProperty(key = METRIC_REPORTER_CLASSES_CONFIG, value = "org.apache.kafka.clients.admin.ClientTelemetryTest$GetIdClientTelemetry"),
+                @ClusterConfigProperty(key = METRIC_REPORTER_CLASSES_CONFIG, value = "org.apache.kafka.clients.admin.ClientTelemetryTest$TelemetryExporter"),
             })
     public void testClientInstanceId(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
         Map<String, Object> configs = new HashMap<>();
@@ -123,18 +117,6 @@ public class ClientTelemetryTest {
         }
     }
 
-    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
-    public void testIntervalMsParser(ClusterInstance clusterInstance) {
-        List<String> alterOpts = asList("--bootstrap-server", clusterInstance.bootstrapServers(),
-                "--alter", "--entity-type", "client-metrics", "--entity-name", "test", "--add-config", "interval.ms=bbb");
-        try (Admin client = clusterInstance.admin()) {
-            ConfigCommand.ConfigCommandOptions addOpts = new ConfigCommand.ConfigCommandOptions(toArray(Set.of(alterOpts)));
-
-            Throwable e = assertThrows(ExecutionException.class, () -> ConfigCommand.alterConfig(client, addOpts));
-            assertTrue(e.getMessage().contains(InvalidConfigurationException.class.getSimpleName()));
-        }
-    }
-
     @ClusterTest(types = Type.KRAFT)
     public void testMetrics(ClusterInstance clusterInstance) {
         Map<String, Object> configs = new HashMap<>();
@@ -152,18 +134,8 @@ public class ClientTelemetryTest {
         }
     }
 
-    private static String[] toArray(Collection<List<String>> lists) {
-        return lists.stream().flatMap(List::stream).toArray(String[]::new);
-    }
-
-    /**
-     * We should add a ClientTelemetry into plugins to test the clientInstanceId method Otherwise the
-     * {@link org.apache.kafka.common.protocol.ApiKeys#GET_TELEMETRY_SUBSCRIPTIONS} command will not be supported
-     * by the server
-     **/
     @SuppressWarnings("unused")
-    public static class GetIdClientTelemetry implements ClientTelemetry, MetricsReporter {
-
+    public static class TelemetryExporter implements ClientTelemetryExporterProvider, MetricsReporter {
 
         @Override
         public void init(List<KafkaMetric> metrics) {
@@ -186,7 +158,7 @@ public class ClientTelemetryTest {
         }
 
         @Override
-        public ClientTelemetryReceiver clientReceiver() {
+        public ClientTelemetryExporter clientTelemetryExporter() {
             return (context, payload) -> {
             };
         }

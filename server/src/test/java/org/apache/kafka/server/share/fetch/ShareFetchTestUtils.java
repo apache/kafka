@@ -19,14 +19,11 @@ package org.apache.kafka.server.share.fetch;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.test.TestUtils;
-
-import com.yammer.metrics.core.Gauge;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -79,7 +76,7 @@ public class ShareFetchTestUtils {
     public static FileRecords createFileRecords(Map<Long, Integer> recordsPerOffset) throws IOException {
         FileRecords fileRecords = FileRecords.open(tempFile());
         for (Entry<Long, Integer> entry : recordsPerOffset.entrySet()) {
-            try (MemoryRecordsBuilder records = memoryRecordsBuilder(entry.getValue(), entry.getKey())) {
+            try (MemoryRecordsBuilder records = memoryRecordsBuilder(entry.getKey(), entry.getValue())) {
                 fileRecords.append(records.build());
             }
         }
@@ -89,23 +86,23 @@ public class ShareFetchTestUtils {
     /**
      * Create a memory records builder with the given number of records and start offset.
      *
-     * @param numOfRecords The number of records to create.
      * @param startOffset The start offset of the records.
+     * @param numOfRecords The number of records to create.
      * @return The memory records builder.
      */
-    public static MemoryRecordsBuilder memoryRecordsBuilder(int numOfRecords, long startOffset) {
-        return memoryRecordsBuilder(ByteBuffer.allocate(1024), numOfRecords, startOffset);
+    public static MemoryRecordsBuilder memoryRecordsBuilder(long startOffset, int numOfRecords) {
+        return memoryRecordsBuilder(ByteBuffer.allocate(1024), startOffset, numOfRecords);
     }
 
     /**
      * Create a memory records builder with the number of records and start offset, in the given buffer.
      *
      * @param buffer The buffer to write the records to.
-     * @param numOfRecords The number of records to create.
      * @param startOffset The start offset of the records.
+     * @param numOfRecords The number of records to create.
      * @return The memory records builder.
      */
-    public static MemoryRecordsBuilder memoryRecordsBuilder(ByteBuffer buffer, int numOfRecords, long startOffset) {
+    public static MemoryRecordsBuilder memoryRecordsBuilder(ByteBuffer buffer, long startOffset, int numOfRecords) {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE,
             TimestampType.CREATE_TIME, startOffset, 2);
         for (int i = 0; i < numOfRecords; i++) {
@@ -126,31 +123,5 @@ public class ShareFetchTestUtils {
         );
     }
 
-    /**
-     * Fetch the gauge value from the yammer metrics.
-     *
-     * @param name The name of the metric.
-     * @return The gauge value as a number.
-     */
-    public static Number yammerMetricValue(String name) {
-        try {
-            Gauge gauge = (Gauge) KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
-                .filter(e -> e.getKey().getMBeanName().contains(name))
-                .findFirst()
-                .orElseThrow()
-                .getValue();
-            return (Number) gauge.value();
-        } catch (Exception e) {
-            return 0;
-        }
-    }
 
-    /**
-     * Clear all the yammer metrics.
-     */
-    public static void clearYammerMetrics() {
-        KafkaYammerMetrics.defaultRegistry().allMetrics().keySet().forEach(
-            metricName -> KafkaYammerMetrics.defaultRegistry().removeMetric(metricName)
-        );
-    }
 }

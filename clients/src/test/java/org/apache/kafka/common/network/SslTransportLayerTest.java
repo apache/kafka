@@ -55,6 +55,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -78,6 +79,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -476,6 +478,8 @@ public class SslTransportLayerTest {
     @ArgumentsSource(SslTransportLayerArgumentsForTLS2Provider.class)
     public void testDsaKeyPair(Args args) throws Exception {
         // DSA algorithms are not supported for TLSv1.3.
+        // Skip test if DSA is not supported by the JVM
+        assumeTrue(isDsaSupported(), "DSA algorithm is not supported by this JVM");
         args.serverCertStores = certBuilder(true, "server", args.useInlinePem).keyAlgorithm("DSA").build();
         args.clientCertStores = certBuilder(false, "client", args.useInlinePem).keyAlgorithm("DSA").build();
         args.sslServerConfigs = args.getTrustingConfig(args.serverCertStores, args.clientCertStores);
@@ -767,11 +771,10 @@ public class SslTransportLayerTest {
     @ParameterizedTest
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
     public void testNetworkThreadTimeRecorded(Args args) throws Exception {
-        LogContext logContext = new LogContext();
-        ChannelBuilder channelBuilder = new SslChannelBuilder(ConnectionMode.CLIENT, null, false, logContext);
+        ChannelBuilder channelBuilder = new SslChannelBuilder(ConnectionMode.CLIENT, null, false);
         channelBuilder.configure(args.sslClientConfigs);
         try (Selector selector = new Selector(NetworkReceive.UNLIMITED, Selector.NO_IDLE_TIMEOUT_MS, new Metrics(), Time.SYSTEM,
-                "MetricGroup", new HashMap<>(), false, true, channelBuilder, MemoryPool.NONE, logContext)) {
+                "MetricGroup", new HashMap<>(), false, true, channelBuilder, MemoryPool.NONE, new LogContext())) {
 
             String node = "0";
             server = createEchoServer(args, SecurityProtocol.SSL);
@@ -967,7 +970,7 @@ public class SslTransportLayerTest {
     }
 
     private SslChannelBuilder newClientChannelBuilder() {
-        return new SslChannelBuilder(ConnectionMode.CLIENT, null, false, new LogContext());
+        return new SslChannelBuilder(ConnectionMode.CLIENT, null, false);
     }
 
     private void testClose(Args args, SecurityProtocol securityProtocol, ChannelBuilder clientChannelBuilder) throws Exception {
@@ -1311,10 +1314,9 @@ public class SslTransportLayerTest {
     }
 
     private Selector createSelector(Args args) {
-        LogContext logContext = new LogContext();
-        ChannelBuilder channelBuilder = new SslChannelBuilder(ConnectionMode.CLIENT, null, false, logContext);
+        ChannelBuilder channelBuilder = new SslChannelBuilder(ConnectionMode.CLIENT, null, false);
         channelBuilder.configure(args.sslClientConfigs);
-        selector = new Selector(5000, new Metrics(), TIME, "MetricGroup", channelBuilder, logContext);
+        selector = new Selector(5000, new Metrics(), TIME, "MetricGroup", channelBuilder, new LogContext());
         return selector;
     }
 
@@ -1347,6 +1349,39 @@ public class SslTransportLayerTest {
                 .usePem(useInlinePem);
     }
 
+    /**
+     * Check if DSA algorithm is supported by the JVM and if there are compatible cipher suites
+     * available for TLSv1.2. This is important because even if DSA KeyPairGenerator is available,
+     * the SSL handshake may fail if no DSA-compatible cipher suites are available.
+     * @return true if DSA KeyPairGenerator is available and DSA-compatible cipher suites exist, false otherwise
+     */
+    private static boolean isDsaSupported() {
+        // First check if DSA KeyPairGenerator is available
+        try {
+            java.security.KeyPairGenerator.getInstance("DSA");
+        } catch (java.security.NoSuchAlgorithmException e) {
+            return false;
+        }
+
+        // Check if there are DSA-compatible cipher suites available for TLSv1.2
+        // DSA algorithms are not supported for TLSv1.3, so we only check TLSv1.2
+        try {
+            SSLContext context = SSLContext.getInstance("TLSv1.2");
+            context.init(null, null, null);
+            SSLParameters params = context.getDefaultSSLParameters();
+            String[] cipherSuites = params.getCipherSuites();
+
+            // Check if any cipher suite supports DSA
+            // In TLS standards and JVM implementations, DSA signature cipher suites use "_DSS_" naming
+            // Common patterns: TLS_DHE_DSS_*, TLS_DH_DSS_*, SSL_DHE_DSS_*, SSL_DH_DSS_*
+            return Arrays.stream(cipherSuites)
+                    .anyMatch(suite -> suite.contains("_DSS_"));
+        } catch (Exception e) {
+            // If we can't check cipher suites, assume DSA is not fully supported
+            return false;
+        }
+    }
+
     @FunctionalInterface
     private interface FailureAction {
         FailureAction NO_OP = () -> { };
@@ -1371,7 +1406,7 @@ public class SslTransportLayerTest {
         int flushDelayCount = 0;
 
         public TestSslChannelBuilder(ConnectionMode connectionMode) {
-            super(connectionMode, null, false, new LogContext());
+            super(connectionMode, null, false);
         }
 
         public void configureBufferSizes(Integer netReadBufSize, Integer netWriteBufSize, Integer appBufSize) {

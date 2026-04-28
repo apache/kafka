@@ -60,7 +60,7 @@ class DockerSanityTest(unittest.TestCase):
         return False
         
     def produce_message(self, topic, producer_config, key, value):
-        command = ["echo", f'"{key}:{value}"', "|", f"{self.FIXTURES_DIR}/{constants.KAFKA_CONSOLE_PRODUCER}", "--topic", topic, "--property", "'parse.key=true'", "--property", "'key.separator=:'", "--timeout", f"{constants.CLIENT_TIMEOUT}"]
+        command = ["echo", f'"{key}:{value}"', "|", f"{self.FIXTURES_DIR}/{constants.KAFKA_CONSOLE_PRODUCER}", "--topic", topic, "--reader-property", "'parse.key=true'", "--reader-property", "'key.separator=:'", "--timeout", f"{constants.CLIENT_TIMEOUT}"]
         command.extend(producer_config)
         subprocess.run(["bash", "-c", " ".join(command)])
     

@@ -23,11 +23,12 @@ import kafka.server.metadata.ClientQuotaMetadataManager.transferToClientQuotaEnt
 import kafka.utils.Logging
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.quota.ClientQuotaEntity
+import org.apache.kafka.common.utils.internals.Sanitizer
 import org.apache.kafka.server.quota.ClientQuotaEntity.ConfigEntity
-import org.apache.kafka.common.utils.Sanitizer
 
 import java.net.{InetAddress, UnknownHostException}
 import java.util.Optional
+import java.util.function.Consumer
 import org.apache.kafka.image.{ClientQuotaDelta, ClientQuotasDelta}
 import org.apache.kafka.server.config.QuotaConfig
 import org.apache.kafka.server.quota.ClientQuotaManager
@@ -51,9 +52,9 @@ case object DefaultUserDefaultClientIdEntity extends QuotaEntity
  * Process quota metadata records as they appear in the metadata log and update quota managers and cache as necessary
  */
 class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManagers,
-                                 private[metadata] val connectionQuotas: ConnectionQuotas) extends Logging {
+                                 private[metadata] val connectionQuotas: ConnectionQuotas) extends Consumer[ClientQuotasDelta] with Logging {
 
-  def update(quotasDelta: ClientQuotasDelta): Unit = {
+  def accept(quotasDelta: ClientQuotasDelta): Unit = {
     quotasDelta.changes().forEach { (key, value) =>
       update(key, value)
     }

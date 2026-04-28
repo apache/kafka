@@ -18,7 +18,7 @@ package org.apache.kafka.coordinator.common.runtime;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
 
@@ -96,7 +96,8 @@ public class InMemoryPartitionWriter implements PartitionWriter {
     public long append(
         TopicPartition tp,
         VerificationGuard verificationGuard,
-        MemoryRecords batch
+        MemoryRecords batch,
+        short transactionVersion
     ) {
         PartitionState state = partitionState(tp);
         state.lock.lock();

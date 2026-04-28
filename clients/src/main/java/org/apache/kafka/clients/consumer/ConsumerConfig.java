@@ -21,6 +21,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.ShareAcknowledgementMode;
+import org.apache.kafka.clients.consumer.internals.ShareAcquireMode;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -112,9 +113,8 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String GROUP_PROTOCOL_CONFIG = "group.protocol";
     public static final String DEFAULT_GROUP_PROTOCOL = GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT);
-    public static final String GROUP_PROTOCOL_DOC = "The group protocol consumer should use. We currently " +
-        "support \"classic\" or \"consumer\". If \"consumer\" is specified, then the consumer group protocol will be " +
-        "used. Otherwise, the classic group protocol will be used.";
+    public static final String GROUP_PROTOCOL_DOC = "The group protocol that the consumer uses. The " +
+        "supported values are <code>classic</code> or <code>consumer</code>. The default value is <code>classic</code>.";
 
     /**
     * <code>group.remote.assignor</code>
@@ -331,17 +331,6 @@ public class ConsumerConfig extends AbstractConfig {
     public static final boolean DEFAULT_EXCLUDE_INTERNAL_TOPICS = true;
 
     /**
-     * <code>internal.leave.group.on.close</code>
-     * Whether or not the consumer should leave the group on close. If set to <code>false</code> then a rebalance
-     * won't occur until <code>session.timeout.ms</code> expires.
-     *
-     * <p>
-     * Note: this is an internal configuration and could be changed in the future in a backward incompatible way
-     *
-     */
-    static final String LEAVE_GROUP_ON_CLOSE_CONFIG = "internal.leave.group.on.close";
-
-    /**
      * <code>internal.throw.on.fetch.stable.offset.unsupported</code>
      * Whether or not the consumer should throw when the new stable offset feature is supported.
      * If set to <code>true</code> then the client shall crash upon hitting it.
@@ -391,6 +380,16 @@ public class ConsumerConfig extends AbstractConfig {
             " If set to <code>explicit</code>, the acknowledgement mode of the consumer is explicit and it must use" +
             " <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records.";
 
+    /**
+     * <code>share.acquire.mode</code>
+     */
+    public static final String SHARE_ACQUIRE_MODE_CONFIG = "share.acquire.mode";
+    private static final String SHARE_ACQUIRE_MODE_DOC = "Controls the acquire mode for a share consumer." +
+            " If set to <code>record_limit</code>, the number of records returned in each poll() will not exceed the value of <code>max.poll.records</code>." +
+            " If set to <code>batch_optimized</code>, the number of records returned in each poll() call may exceed <code>max.poll.records</code>" +
+            " to align with batch boundaries for optimization.";
+    public static final String DEFAULT_SHARE_ACQUIRE_MODE = ShareAcquireMode.BATCH_OPTIMIZED.name();
+
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
     /**
@@ -398,7 +397,8 @@ public class ConsumerConfig extends AbstractConfig {
      */
     private static final List<String> CLASSIC_PROTOCOL_UNSUPPORTED_CONFIGS = List.of(
             GROUP_REMOTE_ASSIGNOR_CONFIG,
-            SHARE_ACKNOWLEDGEMENT_MODE_CONFIG
+            SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
+            SHARE_ACQUIRE_MODE_CONFIG
     );
 
     /**
@@ -408,7 +408,8 @@ public class ConsumerConfig extends AbstractConfig {
             PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
             HEARTBEAT_INTERVAL_MS_CONFIG,
             SESSION_TIMEOUT_MS_CONFIG,
-            SHARE_ACKNOWLEDGEMENT_MODE_CONFIG
+            SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
+            SHARE_ACQUIRE_MODE_CONFIG
     );
 
     static {
@@ -634,10 +635,6 @@ public class ConsumerConfig extends AbstractConfig {
                                         DEFAULT_EXCLUDE_INTERNAL_TOPICS,
                                         Importance.MEDIUM,
                                         EXCLUDE_INTERNAL_TOPICS_DOC)
-                                .defineInternal(LEAVE_GROUP_ON_CLOSE_CONFIG,
-                                        Type.BOOLEAN,
-                                        true,
-                                        Importance.LOW)
                                 .defineInternal(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED,
                                         Type.BOOLEAN,
                                         false,
@@ -692,12 +689,23 @@ public class ConsumerConfig extends AbstractConfig {
                                         atLeast(0),
                                         Importance.LOW,
                                         CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
+                                .define(CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.LOW,
+                                        CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_DOC)
                                 .define(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
                                         Type.STRING,
                                         ShareAcknowledgementMode.IMPLICIT.name(),
                                         new ShareAcknowledgementMode.Validator(),
                                         Importance.MEDIUM,
                                         ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_DOC)
+                                .define(ConsumerConfig.SHARE_ACQUIRE_MODE_CONFIG,
+                                        Type.STRING,
+                                        DEFAULT_SHARE_ACQUIRE_MODE,
+                                        new ShareAcquireMode.Validator(),
+                                        Importance.MEDIUM,
+                                        ConsumerConfig.SHARE_ACQUIRE_MODE_DOC)
                                 .define(CONFIG_PROVIDERS_CONFIG,
                                         ConfigDef.Type.LIST,
                                         List.of(),
@@ -785,10 +793,20 @@ public class ConsumerConfig extends AbstractConfig {
         }
     }
 
+    /**
+     * Constructs a new ConsumerConfig with the given properties.
+     *
+     * @param props The consumer configuration properties
+     */
     public ConsumerConfig(Properties props) {
         super(CONFIG, props);
     }
 
+    /**
+     * Constructs a new ConsumerConfig with the given properties.
+     *
+     * @param props The consumer configuration properties
+     */
     public ConsumerConfig(Map<String, Object> props) {
         super(CONFIG, props);
     }
@@ -797,10 +815,20 @@ public class ConsumerConfig extends AbstractConfig {
         super(CONFIG, props, doLog);
     }
 
+    /**
+     * Returns the set of all configuration keys.
+     *
+     * @return The set of configuration keys
+     */
     public static Set<String> configNames() {
         return CONFIG.names();
     }
 
+    /**
+     * Returns the configuration definition.
+     *
+     * @return The configuration definition
+     */
     public static ConfigDef configDef() {
         return new ConfigDef(CONFIG);
     }

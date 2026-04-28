@@ -23,7 +23,7 @@ public class SampleTest {
 }
 ```
 
-The defaults can be modified by setting specific paramters on the annotation. 
+The defaults can be modified by setting specific parameters on the annotation. 
 
 ```java
 public class SampleTest {

@@ -149,8 +149,7 @@ public class WorkerCoordinatorIncrementalTest {
             Optional.empty(),
             null,
             retryBackoffMs,
-            retryBackoffMaxMs,
-            true);
+            retryBackoffMaxMs);
         this.coordinator = new WorkerCoordinator(rebalanceConfig,
             loggerFactory,
             consumerClient,

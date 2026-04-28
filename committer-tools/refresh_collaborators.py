@@ -26,7 +26,7 @@ import io
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 from bs4 import BeautifulSoup
 from github import Github
@@ -35,6 +35,7 @@ from github.ContentFile import ContentFile
 from github.PaginatedList import PaginatedList
 from github.Repository import Repository
 from ruamel.yaml import YAML
+from ruamel.yaml.representer import RoundTripRepresenter
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(message)s",
@@ -113,9 +114,13 @@ def update_local_yaml_content(yaml_file_path: str, collaborators: List[str]) -> 
 
     collaborators.sort(key=str.casefold)
 
+    def represent_none(self: RoundTripRepresenter, _: Any):
+        return self.represent_scalar("tag:yaml.org,2002:null", "~")
+
     with open(yaml_file_path, "r", encoding="utf-8") as file:
         yaml: YAML = YAML()
         yaml.indent(mapping=2, sequence=4, offset=2)
+        yaml.representer.add_representer(type(None), represent_none)
         yaml_content: dict = yaml.load(file)
 
     yaml_content["github"]["collaborators"] = collaborators

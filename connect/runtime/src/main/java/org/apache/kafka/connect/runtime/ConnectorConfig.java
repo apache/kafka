@@ -415,7 +415,9 @@ public class ConnectorConfig extends AbstractConfig {
         try {
             VersionRange range = PluginUtils.connectorVersionRequirement(getString(versionConfig));
             VersionRange connectorRange = PluginUtils.connectorVersionRequirement(getString(CONNECTOR_VERSION));
-            return (T) plugins.newPlugin(getClass(classConfig).getName(), range, plugins.pluginLoader(getString(CONNECTOR_CLASS_CONFIG), connectorRange));
+            return (T) plugins.newPlugin(getClass(classConfig).getName(),
+                                         range,
+                                         plugins.connectorLoader(getString(CONNECTOR_CLASS_CONFIG), connectorRange));
         } catch (Exception e) {
             throw new ConnectException(e);
         }
@@ -569,7 +571,7 @@ public class ConnectorConfig extends AbstractConfig {
         }
         try {
             VersionRange range = PluginUtils.connectorVersionRequirement(connectorVersion);
-            return plugins.pluginVersion(pluginName, plugins.pluginLoader(connectorClass, range), pluginType);
+            return plugins.pluginVersion(pluginName, plugins.connectorLoader(connectorClass, range), pluginType);
         } catch (InvalidVersionSpecificationException | VersionedPluginLoadingException e) {
             // these errors should be captured in other places, so we can ignore them here
             log.warn("Failed to determine default plugin version for {}", connectorClass, e);
@@ -739,7 +741,7 @@ public class ConnectorConfig extends AbstractConfig {
 
             T plugin;
             try {
-                plugin = (T) plugins.newPlugin(pluginClass, pluginVersion, plugins.pluginLoader(connectorClass, connectorVersionRange));
+                plugin = (T) plugins.newPlugin(pluginClass, pluginVersion, plugins.connectorLoader(connectorClass, connectorVersionRange));
             } catch (VersionedPluginLoadingException e) {
                 throw e;
             } catch (Exception e) {

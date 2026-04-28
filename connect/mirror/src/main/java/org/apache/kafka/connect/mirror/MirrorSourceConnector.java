@@ -622,8 +622,10 @@ public class MirrorSourceConnector extends SourceConnector {
                                 + sourceAndTarget.target() + "' is not compatible with " +
                                 "IncrementalAlterConfigs " +
                                 "API", e));
-                    } else {
+                    } else if (e != null) {
                         log.warn("Could not alter configuration of topic {}.", k.name(), e);
+                    } else {
+                        log.debug("Successfully altered configuration of topic {}.", k.name());
                     }
                 }));
             return null;
@@ -718,7 +720,16 @@ public class MirrorSourceConnector extends SourceConnector {
         String source = replicationPolicy.topicSource(topic);
         if (source == null) {
             return false;
-        } else if (source.equals(sourceAndTarget.target())) {
+        }
+
+        final boolean condition;
+        if (replicationPolicy instanceof IdentityReplicationPolicy) {
+            condition = source.equals(sourceAndTarget.target());
+        } else {
+            condition = source.equals(sourceAndTarget.source()) || source.equals(sourceAndTarget.target());
+        }
+
+        if (condition) {
             return true;
         } else {
             String upstreamTopic = replicationPolicy.upstreamTopic(topic);

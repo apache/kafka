@@ -18,21 +18,24 @@ package integration.kafka.api
 
 import com.nimbusds.jose.jwk.RSAKey
 import kafka.api.{IntegrationTestHarness, SaslSetup}
-import kafka.utils.TestInfoUtils
+import kafka.utils.{TestInfoUtils, TestUtils => KafkaTestUtils}
 import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.admin.NewTopic
+import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.config.{ConfigException, SaslConfigs}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
 
 import java.util.{Base64, Collections, Properties}
 import no.nav.security.mock.oauth2.{MockOAuth2Server, OAuth2Config}
 import no.nav.security.mock.oauth2.token.{KeyProvider, OAuth2TokenProvider}
-import org.apache.kafka.common.KafkaException
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
+import org.apache.kafka.common.errors.SaslAuthenticationException
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.security.oauthbearer.{OAuthBearerLoginCallbackHandler, OAuthBearerLoginModule, OAuthBearerValidatorCallbackHandler}
+import org.apache.kafka.common.security.oauthbearer.{JwtRetriever, OAuthBearerLoginCallbackHandler, OAuthBearerLoginModule, OAuthBearerValidatorCallbackHandler}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.TestUtils
-import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertThrows}
+import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertNotNull, assertThrows}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
@@ -244,6 +247,106 @@ class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
     assertThrows(classOf[ConfigException], () => createAdminClient(configOverrides = configs))
   }
 
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testAuthenticationErrorOnTamperedJwt(groupProtocol: String): Unit = {
+    val className = classOf[TamperedJwtRetriever].getName
+
+    val configs = defaultOAuthConfigs()
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS, className)
+
+    val tp = new TopicPartition("test-topic", 0)
+
+    val admin = createAdminClient(configOverrides = configs)
+    TestUtils.assertFutureThrows(classOf[SaslAuthenticationException], admin.describeCluster().clusterId())
+
+    val producer = createProducer(configOverrides = configs)
+    assertThrows(classOf[SaslAuthenticationException], () => producer.partitionsFor(tp.topic()))
+
+    val consumer = createConsumer(configOverrides = configs)
+    consumer.assign(Collections.singleton(tp))
+    assertThrows(classOf[SaslAuthenticationException], () => consumer.position(tp))
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testClientAssertionProduceConsume(groupProtocol: String): Unit = {
+    val topic = "client-assertion-test"
+    val privateKeyFile = generatePrivateKeyFile()
+    System.setProperty(BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG, privateKeyFile.getAbsolutePath)
+
+    val configs = defaultOAuthConfigs()
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE, privateKeyFile.getPath)
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS, "kafka-e2e-test")
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD, "default")
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB, "kafka-e2e-test")
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_SCOPE, "default")
+
+    val admin = createAdminClient(configOverrides = configs)
+    admin.createTopics(Collections.singletonList(new NewTopic(topic, 1, 1.toShort))).all().get()
+
+    val producer = createProducer(configOverrides = configs)
+    val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, "key".getBytes, "value".getBytes)
+    producer.send(record).get()
+
+    val consumer = createConsumer(configOverrides = configs)
+    consumer.subscribe(Collections.singletonList(topic))
+    val records = KafkaTestUtils.consumeRecords(consumer, 1)
+    assertEquals(1, records.size)
+    assertEquals("value", new String(records.head.value()))
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testClientAssertionFileBasedProduceConsume(groupProtocol: String): Unit = {
+    val topic = "file-assertion-test"
+    val jwt = mockOAuthServer.issueToken(issuerId, "jdoe", "someaudience", Collections.singletonMap("scope", "test"))
+    val assertionFile = TestUtils.tempFile(jwt.serialize())
+    System.setProperty(BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG, assertionFile.getAbsolutePath)
+
+    val configs = defaultOAuthConfigs()
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE, assertionFile.getAbsolutePath)
+
+    val admin = createAdminClient(configOverrides = configs)
+    admin.createTopics(Collections.singletonList(new NewTopic(topic, 1, 1.toShort))).all().get()
+
+    val producer = createProducer(configOverrides = configs)
+    val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, "key".getBytes, "value".getBytes)
+    producer.send(record).get()
+
+    val consumer = createConsumer(configOverrides = configs)
+    consumer.subscribe(Collections.singletonList(topic))
+    val records = KafkaTestUtils.consumeRecords(consumer, 1)
+    assertEquals(1, records.size)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testClientAssertionAdminOperations(groupProtocol: String): Unit = {
+    val privateKeyFile = generatePrivateKeyFile()
+    System.setProperty(BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_FILES_CONFIG, privateKeyFile.getAbsolutePath)
+
+    val configs = defaultOAuthConfigs()
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE, privateKeyFile.getPath)
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS, "kafka-admin-test")
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD, "default")
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB, "kafka-admin-test")
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_SCOPE, "default")
+
+    val admin = createAdminClient(configOverrides = configs)
+
+    val clusterId = admin.describeCluster().clusterId().get()
+    assertNotNull(clusterId)
+
+    val topic = "admin-assertion-test"
+    admin.createTopics(Collections.singletonList(new NewTopic(topic, 1, 1.toShort))).all().get()
+
+    KafkaTestUtils.waitForAllPartitionsMetadata(brokers, topic, 1)
+
+    val description = admin.describeTopics(Collections.singletonList(topic)).allTopicNames().get()
+    assertNotNull(description.get(topic))
+  }
+
   def generatePrivateKeyFile(): File = {
     val file = File.createTempFile("private-", ".key")
     val bytes = Base64.getEncoder.encode(privateKey.getEncoded)
@@ -257,5 +360,12 @@ class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
     }
 
     file
+  }
+}
+
+class TamperedJwtRetriever extends JwtRetriever {
+
+  override def retrieve(): String = {
+    "eyJhbGciOiAiSFMyNTYiLCAidHlwIjogIkpXVCJ9.eyJzdWIiOiAiMTIzNDU2Nzg5MCIsICJuYW1lIjogIkpvaG4gRG9lIiwgInJvbGUiOiAiYWRtaW4iLCAiaWF0IjogMTUxNjIzOTAyMiwgImV4cCI6IDE5MTYyMzkwMjJ9.vVT5ylQCGvb0B-wv1YXHjmlMd-DZKCThUt5-enry_sA"
   }
 }

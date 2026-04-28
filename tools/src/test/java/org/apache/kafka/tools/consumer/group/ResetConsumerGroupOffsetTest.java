@@ -909,7 +909,7 @@ public class ResetConsumerGroupOffsetTest {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> allResetOffsets = resetOffsets(service);
 
         allResetOffsets.forEach((group, offsetsInfo) -> offsetsInfo.forEach((tp, offsetMetadata) -> {
-            assertEquals(offsetMetadata.offset(), expectedOffsets.get(tp));
+            assertEquals(expectedOffsets.get(tp), offsetMetadata.offset());
             assertEquals(expectedOffsets, committedOffsets(cluster, topic, group));
         }));
     }

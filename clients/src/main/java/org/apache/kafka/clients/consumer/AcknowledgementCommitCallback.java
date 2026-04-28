@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InterruptException;
@@ -33,7 +32,6 @@ import java.util.Set;
  * A callback interface that the user can implement to trigger custom actions when an acknowledgement completes.
  * The callback may be executed in any thread calling {@link ShareConsumer#poll(java.time.Duration)}.
  */
-@InterfaceStability.Evolving
 public interface AcknowledgementCommitCallback {
 
     /**

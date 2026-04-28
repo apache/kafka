@@ -45,6 +45,11 @@ public class StickyTaskAssignor implements TaskAssignor {
     }
 
     @Override
+    public String toString() {
+        return name();
+    }
+
+    @Override
     public GroupAssignment assign(final GroupSpec groupSpec, final TopologyDescriber topologyDescriber) throws TaskAssignorException {
         initialize(groupSpec, topologyDescriber);
         final GroupAssignment assignments =  doAssign(groupSpec, topologyDescriber);
@@ -272,7 +277,7 @@ public class StickyTaskAssignor implements TaskAssignor {
      * @param taskId  The taskId, to check if the previous member already has the task. Can be null, if we assign it
      *                for the first time (e.g., during active task assignment).
      *
-     * @return Previous member with the least load that deoes not have the task, or null if no such member exists.
+     * @return Previous member with the least load that does not have the task, or null if no such member exists.
      */
     private Member findPrevMemberWithLeastLoad(final ArrayList<Member> members, final TaskId taskId) {
         if (members == null || members.isEmpty()) {

@@ -127,4 +127,15 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
     public boolean shouldClientThrottle(short version) {
         return version >= 1;
     }
+
+    // Do not print tokenId and Hmac, overwrite a temp copy of the data with empty content
+    @Override
+    public String toString() {
+        DescribeDelegationTokenResponseData tempData = data.duplicate();
+        tempData.tokens().forEach(token -> {
+            token.setTokenId("REDACTED");
+            token.setHmac(new byte[0]);
+        });
+        return tempData.toString();
+    }
 }

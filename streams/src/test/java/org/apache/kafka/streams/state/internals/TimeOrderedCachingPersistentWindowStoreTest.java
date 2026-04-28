@@ -63,6 +63,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 
@@ -107,13 +108,14 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
     private TimeFirstWindowKeySchema baseKeySchema;
     private WindowStore<Bytes, byte[]> underlyingStore;
     private TimeOrderedCachingWindowStore cachingStore;
-    private RocksDBTimeOrderedWindowSegmentedBytesStore bytesStore;
+    private RocksDBTimeOrderedWindowSegmentedBytesStore<KeyValueSegment> bytesStore;
     private CacheFlushListenerStub<Windowed<String>, String> cacheListener;
 
     private void setUp(final boolean hasIndex) {
         baseKeySchema = new TimeFirstWindowKeySchema();
-        bytesStore = new RocksDBTimeOrderedWindowSegmentedBytesStore("test", "metrics-scope", 100, SEGMENT_INTERVAL, hasIndex);
-        underlyingStore = new RocksDBTimeOrderedWindowStore(bytesStore, false, WINDOW_SIZE);
+        bytesStore = new RocksDBTimeOrderedWindowSegmentedBytesStore<>("test", 100, hasIndex,
+            new KeyValueSegments("test", "metrics-scope", 100, SEGMENT_INTERVAL));
+        underlyingStore = new RocksDBTimeOrderedWindowStore<>(bytesStore, false, WINDOW_SIZE);
         final TimeWindowedDeserializer<String> keyDeserializer = new TimeWindowedDeserializer<>(new StringDeserializer(), WINDOW_SIZE);
         keyDeserializer.setIsChangelogTopic(true);
         cacheListener = new CacheFlushListenerStub<>(keyDeserializer, new StringDeserializer());
@@ -134,7 +136,7 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
     @ValueSource(booleans = {true, false})
     public void shouldDelegateInit(final boolean hasIndex) {
         setUp(hasIndex);
-        final RocksDBTimeOrderedWindowStore inner = mock(RocksDBTimeOrderedWindowStore.class);
+        final RocksDBTimeOrderedWindowStore<?> inner = mock(RocksDBTimeOrderedWindowStore.class);
         when(inner.hasIndex()).thenReturn(hasIndex);
 
         final TimeOrderedCachingWindowStore outer = new TimeOrderedCachingWindowStore(inner, WINDOW_SIZE, SEGMENT_INTERVAL);
@@ -152,7 +154,7 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         assertThat(e.getMessage(),
             containsString("TimeOrderedCachingWindowStore only supports RocksDBTimeOrderedWindowStore backed store"));
 
-        final RocksDBTimeOrderedWindowStore inner = mock(RocksDBTimeOrderedWindowStore.class);
+        final RocksDBTimeOrderedWindowStore<?> inner = mock(RocksDBTimeOrderedWindowStore.class);
         // Nothing happens
         new TimeOrderedCachingWindowStore(inner, WINDOW_SIZE, SEGMENT_INTERVAL);
     }
@@ -309,7 +311,7 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         assertEquals(Position.emptyPosition(), cachingStore.getPosition());
         assertEquals(Position.emptyPosition(), underlyingStore.getPosition());
 
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
 
         assertEquals(
             Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
@@ -675,12 +677,12 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldForwardDirtyItemsWhenFlushCalled(final boolean hasIndex) {
+    public void shouldForwardDirtyItemsWhenCommitCalled(final boolean hasIndex) {
         setUp(hasIndex);
         final Windowed<String> windowedKey =
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         assertEquals("a", cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
     }
@@ -702,23 +704,23 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         assertEquals("b", cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
         cacheListener.forwarded.clear();
         cachingStore.put(bytesKey("1"), bytesValue("c"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         assertEquals("c", cacheListener.forwarded.get(windowedKey).newValue);
         assertEquals("b", cacheListener.forwarded.get(windowedKey).oldValue);
         cachingStore.put(bytesKey("1"), null, DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         assertNull(cacheListener.forwarded.get(windowedKey).newValue);
         assertEquals("c", cacheListener.forwarded.get(windowedKey).oldValue);
         cacheListener.forwarded.clear();
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), null, DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         assertNull(cacheListener.forwarded.get(windowedKey));
         cacheListener.forwarded.clear();
     }
@@ -731,22 +733,22 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         assertEquals("b", cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
         cachingStore.put(bytesKey("1"), bytesValue("c"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         assertEquals("c", cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
         cachingStore.put(bytesKey("1"), null, DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         assertNull(cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
         cacheListener.forwarded.clear();
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), null, DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         assertNull(cacheListener.forwarded.get(windowedKey));
         cacheListener.forwarded.clear();
     }
@@ -764,7 +766,7 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
     public void shouldTakeValueFromCacheIfSameTimestampFlushedToRocks(final boolean hasIndex) {
         setUp(hasIndex);
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
 
         try (final WindowStoreIterator<byte[]> fetch =
@@ -1254,6 +1256,7 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         verifyAndTearDownCloseTests();
     }
 
+    @SuppressWarnings("unchecked")
     private void setUpCloseTests() {
         underlyingStore = mock(RocksDBTimeOrderedWindowStore.class);
         when(underlyingStore.name()).thenReturn("store-name");

@@ -219,6 +219,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                 memberDescriptions.add(new MemberDescription(
                     groupMember.memberId(),
                     Optional.ofNullable(groupMember.instanceId()),
+                    Optional.ofNullable(groupMember.rackId()),
                     groupMember.clientId(),
                     groupMember.clientHost(),
                     new MemberAssignment(convertAssignment(groupMember.assignment())),
@@ -283,6 +284,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                     memberDescriptions.add(new MemberDescription(
                         groupMember.memberId(),
                         Optional.ofNullable(groupMember.groupInstanceId()),
+                        Optional.empty(),
                         groupMember.clientId(),
                         groupMember.clientHost(),
                         new MemberAssignment(partitions),

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.server.metrics;
 
-import org.apache.kafka.common.utils.Sanitizer;
+import org.apache.kafka.common.utils.internals.Sanitizer;
 
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Histogram;
@@ -34,10 +34,6 @@ import java.util.stream.Collectors;
 public class KafkaMetricsGroup {
     private final String pkg;
     private final String simpleName;
-
-    public KafkaMetricsGroup(Class<?> klass) {
-        this(klass.getPackage() == null ? "" : klass.getPackage().getName(), klass.getSimpleName().replaceAll("\\$$", ""));
-    }
 
     /**
      * This constructor allows caller to build metrics name with custom package and class name. This is useful to keep metrics

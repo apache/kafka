@@ -354,7 +354,7 @@ public class KGroupedStreamImplTest {
         table.toStream().process(supplier);
 
         doAggregateSessionWindows(supplier);
-        assertEquals(table.queryableStoreName(), "session-store");
+        assertEquals("session-store", table.queryableStoreName());
     }
 
     @Test
@@ -438,7 +438,7 @@ public class KGroupedStreamImplTest {
             .count(Materialized.as("session-store"));
         table.toStream().process(supplier);
         doCountSessionWindows(supplier);
-        assertEquals(table.queryableStoreName(), "session-store");
+        assertEquals("session-store", table.queryableStoreName());
     }
 
     @Test
@@ -484,7 +484,7 @@ public class KGroupedStreamImplTest {
             .reduce((value1, value2) -> value1 + ":" + value2, Materialized.as("session-store"));
         table.toStream().process(supplier);
         doReduceSessionWindows(supplier);
-        assertEquals(table.queryableStoreName(), "session-store");
+        assertEquals("session-store", table.queryableStoreName());
     }
 
     @Test

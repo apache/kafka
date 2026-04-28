@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.DslKeyValueParams;
@@ -38,7 +39,7 @@ public class SubscriptionStoreFactory<K> extends AbstractConfigurableStoreFactor
         final String name,
         final Serde<SubscriptionWrapper<K>> subscriptionWrapperSerde
     ) {
-        super(null);
+        super(null, DslStoreFormat.TIMESTAMPED);
         this.name = name;
         this.subscriptionWrapperSerde = subscriptionWrapperSerde;
     }
@@ -46,8 +47,8 @@ public class SubscriptionStoreFactory<K> extends AbstractConfigurableStoreFactor
     @Override
     public StoreBuilder<?> builder() {
         StoreBuilder<?> builder;
-        builder = Stores.timestampedKeyValueStoreBuilder(
-            dslStoreSuppliers().keyValueStore(new DslKeyValueParams(name, true)),
+        builder = Stores.timestampedKeyValueStoreWithHeadersBuilder(
+            dslStoreSuppliers().keyValueStore(new DslKeyValueParams(name, dslStoreFormat())),
             new Serdes.BytesSerde(),
             subscriptionWrapperSerde
         );

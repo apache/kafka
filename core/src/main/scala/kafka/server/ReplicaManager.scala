@@ -17,10 +17,7 @@
 package kafka.server
 
 import com.yammer.metrics.core.Meter
-import kafka.cluster.{Partition, PartitionListener}
-import kafka.controller.StateChangeLogger
-import kafka.log.LogManager
-import kafka.server.HostedPartition.Online
+import kafka.cluster.Partition
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.ReplicaManager.{AtMinIsrPartitionCountMetricName, FailedIsrUpdatesPerSecMetricName, IsrExpandsPerSecMetricName, IsrShrinksPerSecMetricName, LeaderCountMetricName, OfflineReplicaCountMetricName, PartitionCountMetricName, PartitionsWithLateTransactionsCountMetricName, ProducerIdCountMetricName, ReassigningPartitionsMetricName, UnderMinIsrPartitionCountMetricName, UnderReplicatedPartitionsMetricName, createLogReadResult, isListOffsetsTimestampUnsupported}
 import kafka.server.share.DelayedShareFetch
@@ -38,34 +35,41 @@ import org.apache.kafka.common.message.{DescribeLogDirsResponseData, DescribePro
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.internal._
 import org.apache.kafka.common.replica.PartitionView.DefaultPartitionView
 import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
 import org.apache.kafka.common.replica._
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.utils.{Exit, Time, Utils}
+import org.apache.kafka.common.utils.internals.Exit
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.coordinator.transaction.{AddPartitionsToTxnConfig, TransactionLogConfig}
 import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
+import org.apache.kafka.logger.StateChangeLogger
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.MetadataCache
-import org.apache.kafka.server.common.{DirectoryEventHandler, RequestLocal, StopPartition}
+import org.apache.kafka.server.purgatory.DelayedProduce.ProducePartitionStatus
+import org.apache.kafka.server.LogAppendResult.LogAppendSummary
+import org.apache.kafka.server.common.{DirectoryEventHandler, RequestLocal, StopPartition, TransactionVersion}
 import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.network.BrokerEndPoint
-import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedRemoteListOffsets, DeleteRecordsPartitionStatus, ListOffsetsPartitionStatus, TopicPartitionOperationKey}
+import org.apache.kafka.server.partition.{AlterPartitionManager, PartitionListener}
+import org.apache.kafka.server.purgatory.DelayedProduce.PartitionStatusValidator.Result
+import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedProduce, DelayedRemoteFetch, DelayedRemoteListOffsets, DeleteRecordsPartitionStatus, ListOffsetsPartitionStatus, TopicPartitionOperationKey}
+import org.apache.kafka.server.quota.{ReplicaQuota, ReplicationQuotaManager}
 import org.apache.kafka.server.share.fetch.{DelayedShareFetchKey, DelayedShareFetchPartitionKey}
 import org.apache.kafka.server.storage.log.{FetchParams, FetchPartitionData}
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation
 import org.apache.kafka.server.util.timer.{SystemTimer, TimerTask}
 import org.apache.kafka.server.util.{Scheduler, ShutdownableThread}
-import org.apache.kafka.server.{ActionQueue, DelayedActionQueue, LogReadResult, common}
+import org.apache.kafka.server.{ActionQueue, DelayedActionQueue, HostedPartition, LogAppendResult, LogDeleteRecordsResult, common}
 import org.apache.kafka.storage.internals.checkpoint.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, OffsetResultHolder, RecordValidationException, RemoteLogReadResult, RemoteStorageFetchInfo, UnifiedLog, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchPartitionStatus, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogManager, LogOffsetMetadata, LogReadInfo, LogReadResult, OffsetResultHolder, RecordValidationException, RecordValidationStats, RemoteLogReadResult, RemoteStorageFetchInfo, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.io.File
@@ -78,58 +82,8 @@ import java.util.{Collections, Optional, OptionalInt, OptionalLong}
 import java.util.function.Consumer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.jdk.CollectionConverters._
+import scala.jdk.FunctionConverters.enrichAsJavaConsumer
 import scala.jdk.OptionConverters.RichOptional
-
-/*
- * Result metadata of a log append operation on the log
- */
-case class LogAppendResult(info: LogAppendInfo,
-                           exception: Option[Throwable],
-                           hasCustomErrorMessage: Boolean) {
-  def error: Errors = exception match {
-    case None => Errors.NONE
-    case Some(e) => Errors.forException(e)
-  }
-
-  def errorMessage: String = {
-    exception match {
-      case Some(e) if hasCustomErrorMessage => e.getMessage
-      case _ => null
-    }
-  }
-}
-
-case class LogDeleteRecordsResult(requestedOffset: Long, lowWatermark: Long, exception: Option[Throwable] = None) {
-  def error: Errors = exception match {
-    case None => Errors.NONE
-    case Some(e) => Errors.forException(e)
-  }
-}
-
-/**
- * Trait to represent the state of hosted partitions. We create a concrete (active) Partition
- * instance when the broker receives a LeaderAndIsr request from the controller or a metadata
- * log record from the Quorum controller indicating that the broker should be either a leader
- * or follower of a partition.
- */
-sealed trait HostedPartition
-
-object HostedPartition {
-  /**
-   * This broker does not have any state for this partition locally.
-   */
-  final object None extends HostedPartition
-
-  /**
-   * This broker hosts the partition and it is online.
-   */
-  final case class Online(partition: Partition) extends HostedPartition
-
-  /**
-   * This broker hosts the partition, but it is in an offline log directory.
-   */
-  final case class Offline(partition: Option[Partition]) extends HostedPartition
-}
 
 object ReplicaManager {
   val HighWatermarkFilename = "replication-offset-checkpoint"
@@ -188,19 +142,7 @@ object ReplicaManager {
       -1L,
       -1L,
       OptionalLong.empty(),
-      Optional.of(e))
-  }
-
-  def createLogReadResult(e: Throwable): LogReadResult = {
-    new LogReadResult(new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
-      Optional.empty(),
-      UnifiedLog.UNKNOWN_OFFSET,
-      UnifiedLog.UNKNOWN_OFFSET,
-      UnifiedLog.UNKNOWN_OFFSET,
-      UnifiedLog.UNKNOWN_OFFSET,
-      -1L,
-      OptionalLong.empty(),
-      Optional.of(e))
+      Errors.forException(e));
   }
 
   private[server] def isListOffsetsTimestampUnsupported(timestamp: JLong, version: Short): Boolean = {
@@ -231,7 +173,10 @@ class ReplicaManager(val config: KafkaConfig,
                      val directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP,
                      val defaultActionQueue: ActionQueue = new DelayedActionQueue
                      ) extends Logging {
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
+  private val metricsPackage = "kafka.server"
+  private val metricsClassName = "ReplicaManager"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
   private val addPartitionsToTxnConfig = new AddPartitionsToTxnConfig(config)
   private val shareFetchPurgatoryName = "ShareFetch"
   private val delayedShareFetchTimer = new SystemTimer(shareFetchPurgatoryName)
@@ -248,9 +193,12 @@ class ReplicaManager(val config: KafkaConfig,
     new DelayedOperationPurgatory[DelayedDeleteRecords](
       "DeleteRecords", config.brokerId,
       config.deleteRecordsPurgatoryPurgeIntervalRequests))
+  // delayedRemoteFetchPurgatory purgeInterval is set to 0 to release the references of completed DelayedRemoteFetch
+  // instances immediately for GC. The DelayedRemoteFetch instance internally holds the RemoteLogReadResult that can be
+  // up to the size of `fetch.max.bytes` which defaults to 50 MB.
   val delayedRemoteFetchPurgatory = delayedRemoteFetchPurgatoryParam.getOrElse(
     new DelayedOperationPurgatory[DelayedRemoteFetch](
-      "RemoteFetch", config.brokerId))
+      "RemoteFetch", config.brokerId, 0))
   val delayedRemoteListOffsetsPurgatory = delayedRemoteListOffsetsPurgatoryParam.getOrElse(
     new DelayedOperationPurgatory[DelayedRemoteListOffsets](
       "RemoteListOffsets", config.brokerId))
@@ -261,18 +209,18 @@ class ReplicaManager(val config: KafkaConfig,
 
   /* epoch of the controller that last changed the leader */
   protected val localBrokerId = config.brokerId
-  protected val allPartitions = new ConcurrentHashMap[TopicPartition, HostedPartition]
+  protected val allPartitions = new ConcurrentHashMap[TopicPartition, HostedPartition[Partition]]
   private val replicaStateChangeLock = new Object
   val replicaFetcherManager = createReplicaFetcherManager(metrics, time, quotaManagers.follower)
   private[server] val replicaAlterLogDirsManager = createReplicaAlterLogDirsManager(quotaManagers.alterLogDirs, brokerTopicStats)
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
-  @volatile private[server] var highWatermarkCheckpoints: Map[String, OffsetCheckpointFile] = logManager.liveLogDirs.map(dir =>
+  @volatile private[server] var highWatermarkCheckpoints: Map[String, OffsetCheckpointFile] = logManager.liveLogDirs.asScala.map(dir =>
     (dir.getAbsolutePath, new OffsetCheckpointFile(new File(dir, ReplicaManager.HighWatermarkFilename), logDirFailureChannel))).toMap
 
   @volatile private var isInControlledShutdown = false
 
   this.logIdent = s"[ReplicaManager broker=$localBrokerId] "
-  protected val stateChangeLogger = new StateChangeLogger(localBrokerId, inControllerContext = false, None)
+  protected val stateChangeLogger = new StateChangeLogger(localBrokerId)
 
   private var logDirFailureHandler: LogDirFailureHandler = _
 
@@ -329,7 +277,7 @@ class ReplicaManager(val config: KafkaConfig,
     replicaFetcherManager.resizeThreadPool(newSize)
   }
 
-  def getLog(topicPartition: TopicPartition): Option[UnifiedLog] = logManager.getLog(topicPartition)
+  def getLog(topicPartition: TopicPartition): Option[UnifiedLog] = logManager.getLog(topicPartition).toScala
 
   def startup(): Unit = {
     // start ISR expiration thread
@@ -345,8 +293,9 @@ class ReplicaManager(val config: KafkaConfig,
 
   private def maybeRemoveTopicMetrics(topic: String): Unit = {
     val topicHasNonOfflinePartition = allPartitions.values.asScala.exists {
-      case online: HostedPartition.Online => topic == online.partition.topic
-      case HostedPartition.None | HostedPartition.Offline(_) => false
+      case online: HostedPartition.Online[Partition] => topic == online.partition.topic
+      case _: HostedPartition.Offline[Partition] => false
+      case _: HostedPartition.None[Partition] => false
     }
     if (!topicHasNonOfflinePartition) // nothing online or deferred
       brokerTopicStats.removeMetrics(topic)
@@ -405,8 +354,8 @@ class ReplicaManager(val config: KafkaConfig,
    */
   def maybeAddListener(partition: TopicPartition, listener: PartitionListener): Boolean = {
     getPartition(partition) match {
-      case HostedPartition.Online(partition) =>
-        partition.maybeAddListener(listener)
+      case online: HostedPartition.Online[Partition] =>
+        online.partition.maybeAddListener(listener)
       case _ =>
         false
     }
@@ -417,8 +366,8 @@ class ReplicaManager(val config: KafkaConfig,
    */
   def removeListener(partition: TopicPartition, listener: PartitionListener): Unit = {
     getPartition(partition) match {
-      case HostedPartition.Online(partition) =>
-        partition.removeListener(listener)
+      case online: HostedPartition.Online[Partition] =>
+        online.partition.removeListener(listener)
       case _ => // Ignore
     }
   }
@@ -446,7 +395,7 @@ class ReplicaManager(val config: KafkaConfig,
       var topicId: Option[Uuid] = None
       if (stopPartition.deleteLocalLog) {
         getPartition(topicPartition) match {
-          case hostedPartition: HostedPartition.Online =>
+          case hostedPartition: HostedPartition.Online[Partition] =>
             if (allPartitions.remove(topicPartition, hostedPartition)) {
               maybeRemoveTopicMetrics(topicPartition.topic)
               // Logs are not deleted here. They are deleted in a single batch later on.
@@ -462,16 +411,20 @@ class ReplicaManager(val config: KafkaConfig,
       // If we were the leader, we may have some operations still waiting for completion.
       // We force completion to prevent them from timing out.
       completeDelayedOperationsWhenNotPartitionLeader(topicPartition, topicId)
+      // Clean up per-partition expiration metrics regardless of whether the local log
+      // is deleted. This covers both partition deletion and reassignment (leader -> follower).
+      DelayedProduce.removePartitionMetrics(topicPartition)
+      DelayedRemoteListOffsets.removePartitionMetrics(topicPartition)
     }
 
     // Third delete the logs and checkpoint.
     val errorMap = new mutable.HashMap[TopicPartition, Throwable]()
     val remotePartitionsToStop = partitionsToStop.filter {
-      sp => logManager.getLog(sp.topicPartition).exists(unifiedLog => unifiedLog.remoteLogEnabled())
+      sp => logManager.getLog(sp.topicPartition).toScala.exists(unifiedLog => unifiedLog.remoteLogEnabled())
     }
     if (partitionsToDelete.nonEmpty) {
       // Delete the logs and checkpoint.
-      logManager.asyncDelete(partitionsToDelete, isStray = false, (tp, e) => errorMap.put(tp, e))
+      logManager.asyncDelete(partitionsToDelete.asJava, false, (tp, e) => errorMap.put(tp, e))
     }
     remoteLogManager.foreach { rlm =>
       // exclude the partitions with offline/error state
@@ -488,13 +441,13 @@ class ReplicaManager(val config: KafkaConfig,
     new TopicIdPartition(topicId, topicPartition)
   }
 
-  def getPartition(topicPartition: TopicPartition): HostedPartition = {
-    Option(allPartitions.get(topicPartition)).getOrElse(HostedPartition.None)
+  def getPartition(topicPartition: TopicPartition): HostedPartition[Partition] = {
+    Option(allPartitions.get(topicPartition)).getOrElse(new HostedPartition.None[Partition])
   }
 
   def isAddingReplica(topicPartition: TopicPartition, replicaId: Int): Boolean = {
     getPartition(topicPartition) match {
-      case Online(partition) => partition.isAddingReplica(replicaId)
+      case online: HostedPartition.Online[Partition] => online.partition.isAddingReplica(replicaId)
       case _ => false
     }
   }
@@ -508,12 +461,12 @@ class ReplicaManager(val config: KafkaConfig,
 
   // Visible for testing
   private[server] def addOnlinePartition(topicPartition: TopicPartition, partition: Partition): Unit = {
-    allPartitions.put(topicPartition, HostedPartition.Online(partition))
+    allPartitions.put(topicPartition, new HostedPartition.Online(partition))
   }
 
   def onlinePartition(topicPartition: TopicPartition): Option[Partition] = {
     getPartition(topicPartition) match {
-      case HostedPartition.Online(partition) => Some(partition)
+      case online: HostedPartition.Online[Partition] => Some(online.partition)
       case _ => None
     }
   }
@@ -522,13 +475,13 @@ class ReplicaManager(val config: KafkaConfig,
   // the iterator has been constructed could still be returned by this iterator.
   private def onlinePartitionsIterator: Iterator[Partition] = {
     allPartitions.values.asScala.iterator.flatMap {
-      case HostedPartition.Online(partition) => Some(partition)
+      case online: HostedPartition.Online[Partition] => Some(online.partition)
       case _ => None
     }
   }
 
   private def offlinePartitionCount: Int = {
-    allPartitions.values.asScala.iterator.count(_.getClass == HostedPartition.Offline.getClass)
+    allPartitions.values.asScala.iterator.count(_.getClass == classOf[HostedPartition.Offline[Partition]])
   }
 
   def getPartitionOrException(topicPartition: TopicPartition): Partition = {
@@ -566,20 +519,20 @@ class ReplicaManager(val config: KafkaConfig,
 
   def getPartitionOrError(topicPartition: TopicPartition): Either[Errors, Partition] = {
     getPartition(topicPartition) match {
-      case HostedPartition.Online(partition) =>
-        Right(partition)
+      case online: HostedPartition.Online[Partition] =>
+        Right(online.partition)
 
-      case HostedPartition.Offline(_) =>
+      case _: HostedPartition.Offline[Partition] =>
         Left(Errors.KAFKA_STORAGE_ERROR)
 
-      case HostedPartition.None if metadataCache.contains(topicPartition) =>
+      case _: HostedPartition.None[Partition] if metadataCache.contains(topicPartition) =>
         // The topic exists, but this broker is no longer a replica of it, so we return NOT_LEADER_OR_FOLLOWER which
         // forces clients to refresh metadata to find the new location. This can happen, for example,
         // during a partition reassignment if a produce request from the client is sent to a broker after
         // the local replica has been deleted.
         Left(Errors.NOT_LEADER_OR_FOLLOWER)
 
-      case HostedPartition.None =>
+      case _: HostedPartition.None[Partition] =>
         Left(Errors.UNKNOWN_TOPIC_OR_PARTITION)
     }
   }
@@ -626,6 +579,9 @@ class ReplicaManager(val config: KafkaConfig,
    *                                      thread calling this method
    * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
    * @param verificationGuards            the mapping from topic partition to verification guards if transaction verification is used
+   * @param transactionVersion            the transaction version for the records (1 for TV1, 2 for TV2, etc.).
+   *                                      Defaults to TV_UNKNOWN (-1) to force explicit specification.
+   *                                      Used for epoch validation of transaction markers (KIP-1228).
    */
   def appendRecordsToLeader(
     requiredAcks: Short,
@@ -634,7 +590,8 @@ class ReplicaManager(val config: KafkaConfig,
     entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
     requestLocal: RequestLocal = RequestLocal.noCaching,
     actionQueue: ActionQueue = this.defaultActionQueue,
-    verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty
+    verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
+    transactionVersion: Short = TransactionVersion.TV_UNKNOWN
   ): Map[TopicIdPartition, LogAppendResult] = {
     val startTimeMs = time.milliseconds
     val localProduceResultsWithTopicId = appendToLocalLog(
@@ -643,7 +600,8 @@ class ReplicaManager(val config: KafkaConfig,
       entriesPerPartition,
       requiredAcks,
       requestLocal,
-      verificationGuards.toMap
+      verificationGuards.toMap,
+      transactionVersion
     )
     debug("Produce to local log in %d ms".format(time.milliseconds - startTimeMs))
 
@@ -673,16 +631,20 @@ class ReplicaManager(val config: KafkaConfig,
    * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
    *                                      thread calling this method
    * @param verificationGuards            the mapping from topic partition to verification guards if transaction verification is used
+   * @param transactionVersion            the transaction version for the records (1 = TV1, 2 = TV2).
+   *                                      Defaults to TV_UNKNOWN (-1) to force explicit specification.
+   *                                      Used for epoch validation of transaction markers (KIP-1228).
    */
   def appendRecords(timeout: Long,
                     requiredAcks: Short,
                     internalTopicsAllowed: Boolean,
                     origin: AppendOrigin,
                     entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
-                    responseCallback: Map[TopicIdPartition, PartitionResponse] => Unit,
+                    responseCallback: util.Map[TopicIdPartition, PartitionResponse] => Unit,
                     recordValidationStatsCallback: Map[TopicIdPartition, RecordValidationStats] => Unit = _ => (),
                     requestLocal: RequestLocal = RequestLocal.noCaching,
-                    verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
+                    verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
+                    transactionVersion: Short = TransactionVersion.TV_UNKNOWN): Unit = {
     if (!isValidRequiredAcks(requiredAcks)) {
       sendInvalidRequiredAcksResponse(entriesPerPartition, responseCallback)
       return
@@ -695,13 +657,14 @@ class ReplicaManager(val config: KafkaConfig,
       entriesPerPartition,
       requestLocal,
       defaultActionQueue,
-      verificationGuards
+      verificationGuards,
+      transactionVersion
     )
 
     val produceStatus = buildProducePartitionStatus(localProduceResults)
 
     recordValidationStatsCallback(localProduceResults.map { case (k, v) =>
-      k -> v.info.recordValidationStats
+      k -> v.logAppendSummary().recordValidationStats()
     })
 
     maybeAddDelayedProduce(
@@ -783,22 +746,22 @@ class ReplicaManager(val config: KafkaConfig,
                 }
               case _ => None
             }
-          new TopicIdPartition(topicIds.getOrElse(topicPartition.topic(), Uuid.ZERO_UUID), topicPartition) -> LogAppendResult(
-            LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
-            Some(customException.getOrElse(error.exception)),
-            hasCustomErrorMessage = customException.isDefined
+          new TopicIdPartition(topicIds.getOrElse(topicPartition.topic(), Uuid.ZERO_UUID), topicPartition) -> new LogAppendResult(
+            LogAppendSummary.fromAppendInfo(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO),
+            Optional.ofNullable(customException.getOrElse(error.exception)),
+            customException.isDefined
           )
       }
-      // In non-transaction paths, errorResults is typically empty, so we can 
+      // In non-transaction paths, errorResults is typically empty, so we can
       // directly use entriesPerPartition instead of creating a new filtered collection
-      val entriesWithoutErrorsPerPartition = 
+      val entriesWithoutErrorsPerPartition =
         if (errorResults.nonEmpty) entriesPerPartition.filter { case (key, _) => !errorResults.contains(key) }
         else entriesPerPartition
 
       val preAppendPartitionResponses = buildProducePartitionStatus(errorResults).map { case (k, status) => k -> status.responseStatus }
 
-      def newResponseCallback(responses: Map[TopicIdPartition, PartitionResponse]): Unit = {
-        responseCallback(preAppendPartitionResponses ++ responses)
+      def newResponseCallback(responses: util.Map[TopicIdPartition, PartitionResponse]): Unit = {
+        responseCallback(preAppendPartitionResponses ++ responses.asScala)
       }
 
       appendRecords(
@@ -873,14 +836,14 @@ class ReplicaManager(val config: KafkaConfig,
     results: Map[TopicIdPartition, LogAppendResult]
   ): Map[TopicIdPartition, ProducePartitionStatus] = {
     results.map { case (topicIdPartition, result) =>
-      topicIdPartition -> ProducePartitionStatus(
-        result.info.lastOffset + 1, // required offset
+      topicIdPartition -> new ProducePartitionStatus(
+        result.logAppendSummary.lastOffset + 1, // required offset
         new PartitionResponse(
           result.error,
-          result.info.firstOffset,
-          result.info.logAppendTime,
-          result.info.logStartOffset,
-          result.info.recordErrors,
+          result.logAppendSummary.firstOffset,
+          result.logAppendSummary.logAppendTime,
+          result.logAppendSummary.logStartOffset,
+          result.logAppendSummary.recordErrors,
           result.errorMessage
         )
       )
@@ -894,7 +857,7 @@ class ReplicaManager(val config: KafkaConfig,
     actionQueue.add {
       () => appendResults.foreach { case (topicIdPartition, result) =>
         val requestKey = new TopicPartitionOperationKey(topicIdPartition.topicPartition)
-        result.info.leaderHwChange match {
+        result.logAppendSummary.leaderHwChange match {
           case LeaderHwChange.INCREASED =>
             // some delayed operations may be unblocked after HW changed
             delayedProducePurgatory.checkAndComplete(requestKey)
@@ -918,12 +881,26 @@ class ReplicaManager(val config: KafkaConfig,
     entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
     initialAppendResults: Map[TopicIdPartition, LogAppendResult],
     initialProduceStatus: Map[TopicIdPartition, ProducePartitionStatus],
-    responseCallback: Map[TopicIdPartition, PartitionResponse] => Unit,
+    responseCallback: util.Map[TopicIdPartition, PartitionResponse] => Unit,
   ): Unit = {
     if (delayedProduceRequestRequired(requiredAcks, entriesPerPartition, initialAppendResults)) {
-      // create delayed produce operation
-      val produceMetadata = ProduceMetadata(requiredAcks, initialProduceStatus)
-      val delayedProduce = new DelayedProduce(timeoutMs, produceMetadata, this, responseCallback)
+      // Create delayed produce operation
+      //
+      // This delegate is invoked by DelayedProduce to verify if the produce operation can be completed.
+      // Defined here to provide access to ReplicaManager#getPartitionOrError, which is otherwise inaccessible to the caller.
+      def delegate(tp: TopicPartition, requiredOffset: Long) : Result = {
+        val (hasEnough, error) = getPartitionOrError(tp).fold(
+            // Please refer to the documentation in `DelayedProduce#tryComplete` for a comprehensive description of these cases.
+            // Case A or Case B
+            err => (false, err),
+
+            // Case B or Case C
+            partition => partition.checkEnoughReplicasReachOffset(requiredOffset))
+
+        new Result(hasEnough, error)
+      }
+
+      val delayedProduce = new DelayedProduce(timeoutMs, initialProduceStatus.asJava, delegate, responseCallback.asJava)
 
       // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
       val producerRequestKeys = entriesPerPartition.keys.map(new TopicPartitionOperationKey(_)).toList
@@ -934,23 +911,25 @@ class ReplicaManager(val config: KafkaConfig,
       delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys.asJava)
     } else {
       // we can respond immediately
-      val produceResponseStatus = initialProduceStatus.map { case (k, status) => k -> status.responseStatus }
+      val produceResponseStatus = new util.HashMap[TopicIdPartition, PartitionResponse]
+      initialProduceStatus.foreach { case (k, status) => produceResponseStatus.put(k, status.responseStatus) }
       responseCallback(produceResponseStatus)
     }
   }
 
   private def sendInvalidRequiredAcksResponse(
     entries: Map[TopicIdPartition, MemoryRecords],
-    responseCallback: Map[TopicIdPartition, PartitionResponse] => Unit): Unit = {
+    responseCallback: util.Map[TopicIdPartition, PartitionResponse] => Unit): Unit = {
     // If required.acks is outside accepted range, something is wrong with the client
     // Just return an error and don't handle the request at all
-    val responseStatus = entries.map { case (topicIdPartition, _) =>
-      topicIdPartition -> new PartitionResponse(
-        Errors.INVALID_REQUIRED_ACKS,
-        LogAppendInfo.UNKNOWN_LOG_APPEND_INFO.firstOffset,
-        RecordBatch.NO_TIMESTAMP,
-        LogAppendInfo.UNKNOWN_LOG_APPEND_INFO.logStartOffset
-      )
+    val responseStatus = new util.HashMap[TopicIdPartition, PartitionResponse]
+    entries.foreach { case(topicIdPartition, _) =>
+        responseStatus.put(topicIdPartition, new PartitionResponse(
+          Errors.INVALID_REQUIRED_ACKS,
+          LogAppendInfo.UNKNOWN_LOG_APPEND_INFO.firstOffset,
+          RecordBatch.NO_TIMESTAMP,
+          LogAppendInfo.UNKNOWN_LOG_APPEND_INFO.logStartOffset)
+        )
     }
     responseCallback(responseStatus)
   }
@@ -1105,7 +1084,7 @@ class ReplicaManager(val config: KafkaConfig,
     offsetPerPartition.map { case (topicPartition, requestedOffset) =>
       // reject delete records operation for internal topics unless allowInternalTopicDeletion is true
       if (Topic.isInternal(topicPartition.topic) && !allowInternalTopicDeletion) {
-        (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(new InvalidTopicException(s"Cannot delete records of internal topic ${topicPartition.topic}"))))
+        (topicPartition, new LogDeleteRecordsResult(-1L, -1L, Optional.of(new InvalidTopicException(s"Cannot delete records of internal topic ${topicPartition.topic}"))))
       } else {
         try {
           val partition = getPartitionOrException(topicPartition)
@@ -1114,13 +1093,15 @@ class ReplicaManager(val config: KafkaConfig,
         } catch {
           case e@ (_: UnknownTopicOrPartitionException |
                    _: NotLeaderOrFollowerException |
-                   _: OffsetOutOfRangeException |
                    _: PolicyViolationException |
                    _: KafkaStorageException) =>
-            (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(e)))
+            (topicPartition, new LogDeleteRecordsResult(-1L, -1L, Optional.of(e)))
+          case e: OffsetOutOfRangeException =>
+            debug("Error processing delete records operation on partition %s".format(topicPartition), e)
+            (topicPartition, new LogDeleteRecordsResult(-1L, -1L, Optional.of(e)))
           case t: Throwable =>
             error("Error processing delete records operation on partition %s".format(topicPartition), t)
-            (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(t)))
+            (topicPartition, new LogDeleteRecordsResult(-1L, -1L, Optional.of(t)))
         }
       }
     }
@@ -1153,9 +1134,12 @@ class ReplicaManager(val config: KafkaConfig,
             throw new InvalidTopicException("The topic name is too long.")
           if (!logManager.isLogDirOnline(destinationDir))
             throw new KafkaStorageException(s"Log directory $destinationDir is offline")
+          if (logManager.cordonedLogDirs().contains(destinationDir))
+            throw new InvalidReplicaAssignmentException(s"Log directory $destinationDir is cordoned")
 
           getPartition(topicPartition) match {
-            case HostedPartition.Online(partition) =>
+            case online: HostedPartition.Online[Partition] =>
+              val partition = online.partition
               // Stop current replica movement if the destinationDir is different from the existing destination log directory
               if (partition.futureReplicaDirChanged(destinationDir)) {
                 replicaAlterLogDirsManager.removeFetcherForPartitions(Set(topicPartition))
@@ -1169,10 +1153,10 @@ class ReplicaManager(val config: KafkaConfig,
                   logManager.resumeCleaning(topicPartition)
                 }
               }
-            case HostedPartition.Offline(_) =>
+            case _: HostedPartition.Offline[Partition] =>
               throw new KafkaStorageException(s"Partition $topicPartition is offline")
 
-            case HostedPartition.None => // Do nothing
+            case _: HostedPartition.None[Partition] => // Do nothing
           }
 
           // If the log for this partition has not been created yet:
@@ -1206,7 +1190,8 @@ class ReplicaManager(val config: KafkaConfig,
           case e@(_: InvalidTopicException |
                   _: LogDirNotFoundException |
                   _: ReplicaNotAvailableException |
-                  _: KafkaStorageException) =>
+                  _: KafkaStorageException |
+                  _: InvalidReplicaAssignmentException) =>
             warn(s"Unable to alter log dirs for $topicPartition", e)
             (topicPartition, Errors.forException(e))
           case e: NotLeaderOrFollowerException =>
@@ -1230,7 +1215,7 @@ class ReplicaManager(val config: KafkaConfig,
    *    are included. There may be future logs (which will replace the current logs of the partition in the future) on the broker after KIP-113 is implemented.
    */
   def describeLogDirs(partitions: Set[TopicPartition]): util.List[DescribeLogDirsResponseData.DescribeLogDirsResult] = {
-    val logsByDir = logManager.allLogs.groupBy(log => log.parentDir)
+    val logsByDir = logManager.allLogs.asScala.groupBy(log => log.parentDir)
 
     config.logDirs.stream().distinct().map(logDir => {
       val file = Paths.get(logDir)
@@ -1260,12 +1245,17 @@ class ReplicaManager(val config: KafkaConfig,
             Collections.emptyList[DescribeLogDirsTopic]()
         }
 
+        val isCordoned = if (metadataCache.metadataVersion().isCordonedLogDirsSupported)
+          logManager.cordonedLogDirs().contains(absolutePath)
+        else
+          false
         val describeLogDirsResult = new DescribeLogDirsResponseData.DescribeLogDirsResult()
-          .setLogDir(absolutePath).setTopics(topicInfos)
+          .setLogDir(absolutePath)
+          .setTopics(topicInfos)
           .setErrorCode(Errors.NONE.code)
-          .setTotalBytes(totalBytes).setUsableBytes(usableBytes)
-        if (!topicInfos.isEmpty)
-          describeLogDirsResult.setTopics(topicInfos)
+          .setTotalBytes(totalBytes)
+          .setUsableBytes(usableBytes)
+          .setIsCordoned(isCordoned)
         describeLogDirsResult
 
       } catch {
@@ -1324,7 +1314,8 @@ class ReplicaManager(val config: KafkaConfig,
     if (delayedDeleteRecordsRequired(localDeleteRecordsResults)) {
       def onAcks(topicPartition: TopicPartition, status: DeleteRecordsPartitionStatus): Unit = {
         val (lowWatermarkReached, error, lw) = getPartition(topicPartition) match {
-          case HostedPartition.Online(partition) =>
+          case online: HostedPartition.Online[Partition] =>
+            val partition = online.partition
             partition.leaderLogIfLocal match {
               case Some(_) =>
                 val leaderLW = partition.lowWatermarkIfLeader
@@ -1333,10 +1324,10 @@ class ReplicaManager(val config: KafkaConfig,
                 (false, Errors.NOT_LEADER_OR_FOLLOWER, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
             }
 
-          case HostedPartition.Offline(_) =>
+          case _: HostedPartition.Offline[Partition] =>
             (false, Errors.KAFKA_STORAGE_ERROR, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
 
-          case HostedPartition.None =>
+          case _: HostedPartition.None[Partition] =>
             (false, Errors.UNKNOWN_TOPIC_OR_PARTITION, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
         }
         if (error != Errors.NONE || lowWatermarkReached) {
@@ -1372,7 +1363,7 @@ class ReplicaManager(val config: KafkaConfig,
                                             localProduceResults: Map[TopicIdPartition, LogAppendResult]): Boolean = {
     requiredAcks == -1 &&
     entriesPerPartition.nonEmpty &&
-    localProduceResults.values.count(_.exception.isDefined) < entriesPerPartition.size
+    localProduceResults.values.count(_.exception().isPresent) < entriesPerPartition.size
   }
 
   private def isValidRequiredAcks(requiredAcks: Short): Boolean = {
@@ -1387,7 +1378,8 @@ class ReplicaManager(val config: KafkaConfig,
                                entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
                                requiredAcks: Short,
                                requestLocal: RequestLocal,
-                               verificationGuards: Map[TopicPartition, VerificationGuard]):
+                               verificationGuards: Map[TopicPartition, VerificationGuard],
+                               transactionVersion: Short):
   Map[TopicIdPartition, LogAppendResult] = {
     val traceEnabled = isTraceEnabled
     def processFailedRecord(topicIdPartition: TopicIdPartition, t: Throwable) = {
@@ -1413,15 +1405,15 @@ class ReplicaManager(val config: KafkaConfig,
 
       // reject appending to internal topics if it is not allowed
       if (Topic.isInternal(topicIdPartition.topic) && !internalTopicsAllowed) {
-        (topicIdPartition, LogAppendResult(
-          LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
-          Some(new InvalidTopicException(s"Cannot append to internal topic ${topicIdPartition.topic}")),
-          hasCustomErrorMessage = false))
+        (topicIdPartition, new LogAppendResult(
+          LogAppendSummary.fromAppendInfo(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO),
+          Optional.of(new InvalidTopicException(s"Cannot append to internal topic ${topicIdPartition.topic}")),
+          false))
       } else {
         try {
           val partition = getPartitionOrException(topicIdPartition)
           val info = partition.appendRecordsToLeader(records, origin, requiredAcks, requestLocal,
-            verificationGuards.getOrElse(topicIdPartition.topicPartition(), VerificationGuard.SENTINEL))
+            verificationGuards.getOrElse(topicIdPartition.topicPartition(), VerificationGuard.SENTINEL), transactionVersion)
           val numAppendedMessages = info.numMessages
 
           // update stats for successfully appended bytes and messages as bytesInRate and messageInRate
@@ -1434,7 +1426,7 @@ class ReplicaManager(val config: KafkaConfig,
             trace(s"${records.sizeInBytes} written to log $topicIdPartition beginning at offset " +
               s"${info.firstOffset} and ending at offset ${info.lastOffset}")
 
-          (topicIdPartition, LogAppendResult(info, exception = None, hasCustomErrorMessage = false))
+          (topicIdPartition,  new LogAppendResult(LogAppendSummary.fromAppendInfo(info), Optional.empty(), false))
 
         } catch {
           // NOTE: Failed produce requests metric is not incremented for known exceptions
@@ -1446,16 +1438,19 @@ class ReplicaManager(val config: KafkaConfig,
                    _: CorruptRecordException |
                    _: KafkaStorageException |
                    _: UnknownTopicIdException) =>
-            (topicIdPartition, LogAppendResult(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO, Some(e), hasCustomErrorMessage = false))
+            (topicIdPartition, new LogAppendResult(LogAppendSummary.fromAppendInfo(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO),
+              Optional.of(e), false))
           case rve: RecordValidationException =>
             val logStartOffset = processFailedRecord(topicIdPartition, rve.invalidException)
             val recordErrors = rve.recordErrors
-            (topicIdPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithAdditionalInfo(logStartOffset, recordErrors),
-              Some(rve.invalidException), hasCustomErrorMessage = true))
+            (topicIdPartition, new LogAppendResult(
+              LogAppendSummary.fromAppendInfo(LogAppendInfo.unknownLogAppendInfoWithAdditionalInfo(logStartOffset, recordErrors)),
+              Optional.of(rve.invalidException), true))
           case t: Throwable =>
             val logStartOffset = processFailedRecord(topicIdPartition, t)
-            (topicIdPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithLogStartOffset(logStartOffset),
-              Some(t), hasCustomErrorMessage = false))
+            (topicIdPartition, new LogAppendResult(
+              LogAppendSummary.fromAppendInfo(LogAppendInfo.unknownLogAppendInfoWithLogStartOffset(logStartOffset)),
+              Optional.of(t), false))
         }
       }
     }
@@ -1630,26 +1625,35 @@ class ReplicaManager(val config: KafkaConfig,
   /**
    * Process all remote fetches by creating async read tasks and handling them in DelayedRemoteFetch collectively.
    */
-  private def processRemoteFetches(remoteFetchInfos: util.HashMap[TopicIdPartition, RemoteStorageFetchInfo],
+  private def processRemoteFetches(remoteFetchInfos: util.LinkedHashMap[TopicIdPartition, RemoteStorageFetchInfo],
                                    params: FetchParams,
                                    responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit,
-                                   logReadResults: Seq[(TopicIdPartition, LogReadResult)],
-                                   remoteFetchPartitionStatus: Seq[(TopicIdPartition, FetchPartitionStatus)]): Unit = {
+                                   logReadResults: util.LinkedHashMap[TopicIdPartition, LogReadResult],
+                                   fetchPartitionStatus: util.LinkedHashMap[TopicIdPartition, FetchPartitionStatus]): Unit = {
     val remoteFetchTasks = new util.HashMap[TopicIdPartition, Future[Void]]
     val remoteFetchResults = new util.HashMap[TopicIdPartition, CompletableFuture[RemoteLogReadResult]]
-    
+
     remoteFetchInfos.forEach { (topicIdPartition, remoteFetchInfo) =>
       val (task, result) = processRemoteFetch(remoteFetchInfo)
       remoteFetchTasks.put(topicIdPartition, task)
       remoteFetchResults.put(topicIdPartition, result)
     }
-    
+
     val remoteFetchMaxWaitMs = config.remoteLogManagerConfig.remoteFetchMaxWaitMs().toLong
-    val remoteFetch = new DelayedRemoteFetch(remoteFetchTasks, remoteFetchResults, remoteFetchInfos, remoteFetchMaxWaitMs,
-      remoteFetchPartitionStatus, params, logReadResults, this, responseCallback)
+    val remoteFetch = new DelayedRemoteFetch(remoteFetchTasks,
+                                             remoteFetchResults,
+                                             remoteFetchInfos,
+                                             remoteFetchMaxWaitMs,
+                                             fetchPartitionStatus,
+                                             params,
+                                             logReadResults,
+                                             tp => getPartitionOrException(tp),
+                                             response => responseCallback(response.asScala.toSeq))
 
     // create a list of (topic, partition) pairs to use as keys for this delayed fetch operation
-    val delayedFetchKeys = remoteFetchPartitionStatus.map { case (tp, _) => new TopicPartitionOperationKey(tp) }.toList
+    val delayedFetchKeys = remoteFetchTasks.asScala.map { case (tp, _) => new TopicPartitionOperationKey(tp) }.toList
+    // We only guarantee eventual cleanup via the next FETCH request for the same set of partitions or
+    // using reaper-thread.
     delayedRemoteFetchPurgatory.tryCompleteElseWatch(remoteFetch, delayedFetchKeys.asJava)
   }
 
@@ -1669,11 +1673,11 @@ class ReplicaManager(val config: KafkaConfig,
     var errorReadingData = false
 
     // topic-partitions that have to be read from remote storage
-    val remoteFetchInfos = new util.HashMap[TopicIdPartition, RemoteStorageFetchInfo]()
+    val remoteFetchInfos = new util.LinkedHashMap[TopicIdPartition, RemoteStorageFetchInfo]()
 
     var hasDivergingEpoch = false
     var hasPreferredReadReplica = false
-    val logReadResultMap = new mutable.HashMap[TopicIdPartition, LogReadResult]
+    val logReadResultMap = new util.LinkedHashMap[TopicIdPartition, LogReadResult]
 
     logReadResults.foreach { case (topicIdPartition, logReadResult) =>
       brokerTopicStats.topicStats(topicIdPartition.topicPartition.topic).totalFetchRequestRate.mark()
@@ -1707,16 +1711,17 @@ class ReplicaManager(val config: KafkaConfig,
       responseCallback(fetchPartitionData)
     } else {
       // construct the fetch results from the read results
-      val fetchPartitionStatus = new mutable.ArrayBuffer[(TopicIdPartition, FetchPartitionStatus)]
+      val fetchPartitionStatus = new util.LinkedHashMap[TopicIdPartition, FetchPartitionStatus]
       fetchInfos.foreach { case (topicIdPartition, partitionData) =>
-        logReadResultMap.get(topicIdPartition).foreach(logReadResult => {
+        val logReadResult = logReadResultMap.get(topicIdPartition)
+        if (logReadResult != null) {
           val logOffsetMetadata = logReadResult.info.fetchOffsetMetadata
-          fetchPartitionStatus += (topicIdPartition -> FetchPartitionStatus(logOffsetMetadata, partitionData))
-        })
+          fetchPartitionStatus.put(topicIdPartition, new FetchPartitionStatus(logOffsetMetadata, partitionData))
+        }
       }
 
       if (!remoteFetchInfos.isEmpty) {
-        processRemoteFetches(remoteFetchInfos, params, responseCallback, logReadResults, fetchPartitionStatus.toSeq)
+        processRemoteFetches(remoteFetchInfos, params, responseCallback, logReadResultMap, fetchPartitionStatus)
       } else {
         // If there is not enough data to respond and there is no remote data, we will let the fetch request
         // wait for new data.
@@ -1729,12 +1734,15 @@ class ReplicaManager(val config: KafkaConfig,
         )
 
         // create a list of (topic, partition) pairs to use as keys for this delayed fetch operation
-        val delayedFetchKeys = fetchPartitionStatus.map { case (tp, _) => new TopicPartitionOperationKey(tp) }.toList
+        val delayedFetchKeys = fetchPartitionStatus.keySet()
+          .stream()
+          .map(new TopicPartitionOperationKey(_))
+          .toList()
 
         // try to complete the request immediately, otherwise put it into the purgatory;
         // this is because while the delayed fetch operation is being created, new requests
         // may arrive and hence make this operation completable.
-        delayedFetchPurgatory.tryCompleteElseWatch(delayedFetch, delayedFetchKeys.asJava)
+        delayedFetchPurgatory.tryCompleteElseWatch(delayedFetch, delayedFetchKeys)
       }
     }
   }
@@ -1804,7 +1812,7 @@ class ReplicaManager(val config: KafkaConfig,
             -1L,
             OptionalLong.of(offsetSnapshot.lastStableOffset.messageOffset),
             if (preferredReadReplica.isDefined) OptionalInt.of(preferredReadReplica.get) else OptionalInt.empty(),
-            Optional.empty())
+            Errors.NONE)
         } else {
           log = partition.localLogWithEpochOrThrow(fetchInfo.currentLeaderEpoch, params.fetchOnlyLeader())
 
@@ -1828,7 +1836,7 @@ class ReplicaManager(val config: KafkaConfig,
             fetchTimeMs,
             OptionalLong.of(readInfo.lastStableOffset),
             if (preferredReadReplica.isDefined) OptionalInt.of(preferredReadReplica.get) else OptionalInt.empty(),
-            Optional.empty()
+            Errors.NONE
           )
         }
       } catch {
@@ -1841,7 +1849,7 @@ class ReplicaManager(val config: KafkaConfig,
                  _: ReplicaNotAvailableException |
                  _: KafkaStorageException |
                  _: InconsistentTopicIdException) =>
-          createLogReadResult(e)
+          new LogReadResult(Errors.forException(e))
         case e: OffsetOutOfRangeException =>
           handleOffsetOutOfRangeError(tp, params, fetchInfo, adjustedMaxBytes, minOneMessage, log, fetchTimeMs, e)
         case e: Throwable =>
@@ -1860,7 +1868,7 @@ class ReplicaManager(val config: KafkaConfig,
             UnifiedLog.UNKNOWN_OFFSET,
             -1L,
             OptionalLong.empty(),
-            Optional.of(e)
+            Errors.forException(e)
           )
       }
     }
@@ -1871,13 +1879,13 @@ class ReplicaManager(val config: KafkaConfig,
     readPartitionInfo.foreach { case (tp, fetchInfo) =>
       val readResult = read(tp, fetchInfo, limitBytes, minOneMessage)
       val recordBatchSize = readResult.info.records.sizeInBytes
-      // Once we read from a non-empty partition, we stop ignoring request and partition level size limits
-      if (recordBatchSize > 0)
-        minOneMessage = false
       // Because we don't know how much data will be retrieved in remote fetch yet, and we don't want to block the API call
       // to query remoteLogMetadata, assume it will fetch the max bytes size of data to avoid to exceed the "fetch.max.bytes" setting.
       val estimatedRecordBatchSize = if (recordBatchSize == 0 && readResult.info.delayedRemoteStorageFetch.isPresent)
         readResult.info.delayedRemoteStorageFetch.get.fetchMaxBytes else recordBatchSize
+      // Once we read from a non-empty partition, we stop ignoring request and partition level size limits
+      if (estimatedRecordBatchSize > 0)
+        minOneMessage = false
       limitBytes = math.max(0, limitBytes - estimatedRecordBatchSize)
       result += (tp -> readResult)
     }
@@ -1923,11 +1931,14 @@ class ReplicaManager(val config: KafkaConfig,
             Optional.empty()
           )
         } else {
-          // For consume fetch requests, create a dummy FetchDataInfo with the remote storage fetch information.
-          // For the topic-partitions that need remote data, we will use this information to read the data in another thread.
-          new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY, false, Optional.empty(),
-            Optional.of(new RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp,
-              fetchInfo, params.isolation)))
+          val remoteStorageFetchInfoOpt = if (adjustedMaxBytes > 0) {
+            // For consume fetch requests, create a dummy FetchDataInfo with the remote storage fetch information.
+            // For the topic-partitions that need remote data, we will use this information to read the data in another thread.
+            Optional.of(new RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp, fetchInfo, params.isolation))
+          } else {
+            Optional.empty[RemoteStorageFetchInfo]()
+          }
+          new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY, false, Optional.empty(), remoteStorageFetchInfoOpt)
         }
 
         new LogReadResult(fetchDataInfo,
@@ -1938,10 +1949,10 @@ class ReplicaManager(val config: KafkaConfig,
           fetchInfo.logStartOffset,
           fetchTimeMs,
           OptionalLong.of(log.lastStableOffset),
-          Optional.empty[Throwable]())
+          Errors.NONE)
       }
     } else {
-      createLogReadResult(exception)
+      new LogReadResult(Errors.forException(exception))
     }
   }
 
@@ -2050,7 +2061,7 @@ class ReplicaManager(val config: KafkaConfig,
     val futureReplicasAndInitialOffset = new mutable.HashMap[TopicPartition, InitialFetchState]
     for (partition <- partitions) {
       val topicPartition = partition.topicPartition
-      logManager.getLog(topicPartition, isFuture = true).foreach { futureLog =>
+      logManager.getLog(topicPartition, true).ifPresent { futureLog =>
         partition.log.foreach { _ =>
           val leader = new BrokerEndPoint(config.brokerId, "localhost", -1)
 
@@ -2128,11 +2139,12 @@ class ReplicaManager(val config: KafkaConfig,
 
   def markPartitionOffline(tp: TopicPartition): Unit = replicaStateChangeLock synchronized {
     allPartitions.get(tp) match {
-      case HostedPartition.Online(partition) =>
-        allPartitions.put(tp, HostedPartition.Offline(Some(partition)))
+      case online: HostedPartition.Online[Partition] =>
+        val partition = online.partition
+        allPartitions.put(tp, new HostedPartition.Offline(Optional.of(partition)))
         partition.markOffline()
       case _ =>
-        allPartitions.put(tp, HostedPartition.Offline(None))
+        allPartitions.put(tp, new HostedPartition.Offline(Optional.empty()))
     }
   }
 
@@ -2179,7 +2191,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
 
     if (notifyController) {
-      if (uuid.isDefined) {
+      if (uuid.isPresent) {
         directoryEventHandler.handleFailure(uuid.get)
       } else {
         fatal(s"Unable to propagate directory failure disabled because directory $dir has no UUID")
@@ -2250,29 +2262,29 @@ class ReplicaManager(val config: KafkaConfig,
       val partitions = offsetForLeaderTopic.partitions.asScala.map { offsetForLeaderPartition =>
         val tp = new TopicPartition(offsetForLeaderTopic.topic, offsetForLeaderPartition.partition)
         getPartition(tp) match {
-          case HostedPartition.Online(partition) =>
+          case online: HostedPartition.Online[Partition] =>
             val currentLeaderEpochOpt =
               if (offsetForLeaderPartition.currentLeaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
                 Optional.empty[Integer]
               else
                 Optional.of[Integer](offsetForLeaderPartition.currentLeaderEpoch)
 
-            partition.lastOffsetForLeaderEpoch(
+            online.partition.lastOffsetForLeaderEpoch(
               currentLeaderEpochOpt,
               offsetForLeaderPartition.leaderEpoch,
               fetchOnlyFromLeader = true)
 
-          case HostedPartition.Offline(_) =>
+          case _: HostedPartition.Offline[Partition] =>
             new EpochEndOffset()
               .setPartition(offsetForLeaderPartition.partition)
               .setErrorCode(Errors.KAFKA_STORAGE_ERROR.code)
 
-          case HostedPartition.None if metadataCache.contains(tp) =>
+          case _: HostedPartition.None[Partition] if metadataCache.contains(tp) =>
             new EpochEndOffset()
               .setPartition(offsetForLeaderPartition.partition)
               .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code)
 
-          case HostedPartition.None =>
+          case _: HostedPartition.None[Partition] =>
             new EpochEndOffset()
               .setPartition(offsetForLeaderPartition.partition)
               .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
@@ -2298,8 +2310,9 @@ class ReplicaManager(val config: KafkaConfig,
                                           delta: TopicsDelta,
                                           topicId: Uuid): Option[(Partition, Boolean)] = {
     getPartition(tp) match {
-      case HostedPartition.Offline(offlinePartition) =>
-        if (offlinePartition.flatMap(p => p.topicId).contains(topicId)) {
+      case offline: HostedPartition.Offline[Partition] =>
+        val offlinePartition = offline.partition
+        if (offlinePartition.toScala.flatMap(p => p.topicId).contains(topicId)) {
           stateChangeLogger.warn(s"Unable to bring up new local leader $tp " +
             s"with topic id $topicId because it resides in an offline log " +
             "directory.")
@@ -2309,11 +2322,12 @@ class ReplicaManager(val config: KafkaConfig,
             s"A topic with the same name but different id exists but it resides in an offline log " +
             s"directory.")
           val partition = Partition(new TopicIdPartition(topicId, tp), time, this)
-          allPartitions.put(tp, HostedPartition.Online(partition))
+          allPartitions.put(tp, new HostedPartition.Online(partition))
           Some(partition, true)
         }
 
-      case HostedPartition.Online(partition) =>
+      case online: HostedPartition.Online[Partition] =>
+        val partition = online.partition
         if (partition.topicId.exists(_ != topicId)) {
           // Note: Partition#topicId will be None here if the Log object for this partition
           // has not been created.
@@ -2322,7 +2336,7 @@ class ReplicaManager(val config: KafkaConfig,
         }
         Some(partition, false)
 
-      case HostedPartition.None =>
+      case _: HostedPartition.None[Partition] =>
         if (delta.image().topicsById().containsKey(topicId)) {
           stateChangeLogger.error(s"Expected partition $tp with topic id " +
             s"$topicId to exist, but it was missing. Creating...")
@@ -2332,7 +2346,7 @@ class ReplicaManager(val config: KafkaConfig,
         }
         // it's a partition that we don't know about yet, so create it and mark it online
         val partition = Partition(new TopicIdPartition(topicId, tp), time, this)
-        allPartitions.put(tp, HostedPartition.Online(partition))
+        allPartitions.put(tp, new HostedPartition.Online(partition))
         Some(partition, true)
     }
   }
@@ -2523,7 +2537,11 @@ class ReplicaManager(val config: KafkaConfig,
       stateChangeLogger.info(s"Started fetchers as part of become-follower for ${partitionsToStartFetching.size} partitions")
 
       partitionsToStartFetching.foreach{ case (topicPartition, partition) =>
-        completeDelayedOperationsWhenNotPartitionLeader(topicPartition, partition.topicId)}
+        completeDelayedOperationsWhenNotPartitionLeader(topicPartition, partition.topicId)
+        // Clean up per-partition expiration metrics when transitioning from leader to follower.
+        DelayedProduce.removePartitionMetrics(topicPartition)
+        DelayedRemoteListOffsets.removePartitionMetrics(topicPartition)
+      }
 
       updateLeaderAndFollowerMetrics(followerTopicSet)
     }
@@ -2537,8 +2555,8 @@ class ReplicaManager(val config: KafkaConfig,
 
   private def maybeUpdateTopicAssignment(partition: TopicIdPartition, partitionDirectoryId: Uuid): Unit = {
     for {
-      topicPartitionActualLog <- logManager.getLog(partition.topicPartition())
-      topicPartitionActualDirectoryId <- logManager.directoryId(topicPartitionActualLog.dir.getParent)
+      topicPartitionActualLog <- logManager.getLog(partition.topicPartition()).toScala
+      topicPartitionActualDirectoryId <- logManager.directoryId(topicPartitionActualLog.dir.getParent).toScala
       if partitionDirectoryId != topicPartitionActualDirectoryId
     } directoryEventHandler.handleAssignment(
       new common.TopicIdPartition(partition.topicId, partition.partition()),

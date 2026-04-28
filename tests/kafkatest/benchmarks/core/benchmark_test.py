@@ -239,12 +239,11 @@ class Benchmark(Test):
     
     @cluster(num_nodes=8)
     @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT'], tls_version=['TLSv1.2', 'TLSv1.3'],
-            compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft], use_share_groups=[True])
-    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft], 
-            use_share_groups=[True])
+            compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft])
+    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft])
     def test_producer_and_share_consumer(self, compression_type="none", security_protocol="PLAINTEXT", tls_version=None,
                                    interbroker_security_protocol=None, client_version=str(DEV_BRANCH), broker_version=str(DEV_BRANCH), 
-                                   metadata_quorum=quorum.isolated_kraft, use_share_groups=True):
+                                   metadata_quorum=quorum.isolated_kraft):
         """
         Setup: 3 node kafka cluster
         Concurrently produce and consume 1e6 messages with a single producer and a single share consumer,
@@ -345,12 +344,11 @@ class Benchmark(Test):
     
     @cluster(num_nodes=8)
     @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT'], tls_version=['TLSv1.2', 'TLSv1.3'],
-            compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft], use_share_groups=[True])
-    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft], 
-            use_share_groups=[True])
+            compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft])
+    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy"], metadata_quorum=[quorum.isolated_kraft])
     def test_share_consumer_throughput(self, compression_type="none", security_protocol="PLAINTEXT", tls_version=None,
                                  interbroker_security_protocol=None, num_consumers=1, client_version=str(DEV_BRANCH), 
-                                 broker_version=str(DEV_BRANCH), metadata_quorum=quorum.isolated_kraft, use_share_groups=True):
+                                 broker_version=str(DEV_BRANCH), metadata_quorum=quorum.isolated_kraft):
         """
         Consume 1e6 100-byte messages with 1 or more consumers from a topic with 6 partitions
         and report throughput.

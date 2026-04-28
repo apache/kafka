@@ -33,6 +33,7 @@ import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.authorizer.AclMutator;
@@ -383,6 +384,7 @@ public class AclControlManagerTest {
         assertEquals(2, deleteAclResultsBothFilters.response().size());
     }
 
+    @Flaky("KAFKA-19513")
     @Test
     public void testDeleteExceedsMaxRecords() {
         AclControlManager manager = new AclControlManager.Builder().build();

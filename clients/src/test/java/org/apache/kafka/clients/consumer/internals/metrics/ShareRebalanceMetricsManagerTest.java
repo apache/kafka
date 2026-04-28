@@ -26,10 +26,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 
-class ShareRebalanceMetricsManagerTest {
+class ShareRebalanceMetricsManagerTest extends AbstractConsumerMetricsManagerTest {
 
     private final Time time = new MockTime();
     private final Metrics metrics = new Metrics(time);
+
+    @Override
+    protected AbstractConsumerMetricsManager metricsManager(Metrics metrics, String groupDescription) {
+        return new HeartbeatMetricsManager(metrics, groupDescription);
+    }
 
     @Test
     public void testRebalanceMetrics() {
@@ -46,6 +51,6 @@ class ShareRebalanceMetricsManagerTest {
         shareRebalanceMetricsManager.recordRebalanceEnded(100);
 
         assertEquals(3.0d, metrics.metric(shareRebalanceMetricsManager.rebalanceTotal).metricValue());
-        assertEquals(360.d, metrics.metric(shareRebalanceMetricsManager.rebalanceRatePerHour).metricValue());
+        assertEquals(3.d, metrics.metric(shareRebalanceMetricsManager.rebalanceRatePerHour).metricValue());
     }
 }

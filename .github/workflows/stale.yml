@@ -38,7 +38,7 @@ jobs:
   stale:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/stale@v9
+      - uses: actions/stale@v10
         with:
           debug-only: ${{ inputs.dryRun || false }}
           operations-per-run: ${{ inputs.operationsPerRun || 500 }}

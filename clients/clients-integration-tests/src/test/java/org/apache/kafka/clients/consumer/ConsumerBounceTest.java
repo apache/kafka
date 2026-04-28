@@ -31,11 +31,12 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.IntegrationTestUtils;
-import org.apache.kafka.server.config.KRaftConfigs;
 import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
@@ -402,7 +403,14 @@ public class ConsumerBounceTest {
         testConsumerReceivesFatalExceptionWhenGroupPassesMaxSize(GroupProtocol.CLASSIC);
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testAsyncConsumerReceivesFatalExceptionWhenGroupPassesMaxSize() throws Exception {
         testConsumerReceivesFatalExceptionWhenGroupPassesMaxSize(GroupProtocol.CONSUMER);
     }
@@ -564,7 +572,7 @@ public class ConsumerBounceTest {
             assignments.clear();
             consumerPollers.forEach(poller -> assignments.add(poller.consumerAssignment()));
             return isPartitionAssignmentValid(assignments, subscriptions, expectedAssignments);
-        }, waitTimeMs, msg.orElse("Did not get valid assignment for partitions " + subscriptions + ". Instead got: " + assignments));
+        }, waitTimeMs, () -> msg.orElse("Did not get valid assignment for partitions " + subscriptions + ". Instead got: " + assignments));
     }
 
     // Overload for convenience (optional msg and expectedAssignments)
@@ -769,7 +777,7 @@ public class ConsumerBounceTest {
 
     private void receiveExactRecords(ConsumerAssignmentPoller consumer, int numRecords, long timeoutMs) throws InterruptedException {
         TestUtils.waitForCondition(() -> consumer.receivedMessages() == numRecords, timeoutMs,
-             String.format("Consumer did not receive expected %d. It received %d", numRecords, consumer.receivedMessages()));
+                () -> String.format("Consumer did not receive expected %d. It received %d", numRecords, consumer.receivedMessages()));
     }
 
     // A mock class to represent broker bouncing (simulate broker restart behavior)

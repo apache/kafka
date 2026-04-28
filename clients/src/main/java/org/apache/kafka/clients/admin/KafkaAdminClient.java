@@ -63,6 +63,7 @@ import org.apache.kafka.clients.admin.internals.ListConsumerGroupOffsetsHandler;
 import org.apache.kafka.clients.admin.internals.ListOffsetsHandler;
 import org.apache.kafka.clients.admin.internals.ListShareGroupOffsetsHandler;
 import org.apache.kafka.clients.admin.internals.ListTransactionsHandler;
+import org.apache.kafka.clients.admin.internals.PartitionLeaderCache;
 import org.apache.kafka.clients.admin.internals.PartitionLeaderStrategy;
 import org.apache.kafka.clients.admin.internals.RemoveMembersFromConsumerGroupHandler;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -257,12 +258,12 @@ import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.ExponentialBackoff;
-import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.ExponentialBackoff;
+import org.apache.kafka.common.utils.internals.KafkaThread;
 
 import org.slf4j.Logger;
 
@@ -407,7 +408,7 @@ public class KafkaAdminClient extends AdminClient {
     private final long retryBackoffMaxMs;
     private final ExponentialBackoff retryBackoff;
     private final MetadataRecoveryStrategy metadataRecoveryStrategy;
-    private final Map<TopicPartition, Integer> partitionLeaderCache;
+    private final PartitionLeaderCache partitionLeaderCache;
     private final AdminFetchMetricsManager adminFetchMetricsManager;
     private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
 
@@ -631,7 +632,7 @@ public class KafkaAdminClient extends AdminClient {
             CommonClientConfigs.RETRY_BACKOFF_JITTER);
         this.clientTelemetryReporter = clientTelemetryReporter;
         this.metadataRecoveryStrategy = MetadataRecoveryStrategy.forName(config.getString(AdminClientConfig.METADATA_RECOVERY_STRATEGY_CONFIG));
-        this.partitionLeaderCache = new HashMap<>();
+        this.partitionLeaderCache = new PartitionLeaderCache();
         this.adminFetchMetricsManager = new AdminFetchMetricsManager(metrics);
         config.logUnused();
         AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
@@ -656,7 +657,7 @@ public class KafkaAdminClient extends AdminClient {
                     " must be no smaller than the value of " + AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG + ".");
             } else {
                 log.warn("Overriding the default value for {} ({}) with the explicitly configured request timeout {}",
-                    AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, this.defaultApiTimeoutMs,
+                    AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, defaultApiTimeoutMs,
                     requestTimeoutMs);
                 return requestTimeoutMs;
             }
@@ -899,6 +900,7 @@ public class KafkaAdminClient extends AdminClient {
          * @param now       The current time in milliseconds.
          * @param throwable The failure exception.
          */
+        @SuppressWarnings("NPathComplexity")
         final void fail(long now, Throwable throwable) {
             if (curNode != null) {
                 runnable.nodeReadyDeadlines.remove(curNode);
@@ -920,6 +922,11 @@ public class KafkaAdminClient extends AdminClient {
             }
             nextAllowedTryMs = now + retryBackoff.backoff(tries++);
 
+            // Don't mask VirtualMachineError as TimeoutException - propagate it directly
+            if (throwable instanceof VirtualMachineError) {
+                handleFailure(throwable);
+                return;
+            }
             // If the call has timed out, fail.
             if (calcTimeoutMsRemainingAsInt(now, deadlineMs) <= 0) {
                 handleTimeoutFailure(now, throwable);
@@ -3053,7 +3060,8 @@ public class KafkaAdminClient extends AdminClient {
                 Errors.forCode(logDirResult.errorCode()).exception(),
                 replicaInfoMap,
                 logDirResult.totalBytes(),
-                logDirResult.usableBytes()));
+                logDirResult.usableBytes(),
+                logDirResult.isCordoned()));
         }
         return result;
     }
@@ -3580,6 +3588,7 @@ public class KafkaAdminClient extends AdminClient {
             .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
     }
 
+    @SuppressWarnings("removal")
     @Deprecated
     private static final class ListConsumerGroupsResults {
         private final List<Throwable> errors;
@@ -3814,7 +3823,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public ListShareGroupOffsetsResult listShareGroupOffsets(final Map<String, ListShareGroupOffsetsSpec> groupSpecs,
                                                              final ListShareGroupOffsetsOptions options) {
-        SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> future = ListShareGroupOffsetsHandler.newFuture(groupSpecs.keySet());
+        SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, SharePartitionOffsetInfo>> future = ListShareGroupOffsetsHandler.newFuture(groupSpecs.keySet());
         ListShareGroupOffsetsHandler handler = new ListShareGroupOffsetsHandler(groupSpecs, logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new ListShareGroupOffsetsResult(future.all());
@@ -3862,6 +3871,14 @@ public class KafkaAdminClient extends AdminClient {
             .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
     }
 
+    /**
+     * Get the metrics kept by the admin client.
+     *
+     * <p>The returned map is an unmodifiable live view of the metrics. Changes to the underlying
+     * metrics will be reflected in the returned map.
+     *
+     * @return An unmodifiable live view of the map of metrics currently maintained by the admin client
+     */
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
         return Collections.unmodifiableMap(this.metrics.metrics());
@@ -4518,8 +4535,10 @@ public class KafkaAdminClient extends AdminClient {
     public DescribeFeaturesResult describeFeatures(final DescribeFeaturesOptions options) {
         final KafkaFutureImpl<FeatureMetadata> future = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
+        final NodeProvider nodeProvider = options.nodeId().isPresent() ?
+            new ConstantNodeIdProvider(options.nodeId().getAsInt(), true) : new LeastLoadedBrokerOrActiveKController();
         final Call call = new Call(
-            "describeFeatures", calcDeadlineMs(now, options.timeoutMs()), new LeastLoadedBrokerOrActiveKController()) {
+            "describeFeatures", calcDeadlineMs(now, options.timeoutMs()), nodeProvider) {
 
             private FeatureMetadata createFeatureMetadata(final ApiVersionsResponse response) {
                 final Map<String, FinalizedVersionRange> finalizedFeatures = new HashMap<>();
@@ -5032,10 +5051,10 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleResponse(AbstractResponse response) {
                 handleNotControllerError(response);
-                RemoveRaftVoterResponse addResponse = (RemoveRaftVoterResponse) response;
-                Errors error = Errors.forCode(addResponse.data().errorCode());
+                RemoveRaftVoterResponse removeResponse = (RemoveRaftVoterResponse) response;
+                Errors error = Errors.forCode(removeResponse.data().errorCode());
                 if (error != Errors.NONE)
-                    future.completeExceptionally(error.exception(addResponse.data().errorMessage()));
+                    future.completeExceptionally(error.exception(removeResponse.data().errorMessage()));
                 else
                     future.complete(null);
             }

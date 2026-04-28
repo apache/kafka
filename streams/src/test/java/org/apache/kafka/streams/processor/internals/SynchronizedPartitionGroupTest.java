@@ -27,6 +27,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.util.Collections;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -59,7 +60,7 @@ public class SynchronizedPartitionGroupTest {
     @Test
     public void testReadyToProcess() {
         final long wallClockTime = 0L;
-        when(wrapped.readyToProcess(wallClockTime)).thenReturn(true);
+        when(wrapped.readyToProcess(wallClockTime)).thenReturn(new AbstractPartitionGroup.ReadyToProcessResult(true, Optional.empty()));
 
         synchronizedPartitionGroup.readyToProcess(wallClockTime);
 

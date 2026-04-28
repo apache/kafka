@@ -28,7 +28,7 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
-import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.internals.Exit;
 
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
@@ -111,21 +111,21 @@ public class LeaderElectionCommandTest {
         Path adminConfigPath = tempAdminConfig(defaultApiTimeoutMs, requestTimeoutMs);
 
         try (final MockedStatic<Admin> mockedAdmin = Mockito.mockStatic(Admin.class)) {
-            String output = ToolsTestUtils.captureStandardOut(() -> {
+            String output = ToolsTestUtils.captureStandardOut(() ->
                 LeaderElectionCommand.mainNoExit(
                     "--bootstrap-server", cluster.bootstrapServers(),
                     "--election-type", "unclean", "--all-topic-partitions",
                     "--admin.config", adminConfigPath.toString()
-                );
-            });
+                )
+            );
             assertTrue(output.contains("Option --admin.config has been deprecated and will be removed in a future version. Use --command-config instead."));
 
             ArgumentCaptor<Properties> argumentCaptor = ArgumentCaptor.forClass(Properties.class);
             mockedAdmin.verify(() -> Admin.create(argumentCaptor.capture()));
             // verify that properties provided to admin client are the overridden properties
             final Properties actualProps = argumentCaptor.getValue();
-            assertEquals(actualProps.get(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG), requestTimeoutMs);
-            assertEquals(actualProps.get(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG), defaultApiTimeoutMs);
+            assertEquals(requestTimeoutMs, actualProps.get(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG));
+            assertEquals(defaultApiTimeoutMs, actualProps.get(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG));
         }
     }
 
@@ -161,14 +161,14 @@ public class LeaderElectionCommandTest {
             // Mock Exit because CommandLineUtils.checkInvalidArgs calls exit
             Exit.setExitProcedure(new ToolsTestUtils.MockExitProcedure());
 
-            String output = ToolsTestUtils.captureStandardErr(() -> {
+            String output = ToolsTestUtils.captureStandardErr(() ->
                 LeaderElectionCommand.mainNoExit(
                     "--bootstrap-server", "localhost:9092",
                     "--election-type", "unclean", "--all-topic-partitions",
                     "--admin.config", adminConfigPath.toString(),
                     "--command-config", adminConfigPath.toString()
-                );
-            });
+                )
+            );
 
             assertTrue(output.contains(String.format("Option \"%s\" can't be used with option \"%s\"",
                 "[admin.config]", "[command-config]")));
@@ -278,7 +278,8 @@ public class LeaderElectionCommandTest {
             assertEquals(0, LeaderElectionCommand.mainNoExit(
                     "--bootstrap-server", cluster.bootstrapServers(),
                     "--election-type", "preferred",
-                    "--all-topic-partitions"
+                    "--topic", topic,
+                    "--partition", Integer.toString(partition)
             ));
 
             TestUtils.assertLeader(client, topicPartition, broker2);

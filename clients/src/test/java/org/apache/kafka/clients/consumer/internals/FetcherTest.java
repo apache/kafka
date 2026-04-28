@@ -53,18 +53,18 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.DefaultRecordBatch;
-import org.apache.kafka.common.record.EndTransactionMarker;
-import org.apache.kafka.common.record.LegacyRecord;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.DefaultRecordBatch;
+import org.apache.kafka.common.record.internal.EndTransactionMarker;
+import org.apache.kafka.common.record.internal.LegacyRecord;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.FetchMetadata;
 import org.apache.kafka.common.requests.FetchRequest;
@@ -77,12 +77,12 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.BytesDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestUtils;
@@ -811,7 +811,8 @@ public class FetcherTest {
         int partitionLeaderEpoch = 0;
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        MemoryRecordsBuilder builder = MemoryRecords.idempotentBuilder(buffer, Compression.NONE, 0L, producerId,
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE,
+                TimestampType.CREATE_TIME, 0L, System.currentTimeMillis(), producerId,
                 producerEpoch, baseSequence);
         builder.append(0L, "key".getBytes(), null);
         builder.close();
@@ -1802,7 +1803,7 @@ public class FetcherTest {
         assertEquals(1, oorExceptions.size());
         OffsetOutOfRangeException oor = oorExceptions.get(0);
         assertTrue(oor.offsetOutOfRangePartitions().containsKey(tp0));
-        assertEquals(oor.offsetOutOfRangePartitions().size(), 1);
+        assertEquals(1, oor.offsetOutOfRangePartitions().size());
 
         fetchRecordsInto(fetchedRecords);
 
@@ -2346,7 +2347,7 @@ public class FetcherTest {
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
         assertTrue(fetchedRecords.containsKey(tp0));
-        assertEquals(fetchedRecords.get(tp0).size(), 2);
+        assertEquals(2, fetchedRecords.get(tp0).size());
     }
 
     @Test
@@ -2464,7 +2465,7 @@ public class FetcherTest {
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
         assertTrue(fetchedRecords.containsKey(tp0));
-        assertEquals(fetchedRecords.get(tp0).size(), 2);
+        assertEquals(2, fetchedRecords.get(tp0).size());
         List<ConsumerRecord<byte[], byte[]>> fetchedConsumerRecords = fetchedRecords.get(tp0);
         Set<String> expectedCommittedKeys = Set.of("commit1-1", "commit1-2");
         Set<String> actuallyCommittedKeys = new HashSet<>();
@@ -3054,7 +3055,7 @@ public class FetcherTest {
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchRecords();
         assertTrue(fetchedRecords.containsKey(tp0));
-        assertEquals(fetchedRecords.get(tp0).size(), 2);
+        assertEquals(2, fetchedRecords.get(tp0).size());
     }
 
     private MemoryRecords buildRecords(long baseOffset, int count, long firstMessageId) {
@@ -3139,8 +3140,8 @@ public class FetcherTest {
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(tp0));
 
-        assertEquals(subscriptions.position(tp0).offset, 3L);
-        assertOptional(subscriptions.position(tp0).offsetEpoch, value -> assertEquals(value.intValue(), 1));
+        assertEquals(3L, subscriptions.position(tp0).offset);
+        assertOptional(subscriptions.position(tp0).offsetEpoch, value -> assertEquals(1, value.intValue()));
     }
 
     @Test
@@ -3217,8 +3218,8 @@ public class FetcherTest {
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(tp0));
 
-        assertEquals(subscriptions.position(tp0).offset, 3L);
-        assertOptional(subscriptions.position(tp0).offsetEpoch, value -> assertEquals(value.intValue(), 1));
+        assertEquals(3L, subscriptions.position(tp0).offset);
+        assertOptional(subscriptions.position(tp0).offsetEpoch, value -> assertEquals(1, value.intValue()));
     }
 
     @Test
@@ -3388,7 +3389,7 @@ public class FetcherTest {
         fetchRecords();
 
         Node selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
-        assertEquals(selected.id(), 1);
+        assertEquals(1, selected.id());
 
         assertEquals(1, sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
@@ -3402,7 +3403,7 @@ public class FetcherTest {
         fetchRecords();
 
         selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
-        assertEquals(selected.id(), -1);
+        assertEquals(-1, selected.id());
     }
 
     @Test

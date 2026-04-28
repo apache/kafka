@@ -184,9 +184,8 @@ public class ProducerSendWhileDeletionTest {
             try (var producer = createProducer()) {
                 for (int i = 1; i <= numRecords; i++) {
                     producer.send(new ProducerRecord<>(topic, null, ("value" + i).getBytes()),
-                            (metadata, exception) -> {
-                                numAcks.incrementAndGet();
-                            });
+                            (metadata, exception) -> numAcks.incrementAndGet()
+                    );
                 }
                 producer.flush();
             }
@@ -277,8 +276,7 @@ public class ProducerSendWhileDeletionTest {
     }
 
     private boolean partitionNotInCheckpoint(KafkaBroker broker, TopicPartition tp) {
-        List<File> liveLogDirs = new ArrayList<>();
-        broker.logManager().liveLogDirs().foreach(liveLogDirs::add);
+        List<File> liveLogDirs = new ArrayList<>(broker.logManager().liveLogDirs());
         var checkpoints = liveLogDirs.stream().map(logDir -> {
             try {
                 return new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint"), null).read();

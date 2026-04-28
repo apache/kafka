@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -56,6 +55,7 @@ import java.util.stream.Collectors;
 import joptsimple.OptionException;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(600)
 @Tag("integration")
@@ -71,7 +71,6 @@ public class ListStreamsGroupTest {
     public static void setup() throws Exception {
         // start the cluster and create the input topic
         final Properties props = new Properties();
-        props.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,streams");
         cluster = new EmbeddedKafkaCluster(1, props);
         cluster.start();
         cluster.createTopic(INPUT_TOPIC, 2, 1);
@@ -108,7 +107,7 @@ public class ListStreamsGroupTest {
             TestUtils.waitForCondition(() -> {
                 foundGroups.set(new HashSet<>(service.listStreamsGroups()));
                 return Objects.equals(expectedGroups, foundGroups.get());
-            }, "Expected --list to show streams groups " + expectedGroups + ", but found " + foundGroups.get() + ".");
+            }, () -> "Expected --list to show streams groups " + expectedGroups + ", but found " + foundGroups.get() + ".");
 
         }
     }
@@ -135,7 +134,7 @@ public class ListStreamsGroupTest {
             TestUtils.waitForCondition(() -> {
                 foundListing.set(new HashSet<>(service.listStreamsGroupsInStates(Set.of())));
                 return Objects.equals(expectedListing, foundListing.get());
-            }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
+            }, () -> "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
     }
 
@@ -155,7 +154,7 @@ public class ListStreamsGroupTest {
             TestUtils.waitForCondition(() -> {
                 foundListing.set(new HashSet<>(service.listStreamsGroupsInStates(Set.of())));
                 return Objects.equals(expectedListing, foundListing.get());
-            }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
+            }, () -> "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
 
         try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "PreparingRebalance"})) {
@@ -166,7 +165,7 @@ public class ListStreamsGroupTest {
             TestUtils.waitForCondition(() -> {
                 foundListing.set(new HashSet<>(service.listStreamsGroupsInStates(Set.of(GroupState.PREPARING_REBALANCE))));
                 return Objects.equals(expectedListing, foundListing.get());
-            }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
+            }, () -> "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
     }
 
@@ -223,7 +222,7 @@ public class ListStreamsGroupTest {
     ) throws InterruptedException {
         final AtomicReference<String> out = new AtomicReference<>("");
         TestUtils.waitForCondition(() -> {
-            String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.main(args.toArray(new String[0])));
+            String output = ToolsTestUtils.grabConsoleOutput(() -> assertEquals(0, StreamsGroupCommand.execute(args.toArray(new String[0]))));
             out.set(output);
 
             String[] lines = output.split("\n");

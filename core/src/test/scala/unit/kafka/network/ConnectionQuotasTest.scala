@@ -30,9 +30,10 @@ import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Metrics}
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.network.{ConnectionThrottledException, SocketServerConfigs, TooManyConnectionsException}
+import org.apache.kafka.network.{ConnectionThrottledException, SocketServer, SocketServerConfigs, TooManyConnectionsException}
 import org.apache.kafka.server.config.{QuotaConfig, ReplicationConfigs}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.util.ServerTestUtils
 import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
@@ -86,10 +87,13 @@ class ConnectionQuotasTest {
   @BeforeEach
   def setUp(): Unit = {
     // Clean-up any metrics left around by previous tests
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
+
+    val metricsPackage = "kafka.network"
+    val metricsClassName = "ConnectionQuotasTest"
 
     listeners.keys.foreach { name =>
-        blockedPercentMeters.put(name, new KafkaMetricsGroup(this.getClass).newMeter(
+        blockedPercentMeters.put(name, new KafkaMetricsGroup(metricsPackage, metricsClassName).newMeter(
           s"${name}BlockedPercent", "blocked time", TimeUnit.NANOSECONDS, util.Map.of(ListenerMetricTag, name)))
     }
     // use system time, because ConnectionQuota causes the current thread to wait with timeout, which waits based on
@@ -106,7 +110,7 @@ class ConnectionQuotasTest {
       connectionQuotas.close()
     }
     metrics.close()
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
     blockedPercentMeters.clear()
   }
 
@@ -827,7 +831,7 @@ class ConnectionQuotasTest {
   private def listenerConnThrottleMetric(listener: String) : KafkaMetric = {
     val metricName = metrics.metricName(
       "connection-accept-throttle-time",
-      SocketServer.MetricsGroup,
+      SocketServer.METRICS_GROUP,
       util.Map.of(Processor.ListenerMetricTag, listener))
     metrics.metric(metricName)
   }
@@ -835,7 +839,7 @@ class ConnectionQuotasTest {
   private def ipConnThrottleMetric(listener: String): KafkaMetric = {
     val metricName = metrics.metricName(
       "ip-connection-accept-throttle-time",
-      SocketServer.MetricsGroup,
+      SocketServer.METRICS_GROUP,
       util.Map.of(Processor.ListenerMetricTag, listener))
     metrics.metric(metricName)
   }
@@ -843,7 +847,7 @@ class ConnectionQuotasTest {
   private def listenerConnRateMetric(listener: String) : KafkaMetric = {
     val metricName = metrics.metricName(
       "connection-accept-rate",
-      SocketServer.MetricsGroup,
+      SocketServer.METRICS_GROUP,
       util.Map.of(Processor.ListenerMetricTag, listener))
     metrics.metric(metricName)
   }
@@ -851,14 +855,14 @@ class ConnectionQuotasTest {
   private def brokerConnRateMetric() : KafkaMetric = {
     val metricName = metrics.metricName(
       s"broker-connection-accept-rate",
-      SocketServer.MetricsGroup)
+      SocketServer.METRICS_GROUP)
     metrics.metric(metricName)
   }
 
   private def ipConnRateMetric(ip: String): KafkaMetric = {
     val metricName = metrics.metricName(
       s"connection-accept-rate",
-      SocketServer.MetricsGroup,
+      SocketServer.METRICS_GROUP,
       util.Map.of("ip", ip))
     metrics.metric(metricName)
   }

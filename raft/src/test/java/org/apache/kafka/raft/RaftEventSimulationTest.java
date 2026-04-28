@@ -28,10 +28,10 @@ import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.protocol.types.Type;
-import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
@@ -1220,7 +1220,7 @@ public class RaftEventSimulationTest {
         public void verify() {
             for (Map.Entry<Integer, PersistentState> nodeEntry : cluster.nodes.entrySet()) {
                 int nodeId = nodeEntry.getKey();
-                ReplicatedLog log = nodeEntry.getValue().log;
+                RaftLog log = nodeEntry.getValue().log;
                 log.earliestSnapshotId().ifPresent(earliestSnapshotId  -> {
                     long logStartOffset = log.startOffset();
                     ValidOffsetAndEpoch validateOffsetAndEpoch = log.validateOffsetAndEpoch(

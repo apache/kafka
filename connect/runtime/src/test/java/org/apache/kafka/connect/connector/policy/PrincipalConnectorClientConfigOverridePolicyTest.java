@@ -27,6 +27,7 @@ import java.util.Map;
 
 public class PrincipalConnectorClientConfigOverridePolicyTest extends BaseConnectorClientConfigOverridePolicyTest {
 
+    @SuppressWarnings("removal")
     ConnectorClientConfigOverridePolicy principalConnectorClientConfigOverridePolicy = new PrincipalConnectorClientConfigOverridePolicy();
 
     @Test

@@ -27,6 +27,7 @@ public enum RecordState {
     AVAILABLE((byte) 0),
     ACQUIRED((byte) 1),
     ACKNOWLEDGED((byte) 2),
+    ARCHIVING((byte) 3),    // Per KIP-1191
     ARCHIVED((byte) 4);
 
     public final byte id;
@@ -49,7 +50,7 @@ public enum RecordState {
     public RecordState validateTransition(RecordState newState) throws IllegalStateException {
         Objects.requireNonNull(newState, "newState cannot be null");
         if (this == newState) {
-            throw new IllegalStateException("The state transition is invalid as the new state is"
+            throw new IllegalStateException("The state transition is invalid as the new state is "
                 + "the same as the current state");
         }
 
@@ -71,6 +72,7 @@ public enum RecordState {
             case 0 -> AVAILABLE;
             case 1 -> ACQUIRED;
             case 2 -> ACKNOWLEDGED;
+            case 3 -> ARCHIVING;
             case 4 -> ARCHIVED;
             default -> throw new IllegalArgumentException("Unknown record state id: " + id);
         };

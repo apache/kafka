@@ -460,7 +460,7 @@ public class OffsetsUtils {
         Set<String> topics = topicPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
 
         try {
-            return adminClient.describeTopics(topics).allTopicNames().get().entrySet()
+            return adminClient.describeTopics(topics, withTimeoutMs(new DescribeTopicsOptions())).allTopicNames().get().entrySet()
                 .stream()
                 .flatMap(entry -> entry.getValue().partitions().stream()
                     .filter(partitionInfo -> partitionInfo.leader() == null)
@@ -476,7 +476,7 @@ public class OffsetsUtils {
         // collect all topics
         Set<String> topics = topicPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
         try {
-            List<TopicPartition> existPartitions = adminClient.describeTopics(topics).allTopicNames().get().entrySet()
+            List<TopicPartition> existPartitions = adminClient.describeTopics(topics, withTimeoutMs(new DescribeTopicsOptions())).allTopicNames().get().entrySet()
                 .stream()
                 .flatMap(entry -> entry.getValue().partitions().stream()
                     .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))

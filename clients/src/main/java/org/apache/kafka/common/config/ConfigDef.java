@@ -19,6 +19,9 @@ package org.apache.kafka.common.config;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -81,7 +84,7 @@ import java.util.stream.Collectors;
 public class ConfigDef {
 
     private static final Pattern COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");
-
+    private static final Logger LOGGER = LoggerFactory.getLogger(ConfigDef.class);
     /**
      * A unique Java object which represents the lack of a default value.
      */
@@ -215,7 +218,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, Recommender recommender) {
-        return define(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, Collections.emptyList(), recommender);
+        return define(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, List.of(), recommender);
     }
 
     /**
@@ -234,7 +237,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName) {
-        return define(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, Collections.emptyList());
+        return define(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, List.of());
     }
 
     /**
@@ -292,7 +295,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, Recommender recommender) {
-        return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, Collections.emptyList(), recommender);
+        return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, List.of(), recommender);
     }
 
     /**
@@ -310,7 +313,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName) {
-        return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, Collections.emptyList());
+        return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, List.of());
     }
 
     /**
@@ -365,7 +368,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Importance importance, String documentation, String group, int orderInGroup,
                             Width width, String displayName, Recommender recommender) {
-        return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, Collections.emptyList(), recommender);
+        return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, List.of(), recommender);
     }
 
     /**
@@ -382,7 +385,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Importance importance, String documentation, String group, int orderInGroup,
                             Width width, String displayName) {
-        return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, Collections.emptyList());
+        return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, List.of());
     }
 
     /**
@@ -424,7 +427,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation, String alternativeString) {
         return define(name, type, defaultValue, null, importance, documentation, null, -1, Width.NONE,
-                name, Collections.emptyList(), null, alternativeString);
+                name, List.of(), null, alternativeString);
     }
 
     /**
@@ -449,7 +452,7 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef defineInternal(final String name, final Type type, final Object defaultValue, final Importance importance) {
-        return define(new ConfigKey(name, type, defaultValue, null, importance, "", "", -1, Width.NONE, name, Collections.emptyList(), null, true, null));
+        return define(new ConfigKey(name, type, defaultValue, null, importance, "", "", -1, Width.NONE, name, List.of(), null, true, null));
     }
 
     /**
@@ -464,7 +467,7 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef defineInternal(final String name, final Type type, final Object defaultValue, final Validator validator, final Importance importance, final String documentation) {
-        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, "", -1, Width.NONE, name, Collections.emptyList(), null, true, null));
+        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, "", -1, Width.NONE, name, List.of(), null, true, null));
     }
 
     /**
@@ -535,6 +538,14 @@ public class ConfigDef {
         } else {
             // otherwise assign setting its default value
             parsedValue = key.defaultValue;
+        }
+        if (key.validator instanceof ValidList && parsedValue instanceof List) {
+            List<?> originalListValue = (List<?>) parsedValue;
+            parsedValue = originalListValue.stream().distinct().collect(Collectors.toList());
+            if (originalListValue.size() != ((List<?>) parsedValue).size()) {
+                LOGGER.warn("Configuration key \"{}\" contains duplicate values. Duplicates will be removed. The original value " +
+                        "is: {}, the updated value is: {}", key.name, originalListValue, parsedValue);
+            }
         }
         if (key.validator != null) {
             key.validator.ensureValid(key.name, parsedValue);
@@ -757,7 +768,7 @@ public class ConfigDef {
                         return value;
                     else if (value instanceof String)
                         if (trimmed.isEmpty())
-                            return Collections.emptyList();
+                            return List.of();
                         else
                             return Arrays.asList(COMMA_WITH_WHITESPACE.split(trimmed, -1));
                     else
@@ -779,6 +790,17 @@ public class ConfigDef {
         }
     }
 
+    /**
+     * Convert the provided object into a string based on its type.
+     * <p>
+     * This method uses Java's {@link #toString()} for {@link Type#BOOLEAN}, {@link Type#SHORT}, {@link Type#INT},
+     * {@link Type#LONG}, {@link Type#DOUBLE}, {@link Type#STRING} and {@link Type#PASSWORD} objects.
+     * For {@link Type#LIST} objects, Java's {@link #toString()} is used for each entry and entries are concatenated
+     * separated by commas. For {@link Type#CLASS} objects, {@link Class#getName()} is used.
+     * @param parsedValue The object to convert into a string
+     * @param type The type of the object
+     * @return The string representation of the provided object and type
+     */
     public static String convertToString(Object parsedValue, Type type) {
         if (parsedValue == null) {
             return null;
@@ -1070,8 +1092,7 @@ public class ConfigDef {
         }
 
         public String toString() {
-            return validString + (isEmptyAllowed ? " (empty config allowed)" : " (empty not allowed)") +
-                    (isNullAllowed ? " (null config allowed)" : " (null not allowed)");
+            return !validString.validStrings.isEmpty() ? validString.toString() : "";
         }
     }
 
@@ -1424,7 +1445,7 @@ public class ConfigDef {
     }
 
     public String toHtmlTable() {
-        return toHtmlTable(Collections.emptyMap());
+        return toHtmlTable(Map.of());
     }
 
     private void addHeader(StringBuilder builder, String headerName) {
@@ -1679,7 +1700,7 @@ public class ConfigDef {
     }
 
     public String toHtml() {
-        return toHtml(Collections.emptyMap());
+        return toHtml(Map.of());
     }
 
     /**
@@ -1688,7 +1709,7 @@ public class ConfigDef {
      * @param idGenerator A function for computing the HTML id attribute in the generated HTML from a given config name.
      */
     public String toHtml(int headerDepth, Function<String, String> idGenerator) {
-        return toHtml(headerDepth, idGenerator, Collections.emptyMap());
+        return toHtml(headerDepth, idGenerator, Map.of());
     }
 
     /**

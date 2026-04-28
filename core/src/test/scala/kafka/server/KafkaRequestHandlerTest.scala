@@ -24,7 +24,8 @@ import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.common.utils.{BufferSupplier, MockTime, Time}
+import org.apache.kafka.common.utils.internals.BufferSupplier
+import org.apache.kafka.common.utils.{MockTime, Time}
 import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics
@@ -59,7 +60,7 @@ class KafkaRequestHandlerTest {
     val requestChannel = new RequestChannel(10, time, metrics)
     val apiHandler = mock(classOf[ApiRequestHandler])
     try {
-      val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
+      val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time, "broker")
 
       val request = makeRequest(time, metrics)
       requestChannel.sendRequest(request)
@@ -95,7 +96,7 @@ class KafkaRequestHandlerTest {
     val metrics = mock(classOf[RequestChannelMetrics])
     val apiHandler = mock(classOf[ApiRequestHandler])
     val requestChannel = new RequestChannel(10, time, metrics)
-    val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
+    val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time, "broker")
 
     var handledCount = 0
     var tryCompleteActionCount = 0
@@ -131,7 +132,7 @@ class KafkaRequestHandlerTest {
     val metrics = mock(classOf[RequestChannelMetrics])
     val apiHandler = mock(classOf[ApiRequestHandler])
     val requestChannel = new RequestChannel(10, time, metrics)
-    val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
+    val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time, "broker")
 
     val originalRequestLocal = mock(classOf[RequestLocal])
 
@@ -165,7 +166,7 @@ class KafkaRequestHandlerTest {
     val metrics = mock(classOf[RequestChannelMetrics])
     val apiHandler = mock(classOf[ApiRequestHandler])
     val requestChannel = new RequestChannel(10, time, metrics)
-    val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
+    val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time, "broker")
 
     val originalRequestLocal = mock(classOf[RequestLocal])
     when(originalRequestLocal.bufferSupplier).thenReturn(BufferSupplier.create())
@@ -697,5 +698,57 @@ class KafkaRequestHandlerTest {
 
     // cleanup
     brokerTopicStats.close()
+  }
+
+  @Test
+  def testMetricsForMultipleRequestPools(): Unit = {
+    val time = new MockTime()
+    val metricsBroker = mock(classOf[RequestChannelMetrics])
+    val metricsController = mock(classOf[RequestChannelMetrics])
+    val requestChannelBroker = new RequestChannel(10, time, metricsBroker)
+    val requestChannelController = new RequestChannel(10, time, metricsController)
+    val apiHandler = mock(classOf[ApiRequestHandler])
+
+    // Create a factory for this test
+    val factory = new KafkaRequestHandlerPoolFactory()
+    
+    // Create broker pool with 4 threads
+    val brokerPool = factory.createPool(
+      0,
+      requestChannelBroker,
+      apiHandler,
+      time,
+      4,
+      "broker"
+    )
+
+    // Verify global counter is updated
+    assertEquals(4, factory.aggregateThreadCount, "global counter should be 4 after broker pool")
+
+    // Create controller pool with 4 threads
+    val controllerPool = factory.createPool(
+      0,
+      requestChannelController,
+      apiHandler,
+      time,
+      4,
+      "controller"
+    )
+
+    // Verify global counter is updated to sum of both pools
+    assertEquals(8, factory.aggregateThreadCount, "global counter should be 8 after both pools")
+
+    // Test pool resizing
+    // Shrink broker pool from 4 to 2 threads
+    brokerPool.resizeThreadPool(2)
+    assertEquals(2, brokerPool.threadPoolSize.get)
+    assertEquals(4, controllerPool.threadPoolSize.get)
+    assertEquals(6, factory.aggregateThreadCount)
+
+    // Expand controller pool from 4 to 6 threads
+    controllerPool.resizeThreadPool(6)
+    assertEquals(2, brokerPool.threadPoolSize.get)
+    assertEquals(6, controllerPool.threadPoolSize.get)
+    assertEquals(8, factory.aggregateThreadCount)
   }
 }

@@ -41,6 +41,8 @@ import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
+import scala.jdk.OptionConverters.RichOptional
+
 @Timeout(120)
 class MetricsTest extends KafkaServerTestHarness with Logging {
   val numNodes = 2
@@ -153,7 +155,11 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     val path = "C:\\windows-path\\kafka-logs"
     val tags = util.Map.of("dir", path)
     val expectedMBeanName = Set(tags.keySet().iterator().next(), ObjectName.quote(path)).mkString("=")
-    val metric = new KafkaMetricsGroup(this.getClass).metricName("test-metric", tags)
+
+    // Changing the package or class name may cause incompatibility with existing code and metrics configuration
+    val metricsPackage = "kafka.metrics"
+    val metricsClassName = "MetricsTest"
+    val metric = new KafkaMetricsGroup(metricsPackage, metricsClassName).metricName("test-metric", tags)
     assert(metric.getMBeanName.endsWith(expectedMBeanName))
   }
 
@@ -176,7 +182,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     // versus failures caused by the metrics
     val topicPartition = new TopicPartition(topic, 0)
     brokers.foreach { broker =>
-      val log = broker.logManager.getLog(new TopicPartition(topic, 0))
+      val log = broker.logManager.getLog(new TopicPartition(topic, 0)).toScala
       val brokerId = broker.config.brokerId
       val logSize = log.map(_.size)
       assertTrue(logSize.exists(_ > 0), s"Expected broker $brokerId to have a Log for $topicPartition with positive size, actual: $logSize")

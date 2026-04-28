@@ -25,7 +25,7 @@ def requirements_instructions(prefs_file, prefs):
     return f"""
 Requirements:
 1. Updated docs to reference the new release version where appropriate.
-2. JDK8 and JDK17 compilers and libraries
+2. JDK25 compiler and libraries
 3. Your Apache ID, already configured with SSH keys on id.apache.org and SSH keys available in this shell session
 4. All issues in the target release resolved with valid resolutions (if not, this script will report the problematic JIRAs)
 5. A GPG key used for signing the release. This key should have been added to public Apache servers and the KEYS file on the Kafka site
@@ -207,7 +207,7 @@ https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/RELEASE_NOTES.html
 <THE RELEASE POLICY (https://www.apache.org/legal/release-policy.html#release-approval) REQUIRES VOTES TO BE OPEN FOR MINIMUM OF 3 DAYS THEREFORE VOTING DEADLINE SHOULD BE AT LEAST 72 HOURS FROM THE TIME THIS EMAIL IS SENT.>
 
 Kafka's KEYS file containing PGP keys we use to sign the release:
-https://kafka.apache.org/KEYS
+https://downloads.apache.org/kafka/KEYS
 
 * Release artifacts to be voted upon (source and binary):
 https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/
@@ -230,7 +230,7 @@ https://github.com/apache/kafka/releases/tag/{rc_tag}
 https://kafka.apache.org/{docs_version}/documentation.html
 
 * Protocol:
-https://kafka.apache.org/{docs_version}/protocol.html
+https://kafka.apache.org/{docs_version}/design/protocol
 
 * Successful CI builds for the {dev_branch} branch:
 Unit/integration tests: https://github.com/apache/kafka/actions/runs/<RUN_NUMBER>

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
@@ -68,19 +70,27 @@ public class ValueAndTimestampSerializer<V> implements WrappingNullableSerialize
     @Override
     public byte[] serialize(final String topic,
                             final ValueAndTimestamp<V> data) {
+        return serialize(topic, new RecordHeaders(), data);
+    }
+
+    @Override
+    public byte[] serialize(final String topic,
+                            final Headers headers,
+                            final ValueAndTimestamp<V> data) {
         if (data == null) {
             return null;
         }
-        return serialize(topic, data.value(), data.timestamp());
+        return serialize(topic, headers, data.value(), data.timestamp());
     }
 
     public byte[] serialize(final String topic,
+                            final Headers headers,
                             final V data,
                             final long timestamp) {
         if (data == null) {
             return null;
         }
-        final byte[] rawValue = valueSerializer.serialize(topic, data);
+        final byte[] rawValue = valueSerializer.serialize(topic, headers, data);
 
         // Since we can't control the result of the internal serializer, we make sure that the result
         // is not null as well.
@@ -91,7 +101,7 @@ public class ValueAndTimestampSerializer<V> implements WrappingNullableSerialize
             return null;
         }
 
-        final byte[] rawTimestamp = timestampSerializer.serialize(topic, timestamp);
+        final byte[] rawTimestamp = timestampSerializer.serialize(topic, headers, timestamp);
         return ByteBuffer
             .allocate(rawTimestamp.length + rawValue.length)
             .put(rawTimestamp)

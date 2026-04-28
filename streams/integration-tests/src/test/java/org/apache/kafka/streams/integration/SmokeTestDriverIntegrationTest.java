@@ -17,7 +17,8 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.internals.Exit;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
@@ -26,9 +27,7 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.tests.SmokeTestClient;
 import org.apache.kafka.streams.tests.SmokeTestDriver;
 
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
@@ -47,31 +46,36 @@ import java.util.Set;
 import static org.apache.kafka.streams.tests.SmokeTestDriver.generate;
 import static org.apache.kafka.streams.tests.SmokeTestDriver.verify;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 @Tag("integration")
 public class SmokeTestDriverIntegrationTest {
-    private static EmbeddedKafkaCluster cluster = null;
+    private EmbeddedKafkaCluster cluster;
     public TestInfo testInfo;
     private ArrayList<SmokeTestClient> clients = new ArrayList<>();
 
-    @BeforeAll
-    public static void startCluster() throws IOException {
-        cluster = new EmbeddedKafkaCluster(3);
-        cluster.start();
+    protected Properties brokerConfig() {
+        return new Properties();
     }
 
-    @AfterAll
-    public static void closeCluster() {
-        cluster.stop();
-        cluster = null;
+    public static class WithAssignmentBatchingDisabledTest extends SmokeTestDriverIntegrationTest {
+        @Override
+        protected Properties brokerConfig() {
+            final Properties props = new Properties();
+            props.putAll(super.brokerConfig());
+            props.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "0");
+            return props;
+        }
     }
 
     @BeforeEach
-    public void setUp(final TestInfo testInfo) {
+    public void setUp(final TestInfo testInfo) throws IOException {
         this.testInfo = testInfo;
+        this.cluster = new EmbeddedKafkaCluster(3, brokerConfig());
+        this.cluster.start();
     }
 
     @AfterEach
@@ -82,6 +86,8 @@ public class SmokeTestDriverIntegrationTest {
                 client.close();
             }
         }
+        cluster.stop();
+        cluster = null;
     }
 
     private static class Driver extends Thread {
@@ -140,11 +146,14 @@ public class SmokeTestDriverIntegrationTest {
             throw new AssertionError("Test called halt(). code:" + statusCode + " message:" + message);
         });
         int numClientsCreated = 0;
+        int numDataRecordsProcessed = 0;
+        final int numKeys = 10;
+        final int maxRecordsPerKey = 1000;
 
         IntegrationTestUtils.cleanStateBeforeTest(cluster, SmokeTestDriver.topics());
 
         final String bootstrapServers = cluster.bootstrapServers();
-        final Driver driver = new Driver(bootstrapServers, 10, 1000);
+        final Driver driver = new Driver(bootstrapServers, numKeys, maxRecordsPerKey);
         driver.start();
         System.out.println("started driver");
 
@@ -183,6 +192,7 @@ public class SmokeTestDriverIntegrationTest {
                     assertFalse(client.error(), "The streams application seems to have crashed.");
                     Thread.sleep(100);
                 }
+                numDataRecordsProcessed += client.totalDataRecordsProcessed();
             }
         }
 
@@ -201,6 +211,7 @@ public class SmokeTestDriverIntegrationTest {
                     assertFalse(client.error(), "The streams application seems to have crashed.");
                     Thread.sleep(100);
                 }
+                numDataRecordsProcessed += client.totalDataRecordsProcessed();
             }
         }
 
@@ -210,5 +221,16 @@ public class SmokeTestDriverIntegrationTest {
             throw new AssertionError(driver.exception());
         }
         assertTrue(driver.result().passed(), driver.result().result());
+
+        // The one extra record is a record that the driver produces to flush suppress
+        final int expectedRecords = numKeys * maxRecordsPerKey + 1;
+
+        // We check that we did no have to reprocess any records, which would indicate a bug since everything
+        // runs locally in this test.
+        assertEquals(expectedRecords, numDataRecordsProcessed,
+            String.format("It seems we had to reprocess records, expected %d records, processed %d records.",
+                expectedRecords,
+                numDataRecordsProcessed)
+        );
     }
 }

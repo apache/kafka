@@ -20,17 +20,20 @@ package kafka.server
 import kafka.utils.Logging
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.PartitionFetchState
 
 import scala.collection.{Map, Set, mutable}
-import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
 
 abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: String, clientId: String, numFetchers: Int)
   extends Logging {
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
+  private val metricsPackage = "kafka.server"
+  private val metricsClassName = this.getClass.getSimpleName
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   // map of (source broker_id, fetcher_id per source broker) => fetcher.
   // package private for test
@@ -40,7 +43,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   val failedPartitions = new FailedPartitions
   this.logIdent = "[" + name + "] "
 
-  private val tags = Map("clientId" -> clientId).asJava
+  private val tags = MetricsUtils.getTags("clientId", clientId)
 
   metricsGroup.newGauge("MaxLag", () => {
     // current max lag across all fetchers/topics/partitions

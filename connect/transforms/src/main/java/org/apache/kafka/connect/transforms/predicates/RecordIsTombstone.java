@@ -18,7 +18,6 @@ package org.apache.kafka.connect.transforms.predicates;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 
 import java.util.Map;
@@ -27,7 +26,7 @@ import java.util.Map;
  * A predicate which is true for records which are tombstones (i.e. have null value).
  * @param <R> The type of connect record.
  */
-public class RecordIsTombstone<R extends ConnectRecord<R>> implements Predicate<R>, Versioned {
+public class RecordIsTombstone<R extends ConnectRecord<R>> implements Predicate<R> {
 
     public static final String OVERVIEW_DOC = "A predicate which is true for records which are tombstones (i.e. have null value).";
     public static final ConfigDef CONFIG_DEF = new ConfigDef();

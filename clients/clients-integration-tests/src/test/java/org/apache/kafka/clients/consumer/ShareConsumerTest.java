@@ -19,14 +19,8 @@ package org.apache.kafka.clients.consumer;
 import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AlterConfigOp;
-import org.apache.kafka.clients.admin.AlterConfigsOptions;
-import org.apache.kafka.clients.admin.ConfigEntry;
-import org.apache.kafka.clients.admin.CreateTopicsResult;
-import org.apache.kafka.clients.admin.DescribeShareGroupsOptions;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.RecordsToDelete;
-import org.apache.kafka.clients.admin.ShareMemberDescription;
+import org.apache.kafka.clients.admin.SharePartitionOffsetInfo;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -35,19 +29,18 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.InterruptException;
-import org.apache.kafka.common.errors.InvalidConfigurationException;
-import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.ShareSessionNotFoundException;
+import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.internals.Topic;
-import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -58,46 +51,36 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.coordinator.group.GroupConfig;
-import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Timeout;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiConsumer;
 import java.util.function.Function;
-import java.util.function.Predicate;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
@@ -107,17 +90,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-@SuppressWarnings("ClassFanOutComplexity")
 @Timeout(1200)
-@Tag("integration")
 @ClusterTestDefaults(
     types = {Type.KRAFT},
     serverProperties = {
         @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+        @ClusterConfigProperty(key = "group.share.max.partition.max.record.locks", value = "10000"),
         @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
         @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
         @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
@@ -128,34 +112,10 @@ import static org.junit.jupiter.api.Assertions.fail;
         @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "1")
     }
 )
-public class ShareConsumerTest {
-    private final ClusterInstance cluster;
-    private final TopicPartition tp = new TopicPartition("topic", 0);
-    private final TopicPartition tp2 = new TopicPartition("topic2", 0);
-    private final TopicPartition warmupTp = new TopicPartition("warmup", 0);
-    private List<TopicPartition> sgsTopicPartitions;
-    private static final String KEY = "content-type";
-    private static final String VALUE = "application/octet-stream";
-    private static final String EXPLICIT = "explicit";
-    private static final String IMPLICIT = "implicit";
+public class ShareConsumerTest extends ShareConsumerTestBase {
 
     public ShareConsumerTest(ClusterInstance cluster) {
-        this.cluster = cluster;
-    }
-
-    @BeforeEach
-    public void setup() {
-        try {
-            this.cluster.waitForReadyBrokers();
-            createTopic("topic");
-            createTopic("topic2");
-            sgsTopicPartitions = IntStream.range(0, 3)
-                .mapToObj(part -> new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, part))
-                .toList();
-            this.warmup();
-        } catch (Exception e) {
-            fail(e);
-        }
+        super(cluster);
     }
 
     @ClusterTest
@@ -246,7 +206,14 @@ public class ShareConsumerTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testSubscriptionAndPoll() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -256,13 +223,22 @@ public class ShareConsumerTest {
             producer.send(record);
             producer.flush();
             shareConsumer.subscribe(Set.of(tp.topic()));
+            assertEquals(Optional.empty(), shareConsumer.acquisitionLockTimeoutMs());
             ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
+            assertEquals(Optional.of(15000), shareConsumer.acquisitionLockTimeoutMs());
             verifyShareGroupStateTopicRecordsProduced();
         }
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testSubscriptionAndPollMultiple() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -272,8 +248,10 @@ public class ShareConsumerTest {
             producer.send(record);
             producer.flush();
             shareConsumer.subscribe(Set.of(tp.topic()));
+            assertEquals(Optional.empty(), shareConsumer.acquisitionLockTimeoutMs());
             ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
+            assertEquals(Optional.of(15000), shareConsumer.acquisitionLockTimeoutMs());
             producer.send(record);
             records = shareConsumer.poll(Duration.ofMillis(5000));
             assertEquals(1, records.count());
@@ -299,162 +277,6 @@ public class ShareConsumerTest {
             ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
             verifyShareGroupStateTopicRecordsProduced();
-        }
-    }
-
-    @ClusterTest
-    public void testAcknowledgementSentOnSubscriptionChange() throws ExecutionException, InterruptedException {
-        alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer();
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
-
-            Map<TopicPartition, Set<Long>> partitionOffsetsMap = new HashMap<>();
-            Map<TopicPartition, Exception> partitionExceptionMap = new HashMap<>();
-
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
-            producer.send(record);
-            ProducerRecord<byte[], byte[]> record2 = new ProducerRecord<>(tp2.topic(), tp2.partition(), null, "key".getBytes(), "value".getBytes());
-            producer.send(record2).get();
-            producer.flush();
-            shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap, partitionExceptionMap));
-
-            shareConsumer.subscribe(Set.of(tp.topic()));
-
-            TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
-                DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume records for share consumer");
-
-            shareConsumer.subscribe(Set.of(tp2.topic()));
-
-            // Waiting for heartbeat to propagate the subscription change.
-            TestUtils.waitForCondition(() -> {
-                shareConsumer.poll(Duration.ofMillis(500));
-                return partitionOffsetsMap.containsKey(tp) && partitionOffsetsMap.containsKey(tp2);
-            }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume records from the updated subscription");
-
-            // Verifying if the callback was invoked without exceptions for the partitions for both topics.
-            assertFalse(partitionExceptionMap.containsKey(tp));
-            assertFalse(partitionExceptionMap.containsKey(tp2));
-            verifyShareGroupStateTopicRecordsProduced();
-        }
-    }
-
-    @ClusterTest
-    public void testAcknowledgementCommitCallbackSuccessfulAcknowledgement() throws Exception {
-        alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer();
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
-
-            Map<TopicPartition, Set<Long>> partitionOffsetsMap = new HashMap<>();
-            Map<TopicPartition, Exception> partitionExceptionMap = new HashMap<>();
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
-
-            producer.send(record);
-            producer.flush();
-
-            shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap, partitionExceptionMap));
-            shareConsumer.subscribe(Set.of(tp.topic()));
-
-            TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
-                DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume records for share consumer");
-
-            TestUtils.waitForCondition(() -> {
-                shareConsumer.poll(Duration.ofMillis(500));
-                return partitionOffsetsMap.containsKey(tp);
-            }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to receive call to callback");
-
-            // We expect no exception as the acknowledgement error code is null.
-            assertFalse(partitionExceptionMap.containsKey(tp));
-            verifyShareGroupStateTopicRecordsProduced();
-        }
-    }
-
-    @ClusterTest
-    public void testAcknowledgementCommitCallbackOnClose() {
-        alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer();
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
-
-            Map<TopicPartition, Set<Long>> partitionOffsetsMap = new HashMap<>();
-            Map<TopicPartition, Exception> partitionExceptionMap = new HashMap<>();
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
-            producer.send(record);
-            producer.flush();
-            shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap, partitionExceptionMap));
-            shareConsumer.subscribe(Set.of(tp.topic()));
-
-            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
-            assertEquals(1, records.count());
-
-            // Now in the second poll, we implicitly acknowledge the record received in the first poll.
-            // We get back the acknowledgement error code asynchronously after the second poll.
-            // The acknowledgement commit callback is invoked in close.
-            shareConsumer.poll(Duration.ofMillis(1000));
-            shareConsumer.close();
-
-            // We expect no exception as the acknowledgement error code is null.
-            assertFalse(partitionExceptionMap.containsKey(tp));
-            verifyShareGroupStateTopicRecordsProduced();
-        }
-    }
-
-    @ClusterTest
-    public void testAcknowledgementCommitCallbackInvalidRecordStateException() throws Exception {
-        alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer();
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
-
-            Map<TopicPartition, Set<Long>> partitionOffsetsMap = new HashMap<>();
-            Map<TopicPartition, Exception> partitionExceptionMap = new HashMap<>();
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
-            producer.send(record);
-            producer.flush();
-
-            shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap, partitionExceptionMap));
-            shareConsumer.subscribe(Set.of(tp.topic()));
-
-            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
-            assertEquals(1, records.count());
-
-            // Waiting until the acquisition lock expires.
-            Thread.sleep(20000);
-
-            TestUtils.waitForCondition(() -> {
-                shareConsumer.poll(Duration.ofMillis(500));
-                return partitionExceptionMap.containsKey(tp) && partitionExceptionMap.get(tp) instanceof InvalidRecordStateException;
-            }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to be notified by InvalidRecordStateException");
-        }
-    }
-
-    /**
-     * Test implementation of AcknowledgementCommitCallback to track the completed acknowledgements.
-     * partitionOffsetsMap is used to track the offsets acknowledged for each partition.
-     * partitionExceptionMap is used to track the exception encountered for each partition if any.
-     * Note - Multiple calls to {@link #onComplete(Map, Exception)} will not update the partitionExceptionMap for any existing partitions,
-     * so please ensure to clear the partitionExceptionMap after every call to onComplete() in a single test.
-     */
-    private static class TestableAcknowledgementCommitCallback implements AcknowledgementCommitCallback {
-        private final Map<TopicPartition, Set<Long>> partitionOffsetsMap;
-        private final Map<TopicPartition, Exception> partitionExceptionMap;
-
-        public TestableAcknowledgementCommitCallback(Map<TopicPartition, Set<Long>> partitionOffsetsMap,
-                                                     Map<TopicPartition, Exception> partitionExceptionMap) {
-            this.partitionOffsetsMap = partitionOffsetsMap;
-            this.partitionExceptionMap = partitionExceptionMap;
-        }
-
-        @Override
-        public void onComplete(Map<TopicIdPartition, Set<Long>> offsetsMap, Exception exception) {
-            offsetsMap.forEach((partition, offsets) -> {
-                partitionOffsetsMap.merge(partition.topicPartition(), offsets, (oldOffsets, newOffsets) -> {
-                    Set<Long> mergedOffsets = new HashSet<>();
-                    mergedOffsets.addAll(oldOffsets);
-                    mergedOffsets.addAll(newOffsets);
-                    return mergedOffsets;
-                });
-                if (!partitionExceptionMap.containsKey(partition.topicPartition()) && exception != null) {
-                    partitionExceptionMap.put(partition.topicPartition(), exception);
-                }
-            });
         }
     }
 
@@ -1202,6 +1024,173 @@ public class ShareConsumerTest {
     }
 
     @ClusterTest
+    public void testConsumerCloseOnBrokerShutdown() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1");
+        shareConsumer.subscribe(Set.of(tp.topic()));
+
+        // To ensure coordinator discovery is complete before shutting down the broker
+        shareConsumer.poll(Duration.ofMillis(100));
+
+        // Shutdown the broker.
+        assertEquals(1, cluster.brokers().size());
+        KafkaBroker broker = cluster.brokers().get(0);
+        cluster.shutdownBroker(0);
+
+        broker.awaitShutdown();
+
+        // Assert that close completes in less than 5 seconds, not the full 30-second timeout.
+        assertTimeoutPreemptively(Duration.ofSeconds(5), () -> shareConsumer.close(),
+            "Consumer close should not wait for full timeout when broker is already shut down");
+    }
+
+    @ClusterTest
+    public void testLeaderRestartWithoutLeadershipChangeExplicitAcknowledgementSync() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1",
+                 Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
+
+            AtomicBoolean callbackCalled = new AtomicBoolean(false);
+            shareConsumer.setAcknowledgementCommitCallback((offsetsByTopicPartition, exception) -> {
+                assertInstanceOf(NotLeaderOrFollowerException.class, exception);
+                callbackCalled.set(true);
+            });
+
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            shareConsumer.subscribe(Set.of(tp.topic()));
+
+            producer.send(record);
+            producer.flush();
+
+            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(20000));
+            assertEquals(1, records.count());
+            ConsumerRecord<byte[], byte[]> consumerRecord = records.iterator().next();
+
+            // Shutdown the broker
+            assertEquals(1, cluster.brokers().size());
+            KafkaBroker broker = cluster.brokers().get(0);
+            cluster.shutdownBroker(0);
+
+            broker.awaitShutdown();
+
+            // Restart the broker
+            cluster.startBroker(0);
+
+            shareConsumer.acknowledge(consumerRecord);
+            Map<TopicIdPartition, Optional<KafkaException>> commitResult = shareConsumer.commitSync(Duration.ofMillis(30000));
+            assertEquals(1, commitResult.size());
+            TopicIdPartition tidp = commitResult.keySet().iterator().next();
+            assertTrue(commitResult.get(tidp).isPresent());
+            assertInstanceOf(NotLeaderOrFollowerException.class, commitResult.get(tidp).get());
+
+            assertTrue(callbackCalled.get());
+        }
+    }
+
+    @ClusterTest
+    public void testLeaderRestartWithoutLeadershipChangeExplicitAcknowledgementAsync() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1",
+                 Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
+
+            AtomicBoolean callbackCalled = new AtomicBoolean(false);
+            shareConsumer.setAcknowledgementCommitCallback((offsetsByTopicPartition, exception) -> {
+                assertInstanceOf(NotLeaderOrFollowerException.class, exception);
+                callbackCalled.set(true);
+            });
+
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            shareConsumer.subscribe(Set.of(tp.topic()));
+
+            producer.send(record);
+            producer.flush();
+
+            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(20000));
+            assertEquals(1, records.count());
+            ConsumerRecord<byte[], byte[]> consumerRecord = records.iterator().next();
+
+            // Shutdown the broker
+            assertEquals(1, cluster.brokers().size());
+            KafkaBroker broker = cluster.brokers().get(0);
+            cluster.shutdownBroker(0);
+
+            broker.awaitShutdown();
+
+            // Restart the broker
+            cluster.startBroker(0);
+
+            shareConsumer.acknowledge(consumerRecord);
+            shareConsumer.commitAsync();
+
+            int maxRetries = 15;
+            int retries = 0;
+            while (retries < maxRetries) {
+                shareConsumer.poll(Duration.ofMillis(2000));
+                if (callbackCalled.get()) {
+                    break;
+                }
+                retries++;
+            }
+
+            assertTrue(callbackCalled.get());
+        }
+    }
+
+    @ClusterTest
+    public void testLeaderRestartWithoutLeadershipChangeImplicitAcknowledgement() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
+
+            AtomicBoolean callbackCalled = new AtomicBoolean(false);
+            shareConsumer.setAcknowledgementCommitCallback((offsetsByTopicPartition, exception) -> {
+                assertInstanceOf(ShareSessionNotFoundException.class, exception);
+                callbackCalled.set(true);
+            });
+
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            shareConsumer.subscribe(Set.of(tp.topic()));
+
+            producer.send(record);
+            producer.flush();
+
+            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(20000));
+            assertEquals(1, records.count());
+
+            // Shutdown the broker
+            assertEquals(1, cluster.brokers().size());
+            KafkaBroker broker = cluster.brokers().get(0);
+            cluster.shutdownBroker(0);
+
+            broker.awaitShutdown();
+
+            // Restart the broker
+            cluster.startBroker(0);
+
+            int maxRetries = 15;
+            int retries = 0;
+            while (retries < maxRetries) {
+                shareConsumer.poll(Duration.ofMillis(2000));
+                if (callbackCalled.get()) {
+                    break;
+                }
+                retries++;
+            }
+
+            assertTrue(callbackCalled.get());
+        }
+    }
+
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testMultipleConsumersInGroupSequentialConsumption() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -1237,7 +1226,14 @@ public class ShareConsumerTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testMultipleConsumersInGroupConcurrentConsumption()
         throws InterruptedException, ExecutionException, TimeoutException {
         AtomicInteger totalMessagesConsumed = new AtomicInteger(0);
@@ -1271,7 +1267,14 @@ public class ShareConsumerTest {
         assertEquals(producerCount * messagesPerProducer, totalResult);
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testMultipleConsumersInMultipleGroupsConcurrentConsumption()
         throws ExecutionException, InterruptedException, TimeoutException {
         AtomicInteger totalMessagesConsumedGroup1 = new AtomicInteger(0);
@@ -1384,7 +1387,14 @@ public class ShareConsumerTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testMultipleConsumersInGroupFailureConcurrentConsumption()
         throws InterruptedException, ExecutionException, TimeoutException {
         AtomicInteger totalMessagesConsumed = new AtomicInteger(0);
@@ -1490,141 +1500,6 @@ public class ShareConsumerTest {
     }
 
     /**
-     * Test to verify that the acknowledgement commit callback cannot invoke methods of ShareConsumer.
-     * The exception thrown is verified in {@link TestableAcknowledgementCommitCallbackWithShareConsumer}
-     */
-    @ClusterTest
-    public void testAcknowledgementCommitCallbackCallsShareConsumerDisallowed() {
-        alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer();
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
-
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
-            producer.send(record);
-            producer.flush();
-
-            shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallbackWithShareConsumer<>(shareConsumer));
-            shareConsumer.subscribe(Set.of(tp.topic()));
-
-            // The acknowledgement commit callback will try to call a method of ShareConsumer
-            shareConsumer.poll(Duration.ofMillis(5000));
-            // The second poll sends the acknowledgements implicitly.
-            // The acknowledgement commit callback will be called and the exception is thrown.
-            // This is verified inside the onComplete() method implementation.
-            shareConsumer.poll(Duration.ofMillis(500));
-            verifyShareGroupStateTopicRecordsProduced();
-        }
-    }
-
-    private class TestableAcknowledgementCommitCallbackWithShareConsumer<K, V> implements AcknowledgementCommitCallback {
-        private final ShareConsumer<K, V> shareConsumer;
-
-        TestableAcknowledgementCommitCallbackWithShareConsumer(ShareConsumer<K, V> shareConsumer) {
-            this.shareConsumer = shareConsumer;
-        }
-
-        @Override
-        public void onComplete(Map<TopicIdPartition, Set<Long>> offsetsMap, Exception exception) {
-            // Accessing methods of ShareConsumer should throw an exception.
-            assertThrows(IllegalStateException.class, shareConsumer::close);
-            assertThrows(IllegalStateException.class, () -> shareConsumer.subscribe(Set.of(tp.topic())));
-            assertThrows(IllegalStateException.class, () -> shareConsumer.poll(Duration.ofMillis(5000)));
-        }
-    }
-
-    /**
-     * Test to verify that the acknowledgement commit callback can invoke ShareConsumer.wakeup() and it
-     * wakes up the enclosing poll.
-     */
-    @ClusterTest
-    public void testAcknowledgementCommitCallbackCallsShareConsumerWakeup() throws InterruptedException {
-        alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer();
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
-
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
-            producer.send(record);
-            producer.flush();
-
-            // The acknowledgement commit callback will try to call a method of ShareConsumer
-            shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallbackWakeup<>(shareConsumer));
-            shareConsumer.subscribe(Set.of(tp.topic()));
-
-            TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
-                DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume records for share consumer");
-
-            // The second poll sends the acknowledgements implicitly.
-            shareConsumer.poll(Duration.ofMillis(2000));
-
-            // Till now acknowledgement commit callback has not been called, so no exception thrown yet.
-            // On 3rd poll, the acknowledgement commit callback will be called and the exception is thrown.
-            AtomicBoolean exceptionThrown = new AtomicBoolean(false);
-            TestUtils.waitForCondition(() -> {
-                try {
-                    shareConsumer.poll(Duration.ofMillis(500));
-                } catch (WakeupException e) {
-                    exceptionThrown.set(true);
-                }
-                return exceptionThrown.get();
-            }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to receive expected exception");
-            verifyShareGroupStateTopicRecordsProduced();
-        }
-    }
-
-    private static class TestableAcknowledgementCommitCallbackWakeup<K, V> implements AcknowledgementCommitCallback {
-        private final ShareConsumer<K, V> shareConsumer;
-
-        TestableAcknowledgementCommitCallbackWakeup(ShareConsumer<K, V> shareConsumer) {
-            this.shareConsumer = shareConsumer;
-        }
-
-        @Override
-        public void onComplete(Map<TopicIdPartition, Set<Long>> offsetsMap, Exception exception) {
-            shareConsumer.wakeup();
-        }
-    }
-
-    /**
-     * Test to verify that the acknowledgement commit callback can throw an exception, and it is propagated
-     * to the caller of poll().
-     */
-    @ClusterTest
-    public void testAcknowledgementCommitCallbackThrowsException() throws InterruptedException {
-        alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer();
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
-
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
-            producer.send(record);
-            producer.flush();
-
-            shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallbackThrows<>());
-            shareConsumer.subscribe(Set.of(tp.topic()));
-
-            TestUtils.waitForCondition(() -> shareConsumer.poll(Duration.ofMillis(2000)).count() == 1,
-                DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume records for share consumer");
-
-            AtomicBoolean exceptionThrown = new AtomicBoolean(false);
-            TestUtils.waitForCondition(() -> {
-                try {
-                    shareConsumer.poll(Duration.ofMillis(500));
-                } catch (org.apache.kafka.common.errors.OutOfOrderSequenceException e) {
-                    exceptionThrown.set(true);
-                }
-                return exceptionThrown.get();
-            }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to receive expected exception");
-            verifyShareGroupStateTopicRecordsProduced();
-        }
-    }
-
-    private static class TestableAcknowledgementCommitCallbackThrows<K, V> implements AcknowledgementCommitCallback {
-        @Override
-        public void onComplete(Map<TopicIdPartition, Set<Long>> offsetsMap, Exception exception) {
-            throw new org.apache.kafka.common.errors.OutOfOrderSequenceException("Exception thrown in TestableAcknowledgementCommitCallbackThrows.onComplete");
-        }
-    }
-
-    /**
      * Test to verify that calling Thread.interrupt() before ShareConsumer.poll(Duration)
      * causes it to throw InterruptException
      */
@@ -1690,7 +1565,14 @@ public class ShareConsumerTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testSubscriptionFollowedByTopicCreation() throws InterruptedException {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -1719,7 +1601,14 @@ public class ShareConsumerTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testSubscriptionAndPollFollowedByTopicDeletion() throws InterruptedException, ExecutionException {
         String topic1 = "bar";
         String topic2 = "baz";
@@ -1779,7 +1668,7 @@ public class ShareConsumerTest {
             }
 
             // We delete records before offset 5, so the LSO should move to 5.
-            adminClient.deleteRecords(Map.of(tp, RecordsToDelete.beforeOffset(5L)));
+            assertDoesNotThrow(() -> adminClient.deleteRecords(Map.of(tp, RecordsToDelete.beforeOffset(5L))).all().get(), "Failed to delete records");
 
             int messageCount = consumeMessages(new AtomicInteger(0), 5, groupId, 1, 10, true);
             // The records returned belong to offsets 5-9.
@@ -1791,14 +1680,14 @@ public class ShareConsumerTest {
             }
 
             // We delete records before offset 14, so the LSO should move to 14.
-            adminClient.deleteRecords(Map.of(tp, RecordsToDelete.beforeOffset(14L)));
+            assertDoesNotThrow(() -> adminClient.deleteRecords(Map.of(tp, RecordsToDelete.beforeOffset(14L))).all().get(), "Failed to delete records");
 
             int consumeMessagesCount = consumeMessages(new AtomicInteger(0), 1, groupId, 1, 10, true);
             // The record returned belong to offset 14.
             assertEquals(1, consumeMessagesCount);
 
             // We delete records before offset 15, so the LSO should move to 15 and now no records should be returned.
-            adminClient.deleteRecords(Map.of(tp, RecordsToDelete.beforeOffset(15L)));
+            assertDoesNotThrow(() -> adminClient.deleteRecords(Map.of(tp, RecordsToDelete.beforeOffset(15L))).all().get(), "Failed to delete records");
 
             messageCount = consumeMessages(new AtomicInteger(0), 0, groupId, 1, 5, true);
             assertEquals(0, messageCount);
@@ -1806,197 +1695,11 @@ public class ShareConsumerTest {
         }
     }
 
-    @ClusterTest
-    public void testShareAutoOffsetResetDefaultValue() {
-        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1");
-             Producer<byte[], byte[]> producer = createProducer()) {
-
-            shareConsumer.subscribe(Set.of(tp.topic()));
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
-            // Producing a record.
-            producer.send(record);
-            producer.flush();
-            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 0, true, "group1", List.of(tp));
-            // No records should be consumed because share.auto.offset.reset has a default of "latest". Since the record
-            // was produced before share partition was initialized (which happens after the first share fetch request
-            // in the poll method), the start offset would be the latest offset, i.e. 1 (the next offset after the already
-            // present 0th record)
-            assertEquals(0, records.count());
-            // Producing another record.
-            producer.send(record);
-            producer.flush();
-            records = shareConsumer.poll(Duration.ofMillis(5000));
-            // Now the next record should be consumed successfully
-            assertEquals(1, records.count());
-            verifyShareGroupStateTopicRecordsProduced();
-        }
-    }
-
-    @ClusterTest
-    public void testShareAutoOffsetResetEarliest() {
-        alterShareAutoOffsetReset("group1", "earliest");
-        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1");
-             Producer<byte[], byte[]> producer = createProducer()) {
-
-            shareConsumer.subscribe(Set.of(tp.topic()));
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
-            // Producing a record.
-            producer.send(record);
-            producer.flush();
-            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
-            // Since the value for share.auto.offset.reset has been altered to "earliest", the consumer should consume
-            // all messages present on the partition
-            assertEquals(1, records.count());
-            // Producing another record.
-            producer.send(record);
-            producer.flush();
-            records = shareConsumer.poll(Duration.ofMillis(5000));
-            // The next records should also be consumed successfully
-            assertEquals(1, records.count());
-            verifyShareGroupStateTopicRecordsProduced();
-        }
-    }
-
-    @ClusterTest
-    public void testShareAutoOffsetResetEarliestAfterLsoMovement() {
-        alterShareAutoOffsetReset("group1", "earliest");
-        try (
-            Producer<byte[], byte[]> producer = createProducer();
-            Admin adminClient = createAdminClient()
-        ) {
-
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
-            // We write 10 records to the topic, so they would be written from offsets 0-9 on the topic.
-            for (int i = 0; i < 10; i++) {
-                assertDoesNotThrow(() -> producer.send(record).get(), "Failed to send records");
-            }
-
-            // We delete records before offset 5, so the LSO should move to 5.
-            adminClient.deleteRecords(Map.of(tp, RecordsToDelete.beforeOffset(5L)));
-
-            int consumedMessageCount = consumeMessages(new AtomicInteger(0), 5, "group1", 1, 10, true);
-            // The records returned belong to offsets 5-9.
-            assertEquals(5, consumedMessageCount);
-            verifyShareGroupStateTopicRecordsProduced();
-        }
-    }
-
-    @ClusterTest
-    public void testShareAutoOffsetResetMultipleGroupsWithDifferentValue() {
-        alterShareAutoOffsetReset("group1", "earliest");
-        alterShareAutoOffsetReset("group2", "latest");
-        try (ShareConsumer<byte[], byte[]> shareConsumerEarliest = createShareConsumer("group1");
-             ShareConsumer<byte[], byte[]> shareConsumerLatest = createShareConsumer("group2");
-             Producer<byte[], byte[]> producer = createProducer()) {
-
-            shareConsumerEarliest.subscribe(Set.of(tp.topic()));
-            shareConsumerLatest.subscribe(Set.of(tp.topic()));
-
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
-            // Producing a record.
-            producer.send(record);
-            producer.flush();
-            ConsumerRecords<byte[], byte[]> records1 = waitedPoll(shareConsumerEarliest, 2500L, 1);
-            // Since the value for share.auto.offset.reset has been altered to "earliest", the consumer should consume
-            // all messages present on the partition
-            assertEquals(1, records1.count());
-
-            ConsumerRecords<byte[], byte[]> records2 = waitedPoll(shareConsumerLatest, 2500L, 0, true, "group2", List.of(tp));
-            // Since the value for share.auto.offset.reset has been altered to "latest", the consumer should not consume
-            // any message
-            assertEquals(0, records2.count());
-
-            // Producing another record.
-            producer.send(record);
-
-            records1 = shareConsumerEarliest.poll(Duration.ofMillis(5000));
-            // The next record should also be consumed successfully by group1
-            assertEquals(1, records1.count());
-
-            records2 = shareConsumerLatest.poll(Duration.ofMillis(5000));
-            // The next record should also be consumed successfully by group2
-            assertEquals(1, records2.count());
-            verifyShareGroupStateTopicRecordsProduced();
-        }
-    }
-
-    @ClusterTest
-    public void testShareAutoOffsetResetByDuration() throws Exception {
-        // Set auto offset reset to 1 hour before current time
-        alterShareAutoOffsetReset("group1", "by_duration:PT1H");
-
-        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1");
-             Producer<byte[], byte[]> producer = createProducer()) {
-
-            long currentTime = System.currentTimeMillis();
-            long twoHoursAgo = currentTime - TimeUnit.HOURS.toMillis(2);
-            long thirtyMinsAgo = currentTime - TimeUnit.MINUTES.toMillis(30);
-
-            // Produce messages with different timestamps
-            ProducerRecord<byte[], byte[]> oldRecord = new ProducerRecord<>(tp.topic(), tp.partition(),
-                twoHoursAgo, "old_key".getBytes(), "old_value".getBytes());
-            ProducerRecord<byte[], byte[]> recentRecord = new ProducerRecord<>(tp.topic(), tp.partition(),
-                thirtyMinsAgo, "recent_key".getBytes(), "recent_value".getBytes());
-            ProducerRecord<byte[], byte[]> currentRecord = new ProducerRecord<>(tp.topic(), tp.partition(),
-                currentTime, "current_key".getBytes(), "current_value".getBytes());
-
-            producer.send(oldRecord).get();
-            producer.send(recentRecord).get();
-            producer.send(currentRecord).get();
-            producer.flush();
-
-            shareConsumer.subscribe(Set.of(tp.topic()));
-
-            // Should only receive messages from last hour (recent and current)
-            List<ConsumerRecord<byte[], byte[]>> records = consumeRecords(shareConsumer, 2);
-            assertEquals(2, records.size());
-
-            // Verify timestamps and order
-            assertEquals(thirtyMinsAgo, records.get(0).timestamp());
-            assertEquals("recent_key", new String(records.get(0).key()));
-            assertEquals(currentTime, records.get(1).timestamp());
-            assertEquals("current_key", new String(records.get(1).key()));
-        }
-
-        // Set the auto offset reset to 3 hours before current time
-        // so the consumer should consume all messages (3 records)
-        alterShareAutoOffsetReset("group2", "by_duration:PT3H");
-        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group2")) {
-
-            shareConsumer.subscribe(Set.of(tp.topic()));
-            List<ConsumerRecord<byte[], byte[]>> records = consumeRecords(shareConsumer, 3);
-            assertEquals(3, records.size());
-            verifyShareGroupStateTopicRecordsProduced();
-        }
-    }
-
-    @ClusterTest
-    public void testShareAutoOffsetResetByDurationInvalidFormat() {
-        // Test invalid duration format
-        ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, "group1");
-        Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
-
-        // Test invalid duration format
-        try (Admin adminClient = createAdminClient()) {
-            alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
-                GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "by_duration:1h"), AlterConfigOp.OpType.SET)));
-            ExecutionException e1 = assertThrows(ExecutionException.class, () ->
-                adminClient.incrementalAlterConfigs(alterEntries).all().get());
-            assertInstanceOf(InvalidConfigurationException.class, e1.getCause());
-
-            // Test negative duration
-            alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
-                GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "by_duration:-PT1H"), AlterConfigOp.OpType.SET)));
-            ExecutionException e2 = assertThrows(ExecutionException.class, () ->
-                adminClient.incrementalAlterConfigs(alterEntries).all().get());
-            assertInstanceOf(InvalidConfigurationException.class, e2.getCause());
-        }
-    }
-
     @ClusterTest(
         brokers = 3,
         serverProperties = {
             @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+            @ClusterConfigProperty(key = "group.share.max.partition.max.record.locks", value = "10000"),
             @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
             @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
             @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "3"),
@@ -2082,11 +1785,7 @@ public class ShareConsumerTest {
                     int shareGroupStateTp = Utils.abs(key.asCoordinatorKey().hashCode()) % 3;
                     List<Integer> curShareCoordNodeId = null;
                     try {
-                        curShareCoordNodeId = admin.describeTopics(List.of(Topic.SHARE_GROUP_STATE_TOPIC_NAME)).allTopicNames().get().get(Topic.SHARE_GROUP_STATE_TOPIC_NAME)
-                            .partitions().stream()
-                            .filter(info -> info.partition() == shareGroupStateTp)
-                            .map(info -> info.leader().id())
-                            .toList();
+                        curShareCoordNodeId = topicPartitionLeader(admin, Topic.SHARE_GROUP_STATE_TOPIC_NAME, shareGroupStateTp);
                     } catch (Exception e) {
                         fail(e);
                     }
@@ -2101,11 +1800,7 @@ public class ShareConsumerTest {
 
                     List<Integer> newShareCoordNodeId = null;
                     try {
-                        newShareCoordNodeId = admin.describeTopics(List.of(Topic.SHARE_GROUP_STATE_TOPIC_NAME)).allTopicNames().get().get(Topic.SHARE_GROUP_STATE_TOPIC_NAME)
-                            .partitions().stream()
-                            .filter(info -> info.partition() == shareGroupStateTp)
-                            .map(info -> info.leader().id())
-                            .toList();
+                        newShareCoordNodeId = topicPartitionLeader(admin, Topic.SHARE_GROUP_STATE_TOPIC_NAME, shareGroupStateTp);
                     } catch (Exception e) {
                         fail(e);
                     }
@@ -2139,108 +1834,11 @@ public class ShareConsumerTest {
         verifyShareGroupStateTopicRecordsProduced();
     }
 
-    @ClusterTest
-    public void testDeliveryCountNotIncreaseAfterSessionClose() {
-        alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer()) {
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
-            // We write 10 records to the topic, so they would be written from offsets 0-9 on the topic.
-            for (int i = 0; i < 10; i++) {
-                assertDoesNotThrow(() -> producer.send(record).get(), "Failed to send records");
-            }
-        }
-
-        // Perform the fetch, close in a loop.
-        for (int count = 0; count < ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_DEFAULT; count++) {
-            consumeMessages(new AtomicInteger(0), 10, "group1", 1, 10, false);
-        }
-
-        // If the delivery count is increased, consumer will get nothing.
-        int consumedMessageCount = consumeMessages(new AtomicInteger(0), 10, "group1", 1, 10, true);
-        // The records returned belong to offsets 0-9.
-        assertEquals(10, consumedMessageCount);
-        verifyShareGroupStateTopicRecordsProduced();
-    }
-
-    @ClusterTest
-    public void testDeliveryCountDifferentBehaviorWhenClosingSessionWithExplicitAcknowledgement() {
-        alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer();
-            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
-                "group1",
-                Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
-
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null,
-                "key".getBytes(), "value".getBytes());
-            producer.send(record);
-            producer.send(record);
-            producer.flush();
-
-            shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 2);
-            assertEquals(2, records.count());
-            // Acknowledge the first record with AcknowledgeType.RELEASE
-            shareConsumer.acknowledge(records.records(tp).get(0), AcknowledgeType.RELEASE);
-            Map<TopicIdPartition, Optional<KafkaException>> result = shareConsumer.commitSync();
-            assertEquals(1, result.size());
-        }
-
-        // Test delivery count
-        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1", Map.of())) {
-            shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 2);
-            assertEquals(2, records.count());
-            assertEquals((short) 2, records.records(tp).get(0).deliveryCount().get());
-            assertEquals((short) 1, records.records(tp).get(1).deliveryCount().get());
-        }
-    }
-
-    @ClusterTest(
-        serverProperties = {
-            @ClusterConfigProperty(key = "group.share.delivery.count.limit", value = "2"),
-        }
-    )
-    public void testBehaviorOnDeliveryCountBoundary() {
-        alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer();
-            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
-                "group1",
-                Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
-
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null,
-                "key".getBytes(), "value".getBytes());
-            producer.send(record);
-            producer.flush();
-
-            shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
-            assertEquals(1, records.count());
-            assertEquals((short) 1, records.records(tp).get(0).deliveryCount().get());
-            // Acknowledge the record with AcknowledgeType.RELEASE.
-            shareConsumer.acknowledge(records.records(tp).get(0), AcknowledgeType.RELEASE);
-            Map<TopicIdPartition, Optional<KafkaException>> result = shareConsumer.commitSync();
-            assertEquals(1, result.size());
-
-            // Consume again, the delivery count should be 2.
-            records = waitedPoll(shareConsumer, 2500L, 1);
-            assertEquals(1, records.count());
-            assertEquals((short) 2, records.records(tp).get(0).deliveryCount().get());
-
-        }
-
-        // Start again and same record should be delivered
-        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1", Map.of())) {
-            shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
-            assertEquals(1, records.count());
-            assertEquals((short) 2, records.records(tp).get(0).deliveryCount().get());
-        }
-    }
-
     @ClusterTest(
         brokers = 3,
         serverProperties = {
             @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+            @ClusterConfigProperty(key = "group.share.max.partition.max.record.locks", value = "10000"),
             @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
             @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
             @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "3"),
@@ -2260,15 +1858,16 @@ public class ShareConsumerTest {
 
         ClientState prodState = new ClientState();
 
-        // Produce messages until we want.
+        // Produce a fixed number of messages for deterministic testing.
+        int targetRecordCount = 2000;
         service.execute(() -> {
             try (Producer<byte[], byte[]> producer = createProducer()) {
-                while (!prodState.done().get()) {
+                do {
                     ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(multiTp.topic(), multiTp.partition(), null, "key".getBytes(), "value".getBytes());
                     producer.send(record);
                     producer.flush();
-                    prodState.count().incrementAndGet();
-                }
+                } while (prodState.count().incrementAndGet() < targetRecordCount);
+                prodState.done().set(true);
             }
         });
 
@@ -2287,12 +1886,9 @@ public class ShareConsumerTest {
             TimeUnit.MILLISECONDS
         );
 
-        // Let the complex consumer read the messages.
-        service.schedule(() -> prodState.done().set(true), 5L, TimeUnit.SECONDS);
-
-        // All messages which can be read are read, some would be redelivered (roughly 3 times the records produced).
+        // All messages which can be read are read, some would be redelivered (roughly 2 times the records produced).
         TestUtils.waitForCondition(complexCons1::isDone, 45_000L, () -> "did not close!");
-        int delta = complexCons1.recordsRead() - (int) (prodState.count().get() * 3 * 0.95);    // 3 times with margin of error (5%).
+        int delta = complexCons1.recordsRead() - (int) (prodState.count().get() * 2 * 0.95);    // 2 times with margin of error (5%).
 
         assertTrue(delta > 0,
             String.format("Producer (%d) and share consumer (%d) record count mismatch.", prodState.count().get(), complexCons1.recordsRead()));
@@ -2306,8 +1902,7 @@ public class ShareConsumerTest {
         brokers = 1,
         serverProperties = {
             @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
-            @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
-            @ClusterConfigProperty(key = "group.share.enable", value = "true"),
+            @ClusterConfigProperty(key = "group.share.max.partition.max.record.locks", value = "10000"),
             @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
             @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
             @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
@@ -2389,839 +1984,50 @@ public class ShareConsumerTest {
     }
 
     @ClusterTest
-    public void testReadCommittedIsolationLevel() {
+    public void testCommitSyncFailsForDeletedTopic() throws InterruptedException {
+        Uuid topicId = createTopic("baz", 1, 1);
         alterShareAutoOffsetReset("group1", "earliest");
-        alterShareIsolationLevel("group1", "read_committed");
-        try (Producer<byte[], byte[]> transactionalProducer = createProducer("T1");
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
-            produceCommittedAndAbortedTransactionsInInterval(transactionalProducer, 10, 5);
-            shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 5000L, 8);
-            // 5th and 10th message transaction was aborted, hence they won't be included in the fetched records.
-            assertEquals(8, records.count());
-            int messageCounter = 1;
-            for (ConsumerRecord<byte[], byte[]> record : records) {
-                assertEquals(tp.topic(), record.topic());
-                assertEquals(tp.partition(), record.partition());
-                if (messageCounter % 5 == 0)
-                    messageCounter++;
-                assertEquals("Message " + messageCounter, new String(record.value()));
-                messageCounter++;
-            }
-        }
-        verifyShareGroupStateTopicRecordsProduced();
-    }
-
-    @ClusterTest
-    public void testReadUncommittedIsolationLevel() {
-        alterShareAutoOffsetReset("group1", "earliest");
-        alterShareIsolationLevel("group1", "read_uncommitted");
-        try (Producer<byte[], byte[]> transactionalProducer = createProducer("T1");
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
-            produceCommittedAndAbortedTransactionsInInterval(transactionalProducer, 10, 5);
-            shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 5000L, 10);
-            // Even though 5th and 10th message transaction was aborted, they will be included in the fetched records since IsolationLevel is READ_UNCOMMITTED.
-            assertEquals(10, records.count());
-            int messageCounter = 1;
-            for (ConsumerRecord<byte[], byte[]> record : records) {
-                assertEquals(tp.topic(), record.topic());
-                assertEquals(tp.partition(), record.partition());
-                assertEquals("Message " + messageCounter, new String(record.value()));
-                messageCounter++;
-            }
-        }
-        verifyShareGroupStateTopicRecordsProduced();
-    }
-
-    @ClusterTest
-    public void testAlterReadUncommittedToReadCommittedIsolationLevel() {
-        alterShareAutoOffsetReset("group1", "earliest");
-        alterShareIsolationLevel("group1", "read_uncommitted");
-        try (Producer<byte[], byte[]> transactionalProducer = createProducer("T1");
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1", Map.of(
-                 ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
-            shareConsumer.subscribe(Set.of(tp.topic()));
-            transactionalProducer.initTransactions();
-            try {
-                // First transaction is committed.
-                produceCommittedTransaction(transactionalProducer, "Message 1");
-
-                ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 5000L, 1);
-                assertEquals(1, records.count());
-                ConsumerRecord<byte[], byte[]> record = records.iterator().next();
-                assertEquals("Message 1", new String(record.value()));
-                assertEquals(tp.topic(), record.topic());
-                assertEquals(tp.partition(), record.partition());
-                records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.ACCEPT));
-                shareConsumer.commitSync();
-
-                // Second transaction is aborted.
-                produceAbortedTransaction(transactionalProducer, "Message 2");
-
-                records = waitedPoll(shareConsumer, 5000L, 1);
-                assertEquals(1, records.count());
-                record = records.iterator().next();
-                assertEquals("Message 2", new String(record.value()));
-                records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.ACCEPT));
-                shareConsumer.commitSync();
-
-                // Third transaction is committed.
-                produceCommittedTransaction(transactionalProducer, "Message 3");
-                // Fourth transaction is aborted.
-                produceAbortedTransaction(transactionalProducer, "Message 4");
-
-                records = waitedPoll(shareConsumer, 5000L, 2);
-                // Message 3 and Message 4 would be returned by this poll.
-                assertEquals(2, records.count());
-                Iterator<ConsumerRecord<byte[], byte[]>> recordIterator = records.iterator();
-                record = recordIterator.next();
-                assertEquals("Message 3", new String(record.value()));
-                record = recordIterator.next();
-                assertEquals("Message 4", new String(record.value()));
-                // We will make Message 3 and Message 4 available for re-consumption.
-                records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.RELEASE));
-                shareConsumer.commitSync();
-
-                // We are altering IsolationLevel to READ_COMMITTED now. We will only read committed transactions now.
-                alterShareIsolationLevel("group1", "read_committed");
-
-                // Fifth transaction is committed.
-                produceCommittedTransaction(transactionalProducer, "Message 5");
-                // Sixth transaction is aborted.
-                produceAbortedTransaction(transactionalProducer, "Message 6");
-                // Seventh transaction is aborted.
-                produceAbortedTransaction(transactionalProducer, "Message 7");
-                // Eighth transaction is committed.
-                produceCommittedTransaction(transactionalProducer, "Message 8");
-
-                // Since isolation level is READ_COMMITTED, we can consume Message 3 (committed transaction that was released), Message 5 and Message 8.
-                // We cannot consume Message 4 (aborted transaction that was released), Message 6 and Message 7 since they were aborted.
-                List<String> messages = new ArrayList<>();
-                TestUtils.waitForCondition(() -> {
-                    ConsumerRecords<byte[], byte[]> pollRecords = shareConsumer.poll(Duration.ofMillis(5000));
-                    if (pollRecords.count() > 0) {
-                        for (ConsumerRecord<byte[], byte[]> pollRecord : pollRecords)
-                            messages.add(new String(pollRecord.value()));
-                        pollRecords.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.ACCEPT));
-                        shareConsumer.commitSync();
-                    }
-                    return messages.size() == 3;
-                }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume all records post altering share isolation level");
-
-                assertEquals("Message 3", messages.get(0));
-                assertEquals("Message 5", messages.get(1));
-                assertEquals("Message 8", messages.get(2));
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            } finally {
-                transactionalProducer.close();
-            }
-        }
-        verifyShareGroupStateTopicRecordsProduced();
-    }
-
-    @ClusterTest
-    public void testAlterReadCommittedToReadUncommittedIsolationLevelWithReleaseAck() {
-        alterShareAutoOffsetReset("group1", "earliest");
-        alterShareIsolationLevel("group1", "read_committed");
-        try (Producer<byte[], byte[]> transactionalProducer = createProducer("T1");
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1", Map.of(
-                 ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
-            shareConsumer.subscribe(Set.of(tp.topic()));
-            transactionalProducer.initTransactions();
-
-            try {
-                // First transaction is committed.
-                produceCommittedTransaction(transactionalProducer, "Message 1");
-
-                ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 5000L, 1);
-                assertEquals(1, records.count());
-                ConsumerRecord<byte[], byte[]> record = records.iterator().next();
-                assertEquals("Message 1", new String(record.value()));
-                assertEquals(tp.topic(), record.topic());
-                assertEquals(tp.partition(), record.partition());
-                records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.ACCEPT));
-                shareConsumer.commitSync();
-
-                // Second transaction is aborted.
-                produceAbortedTransaction(transactionalProducer, "Message 2");
-
-                // Setting the acknowledgement commit callback to verify acknowledgement completion.
-                Map<TopicPartition, Set<Long>> partitionOffsetsMap = new HashMap<>();
-                shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap, Map.of()));
-
-                // We will not receive any records since the transaction for Message 2 was aborted. Wait for the
-                // aborted marker offset for Message 2 (3L) to be fetched and acknowledged by the consumer.
-                TestUtils.waitForCondition(() -> {
-                    ConsumerRecords<byte[], byte[]> pollRecords = shareConsumer.poll(Duration.ofMillis(500));
-                    return pollRecords.count() == 0 && partitionOffsetsMap.containsKey(tp) && partitionOffsetsMap.get(tp).contains(3L);
-                }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume abort transaction and marker offset for Message 2");
-
-                // Third transaction is committed.
-                produceCommittedTransaction(transactionalProducer, "Message 3");
-                // Fourth transaction is aborted.
-                produceAbortedTransaction(transactionalProducer, "Message 4");
-
-                // Setting the acknowledgement commit callback to verify acknowledgement completion.
-                Map<TopicPartition, Set<Long>> partitionOffsetsMap2 = new HashMap<>();
-                shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap2, Map.of()));
-
-                records = waitedPoll(shareConsumer, 5000L, 1);
-                // Message 3 would be returned by this poll.
-                assertEquals(1, records.count());
-                record = records.iterator().next();
-                assertEquals("Message 3", new String(record.value()));
-                // We will make Message 3 available for re-consumption.
-                records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.RELEASE));
-                shareConsumer.commitSync();
-
-                // Wait for the aborted marker offset for Message 4 (7L) to be fetched and acknowledged by the consumer.
-                TestUtils.waitForCondition(() -> {
-                    ConsumerRecords<byte[], byte[]> pollRecords = shareConsumer.poll(Duration.ofMillis(500));
-                    if (pollRecords.count() > 0) {
-                        // We will release Message 3 again if it was received in this poll().
-                        pollRecords.forEach(consumerRecord -> shareConsumer.acknowledge(consumerRecord, AcknowledgeType.RELEASE));
-                    }
-                    return partitionOffsetsMap2.containsKey(tp) && partitionOffsetsMap2.get(tp).contains(7L);
-                }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume abort transaction marker offset for Message 4");
-
-                // We are altering IsolationLevel to READ_UNCOMMITTED now. We will read both committed/aborted transactions now.
-                alterShareIsolationLevel("group1", "read_uncommitted");
-
-                // Fifth transaction is committed.
-                produceCommittedTransaction(transactionalProducer, "Message 5");
-                // Sixth transaction is aborted.
-                produceAbortedTransaction(transactionalProducer, "Message 6");
-                // Seventh transaction is aborted.
-                produceAbortedTransaction(transactionalProducer, "Message 7");
-                // Eighth transaction is committed.
-                produceCommittedTransaction(transactionalProducer, "Message 8");
-
-                // Since isolation level is READ_UNCOMMITTED, we can consume Message 3 (committed transaction that was released), Message 5, Message 6, Message 7 and Message 8.
-                Set<String> finalMessages = new HashSet<>();
-                TestUtils.waitForCondition(() -> {
-                    ConsumerRecords<byte[], byte[]> pollRecords = shareConsumer.poll(Duration.ofMillis(5000));
-                    if (pollRecords.count() > 0) {
-                        for (ConsumerRecord<byte[], byte[]> pollRecord : pollRecords)
-                            finalMessages.add(new String(pollRecord.value()));
-                        pollRecords.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.ACCEPT));
-                        shareConsumer.commitSync();
-                    }
-                    return finalMessages.size() == 5;
-                }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume all records post altering share isolation level");
-
-                Set<String> expected = Set.of("Message 3", "Message 5", "Message 6", "Message 7", "Message 8");
-                assertEquals(expected, finalMessages);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            } finally {
-                transactionalProducer.close();
-            }
-        }
-        verifyShareGroupStateTopicRecordsProduced();
-    }
-
-    @ClusterTest
-    public void testAlterReadCommittedToReadUncommittedIsolationLevelWithRejectAck() {
-        alterShareAutoOffsetReset("group1", "earliest");
-        alterShareIsolationLevel("group1", "read_committed");
-        try (Producer<byte[], byte[]> transactionalProducer = createProducer("T1");
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1", Map.of(
-                 ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
-            shareConsumer.subscribe(Set.of(tp.topic()));
-            transactionalProducer.initTransactions();
-
-            try {
-                // First transaction is committed.
-                produceCommittedTransaction(transactionalProducer, "Message 1");
-
-                ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 5000L, 1);
-                assertEquals(1, records.count());
-                ConsumerRecord<byte[], byte[]> record = records.iterator().next();
-                assertEquals("Message 1", new String(record.value()));
-                assertEquals(tp.topic(), record.topic());
-                assertEquals(tp.partition(), record.partition());
-                records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.ACCEPT));
-                shareConsumer.commitSync();
-
-                // Second transaction is aborted.
-                produceAbortedTransaction(transactionalProducer, "Message 2");
-
-                // Setting the acknowledgement commit callback to verify acknowledgement completion.
-                Map<TopicPartition, Set<Long>> partitionOffsetsMap = new HashMap<>();
-                shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap, Map.of()));
-
-                // We will not receive any records since the transaction for Message 2 was aborted. Wait for the
-                // aborted marker offset for Message 2 (3L) to be fetched and acknowledged by the consumer.
-                TestUtils.waitForCondition(() -> {
-                    ConsumerRecords<byte[], byte[]> pollRecords = shareConsumer.poll(Duration.ofMillis(500));
-                    return pollRecords.count() == 0 && partitionOffsetsMap.containsKey(tp) && partitionOffsetsMap.get(tp).contains(3L);
-                }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume abort transaction and marker offset for Message 2");
-
-                // Third transaction is committed.
-                produceCommittedTransaction(transactionalProducer, "Message 3");
-                // Fourth transaction is aborted.
-                produceAbortedTransaction(transactionalProducer, "Message 4");
-
-                // Setting the acknowledgement commit callback to verify acknowledgement completion.
-                Map<TopicPartition, Set<Long>> partitionOffsetsMap2 = new HashMap<>();
-                shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap2, Map.of()));
-
-                records = waitedPoll(shareConsumer, 5000L, 1);
-                // Message 3 would be returned by this poll.
-                assertEquals(1, records.count());
-                record = records.iterator().next();
-                assertEquals("Message 3", new String(record.value()));
-                // We will make Message 3 available for re-consumption.
-                records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.REJECT));
-                shareConsumer.commitSync();
-
-                // Wait for the aborted marker offset for Message 4 (7L) to be fetched and acknowledged by the consumer.
-                TestUtils.waitForCondition(() -> {
-                    shareConsumer.poll(Duration.ofMillis(500));
-                    return partitionOffsetsMap2.containsKey(tp) && partitionOffsetsMap2.get(tp).contains(7L);
-                }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume abort transaction marker offset for Message 4");
-
-                // We are altering IsolationLevel to READ_UNCOMMITTED now. We will read both committed/aborted transactions now.
-                alterShareIsolationLevel("group1", "read_uncommitted");
-
-                // Fifth transaction is committed.
-                produceCommittedTransaction(transactionalProducer, "Message 5");
-                // Sixth transaction is aborted.
-                produceAbortedTransaction(transactionalProducer, "Message 6");
-                // Seventh transaction is aborted.
-                produceAbortedTransaction(transactionalProducer, "Message 7");
-                // Eighth transaction is committed.
-                produceCommittedTransaction(transactionalProducer, "Message 8");
-
-                // Since isolation level is READ_UNCOMMITTED, we can consume Message 5, Message 6, Message 7 and Message 8.
-                List<String> finalMessages = new ArrayList<>();
-                TestUtils.waitForCondition(() -> {
-                    ConsumerRecords<byte[], byte[]> pollRecords = shareConsumer.poll(Duration.ofMillis(5000));
-                    if (pollRecords.count() > 0) {
-                        for (ConsumerRecord<byte[], byte[]> pollRecord : pollRecords)
-                            finalMessages.add(new String(pollRecord.value()));
-                        pollRecords.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.ACCEPT));
-                        shareConsumer.commitSync();
-                    }
-                    return finalMessages.size() == 4;
-                }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume all records post altering share isolation level");
-
-                assertEquals("Message 5", finalMessages.get(0));
-                assertEquals("Message 6", finalMessages.get(1));
-                assertEquals("Message 7", finalMessages.get(2));
-                assertEquals("Message 8", finalMessages.get(3));
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            } finally {
-                transactionalProducer.close();
-            }
-        }
-        verifyShareGroupStateTopicRecordsProduced();
-    }
-
-    /**
-     * Util class to encapsulate state for a consumer/producer
-     * being executed by an {@link ExecutorService}.
-     */
-    private static class ClientState {
-        private final AtomicBoolean done = new AtomicBoolean(false);
-        private final AtomicInteger count = new AtomicInteger(0);
-
-        AtomicBoolean done() {
-            return done;
-        }
-
-        AtomicInteger count() {
-            return count;
-        }
-    }
-
-    private int produceMessages(int messageCount) {
-        try (Producer<byte[], byte[]> producer = createProducer()) {
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
-            IntStream.range(0, messageCount).forEach(__ -> producer.send(record));
-            producer.flush();
-        }
-        return messageCount;
-    }
-
-    private void produceMessagesWithTimestamp(int messageCount, long startingTimestamp) {
-        try (Producer<byte[], byte[]> producer = createProducer()) {
-            for (int i = 0; i < messageCount; i++) {
-                ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), startingTimestamp + i,
-                    ("key " + i).getBytes(), ("value " + i).getBytes());
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                 "group1",
+                 Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))
+        ) {
+            for (int i = 0; i < 10; i++) {
+                ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("baz", 0, null, "key".getBytes(), ("Message " + i).getBytes());
                 producer.send(record);
             }
             producer.flush();
+
+            shareConsumer.subscribe(List.of("baz"));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 10);
+            assertEquals(10, records.count());
+
+            records.forEach(shareConsumer::acknowledge);
+
+            // Topic deletion does not necessarily become apparent across the cluster immediately, so sleep a short while
+            deleteTopic("baz");
+            Thread.sleep(5000);
+
+            Map<TopicIdPartition, Optional<KafkaException>> commitResult = shareConsumer.commitSync();
+            assertEquals(1, commitResult.size());
+            assertInstanceOf(UnknownTopicIdException.class, commitResult.get(new TopicIdPartition(topicId, 0, "baz")).get());
         }
     }
 
-    private void produceCommittedTransaction(Producer<byte[], byte[]> transactionalProducer, String message) {
-        try {
-            transactionalProducer.beginTransaction();
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, message.getBytes(), message.getBytes());
-            Future<RecordMetadata> future = transactionalProducer.send(record);
-            transactionalProducer.flush();
-            future.get(); // Ensure producer send is complete before committing
-            transactionalProducer.commitTransaction();
-        } catch (Exception e) {
-            transactionalProducer.abortTransaction();
-        }
-    }
-
-    private void produceAbortedTransaction(Producer<byte[], byte[]> transactionalProducer, String message) {
-        try {
-            transactionalProducer.beginTransaction();
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, message.getBytes(), message.getBytes());
-            Future<RecordMetadata> future = transactionalProducer.send(record);
-            transactionalProducer.flush();
-            future.get(); // Ensure producer send is complete before aborting
-            transactionalProducer.abortTransaction();
-        } catch (Exception e) {
-            transactionalProducer.abortTransaction();
-        }
-    }
-
-    private void produceCommittedAndAbortedTransactionsInInterval(Producer<byte[], byte[]> transactionalProducer, int messageCount, int intervalAbortedTransactions) {
-        transactionalProducer.initTransactions();
-        int transactionCount = 0;
-        try {
-            for (int i = 0; i < messageCount; i++) {
-                transactionalProducer.beginTransaction();
-                String recordMessage = "Message " + (i + 1);
-                ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, recordMessage.getBytes(), recordMessage.getBytes());
-                Future<RecordMetadata> future = transactionalProducer.send(record);
-                transactionalProducer.flush();
-                // Increment transaction count
-                transactionCount++;
-                if (transactionCount % intervalAbortedTransactions == 0) {
-                    // Aborts every intervalAbortedTransactions transaction
-                    transactionalProducer.abortTransaction();
-                } else {
-                    // Commits other transactions
-                    future.get(); // Ensure producer send is complete before committing
-                    transactionalProducer.commitTransaction();
-                }
-            }
-        } catch (Exception e) {
-            transactionalProducer.abortTransaction();
-        } finally {
-            transactionalProducer.close();
-        }
-    }
-
-    private int consumeMessages(AtomicInteger totalMessagesConsumed,
-                                int totalMessages,
-                                String groupId,
-                                int consumerNumber,
-                                int maxPolls,
-                                boolean commit) {
-        return assertDoesNotThrow(() -> {
-            try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId)) {
-                shareConsumer.subscribe(Set.of(tp.topic()));
-                return consumeMessages(shareConsumer, totalMessagesConsumed, totalMessages, consumerNumber, maxPolls, commit);
-            }
-        }, "Consumer " + consumerNumber + " failed with exception");
-    }
-
-    private int consumeMessages(AtomicInteger totalMessagesConsumed,
-                                int totalMessages,
-                                String groupId,
-                                int consumerNumber,
-                                int maxPolls,
-                                boolean commit,
-                                int maxFetchBytes) {
-        return assertDoesNotThrow(() -> {
-            try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
-                groupId,
-                Map.of(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxFetchBytes))) {
-                shareConsumer.subscribe(Set.of(tp.topic()));
-                return consumeMessages(shareConsumer, totalMessagesConsumed, totalMessages, consumerNumber, maxPolls, commit);
-            }
-        }, "Consumer " + consumerNumber + " failed with exception");
-    }
-
-    private int consumeMessages(ShareConsumer<byte[], byte[]> consumer,
-                                AtomicInteger totalMessagesConsumed,
-                                int totalMessages,
-                                int consumerNumber,
-                                int maxPolls,
-                                boolean commit) {
-        return assertDoesNotThrow(() -> {
-            int messagesConsumed = 0;
-            int retries = 0;
-            if (totalMessages > 0) {
-                while (totalMessagesConsumed.get() < totalMessages && retries < maxPolls) {
-                    ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(2000));
-                    messagesConsumed += records.count();
-                    totalMessagesConsumed.addAndGet(records.count());
-                    retries++;
-                }
-            } else {
-                while (retries < maxPolls) {
-                    ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(2000));
-                    messagesConsumed += records.count();
-                    totalMessagesConsumed.addAndGet(records.count());
-                    retries++;
-                }
-            }
-
-            if (commit) {
-                // Complete acknowledgement of the records
-                consumer.commitSync(Duration.ofMillis(10000));
-            }
-            return messagesConsumed;
-        }, "Consumer " + consumerNumber + " failed with exception");
-    }
-
-    private <K, V> List<ConsumerRecord<K, V>> consumeRecords(ShareConsumer<K, V> consumer,
-                                                             int numRecords) {
-        ArrayList<ConsumerRecord<K, V>> accumulatedRecords = new ArrayList<>();
-        long startTimeMs = System.currentTimeMillis();
-        while (accumulatedRecords.size() < numRecords) {
-            ConsumerRecords<K, V> records = consumer.poll(Duration.ofMillis(100));
-            records.forEach(accumulatedRecords::add);
-            long currentTimeMs = System.currentTimeMillis();
-            assertFalse(currentTimeMs - startTimeMs > 60000, "Timed out before consuming expected records.");
-        }
-        return accumulatedRecords;
-    }
-
-    private Uuid createTopic(String topicName) {
-        return createTopic(topicName, 1, 1);
-    }
-
-    private Uuid createTopic(String topicName, int numPartitions, int replicationFactor) {
-        AtomicReference<Uuid> topicId = new AtomicReference<>(null);
-        assertDoesNotThrow(() -> {
-            try (Admin admin = createAdminClient()) {
-                CreateTopicsResult result = admin.createTopics(Set.of(new NewTopic(topicName, numPartitions, (short) replicationFactor)));
-                result.all().get();
-                topicId.set(result.topicId(topicName).get());
-            }
-        }, "Failed to create topic");
-
-        return topicId.get();
-    }
-
-    private void deleteTopic(String topicName) {
-        assertDoesNotThrow(() -> {
-            try (Admin admin = createAdminClient()) {
-                admin.deleteTopics(Set.of(topicName)).all().get();
-            }
-        }, "Failed to delete topic");
-    }
-
-    private Admin createAdminClient() {
-        return cluster.admin();
-    }
-
-    private <K, V> Producer<K, V> createProducer() {
-        return createProducer(Map.of());
-    }
-
-    private <K, V> Producer<K, V> createProducer(Map<String, Object> config) {
-        return cluster.producer(config);
-    }
-
-    private <K, V> Producer<K, V> createProducer(String transactionalId) {
-        return createProducer(
-            Map.of(
-                ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId
-            )
-        );
-    }
-
-    private <K, V> ShareConsumer<K, V> createShareConsumer(String groupId) {
-        return createShareConsumer(groupId, Map.of());
-    }
-
-    private <K, V> ShareConsumer<K, V> createShareConsumer(
-        String groupId,
-        Map<?, ?> additionalProperties
-    ) {
-        return createShareConsumer(groupId, additionalProperties, null, null);
-    }
-
-    private <K, V> ShareConsumer<K, V> createShareConsumer(
-        String groupId,
-        Map<?, ?> additionalProperties,
-        Deserializer<K> keyDeserializer,
-        Deserializer<V> valueDeserializer
-    ) {
-        Properties props = new Properties();
-        props.putAll(additionalProperties);
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        Map<String, Object> conf = new HashMap<>();
-        props.forEach((k, v) -> conf.put((String) k, v));
-        return cluster.shareConsumer(conf, keyDeserializer, valueDeserializer);
-    }
-
-    private void warmup() throws InterruptedException {
-        createTopic(warmupTp.topic());
-        waitForMetadataCache();
-        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(warmupTp.topic(), warmupTp.partition(), null, "key".getBytes(), "value".getBytes());
-        Set<String> subscription = Set.of(warmupTp.topic());
-        alterShareAutoOffsetReset("warmupgroup1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer();
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("warmupgroup1")) {
-
-            producer.send(record);
-            producer.flush();
-
-            shareConsumer.subscribe(subscription);
-            TestUtils.waitForCondition(
-                () -> shareConsumer.poll(Duration.ofMillis(5000)).count() == 1, 30000, 200L, () -> "warmup record not received");
-        }
-    }
-
-    private void waitForMetadataCache() throws InterruptedException {
-        TestUtils.waitForCondition(() ->
-                !cluster.brokers().get(0).metadataCache().getAliveBrokerNodes(new ListenerName("EXTERNAL")).isEmpty(),
-            DEFAULT_MAX_WAIT_MS, 100L, () -> "cache not up yet");
-    }
-
-    private void verifyShareGroupStateTopicRecordsProduced() {
-        try {
-            try (Consumer<byte[], byte[]> consumer = cluster.consumer()) {
-                consumer.assign(sgsTopicPartitions);
-                consumer.seekToBeginning(sgsTopicPartitions);
-                Set<ConsumerRecord<byte[], byte[]>> records = new HashSet<>();
-                TestUtils.waitForCondition(() -> {
-                        ConsumerRecords<byte[], byte[]> msgs = consumer.poll(Duration.ofMillis(5000L));
-                        if (msgs.count() > 0) {
-                            msgs.records(Topic.SHARE_GROUP_STATE_TOPIC_NAME).forEach(records::add);
-                        }
-                        return records.size() > 2; // +2 because of extra warmup records
-                    },
-                    30000L,
-                    200L,
-                    () -> "no records produced"
-                );
-            }
-        } catch (InterruptedException e) {
-            fail(e);
-        }
-    }
-
-    private void alterShareAutoOffsetReset(String groupId, String newValue) {
-        ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, groupId);
-        Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
-        alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
-            GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, newValue), AlterConfigOp.OpType.SET)));
-        AlterConfigsOptions alterOptions = new AlterConfigsOptions();
-        try (Admin adminClient = createAdminClient()) {
-            assertDoesNotThrow(() -> adminClient.incrementalAlterConfigs(alterEntries, alterOptions)
-                .all()
-                .get(60, TimeUnit.SECONDS), "Failed to alter configs");
-        }
-    }
-
-    private void alterShareIsolationLevel(String groupId, String newValue) {
-        ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, groupId);
-        Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
-        alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
-            GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, newValue), AlterConfigOp.OpType.SET)));
-        AlterConfigsOptions alterOptions = new AlterConfigsOptions();
-        try (Admin adminClient = createAdminClient()) {
-            assertDoesNotThrow(() -> adminClient.incrementalAlterConfigs(alterEntries, alterOptions)
-                .all()
-                .get(60, TimeUnit.SECONDS), "Failed to alter configs");
-        }
-    }
-
-    /**
-     * Test utility which encapsulates a {@link ShareConsumer} whose record processing
-     * behavior can be supplied as a function argument.
-     * <p></p>
-     * This can be used to create different consume patterns on the broker and study
-     * the status of broker side share group abstractions.
-     *
-     * @param <K> - key type of the records consumed
-     * @param <V> - value type of the records consumed
-     */
-    private static class ComplexShareConsumer<K, V> implements Runnable {
-        public static final int POLL_TIMEOUT_MS = 15000;
-        public static final int MAX_DELIVERY_COUNT = ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_DEFAULT;
-
-        private final String topicName;
-        private final Map<String, Object> configs = new HashMap<>();
-        private final ClientState state = new ClientState();
-        private final Predicate<ConsumerRecords<K, V>> exitCriteria;
-        private final BiConsumer<ShareConsumer<K, V>, ConsumerRecord<K, V>> processFunc;
-
-        ComplexShareConsumer(
-            String bootstrapServers,
-            String topicName,
-            String groupId,
-            Map<String, Object> additionalProperties
-        ) {
-            this(
-                bootstrapServers,
-                topicName,
-                groupId,
-                additionalProperties,
-                records -> records.count() == 0,
-                (consumer, record) -> {
-                    short deliveryCountBeforeAccept = (short) ((record.offset() + record.offset() / (MAX_DELIVERY_COUNT + 2)) % (MAX_DELIVERY_COUNT + 2));
-                    if (deliveryCountBeforeAccept == 0) {
-                        consumer.acknowledge(record, AcknowledgeType.REJECT);
-                    } else if (record.deliveryCount().get() == deliveryCountBeforeAccept) {
-                        consumer.acknowledge(record, AcknowledgeType.ACCEPT);
-                    } else {
-                        consumer.acknowledge(record, AcknowledgeType.RELEASE);
-                    }
-                }
-            );
-        }
-
-        ComplexShareConsumer(
-            String bootstrapServers,
-            String topicName,
-            String groupId,
-            Map<String, Object> additionalProperties,
-            Predicate<ConsumerRecords<K, V>> exitCriteria,
-            BiConsumer<ShareConsumer<K, V>, ConsumerRecord<K, V>> processFunc
-        ) {
-            this.exitCriteria = Objects.requireNonNull(exitCriteria);
-            this.processFunc = Objects.requireNonNull(processFunc);
-            this.topicName = topicName;
-            this.configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-            this.configs.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-            this.configs.putAll(additionalProperties);
-            this.configs.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
-            this.configs.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
-        }
-
-        @Override
-        public void run() {
-            try (ShareConsumer<K, V> consumer = new KafkaShareConsumer<>(configs)) {
-                consumer.subscribe(Set.of(this.topicName));
-                while (!state.done().get()) {
-                    ConsumerRecords<K, V> records = consumer.poll(Duration.ofMillis(POLL_TIMEOUT_MS));
-                    state.count().addAndGet(records.count());
-                    if (exitCriteria.test(records)) {
-                        state.done().set(true);
-                    }
-                    records.forEach(record -> processFunc.accept(consumer, record));
-                }
-            }
-        }
-
-        boolean isDone() {
-            return state.done().get();
-        }
-
-        int recordsRead() {
-            return state.count().get();
-        }
-    }
-
-    private void shutdownExecutorService(ExecutorService service) {
-        service.shutdown();
-        try {
-            if (!service.awaitTermination(5L, TimeUnit.SECONDS)) {
-                service.shutdownNow();
-            }
-        } catch (Exception e) {
-            service.shutdownNow();
-            Thread.currentThread().interrupt();
-        }
-    }
-
-    private ConsumerRecords<byte[], byte[]> waitedPoll(
-        ShareConsumer<byte[], byte[]> shareConsumer,
-        long pollMs,
-        int recordCount
-    ) {
-        return waitedPoll(shareConsumer, pollMs, recordCount, false, "", List.of());
-    }
-
-    private ConsumerRecords<byte[], byte[]> waitedPoll(
-        ShareConsumer<byte[], byte[]> shareConsumer,
-        long pollMs,
-        int recordCount,
-        boolean checkAssignment,
-        String groupId,
-        List<TopicPartition> tps
-    ) {
-        AtomicReference<ConsumerRecords<byte[], byte[]>> recordsAtomic = new AtomicReference<>();
-        try {
-            waitForCondition(() -> {
-                    ConsumerRecords<byte[], byte[]> recs = shareConsumer.poll(Duration.ofMillis(pollMs));
-                    recordsAtomic.set(recs);
-                    if (checkAssignment) {
-                        waitForAssignment(groupId, tps);
-                    }
-                    return recs.count() == recordCount;
-                },
-                DEFAULT_MAX_WAIT_MS,
-                500L,
-                () -> "failed to get records"
-            );
-            return recordsAtomic.get();
-        } catch (InterruptedException e) {
+    @ClusterTest
+    public void testDescribeShareGroupOffsetsForEmptySharePartition() {
+        String groupId = "group1";
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId);
+             Admin adminClient = createAdminClient()) {
+            shareConsumer.subscribe(List.of(tp.topic()));
+            // Polling share consumer to make sure the share partition is created.
+            shareConsumer.poll(Duration.ofMillis(2000));
+            SharePartitionOffsetInfo sharePartitionOffsetInfo = sharePartitionOffsetInfo(adminClient, groupId, tp);
+            // Since the partition is empty, and no records have been consumed, the share partition startOffset will be
+            // -1. Thus, there will be no description for the share partition.
+            assertNull(sharePartitionOffsetInfo);
+        } catch (ExecutionException | InterruptedException e) {
             throw new RuntimeException(e);
-        }
-    }
-
-    private void waitForAssignment(String groupId, List<TopicPartition> tps) {
-        try {
-            waitForCondition(() -> {
-                    try (Admin admin = createAdminClient()) {
-                        Collection<ShareMemberDescription> members = admin.describeShareGroups(List.of(groupId),
-                            new DescribeShareGroupsOptions().includeAuthorizedOperations(true)
-                        ).describedGroups().get(groupId).get().members();
-                        Set<TopicPartition> assigned = new HashSet<>();
-                        members.forEach(desc -> {
-                            if (desc.assignment() != null) {
-                                assigned.addAll(desc.assignment().topicPartitions());
-                            }
-                        });
-                        return assigned.containsAll(tps);
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                },
-                DEFAULT_MAX_WAIT_MS,
-                1000L,
-                () -> "tps not assigned to members"
-            );
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public static class SerializerImpl implements Serializer<byte[]> {
-
-        @Override
-        public byte[] serialize(String topic, Headers headers, byte[] data) {
-            headers.add(KEY, VALUE.getBytes());
-            return data;
-        }
-
-        @Override
-        public byte[] serialize(String topic, byte[] data) {
-            fail("method should not be invoked");
-            return null;
-        }
-    }
-
-    public static class DeserializerImpl implements Deserializer<byte[]> {
-
-        @Override
-        public byte[] deserialize(String topic, Headers headers, byte[] data) {
-            Header header = headers.lastHeader(KEY);
-            assertEquals("application/octet-stream", header == null ? null : new String(header.value()));
-            return data;
-        }
-
-        @Override
-        public byte[] deserialize(String topic, byte[] data) {
-            fail("method should not be invoked");
-            return null;
         }
     }
 }

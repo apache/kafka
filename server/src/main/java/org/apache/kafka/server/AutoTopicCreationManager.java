@@ -20,6 +20,7 @@ package org.apache.kafka.server;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
 import org.apache.kafka.common.requests.RequestContext;
+import org.apache.kafka.server.quota.ControllerMutationQuota;
 
 import java.util.List;
 import java.util.Map;
@@ -32,23 +33,13 @@ public interface AutoTopicCreationManager {
      * Initiate auto topic creation for the given topics.
      *
      * @param topics the topics to create
+     * @param controllerMutationQuota the controller mutation quota for topic creation
      * @param metadataRequestContext defined when creating topics on behalf of the client. The goal here is to preserve
      *                               original client principal for auditing, thus needing to wrap a plain CreateTopicsRequest
      *                               inside Envelope to send to the controller when forwarding is enabled.
      * @return auto created topic metadata responses
      */
-    List<MetadataResponseTopic> createTopics(Set<String> topics, Optional<RequestContext> metadataRequestContext);
-
-    /**
-     * Initiate auto topic creation for the given topics.
-     * This method is used for creating internal topics.
-     *
-     * @param topics the topics to create
-     * @return auto created topic metadata responses
-     */
-    default List<MetadataResponseTopic> createInternalTopics(Set<String> topics) {
-        return createTopics(topics, Optional.empty());
-    }
+    List<MetadataResponseTopic> createTopics(Set<String> topics, ControllerMutationQuota controllerMutationQuota, Optional<RequestContext> metadataRequestContext);
 
     /**
      * Initiate auto topic creation for the given topics.

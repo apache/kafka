@@ -29,8 +29,10 @@ import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.requests.JoinGroupRequest;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.CommitPartitionValidator;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
@@ -47,6 +49,8 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineInteger;
 import org.apache.kafka.timeline.TimelineObject;
+
+import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -104,6 +108,11 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     }
 
     /**
+     * The logger.
+     */
+    private final Logger log;
+
+    /**
      * The group state.
      */
     private final TimelineObject<ConsumerGroupState> state;
@@ -148,10 +157,12 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     private final TimelineObject<Boolean> hasSubscriptionMetadataRecord;
 
     public ConsumerGroup(
+        LogContext logContext,
         SnapshotRegistry snapshotRegistry,
         String groupId
     ) {
         super(snapshotRegistry, groupId);
+        this.log = logContext.logger(ConsumerGroup.class);
         this.state = new TimelineObject<>(snapshotRegistry, EMPTY);
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.serverAssignors = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -627,6 +638,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * @param isTransactional   Whether the offset commit is transactional or not. It has no
      *                          impact when a consumer group is used.
      * @param apiVersion        The api version.
+     * @return A validator for per-partition validation.
      * @throws UnknownMemberIdException     If the member is not found.
      * @throws StaleMemberEpochException    If the member uses the consumer protocol and the provided
      *                                      member epoch doesn't match the actual member epoch.
@@ -634,7 +646,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      *                                      generation id is not equal to the member epoch.
      */
     @Override
-    public void validateOffsetCommit(
+    public CommitPartitionValidator validateOffsetCommit(
         String memberId,
         String groupInstanceId,
         int memberEpoch,
@@ -644,13 +656,13 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         // When the member epoch is -1, the request comes from either the admin client
         // or a consumer which does not use the group management facility. In this case,
         // the request can commit offsets if the group is empty.
-        if (memberEpoch < 0 && members().isEmpty()) return;
+        if (memberEpoch < 0 && members().isEmpty()) return CommitPartitionValidator.NO_OP;
 
         // The TxnOffsetCommit API does not require the member id, the generation id and the group instance id fields.
         // Hence, they are only validated if any of them is provided
         if (isTransactional && memberEpoch == JoinGroupRequest.UNKNOWN_GENERATION_ID &&
             memberId.equals(JoinGroupRequest.UNKNOWN_MEMBER_ID) && groupInstanceId == null)
-            return;
+            return CommitPartitionValidator.NO_OP;
 
         final ConsumerGroupMember member = getOrMaybeCreateMember(memberId, false);
 
@@ -658,10 +670,27 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         // the member should be using the OffsetCommit API version >= 9.
         if (!isTransactional && !member.useClassicProtocol() && apiVersion < 9) {
             throw new UnsupportedVersionException("OffsetCommit version 9 or above must be used " +
-                "by members using the modern group protocol");
+                "by members using the consumer group protocol");
         }
 
-        validateMemberEpoch(memberEpoch, member.memberEpoch(), member.useClassicProtocol());
+        // For members in a consumer group, the epoch must either match the last epoch sent
+        // in a heartbeat or be greater than or equal to the partition's assignment epoch.
+        if (memberEpoch == member.memberEpoch()) {
+            return CommitPartitionValidator.NO_OP;
+        }
+
+        if (memberEpoch > member.memberEpoch()) {
+            if (member.useClassicProtocol()) {
+                throw new IllegalGenerationException(String.format("Received generation id %d is newer than "
+                    + "current member epoch %d.", memberEpoch, member.memberEpoch()));
+            } else {
+                throw new StaleMemberEpochException(String.format("Received member epoch %d is newer than "
+                    + "current member epoch %d.", memberEpoch, member.memberEpoch()));
+            }
+        }
+
+        // Member epoch is older; validate against per-partition assignment epochs.
+        return createAssignmentEpochValidator(member, memberEpoch);
     }
 
     /**
@@ -727,7 +756,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         members.keySet().forEach(memberId ->
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId))
         );
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord(groupId));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataTombstoneRecord(groupId));
 
         members.keySet().forEach(memberId ->
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId))
@@ -764,7 +793,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             String removedMemberId = memberId.equals(leavingMemberId) ? joiningMemberId : memberId;
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, removedMemberId));
         });
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord(groupId));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataTombstoneRecord(groupId));
 
         members.keySet().forEach(memberId -> {
             String removedMemberId = memberId.equals(leavingMemberId) ? joiningMemberId : memberId;
@@ -822,6 +851,54 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                     + "the expected member epoch %d.", receivedMemberEpoch, expectedMemberEpoch));
             }
         }
+    }
+
+    /**
+     * Creates a validator that checks if the received member epoch is valid for each partition's assignment epoch.
+     * A commit is rejected if the partition is not assigned to the member
+     * or if the received client-side epoch is older than the partition's assignment epoch (KIP-1251).
+     *
+     * @param member              The consumer whose assignments are being validated.
+     * @param receivedMemberEpoch The received member epoch.
+     * @return A validator for per-partition validation.
+     */
+    private CommitPartitionValidator createAssignmentEpochValidator(
+        ConsumerGroupMember member,
+        int receivedMemberEpoch
+    ) {
+        return (topicName, topicId, partitionId) -> {
+            // Search for the partition in the assigned partitions, then in partitions pending revocation.
+            Integer assignmentEpoch = member.assignmentEpoch(topicId, partitionId);
+            if (assignmentEpoch == null) {
+                assignmentEpoch = member.pendingRevocationEpoch(topicId, partitionId);
+            }
+
+            if (assignmentEpoch == null) {
+                if (member.useClassicProtocol()) {
+                    throw new IllegalGenerationException(String.format(
+                        "Partition %s-%d is not assigned or pending revocation for member.",
+                        topicName, partitionId));
+                } else {
+                    throw new StaleMemberEpochException(String.format(
+                        "Partition %s-%d is not assigned or pending revocation for member.",
+                        topicName, partitionId));
+                }
+            }
+
+            if (receivedMemberEpoch < assignmentEpoch) {
+                if (member.useClassicProtocol()) {
+                    throw new IllegalGenerationException(String.format(
+                        "Received generation id %d is older than assignment epoch %d for partition %s-%d.",
+                        receivedMemberEpoch, assignmentEpoch, topicName, partitionId)
+                    );
+                } else {
+                    throw new StaleMemberEpochException(String.format(
+                        "Received member epoch %d is older than assignment epoch %d for partition %s-%d.",
+                        receivedMemberEpoch, assignmentEpoch, topicName, partitionId)
+                    );
+                }
+            }
+        };
     }
 
     /**
@@ -883,11 +960,11 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         ConsumerGroupState newState = STABLE;
         if (members.isEmpty()) {
             newState = EMPTY;
-        } else if (groupEpoch.get() > targetAssignmentEpoch.get()) {
+        } else if (groupEpoch.get() > assignmentEpoch()) {
             newState = ASSIGNING;
         } else {
             for (ModernGroupMember member : members.values()) {
-                if (!member.isReconciledTo(targetAssignmentEpoch.get())) {
+                if (!member.isReconciledTo(assignmentEpoch())) {
                     newState = RECONCILING;
                     break;
                 }
@@ -1030,26 +1107,26 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     }
 
     /**
-     * Removes the partition epochs based on the provided assignment.
+     * Removes the partition epochs based on the provided assignment and member epoch.
      *
-     * @param assignment    The assignment.
-     * @param expectedEpoch The expected epoch.
-     * @throws IllegalStateException if the epoch does not match the expected one.
+     * @param assignment    The assignment with epochs. The assignment epochs are ignored.
+     * @param expectedEpoch The expected member epoch.
      * package-private for testing.
      */
     void removePartitionEpochs(
-        Map<Uuid, Set<Integer>> assignment,
+        Map<Uuid, Map<Integer, Integer>> assignment,
         int expectedEpoch
     ) {
-        assignment.forEach((topicId, assignedPartitions) -> {
+        assignment.forEach((topicId, partitionEpochs) -> {
             currentPartitionEpoch.compute(topicId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull != null) {
-                    assignedPartitions.forEach(partitionId -> {
-                        Integer prevValue = partitionsOrNull.remove(partitionId);
-                        if (prevValue != expectedEpoch) {
-                            throw new IllegalStateException(
-                                String.format("Cannot remove the epoch %d from %s-%s because the partition is " +
-                                    "still owned at a different epoch %d", expectedEpoch, topicId, partitionId, prevValue));
+                    partitionEpochs.keySet().forEach(partitionId -> {
+                        Integer prevValue = partitionsOrNull.get(partitionId);
+                        if (prevValue != null && prevValue == expectedEpoch) {
+                            partitionsOrNull.remove(partitionId);
+                        } else {
+                            log.debug("[GroupId {}] Cannot remove the epoch {} from {}-{} because the partition is " +
+                                    "still owned at a different epoch {}", groupId, expectedEpoch, topicId, partitionId, prevValue);
                         }
                     });
                     if (partitionsOrNull.isEmpty()) {
@@ -1058,34 +1135,36 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                         return partitionsOrNull;
                     }
                 } else {
-                    throw new IllegalStateException(
-                        String.format("Cannot remove the epoch %d from %s because it does not have any epoch",
-                            expectedEpoch, topicId));
+                    log.debug("[GroupId {}] Cannot remove the epoch {} from {} because it does not have any epoch",
+                            groupId, expectedEpoch, topicId);
+                    return partitionsOrNull;
                 }
             });
         });
     }
 
     /**
-     * Adds the partitions epoch based on the provided assignment.
+     * Adds the partitions epoch based on the provided assignment and member epoch.
      *
-     * @param assignment    The assignment.
-     * @param epoch         The new epoch.
-     * @throws IllegalStateException if the partition already has an epoch assigned.
+     * @param assignment    The assignment with epochs. The assignment epochs are ignored.
+     * @param epoch         The new member epoch.
+     * @throws IllegalStateException if updating a partition with a smaller or equal member epoch.
      * package-private for testing.
      */
     void addPartitionEpochs(
-        Map<Uuid, Set<Integer>> assignment,
+        Map<Uuid, Map<Integer, Integer>> assignment,
         int epoch
     ) {
-        assignment.forEach((topicId, assignedPartitions) -> {
+        assignment.forEach((topicId, partitionEpochs) -> {
             currentPartitionEpoch.compute(topicId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull == null) {
-                    partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, assignedPartitions.size());
+                    partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, partitionEpochs.size());
                 }
-                for (Integer partitionId : assignedPartitions) {
-                    Integer prevValue = partitionsOrNull.put(partitionId, epoch);
-                    if (prevValue != null) {
+                for (Integer partitionId : partitionEpochs.keySet()) {
+                    Integer prevValue = partitionsOrNull.get(partitionId);
+                    if (prevValue == null || prevValue < epoch) {
+                        partitionsOrNull.put(partitionId, epoch);
+                    } else {
                         throw new IllegalStateException(
                             String.format("Cannot set the epoch of %s-%s to %d because the partition is " +
                                 "still owned at epoch %d", topicId, partitionId, epoch, prevValue));
@@ -1106,7 +1185,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             .setAssignorName(preferredServerAssignor(committedOffset).orElse(defaultAssignor))
             .setGroupEpoch(groupEpoch.get(committedOffset))
             .setGroupState(state.get(committedOffset).toString())
-            .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset));
+            .setAssignmentEpoch(targetAssignmentMetadata.get(committedOffset).assignmentEpoch());
         members.entrySet(committedOffset).forEach(
             entry -> describedGroup.members().add(
                 entry.getValue().asConsumerGroupDescribeMember(
@@ -1121,6 +1200,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     /**
      * Create a new consumer group according to the given classic group.
      *
+     * @param logContext        The log context.
      * @param snapshotRegistry  The SnapshotRegistry.
      * @param classicGroup      The converted classic group.
      * @param topicHashCache    The cache for topic hashes.
@@ -1131,15 +1211,16 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * @throws UnsupportedVersionException if userData from a custom assignor would be lost.
      */
     public static ConsumerGroup fromClassicGroup(
+        LogContext logContext,
         SnapshotRegistry snapshotRegistry,
         ClassicGroup classicGroup,
         Map<String, Long> topicHashCache,
         CoordinatorMetadataImage metadataImage
     ) {
         String groupId = classicGroup.groupId();
-        ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId);
+        ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId);
         consumerGroup.setGroupEpoch(classicGroup.generationId());
-        consumerGroup.setTargetAssignmentEpoch(classicGroup.generationId());
+        consumerGroup.setTargetAssignmentMetadata(classicGroup.generationId(), 0L);
 
         classicGroup.allMembers().forEach(classicGroupMember -> {
             // The assigned partition can be empty if the member just joined and has never synced.
@@ -1177,7 +1258,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                 .setClientId(classicGroupMember.clientId())
                 .setClientHost(classicGroupMember.clientHost())
                 .setSubscribedTopicNames(subscription.topics())
-                .setAssignedPartitions(assignedPartitions)
+                .setAssignedPartitions(Utils.toAssignmentWithEpochs(assignedPartitions, classicGroup.generationId()))
                 .setClassicMemberMetadata(
                     new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                         .setSessionTimeoutMs(classicGroupMember.sessionTimeoutMs())
@@ -1221,7 +1302,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             ))
         );
 
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId(), groupEpoch()));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(groupId(), assignmentEpoch(), assignmentTimestamp()));
 
         members().forEach((__, consumerGroupMember) ->
             records.add(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId(), consumerGroupMember))
@@ -1288,10 +1369,10 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         if (member.state() == MemberState.UNRELEASED_PARTITIONS) {
             for (Map.Entry<Uuid, Set<Integer>> entry : targetAssignment().get(member.memberId()).partitions().entrySet()) {
                 Uuid topicId = entry.getKey();
-                Set<Integer> assignedPartitions = member.assignedPartitions().getOrDefault(topicId, Set.of());
+                Map<Integer, Integer> assignedPartitions = member.assignedPartitions().getOrDefault(topicId, Map.of());
 
                 for (int partition : entry.getValue()) {
-                    if (!assignedPartitions.contains(partition) && currentPartitionEpoch(topicId, partition) != -1) {
+                    if (!assignedPartitions.containsKey(partition) && currentPartitionEpoch(topicId, partition) != -1) {
                         return true;
                     }
                 }

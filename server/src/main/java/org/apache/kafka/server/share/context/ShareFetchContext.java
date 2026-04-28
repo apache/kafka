@@ -17,7 +17,6 @@
 package org.apache.kafka.server.share.context;
 
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareFetchResponse;
@@ -76,7 +75,7 @@ public abstract class ShareFetchContext {
      * @param updates - The updates to be sent in the response.
      * @return - The share fetch response.
      */
-    public abstract ShareFetchResponse updateAndGenerateResponseData(String groupId, Uuid memberId, LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates);
+    public abstract ShareFetchResponse updateAndGenerateResponseData(String groupId, String memberId, LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates);
 
     /**
      * @return - The error-prone and valid topic id partitions in the share fetch request.

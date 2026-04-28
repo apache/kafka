@@ -32,9 +32,9 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.SecurityUtils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.test.TestUtils;
 
@@ -445,7 +445,17 @@ public class AclCommandTest {
     }
 
     private Map.Entry<String, String> callMain(List<String> args) {
-        return ToolsTestUtils.grabConsoleOutputAndError(() -> AclCommand.main(args.toArray(new String[0])));
+        Exit.setExitProcedure((status, message) -> {
+            if (status == 1)
+                throw new RuntimeException("Exiting command");
+            else
+                throw new AssertionError("Unexpected exit with status " + status);
+        });
+        try {
+            return ToolsTestUtils.grabConsoleOutputAndError(() -> AclCommand.main(args.toArray(new String[0])));
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 
     private void testAclCli(ClusterInstance cluster, List<String> cmdArgs) throws InterruptedException {
@@ -507,29 +517,19 @@ public class AclCommandTest {
     }
 
     private void testPatternTypes(List<String> cmdArgs) {
-        Exit.setExitProcedure((status, message) -> {
-            if (status == 1)
-                throw new RuntimeException("Exiting command");
-            else
-                throw new AssertionError("Unexpected exit with status " + status);
-        });
-        try {
-            for (PatternType patternType : PatternType.values()) {
-                List<String> addCmd = new ArrayList<>(cmdArgs);
-                addCmd.addAll(List.of("--allow-principal", PRINCIPAL.toString(), PRODUCER, TOPIC, "Test",
-                        ADD, RESOURCE_PATTERN_TYPE, patternType.toString()));
-                verifyPatternType(addCmd, patternType.isSpecific());
+        for (PatternType patternType : PatternType.values()) {
+            List<String> addCmd = new ArrayList<>(cmdArgs);
+            addCmd.addAll(List.of("--allow-principal", PRINCIPAL.toString(), PRODUCER, TOPIC, "Test",
+                    ADD, RESOURCE_PATTERN_TYPE, patternType.toString()));
+            verifyPatternType(addCmd, patternType.isSpecific());
 
-                List<String> listCmd = new ArrayList<>(cmdArgs);
-                listCmd.addAll(List.of(TOPIC, "Test", LIST, RESOURCE_PATTERN_TYPE, patternType.toString()));
-                verifyPatternType(listCmd, patternType != PatternType.UNKNOWN);
+            List<String> listCmd = new ArrayList<>(cmdArgs);
+            listCmd.addAll(List.of(TOPIC, "Test", LIST, RESOURCE_PATTERN_TYPE, patternType.toString()));
+            verifyPatternType(listCmd, patternType != PatternType.UNKNOWN);
 
-                List<String> removeCmd = new ArrayList<>(cmdArgs);
-                removeCmd.addAll(List.of(TOPIC, "Test", "--force", REMOVE, RESOURCE_PATTERN_TYPE, patternType.toString()));
-                verifyPatternType(removeCmd, patternType != PatternType.UNKNOWN);
-            }
-        } finally {
-            Exit.resetExitProcedure();
+            List<String> removeCmd = new ArrayList<>(cmdArgs);
+            removeCmd.addAll(List.of(TOPIC, "Test", "--force", REMOVE, RESOURCE_PATTERN_TYPE, patternType.toString()));
+            verifyPatternType(removeCmd, patternType != PatternType.UNKNOWN);
         }
     }
 

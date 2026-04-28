@@ -28,7 +28,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -61,7 +60,7 @@ public class StreamsRebalanceListenerInvokerTest {
 
     @Test
     public void testSetRebalanceListenerWithNull() {
-        NullPointerException exception = assertThrows(NullPointerException.class, 
+        NullPointerException exception = assertThrows(NullPointerException.class,
             () -> invoker.setRebalanceListener(null));
         assertEquals("StreamsRebalanceListener cannot be null", exception.getMessage());
     }
@@ -73,7 +72,6 @@ public class StreamsRebalanceListenerInvokerTest {
 
         StreamsRebalanceData.Assignment mockAssignment = createMockAssignment();
         when(streamsRebalanceData.reconciledAssignment()).thenReturn(mockAssignment);
-        when(secondListener.onTasksRevoked(any())).thenReturn(Optional.empty());
 
         // Set first listener
         invoker.setRebalanceListener(firstListener);
@@ -89,33 +87,21 @@ public class StreamsRebalanceListenerInvokerTest {
 
     @Test
     public void testInvokeMethodsWithNoListener() {
-        IllegalStateException exception1 = assertThrows(IllegalStateException.class, 
-            () -> invoker.invokeAllTasksRevoked());
-        assertEquals("StreamsRebalanceListener is not defined", exception1.getMessage());
-
-        IllegalStateException exception2 = assertThrows(IllegalStateException.class, 
-            () -> invoker.invokeTasksAssigned(createMockAssignment()));
-        assertEquals("StreamsRebalanceListener is not defined", exception2.getMessage());
-
-        IllegalStateException exception3 = assertThrows(IllegalStateException.class, 
-            () -> invoker.invokeTasksRevoked(createMockTasks()));
-        assertEquals("StreamsRebalanceListener is not defined", exception3.getMessage());
-
-        IllegalStateException exception4 = assertThrows(IllegalStateException.class, 
-            () -> invoker.invokeAllTasksLost());
-        assertEquals("StreamsRebalanceListener is not defined", exception4.getMessage());
+        assertNull(invoker.invokeAllTasksRevoked());
+        assertNull(invoker.invokeTasksAssigned(createMockAssignment()));
+        assertNull(invoker.invokeTasksRevoked(createMockTasks()));
+        assertNull(invoker.invokeAllTasksLost());
     }
 
     @Test
     public void testInvokeAllTasksRevokedWithListener() {
         invoker.setRebalanceListener(mockListener);
-        
+
         StreamsRebalanceData.Assignment mockAssignment = createMockAssignment();
         when(streamsRebalanceData.reconciledAssignment()).thenReturn(mockAssignment);
-        when(mockListener.onTasksRevoked(any())).thenReturn(Optional.empty());
-        
+
         Exception result = invoker.invokeAllTasksRevoked();
-        
+
         assertNull(result);
         verify(mockListener).onTasksRevoked(eq(mockAssignment.activeTasks()));
     }
@@ -124,10 +110,9 @@ public class StreamsRebalanceListenerInvokerTest {
     public void testInvokeTasksAssignedWithListener() {
         invoker.setRebalanceListener(mockListener);
         StreamsRebalanceData.Assignment assignment = createMockAssignment();
-        when(mockListener.onTasksAssigned(assignment)).thenReturn(Optional.empty());
-        
+
         Exception result = invoker.invokeTasksAssigned(assignment);
-        
+
         assertNull(result);
         verify(mockListener).onTasksAssigned(eq(assignment));
     }
@@ -138,10 +123,10 @@ public class StreamsRebalanceListenerInvokerTest {
         StreamsRebalanceData.Assignment assignment = createMockAssignment();
         WakeupException wakeupException = new WakeupException();
         doThrow(wakeupException).when(mockListener).onTasksAssigned(assignment);
-        
-        WakeupException thrownException = assertThrows(WakeupException.class, 
+
+        WakeupException thrownException = assertThrows(WakeupException.class,
             () -> invoker.invokeTasksAssigned(assignment));
-        
+
         assertEquals(wakeupException, thrownException);
         verify(mockListener).onTasksAssigned(eq(assignment));
     }
@@ -152,10 +137,10 @@ public class StreamsRebalanceListenerInvokerTest {
         StreamsRebalanceData.Assignment assignment = createMockAssignment();
         InterruptException interruptException = new InterruptException("Test interrupt");
         doThrow(interruptException).when(mockListener).onTasksAssigned(assignment);
-        
-        InterruptException thrownException = assertThrows(InterruptException.class, 
+
+        InterruptException thrownException = assertThrows(InterruptException.class,
             () -> invoker.invokeTasksAssigned(assignment));
-        
+
         assertEquals(interruptException, thrownException);
         verify(mockListener).onTasksAssigned(eq(assignment));
     }
@@ -166,9 +151,9 @@ public class StreamsRebalanceListenerInvokerTest {
         StreamsRebalanceData.Assignment assignment = createMockAssignment();
         RuntimeException runtimeException = new RuntimeException("Test exception");
         doThrow(runtimeException).when(mockListener).onTasksAssigned(assignment);
-        
+
         Exception result = invoker.invokeTasksAssigned(assignment);
-        
+
         assertEquals(runtimeException, result);
         verify(mockListener).onTasksAssigned(eq(assignment));
     }
@@ -177,10 +162,9 @@ public class StreamsRebalanceListenerInvokerTest {
     public void testInvokeTasksRevokedWithListener() {
         invoker.setRebalanceListener(mockListener);
         Set<StreamsRebalanceData.TaskId> tasks = createMockTasks();
-        when(mockListener.onTasksRevoked(tasks)).thenReturn(Optional.empty());
-        
+
         Exception result = invoker.invokeTasksRevoked(tasks);
-        
+
         assertNull(result);
         verify(mockListener).onTasksRevoked(eq(tasks));
     }
@@ -191,10 +175,10 @@ public class StreamsRebalanceListenerInvokerTest {
         Set<StreamsRebalanceData.TaskId> tasks = createMockTasks();
         WakeupException wakeupException = new WakeupException();
         doThrow(wakeupException).when(mockListener).onTasksRevoked(tasks);
-        
-        WakeupException thrownException = assertThrows(WakeupException.class, 
+
+        WakeupException thrownException = assertThrows(WakeupException.class,
             () -> invoker.invokeTasksRevoked(tasks));
-        
+
         assertEquals(wakeupException, thrownException);
         verify(mockListener).onTasksRevoked(eq(tasks));
     }
@@ -205,10 +189,10 @@ public class StreamsRebalanceListenerInvokerTest {
         Set<StreamsRebalanceData.TaskId> tasks = createMockTasks();
         InterruptException interruptException = new InterruptException("Test interrupt");
         doThrow(interruptException).when(mockListener).onTasksRevoked(tasks);
-        
-        InterruptException thrownException = assertThrows(InterruptException.class, 
+
+        InterruptException thrownException = assertThrows(InterruptException.class,
             () -> invoker.invokeTasksRevoked(tasks));
-        
+
         assertEquals(interruptException, thrownException);
         verify(mockListener).onTasksRevoked(eq(tasks));
     }
@@ -219,9 +203,9 @@ public class StreamsRebalanceListenerInvokerTest {
         Set<StreamsRebalanceData.TaskId> tasks = createMockTasks();
         RuntimeException runtimeException = new RuntimeException("Test exception");
         doThrow(runtimeException).when(mockListener).onTasksRevoked(tasks);
-        
+
         Exception result = invoker.invokeTasksRevoked(tasks);
-        
+
         assertEquals(runtimeException, result);
         verify(mockListener).onTasksRevoked(eq(tasks));
     }
@@ -229,10 +213,9 @@ public class StreamsRebalanceListenerInvokerTest {
     @Test
     public void testInvokeAllTasksLostWithListener() {
         invoker.setRebalanceListener(mockListener);
-        when(mockListener.onAllTasksLost()).thenReturn(Optional.empty());
-        
+
         Exception result = invoker.invokeAllTasksLost();
-        
+
         assertNull(result);
         verify(mockListener).onAllTasksLost();
     }
@@ -242,10 +225,10 @@ public class StreamsRebalanceListenerInvokerTest {
         invoker.setRebalanceListener(mockListener);
         WakeupException wakeupException = new WakeupException();
         doThrow(wakeupException).when(mockListener).onAllTasksLost();
-        
-        WakeupException thrownException = assertThrows(WakeupException.class, 
+
+        WakeupException thrownException = assertThrows(WakeupException.class,
             () -> invoker.invokeAllTasksLost());
-        
+
         assertEquals(wakeupException, thrownException);
         verify(mockListener).onAllTasksLost();
     }
@@ -255,10 +238,10 @@ public class StreamsRebalanceListenerInvokerTest {
         invoker.setRebalanceListener(mockListener);
         InterruptException interruptException = new InterruptException("Test interrupt");
         doThrow(interruptException).when(mockListener).onAllTasksLost();
-        
-        InterruptException thrownException = assertThrows(InterruptException.class, 
+
+        InterruptException thrownException = assertThrows(InterruptException.class,
             () -> invoker.invokeAllTasksLost());
-        
+
         assertEquals(interruptException, thrownException);
         verify(mockListener).onAllTasksLost();
     }
@@ -268,9 +251,9 @@ public class StreamsRebalanceListenerInvokerTest {
         invoker.setRebalanceListener(mockListener);
         RuntimeException runtimeException = new RuntimeException("Test exception");
         doThrow(runtimeException).when(mockListener).onAllTasksLost();
-        
+
         Exception result = invoker.invokeAllTasksLost();
-        
+
         assertEquals(runtimeException, result);
         verify(mockListener).onAllTasksLost();
     }
@@ -279,8 +262,8 @@ public class StreamsRebalanceListenerInvokerTest {
         Set<StreamsRebalanceData.TaskId> activeTasks = createMockTasks();
         Set<StreamsRebalanceData.TaskId> standbyTasks = Set.of();
         Set<StreamsRebalanceData.TaskId> warmupTasks = Set.of();
-        
-        return new StreamsRebalanceData.Assignment(activeTasks, standbyTasks, warmupTasks);
+
+        return new StreamsRebalanceData.Assignment(activeTasks, standbyTasks, warmupTasks, true);
     }
 
     private Set<StreamsRebalanceData.TaskId> createMockTasks() {

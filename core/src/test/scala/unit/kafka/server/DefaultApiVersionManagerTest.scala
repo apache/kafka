@@ -16,12 +16,12 @@
  */
 package kafka.server
 
-import kafka.server.metadata.KRaftMetadataCache
 import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metadata.FeatureLevelRecord
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
+import org.apache.kafka.metadata.KRaftMetadataCache
 import org.apache.kafka.server.{BrokerFeatures, DefaultApiVersionManager}
 import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion}
 import org.junit.jupiter.api.Test
@@ -38,7 +38,9 @@ class DefaultApiVersionManagerTest {
   private val brokerFeatures = BrokerFeatures.createDefault(true)
   private val metadataCache = {
     val cache = new KRaftMetadataCache(1, () => KRaftVersion.LATEST_PRODUCTION)
-    val delta = new MetadataDelta(MetadataImage.EMPTY)
+    val delta = new MetadataDelta.Builder()
+      .setImage(MetadataImage.EMPTY)
+      .build()
     delta.replay(new FeatureLevelRecord()
       .setName(MetadataVersion.FEATURE_NAME)
       .setFeatureLevel(MetadataVersion.latestProduction().featureLevel())
@@ -80,7 +82,15 @@ class DefaultApiVersionManagerTest {
     )
 
     ApiKeys.apisForListener(apiScope).forEach { apiKey =>
-      if (apiKey.messageType.latestVersionUnstable()) {
+      if (apiKey.id == ApiKeys.API_VERSIONS.id) {
+        // ApiVersions API is a particular case. The client always send the highest version
+        // that it supports and the server fails back to version 0 if it does not know it.
+        // See ApiKeys.isVersionEnabled for more information (KIP-511).
+        // Because API_VERSIONS has an unstable version while KIP-1242 is under development,
+        // we need a special case in this test. This assertion will start failing when the
+        // API is no longer unstable and the special case can be removed.
+        assertTrue(apiKey.messageType.latestVersionUnstable());
+      } else if (apiKey.messageType.latestVersionUnstable()) {
         assertFalse(versionManager.isApiEnabled(apiKey, apiKey.latestVersion),
           s"$apiKey version ${apiKey.latestVersion} should be disabled.")
       }

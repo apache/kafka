@@ -20,6 +20,15 @@ KAFKA_NUM_CONTAINERS=${KAFKA_NUM_CONTAINERS:-14}
 TC_PATHS=${TC_PATHS:-./kafkatest/}
 REBUILD=${REBUILD:f}
 
+# Auto-detect container runtime if not set
+if [[ -z "${CONTAINER_RUNTIME}" ]]; then
+    if command -v docker &> /dev/null; then
+        export CONTAINER_RUNTIME="docker"
+    elif command -v podman &> /dev/null; then
+        export CONTAINER_RUNTIME="podman"
+    fi
+fi
+
 die() {
     echo $@
     exit 1

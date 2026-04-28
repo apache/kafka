@@ -24,8 +24,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 
@@ -36,6 +36,7 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -165,7 +166,7 @@ public class ConsumerPerformance {
                     if (showDetailedStats)
                         printConsumerProgress(0, bytesRead, lastBytesRead, recordsRead, lastRecordsRead,
                             lastReportTimeMs, currentTimeMs, dateFormat, joinTimeMsInSingleRound.get());
-                    joinTimeMsInSingleRound = new AtomicLong(0);
+                    joinTimeMsInSingleRound.set(0);
                     lastReportTimeMs = currentTimeMs;
                     lastRecordsRead = recordsRead;
                     lastBytesRead = bytesRead;
@@ -230,24 +231,32 @@ public class ConsumerPerformance {
     public static class ConsumerPerfRebListener implements ConsumerRebalanceListener {
         private final AtomicLong joinTimeMs;
         private final AtomicLong joinTimeMsInSingleRound;
+        private final Collection<TopicPartition> assignedPartitions;
         private long joinStartMs;
 
         public ConsumerPerfRebListener(AtomicLong joinTimeMs, long joinStartMs, AtomicLong joinTimeMsInSingleRound) {
             this.joinTimeMs = joinTimeMs;
             this.joinStartMs = joinStartMs;
             this.joinTimeMsInSingleRound = joinTimeMsInSingleRound;
+            this.assignedPartitions = new HashSet<>();
         }
 
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-            joinStartMs = System.currentTimeMillis();
+            assignedPartitions.removeAll(partitions);
+            if (assignedPartitions.isEmpty()) {
+                joinStartMs = System.currentTimeMillis();
+            }
         }
 
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-            long elapsedMs = System.currentTimeMillis() - joinStartMs;
-            joinTimeMs.addAndGet(elapsedMs);
-            joinTimeMsInSingleRound.addAndGet(elapsedMs);
+            if (assignedPartitions.isEmpty()) {
+                long elapsedMs = System.currentTimeMillis() - joinStartMs;
+                joinTimeMs.addAndGet(elapsedMs);
+                joinTimeMsInSingleRound.addAndGet(elapsedMs);
+            }
+            assignedPartitions.addAll(partitions);
         }
     }
 
@@ -292,7 +301,7 @@ public class ConsumerPerformance {
                 .describedAs("gid")
                 .defaultsTo("perf-consumer-" + RND.nextInt(100_000))
                 .ofType(String.class);
-            fetchSizeOpt = parser.accepts("fetch-size", "The amount of data to fetch in a single request.")
+            fetchSizeOpt = parser.accepts("fetch-size", "The maximum amount of data to fetch from a single partition per request.")
                 .withRequiredArg()
                 .describedAs("size")
                 .ofType(Integer.class)

@@ -19,7 +19,6 @@ package org.apache.kafka.coordinator.group.modern;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -28,10 +27,12 @@ import java.util.Set;
  * The partition assignment for a modern group member.
  *
  * @param partitions The partitions assigned to this member keyed by topicId.
+ *                   The map will not be made immutable, since the server-side assignors rely on
+ *                   being able to mutate the map while building new assignments.
  */
 public record MemberAssignmentImpl(Map<Uuid, Set<Integer>> partitions) implements MemberAssignment {
     public MemberAssignmentImpl {
-        partitions = Collections.unmodifiableMap(Objects.requireNonNull(partitions));
+        Objects.requireNonNull(partitions);
     }
 
     /**

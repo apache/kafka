@@ -23,7 +23,6 @@ import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.TopicDescription;
-import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -97,8 +96,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             String testTopicName = String.format("%s-%s", "testHighWatermarkShouldNotAdvanceIfUnderMinIsr", "ELR-test");
             admin.updateFeatures(
                 Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
-                    new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)),
-                new UpdateFeaturesOptions()).all().get();
+                    new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE))).all().get();
 
             admin.createTopics(List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
             clusterInstance.waitTopicCreation(testTopicName, 1);
@@ -164,8 +162,7 @@ public class EligibleLeaderReplicasIntegrationTest {
 
             admin.updateFeatures(
                 Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
-                    new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)),
-                new UpdateFeaturesOptions()).all().get();
+                    new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE))).all().get();
             admin.createTopics(List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
             clusterInstance.waitTopicCreation(testTopicName, 1);
 
@@ -234,8 +231,7 @@ public class EligibleLeaderReplicasIntegrationTest {
 
             admin.updateFeatures(
                 Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
-                    new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)),
-                new UpdateFeaturesOptions()).all().get();
+                    new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE))).all().get();
             admin.createTopics(List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
             clusterInstance.waitTopicCreation(testTopicName, 1);
 
@@ -266,8 +262,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             int brokerToBeUncleanShutdown = topicPartitionInfo.elr().get(0).id();
             var broker = clusterInstance.brokers().values().stream().filter(b -> b.config().brokerId() == brokerToBeUncleanShutdown)
                 .findFirst().get();
-            List<File> dirs = new ArrayList<>();
-            broker.logManager().liveLogDirs().foreach(dirs::add);
+            List<File> dirs = new ArrayList<>(broker.logManager().liveLogDirs());
             assertEquals(1, dirs.size());
             CleanShutdownFileHandler handler = new CleanShutdownFileHandler(dirs.get(0).toString());
             assertTrue(handler.exists());
@@ -293,8 +288,7 @@ public class EligibleLeaderReplicasIntegrationTest {
 
             admin.updateFeatures(
                 Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
-                    new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)),
-                new UpdateFeaturesOptions()).all().get();
+                    new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE))).all().get();
             admin.createTopics(List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
             clusterInstance.waitTopicCreation(testTopicName, 1);
 
@@ -327,8 +321,7 @@ public class EligibleLeaderReplicasIntegrationTest {
             Set<Integer> initialReplicaSet = initialReplicas.stream().map(node -> node.id()).collect(Collectors.toSet());
             clusterInstance.brokers().forEach((id, broker) -> {
                 if (initialReplicaSet.contains(id)) {
-                    List<File> dirs = new ArrayList<>();
-                    broker.logManager().liveLogDirs().foreach(dirs::add);
+                    List<File> dirs = new ArrayList<>(broker.logManager().liveLogDirs());
                     assertEquals(1, dirs.size());
                     CleanShutdownFileHandler handler = new CleanShutdownFileHandler(dirs.get(0).toString());
                     assertDoesNotThrow(handler::delete);

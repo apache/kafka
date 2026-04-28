@@ -19,6 +19,8 @@ package org.apache.kafka.server.common;
 
 import org.apache.kafka.common.Uuid;
 
+import java.util.Set;
+
 public interface DirectoryEventHandler {
 
     /**
@@ -27,6 +29,8 @@ public interface DirectoryEventHandler {
     DirectoryEventHandler NOOP = new DirectoryEventHandler() {
         @Override public void handleAssignment(TopicIdPartition partition, Uuid directoryId, String reason, Runnable callback) {}
         @Override public void handleFailure(Uuid directoryId) {}
+        @Override public void handleCordoned(Set<Uuid> directoryIds) {}
+        @Override public void handleUncordoned(Set<Uuid> directoryIds) {}
     };
 
     /**
@@ -43,4 +47,16 @@ public interface DirectoryEventHandler {
      * @param directoryId  The directory ID
      */
     void handleFailure(Uuid directoryId);
+
+    /**
+     * Handle the transition of an online log directory to the cordoned state.
+     * @param directoryIds  The directory IDs to cordon
+     */
+    void handleCordoned(Set<Uuid> directoryIds);
+
+    /**
+     * Handle the transition of a cordoned log directory to the online state.
+     * @param directoryIds  The directory IDs to uncordon
+     */
+    void handleUncordoned(Set<Uuid> directoryIds);
 }

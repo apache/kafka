@@ -22,13 +22,14 @@ import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator.Feature
 import kafka.Kafka
-import kafka.tools.{StorageTool, TerseFailure}
+import kafka.tools.StorageTool
 import kafka.utils.Logging
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.store
 import net.sourceforge.argparse4j.inf.Namespace
-import org.apache.kafka.common.utils.Exit
+import org.apache.kafka.common.utils.internals.Exit
 import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.server.util.TerseFailure
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths, StandardCopyOption, StandardOpenOption}
@@ -250,7 +251,7 @@ object KafkaDockerWrapper extends Logging {
 
     val mapper = new ObjectMapper(new YAMLFactory().disable(Feature.WRITE_DOC_START_MARKER))
       .configure(DeserializationFeature.ACCEPT_EMPTY_STRING_AS_NULL_OBJECT, true)
-      .setSerializationInclusion(JsonInclude.Include.NON_EMPTY)
+      .setDefaultPropertyInclusion(JsonInclude.Include.NON_EMPTY)
       .findAndRegisterModules();
 
     val yaml = try {

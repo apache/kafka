@@ -17,14 +17,13 @@
 package kafka.server
 
 import com.yammer.metrics.core.Gauge
-import kafka.utils.TestUtils
 import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochRequestData}
-import org.apache.kafka.common.message.FetchResponseData.PartitionData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.requests.FetchRequest
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{MockTime, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.server.common.OffsetAndEpoch
+import org.apache.kafka.server.common.{DirectoryEventHandler, MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.ReplicaFetch
@@ -32,6 +31,8 @@ import org.apache.kafka.server.ReplicaState
 import org.apache.kafka.server.ResultWithPartitions
 import org.apache.kafka.server.PartitionFetchState
 import org.apache.kafka.server.LeaderEndPoint
+import org.apache.kafka.server.quota.ReplicationQuotaManager
+import org.apache.kafka.server.util.ServerTestUtils
 import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
@@ -47,7 +48,7 @@ class AbstractFetcherManagerTest {
 
   @BeforeEach
   def cleanMetricRegistry(): Unit = {
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
   }
 
   private def getMetricValue(name: String): Any = {
@@ -317,10 +318,12 @@ class AbstractFetcherManagerTest {
     override val isTruncationOnFetchSupported: Boolean = false
 
     override def fetchEarliestLocalOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = new OffsetAndEpoch(1L, 0)
+
+    override def fetchEarliestPendingUploadOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = new OffsetAndEpoch(-1L, -1)
   }
 
   private class MockResizeFetcherTierStateMachine extends TierStateMachine(null, null, false) {
-    override def start(topicPartition: TopicPartition, currentFetchState: PartitionFetchState, fetchPartitionData: PartitionData): PartitionFetchState = {
+    override def start(topicPartition: TopicPartition, topicId: Optional[Uuid], currentLeaderEpoch: Int, fetchStartOffsetAndEpoch: OffsetAndEpoch, leaderLogStartOffset: Long): PartitionFetchState = {
       throw new UnsupportedOperationException("Materializing tier state is not supported in this test.")
     }
   }
@@ -353,6 +356,28 @@ class AbstractFetcherManagerTest {
     override protected def logEndOffset(topicPartition: TopicPartition): Long = 1
 
     override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Optional[OffsetAndEpoch] = Optional.of(new OffsetAndEpoch(1, 0))
+
+    override protected def shouldFetchFromLastTieredOffset(topicPartition: TopicPartition, leaderEndOffset: Long, replicaEndOffset: Long): Boolean = false
   }
 
+  @Test
+  def testMetricsClassName(): Unit = {
+    val registry = KafkaYammerMetrics.defaultRegistry()
+    val config = mock(classOf[KafkaConfig])
+    val replicaManager = mock(classOf[ReplicaManager])
+    val quotaManager = mock(classOf[ReplicationQuotaManager])
+    val brokerTopicStats   = new BrokerTopicStats()
+    val directoryEventHandler = DirectoryEventHandler.NOOP
+    val metrics = new Metrics()
+    val time = new MockTime()
+    val metadataVersionSupplier = () => MetadataVersion.LATEST_PRODUCTION
+    val brokerEpochSupplier = () => 1L
+
+    val _ = new ReplicaAlterLogDirsManager(config, replicaManager, quotaManager, brokerTopicStats, directoryEventHandler)
+    val _ = new ReplicaFetcherManager(config, replicaManager, metrics, time, quotaManager, metadataVersionSupplier, brokerEpochSupplier)
+    val existReplicaAlterLogDirsManager = registry.allMetrics.entrySet().stream().filter(metric => metric.getKey.getType == "ReplicaAlterLogDirsManager").findFirst()
+    val existReplicaFetcherManager = registry.allMetrics.entrySet().stream().filter(metric => metric.getKey.getType == "ReplicaFetcherManager").findFirst()
+    assertTrue(existReplicaAlterLogDirsManager.isPresent)
+    assertTrue(existReplicaFetcherManager.isPresent)
+  }
 }

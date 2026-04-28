@@ -173,6 +173,7 @@ public class StreamsConfig extends AbstractConfig {
     public static final int DUMMY_THREAD_INDEX = 1;
 
     public static final long MAX_TASK_IDLE_MS_DISABLED = -1;
+    public static final long STATE_CLEANUP_DIR_MAX_AGE_MS_DISABLED = -1;
 
     // We impose these limitations because client tags are encoded into the subscription info,
     // which is part of the group metadata message that is persisted into the internal topic.
@@ -288,66 +289,6 @@ public class StreamsConfig extends AbstractConfig {
         SINGLE_STORE_SELF_JOIN);
 
     /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.0.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_0100 = UpgradeFromValues.UPGRADE_FROM_0100.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.1.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_0101 = UpgradeFromValues.UPGRADE_FROM_0101.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.2.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_0102 = UpgradeFromValues.UPGRADE_FROM_0102.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.11.0.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_0110 = UpgradeFromValues.UPGRADE_FROM_0110.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 1.0.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_10 = UpgradeFromValues.UPGRADE_FROM_10.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 1.1.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_11 = UpgradeFromValues.UPGRADE_FROM_11.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.0.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_20 = UpgradeFromValues.UPGRADE_FROM_20.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.1.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_21 = UpgradeFromValues.UPGRADE_FROM_21.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.2.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_22 = UpgradeFromValues.UPGRADE_FROM_22.toString();
-
-    /**
-     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.3.x}.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static final String UPGRADE_FROM_23 = UpgradeFromValues.UPGRADE_FROM_23.toString();
-
-    /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 2.4.x}.
      */
     @SuppressWarnings("WeakerAccess")
@@ -449,6 +390,11 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String UPGRADE_FROM_41 = UpgradeFromValues.UPGRADE_FROM_41.toString();
 
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 4.2.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_42 = UpgradeFromValues.UPGRADE_FROM_42.toString();
 
     /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
@@ -479,6 +425,11 @@ public class StreamsConfig extends AbstractConfig {
                                                                   " to receive an active task assignment. Upon assignment, it will still restore the rest of the changelog" +
                                                                   " before processing. To avoid a pause in processing during rebalances, this config" +
                                                                   " should correspond to a recovery time of well under a minute for a given workload. Must be at least 0.";
+
+    /** {@code allow.os.group.write.access} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String ALLOW_OS_GROUP_WRITE_ACCESS_CONFIG = "allow.os.group.write.access";
+    private static final String ALLOW_OS_GROUP_WRITE_ACCESS_DOC = "Allows state store directories created by Kafka Streams to have write access for the OS group. Default is false";
 
     /** {@code application.id} */
     @SuppressWarnings("WeakerAccess")
@@ -587,6 +538,14 @@ public class StreamsConfig extends AbstractConfig {
     static final String DSL_STORE_SUPPLIERS_CLASS_DOC = "Defines which store implementations to plug in to DSL operators. Must implement the <code>org.apache.kafka.streams.state.DslStoreSuppliers</code> interface.";
     static final Class<?> DSL_STORE_SUPPLIERS_CLASS_DEFAULT = BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class;
 
+    /** {@code dsl.store.suppliers.class } */
+    public static final String DSL_STORE_FORMAT_CONFIG = "dsl.store.format";
+    public static final String DSL_STORE_FORMAT_DEFAULT = "DEFAULT";
+    public static final String DSL_STORE_FORMAT_HEADERS = "HEADERS";
+    private static final String DSL_STORE_FORMAT_DOC = "Specifies the state store format for DSL operators. " +
+        "'DEFAULT' creates either timestamped or plain state stores, depending on context. " +
+        "'HEADERS' creates headers-aware stores that preserve record headers.";
+
     /** {@code default key.serde} */
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_KEY_SERDE_CLASS_CONFIG = "default.key.serde";
@@ -629,7 +588,8 @@ public class StreamsConfig extends AbstractConfig {
     public static final String ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG = "errors.dead.letter.queue.topic.name";
 
     private static final String ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_DOC = "If not null, the default exception handler will build and send a Dead Letter Queue record to the topic with the provided name if an error occurs.\n" +
-            "If a custom deserialization/production or processing exception handler is set, this parameter is ignored for this handler.";
+            "If a custom deserialization/production or processing exception handler is set, this parameter is ignored for this handler.\n" +
+            "Note: This configuration applies only to regular stream processing tasks. It does not apply to global state store updates (global threads).";
 
     /** {@code log.summary.interval.ms} */
     public static final String LOG_SUMMARY_INTERVAL_MS_CONFIG = "log.summary.interval.ms";
@@ -707,7 +667,9 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG = "processing.exception.handler";
     @Deprecated
-    public static final String PROCESSING_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.ProcessingExceptionHandler</code> interface.";
+    public static final String PROCESSING_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.ProcessingExceptionHandler</code> interface. " +
+            "Note: This handler applies only to regular stream processing tasks. It does not apply to global state store updates (global threads). " +
+            "Exceptions occurring in global threads will bubble up to the configured uncaught exception handler.";
 
     /** {@code processing.guarantee} */
     @SuppressWarnings("WeakerAccess")
@@ -806,6 +768,11 @@ public class StreamsConfig extends AbstractConfig {
     public static final String STATE_CLEANUP_DELAY_MS_CONFIG = "state.cleanup.delay.ms";
     private static final String STATE_CLEANUP_DELAY_MS_DOC = "The amount of time in milliseconds to wait before deleting state when a partition has migrated. Only state directories that have not been modified for at least <code>state.cleanup.delay.ms</code> will be removed";
 
+    /** {@code state.cleanup.dir.max.age} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String STATE_CLEANUP_DIR_MAX_AGE_MS_CONFIG = "state.cleanup.dir.max.age.ms";
+    private static final String STATE_CLEANUP_DIR_MAX_AGE_MS_DOC = "Time-based threshold for purging local state directories and checkpoint files during application startup. State directories that have not been modified for at least <code>" + STATE_CLEANUP_DIR_MAX_AGE_MS_CONFIG + "</code> will be removed.";
+
     /** {@code state.dir} */
     @SuppressWarnings("WeakerAccess")
     public static final String STATE_DIR_CONFIG = "state.dir";
@@ -838,7 +805,15 @@ public class StreamsConfig extends AbstractConfig {
         "Note that when upgrading from 3.5 to a newer version it is never required to specify this config, " +
         "while upgrading live directly to 4.0+ from 2.3 or below is no longer supported even with this config.";
 
-    /** {@code topology.optimization} */
+    /**
+     * {@code topology.optimization}
+     *
+     * <p><b>Important:</b> Setting this config alone is not sufficient to enable optimizations.
+     * You must also pass the {@link java.util.Properties} object to
+     * {@link org.apache.kafka.streams.StreamsBuilder#build(java.util.Properties)} when building
+     * your topology. Calling {@code StreamsBuilder.build()} without the properties argument will
+     * result in no optimizations being applied, even if this config is set.
+     */
     public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
     private static final String CONFIG_ERROR_MSG = "Acceptable values are:"
         + " \"+NO_OPTIMIZATION+\", \"+OPTIMIZE+\", "
@@ -848,7 +823,9 @@ public class StreamsConfig extends AbstractConfig {
     private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka "
         + "Streams if it should optimize the topology and what optimizations to apply. "
         + CONFIG_ERROR_MSG
-        + "\"NO_OPTIMIZATION\" by default.";
+        + "\"NO_OPTIMIZATION\" by default. "
+        + "Note: this config must also be passed to StreamsBuilder#build(Properties) "
+        + "for optimizations to take effect.";
 
     /**
      * {@code windowed.inner.class.serde}
@@ -881,7 +858,7 @@ public class StreamsConfig extends AbstractConfig {
     private static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC = "Added to a windows maintainMs to ensure data is not deleted from the log prematurely. Allows for clock drift. Default is 1 day";
 
     private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS =
-        new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, ConsumerConfig.GROUP_PROTOCOL_CONFIG};
+        new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, ConsumerConfig.GROUP_PROTOCOL_CONFIG, ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG};
     private static final String[] NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS =
         new String[] {ConsumerConfig.ISOLATION_LEVEL_CONFIG};
     private static final String[] NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS =
@@ -890,6 +867,16 @@ public class StreamsConfig extends AbstractConfig {
             ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
             ProducerConfig.TRANSACTIONAL_ID_CONFIG
         };
+    /**
+     * {@code processing.exception.handler.global.enabled}
+     * @deprecated Since 4.3. Default will change to {@code true} when removed.
+     */
+    @Deprecated
+    @SuppressWarnings("WeakerAccess")
+    public static final String PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG = "processing.exception.handler.global.enabled";
+    private static final String PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_DOC =
+            "Whether to use the configured <code>" + PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + "</code> during global store/KTable processing. " +
+                    "Disabled by default. This config will be removed in Kafka Streams 5.0, where global exception handling will be enabled by default";
 
     static {
         CONFIG = new ConfigDef()
@@ -911,6 +898,11 @@ public class StreamsConfig extends AbstractConfig {
                     0,
                     Importance.HIGH,
                     NUM_STANDBY_REPLICAS_DOC)
+            .define(PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG,
+                    Type.BOOLEAN,
+                    false,
+                    Importance.HIGH,
+                    PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_DOC)
             .define(STATE_DIR_CONFIG,
                     Type.STRING,
                     System.getProperty("java.io.tmpdir") + File.separator + "kafka-streams",
@@ -1075,6 +1067,11 @@ public class StreamsConfig extends AbstractConfig {
 
             // LOW
 
+            .define(ALLOW_OS_GROUP_WRITE_ACCESS_CONFIG,
+                    Type.BOOLEAN,
+                    false,
+                    Importance.LOW,
+                    ALLOW_OS_GROUP_WRITE_ACCESS_DOC)
             .define(APPLICATION_SERVER_CONFIG,
                     Type.STRING,
                     "",
@@ -1154,6 +1151,12 @@ public class StreamsConfig extends AbstractConfig {
                     DSL_STORE_SUPPLIERS_CLASS_DEFAULT,
                     Importance.LOW,
                     DSL_STORE_SUPPLIERS_CLASS_DOC)
+            .define(DSL_STORE_FORMAT_CONFIG,
+                    Type.STRING,
+                    DSL_STORE_FORMAT_DEFAULT,
+                    ConfigDef.CaseInsensitiveValidString.in(DSL_STORE_FORMAT_DEFAULT, DSL_STORE_FORMAT_HEADERS),
+                    Importance.LOW,
+                    DSL_STORE_FORMAT_DOC)
             .define(DEFAULT_CLIENT_SUPPLIER_CONFIG,
                     Type.CLASS,
                     DefaultKafkaClientSupplier.class.getName(),
@@ -1253,6 +1256,11 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.LOW,
                     CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
+            .define(CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
+                    Type.BOOLEAN,
+                    true,
+                    Importance.LOW,
+                    CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_DOC)
             .define(ROCKSDB_CONFIG_SETTER_CLASS_CONFIG,
                     Type.CLASS,
                     null,
@@ -1269,6 +1277,11 @@ public class StreamsConfig extends AbstractConfig {
                     10 * 60 * 1000L,
                     Importance.LOW,
                     STATE_CLEANUP_DELAY_MS_DOC)
+            .define(STATE_CLEANUP_DIR_MAX_AGE_MS_CONFIG,
+                    Type.LONG,
+                    STATE_CLEANUP_DIR_MAX_AGE_MS_DISABLED,
+                    Importance.LOW,
+                    STATE_CLEANUP_DIR_MAX_AGE_MS_DOC)
             .define(UPGRADE_FROM_CONFIG,
                     Type.STRING,
                     null,
@@ -1315,8 +1328,8 @@ public class StreamsConfig extends AbstractConfig {
         ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1000",
         ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
         ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
-        "internal.leave.group.on.close", false,
-        ConsumerConfig.GROUP_PROTOCOL_CONFIG, "classic"
+        ConsumerConfig.GROUP_PROTOCOL_CONFIG, "classic",
+        ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "false"
     );
 
     private static final Map<String, Object> CONSUMER_EOS_OVERRIDES;
@@ -1354,14 +1367,8 @@ public class StreamsConfig extends AbstractConfig {
             + ".vector.enabled__";
 
         // Private API used to control the prefix of the auto created topics
+        @Deprecated
         public static final String TOPIC_PREFIX_ALTERNATIVE = "__internal.override.topic.prefix__";
-
-        // Private API to enable the state updater (i.e. state updating on a dedicated thread)
-        public static final String STATE_UPDATER_ENABLED = "__state.updater.enabled__";
-
-        public static boolean stateUpdaterEnabled(final Map<String, Object> configs) {
-            return InternalConfig.getBoolean(configs, InternalConfig.STATE_UPDATER_ENABLED, true);
-        }
 
         // Private API to enable processing threads (i.e. polling is decoupled from processing)
         public static final String PROCESSING_THREADS_ENABLED = "__processing.threads.enabled__";
@@ -1546,12 +1553,16 @@ public class StreamsConfig extends AbstractConfig {
         verifyTopologyOptimizationConfigs(getString(TOPOLOGY_OPTIMIZATION_CONFIG));
         verifyClientTelemetryConfigs();
         verifyStreamsProtocolCompatibility(doLog);
+        if (!getBoolean(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG)) {
+            log.warn("Processing exception handler is not enabled for the GlobalThread. " +
+                "It's recommended to set `" + StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG + "` to true to enable it. " +
+                "Enabling the processing exception handler for global state/KTable processing now, ensures future backward compatibility. " +
+                "The processing exception handler will get enabled by default with Apache Kafka 5.0 release.");
+        }
     }
 
     private void verifyStreamsProtocolCompatibility(final boolean doLog) {
         if (doLog && isStreamsProtocolEnabled()) {
-            log.warn("The streams rebalance protocol is still in development and should not be used in production. "
-                + "Please set group.protocol=classic (default) in all production use cases.");
             final Map<String, Object> mainConsumerConfigs = getMainConsumerConfigs("dummy", "dummy", -1);
             final String instanceId = (String) mainConsumerConfigs.get(CommonClientConfigs.GROUP_INSTANCE_ID_CONFIG);
             if (instanceId != null && !instanceId.isEmpty()) {
@@ -1659,29 +1670,61 @@ public class StreamsConfig extends AbstractConfig {
         final Map<String, String> clientTags = getClientTags();
 
         if (clientTags.size() > MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE) {
-            throw new ConfigException("At most " + MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE + " client tags " +
-                                      "can be specified using " + CLIENT_TAG_PREFIX + " prefix.");
+            throw new ConfigException(
+                String.format(
+                    "At most %s client tags can be specified using %s prefix.",
+                    MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE,
+                    CLIENT_TAG_PREFIX
+                )
+            );
         }
 
         for (final String rackAwareAssignmentTag : rackAwareAssignmentTags) {
+            // no need to call `trim()` because for LIST type `AbstractConfig` takes already care of this
+            if (rackAwareAssignmentTag.isEmpty()) {
+                throw new ConfigException(
+                    RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+                    rackAwareAssignmentTags,
+                    "Contains invalid value []. Tag key cannot be empty."
+                );
+            }
             if (!clientTags.containsKey(rackAwareAssignmentTag)) {
-                throw new ConfigException(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
-                                          rackAwareAssignmentTags,
-                                          "Contains invalid value [" + rackAwareAssignmentTag + "] " +
-                                          "which doesn't have corresponding tag set via [" + CLIENT_TAG_PREFIX + "] prefix.");
+                throw new ConfigException(
+                    RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+                    rackAwareAssignmentTags,
+                    String.format(
+                        "Contains invalid value [%s] which doesn't have corresponding tag set via [%s] prefix.",
+                        rackAwareAssignmentTag,
+                        CLIENT_TAG_PREFIX
+                    )
+                );
             }
         }
 
         clientTags.forEach((tagKey, tagValue) -> {
+            if (tagKey.trim().isEmpty()) {
+                throw new ConfigException("Invalid config `client.tag.` (missing client tag key).");
+            }
+            if (tagValue.trim().isEmpty()) {
+                throw new ConfigException(
+                    CLIENT_TAG_PREFIX + tagKey,
+                    "[]",
+                    "Tag value cannot be empty."
+                );
+            }
             if (tagKey.length() > MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH) {
-                throw new ConfigException(CLIENT_TAG_PREFIX,
-                                          tagKey,
-                                          "Tag key exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH + ".");
+                throw new ConfigException(
+                    CLIENT_TAG_PREFIX + tagKey,
+                    tagKey,
+                    "Tag key exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH + "."
+                );
             }
             if (tagValue.length() > MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH) {
-                throw new ConfigException(CLIENT_TAG_PREFIX,
-                                          tagValue,
-                                          "Tag value exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH + ".");
+                throw new ConfigException(
+                    CLIENT_TAG_PREFIX + tagKey,
+                    tagValue,
+                    "Tag value exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH + "."
+                );
             }
         });
     }
@@ -1691,8 +1734,8 @@ public class StreamsConfig extends AbstractConfig {
 
         clientProvidedProps.remove(GROUP_PROTOCOL_CONFIG);
 
-        checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
-        checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS);
+        checkIfUnexpectedUserSpecifiedClientConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
+        checkIfUnexpectedUserSpecifiedClientConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS);
 
         final Map<String, Object> consumerProps = new HashMap<>(eosEnabled ? CONSUMER_EOS_OVERRIDES : CONSUMER_DEFAULT_OVERRIDES);
         if (StreamsConfigUtils.eosEnabled(this)) {
@@ -1707,12 +1750,12 @@ public class StreamsConfig extends AbstractConfig {
         return consumerProps;
     }
 
-    private void checkIfUnexpectedUserSpecifiedConsumerConfig(final Map<String, Object> clientProvidedProps,
-                                                              final String[] nonConfigurableConfigs) {
-        // Streams does not allow users to configure certain consumer/producer configurations, for example,
-        // enable.auto.commit. In cases where user tries to override such non-configurable
-        // consumer/producer configurations, log a warning and remove the user defined value from the Map.
-        // Thus, the default values for these consumer/producer configurations that are suitable for
+    private void checkIfUnexpectedUserSpecifiedClientConfig(final Map<String, Object> clientProvidedProps,
+                                                            final String[] nonConfigurableConfigs) {
+        // Streams does not allow users to configure certain client configurations (consumer/producer),
+        // for example, enable.auto.commit or transactional.id. In cases where user tries to override
+        // such non-configurable client configurations, log a warning and remove the user defined value
+        // from the Map. Thus, the default values for these client configurations that are suitable for
         // Streams will be used instead.
 
         final String nonConfigurableConfigMessage = "Unexpected user-specified {} config '{}' found. {} setting ({}) will be ignored and the Streams default setting ({}) will be used.";
@@ -1820,6 +1863,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get main consumer override configs
         final Map<String, Object> mainConsumerProps = originalsWithPrefix(MAIN_CONSUMER_PREFIX);
+        checkIfUnexpectedUserSpecifiedClientConfig(mainConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
         consumerProps.putAll(mainConsumerProps);
 
         // this is a hack to work around StreamsConfig constructor inside StreamsPartitionAssignor to avoid casting
@@ -1849,9 +1893,6 @@ public class StreamsConfig extends AbstractConfig {
         consumerProps.put(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, getList(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG));
         consumerProps.put(RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG, getInt(RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG));
         consumerProps.put(TASK_ASSIGNOR_CLASS_CONFIG, getString(TASK_ASSIGNOR_CLASS_CONFIG));
-
-        // disable auto topic creation
-        consumerProps.put(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "false");
 
         // verify that producer batch config is no larger than segment size, then add topic configs required for creating topics
         final Map<String, Object> topicProps = originalsWithPrefix(TOPIC_PREFIX, false);
@@ -1895,6 +1936,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get restore consumer override configs
         final Map<String, Object> restoreConsumerProps = originalsWithPrefix(RESTORE_CONSUMER_PREFIX);
+        checkIfUnexpectedUserSpecifiedClientConfig(restoreConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
         baseConsumerProps.putAll(restoreConsumerProps);
 
         // no need to set group id for a restore consumer
@@ -1928,6 +1970,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get global consumer override configs
         final Map<String, Object> globalConsumerProps = originalsWithPrefix(GLOBAL_CONSUMER_PREFIX);
+        checkIfUnexpectedUserSpecifiedClientConfig(globalConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
         baseConsumerProps.putAll(globalConsumerProps);
 
         // no need to set group id for a global consumer
@@ -1938,6 +1981,7 @@ public class StreamsConfig extends AbstractConfig {
         // add client id with stream client id prefix
         baseConsumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-global-consumer");
         baseConsumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
+
         return baseConsumerProps;
     }
 
@@ -1954,7 +1998,7 @@ public class StreamsConfig extends AbstractConfig {
     public Map<String, Object> getProducerConfigs(final String clientId) {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(PRODUCER_PREFIX, ProducerConfig.configNames());
 
-        checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS);
+        checkIfUnexpectedUserSpecifiedClientConfig(clientProvidedProps, NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS);
 
         // generate producer configs from original properties and overridden maps
         final Map<String, Object> props = new HashMap<>(eosEnabled ? PRODUCER_EOS_OVERRIDES : PRODUCER_DEFAULT_OVERRIDES);

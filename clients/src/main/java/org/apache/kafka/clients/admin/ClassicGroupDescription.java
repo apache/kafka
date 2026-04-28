@@ -137,7 +137,7 @@ public class ClassicGroupDescription {
     /**
      * authorizedOperations for this group, or null if that information is not known.
      */
-    public  Set<AclOperation> authorizedOperations() {
+    public Set<AclOperation> authorizedOperations() {
         return authorizedOperations;
     }
 

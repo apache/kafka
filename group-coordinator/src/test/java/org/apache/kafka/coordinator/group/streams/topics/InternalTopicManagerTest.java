@@ -21,7 +21,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfig;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfigCollection;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse.Status;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
@@ -30,6 +30,8 @@ import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.image.MetadataImage;
 
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
@@ -43,6 +45,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class InternalTopicManagerTest {
 
+    private static final Logger LOG = LoggerFactory.getLogger(InternalTopicManagerTest.class);
+    public static final MockTime TIME = new MockTime();
     public static final String SOURCE_TOPIC_1 = "source_topic1";
     public static final String SOURCE_TOPIC_2 = "source_topic2";
     public static final String REPARTITION_TOPIC = "repartition_topic";
@@ -61,7 +65,7 @@ class InternalTopicManagerTest {
         // SOURCE_TOPIC_2 is missing from topicMetadata
         StreamsTopology topology = makeTestTopology();
 
-        final ConfiguredTopology configuredTopology = InternalTopicManager.configureTopics(new LogContext(), 0, topology, new KRaftCoordinatorMetadataImage(metadataImage));
+        final ConfiguredTopology configuredTopology = InternalTopicManager.configureTopics(LOG, "test-group", "test-member", 0, topology, new KRaftCoordinatorMetadataImage(metadataImage), TIME);
 
         assertEquals(Optional.empty(), configuredTopology.subtopologies());
         assertTrue(configuredTopology.topicConfigurationException().isPresent());
@@ -78,7 +82,7 @@ class InternalTopicManagerTest {
             .build();
         StreamsTopology topology = makeTestTopology();
 
-        ConfiguredTopology configuredTopology = InternalTopicManager.configureTopics(new LogContext(), 0, topology, new KRaftCoordinatorMetadataImage(metadataImage));
+        ConfiguredTopology configuredTopology = InternalTopicManager.configureTopics(LOG, "test-group", "test-member", 0, topology, new KRaftCoordinatorMetadataImage(metadataImage), TIME);
         final Map<String, CreatableTopic> internalTopicsToBeCreated = configuredTopology.internalTopicsToBeCreated();
 
         assertEquals(2, internalTopicsToBeCreated.size());

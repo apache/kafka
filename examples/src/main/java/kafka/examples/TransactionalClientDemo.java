@@ -16,7 +16,6 @@
  */
 package kafka.examples;
 
-import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -65,7 +64,7 @@ public class TransactionalClientDemo {
     private static final String CONSUMER_GROUP_ID = "my-group-id";
     private static final String OUTPUT_TOPIC = "output";
     private static final String INPUT_TOPIC = "input";
-    private static final ConsumerGroupMetadata GROUP_METADATA = new ConsumerGroupMetadata(CONSUMER_GROUP_ID);
+
     private static KafkaConsumer<String, String> consumer;
     private static KafkaProducer<String, String> producer;
     private static volatile boolean isRunning = true;
@@ -113,7 +112,7 @@ public class TransactionalClientDemo {
                         offsetsToCommit.put(partition, new OffsetAndMetadata(offset + 1));
                     }
 
-                    producer.sendOffsetsToTransaction(offsetsToCommit, GROUP_METADATA);
+                    producer.sendOffsetsToTransaction(offsetsToCommit, consumer.groupMetadata());
                     Utils.printOut("Sent offsets to transaction for commit");
 
                     producer.commitTransaction();

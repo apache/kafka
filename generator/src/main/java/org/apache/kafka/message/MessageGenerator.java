@@ -36,7 +36,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -85,10 +84,10 @@ public final class MessageGenerator {
     static final String ARRAYLIST_CLASS = "java.util.ArrayList";
 
     static final String IMPLICIT_LINKED_HASH_COLLECTION_CLASS =
-        "org.apache.kafka.common.utils.ImplicitLinkedHashCollection";
+        "org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection";
 
     static final String IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS =
-        "org.apache.kafka.common.utils.ImplicitLinkedHashMultiCollection";
+        "org.apache.kafka.common.utils.internals.ImplicitLinkedHashMultiCollection";
 
     static final String UNSUPPORTED_VERSION_EXCEPTION_CLASS =
         "org.apache.kafka.common.errors.UnsupportedVersionException";
@@ -103,6 +102,8 @@ public final class MessageGenerator {
 
     static final String SCHEMA_CLASS = "org.apache.kafka.common.protocol.types.Schema";
 
+    static final String NULLABLE_SCHEMA_CLASS = "org.apache.kafka.common.protocol.types.NullableSchema";
+
     static final String ARRAYOF_CLASS = "org.apache.kafka.common.protocol.types.ArrayOf";
 
     static final String COMPACT_ARRAYOF_CLASS = "org.apache.kafka.common.protocol.types.CompactArrayOf";
@@ -111,15 +112,15 @@ public final class MessageGenerator {
 
     static final String UUID_CLASS = "org.apache.kafka.common.Uuid";
 
-    static final String BASE_RECORDS_CLASS = "org.apache.kafka.common.record.BaseRecords";
+    static final String BASE_RECORDS_CLASS = "org.apache.kafka.common.record.internal.BaseRecords";
 
-    static final String MEMORY_RECORDS_CLASS = "org.apache.kafka.common.record.MemoryRecords";
+    static final String MEMORY_RECORDS_CLASS = "org.apache.kafka.common.record.internal.MemoryRecords";
 
     static final String REQUEST_SUFFIX = "Request";
 
     static final String RESPONSE_SUFFIX = "Response";
 
-    static final String BYTE_UTILS_CLASS = "org.apache.kafka.common.utils.ByteUtils";
+    static final String BYTE_UTILS_CLASS = "org.apache.kafka.common.utils.internals.ByteUtils";
 
     static final String STANDARD_CHARSETS = "java.nio.charset.StandardCharsets";
 
@@ -180,13 +181,13 @@ public final class MessageGenerator {
         JSON_SERDE.configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true);
         JSON_SERDE.configure(DeserializationFeature.FAIL_ON_TRAILING_TOKENS, true);
         JSON_SERDE.configure(JsonParser.Feature.ALLOW_COMMENTS, true);
-        JSON_SERDE.setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
+        JSON_SERDE.setDefaultPropertyInclusion(JsonInclude.Include.NON_EMPTY);
         JSON_SERDE.registerModule(new Jdk8Module());
     }
 
     private static List<TypeClassGenerator> createTypeClassGenerators(String packageName,
                                                                       List<String> types) {
-        if (types == null) return Collections.emptyList();
+        if (types == null) return List.of();
         List<TypeClassGenerator> generators = new ArrayList<>();
         for (String type : types) {
             switch (type) {
@@ -214,7 +215,7 @@ public final class MessageGenerator {
 
     private static List<MessageClassGenerator> createMessageClassGenerators(String packageName,
                                                                             List<String> types) {
-        if (types == null) return Collections.emptyList();
+        if (types == null) return List.of();
         List<MessageClassGenerator> generators = new ArrayList<>();
         for (String type : types) {
             switch (type) {

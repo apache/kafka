@@ -31,6 +31,7 @@ import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffset
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.LeaderEndPoint
+import org.apache.kafka.server.quota.ReplicaQuota
 import org.apache.kafka.server.{PartitionFetchState, ReplicaFetch, ResultWithPartitions}
 
 import scala.jdk.CollectionConverters._
@@ -103,6 +104,10 @@ class RemoteLeaderEndPoint(logPrefix: String,
 
   override def fetchEarliestLocalOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = {
     fetchOffset(topicPartition, currentLeaderEpoch, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP)
+  }
+
+  override def fetchEarliestPendingUploadOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = {
+    fetchOffset(topicPartition, currentLeaderEpoch, ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP)
   }
 
   private def fetchOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, timestamp: Long): OffsetAndEpoch = {

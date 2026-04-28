@@ -23,8 +23,6 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -44,23 +42,18 @@ public class AcknowledgementCommitCallbackHandler {
     }
 
     void onComplete(List<Map<TopicIdPartition, Acknowledgements>> acknowledgementsMapList) {
-        final ArrayList<Throwable> exceptions = new ArrayList<>();
         acknowledgementsMapList.forEach(acknowledgementsMap -> acknowledgementsMap.forEach((partition, acknowledgements) -> {
             KafkaException exception = acknowledgements.getAcknowledgeException();
             Set<Long> offsets = acknowledgements.getAcknowledgementsTypeMap().keySet();
-            Set<Long> offsetsCopy = Collections.unmodifiableSet(offsets);
+            Set<Long> offsetsCopy = Set.copyOf(offsets);
             enteredCallback = true;
             try {
-                acknowledgementCommitCallback.onComplete(Collections.singletonMap(partition, offsetsCopy), exception);
-            } catch (Throwable e) {
+                acknowledgementCommitCallback.onComplete(Map.of(partition, offsetsCopy), exception);
+            } catch (Exception e) {
                 LOG.error("Exception thrown by acknowledgement commit callback", e);
-                exceptions.add(e);
             } finally {
                 enteredCallback = false;
             }
         }));
-        if (!exceptions.isEmpty()) {
-            throw ConsumerUtils.maybeWrapAsKafkaException(exceptions.get(0), "Exception thrown by acknowledgement commit callback");
-        }
     }
 }

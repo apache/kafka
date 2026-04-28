@@ -17,7 +17,7 @@
 
 package org.apache.kafka.jmh.util;
 
-import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.CompilerControl;
@@ -101,7 +101,7 @@ public class ByteUtilsBenchmark {
         /**
          * Generates a random int32 number which occupies exactly bytesSet in the variable length encoding for int32
          *
-         * @see {@link #generateRandomLongWithExactBytesSet(int)} for implementation details.
+         * @see #generateRandomLongWithExactBytesSet(int) for implementation details.
          *
          */
         int generateRandomIntWithExactBytesSet(int bytesSet) {

@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.json.JsonConverter;
@@ -239,6 +239,8 @@ public class MirrorMaker {
         String workerId = generateWorkerId(sourceAndTarget);
         Plugins plugins = new Plugins(workerProps);
         plugins.compareAndSwapWithDelegatingLoader();
+        // create DistributedConfig only after compareAndSwapWithDelegatingLoader to
+        // ensure plugin classes on plugin.path are loadable
         DistributedConfig distributedConfig = new DistributedConfig(workerProps);
         String kafkaClusterId = distributedConfig.kafkaClusterId();
         String clientIdBase = ConnectUtils.clientIdBase(distributedConfig);

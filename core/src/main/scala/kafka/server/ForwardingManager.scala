@@ -25,7 +25,7 @@ import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeResponse, RequestContext, RequestHeader}
-import org.apache.kafka.server.ForwardingManagerUtils
+import org.apache.kafka.server.ForwardingManagerUtil
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.metrics.ForwardingManagerMetrics
 
@@ -105,7 +105,7 @@ class ForwardingManagerImpl(
     requestToString: () => String,
     responseCallback: Option[AbstractResponse] => Unit
   ): Unit = {
-    val envelopeRequest = ForwardingManagerUtils.buildEnvelopeRequest(requestContext, requestBufferCopy)
+    val envelopeRequest = ForwardingManagerUtil.buildEnvelopeRequest(requestContext, requestBufferCopy)
     val requestCreationTimeMs = TimeUnit.NANOSECONDS.toMillis(requestCreationNs)
 
     class ForwardingResponseHandler extends ControllerRequestCompletionHandler {

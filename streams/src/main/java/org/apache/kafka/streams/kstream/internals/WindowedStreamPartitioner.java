@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
@@ -46,7 +47,7 @@ public class WindowedStreamPartitioner<K, V> implements StreamPartitioner<Window
     @Override
     public Optional<Set<Integer>> partitions(final String topic, final Windowed<K> windowedKey, final V value, final int numPartitions) {
         // for windowed key, the key bytes should never be null
-        final byte[] keyBytes = serializer.serializeBaseKey(topic, windowedKey);
+        final byte[] keyBytes = serializer.serializeBaseKey(topic, new RecordHeaders(), windowedKey);
 
         // stick with the same built-in partitioner util functions that producer used
         // to make sure its behavior is consistent with the producer
