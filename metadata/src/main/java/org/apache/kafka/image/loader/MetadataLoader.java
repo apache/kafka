@@ -80,6 +80,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         private MetadataLoaderMetrics metrics = null;
         private Supplier<OptionalLong> highWaterMarkAccessor = null;
         private SupportedConfigChecker supportedConfigChecker = SupportedConfigChecker.TRUE;
+        // Default for callers without a raft client (e.g. MetadataShell);
+        // SharedServer overrides this with KafkaRaftClient.kraftVersion().
         private Supplier<KRaftVersion> kraftVersionSupplier = () -> KRaftVersion.KRAFT_VERSION_0;
 
         public Builder setNodeId(int nodeId) {
