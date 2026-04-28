@@ -59,7 +59,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class ProduceBenchWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(ProduceBenchWorker.class);
-    
+
     private static final int THROTTLE_PERIOD_MS = 100;
 
     private final String id;
@@ -81,7 +81,7 @@ public class ProduceBenchWorker implements TaskWorker {
 
     @Override
     public void start(Platform platform, WorkerStatusTracker status,
-                      KafkaFutureImpl<String> doneFuture) {
+        KafkaFutureImpl<String> doneFuture) {
         if (!running.compareAndSet(false, true)) {
             throw new IllegalStateException("ProducerBenchWorker is already running.");
         }
@@ -121,7 +121,7 @@ public class ProduceBenchWorker implements TaskWorker {
                 }
                 status.update(new TextNode("Creating " + newTopics.keySet().size() + " topic(s)"));
                 WorkerUtils.createTopics(log, spec.bootstrapServers(), spec.commonClientConf(),
-                                         spec.adminClientConf(), newTopics, false);
+                    spec.adminClientConf(), newTopics, false);
                 status.update(new TextNode("Created " + newTopics.keySet().size() + " topic(s)"));
                 executor.submit(new SendRecords(active));
             } catch (Throwable e) {
@@ -363,11 +363,11 @@ public class ProduceBenchWorker implements TaskWorker {
 
         @JsonCreator
         StatusData(@JsonProperty("totalSent") long totalSent,
-                   @JsonProperty("averageLatencyMs") float averageLatencyMs,
-                   @JsonProperty("p50LatencyMs") int p50latencyMs,
-                   @JsonProperty("p95LatencyMs") int p95latencyMs,
-                   @JsonProperty("p99LatencyMs") int p99latencyMs,
-                   @JsonProperty("transactionsCommitted") long transactionsCommitted) {
+            @JsonProperty("averageLatencyMs") float averageLatencyMs,
+            @JsonProperty("p50LatencyMs") int p50latencyMs,
+            @JsonProperty("p95LatencyMs") int p95latencyMs,
+            @JsonProperty("p99LatencyMs") int p99latencyMs,
+            @JsonProperty("transactionsCommitted") long transactionsCommitted) {
             this.totalSent = totalSent;
             this.averageLatencyMs = averageLatencyMs;
             this.p50LatencyMs = p50latencyMs;

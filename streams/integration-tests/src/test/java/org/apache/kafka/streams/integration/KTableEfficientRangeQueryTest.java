@@ -55,7 +55,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 @Tag("integration")
 @Timeout(600)
 public class KTableEfficientRangeQueryTest {
-    private enum StoreType { InMemory, RocksDB, Timed }
+    private enum StoreType {InMemory, RocksDB, Timed}
     private static final String TABLE_NAME = "mytable";
     private static final int DATA_SIZE = 5;
 
@@ -122,7 +122,7 @@ public class KTableEfficientRangeQueryTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology)) {
             //get input topic and stateStore
             final TestInputTopic<String, String> input = driver
-                    .createInputTopic("input", new StringSerializer(), new StringSerializer());
+                .createInputTopic("input", new StringSerializer(), new StringSerializer());
             final ReadOnlyKeyValueStore<String, String> stateStore = driver.getKeyValueStore(TABLE_NAME);
 
             //write some data
@@ -215,9 +215,9 @@ public class KTableEfficientRangeQueryTest {
 
         final KeyValueBytesStoreSupplier stateStoreSupplier = createStore.get();
         final Materialized<String, String, KeyValueStore<Bytes, byte[]>> stateStoreConfig = Materialized
-                .<String, String>as(stateStoreSupplier)
-                .withKeySerde(Serdes.String())
-                .withValueSerde(Serdes.String());
+            .<String, String>as(stateStoreSupplier)
+            .withKeySerde(Serdes.String())
+            .withValueSerde(Serdes.String());
         if (cachingEnabled) {
             stateStoreConfig.withCachingEnabled();
         } else {

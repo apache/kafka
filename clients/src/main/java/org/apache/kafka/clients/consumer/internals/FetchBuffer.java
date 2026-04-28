@@ -264,8 +264,8 @@ public class FetchBuffer implements AutoCloseable {
             lock.lock();
 
             idempotentCloser.close(
-                    () -> retainAll(Collections.emptySet()),
-                    () -> log.warn("The fetch buffer was already closed")
+                () -> retainAll(Collections.emptySet()),
+                () -> log.warn("The fetch buffer was already closed")
             );
         } finally {
             lock.unlock();

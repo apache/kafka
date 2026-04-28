@@ -275,11 +275,11 @@ public final class Lz4BlockOutputStream extends OutputStream {
         }
 
         private FLG(int reserved,
-                    int contentChecksum,
-                    int contentSize,
-                    int blockChecksum,
-                    int blockIndependence,
-                    int version) {
+            int contentChecksum,
+            int contentSize,
+            int blockChecksum,
+            int blockIndependence,
+            int version) {
             this.reserved = reserved;
             this.contentChecksum = contentChecksum;
             this.contentSize = contentSize;
@@ -298,16 +298,16 @@ public final class Lz4BlockOutputStream extends OutputStream {
             int version = (flg >>> 6) & 3;
 
             return new FLG(reserved,
-                           contentChecksum,
-                           contentSize,
-                           blockChecksum,
-                           blockIndependence,
-                           version);
+                contentChecksum,
+                contentSize,
+                blockChecksum,
+                blockIndependence,
+                version);
         }
 
         public byte toByte() {
             return (byte) (((reserved & 3) << 0) | ((contentChecksum & 1) << 2)
-                    | ((contentSize & 1) << 3) | ((blockChecksum & 1) << 4) | ((blockIndependence & 1) << 5) | ((version & 3) << 6));
+                | ((contentSize & 1) << 3) | ((blockChecksum & 1) << 4) | ((blockIndependence & 1) << 5) | ((version & 3) << 6));
         }
 
         private void validate() {

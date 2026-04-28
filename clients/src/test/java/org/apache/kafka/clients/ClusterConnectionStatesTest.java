@@ -48,14 +48,14 @@ public class ClusterConnectionStatesTest {
     static {
         try {
             initialAddresses = new ArrayList<>(Arrays.asList(
-                    InetAddress.getByName("10.200.20.100"),
-                    InetAddress.getByName("10.200.20.101"),
-                    InetAddress.getByName("10.200.20.102")
+                InetAddress.getByName("10.200.20.100"),
+                InetAddress.getByName("10.200.20.101"),
+                InetAddress.getByName("10.200.20.102")
             ));
             newAddresses = new ArrayList<>(Arrays.asList(
-                    InetAddress.getByName("10.200.20.103"),
-                    InetAddress.getByName("10.200.20.104"),
-                    InetAddress.getByName("10.200.20.105")
+                InetAddress.getByName("10.200.20.103"),
+                InetAddress.getByName("10.200.20.104"),
+                InetAddress.getByName("10.200.20.105")
             ));
         } catch (UnknownHostException e) {
             fail("Attempted to create an invalid InetAddress, this should not happen");
@@ -81,14 +81,14 @@ public class ClusterConnectionStatesTest {
 
     // For testing nodes with multiple IP addresses, mock DNS resolution to get consistent results
     private final AddressChangeHostResolver multipleIPHostResolver = new AddressChangeHostResolver(
-            initialAddresses.toArray(new InetAddress[0]), newAddresses.toArray(new InetAddress[0]));
+        initialAddresses.toArray(new InetAddress[0]), newAddresses.toArray(new InetAddress[0]));
 
     private ClusterConnectionStates connectionStates;
 
     @BeforeEach
     public void setup() {
         this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax,
-                connectionSetupTimeoutMs, connectionSetupTimeoutMaxMs, new LogContext(), this.singleIPHostResolver);
+            connectionSetupTimeoutMs, connectionSetupTimeoutMaxMs, new LogContext(), this.singleIPHostResolver);
     }
 
     @Test
@@ -221,7 +221,7 @@ public class ClusterConnectionStatesTest {
         connectionStates.disconnected(nodeId1, time.milliseconds());
 
         // Do 100 reconnect attempts and check that MaxReconnectBackoff (plus jitter) is not exceeded
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0;i < 100;i++) {
             long reconnectBackoff = connectionStates.connectionDelay(nodeId1, time.milliseconds());
             assertTrue(reconnectBackoff <= effectiveMaxReconnectBackoff);
             assertFalse(connectionStates.canConnect(nodeId1, time.milliseconds()));
@@ -344,12 +344,12 @@ public class ClusterConnectionStatesTest {
         assertTrue(connectionStates.canConnect(nodeId1, time.milliseconds()));
 
         // Check the exponential timeout growth
-        for (int n = 0; n <= Math.log((double) connectionSetupTimeoutMaxMs / connectionSetupTimeoutMs) / Math.log(connectionSetupTimeoutExpBase); n++) {
+        for (int n = 0;n <= Math.log((double) connectionSetupTimeoutMaxMs / connectionSetupTimeoutMs) / Math.log(connectionSetupTimeoutExpBase);n++) {
             connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
             assertTrue(connectionStates.connectingNodes().contains(nodeId1));
             assertEquals(connectionSetupTimeoutMs * Math.pow(connectionSetupTimeoutExpBase, n),
-                    connectionStates.connectionSetupTimeoutMs(nodeId1),
-                    connectionSetupTimeoutMs * Math.pow(connectionSetupTimeoutExpBase, n) * connectionSetupTimeoutJitter);
+                connectionStates.connectionSetupTimeoutMs(nodeId1),
+                connectionSetupTimeoutMs * Math.pow(connectionSetupTimeoutExpBase, n) * connectionSetupTimeoutJitter);
             connectionStates.disconnected(nodeId1, time.milliseconds());
             assertFalse(connectionStates.connectingNodes().contains(nodeId1));
         }
@@ -357,15 +357,15 @@ public class ClusterConnectionStatesTest {
         // Check the timeout value upper bound
         connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
         assertEquals(connectionSetupTimeoutMaxMs,
-                connectionStates.connectionSetupTimeoutMs(nodeId1),
-                connectionSetupTimeoutMaxMs * connectionSetupTimeoutJitter);
+            connectionStates.connectionSetupTimeoutMs(nodeId1),
+            connectionSetupTimeoutMaxMs * connectionSetupTimeoutJitter);
         assertTrue(connectionStates.connectingNodes().contains(nodeId1));
 
         // Should reset the timeout value to the init value
         connectionStates.ready(nodeId1);
         assertEquals(connectionSetupTimeoutMs,
-                connectionStates.connectionSetupTimeoutMs(nodeId1),
-                connectionSetupTimeoutMs * connectionSetupTimeoutJitter);
+            connectionStates.connectionSetupTimeoutMs(nodeId1),
+            connectionSetupTimeoutMs * connectionSetupTimeoutJitter);
         assertFalse(connectionStates.connectingNodes().contains(nodeId1));
         connectionStates.disconnected(nodeId1, time.milliseconds());
 
@@ -373,8 +373,8 @@ public class ClusterConnectionStatesTest {
         // won't increase the timeout value
         connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
         assertEquals(connectionSetupTimeoutMs,
-                connectionStates.connectionSetupTimeoutMs(nodeId1),
-                connectionSetupTimeoutMs * connectionSetupTimeoutJitter);
+            connectionStates.connectionSetupTimeoutMs(nodeId1),
+            connectionSetupTimeoutMs * connectionSetupTimeoutJitter);
         assertTrue(connectionStates.connectingNodes().contains(nodeId1));
     }
 
@@ -439,10 +439,10 @@ public class ClusterConnectionStatesTest {
         InetAddress addr2 = connectionStates.currentAddress(nodeId1);
         assertNotSame(addr1, addr2);
     }
-    
+
     private void setupMultipleIPs() {
         this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax,
-                connectionSetupTimeoutMs, connectionSetupTimeoutMaxMs, new LogContext(), this.multipleIPHostResolver);
+            connectionSetupTimeoutMs, connectionSetupTimeoutMaxMs, new LogContext(), this.multipleIPHostResolver);
     }
 
     private void verifyReconnectExponentialBackoff(boolean enterCheckingApiVersionState) {
@@ -451,7 +451,7 @@ public class ClusterConnectionStatesTest {
 
         connectionStates.remove(nodeId1);
         // Run through 10 disconnects and check that reconnect backoff value is within expected range for every attempt
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0;i < 10;i++) {
             connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
             if (enterCheckingApiVersionState) {
                 connectionStates.checkingApiVersions(nodeId1);

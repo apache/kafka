@@ -160,18 +160,18 @@ public class ServerSideAssignorBenchmark {
 
         if (subscriptionType == HOMOGENEOUS) {
             return AssignorBenchmarkUtils.createHomogeneousMembers(
-                numberOfMembers,
-                this::memberId,
-                this::rackId,
-                allTopicNames
+                    numberOfMembers,
+                    this::memberId,
+                    this::rackId,
+                    allTopicNames
             );
         } else {
             return AssignorBenchmarkUtils.createHeterogeneousBucketedMembers(
-                numberOfMembers,
-                MAX_BUCKET_COUNT,
-                this::memberId,
-                this::rackId,
-                allTopicNames
+                    numberOfMembers,
+                    MAX_BUCKET_COUNT,
+                    this::memberId,
+                    this::rackId,
+                    allTopicNames
             );
         }
     }
@@ -194,15 +194,15 @@ public class ServerSideAssignorBenchmark {
 
         for (String memberId : groupSpec.memberIds()) {
             MemberAssignment memberAssignment = members.getOrDefault(
-                memberId,
-                new MemberAssignmentImpl(Map.of())
+                    memberId,
+                    new MemberAssignmentImpl(Map.of())
             );
 
             updatedMemberSpec.put(memberId, new MemberSubscriptionAndAssignmentImpl(
-                groupSpec.memberSubscription(memberId).rackId(),
-                Optional.empty(),
-                groupSpec.memberSubscription(memberId).subscribedTopicIds(),
-                new Assignment(Map.copyOf(memberAssignment.partitions()))
+                    groupSpec.memberSubscription(memberId).rackId(),
+                    Optional.empty(),
+                    groupSpec.memberSubscription(memberId).subscribedTopicIds(),
+                    new Assignment(Map.copyOf(memberAssignment.partitions()))
             ));
         }
 
@@ -215,16 +215,16 @@ public class ServerSideAssignorBenchmark {
 
         Optional<String> rackId = rackId(memberCount - 1);
         updatedMemberSpec.put("newMember", new MemberSubscriptionAndAssignmentImpl(
-            rackId,
-            Optional.empty(),
-            subscribedTopicIdsForNewMember,
-            Assignment.EMPTY
+                rackId,
+                Optional.empty(),
+                subscribedTopicIdsForNewMember,
+                Assignment.EMPTY
         ));
 
         groupSpec = new GroupSpecImpl(
-            updatedMemberSpec,
-            subscriptionType,
-            invertedTargetAssignment
+                updatedMemberSpec,
+                subscriptionType,
+                invertedTargetAssignment
         );
     }
 

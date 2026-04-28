@@ -76,9 +76,9 @@ public class StreamsProducer {
     private final AtomicReference<KafkaException> sendException = new AtomicReference<>(null);
 
     public StreamsProducer(final Producer<byte[], byte[]> producer,
-                           final ProcessingMode processingMode,
-                           final Time time,
-                           final LogContext logContext) {
+        final ProcessingMode processingMode,
+        final Time time,
+        final LogContext logContext) {
         this.producer = Objects.requireNonNull(producer, "producer cannot be null");
         this.processingMode = Objects.requireNonNull(processingMode, "processingMode cannot be null");
         this.time = Objects.requireNonNull(time, "time cannot be null");
@@ -148,7 +148,7 @@ public class StreamsProducer {
     }
 
     private double getMetricValue(final Map<MetricName, ? extends Metric> metrics,
-                                  final String name) {
+        final String name) {
         final List<MetricName> found = metrics.keySet().stream()
             .filter(n -> n.name().equals(name))
             .collect(Collectors.toList());
@@ -206,7 +206,7 @@ public class StreamsProducer {
     }
 
     Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record,
-                                final Callback callback) {
+        final Callback callback) {
         maybeBeginTransaction();
         try {
             return producer.send(record, callback);
@@ -240,7 +240,7 @@ public class StreamsProducer {
      * @throws TaskMigratedException
      */
     public void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                     final ConsumerGroupMetadata consumerGroupMetadata) {
+        final ConsumerGroupMetadata consumerGroupMetadata) {
         if (!eosEnabled()) {
             throw new IllegalStateException(formatException("Exactly-once is not enabled"));
         }

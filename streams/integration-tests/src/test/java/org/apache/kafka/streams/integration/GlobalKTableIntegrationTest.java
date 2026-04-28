@@ -113,7 +113,7 @@ public class GlobalKTableIntegrationTest {
     public void before(final TestInfo testInfo) throws Exception {
         TestGlobalProcessingExceptionHandler.handlerInvoked.set(false);
         TestGlobalProcessingExceptionHandler.shouldResume = false;
-        
+
         builder = new StreamsBuilder();
         final String safeTestName = safeUniqueTestName(testInfo);
         createTopics(safeTestName);
@@ -125,9 +125,9 @@ public class GlobalKTableIntegrationTest {
         streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         globalTable = builder.globalTable(globalTableTopic, Consumed.with(Serdes.Long(), Serdes.String()),
-                                          Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as(globalStore)
-                                                  .withKeySerde(Serdes.Long())
-                                                  .withValueSerde(Serdes.String()));
+            Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as(globalStore)
+                .withKeySerde(Serdes.Long())
+                .withValueSerde(Serdes.String()));
         final Consumed<String, Long> stringLongConsumed = Consumed.with(Serdes.String(), Serdes.Long());
         stream = builder.stream(streamTopic, stringLongConsumed);
         supplier = new MockApiProcessorSupplier<>();
@@ -367,21 +367,21 @@ public class GlobalKTableIntegrationTest {
     private void createBuilderWithFailedProcessor() {
         builder = new StreamsBuilder();
         builder.addGlobalStore(
-                Stores.keyValueStoreBuilder(
-                        Stores.inMemoryKeyValueStore("test-global-store"),
-                        Serdes.Long(),
-                        Serdes.String()
-                ),
-                globalTableTopic,
-                Consumed.with(Serdes.Long(), Serdes.String()),
-                () -> new ContextualProcessor<Long, String, Void, Void>() {
-                    @Override
-                    public void process(final Record<Long, String> record) {
-                        if (record.key().equals(2L)) {
-                            throw new RuntimeException("Test processing exception");
-                        }
+            Stores.keyValueStoreBuilder(
+                Stores.inMemoryKeyValueStore("test-global-store"),
+                Serdes.Long(),
+                Serdes.String()
+            ),
+            globalTableTopic,
+            Consumed.with(Serdes.Long(), Serdes.String()),
+            () -> new ContextualProcessor<Long, String, Void, Void>() {
+                @Override
+                public void process(final Record<Long, String> record) {
+                    if (record.key().equals(2L)) {
+                        throw new RuntimeException("Test processing exception");
                     }
                 }
+            }
         );
     }
 
@@ -412,7 +412,7 @@ public class GlobalKTableIntegrationTest {
         TestGlobalProcessingExceptionHandler.shouldResume = false;
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, true);
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
-                TestGlobalProcessingExceptionHandler.class);
+            TestGlobalProcessingExceptionHandler.class);
 
         StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
@@ -432,7 +432,7 @@ public class GlobalKTableIntegrationTest {
         TestGlobalProcessingExceptionHandler.shouldResume = false;
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, false);
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
-                TestGlobalProcessingExceptionHandler.class);
+            TestGlobalProcessingExceptionHandler.class);
 
         StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
@@ -452,14 +452,14 @@ public class GlobalKTableIntegrationTest {
         TestGlobalProcessingExceptionHandler.shouldResume = true;
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, true);
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
-                TestGlobalProcessingExceptionHandler.class);
+            TestGlobalProcessingExceptionHandler.class);
 
         StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
         startStreams();
         waitForApplicationState(singletonList(kafkaStreams), State.RUNNING, Duration.ofSeconds(30));
         produceInitialGlobalTableValues();
-        
+
         TestUtils.waitForCondition(
             () -> TestGlobalProcessingExceptionHandler.handlerInvoked.get(),
             Duration.ofSeconds(30).toMillis(),
@@ -474,7 +474,7 @@ public class GlobalKTableIntegrationTest {
         // enable processing exception handler invoked config
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, true);
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
-                TestGlobalProcessingExceptionHandler.class);
+            TestGlobalProcessingExceptionHandler.class);
 
         StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
@@ -492,7 +492,7 @@ public class GlobalKTableIntegrationTest {
         // disable processing exception handler invoked config
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, false);
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
-                TestGlobalProcessingExceptionHandler.class);
+            TestGlobalProcessingExceptionHandler.class);
 
         StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
@@ -532,52 +532,52 @@ public class GlobalKTableIntegrationTest {
 
     private void produceTopicValues(final String topic) {
         IntegrationTestUtils.produceKeyValuesSynchronously(
-                topic,
-                Arrays.asList(
-                        new KeyValue<>("a", 1L),
-                        new KeyValue<>("b", 2L),
-                        new KeyValue<>("c", 3L),
-                        new KeyValue<>("d", 4L),
-                        new KeyValue<>("e", 5L)),
-                TestUtils.producerConfig(
-                        CLUSTER.bootstrapServers(),
-                        StringSerializer.class,
-                        LongSerializer.class,
-                        new Properties()),
-                mockTime);
+            topic,
+            Arrays.asList(
+                new KeyValue<>("a", 1L),
+                new KeyValue<>("b", 2L),
+                new KeyValue<>("c", 3L),
+                new KeyValue<>("d", 4L),
+                new KeyValue<>("e", 5L)),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                StringSerializer.class,
+                LongSerializer.class,
+                new Properties()),
+            mockTime);
     }
 
     private void produceInitialGlobalTableValues() {
         IntegrationTestUtils.produceKeyValuesSynchronously(
-                globalTableTopic,
-                Arrays.asList(
-                        new KeyValue<>(1L, "A"),
-                        new KeyValue<>(2L, "B"),
-                        new KeyValue<>(3L, "C"),
-                        new KeyValue<>(4L, "D")
-                        ),
-                TestUtils.producerConfig(
-                        CLUSTER.bootstrapServers(),
-                        LongSerializer.class,
-                        StringSerializer.class
-                        ),
-                mockTime);
+            globalTableTopic,
+            Arrays.asList(
+                new KeyValue<>(1L, "A"),
+                new KeyValue<>(2L, "B"),
+                new KeyValue<>(3L, "C"),
+                new KeyValue<>(4L, "D")
+            ),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                LongSerializer.class,
+                StringSerializer.class
+            ),
+            mockTime);
     }
 
     private void produceGlobalTableValues() {
         IntegrationTestUtils.produceKeyValuesSynchronously(
-                globalTableTopic,
-                Arrays.asList(
-                        new KeyValue<>(1L, "F"),
-                        new KeyValue<>(2L, "G"),
-                        new KeyValue<>(3L, "H"),
-                        new KeyValue<>(4L, "I"),
-                        new KeyValue<>(5L, "J")),
-                TestUtils.producerConfig(
-                        CLUSTER.bootstrapServers(),
-                        LongSerializer.class,
-                        StringSerializer.class,
-                        new Properties()),
-                mockTime);
+            globalTableTopic,
+            Arrays.asList(
+                new KeyValue<>(1L, "F"),
+                new KeyValue<>(2L, "G"),
+                new KeyValue<>(3L, "H"),
+                new KeyValue<>(4L, "I"),
+                new KeyValue<>(5L, "J")),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                LongSerializer.class,
+                StringSerializer.class,
+                new Properties()),
+            mockTime);
     }
 }

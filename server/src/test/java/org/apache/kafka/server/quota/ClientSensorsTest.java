@@ -59,13 +59,13 @@ class ClientSensorsTest {
 
         Map<String, String> resultTags = clientSensors.metricTags();
         assertInstanceOf(LinkedHashMap.class, resultTags);
-        
+
         // Convert to arrays to check order
         String[] expectedKeys = {"first", "second", "third", "fourth"};
         String[] actualKeys = resultTags.keySet().toArray(new String[0]);
-        
+
         for (int i = 0; i < expectedKeys.length; i++) {
-            assertEquals(expectedKeys[i], actualKeys[i], 
+            assertEquals(expectedKeys[i], actualKeys[i],
                 "Key at position " + i + " should match expected order");
         }
     }

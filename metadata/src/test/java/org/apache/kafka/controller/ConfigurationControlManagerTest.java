@@ -82,7 +82,7 @@ public class ConfigurationControlManagerTest {
             define("baz", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "baz").
             define("quux", ConfigDef.Type.INT, ConfigDef.Importance.HIGH, "quux").
             define(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
-                ConfigDef.Type.INT, "1", ConfigDef.Importance.HIGH, "min.isr"));
+            ConfigDef.Type.INT, "1", ConfigDef.Importance.HIGH, "min.isr"));
 
         CONFIGS.put(TOPIC, new ConfigDef().
             define("abc", ConfigDef.Type.LIST, ConfigDef.Importance.HIGH, "abc").
@@ -165,23 +165,23 @@ public class ConfigurationControlManagerTest {
 
         ControllerResult<Map<ConfigResource, ApiError>> result = manager.
             incrementalAlterConfigs(toMap(entry(BROKER0, toMap(
-                entry("baz", entry(SUBTRACT, "abc")),
-                entry("quux", entry(SET, "abc")))),
-                entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123"))))),
-                true);
+            entry("baz", entry(SUBTRACT, "abc")),
+            entry("quux", entry(SET, "abc")))),
+            entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123"))))),
+            true);
 
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
                     setName("abc").setValue("123"), CONFIG_RECORD.highestSupportedVersion())),
-                toMap(entry(BROKER0, new ApiError(Errors.INVALID_CONFIG,
-                            "Can't SUBTRACT to key baz because its type is not LIST.")),
-                    entry(MYTOPIC, ApiError.NONE))), result);
+            toMap(entry(BROKER0, new ApiError(Errors.INVALID_CONFIG,
+                "Can't SUBTRACT to key baz because its type is not LIST.")),
+                entry(MYTOPIC, ApiError.NONE))), result);
 
         RecordTestUtils.replayAll(manager, result.records());
 
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
-                new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
-                    setName("abc").setValue(null), CONFIG_RECORD.highestSupportedVersion())),
+                    new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
+                        setName("abc").setValue(null), CONFIG_RECORD.highestSupportedVersion())),
                 toMap(entry(MYTOPIC, ApiError.NONE))),
             manager.incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(
                 entry("abc", entry(DELETE, "xyz"))))),
@@ -219,7 +219,7 @@ public class ConfigurationControlManagerTest {
         ControllerResult<ApiError> invalidConfigValueResult = manager.incrementalAlterConfig(MYTOPIC, largeValueOfOps, true);
         assertEquals(Errors.INVALID_CONFIG, invalidConfigValueResult.response().error());
         assertEquals("The configuration value cannot be added because it exceeds the maximum value size of " + Short.MAX_VALUE + " bytes.",
-                invalidConfigValueResult.response().message());
+            invalidConfigValueResult.response().message());
     }
 
     @Test
@@ -235,7 +235,7 @@ public class ConfigurationControlManagerTest {
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
                     setName("abc").setValue("123,456,789"), CONFIG_RECORD.highestSupportedVersion())),
-                toMap(entry(MYTOPIC, ApiError.NONE))), result);
+            toMap(entry(MYTOPIC, ApiError.NONE))), result);
 
         RecordTestUtils.replayAll(manager, result.records());
 
@@ -251,10 +251,10 @@ public class ConfigurationControlManagerTest {
         result = manager
             .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(SUBTRACT, "123,456"))))), true);
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
-                new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
-                    setName("abc").setValue("789"), CONFIG_RECORD.highestSupportedVersion())),
+                    new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
+                        setName("abc").setValue("789"), CONFIG_RECORD.highestSupportedVersion())),
                 toMap(entry(MYTOPIC, ApiError.NONE))),
-                result);
+            result);
         RecordTestUtils.replayAll(manager, result.records());
 
         // It's ok for the deleted value not to be present
@@ -280,15 +280,15 @@ public class ConfigurationControlManagerTest {
 
         ControllerResult<Map<ConfigResource, ApiError>> result = manager.
             incrementalAlterConfigs(toMap(entry(BROKER0, toMap(
-                entry("quux", entry(SET, "1")))),
-                entry(existingTopic, toMap(entry("def", entry(SET, "newVal"))))),
-                false);
+            entry("quux", entry(SET, "1")))),
+            entry(existingTopic, toMap(entry("def", entry(SET, "newVal"))))),
+            false);
 
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("ExistingTopic").
                     setName("def").setValue("newVal"), CONFIG_RECORD.highestSupportedVersion())),
             toMap(entry(BROKER0, new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION,
-                    "Unknown resource.")),
+                "Unknown resource.")),
                 entry(existingTopic, ApiError.NONE))), result);
     }
 
@@ -340,31 +340,31 @@ public class ConfigurationControlManagerTest {
             build();
         // Existing configs should not be passed to the policy
         manager.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
-                setName("broker.config").setValue("123"));
+            setName("broker.config").setValue("123"));
         manager.replay(new ConfigRecord().setResourceType(TOPIC.id()).setResourceName(MYTOPIC.name()).
-                setName("topic.config").setValue("123"));
+            setName("topic.config").setValue("123"));
         manager.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
-                setName("broker.config.to.remove").setValue("123"));
+            setName("broker.config.to.remove").setValue("123"));
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
-                new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
-                    setName("foo.bar").setValue("123"), CONFIG_RECORD.highestSupportedVersion()), new ApiMessageAndVersion(
-                                new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
-                                        setName("quux").setValue("456"), CONFIG_RECORD.highestSupportedVersion()), new ApiMessageAndVersion(
-                                            new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
-                                                    setName("broker.config.to.remove").setValue(null), CONFIG_RECORD.highestSupportedVersion())
+                    new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
+                        setName("foo.bar").setValue("123"), CONFIG_RECORD.highestSupportedVersion()), new ApiMessageAndVersion(
+                    new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
+                        setName("quux").setValue("456"), CONFIG_RECORD.highestSupportedVersion()), new ApiMessageAndVersion(
+                    new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
+                        setName("broker.config.to.remove").setValue(null), CONFIG_RECORD.highestSupportedVersion())
                 ),
                 toMap(entry(MYTOPIC, new ApiError(Errors.POLICY_VIOLATION,
                     "Expected: AlterConfigPolicy.RequestMetadata(resource=ConfigResource(" +
-                    "type=TOPIC, name='mytopic'), configs={}). Got: " +
-                    "AlterConfigPolicy.RequestMetadata(resource=ConfigResource(" +
-                    "type=TOPIC, name='mytopic'), configs={foo.bar=123})")),
-                entry(BROKER0, ApiError.NONE))),
+                        "type=TOPIC, name='mytopic'), configs={}). Got: " +
+                        "AlterConfigPolicy.RequestMetadata(resource=ConfigResource(" +
+                        "type=TOPIC, name='mytopic'), configs={foo.bar=123})")),
+                    entry(BROKER0, ApiError.NONE))),
             manager.incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(
                 entry("foo.bar", entry(SET, "123")))),
                 entry(BROKER0, toMap(
-                        entry("foo.bar", entry(SET, "123")),
-                        entry("quux", entry(SET, "456")),
-                        entry("broker.config.to.remove", entry(DELETE, null))
+                    entry("foo.bar", entry(SET, "123")),
+                    entry("quux", entry(SET, "456")),
+                    entry("broker.config.to.remove", entry(DELETE, null))
                 ))),
                 true));
     }
@@ -413,14 +413,14 @@ public class ConfigurationControlManagerTest {
             manager.replay((ConfigRecord) message.message());
         }
         assertEquals(ControllerResult.atomicOf(List.of(
-            new ApiMessageAndVersion(
-                new ConfigRecord()
-                    .setResourceType(TOPIC.id())
-                    .setResourceName("mytopic")
-                    .setName("abc")
-                    .setValue(null),
-                CONFIG_RECORD.highestSupportedVersion())),
-            toMap(entry(MYTOPIC, ApiError.NONE))),
+                    new ApiMessageAndVersion(
+                        new ConfigRecord()
+                            .setResourceType(TOPIC.id())
+                            .setResourceName("mytopic")
+                            .setName("abc")
+                            .setValue(null),
+                        CONFIG_RECORD.highestSupportedVersion())),
+                toMap(entry(MYTOPIC, ApiError.NONE))),
             manager.legacyAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("def", "901")))),
                 true));
     }
@@ -442,8 +442,8 @@ public class ConfigurationControlManagerTest {
         assertEquals(Set.of(), manager.brokersWithConfigs());
 
         assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
-            new ConfigRecord().setResourceType(BROKER.id()).setResourceName("1").
-                setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).setValue("3"), (short) 0)),
+                new ConfigRecord().setResourceType(BROKER.id()).setResourceName("1").
+                    setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).setValue("3"), (short) 0)),
             ApiError.NONE), result);
 
         RecordTestUtils.replayAll(manager, result.records());
@@ -456,16 +456,16 @@ public class ConfigurationControlManagerTest {
             "for brokers: 1.", manager.maybeGenerateElrSafetyRecords(records));
 
         assertEquals(List.of(new ApiMessageAndVersion(
-            new ConfigRecord().
-                setResourceType(BROKER.id()).
-                setResourceName("").
-                setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).
-                setValue(effectiveMinInsync), (short) 0),
-            new ApiMessageAndVersion(new ConfigRecord().
-                setResourceType(BROKER.id()).
-                setResourceName("1").
-                setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).
-                setValue(null), (short) 0)),
+                    new ConfigRecord().
+                        setResourceType(BROKER.id()).
+                        setResourceName("").
+                        setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).
+                        setValue(effectiveMinInsync), (short) 0),
+                new ApiMessageAndVersion(new ConfigRecord().
+                    setResourceType(BROKER.id()).
+                    setResourceName("1").
+                    setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).
+                    setValue(null), (short) 0)),
             records);
         RecordTestUtils.replayAll(manager, records);
         assertEquals(Set.of(), manager.brokersWithConfigs());
@@ -476,8 +476,8 @@ public class ConfigurationControlManagerTest {
     public void testRejectMinIsrChangeWhenElrEnabled(boolean removal) {
         FeatureControlManager featureManager = new FeatureControlManager.Builder().
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of())).
+            QuorumFeatures.defaultSupportedFeatureMap(true),
+            List.of())).
             build();
         featureManager.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
@@ -516,7 +516,7 @@ public class ConfigurationControlManagerTest {
         if (removal) {
             assertEquals(Errors.INVALID_CONFIG, result.response().error());
             assertEquals("Cluster-level min.insync.replicas cannot be removed while ELR is enabled.",
-                    result.response().message());
+                result.response().message());
         } else {
             assertEquals(Errors.NONE, result.response().error());
         }
@@ -527,8 +527,8 @@ public class ConfigurationControlManagerTest {
     public void testElrUpgrade(boolean isMetadataVersionElrEnabled) {
         FeatureControlManager featureManager = new FeatureControlManager.Builder().
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of())).
+            QuorumFeatures.defaultSupportedFeatureMap(true),
+            List.of())).
             build();
         featureManager.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
@@ -561,21 +561,21 @@ public class ConfigurationControlManagerTest {
     @ValueSource(booleans = {false, true})
     public void testCordonedLogDirsFeature(boolean enabled) {
         FeatureControlManager featureManager = new FeatureControlManager.Builder().
-                setQuorumFeatures(new QuorumFeatures(0,
-                        QuorumFeatures.defaultSupportedFeatureMap(true),
-                        List.of())).
-                build();
+            setQuorumFeatures(new QuorumFeatures(0,
+            QuorumFeatures.defaultSupportedFeatureMap(true),
+            List.of())).
+            build();
         featureManager.replay(new FeatureLevelRecord().
-                setName(MetadataVersion.FEATURE_NAME).
-                setFeatureLevel(enabled ? MetadataVersion.LATEST_PRODUCTION.featureLevel() : MetadataVersion.IBP_4_2_IV1.featureLevel()));
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(enabled ? MetadataVersion.LATEST_PRODUCTION.featureLevel() : MetadataVersion.IBP_4_2_IV1.featureLevel()));
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
-                setFeatureControl(featureManager).
-                setKafkaConfigSchema(SCHEMA).
-                build();
+            setFeatureControl(featureManager).
+            setKafkaConfigSchema(SCHEMA).
+            build();
 
         ControllerResult<ApiError> result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, "1"),
-                toMap(entry(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, entry(SET, "*"))),
-                true);
+            toMap(entry(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, entry(SET, "*"))),
+            true);
 
         assertEquals(enabled ? ApiError.NONE : DISALLOWED_CORDONED_LOG_DIRS_ERROR, result.response());
     }

@@ -440,8 +440,8 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      *            won't be called in the consumer when the deserializer is passed in directly.
      */
     public KafkaShareConsumer(Properties properties,
-                              Deserializer<K> keyDeserializer,
-                              Deserializer<V> valueDeserializer) {
+        Deserializer<K> keyDeserializer,
+        Deserializer<V> valueDeserializer) {
         this(propsToMap(properties), keyDeserializer, valueDeserializer);
     }
 
@@ -459,31 +459,31 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      *            won't be called in the consumer when the deserializer is passed in directly.
      */
     public KafkaShareConsumer(Map<String, Object> configs,
-                              Deserializer<K> keyDeserializer,
-                              Deserializer<V> valueDeserializer) {
+        Deserializer<K> keyDeserializer,
+        Deserializer<V> valueDeserializer) {
         this(new ShareConsumerConfig(ShareConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
-                keyDeserializer, valueDeserializer);
+            keyDeserializer, valueDeserializer);
     }
 
     KafkaShareConsumer(ShareConsumerConfig config,
-                              Deserializer<K> keyDeserializer,
-                              Deserializer<V> valueDeserializer) {
+        Deserializer<K> keyDeserializer,
+        Deserializer<V> valueDeserializer) {
         delegate = CREATOR.create(config, keyDeserializer, valueDeserializer);
     }
 
     KafkaShareConsumer(final LogContext logContext,
-                       final String clientId,
-                       final String groupId,
-                       final ShareConsumerConfig config,
-                       final Deserializer<K> keyDeserializer,
-                       final Deserializer<V> valueDeserializer,
-                       final Time time,
-                       final KafkaClient client,
-                       final SubscriptionState subscriptions,
-                       final ShareConsumerMetadata metadata) {
+        final String clientId,
+        final String groupId,
+        final ShareConsumerConfig config,
+        final Deserializer<K> keyDeserializer,
+        final Deserializer<V> valueDeserializer,
+        final Time time,
+        final KafkaClient client,
+        final SubscriptionState subscriptions,
+        final ShareConsumerMetadata metadata) {
         delegate = CREATOR.create(
-                logContext, clientId, groupId, config, keyDeserializer, valueDeserializer,
-                time, client, subscriptions, metadata);
+            logContext, clientId, groupId, config, keyDeserializer, valueDeserializer,
+            time, client, subscriptions, metadata);
     }
 
     /**

@@ -24,7 +24,7 @@ public interface CachedStateStore<K, V> {
      * @param sendOldValues
      */
     boolean setFlushListener(final CacheFlushListener<K, V> listener,
-                             final boolean sendOldValues);
+        final boolean sendOldValues);
 
     /**
      * Flush only the cache but not the underlying state stores

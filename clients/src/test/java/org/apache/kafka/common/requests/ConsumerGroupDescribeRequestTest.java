@@ -43,7 +43,7 @@ public class ConsumerGroupDescribeRequestTest {
         ConsumerGroupDescribeResponse response = request.getErrorResponse(throttleTimeMs, e);
 
         assertEquals(throttleTimeMs, response.throttleTimeMs());
-        for (int i = 0; i < groupIds.size(); i++) {
+        for (int i = 0;i < groupIds.size();i++) {
             ConsumerGroupDescribeResponseData.DescribedGroup group = response.data().groups().get(i);
             assertEquals(groupIds.get(i), group.groupId());
             assertEquals(Errors.forException(e).code(), group.errorCode());

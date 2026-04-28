@@ -107,23 +107,23 @@ public class PartitionGroupTest {
 
     private RecordQueue createQueue1() {
         return new RecordQueue(
-                partition1,
-                new MockSourceNode<>(intDeserializer, intDeserializer),
-                timestampExtractor,
-                new LogAndContinueExceptionHandler(),
-                new InternalMockProcessorContext(),
-                logContext
+            partition1,
+            new MockSourceNode<>(intDeserializer, intDeserializer),
+            timestampExtractor,
+            new LogAndContinueExceptionHandler(),
+            new InternalMockProcessorContext(),
+            logContext
         );
     }
 
     private RecordQueue createQueue2() {
         return new RecordQueue(
-                partition2,
-                new MockSourceNode<>(intDeserializer, intDeserializer),
-                timestampExtractor,
-                new LogAndContinueExceptionHandler(),
-                new InternalMockProcessorContext(),
-                logContext
+            partition2,
+            new MockSourceNode<>(intDeserializer, intDeserializer),
+            timestampExtractor,
+            new LogAndContinueExceptionHandler(),
+            new InternalMockProcessorContext(),
+            logContext
         );
     }
 
@@ -136,15 +136,15 @@ public class PartitionGroupTest {
     }
 
     private ConsumerRecord<byte[], byte[]> createConsumerRecord(
-            final int partition,
-            final long offset,
-            final byte[] key,
-            final byte[] value,
-            final int leaderEpoch
+        final int partition,
+        final long offset,
+        final byte[] key,
+        final byte[] value,
+        final int leaderEpoch
     ) {
         return new ConsumerRecord<>(topics[0], partition, offset, ConsumerRecord.NO_TIMESTAMP,
-                TimestampType.NO_TIMESTAMP_TYPE, ConsumerRecord.NULL_SIZE, ConsumerRecord.NULL_SIZE,
-                key, value, new RecordHeaders(), Optional.of(leaderEpoch));
+            TimestampType.NO_TIMESTAMP_TYPE, ConsumerRecord.NULL_SIZE, ConsumerRecord.NULL_SIZE,
+            key, value, new RecordHeaders(), Optional.of(leaderEpoch));
     }
 
     private void testFirstBatch(final PartitionGroup group) {
@@ -156,17 +156,17 @@ public class PartitionGroupTest {
 
         // add three 3 records with timestamp 1, 3, 5 to partition-1
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
-                createConsumerRecord(1, 1L, recordKey, recordValue, 0),
-                createConsumerRecord(1, 3L, recordKey, recordValue, 0),
-                createConsumerRecord(1, 5L, recordKey, recordValue, 2));
+            createConsumerRecord(1, 1L, recordKey, recordValue, 0),
+            createConsumerRecord(1, 3L, recordKey, recordValue, 0),
+            createConsumerRecord(1, 5L, recordKey, recordValue, 2));
 
         group.addRawRecords(partition1, list1);
 
         // add three 3 records with timestamp 2, 4, 6 to partition-2
         final List<ConsumerRecord<byte[], byte[]>> list2 = Arrays.asList(
-                createConsumerRecord(2, 2L, recordKey, recordValue, 1),
-                createConsumerRecord(2, 4L, recordKey, recordValue, 4),
-                createConsumerRecord(2, 6L, recordKey, recordValue, 4));
+            createConsumerRecord(2, 2L, recordKey, recordValue, 1),
+            createConsumerRecord(2, 4L, recordKey, recordValue, 4),
+            createConsumerRecord(2, 6L, recordKey, recordValue, 4));
 
         group.addRawRecords(partition2, list2);
         // 1:[1, 3, 5]
@@ -221,8 +221,8 @@ public class PartitionGroupTest {
 
         // add 2 more records with timestamp 2, 4 to partition-1
         final List<ConsumerRecord<byte[], byte[]>> list3 = Arrays.asList(
-                createConsumerRecord(1, 2L, recordKey, recordValue, 5),
-                createConsumerRecord(1, 4L, recordKey, recordValue, 6));
+            createConsumerRecord(1, 2L, recordKey, recordValue, 5),
+            createConsumerRecord(1, 4L, recordKey, recordValue, 6));
 
         group.addRawRecords(partition1, list3);
         // 1:[3, 5, 2, 4]
@@ -343,9 +343,9 @@ public class PartitionGroupTest {
 
         // add three 3 records with timestamp 1, 5, 3 to partition-1
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
-                new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
-                new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue),
-                new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue));
+            new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue));
 
         group.addRawRecords(partition1, list1);
 
@@ -364,9 +364,9 @@ public class PartitionGroupTest {
 
         // add three 3 records with timestamp 2, 4, 6 to partition-2
         final List<ConsumerRecord<byte[], byte[]>> list2 = Arrays.asList(
-                new ConsumerRecord<>("topic", 2, 2L, recordKey, recordValue),
-                new ConsumerRecord<>("topic", 2, 4L, recordKey, recordValue),
-                new ConsumerRecord<>("topic", 2, 6L, recordKey, recordValue));
+            new ConsumerRecord<>("topic", 2, 2L, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 2, 4L, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 2, 6L, recordKey, recordValue));
 
         group.addRawRecords(partition2, list2);
         // 1:[3]
@@ -386,17 +386,17 @@ public class PartitionGroupTest {
     }
 
     private void verifyTimes(final StampedRecord record,
-                             final long recordTime,
-                             final long streamTime,
-                             final PartitionGroup group) {
+        final long recordTime,
+        final long streamTime,
+        final PartitionGroup group) {
         assertThat(record.timestamp, is(recordTime));
         assertThat(group.streamTime(), is(streamTime));
     }
 
     private void verifyBuffered(final int totalBuffered,
-                                final int partitionOneBuffered,
-                                final int partitionTwoBuffered,
-                                final PartitionGroup group) {
+        final int partitionOneBuffered,
+        final int partitionTwoBuffered,
+        final PartitionGroup group) {
         assertEquals(totalBuffered, group.numBuffered());
         assertEquals(partitionOneBuffered, group.numBuffered(partition1));
         assertEquals(partitionTwoBuffered, group.numBuffered(partition2));
@@ -469,8 +469,8 @@ public class PartitionGroupTest {
         final PartitionGroup group = getBasicGroup();
 
         final IllegalStateException exception = assertThrows(
-                IllegalStateException.class,
-                () -> group.headRecordLeaderEpoch(unknownPartition));
+            IllegalStateException.class,
+            () -> group.headRecordLeaderEpoch(unknownPartition));
         assertThat(errMessage, equalTo(exception.getMessage()));
     }
 
@@ -489,9 +489,9 @@ public class PartitionGroupTest {
             );
 
         final List<ConsumerRecord<byte[], byte[]>> list = Arrays.asList(
-                new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
-                new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue),
-                new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
+            new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
         group.addRawRecords(partition1, list);
         group.nextRecord(new RecordInfo(), time.milliseconds());
         group.nextRecord(new RecordInfo(), time.milliseconds());
@@ -514,13 +514,13 @@ public class PartitionGroupTest {
         final PartitionGroup group = getBasicGroup();
 
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
-                new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
-                new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
+            new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
         group.addRawRecords(partition1, list1);
         final List<ConsumerRecord<byte[], byte[]>> list2 = Arrays.asList(
-                new ConsumerRecord<>("topic", 2, 2L, recordKey, recordValue),
-                new ConsumerRecord<>("topic", 2, 4L, recordKey, recordValue),
-                new ConsumerRecord<>("topic", 2, 6L, recordKey, recordValue));
+            new ConsumerRecord<>("topic", 2, 2L, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 2, 4L, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 2, 6L, recordKey, recordValue));
         group.addRawRecords(partition2, list2);
         assertEquals(list1.size() + list2.size(), group.numBuffered());
         assertTrue(group.allPartitionsBufferedLocally());
@@ -551,8 +551,8 @@ public class PartitionGroupTest {
             maxTaskIdleMs
         );
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
-                new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
-                new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
+            new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
         group.addRawRecords(partition1, list1);
 
         assertEquals(list1.size(), group.numBuffered());
@@ -584,8 +584,8 @@ public class PartitionGroupTest {
             maxTaskIdleMs
         );
         final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
-                new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
-                new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
+            new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
         group.addRawRecords(partition1, list1);
         assertEquals(list1.size(), group.numBuffered());
         assertTrue(group.allPartitionsBufferedLocally());
@@ -911,7 +911,7 @@ public class PartitionGroupTest {
         assertFalse(result.isReady());
         assertTrue(result.getLogMessage().isPresent() &&
             result.getLogMessage().get().contains(String.format("Partition %s has current lag 0 and current time is %d. "
-            + "Waiting for new data to be produced for configured idle time", partition, 0L)));
+                + "Waiting for new data to be produced for configured idle time", partition, 0L)));
     }
 
     @SuppressWarnings("SameParameterValue")
@@ -920,7 +920,7 @@ public class PartitionGroupTest {
         assertFalse(result.isReady());
         assertTrue(result.getLogMessage().isPresent() &&
             result.getLogMessage().get().contains(String.format("Partition %s has current lag %d, but no data is buffered locally. "
-            + "Waiting to buffer some records.", partition, lag)));
+                + "Waiting to buffer some records.", partition, lag)));
     }
 
 

@@ -168,8 +168,8 @@ public class RemoteLogMetadataCacheTest {
     }
 
     private void updateAndVerifyCacheContents(RemoteLogSegmentMetadataUpdate updatedMetadata,
-                                              RemoteLogSegmentState expectedSegmentState,
-                                              int leaderEpoch) throws RemoteResourceNotFoundException {
+            RemoteLogSegmentState expectedSegmentState,
+            int leaderEpoch) throws RemoteResourceNotFoundException {
         cache.updateRemoteLogSegmentMetadata(updatedMetadata);
         List<RemoteLogSegmentMetadata> metadataList = new ArrayList<>();
         cache.listRemoteLogSegments(leaderEpoch).forEachRemaining(metadataList::add);

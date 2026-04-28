@@ -37,14 +37,14 @@ public class DelayedShareFetchKeyTest {
         TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("topic2", 0));
 
         Map<String, DelayedShareFetchKey> keyMap = Map.of(
-                "key0", new DelayedShareFetchGroupKey("grp", tp0.topicId(), tp0.partition()),
-                "key1", new DelayedShareFetchGroupKey("grp", tp1.topicId(), tp1.partition()),
-                "key2", new DelayedShareFetchGroupKey("grp", tp2.topicId(), tp2.partition()),
-                "key3", new DelayedShareFetchGroupKey("grp2", tp0.topicId(), tp0.partition()),
-                "key4", new DelayedShareFetchGroupKey("grp2", tp1.topicId(), tp1.partition()),
-                "key5", new DelayedShareFetchPartitionKey(tp0.topicId(), tp0.partition()),
-                "key6", new DelayedShareFetchPartitionKey(tp1.topicId(), tp1.partition()),
-                "key7", new DelayedShareFetchPartitionKey(tp2.topicId(), tp2.partition())
+            "key0", new DelayedShareFetchGroupKey("grp", tp0.topicId(), tp0.partition()),
+            "key1", new DelayedShareFetchGroupKey("grp", tp1.topicId(), tp1.partition()),
+            "key2", new DelayedShareFetchGroupKey("grp", tp2.topicId(), tp2.partition()),
+            "key3", new DelayedShareFetchGroupKey("grp2", tp0.topicId(), tp0.partition()),
+            "key4", new DelayedShareFetchGroupKey("grp2", tp1.topicId(), tp1.partition()),
+            "key5", new DelayedShareFetchPartitionKey(tp0.topicId(), tp0.partition()),
+            "key6", new DelayedShareFetchPartitionKey(tp1.topicId(), tp1.partition()),
+            "key7", new DelayedShareFetchPartitionKey(tp2.topicId(), tp2.partition())
         );
 
         keyMap.forEach((key1, value1) -> keyMap.forEach((key2, value2) -> {

@@ -84,7 +84,7 @@ public class EmitOnChangeIntegrationTest {
 
     @Test
     public void shouldEmitSameRecordAfterFailover() throws Exception {
-        final Properties properties  = mkObjectProperties(
+        final Properties properties = mkObjectProperties(
             mkMap(
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
                 mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),

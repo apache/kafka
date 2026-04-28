@@ -63,7 +63,7 @@ public class UpdateFeaturesRequestTest {
     @Test
     public void testUpdateFeaturesV0() {
         UpdateFeaturesRequestData.FeatureUpdateKeyCollection features =
-                new UpdateFeaturesRequestData.FeatureUpdateKeyCollection();
+            new UpdateFeaturesRequestData.FeatureUpdateKeyCollection();
 
         features.add(new UpdateFeaturesRequestData.FeatureUpdateKey()
             .setFeature("foo")

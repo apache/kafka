@@ -57,8 +57,8 @@ class PeriodicTaskControlManager {
             if (logContext == null) logContext = new LogContext();
             if (queueAccessor == null) throw new RuntimeException("You must set queueAccessor");
             return new PeriodicTaskControlManager(logContext,
-                    time,
-                    queueAccessor);
+                time,
+                queueAccessor);
         }
     }
 
@@ -102,10 +102,10 @@ class PeriodicTaskControlManager {
                 long durationUs = NANOSECONDS.toMicros(endNs - startNs);
                 if (task.flags().contains(PeriodicTaskFlag.VERBOSE)) {
                     log.info("Periodic task {} generated {} records in {} microseconds.",
-                            task.name(), result.records().size(), durationUs);
+                        task.name(), result.records().size(), durationUs);
                 } else if (log.isDebugEnabled()) {
                     log.debug("Periodic task {} generated {} records in {} microseconds.",
-                            task.name(), result.records().size(), durationUs);
+                        task.name(), result.records().size(), durationUs);
                 }
             }
             reschedule(task, result.response(), false);
@@ -165,7 +165,7 @@ class PeriodicTaskControlManager {
         }
         tasks.put(task.name(), task);
         log.info("Registering periodic task {} to run every {} ms", task.name(),
-                NANOSECONDS.toMillis(task.periodNs()));
+            NANOSECONDS.toMillis(task.periodNs()));
         reschedule(task, false, false);
     }
 
@@ -205,10 +205,10 @@ class PeriodicTaskControlManager {
             long nextDelayTimeNs = nextDelayTimeNs(task, immediate, error);
             long nextRunTimeNs = time.nanoseconds() + nextDelayTimeNs;
             log.trace("rescheduling {} in {} ns (immediate = {}, error = {})",
-                    task.name(), nextDelayTimeNs, immediate, error);
+                task.name(), nextDelayTimeNs, immediate, error);
             queueAccessor.scheduleDeferred(task.name(),
-                    nextRunTimeNs,
-                    new PeriodicTaskOperation(task));
+                nextRunTimeNs,
+                new PeriodicTaskOperation(task));
         } else {
             log.trace("cancelling {} because it does not appear in the task map.", task.name());
             queueAccessor.cancelDeferred(task.name());

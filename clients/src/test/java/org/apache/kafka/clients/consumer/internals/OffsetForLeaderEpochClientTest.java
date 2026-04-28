@@ -52,7 +52,7 @@ public class OffsetForLeaderEpochClientTest {
     public void testEmptyResponse() {
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
         RequestFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> future =
-                offsetClient.sendAsyncRequest(Node.noNode(), Collections.emptyMap());
+            offsetClient.sendAsyncRequest(Node.noNode(), Collections.emptyMap());
 
         OffsetsForLeaderEpochResponse resp = new OffsetsForLeaderEpochResponse(
             new OffsetForLeaderEpochResponseData());
@@ -68,11 +68,11 @@ public class OffsetForLeaderEpochClientTest {
     public void testUnexpectedEmptyResponse() {
         Map<TopicPartition, SubscriptionState.FetchPosition> positionMap = new HashMap<>();
         positionMap.put(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1),
-                new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
+            new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
         RequestFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> future =
-                offsetClient.sendAsyncRequest(Node.noNode(), positionMap);
+            offsetClient.sendAsyncRequest(Node.noNode(), positionMap);
 
         OffsetsForLeaderEpochResponse resp = new OffsetsForLeaderEpochResponse(
             new OffsetForLeaderEpochResponseData());
@@ -88,11 +88,11 @@ public class OffsetForLeaderEpochClientTest {
     public void testOkResponse() {
         Map<TopicPartition, SubscriptionState.FetchPosition> positionMap = new HashMap<>();
         positionMap.put(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1),
-                new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
+            new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
         RequestFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> future =
-                offsetClient.sendAsyncRequest(Node.noNode(), positionMap);
+            offsetClient.sendAsyncRequest(Node.noNode(), positionMap);
 
         client.prepareResponse(prepareOffsetForLeaderEpochResponse(
             tp0, Errors.NONE, 1, 10L));
@@ -110,11 +110,11 @@ public class OffsetForLeaderEpochClientTest {
     public void testUnauthorizedTopic() {
         Map<TopicPartition, SubscriptionState.FetchPosition> positionMap = new HashMap<>();
         positionMap.put(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1),
-                new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
+            new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
         RequestFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> future =
-                offsetClient.sendAsyncRequest(Node.noNode(), positionMap);
+            offsetClient.sendAsyncRequest(Node.noNode(), positionMap);
 
         client.prepareResponse(prepareOffsetForLeaderEpochResponse(
             tp0, Errors.TOPIC_AUTHORIZATION_FAILED, -1, -1));
@@ -129,11 +129,11 @@ public class OffsetForLeaderEpochClientTest {
     public void testRetriableError() {
         Map<TopicPartition, SubscriptionState.FetchPosition> positionMap = new HashMap<>();
         positionMap.put(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1),
-                new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
+            new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
         RequestFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> future =
-                offsetClient.sendAsyncRequest(Node.noNode(), positionMap);
+            offsetClient.sendAsyncRequest(Node.noNode(), positionMap);
 
         client.prepareResponse(prepareOffsetForLeaderEpochResponse(
             tp0, Errors.LEADER_NOT_AVAILABLE, -1, -1));
@@ -155,14 +155,14 @@ public class OffsetForLeaderEpochClientTest {
         Time time = new MockTime(1);
         SubscriptionState subscriptions = new SubscriptionState(logContext, offsetResetStrategy);
         Metadata metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
-                subscriptions, logContext, new ClusterResourceListeners());
+            subscriptions, logContext, new ClusterResourceListeners());
         client = new MockClient(time, metadata);
         consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time,
-                100, 1000, Integer.MAX_VALUE);
+            100, 1000, Integer.MAX_VALUE);
     }
 
     private static OffsetsForLeaderEpochResponse prepareOffsetForLeaderEpochResponse(
-            TopicPartition tp, Errors error, int leaderEpoch, long endOffset) {
+        TopicPartition tp, Errors error, int leaderEpoch, long endOffset) {
         OffsetForLeaderEpochResponseData data = new OffsetForLeaderEpochResponseData();
         OffsetForLeaderTopicResult topic = new OffsetForLeaderTopicResult()
             .setTopic(tp.topic());

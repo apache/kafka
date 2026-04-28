@@ -30,7 +30,8 @@ import java.util.List;
  */
 public final class NetworkClientUtils {
 
-    private NetworkClientUtils() {}
+    private NetworkClientUtils() {
+    }
 
     /**
      * Checks whether the node is currently connected, first calling `client.poll` to ensure that any pending
@@ -62,7 +63,7 @@ public final class NetworkClientUtils {
         }
         long startTime = time.milliseconds();
 
-        if (isReady(client, node, startTime) ||  client.ready(node, startTime))
+        if (isReady(client, node, startTime) || client.ready(node, startTime))
             return true;
 
         long attemptStartTime = time.milliseconds();

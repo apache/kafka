@@ -76,9 +76,9 @@ public class ToolsTestUtils {
      * of other partitions unaffected.
      */
     public static void setReplicationThrottleForPartitions(Admin admin,
-                                                           List<Integer> brokerIds,
-                                                           Set<TopicPartition> partitions,
-                                                           int throttleBytes) throws ExecutionException, InterruptedException {
+        List<Integer> brokerIds,
+        Set<TopicPartition> partitions,
+        int throttleBytes) throws ExecutionException, InterruptedException {
         throttleAllBrokersReplication(admin, brokerIds, throttleBytes);
         assignThrottledPartitionReplicas(admin, partitions.stream().collect(Collectors.toMap(p -> p, p -> brokerIds)));
     }
@@ -116,25 +116,25 @@ public class ToolsTestUtils {
     public static void assignThrottledPartitionReplicas(Admin adminClient, Map<TopicPartition, List<Integer>> allReplicasByPartition) throws InterruptedException, ExecutionException {
         Map<ConfigResource, List<Entry<TopicPartition, List<Integer>>>> configResourceToPartitionReplicas =
             allReplicasByPartition.entrySet().stream()
-            .collect(Collectors.groupingBy(
-                topicPartitionListEntry -> new ConfigResource(ConfigResource.Type.TOPIC, topicPartitionListEntry.getKey().topic()))
-            );
+                .collect(Collectors.groupingBy(
+                    topicPartitionListEntry -> new ConfigResource(ConfigResource.Type.TOPIC, topicPartitionListEntry.getKey().topic()))
+                );
 
         Map<ConfigResource, List<AlterConfigOp>> throttles = configResourceToPartitionReplicas.entrySet().stream()
             .collect(
                 Collectors.toMap(Entry::getKey, entry -> {
-                    List<AlterConfigOp> alterConfigOps = new ArrayList<>();
-                    Map<TopicPartition, List<Integer>> replicaThrottle =
-                        entry.getValue().stream().collect(Collectors.toMap(Entry::getKey, Entry::getValue));
-                    alterConfigOps.add(new AlterConfigOp(
-                        new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicaThrottle)),
-                        AlterConfigOp.OpType.SET));
-                    alterConfigOps.add(new AlterConfigOp(
-                        new ConfigEntry(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicaThrottle)),
-                        AlterConfigOp.OpType.SET));
-                    return alterConfigOps;
-                }
-            ));
+                        List<AlterConfigOp> alterConfigOps = new ArrayList<>();
+                        Map<TopicPartition, List<Integer>> replicaThrottle =
+                            entry.getValue().stream().collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+                        alterConfigOps.add(new AlterConfigOp(
+                            new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicaThrottle)),
+                            AlterConfigOp.OpType.SET));
+                        alterConfigOps.add(new AlterConfigOp(
+                            new ConfigEntry(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, formatReplicaThrottles(replicaThrottle)),
+                            AlterConfigOp.OpType.SET));
+                        return alterConfigOps;
+                    }
+                ));
         adminClient.incrementalAlterConfigs(new HashMap<>(throttles)).all().get();
     }
 
@@ -146,11 +146,11 @@ public class ToolsTestUtils {
         Map<ConfigResource, Collection<AlterConfigOp>> throttles = partitions.stream().collect(Collectors.toMap(
             tp -> new ConfigResource(ConfigResource.Type.TOPIC, tp.topic()),
             tp -> List.of(
-                    new AlterConfigOp(new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""),
-                        AlterConfigOp.OpType.DELETE),
-                    new AlterConfigOp(new ConfigEntry(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""),
-                        AlterConfigOp.OpType.DELETE))
-            ));
+                new AlterConfigOp(new ConfigEntry(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""),
+                    AlterConfigOp.OpType.DELETE),
+                new AlterConfigOp(new ConfigEntry(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""),
+                    AlterConfigOp.OpType.DELETE))
+        ));
 
         adminClient.incrementalAlterConfigs(throttles).all().get();
     }

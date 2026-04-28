@@ -48,7 +48,7 @@ public class MockKeyValueStore implements KeyValueStore<Object, Object> {
     public final ArrayList<byte[]> values = new ArrayList<>();
 
     public MockKeyValueStore(final String name,
-                             final boolean persistent) {
+        final boolean persistent) {
         this.name = name;
         this.persistent = persistent;
     }
@@ -60,7 +60,7 @@ public class MockKeyValueStore implements KeyValueStore<Object, Object> {
 
     @Override
     public void init(final StateStoreContext stateStoreContext,
-                     final StateStore root) {
+        final StateStore root) {
         stateStoreContext.register(root, stateRestoreCallback);
         initialized = true;
         closed = false;
@@ -101,14 +101,15 @@ public class MockKeyValueStore implements KeyValueStore<Object, Object> {
 
         @Override
         public void restore(final byte[] key,
-                            final byte[] value) {
+            final byte[] value) {
             keys.add(deserializer.deserialize("", key));
             values.add(value);
         }
     };
 
     @Override
-    public void put(final Object key, final Object value) {}
+    public void put(final Object key, final Object value) {
+    }
 
     @Override
     public Object putIfAbsent(final Object key, final Object value) {
@@ -121,7 +122,8 @@ public class MockKeyValueStore implements KeyValueStore<Object, Object> {
     }
 
     @Override
-    public void putAll(final List<KeyValue<Object, Object>> entries) {}
+    public void putAll(final List<KeyValue<Object, Object>> entries) {
+    }
 
     @Override
     public Object get(final Object key) {

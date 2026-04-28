@@ -75,9 +75,9 @@ public class ClientSecretRequestFormatterTest extends OAuthBearerTest {
     }
 
     private static Stream<Arguments> testFormatterMissingValuesSource() {
-        String[] clientIds = new String[] {null, "", "  ", CLIENT_ID};
-        String[] clientSecrets = new String[] {null, "", "  ", CLIENT_SECRET};
-        boolean[] urlencodes = new boolean[] {true, false};
+        String[] clientIds = new String[]{null, "", "  ", CLIENT_ID};
+        String[] clientSecrets = new String[]{null, "", "  ", CLIENT_SECRET};
+        boolean[] urlencodes = new boolean[]{true, false};
 
         List<Arguments> list = new ArrayList<>();
 
@@ -96,8 +96,8 @@ public class ClientSecretRequestFormatterTest extends OAuthBearerTest {
     }
 
     private static Stream<Arguments> testMissingScopesSource() {
-        String[] scopes = new String[] {null, "", "  "};
-        boolean[] urlencodes = new boolean[] {true, false};
+        String[] scopes = new String[]{null, "", "  "};
+        boolean[] urlencodes = new boolean[]{true, false};
 
         List<Arguments> list = new ArrayList<>();
 

@@ -70,6 +70,7 @@ abstract class NumberConverter<T extends Number> implements Converter, HeaderCon
     public String version() {
         return AppInfoParser.getVersion();
     }
+
     @Override
     public ConfigDef config() {
         return NumberConverterConfig.configDef();

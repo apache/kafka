@@ -53,7 +53,7 @@ public interface PartitionView {
             if (o == null || getClass() != o.getClass()) return false;
             DefaultPartitionView that = (DefaultPartitionView) o;
             return Objects.equals(replicas, that.replicas) &&
-                    Objects.equals(leader, that.leader);
+                Objects.equals(leader, that.leader);
         }
 
         @Override
@@ -64,9 +64,9 @@ public interface PartitionView {
         @Override
         public String toString() {
             return "DefaultPartitionView{" +
-                    "replicas=" + replicas +
-                    ", leader=" + leader +
-                    '}';
+                "replicas=" + replicas +
+                ", leader=" + leader +
+                '}';
         }
     }
 }

@@ -35,13 +35,13 @@ public class Deserializers<K, V> implements AutoCloseable {
 
     public Deserializers(Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer, Metrics metrics) {
         this.keyDeserializerPlugin = Plugin.wrapInstance(
-                Objects.requireNonNull(keyDeserializer, "Key deserializer provided to Deserializers should not be null"),
-                metrics,
-                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG);
+            Objects.requireNonNull(keyDeserializer, "Key deserializer provided to Deserializers should not be null"),
+            metrics,
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG);
         this.valueDeserializerPlugin = Plugin.wrapInstance(
-                Objects.requireNonNull(valueDeserializer, "Value deserializer provided to Deserializers should not be null"),
-                metrics,
-                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
+            Objects.requireNonNull(valueDeserializer, "Value deserializer provided to Deserializers should not be null"),
+            metrics,
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
     }
 
     @SuppressWarnings("unchecked")
@@ -91,8 +91,8 @@ public class Deserializers<K, V> implements AutoCloseable {
     @Override
     public String toString() {
         return "Deserializers{" +
-                "keyDeserializer=" + keyDeserializerPlugin.get() +
-                ", valueDeserializer=" + valueDeserializerPlugin.get() +
-                '}';
+            "keyDeserializer=" + keyDeserializerPlugin.get() +
+            ", valueDeserializer=" + valueDeserializerPlugin.get() +
+            '}';
     }
 }

@@ -133,9 +133,9 @@ public class CheckpointFile<T> {
         private final EntryFormatter<T> formatter;
 
         public CheckpointReadBuffer(String location,
-                             BufferedReader reader,
-                             int version,
-                             EntryFormatter<T> formatter) {
+                                    BufferedReader reader,
+                                    int version,
+                                    EntryFormatter<T> formatter) {
             this.location = location;
             this.reader = reader;
             this.version = version;
@@ -150,7 +150,7 @@ public class CheckpointFile<T> {
             int readVersion = toInt(line);
             if (readVersion != version) {
                 throw new IOException("Unrecognised version:" + readVersion + ", expected version: " + version
-                                              + " in checkpoint file at: " + location);
+                    + " in checkpoint file at: " + location);
             }
 
             line = reader.readLine();
@@ -171,7 +171,7 @@ public class CheckpointFile<T> {
 
             if (entries.size() != expectedSize) {
                 throw new IOException("Expected [" + expectedSize + "] entries in checkpoint file ["
-                                              + location + "], but found only [" + entries.size() + "]");
+                    + location + "], but found only [" + entries.size() + "]");
             }
 
             return entries;

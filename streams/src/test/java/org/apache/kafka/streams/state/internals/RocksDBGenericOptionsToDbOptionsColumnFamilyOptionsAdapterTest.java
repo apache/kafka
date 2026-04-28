@@ -133,7 +133,8 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
                 try {
                     DBOptions.class.getMethod(method.getName(), method.getParameterTypes());
                     verifyDBOptionsMethodCall(method);
-                } catch (final NoSuchMethodException expectedAndSwallow) { }
+                } catch (final NoSuchMethodException expectedAndSwallow) {
+                }
             }
         }
     }
@@ -188,7 +189,8 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
                 case "org.rocksdb.Logger":
                     parameters[i] = new Logger(new Options()) {
                         @Override
-                        protected void log(final InfoLogLevel infoLogLevel, final String logMsg) {}
+                        protected void log(final InfoLogLevel infoLogLevel, final String logMsg) {
+                        }
                     };
                     break;
                 case "org.rocksdb.RateLimiter":
@@ -236,7 +238,8 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
                 try {
                     ColumnFamilyOptions.class.getMethod(method.getName(), method.getParameterTypes());
                     verifyColumnFamilyOptionsMethodCall(method);
-                } catch (final NoSuchMethodException expectedAndSwallow) { }
+                } catch (final NoSuchMethodException expectedAndSwallow) {
+                }
             }
         }
     }
@@ -256,7 +259,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
         } catch (final InvocationTargetException undeclaredMockMethodCall) {
             assertThat(undeclaredMockMethodCall.getCause(), instanceOf(AssertionError.class));
             assertThat(undeclaredMockMethodCall.getCause().getMessage().trim(),
-                matchesPattern("Unexpected method call ColumnFamilyOptions\\." + method.getName() +  "(.*)"));
+                matchesPattern("Unexpected method call ColumnFamilyOptions\\." + method.getName() + "(.*)"));
         } finally {
             optionsFacadeColumnFamilyOptions.close();
         }
@@ -365,12 +368,12 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class)) {
 
             try (RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter adapter =
-                         new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(new DBOptions(), new ColumnFamilyOptions())) {
+                     new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(new DBOptions(), new ColumnFamilyOptions())) {
                 adapter.setAtomicFlush(false);
                 final Set<String> logMessages = appender.getEvents().stream()
-                        .filter(e -> e.getLevel().equals("WARN"))
-                        .map(LogCaptureAppender.Event::getMessage)
-                        .collect(Collectors.toSet());
+                    .filter(e -> e.getLevel().equals("WARN"))
+                    .map(LogCaptureAppender.Event::getMessage)
+                    .collect(Collectors.toSet());
                 assertThat(logMessages, hasItem("AtomicFlush is explicitly set to True by Streams in RocksDB. Setting this option to 'false' will be ignored"));
             }
         }

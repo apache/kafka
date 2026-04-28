@@ -78,13 +78,13 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
                                                       String threadNamePrefix,
                                                       Supplier<Long> brokerEpochSupplier) {
         NodeToControllerChannelManager channelManager = new NodeToControllerChannelManagerImpl(
-                controllerNodeProvider,
-                time,
-                metrics,
-                config,
-                "alter-partition",
-                threadNamePrefix,
-                Long.MAX_VALUE
+            controllerNodeProvider,
+            time,
+            metrics,
+            config,
+            "alter-partition",
+            threadNamePrefix,
+            Long.MAX_VALUE
         );
 
         return new DefaultAlterPartitionManager(channelManager, scheduler, config.brokerId(), brokerEpochSupplier);
@@ -110,7 +110,7 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
             maybePropagateIsrChanges();
         } else {
             future.completeExceptionally(new OperationNotAttemptedException(String.format(
-                    "Failed to enqueue ISR change state %s for partition %s", leaderAndIsr, topicIdPartition)));
+                "Failed to enqueue ISR change state %s for partition %s", leaderAndIsr, topicIdPartition)));
         }
         return future;
     }
@@ -139,47 +139,47 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
         // until a response is received, or a new LeaderAndIsr overwrites the existing isrState
         // which causes the response for those partitions to be ignored.
         controllerChannelManager.sendRequest(request,
-                new ControllerRequestCompletionHandler() {
-                    @Override
-                    public void onComplete(ClientResponse response) {
-                        log.debug("Received AlterPartition response {}", response);
-                        Errors error;
-                        try {
-                            if (response.authenticationException() != null) {
-                                // For now, we treat authentication errors as retriable. We use the
-                                // `NETWORK_EXCEPTION` error code for lack of a good alternative.
-                                // Note that `NodeToControllerChannelManager` will still log the
-                                // authentication errors so that users have a chance to fix the problem.
-                                error = Errors.NETWORK_EXCEPTION;
-                            } else if (response.versionMismatch() != null) {
-                                error = Errors.UNSUPPORTED_VERSION;
-                            } else {
-                                error = handleAlterPartitionResponse(
-                                        (AlterPartitionResponse) response.responseBody(),
-                                        brokerEpoch,
-                                        inflightAlterPartitionItems
-                                );
-                            }
-                        } finally {
-                            // clear the flag so future requests can proceed
-                            clearInFlightRequest();
-                        }
-
-                        // check if we need to send another request right away
-                        if (error == Errors.NONE) {
-                            // In the normal case, check for pending updates to send immediately
-                            maybePropagateIsrChanges();
+            new ControllerRequestCompletionHandler() {
+                @Override
+                public void onComplete(ClientResponse response) {
+                    log.debug("Received AlterPartition response {}", response);
+                    Errors error;
+                    try {
+                        if (response.authenticationException() != null) {
+                            // For now, we treat authentication errors as retriable. We use the
+                            // `NETWORK_EXCEPTION` error code for lack of a good alternative.
+                            // Note that `NodeToControllerChannelManager` will still log the
+                            // authentication errors so that users have a chance to fix the problem.
+                            error = Errors.NETWORK_EXCEPTION;
+                        } else if (response.versionMismatch() != null) {
+                            error = Errors.UNSUPPORTED_VERSION;
                         } else {
-                            // If we received a top-level error from the controller, retry the request in the near future
-                            scheduler.scheduleOnce("send-alter-partition", () -> maybePropagateIsrChanges(), 50);
+                            error = handleAlterPartitionResponse(
+                                (AlterPartitionResponse) response.responseBody(),
+                                brokerEpoch,
+                                inflightAlterPartitionItems
+                            );
                         }
+                    } finally {
+                        // clear the flag so future requests can proceed
+                        clearInFlightRequest();
                     }
 
-                    @Override
-                    public void onTimeout() {
-                        throw new IllegalStateException("Encountered unexpected timeout when sending AlterPartition to the controller");
+                    // check if we need to send another request right away
+                    if (error == Errors.NONE) {
+                        // In the normal case, check for pending updates to send immediately
+                        maybePropagateIsrChanges();
+                    } else {
+                        // If we received a top-level error from the controller, retry the request in the near future
+                        scheduler.scheduleOnce("send-alter-partition", () -> maybePropagateIsrChanges(), 50);
                     }
-                });
+                }
+
+                @Override
+                public void onTimeout() {
+                    throw new IllegalStateException("Encountered unexpected timeout when sending AlterPartition to the controller");
+                }
+            });
     }
 
     /**
@@ -192,32 +192,32 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
      * @return an AlterPartitionRequest.Builder with the provided parameters.
      */
     private AlterPartitionRequest.Builder buildRequest(
-            List<AlterPartitionItem> inflightAlterPartitionItems,
-            long brokerEpoch) {
+        List<AlterPartitionItem> inflightAlterPartitionItems,
+        long brokerEpoch) {
         AlterPartitionRequestData message = new AlterPartitionRequestData()
-                .setBrokerId(brokerId)
-                .setBrokerEpoch(brokerEpoch);
+            .setBrokerId(brokerId)
+            .setBrokerEpoch(brokerEpoch);
 
         inflightAlterPartitionItems.stream()
-                .collect(Collectors.groupingBy(item -> item.topicIdPartition().topicId()))
-                .forEach((topicId, items) -> {
-                    AlterPartitionRequestData.TopicData topicData = new AlterPartitionRequestData.TopicData().setTopicId(topicId);
-                    message.topics().add(topicData);
+            .collect(Collectors.groupingBy(item -> item.topicIdPartition().topicId()))
+            .forEach((topicId, items) -> {
+                AlterPartitionRequestData.TopicData topicData = new AlterPartitionRequestData.TopicData().setTopicId(topicId);
+                message.topics().add(topicData);
 
-                    items.forEach(item -> {
-                        AlterPartitionRequestData.PartitionData partitionData =
-                                new AlterPartitionRequestData.PartitionData()
-                                        .setPartitionIndex(item.topicIdPartition().partitionId())
-                                        .setLeaderEpoch(item.leaderAndIsr().leaderEpoch())
-                                        .setNewIsrWithEpochs(item.leaderAndIsr().isrWithBrokerEpoch())
-                                        .setPartitionEpoch(item.leaderAndIsr().partitionEpoch());
+                items.forEach(item -> {
+                    AlterPartitionRequestData.PartitionData partitionData =
+                        new AlterPartitionRequestData.PartitionData()
+                            .setPartitionIndex(item.topicIdPartition().partitionId())
+                            .setLeaderEpoch(item.leaderAndIsr().leaderEpoch())
+                            .setNewIsrWithEpochs(item.leaderAndIsr().isrWithBrokerEpoch())
+                            .setPartitionEpoch(item.leaderAndIsr().partitionEpoch());
 
-                        partitionData.setLeaderRecoveryState(item.leaderAndIsr().leaderRecoveryState().value());
+                    partitionData.setLeaderRecoveryState(item.leaderAndIsr().leaderRecoveryState().value());
 
-                        topicData.partitions().add(partitionData);
-                    });
-
+                    topicData.partitions().add(partitionData);
                 });
+
+            });
 
         return new AlterPartitionRequest.Builder(message);
     }
@@ -230,26 +230,26 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
         switch (error) {
             case STALE_BROKER_EPOCH -> log.warn("Broker had a stale broker epoch ({}), retrying.", sentBrokerEpoch);
             case CLUSTER_AUTHORIZATION_FAILED -> log.error("Broker is not authorized to send AlterPartition to controller",
-                    Errors.CLUSTER_AUTHORIZATION_FAILED.exception("Broker is not authorized to send AlterPartition to controller"));
+                Errors.CLUSTER_AUTHORIZATION_FAILED.exception("Broker is not authorized to send AlterPartition to controller"));
             case NONE -> {
                 // Collect partition-level responses to pass to the callbacks
                 Map<TopicIdPartition, LeaderAndIsr> successResponses = new HashMap<>();
                 Map<TopicIdPartition, Errors> errorResponses = new HashMap<>();
                 data.topics().forEach(topic ->
-                        topic.partitions().forEach(partition -> {
+                    topic.partitions().forEach(partition -> {
                             TopicIdPartition tp = new TopicIdPartition(topic.topicId(), partition.partitionIndex());
                             Errors apiError = Errors.forCode(partition.errorCode());
                             log.debug("Controller successfully handled AlterPartition request for {}: {}", tp, partition);
                             if (apiError == Errors.NONE) {
                                 Optional<LeaderRecoveryState> leaderRecoveryStateOpt =
-                                        LeaderRecoveryState.optionalOf(partition.leaderRecoveryState());
+                                    LeaderRecoveryState.optionalOf(partition.leaderRecoveryState());
                                 if (leaderRecoveryStateOpt.isPresent()) {
                                     successResponses.put(tp, new LeaderAndIsr(
-                                            partition.leaderId(),
-                                            partition.leaderEpoch(),
-                                            partition.isr(),
-                                            leaderRecoveryStateOpt.get(),
-                                            partition.partitionEpoch()
+                                        partition.leaderId(),
+                                        partition.leaderEpoch(),
+                                        partition.isr(),
+                                        leaderRecoveryStateOpt.get(),
+                                        partition.partitionEpoch()
                                     ));
                                 } else {
                                     log.error("Controller returned an invalid leader recovery state ({}) for {}: {}", partition.leaderRecoveryState(), tp, partition);
@@ -259,7 +259,7 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
                                 errorResponses.put(tp, apiError);
                             }
                         }
-                        ));
+                    ));
                 // Iterate across the items we sent rather than what we received to ensure we run the callback even if a
                 // partition was somehow erroneously excluded from the response. Note that these callbacks are run from
                 // the leaderIsrUpdateLock write lock in Partition#sendAlterPartitionRequest

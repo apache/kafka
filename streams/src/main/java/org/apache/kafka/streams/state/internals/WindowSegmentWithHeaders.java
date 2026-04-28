@@ -46,10 +46,10 @@ class WindowSegmentWithHeaders extends RocksDBMigratingWindowStoreWithHeaders im
     private final long id;
 
     WindowSegmentWithHeaders(final String segmentName,
-                             final String windowName,
-                             final long id,
-                             final Position position,
-                             final RocksDBMetricsRecorder metricsRecorder) {
+        final String windowName,
+        final long id,
+        final Position position,
+        final RocksDBMetricsRecorder metricsRecorder) {
         super(segmentName, windowName, metricsRecorder);
         this.id = id;
         this.position = position;

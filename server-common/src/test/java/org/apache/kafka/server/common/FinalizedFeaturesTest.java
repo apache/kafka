@@ -30,11 +30,11 @@ class FinalizedFeaturesTest {
     @Test
     public void testKRaftModeFeatures() {
         FinalizedFeatures finalizedFeatures = new FinalizedFeatures(MINIMUM_VERSION,
-                Map.of("foo", (short) 2), 123);
+            Map.of("foo", (short) 2), 123);
         assertEquals(MINIMUM_VERSION.featureLevel(),
-                finalizedFeatures.finalizedFeatures().get(FEATURE_NAME));
+            finalizedFeatures.finalizedFeatures().get(FEATURE_NAME));
         assertEquals((short) 2,
-                finalizedFeatures.finalizedFeatures().get("foo"));
+            finalizedFeatures.finalizedFeatures().get("foo"));
         assertEquals(2, finalizedFeatures.finalizedFeatures().size());
     }
 

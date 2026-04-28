@@ -42,7 +42,7 @@ public class SyncGroupRequest extends AbstractRequest {
         public SyncGroupRequest build(short version) {
             if (data.groupInstanceId() != null && version < 3) {
                 throw new UnsupportedVersionException("The broker sync group protocol version " +
-                        version + " does not support usage of config group.instance.id.");
+                    version + " does not support usage of config group.instance.id.");
             }
             return new SyncGroupRequest(data, version);
         }
@@ -63,9 +63,9 @@ public class SyncGroupRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         return new SyncGroupResponse(new SyncGroupResponseData()
-                .setErrorCode(Errors.forException(e).code())
-                .setAssignment(new byte[0])
-                .setThrottleTimeMs(throttleTimeMs));
+            .setErrorCode(Errors.forException(e).code())
+            .setAssignment(new byte[0])
+            .setThrottleTimeMs(throttleTimeMs));
     }
 
     public Map<String, ByteBuffer> groupAssignments() {

@@ -65,6 +65,6 @@ public class AllocateProducerIdsRequest extends AbstractRequest {
 
     public static AllocateProducerIdsRequest parse(Readable readable, short version) {
         return new AllocateProducerIdsRequest(new AllocateProducerIdsRequestData(
-                readable, version), version);
+            readable, version), version);
     }
 }

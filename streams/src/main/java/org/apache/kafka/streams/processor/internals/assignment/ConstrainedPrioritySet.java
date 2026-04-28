@@ -37,7 +37,7 @@ public class ConstrainedPrioritySet {
     private final Set<ProcessId> uniqueClients = new HashSet<>();
 
     public ConstrainedPrioritySet(final BiFunction<ProcessId, TaskId, Boolean> constraint,
-                                  final Function<ProcessId, Double> weight) {
+        final Function<ProcessId, Double> weight) {
         this.constraint = constraint;
         clientsByTaskLoad = new PriorityQueue<>(Comparator.comparing(weight).thenComparing(clientId -> clientId));
     }

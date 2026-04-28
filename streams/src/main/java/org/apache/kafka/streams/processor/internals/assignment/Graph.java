@@ -45,11 +45,11 @@ public class Graph<V extends Comparable<V>> {
         }
 
         public Edge(final V destination,
-                    final int capacity,
-                    final int cost,
-                    final int residualFlow,
-                    final int flow,
-                    final boolean forwardEdge) {
+            final int capacity,
+            final int cost,
+            final int residualFlow,
+            final int flow,
+            final boolean forwardEdge) {
             Objects.requireNonNull(destination);
             if (capacity < 0) {
                 throw new IllegalArgumentException("Edge capacity cannot be negative");

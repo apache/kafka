@@ -438,8 +438,8 @@ public class TaskAssignmentUtilsTest {
         private final Map<TaskId, TaskInfo> tasks;
 
         TestApplicationState(final AssignmentConfigs assignmentConfigs,
-                             final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates,
-                             final Map<TaskId, TaskInfo> tasks) {
+            final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates,
+            final Map<TaskId, TaskInfo> tasks) {
             this.kafkaStreamsStates = kafkaStreamsStates;
             this.assignmentConfigs = assignmentConfigs;
             this.tasks = tasks;
@@ -462,25 +462,25 @@ public class TaskAssignmentUtilsTest {
     }
 
     public static Map.Entry<ProcessId, KafkaStreamsState> mkStreamState(final int id,
-                                                                        final int numProcessingThreads,
-                                                                        final Optional<String> rackId) {
+        final int numProcessingThreads,
+        final Optional<String> rackId) {
         return mkStreamState(id, numProcessingThreads, rackId, new HashSet<>(), new HashSet<>(), mkMap());
     }
 
     public static Map.Entry<ProcessId, KafkaStreamsState> mkStreamState(final int id,
-                                                                        final int numProcessingThreads,
-                                                                        final Optional<String> rackId,
-                                                                        final Set<TaskId> previousActiveTasks,
-                                                                        final Set<TaskId> previousStandbyTasks) {
+        final int numProcessingThreads,
+        final Optional<String> rackId,
+        final Set<TaskId> previousActiveTasks,
+        final Set<TaskId> previousStandbyTasks) {
         return mkStreamState(id, numProcessingThreads, rackId, previousActiveTasks, previousStandbyTasks, mkMap());
     }
 
     public static Map.Entry<ProcessId, KafkaStreamsState> mkStreamState(final int id,
-                                                                        final int numProcessingThreads,
-                                                                        final Optional<String> rackId,
-                                                                        final Set<TaskId> previousActiveTasks,
-                                                                        final Set<TaskId> previousStandbyTasks,
-                                                                        final Map<String, String> clientTags) {
+        final int numProcessingThreads,
+        final Optional<String> rackId,
+        final Set<TaskId> previousActiveTasks,
+        final Set<TaskId> previousStandbyTasks,
+        final Map<String, String> clientTags) {
         final ProcessId processId = processIdForInt(id);
         return mkEntry(processId, new DefaultKafkaStreamsState(
             processId,
@@ -500,12 +500,12 @@ public class TaskAssignmentUtilsTest {
     }
 
     public static Map.Entry<ProcessId, KafkaStreamsAssignment> mkAssignment(final AssignedTask.Type taskType,
-                                                                            final int client,
-                                                                            final TaskId... taskIds) {
+        final int client,
+        final TaskId... taskIds) {
         final ProcessId processId = processId(client);
         final Set<AssignedTask> assignedTasks = Arrays.stream(taskIds)
-                .map(taskId -> new AssignedTask(taskId, taskType))
-                .collect(Collectors.toSet());
+            .map(taskId -> new AssignedTask(taskId, taskType))
+            .collect(Collectors.toSet());
         return mkEntry(
             processId,
             KafkaStreamsAssignment.of(
@@ -516,7 +516,7 @@ public class TaskAssignmentUtilsTest {
     }
 
     public static Map.Entry<ProcessId, KafkaStreamsAssignment> mkAssignment(final int client,
-                                                                            final AssignedTask... tasks) {
+        final AssignedTask... tasks) {
         final ProcessId processId = processId(client);
         return mkEntry(
             processId,
@@ -562,10 +562,10 @@ public class TaskAssignmentUtilsTest {
     }
 
     public AssignmentConfigs defaultAssignmentConfigs(final String rackAwareStrategy,
-                                                      final int trafficCost,
-                                                      final int nonOverlapCost,
-                                                      final int numStandbys,
-                                                      final List<String> rackAwareAssignmentTags) {
+        final int trafficCost,
+        final int nonOverlapCost,
+        final int numStandbys,
+        final List<String> rackAwareAssignmentTags) {
         return new AssignmentConfigs(
             0L,
             1,

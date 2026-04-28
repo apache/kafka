@@ -56,14 +56,14 @@ public class RocksDBMigratingWindowStoreWithHeaders extends RocksDBStore impleme
         "windowKeyValueWithHeaders".getBytes(StandardCharsets.UTF_8);
 
     RocksDBMigratingWindowStoreWithHeaders(final String name,
-                                            final String parentDir,
-                                            final RocksDBMetricsRecorder metricsRecorder) {
+        final String parentDir,
+        final RocksDBMetricsRecorder metricsRecorder) {
         super(name, parentDir, metricsRecorder);
     }
 
     @Override
     void openRocksDB(final DBOptions dbOptions,
-                     final ColumnFamilyOptions columnFamilyOptions) {
+        final ColumnFamilyOptions columnFamilyOptions) {
         final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
             dbOptions,
             new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),

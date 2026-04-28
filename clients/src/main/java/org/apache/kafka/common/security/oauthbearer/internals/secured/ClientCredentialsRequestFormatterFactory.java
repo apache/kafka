@@ -85,7 +85,7 @@ public class ClientCredentialsRequestFormatterFactory {
             // Check for config conflicts and warn if both file and local generation configs are present
             if (assertionFile != null && cu.containsKey(SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS)) {
                 LOG.warn("Both {} and {} are configured. Using file-based assertion (first preference); " +
-                         "locally-generated assertion configs will be ignored.",
+                    "locally-generated assertion configs will be ignored.",
                     SASL_OAUTHBEARER_ASSERTION_FILE, SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS);
             }
 
@@ -110,13 +110,13 @@ public class ClientCredentialsRequestFormatterFactory {
     }
 
     /**
-    * In some cases, the incoming {@link Map} doesn't contain a value for
-    * {@link SaslConfigs#SASL_OAUTHBEARER_HEADER_URLENCODE}. Returning {@code null} from {@link Map#get(Object)}
-    * will cause a {@link NullPointerException} when it is later unboxed.
-    * <p>
-    * This utility method ensures that we have a non-{@code null} value to use in the
-    * {@link ClientSecretRequestFormatter} constructor.
-    */
+     * In some cases, the incoming {@link Map} doesn't contain a value for
+     * {@link SaslConfigs#SASL_OAUTHBEARER_HEADER_URLENCODE}. Returning {@code null} from {@link Map#get(Object)}
+     * will cause a {@link NullPointerException} when it is later unboxed.
+     * <p>
+     * This utility method ensures that we have a non-{@code null} value to use in the
+     * {@link ClientSecretRequestFormatter} constructor.
+     */
     public static boolean validateUrlEncodeHeader(ConfigurationUtils configurationUtils) {
         Boolean urlEncodeHeader = configurationUtils.get(SASL_OAUTHBEARER_HEADER_URLENCODE);
         return Objects.requireNonNullElse(urlEncodeHeader, DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE);

@@ -43,10 +43,10 @@ public class ConfigurationImageNodeTest {
 
     static {
         KafkaConfigSchema schema = new KafkaConfigSchema(Map.of(BROKER, new ConfigDef().
-            define("non.secret", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "baz").
-            define("also.non.secret", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "baz").
-            define("secret.config", ConfigDef.Type.PASSWORD, ConfigDef.Importance.HIGH, "baz")),
-                Map.of());
+                define("non.secret", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "baz").
+                define("also.non.secret", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "baz").
+                define("secret.config", ConfigDef.Type.PASSWORD, ConfigDef.Importance.HIGH, "baz")),
+            Map.of());
         NORMAL = new MetadataNodeRedactionCriteria.Normal(schema);
 
         Map<String, String> configs = new HashMap<>();

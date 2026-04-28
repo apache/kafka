@@ -89,11 +89,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class KafkaRaftLogTest {
 
     private static final MetadataLogConfig DEFAULT_METADATA_LOG_CONFIG = createMetadataLogConfig(
-            100 * 1024,
-            10 * 1000,
-            100 * 1024,
-            60 * 1000,
-            KafkaRaftClient.MAX_BATCH_SIZE_BYTES
+        100 * 1024,
+        10 * 1000,
+        100 * 1024,
+        60 * 1000,
+        KafkaRaftClient.MAX_BATCH_SIZE_BYTES
     );
 
     private final MockTime mockTime = new MockTime();
@@ -139,19 +139,19 @@ public class KafkaRaftLogTest {
         long initialOffset = log.endOffset().offset();
 
         log.appendAsLeader(
-                MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo),
-                currentEpoch
+            MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo),
+            currentEpoch
         );
 
         // Throw exception for out of order records
         assertThrows(
-                RuntimeException.class,
-                () -> log.appendAsLeader(MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo), currentEpoch)
+            RuntimeException.class,
+            () -> log.appendAsLeader(MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo), currentEpoch)
         );
 
         assertThrows(
-                RuntimeException.class,
-                () -> log.appendAsFollower(MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo), currentEpoch)
+            RuntimeException.class,
+            () -> log.appendAsFollower(MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo), currentEpoch)
         );
     }
 
@@ -187,8 +187,8 @@ public class KafkaRaftLogTest {
             long previousEndOffset = log.endOffset().offset();
 
             assertThrows(
-                    CorruptRecordException.class,
-                    () -> log.appendAsFollower(records, Integer.MAX_VALUE)
+                CorruptRecordException.class,
+                () -> log.appendAsFollower(records, Integer.MAX_VALUE)
             );
 
             assertEquals(previousEndOffset, log.endOffset().offset());
@@ -209,16 +209,16 @@ public class KafkaRaftLogTest {
             simpleRecords[i] = new SimpleRecord(String.valueOf(i).getBytes(StandardCharsets.UTF_8));
         }
         MemoryRecords batchWithValidEpoch = MemoryRecords.withRecords(
-                previousEndOffset,
-                Compression.NONE,
-                epoch,
-                simpleRecords
+            previousEndOffset,
+            Compression.NONE,
+            epoch,
+            simpleRecords
         );
         MemoryRecords batchWithInvalidEpoch = MemoryRecords.withRecords(
-                previousEndOffset + numberOfRecords,
-                Compression.NONE,
-                epoch + 1,
-                simpleRecords
+            previousEndOffset + numberOfRecords,
+            Compression.NONE,
+            epoch + 1,
+            simpleRecords
         );
 
         ByteBuffer buffer = ByteBuffer.allocate(batchWithValidEpoch.sizeInBytes() + batchWithInvalidEpoch.sizeInBytes());
@@ -277,8 +277,8 @@ public class KafkaRaftLogTest {
         log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords));
 
         assertThrows(
-                IllegalArgumentException.class,
-                () -> log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords - 1, epoch))
+            IllegalArgumentException.class,
+            () -> log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords - 1, epoch))
         );
     }
 
@@ -292,8 +292,8 @@ public class KafkaRaftLogTest {
         log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords));
 
         assertThrows(
-                IllegalArgumentException.class,
-                () -> log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords + 1, epoch))
+            IllegalArgumentException.class,
+            () -> log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords + 1, epoch))
         );
     }
 
@@ -307,8 +307,8 @@ public class KafkaRaftLogTest {
         log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords));
 
         assertThrows(
-                IllegalArgumentException.class,
-                () -> log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords, epoch + 1))
+            IllegalArgumentException.class,
+            () -> log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords, epoch + 1))
         );
     }
 
@@ -360,8 +360,8 @@ public class KafkaRaftLogTest {
         log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords));
 
         assertThrows(
-                IllegalArgumentException.class,
-                () -> log.createNewSnapshot(new OffsetAndEpoch(snapshotId.offset(), snapshotId.epoch() - 1))
+            IllegalArgumentException.class,
+            () -> log.createNewSnapshot(new OffsetAndEpoch(snapshotId.offset(), snapshotId.epoch() - 1))
         );
     }
 
@@ -377,8 +377,8 @@ public class KafkaRaftLogTest {
         createNewSnapshot(log, snapshotId);
 
         assertThrows(
-                IllegalArgumentException.class,
-                () -> log.createNewSnapshot(new OffsetAndEpoch(snapshotId.offset(), snapshotId.epoch() - 1))
+            IllegalArgumentException.class,
+            () -> log.createNewSnapshot(new OffsetAndEpoch(snapshotId.offset(), snapshotId.epoch() - 1))
         );
     }
 
@@ -398,16 +398,16 @@ public class KafkaRaftLogTest {
         log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords));
 
         assertThrows(
-                IllegalArgumentException.class,
-                () -> log.createNewSnapshot(new OffsetAndEpoch(1, missingEpoch))
+            IllegalArgumentException.class,
+            () -> log.createNewSnapshot(new OffsetAndEpoch(1, missingEpoch))
         );
         assertThrows(
-                IllegalArgumentException.class,
-                () -> log.createNewSnapshot(new OffsetAndEpoch(firstBatchRecords, missingEpoch))
+            IllegalArgumentException.class,
+            () -> log.createNewSnapshot(new OffsetAndEpoch(firstBatchRecords, missingEpoch))
         );
         assertThrows(
-                IllegalArgumentException.class,
-                () -> log.createNewSnapshot(new OffsetAndEpoch(secondBatchRecords, missingEpoch))
+            IllegalArgumentException.class,
+            () -> log.createNewSnapshot(new OffsetAndEpoch(secondBatchRecords, missingEpoch))
         );
     }
 
@@ -423,7 +423,7 @@ public class KafkaRaftLogTest {
         createNewSnapshot(log, snapshotId);
 
         assertEquals(Optional.empty(), log.createNewSnapshot(snapshotId),
-                "Creating an existing snapshot should not do anything");
+            "Creating an existing snapshot should not do anything");
     }
 
     @Test
@@ -523,9 +523,9 @@ public class KafkaRaftLogTest {
         mockTime.sleep(config.internalDeleteDelayMillis());
         // Assert that the log dir doesn't contain any older snapshots
         Files.walk(logDir, 1)
-                .map(Snapshots::parse)
-                .filter(Optional::isPresent)
-                .forEach(path -> assertFalse(path.get().snapshotId().offset() < log.startOffset()));
+            .map(Snapshots::parse)
+            .filter(Optional::isPresent)
+            .forEach(path -> assertFalse(path.get().snapshotId().offset() < log.startOffset()));
     }
 
     @Test
@@ -585,8 +585,8 @@ public class KafkaRaftLogTest {
 
     private File metadataLogDir(File logDir) {
         return new File(
-                logDir.getAbsolutePath(),
-                UnifiedLog.logDirName(Topic.CLUSTER_METADATA_TOPIC_PARTITION)
+            logDir.getAbsolutePath(),
+            UnifiedLog.logDirName(Topic.CLUSTER_METADATA_TOPIC_PARTITION)
         );
     }
 
@@ -645,9 +645,9 @@ public class KafkaRaftLogTest {
 
         // Assert that the log dir doesn't contain any partial snapshots
         Files.walk(logDir, 1)
-                .map(Snapshots::parse)
-                .filter(Optional::isPresent)
-                .forEach(path -> assertFalse(path.get().partial()));
+            .map(Snapshots::parse)
+            .filter(Optional::isPresent)
+            .forEach(path -> assertFalse(path.get().partial()));
     }
 
     @Test
@@ -686,9 +686,9 @@ public class KafkaRaftLogTest {
 
         // Assert that the log dir doesn't contain any older snapshots
         Files.walk(logDir, 1)
-                .map(Snapshots::parse)
-                .filter(Optional::isPresent)
-                .forEach(path -> assertFalse(path.get().snapshotId().offset() < log.startOffset()));
+            .map(Snapshots::parse)
+            .filter(Optional::isPresent)
+            .forEach(path -> assertFalse(path.get().snapshotId().offset() < log.startOffset()));
     }
 
     @Test
@@ -718,11 +718,11 @@ public class KafkaRaftLogTest {
         int maxBatchSizeInBytes = 16384;
         int recordSize = 64;
         MetadataLogConfig config = createMetadataLogConfig(
-                DEFAULT_METADATA_LOG_CONFIG.logSegmentBytes(),
-                DEFAULT_METADATA_LOG_CONFIG.logSegmentMillis(),
-                DEFAULT_METADATA_LOG_CONFIG.retentionMaxBytes(),
-                DEFAULT_METADATA_LOG_CONFIG.retentionMillis(),
-                maxBatchSizeInBytes
+            DEFAULT_METADATA_LOG_CONFIG.logSegmentBytes(),
+            DEFAULT_METADATA_LOG_CONFIG.logSegmentMillis(),
+            DEFAULT_METADATA_LOG_CONFIG.retentionMaxBytes(),
+            DEFAULT_METADATA_LOG_CONFIG.retentionMillis(),
+            maxBatchSizeInBytes
         );
         KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, config);
 
@@ -751,19 +751,19 @@ public class KafkaRaftLogTest {
     }
 
     private MemoryRecords buildFullBatch(
-            int leaderEpoch,
-            int recordSize,
-            int maxBatchSizeInBytes
+        int leaderEpoch,
+        int recordSize,
+        int maxBatchSizeInBytes
     ) {
         ByteBuffer buffer = ByteBuffer.allocate(maxBatchSizeInBytes);
         BatchBuilder<byte[]> batchBuilder = new BatchBuilder<>(
-                buffer,
-                new ByteArraySerde(),
-                Compression.NONE,
-                0L,
-                mockTime.milliseconds(),
-                leaderEpoch,
-                maxBatchSizeInBytes
+            buffer,
+            new ByteArraySerde(),
+            Compression.NONE,
+            0L,
+            mockTime.milliseconds(),
+            leaderEpoch,
+            maxBatchSizeInBytes
         );
 
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
@@ -927,11 +927,11 @@ public class KafkaRaftLogTest {
     @Test
     public void testAdvanceLogStartOffsetAfterCleaning() throws IOException {
         MetadataLogConfig config = createMetadataLogConfig(
-                512,
-                10 * 1000,
-                256,
-                60 * 1000,
-                512
+            512,
+            10 * 1000,
+            256,
+            60 * 1000,
+            512
         );
         KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, config);
 
@@ -961,11 +961,11 @@ public class KafkaRaftLogTest {
     public void testDeleteSnapshots() throws IOException {
         // Generate some logs and a few snapshots, set retention low and verify that cleaning occurs
         MetadataLogConfig config = createMetadataLogConfig(
-                1024,
-                10 * 1000,
-                1024,
-                60 * 1000,
-                100
+            1024,
+            10 * 1000,
+            1024,
+            60 * 1000,
+            100
         );
         KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, config);
 
@@ -992,11 +992,11 @@ public class KafkaRaftLogTest {
     public void testSoftRetentionLimit() throws IOException {
         // Set retention equal to the segment size and generate slightly more than one segment of logs
         MetadataLogConfig config = createMetadataLogConfig(
-                10240,
-                10 * 1000,
-                10240,
-                60 * 1000,
-                100
+            10240,
+            10 * 1000,
+            10240,
+            60 * 1000,
+            100
         );
         KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, config);
 
@@ -1039,11 +1039,11 @@ public class KafkaRaftLogTest {
     @Test
     public void testSegmentsLessThanLatestSnapshot() throws IOException {
         MetadataLogConfig config = createMetadataLogConfig(
-                10240,
-                10 * 1000,
-                10240,
-                60 * 1000,
-                200
+            10240,
+            10 * 1000,
+            10240,
+            60 * 1000,
+            200
         );
         KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, config);
 
@@ -1056,15 +1056,15 @@ public class KafkaRaftLogTest {
         // The cleanup code requires that there are at least two snapshots
         // Generate first snapshots that includes the first segment by using the base offset of the second segment
         OffsetAndEpoch snapshotId1 = new OffsetAndEpoch(
-                log.log().logSegments().get(1).baseOffset(),
-                1
+            log.log().logSegments().get(1).baseOffset(),
+            1
         );
         createNewSnapshotUnchecked(log, snapshotId1);
 
         // Generate second snapshots that includes the second segment by using the base offset of the third segment
         OffsetAndEpoch snapshotId2 = new OffsetAndEpoch(
-                log.log().logSegments().get(2).baseOffset(),
-                1
+            log.log().logSegments().get(2).baseOffset(),
+            1
         );
         createNewSnapshotUnchecked(log, snapshotId2);
 
@@ -1077,8 +1077,8 @@ public class KafkaRaftLogTest {
         assertTrue(log.startOffset() > 0, log.startOffset() + " must be greater than 0");
         long latestSnapshotOffset = log.latestSnapshotId().get().offset();
         assertTrue(
-                latestSnapshotOffset >= log.startOffset(),
-                "latest snapshot offset (" + latestSnapshotOffset + " must be >= log start offset (" + log.startOffset() + ")"
+            latestSnapshotOffset >= log.startOffset(),
+            "latest snapshot offset (" + latestSnapshotOffset + " must be >= log start offset (" + log.startOffset() + ")"
         );
     }
 
@@ -1188,19 +1188,19 @@ public class KafkaRaftLogTest {
     }
 
     private static MetadataLogConfig createMetadataLogConfig(
-            int internalLogSegmentBytes,
-            long logSegmentMillis,
-            long retentionMaxBytes,
-            long retentionMillis,
-            int internalMaxBatchSizeInBytes
+        int internalLogSegmentBytes,
+        long logSegmentMillis,
+        long retentionMaxBytes,
+        long retentionMillis,
+        int internalMaxBatchSizeInBytes
     ) {
         Map<String, ?> config = Map.of(
-                MetadataLogConfig.INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG, internalLogSegmentBytes,
-                MetadataLogConfig.METADATA_LOG_SEGMENT_MILLIS_CONFIG, logSegmentMillis,
-                MetadataLogConfig.METADATA_MAX_RETENTION_BYTES_CONFIG, retentionMaxBytes,
-                MetadataLogConfig.METADATA_MAX_RETENTION_MILLIS_CONFIG, retentionMillis,
-                MetadataLogConfig.INTERNAL_METADATA_MAX_BATCH_SIZE_IN_BYTES_CONFIG, internalMaxBatchSizeInBytes,
-                MetadataLogConfig.INTERNAL_METADATA_DELETE_DELAY_MILLIS_CONFIG, ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT
+            MetadataLogConfig.INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG, internalLogSegmentBytes,
+            MetadataLogConfig.METADATA_LOG_SEGMENT_MILLIS_CONFIG, logSegmentMillis,
+            MetadataLogConfig.METADATA_MAX_RETENTION_BYTES_CONFIG, retentionMaxBytes,
+            MetadataLogConfig.METADATA_MAX_RETENTION_MILLIS_CONFIG, retentionMillis,
+            MetadataLogConfig.INTERNAL_METADATA_MAX_BATCH_SIZE_IN_BYTES_CONFIG, internalMaxBatchSizeInBytes,
+            MetadataLogConfig.INTERNAL_METADATA_DELETE_DELAY_MILLIS_CONFIG, ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT
         );
         return new MetadataLogConfig(new AbstractConfig(MetadataLogConfig.CONFIG_DEF, config, false));
     }
@@ -1210,6 +1210,7 @@ public class KafkaRaftLogTest {
         public int recordSize(byte[] data, ObjectSerializationCache serializationCache) {
             return data.length;
         }
+
         @Override
         public void write(byte[] data, ObjectSerializationCache serializationCache, Writable out) {
             out.writeByteArray(data);
@@ -1221,7 +1222,8 @@ public class KafkaRaftLogTest {
         }
     }
 
-    private record MetadataLogAndDir(Path path, KafkaRaftLog log, MetadataLogConfig config) { }
+    private record MetadataLogAndDir(Path path, KafkaRaftLog log, MetadataLogConfig config) {
+    }
 
     private static MetadataLogAndDir buildMetadataLogAndDir(File tempDir, MockTime time) throws IOException {
         return buildMetadataLogAndDir(tempDir, time, DEFAULT_METADATA_LOG_CONFIG);
@@ -1229,18 +1231,18 @@ public class KafkaRaftLogTest {
 
     private static MetadataLogAndDir buildMetadataLogAndDir(File tempDir, MockTime time, MetadataLogConfig metadataLogConfig) throws IOException {
         File logDir = createLogDirectory(
-                tempDir,
-                UnifiedLog.logDirName(Topic.CLUSTER_METADATA_TOPIC_PARTITION)
+            tempDir,
+            UnifiedLog.logDirName(Topic.CLUSTER_METADATA_TOPIC_PARTITION)
         );
 
         KafkaRaftLog metadataLog = KafkaRaftLog.createLog(
-                Topic.CLUSTER_METADATA_TOPIC_PARTITION,
-                Uuid.METADATA_TOPIC_ID,
-                logDir,
-                time,
-                time.scheduler,
-                metadataLogConfig,
-                1
+            Topic.CLUSTER_METADATA_TOPIC_PARTITION,
+            Uuid.METADATA_TOPIC_ID,
+            logDir,
+            time,
+            time.scheduler,
+            metadataLogConfig,
+            1
         );
 
         return new MetadataLogAndDir(logDir.toPath(), metadataLog, metadataLogConfig);
@@ -1274,10 +1276,10 @@ public class KafkaRaftLogTest {
         }
         log.appendAsLeader(
             MemoryRecords.withRecords(
-                    log.endOffset().offset(),
-                    Compression.NONE,
-                    epoch,
-                    records
+                log.endOffset().offset(),
+                Compression.NONE,
+                epoch,
+                records
             ),
             epoch
         );
@@ -1289,10 +1291,10 @@ public class KafkaRaftLogTest {
             records[i] = new SimpleRecord(String.valueOf(i).getBytes(StandardCharsets.UTF_8));
         }
         snapshotWriter.append(MemoryRecords.withRecords(
-                0,
-                Compression.NONE,
-                0,
-                records
+            0,
+            Compression.NONE,
+            0,
+            records
         ));
     }
 

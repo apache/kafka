@@ -119,7 +119,7 @@ public class ChangeLoggingWindowBytesStoreTest {
     @SuppressWarnings({"resource", "unused"})
     @Test
     public void shouldDelegateToUnderlyingStoreWhenBackwardFetchingRange() {
-        try (final KeyValueIterator<Windowed<Bytes>, byte[]> unused =  store.backwardFetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1))) {
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> unused = store.backwardFetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1))) {
             verify(inner).backwardFetch(bytesKey, bytesKey, 0, 1);
         }
     }

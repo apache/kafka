@@ -213,7 +213,7 @@ public class ChunkedBytesStream extends FilterInputStream {
         }
 
         int n = 0;
-        for (; ; ) {
+        for (;;) {
             int nread = read1(b, off + n, len - n);
             if (nread <= 0)
                 return (n == 0) ? nread : n;

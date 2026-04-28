@@ -83,10 +83,10 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     private final Position position;
 
     public InMemoryWindowStore(final String name,
-                               final long retentionPeriod,
-                               final long windowSize,
-                               final boolean retainDuplicates,
-                               final String metricScope) {
+        final long retentionPeriod,
+        final long windowSize,
+        final boolean retainDuplicates,
+        final String metricScope) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.windowSize = windowSize;
@@ -102,7 +102,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     @Override
     public void init(final StateStoreContext stateStoreContext,
-                     final StateStore root) {
+        final StateStore root) {
         this.internalProcessorContext = ProcessorContextUtils.asInternalProcessorContext(stateStoreContext);
 
         final StreamsMetricsImpl metrics = ProcessorContextUtils.metricsImpl(stateStoreContext);
@@ -238,25 +238,25 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
-                                                           final Bytes keyTo,
-                                                           final long timeFrom,
-                                                           final long timeTo) {
+        final Bytes keyTo,
+        final long timeFrom,
+        final long timeTo) {
         return fetch(keyFrom, keyTo, timeFrom, timeTo, true);
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom,
-                                                                   final Bytes keyTo,
-                                                                   final long timeFrom,
-                                                                   final long timeTo) {
+        final Bytes keyTo,
+        final long timeFrom,
+        final long timeTo) {
         return fetch(keyFrom, keyTo, timeFrom, timeTo, false);
     }
 
     KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
-                                                    final Bytes to,
-                                                    final long timeFrom,
-                                                    final long timeTo,
-                                                    final boolean forward) {
+        final Bytes to,
+        final long timeFrom,
+        final long timeTo,
+        final boolean forward) {
         removeExpiredSegments();
 
         if (from != null && to != null && from.compareTo(to) > 0) {
@@ -372,8 +372,8 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
+        final PositionBound positionBound,
+        final QueryConfig config) {
 
         return StoreQueryUtils.handleBasicQueries(
             query,
@@ -438,8 +438,8 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     }
 
     private WrappedInMemoryWindowStoreIterator registerNewWindowStoreIterator(final Bytes key,
-                                                                              final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator,
-                                                                              final boolean forward) {
+        final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator,
+        final boolean forward) {
         final Bytes keyFrom = retainDuplicates ? wrapForDups(key, 0) : key;
         final Bytes keyTo = retainDuplicates ? wrapForDups(key, Integer.MAX_VALUE) : key;
 
@@ -451,9 +451,9 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     }
 
     private WrappedWindowedKeyValueIterator registerNewWindowedKeyValueIterator(final Bytes keyFrom,
-                                                                                final Bytes keyTo,
-                                                                                final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator,
-                                                                                final boolean forward) {
+        final Bytes keyTo,
+        final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator,
+        final boolean forward) {
         final Bytes from = (retainDuplicates && keyFrom != null) ? wrapForDups(keyFrom, 0) : keyFrom;
         final Bytes to = (retainDuplicates && keyTo != null) ? wrapForDups(keyTo, Integer.MAX_VALUE) : keyTo;
 
@@ -490,11 +490,11 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         private final boolean forward;
 
         InMemoryWindowStoreIteratorWrapper(final Bytes keyFrom,
-                                           final Bytes keyTo,
-                                           final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator,
-                                           final ClosingCallback callback,
-                                           final boolean retainDuplicates,
-                                           final boolean forward) {
+            final Bytes keyTo,
+            final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator,
+            final ClosingCallback callback,
+            final boolean retainDuplicates,
+            final boolean forward) {
             this.keyFrom = keyFrom;
             this.keyTo = keyTo;
             allKeys = (keyFrom == null) && (keyTo == null);
@@ -604,11 +604,11 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     private static class WrappedInMemoryWindowStoreIterator extends InMemoryWindowStoreIteratorWrapper implements WindowStoreIterator<byte[]> {
 
         WrappedInMemoryWindowStoreIterator(final Bytes keyFrom,
-                                           final Bytes keyTo,
-                                           final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator,
-                                           final ClosingCallback callback,
-                                           final boolean retainDuplicates,
-                                           final boolean forward) {
+            final Bytes keyTo,
+            final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator,
+            final ClosingCallback callback,
+            final boolean retainDuplicates,
+            final boolean forward) {
             super(keyFrom, keyTo, segmentIterator, callback, retainDuplicates, forward);
         }
 
@@ -644,12 +644,12 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         private final long windowSize;
 
         WrappedWindowedKeyValueIterator(final Bytes keyFrom,
-                                        final Bytes keyTo,
-                                        final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator,
-                                        final ClosingCallback callback,
-                                        final boolean retainDuplicates,
-                                        final long windowSize,
-                                        final boolean forward) {
+            final Bytes keyTo,
+            final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator,
+            final ClosingCallback callback,
+            final boolean retainDuplicates,
+            final long windowSize,
+            final boolean forward) {
             super(keyFrom, keyTo, segmentIterator, callback, retainDuplicates, forward);
             this.windowSize = windowSize;
         }

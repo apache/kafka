@@ -85,7 +85,7 @@ public class MockSelector implements Selectable {
         removeSendsForNode(id, initiatedSends);
         ready.remove(id);
 
-        for (int i = 0; i < this.connected.size(); i++) {
+        for (int i = 0;i < this.connected.size();i++) {
             if (this.connected.get(i).equals(id)) {
                 this.connected.remove(i);
                 break;
@@ -116,7 +116,7 @@ public class MockSelector implements Selectable {
 
     public void serverAuthenticationFailed(String id) {
         ChannelState authFailed = new ChannelState(ChannelState.State.AUTHENTICATION_FAILED,
-                new AuthenticationException("Authentication failed"), null);
+            new AuthenticationException("Authentication failed"), null);
         this.disconnected.put(id, authFailed);
         close(id);
     }

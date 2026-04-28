@@ -41,11 +41,11 @@ public class CoordinatorOperationExceptionHelper {
      * @param <OUT> The type of the value returned by handler.
      */
     public static <IN, OUT> OUT handleOperationException(
-        String operationName,
-        IN operationInput,
-        Throwable exception,
-        BiFunction<Errors, String, OUT> handler,
-        Logger log
+            String operationName,
+            IN operationInput,
+            Throwable exception,
+            BiFunction<Errors, String, OUT> handler,
+            Logger log
     ) {
         ApiError apiError = ApiError.fromThrowable(exception);
 

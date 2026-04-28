@@ -507,10 +507,10 @@ public class RelationalSmokeTest extends SmokeTestUtil {
         private final String articlePrefix;
 
         private AugmentedComment(final int key,
-                                 final long timestamp,
-                                 final String text,
-                                 final int articleId,
-                                 final String articlePrefix) {
+            final long timestamp,
+            final String text,
+            final int articleId,
+            final String articlePrefix) {
             super(key, timestamp, text, articleId);
             this.articlePrefix = articlePrefix;
         }
@@ -622,9 +622,9 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                 .to(ARTICLE_RESULT_SINK);
 
             comments.join(articles,
-                          Comment::getArticleId,
-                          AugmentedComment.joiner(),
-                          Materialized.with(null, new AugmentedComment.AugmentedCommentSerde()))
+                Comment::getArticleId,
+                AugmentedComment.joiner(),
+                Materialized.with(null, new AugmentedComment.AugmentedCommentSerde()))
                 .toStream()
                 .to(COMMENT_RESULT_SINK);
 
@@ -632,11 +632,11 @@ public class RelationalSmokeTest extends SmokeTestUtil {
         }
 
         public static Properties getConfig(final String broker,
-                                           final String application,
-                                           final String id,
-                                           final String processingGuarantee,
-                                           final String groupProtocol,
-                                           final String stateDir) {
+            final String application,
+            final String id,
+            final String processingGuarantee,
+            final String groupProtocol,
+            final String stateDir) {
             final Properties properties =
                 mkProperties(
                     mkMap(
@@ -655,11 +655,11 @@ public class RelationalSmokeTest extends SmokeTestUtil {
         }
 
         public static KafkaStreams startSync(final String broker,
-                                             final String application,
-                                             final String id,
-                                             final String processingGuarantee,
-                                             final String groupProtocol,
-                                             final String stateDir) throws InterruptedException {
+            final String application,
+            final String id,
+            final String processingGuarantee,
+            final String groupProtocol,
+            final String stateDir) throws InterruptedException {
             final KafkaStreams kafkaStreams =
                 new KafkaStreams(getTopology(), getConfig(broker, application, id, processingGuarantee, groupProtocol, stateDir));
             final CountDownLatch startUpLatch = new CountDownLatch(1);
@@ -706,7 +706,7 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                         Stream.concat(
                             articlePartitions.stream().map(p -> new TopicPartition(p.topic(), p.partition())),
                             augmentedArticlePartitions.stream().map(p -> new TopicPartition(p.topic(), p.partition()))
-                        ), 
+                        ),
                         Stream.concat(
                             commentPartitions.stream().map(p -> new TopicPartition(p.topic(), p.partition())),
                             augmentedCommentPartitions.stream().map(p -> new TopicPartition(p.topic(), p.partition()))
@@ -809,9 +809,9 @@ public class RelationalSmokeTest extends SmokeTestUtil {
         }
 
         public static void assertThat(final AtomicBoolean pass,
-                                      final StringBuilder failures,
-                                      final String message,
-                                      final boolean passed) {
+            final StringBuilder failures,
+            final String message,
+            final boolean passed) {
             if (!passed) {
                 if (failures != null) {
                     failures.append("\n").append(message);
@@ -821,10 +821,10 @@ public class RelationalSmokeTest extends SmokeTestUtil {
         }
 
         static boolean verifySync(final boolean logResults,
-                                  final Map<Integer, Article> consumedArticles,
-                                  final Map<Integer, Comment> consumedComments,
-                                  final Map<Integer, AugmentedArticle> consumedAugmentedArticles,
-                                  final Map<Integer, AugmentedComment> consumedAugmentedComments) {
+            final Map<Integer, Article> consumedArticles,
+            final Map<Integer, Comment> consumedComments,
+            final Map<Integer, AugmentedArticle> consumedAugmentedArticles,
+            final Map<Integer, AugmentedComment> consumedAugmentedComments) {
             final AtomicBoolean pass = new AtomicBoolean(true);
             final StringBuilder report = logResults ? new StringBuilder() : null;
 
@@ -856,7 +856,7 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                 "Mismatched comments size between augmented comments (size "
                     + consumedAugmentedComments.size() +
                     ") and consumed comments (size " +
-                    consumedComments.size() + ")", 
+                    consumedComments.size() + ")",
                 consumedAugmentedComments.size() == consumedComments.size()
             );
 
@@ -893,7 +893,7 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                     consumedAugmentedArticles.containsKey(augmentedComment.getArticleId())
                 );
                 final AugmentedArticle augmentedArticle =
-                        consumedAugmentedArticles.get(augmentedComment.getArticleId());
+                    consumedAugmentedArticles.get(augmentedComment.getArticleId());
                 if (augmentedArticle != null) {
                     assertThat(
                         pass,

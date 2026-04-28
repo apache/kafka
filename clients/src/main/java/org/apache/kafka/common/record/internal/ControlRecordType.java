@@ -88,16 +88,16 @@ public enum ControlRecordType {
         ByteBuffer buffer = key.duplicate();
         if (buffer.remaining() < CONTROL_RECORD_KEY_SIZE)
             throw new InvalidRecordException("Invalid value size found for control record key. " +
-                    "Must have at least " + CONTROL_RECORD_KEY_SIZE + " bytes, but found only " + buffer.remaining());
+                "Must have at least " + CONTROL_RECORD_KEY_SIZE + " bytes, but found only " + buffer.remaining());
 
         short version = buffer.getShort();
         if (version < ControlRecordTypeSchema.LOWEST_SUPPORTED_VERSION)
             throw new InvalidRecordException("Invalid version found for control record: " + version +
-                    ". May indicate data corruption");
+                ". May indicate data corruption");
 
         if (version > ControlRecordTypeSchema.HIGHEST_SUPPORTED_VERSION) {
             log.debug("Received unknown control record key version {}. Parsing as version {}", version,
-                    ControlRecordTypeSchema.HIGHEST_SUPPORTED_VERSION);
+                ControlRecordTypeSchema.HIGHEST_SUPPORTED_VERSION);
             version = ControlRecordTypeSchema.HIGHEST_SUPPORTED_VERSION;
         }
         ControlRecordTypeSchema schema = new ControlRecordTypeSchema(new ByteBufferAccessor(buffer), version);

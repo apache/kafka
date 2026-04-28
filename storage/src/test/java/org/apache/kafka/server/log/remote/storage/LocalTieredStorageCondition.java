@@ -74,11 +74,11 @@ public final class LocalTieredStorageCondition {
      *         be used to assess whether the expected event is encountered.
      */
     public static LocalTieredStorageCondition expectEvent(final Iterable<LocalTieredStorage> storages,
-                                                          final EventType eventType,
-                                                          final int brokerId,
-                                                          final TopicPartition tp,
-                                                          final Integer baseOffset,
-                                                          final boolean failed) {
+            final EventType eventType,
+            final int brokerId,
+            final TopicPartition tp,
+            final Integer baseOffset,
+            final boolean failed) {
         final LocalTieredStorageCondition condition = new LocalTieredStorageCondition(eventType, brokerId, tp, failed, baseOffset, 1);
         storages.forEach(storage -> storage.addListener(condition.listener));
         return condition;
@@ -106,11 +106,11 @@ public final class LocalTieredStorageCondition {
      *         be used to assess whether the expected event is encountered.
      */
     public static LocalTieredStorageCondition expectEvent(final Iterable<LocalTieredStorage> storages,
-                                                          final EventType eventType,
-                                                          final int brokerId,
-                                                          final TopicPartition tp,
-                                                          final boolean failed,
-                                                          final int latchCount) {
+            final EventType eventType,
+            final int brokerId,
+            final TopicPartition tp,
+            final boolean failed,
+            final int latchCount) {
         final LocalTieredStorageCondition condition = new LocalTieredStorageCondition(eventType, brokerId, tp, failed, null, latchCount);
         storages.forEach(storage -> storage.addListener(condition.listener));
         return condition;
@@ -195,18 +195,18 @@ public final class LocalTieredStorageCondition {
         }
 
         private InternalListener(final LocalTieredStorageCondition condition,
-                                 final int latchCount) {
+                final int latchCount) {
             this.condition = requireNonNull(condition);
             this.latch = new CountDownLatch(latchCount);
         }
     }
 
     private LocalTieredStorageCondition(final EventType type,
-                                        final int id,
-                                        final TopicPartition tp,
-                                        final boolean failed,
-                                        final Integer baseOffset,
-                                        final int latchCount) {
+            final int id,
+            final TopicPartition tp,
+            final boolean failed,
+            final Integer baseOffset,
+            final int latchCount) {
         this.eventType = requireNonNull(type);
         this.brokerId = id;
         this.topicPartition = requireNonNull(tp);

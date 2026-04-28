@@ -148,7 +148,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
         if (!telemetryProvider.validate(metricsContext)) {
             log.warn("Validation failed for {} context {}, skip starting collectors. Metrics collection is disabled",
-                    telemetryProvider.getClass(), metricsContext.contextLabels());
+                telemetryProvider.getClass(), metricsContext.contextLabels());
             return;
         }
 
@@ -971,8 +971,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
         private final Predicate<? super MetricKeyable> selector;
 
         ClientTelemetrySubscription(Uuid clientInstanceId, int subscriptionId, int pushIntervalMs,
-                List<CompressionType> acceptedCompressionTypes, boolean deltaTemporality,
-                Predicate<? super MetricKeyable> selector) {
+            List<CompressionType> acceptedCompressionTypes, boolean deltaTemporality,
+            Predicate<? super MetricKeyable> selector) {
             this.clientInstanceId = clientInstanceId;
             this.subscriptionId = subscriptionId;
             this.pushIntervalMs = pushIntervalMs;

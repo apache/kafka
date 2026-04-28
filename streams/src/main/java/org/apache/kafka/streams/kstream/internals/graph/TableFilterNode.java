@@ -23,7 +23,7 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 public class TableFilterNode<K, V> extends ProcessorGraphNode<K, V> implements VersionedSemanticsGraphNode {
 
     public TableFilterNode(final String nodeName,
-                           final ProcessorParameters<K, V, ?, ?> processorParameters) {
+        final ProcessorParameters<K, V, ?, ?> processorParameters) {
         super(nodeName, processorParameters);
     }
 

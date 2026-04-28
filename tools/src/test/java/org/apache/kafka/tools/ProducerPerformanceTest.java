@@ -185,11 +185,11 @@ public class ProducerPerformanceTest {
         doReturn(null).when(producerMock).send(any(), any());
         doReturn(producerMock).when(producerPerformanceSpy).createKafkaProducer(any(Properties.class));
 
-        String[] args = new String[] {
-            "--topic", "Hello-Kafka", 
-            "--num-records", "5", 
-            "--throughput", "100", 
-            "--record-size", "100", 
+        String[] args = new String[]{
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "100",
+            "--record-size", "100",
             "--bootstrap-server", "localhost:9000"};
         producerPerformanceSpy.start(args);
         verify(producerMock, times(5)).send(any(), any());
@@ -201,7 +201,7 @@ public class ProducerPerformanceTest {
         doReturn(null).when(producerMock).send(any(), any());
         doReturn(producerMock).when(producerPerformanceSpy).createKafkaProducer(any(Properties.class));
 
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--topic", "Hello-Kafka",
             "--num-records", "5",
             "--throughput", "100",
@@ -222,7 +222,7 @@ public class ProducerPerformanceTest {
             return null;
         }).when(producerMock).send(any(), any());
 
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--topic", "Hello-Kafka",
             "--num-records", "10",
             "--throughput", "1",
@@ -243,7 +243,7 @@ public class ProducerPerformanceTest {
             return null;
         }).when(producerMock).send(any(), any());
 
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--topic", "Hello-Kafka",
             "--num-records", "10",
             "--throughput", "1",
@@ -259,7 +259,7 @@ public class ProducerPerformanceTest {
 
     @Test
     public void testMutuallyExclusiveGroup() {
-        String[] args1 = new String[] {
+        String[] args1 = new String[]{
             "--topic", "Hello-Kafka",
             "--num-records", "5",
             "--throughput", "100",
@@ -267,14 +267,14 @@ public class ProducerPerformanceTest {
             "--payload-monotonic",
             "--bootstrap-server", "localhost:9000"};
         ArgumentParser parser1 = ProducerPerformance.argParser();
-        ArgumentParserException thrown = assertThrows(ArgumentParserException.class, () ->  parser1.parseArgs(args1));
+        ArgumentParserException thrown = assertThrows(ArgumentParserException.class, () -> parser1.parseArgs(args1));
         assertEquals("argument --payload-monotonic: not allowed with argument --record-size", thrown.getMessage());
 
-        String[] args2 = new String[] {
+        String[] args2 = new String[]{
             "--topic", "Hello-Kafka",
             "--num-records", "5",
             "--throughput", "100",
-            "--payload-file",  "abc.txt",
+            "--payload-file", "abc.txt",
             "--payload-monotonic",
             "--bootstrap-server", "localhost:9000"};
         ArgumentParser parser2 = ProducerPerformance.argParser();
@@ -284,11 +284,11 @@ public class ProducerPerformanceTest {
 
     @Test
     public void testUnexpectedArg() {
-        String[] args = new String[] {
-            "--test", "test", 
-            "--topic", "Hello-Kafka", 
-            "--num-records", "5", 
-            "--throughput", "100", 
+        String[] args = new String[]{
+            "--test", "test",
+            "--topic", "Hello-Kafka",
+            "--num-records", "5",
+            "--throughput", "100",
             "--record-size", "100",
             "--bootstrap-server", "localhost:9000"};
         ArgumentParser parser = ProducerPerformance.argParser();
@@ -298,7 +298,7 @@ public class ProducerPerformanceTest {
 
     @Test
     public void testFractionalThroughput() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--topic", "Hello-Kafka",
             "--num-records", "5",
             "--throughput", "1.25",
@@ -360,7 +360,7 @@ public class ProducerPerformanceTest {
     }
 
     @Test
-    public void testClientIdOverride()  throws Exception {
+    public void testClientIdOverride() throws Exception {
         List<String> producerProps = List.of("client.id=producer-1");
 
         Properties prop = ProducerPerformance.readProps(producerProps, null);
@@ -701,12 +701,12 @@ public class ProducerPerformanceTest {
         assertTrue(configs.transactionsEnabled);
         assertEquals(5000, configs.transactionDurationMs);
         assertTrue(configs.producerProps.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG).toString()
-                .startsWith(ProducerPerformance.DEFAULT_TRANSACTION_ID_PREFIX));
+            .startsWith(ProducerPerformance.DEFAULT_TRANSACTION_ID_PREFIX));
     }
 
     @Test
     public void testWarmupRecordsFractionalValue() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--topic", "Hello-Kafka",
             "--num-records", "10",
             "--warmup-records", "1.5",
@@ -720,7 +720,7 @@ public class ProducerPerformanceTest {
 
     @Test
     public void testWarmupRecordsString() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--topic", "Hello-Kafka",
             "--num-records", "10",
             "--warmup-records", "foo",
@@ -740,7 +740,7 @@ public class ProducerPerformanceTest {
             return null;
         }).when(producerMock).send(any(), any());
 
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--topic", "Hello-Kafka",
             "--num-records", "10",
             "--warmup-records", "2",
@@ -763,7 +763,7 @@ public class ProducerPerformanceTest {
             return null;
         }).when(producerMock).send(any(), any());
 
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--topic", "Hello-Kafka",
             "--num-records", "10",
             "--warmup-records", "-1",

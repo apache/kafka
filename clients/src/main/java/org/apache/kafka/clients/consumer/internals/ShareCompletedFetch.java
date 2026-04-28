@@ -81,13 +81,13 @@ public class ShareCompletedFetch {
     private final ShareFetchMetricsAggregator metricsAggregator;
 
     ShareCompletedFetch(final LogContext logContext,
-                        final BufferSupplier decompressionBufferSupplier,
-                        final int nodeId,
-                        final TopicIdPartition partition,
-                        final ShareFetchResponseData.PartitionData partitionData,
-                        final Optional<Integer> acquisitionLockTimeoutMs,
-                        final ShareFetchMetricsAggregator metricsAggregator,
-                        final short requestVersion) {
+        final BufferSupplier decompressionBufferSupplier,
+        final int nodeId,
+        final TopicIdPartition partition,
+        final ShareFetchResponseData.PartitionData partitionData,
+        final Optional<Integer> acquisitionLockTimeoutMs,
+        final ShareFetchMetricsAggregator metricsAggregator,
+        final short requestVersion) {
         this.log = logContext.logger(org.apache.kafka.clients.consumer.internals.ShareCompletedFetch.class);
         this.decompressionBufferSupplier = decompressionBufferSupplier;
         this.nodeId = nodeId;
@@ -112,10 +112,10 @@ public class ShareCompletedFetch {
         // Set to find duplicates in case of overlapping acquired records
         Set<Long> offsets = new HashSet<>();
         partitionAcquiredRecords.forEach(acquiredRecords -> {
-            for (long offset = acquiredRecords.firstOffset(); offset <= acquiredRecords.lastOffset(); offset++) {
+            for (long offset = acquiredRecords.firstOffset();offset <= acquiredRecords.lastOffset();offset++) {
                 if (!offsets.add(offset)) {
                     log.error("Duplicate acquired record offset {} found in share fetch response for partition {}. " +
-                            "This indicates a broker processing issue.", offset, partition.topicPartition());
+                        "This indicates a broker processing issue.", offset, partition.topicPartition());
                 } else {
                     acquiredRecordList.add(new OffsetAndDeliveryCount(offset, acquiredRecords.deliveryCount()));
                 }
@@ -173,8 +173,8 @@ public class ShareCompletedFetch {
      * @return {@link ShareInFlightBatch The ShareInFlightBatch containing records and their acknowledgements}
      */
     <K, V> ShareInFlightBatch<K, V> fetchRecords(final Deserializers<K, V> deserializers,
-                                                 final int maxRecords,
-                                                 final boolean checkCrcs) {
+        final int maxRecords,
+        final boolean checkCrcs) {
         // Creating an empty ShareInFlightBatch
         ShareInFlightBatch<K, V> inFlightBatch = new ShareInFlightBatch<>(nodeId, partition, acquisitionLockTimeoutMs);
 
@@ -219,7 +219,7 @@ public class ShareCompletedFetch {
                         Optional<Integer> leaderEpoch = maybeLeaderEpoch(currentBatch.partitionLeaderEpoch());
                         TimestampType timestampType = currentBatch.timestampType();
                         ConsumerRecord<K, V> record = parseRecord(deserializers, partition, leaderEpoch,
-                                timestampType, lastRecord, nextAcquired.deliveryCount);
+                            timestampType, lastRecord, nextAcquired.deliveryCount);
                         inFlightBatch.addRecord(record);
                         recordsRead++;
                         bytesRead += lastRecord.sizeInBytes();
@@ -280,13 +280,13 @@ public class ShareCompletedFetch {
     }
 
     private <K, V> Set<Long> rejectRecordBatch(final ShareInFlightBatch<K, V> inFlightBatch,
-                                               final RecordBatch currentBatch) {
+        final RecordBatch currentBatch) {
         // Rewind the acquiredRecordIterator to the start, so we are in a known state
         acquiredRecordIterator = acquiredRecordList.listIterator();
 
         OffsetAndDeliveryCount acquired = nextAcquiredRecord();
         Set<Long> offsets = new HashSet<>();
-        for (long offset = currentBatch.baseOffset(); offset <= currentBatch.lastOffset(); offset++) {
+        for (long offset = currentBatch.baseOffset();offset <= currentBatch.lastOffset();offset++) {
             while (acquired != null && acquired.offset < offset) {
                 acquired = nextAcquiredRecord();
             }
@@ -313,11 +313,11 @@ public class ShareCompletedFetch {
      * Parse the record entry, deserializing the key / value fields if necessary
      */
     <K, V> ConsumerRecord<K, V> parseRecord(final Deserializers<K, V> deserializers,
-                                            final TopicIdPartition partition,
-                                            final Optional<Integer> leaderEpoch,
-                                            final TimestampType timestampType,
-                                            final Record record,
-                                            final short deliveryCount) {
+        final TopicIdPartition partition,
+        final Optional<Integer> leaderEpoch,
+        final TimestampType timestampType,
+        final Record record,
+        final short deliveryCount) {
         Headers headers = new RecordHeaders(record.headers());
         ByteBuffer keyBytes = record.key();
         ByteBuffer valueBytes = record.value();
@@ -336,21 +336,21 @@ public class ShareCompletedFetch {
             throw newRecordDeserializationException(RecordDeserializationException.DeserializationExceptionOrigin.VALUE, partition.topicPartition(), timestampType, record, e, headers);
         }
         return new ConsumerRecord<>(partition.topic(), partition.partition(), record.offset(),
-                record.timestamp(), timestampType,
-                keyBytes == null ? ConsumerRecord.NULL_SIZE : keyBytes.remaining(),
-                valueBytes == null ? ConsumerRecord.NULL_SIZE : valueBytes.remaining(),
-                key, value, headers, leaderEpoch, Optional.of(deliveryCount));
+            record.timestamp(), timestampType,
+            keyBytes == null ? ConsumerRecord.NULL_SIZE : keyBytes.remaining(),
+            valueBytes == null ? ConsumerRecord.NULL_SIZE : valueBytes.remaining(),
+            key, value, headers, leaderEpoch, Optional.of(deliveryCount));
     }
 
     private static RecordDeserializationException newRecordDeserializationException(RecordDeserializationException.DeserializationExceptionOrigin origin,
-                                                                                    TopicPartition partition,
-                                                                                    TimestampType timestampType,
-                                                                                    Record record,
-                                                                                    RuntimeException e,
-                                                                                    Headers headers) {
+        TopicPartition partition,
+        TimestampType timestampType,
+        Record record,
+        RuntimeException e,
+        Headers headers) {
         return new RecordDeserializationException(origin, partition, record.offset(), record.timestamp(), timestampType, record.key(), record.value(), headers,
-                "Error deserializing " + origin.name() + " for partition " + partition + " at offset " + record.offset()
-                        + ". The record has been released.", e);
+            "Error deserializing " + origin.name() + " for partition " + partition + " at offset " + record.offset()
+                + ". The record has been released.", e);
     }
 
     /**
@@ -400,7 +400,7 @@ public class ShareCompletedFetch {
                 batch.ensureValid();
             } catch (CorruptRecordException e) {
                 throw new CorruptRecordException("Record batch for partition " + partition.topicPartition()
-                        + " at offset " + batch.baseOffset() + " is invalid, cause: " + e.getMessage());
+                    + " at offset " + batch.baseOffset() + " is invalid, cause: " + e.getMessage());
             }
         }
     }
@@ -411,7 +411,7 @@ public class ShareCompletedFetch {
                 record.ensureValid();
             } catch (CorruptRecordException e) {
                 throw new CorruptRecordException("Record for partition " + partition.topicPartition()
-                        + " at offset " + record.offset() + " is invalid, cause: " + e.getMessage());
+                    + " at offset " + record.offset() + " is invalid, cause: " + e.getMessage());
             }
         }
     }
@@ -435,9 +435,9 @@ public class ShareCompletedFetch {
         @Override
         public String toString() {
             return "OffsetAndDeliveryCount{" +
-                    "offset=" + offset +
-                    ", deliveryCount=" + deliveryCount +
-                    "}";
+                "offset=" + offset +
+                ", deliveryCount=" + deliveryCount +
+                "}";
         }
     }
 }

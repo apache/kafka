@@ -46,7 +46,7 @@ public class ReassignPartitionsCommandArgsTest {
     ///// Test valid argument parsing
     @Test
     public void shouldCorrectlyParseValidMinimumGenerateOptions() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server", "localhost:1234",
             "--generate",
             "--broker-list", "101,102",
@@ -56,7 +56,7 @@ public class ReassignPartitionsCommandArgsTest {
 
     @Test
     public void shouldCorrectlyParseValidMinimumExecuteOptions() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server", "localhost:1234",
             "--execute",
             "--reassignment-json-file", "myfile.json"};
@@ -65,7 +65,7 @@ public class ReassignPartitionsCommandArgsTest {
 
     @Test
     public void shouldCorrectlyParseValidMinimumVerifyOptions() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server", "localhost:1234",
             "--verify",
             "--reassignment-json-file", "myfile.json"};
@@ -74,7 +74,7 @@ public class ReassignPartitionsCommandArgsTest {
 
     @Test
     public void shouldAllowThrottleOptionOnExecute() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server", "localhost:1234",
             "--execute",
             "--throttle", "100",
@@ -84,7 +84,7 @@ public class ReassignPartitionsCommandArgsTest {
 
     @Test
     public void shouldUseDefaultsIfEnabled() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server", "localhost:1234",
             "--execute",
             "--reassignment-json-file", "myfile.json"};
@@ -95,7 +95,7 @@ public class ReassignPartitionsCommandArgsTest {
 
     @Test
     public void testList() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--list",
             "--bootstrap-server", "localhost:1234"};
         ReassignPartitionsCommand.validateAndParseArgs(args);
@@ -103,7 +103,7 @@ public class ReassignPartitionsCommandArgsTest {
 
     @Test
     public void testCancelWithPreserveThrottlesOption() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--cancel",
             "--bootstrap-server", "localhost:1234",
             "--reassignment-json-file", "myfile.json",
@@ -120,13 +120,13 @@ public class ReassignPartitionsCommandArgsTest {
 
     @Test
     public void shouldFailIfBlankArg() {
-        String[] args = new String[] {" "};
+        String[] args = new String[]{" "};
         shouldFailWith("Command must include exactly one action", args);
     }
 
     @Test
     public void shouldFailIfMultipleActions() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server", "localhost:1234",
             "--execute",
             "--verify",
@@ -138,7 +138,7 @@ public class ReassignPartitionsCommandArgsTest {
     ///// Test --execute
     @Test
     public void shouldNotAllowExecuteWithTopicsOption() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server", "localhost:1234",
             "--execute",
             "--reassignment-json-file", "myfile.json",
@@ -148,7 +148,7 @@ public class ReassignPartitionsCommandArgsTest {
 
     @Test
     public void shouldNotAllowExecuteWithBrokerList() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server", "localhost:1234",
             "--execute",
             "--reassignment-json-file", "myfile.json",
@@ -159,7 +159,7 @@ public class ReassignPartitionsCommandArgsTest {
 
     @Test
     public void shouldNotAllowExecuteWithoutReassignmentOption() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server", "localhost:1234",
             "--execute"};
         shouldFailWith("Missing required argument \"[reassignment-json-file]\"", args);
@@ -167,7 +167,7 @@ public class ReassignPartitionsCommandArgsTest {
 
     @Test
     public void testMissingBootstrapServerArgumentForExecute() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--execute"};
         shouldFailWith(MISSING_BOOTSTRAP_SERVER_MSG, args);
     }
@@ -175,7 +175,7 @@ public class ReassignPartitionsCommandArgsTest {
     ///// Test --generate
     @Test
     public void shouldNotAllowGenerateWithoutBrokersAndTopicsOptions() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server", "localhost:1234",
             "--generate"};
         shouldFailWith("Missing required argument \"[topics-to-move-json-file]\"", args);
@@ -183,7 +183,7 @@ public class ReassignPartitionsCommandArgsTest {
 
     @Test
     public void shouldNotAllowGenerateWithoutBrokersOption() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server", "localhost:1234",
             "--topics-to-move-json-file", "myfile.json",
             "--generate"};
@@ -192,7 +192,7 @@ public class ReassignPartitionsCommandArgsTest {
 
     @Test
     public void shouldNotAllowGenerateWithoutTopicsOption() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server", "localhost:1234",
             "--broker-list", "101,102",
             "--generate"};
@@ -201,7 +201,7 @@ public class ReassignPartitionsCommandArgsTest {
 
     @Test
     public void shouldNotAllowGenerateWithThrottleOption() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server", "localhost:1234",
             "--generate",
             "--broker-list", "101,102",
@@ -212,7 +212,7 @@ public class ReassignPartitionsCommandArgsTest {
 
     @Test
     public void shouldNotAllowGenerateWithReassignmentOption() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server", "localhost:1234",
             "--generate",
             "--broker-list", "101,102",
@@ -223,7 +223,7 @@ public class ReassignPartitionsCommandArgsTest {
 
     @Test
     public void shouldPrintHelpTextIfHelpArg() {
-        String[] args = new String[] {"--help"};
+        String[] args = new String[]{"--help"};
         // note, this is not actually a failed case, it's just we share the same `printUsageAndExit` method when wrong arg received
         shouldFailWith(ReassignPartitionsCommand.HELP_TEXT, args);
     }
@@ -231,7 +231,7 @@ public class ReassignPartitionsCommandArgsTest {
     ///// Test --verify
     @Test
     public void shouldNotAllowVerifyWithoutReassignmentOption() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server", "localhost:1234",
             "--verify"};
         shouldFailWith("Missing required argument \"[reassignment-json-file]\"", args);
@@ -239,7 +239,7 @@ public class ReassignPartitionsCommandArgsTest {
 
     @Test
     public void shouldNotAllowBrokersListWithVerifyOption() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server", "localhost:1234",
             "--verify",
             "--broker-list", "100,101",
@@ -249,7 +249,7 @@ public class ReassignPartitionsCommandArgsTest {
 
     @Test
     public void shouldNotAllowThrottleWithVerifyOption() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server", "localhost:1234",
             "--verify",
             "--throttle", "100",
@@ -259,7 +259,7 @@ public class ReassignPartitionsCommandArgsTest {
 
     @Test
     public void shouldNotAllowTopicsOptionWithVerify() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server", "localhost:1234",
             "--verify",
             "--reassignment-json-file", "myfile.json",
@@ -276,23 +276,23 @@ public class ReassignPartitionsCommandArgsTest {
     ///// Test --cancel
     @Test
     public void shouldNotAllowCancelWithoutBootstrapServerOption() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--cancel"};
         shouldFailWith(MISSING_BOOTSTRAP_SERVER_MSG, args);
     }
 
     @Test
     public void shouldNotAllowCancelWithoutReassignmentJsonFile() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--cancel",
             "--bootstrap-server", "localhost:1234",
             "--preserve-throttles"};
         shouldFailWith("Missing required argument \"[reassignment-json-file]\"", args);
     }
-    
+
     @Test
     public void shouldAllowBootstrapControllerArg() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-controller", "localhost:1234",
             "--cancel",
             "--reassignment-json-file", "myfile.json"};
@@ -301,7 +301,7 @@ public class ReassignPartitionsCommandArgsTest {
 
     @Test
     public void shouldNotAllowBootstrapControllerArgWithUnsupportedAction() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-controller", "localhost:1234",
             "--generate",
             "--broker-list", "101,102",
@@ -311,7 +311,7 @@ public class ReassignPartitionsCommandArgsTest {
 
     @Test
     public void shouldNotAllowBootstrapControllerAndBootstrapServerArg() {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server", "localhost:1234",
             "--bootstrap-controller", "localhost:1234",
             "--generate",

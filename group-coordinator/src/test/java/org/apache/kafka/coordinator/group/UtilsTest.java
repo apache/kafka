@@ -51,9 +51,9 @@ public class UtilsTest {
     private static final String BAR_TOPIC_NAME = "bar";
     private static final int FOO_NUM_PARTITIONS = 2;
     private static final CoordinatorMetadataImage FOO_METADATA_IMAGE = new MetadataImageBuilder()
-            .addTopic(FOO_TOPIC_ID, FOO_TOPIC_NAME, FOO_NUM_PARTITIONS)
-            .addRacks()
-            .buildCoordinatorMetadataImage();
+        .addTopic(FOO_TOPIC_ID, FOO_TOPIC_NAME, FOO_NUM_PARTITIONS)
+        .addRacks()
+        .buildCoordinatorMetadataImage();
 
     @Test
     void testNonExistingTopicName() {
@@ -200,18 +200,18 @@ public class UtilsTest {
                     .buildCoordinatorMetadataImage()
             ),
             Arguments.of(new MetadataImageBuilder() // different topic name
-                    .addTopic(FOO_TOPIC_ID, "bar", FOO_NUM_PARTITIONS)
-                    .addRacks()
-                    .buildCoordinatorMetadataImage()
+                .addTopic(FOO_TOPIC_ID, "bar", FOO_NUM_PARTITIONS)
+                .addRacks()
+                .buildCoordinatorMetadataImage()
             ),
             Arguments.of(new MetadataImageBuilder() // different partitions
-                    .addTopic(FOO_TOPIC_ID, FOO_TOPIC_NAME, 1)
-                    .addRacks()
-                    .buildCoordinatorMetadataImage()
+                .addTopic(FOO_TOPIC_ID, FOO_TOPIC_NAME, 1)
+                .addRacks()
+                .buildCoordinatorMetadataImage()
             ),
             Arguments.of(new MetadataImageBuilder() // different racks
-                    .addTopic(FOO_TOPIC_ID, FOO_TOPIC_NAME, FOO_NUM_PARTITIONS)
-                    .buildCoordinatorMetadataImage()
+                .addTopic(FOO_TOPIC_ID, FOO_TOPIC_NAME, FOO_NUM_PARTITIONS)
+                .buildCoordinatorMetadataImage()
             )
         );
     }

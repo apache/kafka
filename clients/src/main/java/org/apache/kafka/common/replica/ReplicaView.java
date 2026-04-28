@@ -84,8 +84,8 @@ public interface ReplicaView {
             if (o == null || getClass() != o.getClass()) return false;
             DefaultReplicaView that = (DefaultReplicaView) o;
             return logEndOffset == that.logEndOffset &&
-                    Objects.equals(endpoint, that.endpoint) &&
-                    Objects.equals(timeSinceLastCaughtUpMs, that.timeSinceLastCaughtUpMs);
+                Objects.equals(endpoint, that.endpoint) &&
+                Objects.equals(timeSinceLastCaughtUpMs, that.timeSinceLastCaughtUpMs);
         }
 
         @Override
@@ -96,10 +96,10 @@ public interface ReplicaView {
         @Override
         public String toString() {
             return "DefaultReplicaView{" +
-                    "endpoint=" + endpoint +
-                    ", logEndOffset=" + logEndOffset +
-                    ", timeSinceLastCaughtUpMs=" + timeSinceLastCaughtUpMs +
-                    '}';
+                "endpoint=" + endpoint +
+                ", logEndOffset=" + logEndOffset +
+                ", timeSinceLastCaughtUpMs=" + timeSinceLastCaughtUpMs +
+                '}';
         }
     }
 }

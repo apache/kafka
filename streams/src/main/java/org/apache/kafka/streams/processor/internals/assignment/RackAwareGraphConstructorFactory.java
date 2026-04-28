@@ -32,12 +32,12 @@ import java.util.TreeMap;
 public class RackAwareGraphConstructorFactory {
 
     static <T> RackAwareGraphConstructor<T> create(final AssignmentConfigs assignmentConfigs,
-                                                   final Map<Subtopology, Set<TaskId>> tasksForTopicGroup) {
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup) {
         return create(assignmentConfigs.rackAwareAssignmentStrategy(), new ArrayList<>(new TreeMap<>(tasksForTopicGroup).values()));
     }
 
     public static <T> RackAwareGraphConstructor<T> create(final String rackAwareAssignmentStrategy,
-                                                          final Collection<TaskId> allTasks) {
+        final Collection<TaskId> allTasks) {
         final Map<Integer, Set<TaskId>> tasksForTopologyId = new TreeMap<>();
         allTasks.forEach(taskId -> {
             tasksForTopologyId.computeIfAbsent(taskId.subtopology(), k -> new HashSet<>());
@@ -52,7 +52,7 @@ public class RackAwareGraphConstructorFactory {
     }
 
     public static <T> RackAwareGraphConstructor<T> create(final String rackAwareAssignmentStrategy,
-                                                          final List<Set<TaskId>> taskSetsPerTopicGroup) {
+        final List<Set<TaskId>> taskSetsPerTopicGroup) {
         switch (rackAwareAssignmentStrategy) {
             case StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC:
                 return new MinTrafficGraphConstructor<T>();

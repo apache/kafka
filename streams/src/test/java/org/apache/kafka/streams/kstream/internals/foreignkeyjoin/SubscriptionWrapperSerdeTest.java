@@ -53,7 +53,7 @@ public class SubscriptionWrapperSerdeTest {
         final byte version = SubscriptionWrapper.VERSION_0;
         final String originalKey = "originalKey";
         final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(() -> TOPIC, Serdes.String());
-        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
+        final long[] hashedValue = Murmur3.hash128(new byte[]{(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
         final Integer primaryPartition = null;
         final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(
             hashedValue,
@@ -78,7 +78,7 @@ public class SubscriptionWrapperSerdeTest {
         final byte version = SubscriptionWrapper.VERSION_1;
         final String originalKey = "originalKey";
         final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(() -> TOPIC, Serdes.String());
-        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
+        final long[] hashedValue = Murmur3.hash128(new byte[]{(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
         final Integer primaryPartition = 10;
         final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(
             hashedValue,
@@ -106,7 +106,7 @@ public class SubscriptionWrapperSerdeTest {
         swSerde.configure(
             Collections.singletonMap(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_32),
             true);
-        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
+        final long[] hashedValue = Murmur3.hash128(new byte[]{(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
         final Integer primaryPartition = 10;
         final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(
             hashedValue,
@@ -178,7 +178,7 @@ public class SubscriptionWrapperSerdeTest {
     public void shouldSerdeNullPrimaryPartitionOnV0Test() {
         final String originalKey = "originalKey";
         final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(() -> TOPIC, Serdes.String());
-        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
+        final long[] hashedValue = Murmur3.hash128(new byte[]{(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
         final Integer primaryPartition = null;
         final byte version = SubscriptionWrapper.VERSION_0;
         final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(
@@ -200,7 +200,7 @@ public class SubscriptionWrapperSerdeTest {
     @Test
     public void shouldThrowExceptionOnNullKeyV0Test() {
         final String originalKey = null;
-        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
+        final long[] hashedValue = Murmur3.hash128(new byte[]{(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
         final Integer primaryPartition = 10;
         assertThrows(NullPointerException.class, () -> new SubscriptionWrapper<>(hashedValue,
             SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE,
@@ -212,7 +212,7 @@ public class SubscriptionWrapperSerdeTest {
     @Test
     public void shouldThrowExceptionOnNullKeyV1Test() {
         final String originalKey = null;
-        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
+        final long[] hashedValue = Murmur3.hash128(new byte[]{(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
         final Integer primaryPartition = 10;
         assertThrows(NullPointerException.class, () -> new SubscriptionWrapper<>(hashedValue,
             SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE,
@@ -224,7 +224,7 @@ public class SubscriptionWrapperSerdeTest {
     @Test
     public void shouldThrowExceptionOnNullInstructionV0Test() {
         final String originalKey = "originalKey";
-        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
+        final long[] hashedValue = Murmur3.hash128(new byte[]{(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
         final Integer primaryPartition = 10;
         assertThrows(NullPointerException.class, () -> new SubscriptionWrapper<>(
             hashedValue,
@@ -237,7 +237,7 @@ public class SubscriptionWrapperSerdeTest {
     @Test
     public void shouldThrowExceptionOnNullInstructionV1Test() {
         final String originalKey = "originalKey";
-        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
+        final long[] hashedValue = Murmur3.hash128(new byte[]{(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
         final Integer primaryPartition = 10;
         assertThrows(NullPointerException.class, () -> new SubscriptionWrapper<>(
             hashedValue,
@@ -251,7 +251,7 @@ public class SubscriptionWrapperSerdeTest {
     public void shouldThrowExceptionOnNullPrimaryPartitionV1Test() {
         final SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde<>(() -> TOPIC, Serdes.String());
         final String originalKey = "originalKey";
-        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
+        final long[] hashedValue = Murmur3.hash128(new byte[]{(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
         final Integer primaryPartition = null;
         final SubscriptionWrapper wrapper = new SubscriptionWrapper<>(
             hashedValue,
@@ -282,7 +282,7 @@ public class SubscriptionWrapperSerdeTest {
         when(mockSerde.serializer()).thenReturn(mockSerializer);
 
         final String primaryKey = "originalKey";
-        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
+        final long[] hashedValue = Murmur3.hash128(new byte[]{(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
         final Integer primaryPartition = null;
         when(mockSerializer.serialize(TOPIC, HEADERS, primaryKey)).thenReturn(primaryKey.getBytes());
 
@@ -308,7 +308,7 @@ public class SubscriptionWrapperSerdeTest {
         when(mockSerde.serializer()).thenReturn(Serdes.String().serializer());
 
         final String primaryKey = "originalKey";
-        final long[] hashedValue = Murmur3.hash128(new byte[] {(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
+        final long[] hashedValue = Murmur3.hash128(new byte[]{(byte) 0xFF, (byte) 0xAA, (byte) 0x00, (byte) 0x19});
         final Integer primaryPartition = null;
         final SubscriptionWrapper<String> wrapper = new SubscriptionWrapper<>(
             hashedValue,

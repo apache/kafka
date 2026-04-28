@@ -39,7 +39,7 @@ public class ListConsumerGroupOffsetsResult {
 
     ListConsumerGroupOffsetsResult(final Map<CoordinatorKey, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> futures) {
         this.futures = futures.entrySet().stream()
-                .collect(Collectors.toMap(e -> e.getKey().idValue, Entry::getValue));
+            .collect(Collectors.toMap(e -> e.getKey().idValue, Entry::getValue));
     }
 
     /**
@@ -49,7 +49,7 @@ public class ListConsumerGroupOffsetsResult {
     public KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> partitionsToOffsetAndMetadata() {
         if (futures.size() != 1) {
             throw new IllegalStateException("Offsets from multiple consumer groups were requested. " +
-                    "Use partitionsToOffsetAndMetadata(groupId) instead to get future for a specific group.");
+                "Use partitionsToOffsetAndMetadata(groupId) instead to get future for a specific group.");
         }
         return futures.values().iterator().next();
     }

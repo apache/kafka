@@ -114,7 +114,7 @@ public class TransactionsCommandTest {
     @Test
     public void testDescribeProducersLeader() throws Exception {
         TopicPartition topicPartition = new TopicPartition("foo", 5);
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server",
             "localhost:9092",
             "describe-producers",
@@ -132,7 +132,7 @@ public class TransactionsCommandTest {
         TopicPartition topicPartition = new TopicPartition("foo", 5);
         int brokerId = 5;
 
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server",
             "localhost:9092",
             "describe-producers",
@@ -184,14 +184,14 @@ public class TransactionsCommandTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testListTransactions(boolean hasDurationFilter) throws Exception {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server",
             "localhost:9092",
             "list"
         };
 
         if (hasDurationFilter) {
-            args = new String[] {
+            args = new String[]{
                 "--bootstrap-server",
                 "localhost:9092",
                 "list",
@@ -236,7 +236,7 @@ public class TransactionsCommandTest {
     @Test
     public void testForceTerminateTransaction() throws Exception {
         String transactionalId = "foo";
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server",
             "localhost:9092",
             "forceTerminateTransaction",
@@ -274,7 +274,7 @@ public class TransactionsCommandTest {
     @Test
     public void testDescribeTransaction() throws Exception {
         String transactionalId = "foo";
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server",
             "localhost:9092",
             "describe",
@@ -296,7 +296,7 @@ public class TransactionsCommandTest {
                 10000,
                 OptionalLong.of(transactionStartTime),
                 Set.of(new TopicPartition("bar", 0))
-        ));
+            ));
 
         Mockito.when(describeResult.description(transactionalId)).thenReturn(describeFuture);
         Mockito.when(admin.describeTransactions(Set.of(transactionalId))).thenReturn(describeResult);
@@ -329,7 +329,7 @@ public class TransactionsCommandTest {
 
     @Test
     public void testListTransactionsWithTransactionalIdPattern() throws Exception {
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server",
             "localhost:9092",
             "list",
@@ -442,7 +442,7 @@ public class TransactionsCommandTest {
         short producerEpoch = 15;
         int coordinatorEpoch = 76;
 
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server",
             "localhost:9092",
             "abort",
@@ -483,7 +483,7 @@ public class TransactionsCommandTest {
         long producerId = 12345L;
         short producerEpoch = 15;
 
-        String[] args = new String[] {
+        String[] args = new String[]{
             "--bootstrap-server",
             "localhost:9092",
             "abort",

@@ -60,7 +60,7 @@ public class BootstrapDirectory {
         if (!Files.isDirectory(path)) {
             if (Files.exists(path)) {
                 throw new RuntimeException("Path " + directoryPath + " exists, but is not " +
-                        "a directory.");
+                    "a directory.");
             } else {
                 throw new RuntimeException("No such directory as " + directoryPath);
             }
@@ -80,7 +80,7 @@ public class BootstrapDirectory {
     BootstrapMetadata readFromBinaryFile(String binaryPath) throws Exception {
         List<ApiMessageAndVersion> records = new ArrayList<>();
         try (BatchFileReader reader = new BatchFileReader.Builder().
-                setPath(binaryPath).build()) {
+                 setPath(binaryPath).build()) {
             while (reader.hasNext()) {
                 BatchAndType batchAndType = reader.next();
                 if (!batchAndType.isControl()) {
@@ -89,7 +89,7 @@ public class BootstrapDirectory {
             }
         }
         return BootstrapMetadata.fromRecords(Collections.unmodifiableList(records),
-                "the binary bootstrap metadata file: " + binaryPath);
+            "the binary bootstrap metadata file: " + binaryPath);
     }
 
     public void writeBinaryFile(BootstrapMetadata bootstrapMetadata) throws IOException {

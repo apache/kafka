@@ -84,18 +84,18 @@ public class KStreamKStreamOuterJoinTest {
         stream2 = builder.stream(topic2, consumed2);
 
         joined = stream1.outerJoin(
-                stream2,
-                MockValueJoiner.TOSTRING_JOINER,
-                JoinWindows.of(ofMillis(100L)).grace(ofMillis(10L)),
-                StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.Long())
+            stream2,
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.of(ofMillis(100L)).grace(ofMillis(10L)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.Long())
         );
         joined.process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(PROPS), PROPS)) {
             final TestInputTopic<Integer, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, Long> inputTopic2 =
-                    driver.createInputTopic(topic2, new IntegerSerializer(), new LongSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic2, new IntegerSerializer(), new LongSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
 
             // Only 2 window stores should be available
@@ -610,7 +610,7 @@ public class KStreamKStreamOuterJoinTest {
             // --> w2 = { 2:12 (ts: 31), 3:13 (ts: 36), 4:14 (ts: 37) }
             inputTopic2.pipeInput(4, 14L, 37L);
             processor.checkAndClearProcessResult(
-                    new KeyValueTimestamp<>(2, "null+12", 31L)
+                new KeyValueTimestamp<>(2, "null+12", 31L)
             );
 
             // push another item to the other stream; this should produce no inner joined-items because there are no matching keys 
@@ -628,7 +628,7 @@ public class KStreamKStreamOuterJoinTest {
             );
         }
     }
-    
+
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testOuterJoinWithInMemoryCustomSuppliers(final boolean withHeaders) {
@@ -663,12 +663,12 @@ public class KStreamKStreamOuterJoinTest {
     }
 
     public void runOuterJoin(final StreamJoined<Integer, String, Long> streamJoined,
-                             final JoinWindows joinWindows,
-                             final boolean withHeaders) {
+        final JoinWindows joinWindows,
+        final boolean withHeaders) {
         setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final int[] expectedKeys = new int[] {0, 1, 2, 3};
+        final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         final KStream<Integer, String> stream1;
         final KStream<Integer, Long> stream2;
@@ -847,7 +847,7 @@ public class KStreamKStreamOuterJoinTest {
     public void testShouldNotEmitLeftJoinResultForAsymmetricBeforeWindow(final boolean withHeaders) {
         setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
-        final int[] expectedKeys = new int[] {0, 1, 2, 3};
+        final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         final KStream<Integer, String> stream1;
         final KStream<Integer, Long> stream2;
@@ -936,7 +936,7 @@ public class KStreamKStreamOuterJoinTest {
     public void testShouldNotEmitLeftJoinResultForAsymmetricAfterWindow(final boolean withHeaders) {
         setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
-        final int[] expectedKeys = new int[] {0, 1, 2, 3};
+        final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         final KStream<Integer, String> stream1;
         final KStream<Integer, Long> stream2;
@@ -1116,8 +1116,8 @@ public class KStreamKStreamOuterJoinTest {
     }
 
     private void testUpperWindowBound(final int[] expectedKeys,
-                                      final TopologyTestDriver driver,
-                                      final MockApiProcessor<Integer, String, Void, Void> processor) {
+        final TopologyTestDriver driver,
+        final MockApiProcessor<Integer, String, Void, Void> processor) {
         long time;
 
         final TestInputTopic<Integer, String> inputTopic1 =
@@ -1262,8 +1262,8 @@ public class KStreamKStreamOuterJoinTest {
     }
 
     private void testLowerWindowBound(final int[] expectedKeys,
-                                      final TopologyTestDriver driver,
-                                      final MockApiProcessor<Integer, String, Void, Void> processor) {
+        final TopologyTestDriver driver,
+        final MockApiProcessor<Integer, String, Void, Void> processor) {
         long time;
         final TestInputTopic<Integer, String> inputTopic1 = driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer());
 
@@ -1458,8 +1458,8 @@ public class KStreamKStreamOuterJoinTest {
         setDslStoreFormat(withHeaders);
         final CapturingStoreSuppliers suppliers = new CapturingStoreSuppliers();
         final StreamJoined<Integer, String, String> streamJoined =
-                StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
-                        .withDslStoreSuppliers(suppliers);
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
+                .withDslStoreSuppliers(suppliers);
 
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -1471,17 +1471,17 @@ public class KStreamKStreamOuterJoinTest {
         stream2 = builder.stream(topic2, consumed);
 
         joined = stream1.outerJoin(
-                stream2,
-                MockValueJoiner.TOSTRING_JOINER,
-                JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L)),
-                streamJoined
+            stream2,
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L)),
+            streamJoined
         );
         joined.process(supplier);
 
         // create a TTD so that the topology gets built
         try (final TopologyTestDriver ignored = new TopologyTestDriver(builder.build(PROPS), PROPS)) {
             assertThat("Expected stream joined to supply builders that create non-timestamped stores",
-                    !WrappedStateStore.isTimestamped(suppliers.capture.get().get()));
+                !WrappedStateStore.isTimestamped(suppliers.capture.get().get()));
         }
     }
 

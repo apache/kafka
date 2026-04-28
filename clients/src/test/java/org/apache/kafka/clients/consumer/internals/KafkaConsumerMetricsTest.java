@@ -86,10 +86,10 @@ class KafkaConsumerMetricsTest {
         );
         consumerMetrics.close();
         expectedMetrics.forEach(
-                metricName -> assertFalse(
-                        metrics.metrics().containsKey(metricName),
-                        "Metric present after close: " + metricName
-                )
+            metricName -> assertFalse(
+                metrics.metrics().containsKey(metricName),
+                "Metric present after close: " + metricName
+            )
         );
     }
 

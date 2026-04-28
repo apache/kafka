@@ -63,15 +63,15 @@ public class FileStreamSinkTaskTest {
         // We do not call task.start() since it would override the output stream
 
         task.put(List.of(
-                new SinkRecord("topic1", 0, null, null, Schema.STRING_SCHEMA, "line1", 1)
+            new SinkRecord("topic1", 0, null, null, Schema.STRING_SCHEMA, "line1", 1)
         ));
         offsets.put(new TopicPartition("topic1", 0), new OffsetAndMetadata(1L));
         task.flush(offsets);
         assertEquals("line1" + newLine, os.toString());
 
         task.put(List.of(
-                new SinkRecord("topic1", 0, null, null, Schema.STRING_SCHEMA, "line2", 2),
-                new SinkRecord("topic2", 0, null, null, Schema.STRING_SCHEMA, "line3", 1)
+            new SinkRecord("topic1", 0, null, null, Schema.STRING_SCHEMA, "line2", 2),
+            new SinkRecord("topic2", 0, null, null, Schema.STRING_SCHEMA, "line3", 1)
         ));
         offsets.put(new TopicPartition("topic1", 0), new OffsetAndMetadata(2L));
         offsets.put(new TopicPartition("topic2", 0), new OffsetAndMetadata(1L));
@@ -88,7 +88,7 @@ public class FileStreamSinkTaskTest {
 
         HashMap<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         task.put(List.of(
-                new SinkRecord("topic1", 0, null, null, Schema.STRING_SCHEMA, "line0", 1)
+            new SinkRecord("topic1", 0, null, null, Schema.STRING_SCHEMA, "line0", 1)
         ));
         offsets.put(new TopicPartition("topic1", 0), new OffsetAndMetadata(1L));
         task.flush(offsets);
@@ -99,8 +99,8 @@ public class FileStreamSinkTaskTest {
         try (BufferedReader reader = Files.newBufferedReader(Paths.get(outputFile))) {
             lines[i++] = reader.readLine();
             task.put(List.of(
-                    new SinkRecord("topic1", 0, null, null, Schema.STRING_SCHEMA, "line1", 2),
-                    new SinkRecord("topic2", 0, null, null, Schema.STRING_SCHEMA, "line2", 1)
+                new SinkRecord("topic1", 0, null, null, Schema.STRING_SCHEMA, "line1", 2),
+                new SinkRecord("topic2", 0, null, null, Schema.STRING_SCHEMA, "line2", 1)
             ));
             offsets.put(new TopicPartition("topic1", 0), new OffsetAndMetadata(2L));
             offsets.put(new TopicPartition("topic2", 0), new OffsetAndMetadata(1L));

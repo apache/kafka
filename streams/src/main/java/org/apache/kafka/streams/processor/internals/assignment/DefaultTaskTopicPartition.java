@@ -47,9 +47,9 @@ public class DefaultTaskTopicPartition implements TaskTopicPartition {
 
 
     public DefaultTaskTopicPartition(final TopicPartition topicPartition,
-                                     final boolean isSourceTopic,
-                                     final boolean isChangelogTopic,
-                                     final Runnable rackIdInformationFetcher) {
+        final boolean isSourceTopic,
+        final boolean isChangelogTopic,
+        final Runnable rackIdInformationFetcher) {
         this.topicPartition = topicPartition;
         this.isSourceTopic = isSourceTopic;
         this.isChangelogTopic = isChangelogTopic;
@@ -96,8 +96,8 @@ public class DefaultTaskTopicPartition implements TaskTopicPartition {
             return false;
         final TaskTopicPartition other = (TaskTopicPartition) obj;
         return topicPartition.equals(other.topicPartition()) &&
-               isSourceTopic == other.isSource() &&
-               isChangelogTopic == other.isChangelog();
+            isSourceTopic == other.isSource() &&
+            isChangelogTopic == other.isChangelog();
     }
 
     public void annotateWithRackIds(final Set<String> rackIds) {

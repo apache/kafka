@@ -64,11 +64,11 @@ public class DeveloperGuideTesting {
         topology.addSource("sourceProcessor", "input-topic");
         topology.addProcessor("aggregator", new CustomMaxAggregatorSupplier(), "sourceProcessor");
         topology.addStateStore(
-                Stores.keyValueStoreBuilder(
-                        Stores.inMemoryKeyValueStore("aggStore"),
-                        Serdes.String(),
-                        Serdes.Long()).withLoggingDisabled(), // need to disable logging to allow store pre-populating
-                "aggregator");
+            Stores.keyValueStoreBuilder(
+                Stores.inMemoryKeyValueStore("aggStore"),
+                Serdes.String(),
+                Serdes.Long()).withLoggingDisabled(), // need to disable logging to allow store pre-populating
+            "aggregator");
         topology.addSink("sinkProcessor", "result-topic", "aggregator");
 
         // setup test driver
@@ -127,10 +127,10 @@ public class DeveloperGuideTesting {
     @Test
     public void shouldPunctuateIfEvenTimeAdvances() {
         final Instant recordTime = Instant.now();
-        inputTopic.pipeInput("a", 1L,  recordTime);
+        inputTopic.pipeInput("a", 1L, recordTime);
         assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
 
-        inputTopic.pipeInput("a", 1L,  recordTime);
+        inputTopic.pipeInput("a", 1L, recordTime);
         assertThat(outputTopic.isEmpty(), is(true));
 
         inputTopic.pipeInput("a", 1L, recordTime.plusSeconds(10L));

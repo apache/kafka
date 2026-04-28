@@ -22,7 +22,7 @@ public final class OperatingSystem {
 
     private OperatingSystem() {
     }
-    
+
     public static final String NAME;
 
     public static final boolean IS_WINDOWS;

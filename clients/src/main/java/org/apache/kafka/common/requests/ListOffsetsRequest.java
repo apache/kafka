@@ -59,16 +59,16 @@ public class ListOffsetsRequest extends AbstractRequest {
         private final ListOffsetsRequestData data;
 
         public static Builder forConsumer(boolean requireTimestamp,
-                                          IsolationLevel isolationLevel) {
+            IsolationLevel isolationLevel) {
             return forConsumer(requireTimestamp, isolationLevel, false, false, false, false);
         }
 
         public static Builder forConsumer(boolean requireTimestamp,
-                                          IsolationLevel isolationLevel,
-                                          boolean requireMaxTimestamp,
-                                          boolean requireEarliestLocalTimestamp,
-                                          boolean requireTieredStorageTimestamp,
-                                          boolean requireEarliestPendingUploadTimestamp) {
+            IsolationLevel isolationLevel,
+            boolean requireMaxTimestamp,
+            boolean requireEarliestLocalTimestamp,
+            boolean requireTieredStorageTimestamp,
+            boolean requireEarliestPendingUploadTimestamp) {
             short minVersion = ApiKeys.LIST_OFFSETS.oldestVersion();
             if (requireEarliestPendingUploadTimestamp)
                 minVersion = 11;
@@ -90,13 +90,13 @@ public class ListOffsetsRequest extends AbstractRequest {
         }
 
         private Builder(short oldestAllowedVersion,
-                        short latestAllowedVersion,
-                        int replicaId,
-                        IsolationLevel isolationLevel) {
+            short latestAllowedVersion,
+            int replicaId,
+            IsolationLevel isolationLevel) {
             super(ApiKeys.LIST_OFFSETS, oldestAllowedVersion, latestAllowedVersion);
             data = new ListOffsetsRequestData()
-                      .setIsolationLevel(isolationLevel.id())
-                      .setReplicaId(replicaId);
+                .setIsolationLevel(isolationLevel.id())
+                .setReplicaId(replicaId);
         }
 
         public Builder setTargetTimes(List<ListOffsetsTopic> topics) {
@@ -148,18 +148,18 @@ public class ListOffsetsRequest extends AbstractRequest {
             List<ListOffsetsPartitionResponse> partitions = new ArrayList<>();
             for (ListOffsetsPartition partition : topic.partitions()) {
                 ListOffsetsPartitionResponse partitionResponse = new ListOffsetsPartitionResponse()
-                        .setErrorCode(errorCode)
-                        .setPartitionIndex(partition.partitionIndex());
+                    .setErrorCode(errorCode)
+                    .setPartitionIndex(partition.partitionIndex());
                 partitionResponse.setOffset(ListOffsetsResponse.UNKNOWN_OFFSET)
-                         .setTimestamp(ListOffsetsResponse.UNKNOWN_TIMESTAMP);
+                    .setTimestamp(ListOffsetsResponse.UNKNOWN_TIMESTAMP);
                 partitions.add(partitionResponse);
             }
             topicResponse.setPartitions(partitions);
             responses.add(topicResponse);
         }
         ListOffsetsResponseData responseData = new ListOffsetsResponseData()
-                .setThrottleTimeMs(throttleTimeMs)
-                .setTopics(responses);
+            .setThrottleTimeMs(throttleTimeMs)
+            .setTopics(responses);
         return new ListOffsetsResponse(responseData);
     }
 

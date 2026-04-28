@@ -286,8 +286,8 @@ abstract class EmbeddedConnect {
             return responseToString(response);
         } else {
             throw new ConnectRestException(
-                response.getStatus(),
-                "Could not execute 'POST /connectors' request. Error response: " + responseToString(response)
+                    response.getStatus(),
+                    "Could not execute 'POST /connectors' request. Error response: " + responseToString(response)
             );
         }
     }
@@ -507,6 +507,7 @@ abstract class EmbeddedConnect {
             throw new ConnectException("Could not parse connector state", e);
         }
     }
+
     /**
      * Get the connector names of the connectors currently running on this cluster.
      *
@@ -573,7 +574,8 @@ abstract class EmbeddedConnect {
         try {
             if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
                 Map<String, Map<String, List<String>>> activeTopics = mapper
-                        .readerFor(new TypeReference<Map<String, Map<String, List<String>>>>() { })
+                        .readerFor(new TypeReference<Map<String, Map<String, List<String>>>>() {
+                        })
                         .readValue(responseToString(response));
                 return new ActiveTopicsInfo(connectorName,
                         activeTopics.get(connectorName).getOrDefault("topics", List.of()));
@@ -589,7 +591,7 @@ abstract class EmbeddedConnect {
 
     /**
      * Get the info of a connector running in this cluster (retrieved via the <code>GET /connectors/{connector}</code> endpoint).
-
+     
      * @param connectorName name of the connector
      * @return an instance of {@link ConnectorInfo} populated with state information of the connector and its tasks.
      */
@@ -624,7 +626,8 @@ abstract class EmbeddedConnect {
             if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
                 // We use String instead of ConnectorTaskId as the key here since the latter can't be automatically
                 // deserialized by Jackson when used as a JSON object key (i.e., when it's serialized as a JSON string)
-                return mapper.readValue(responseToString(response), new TypeReference<>() { });
+                return mapper.readValue(responseToString(response), new TypeReference<>() {
+                });
             }
         } catch (IOException e) {
             log.error("Could not read task configs from response: {}",
@@ -791,7 +794,8 @@ abstract class EmbeddedConnect {
             ObjectMapper mapper = new ObjectMapper();
             try {
                 return mapper
-                        .readerFor(new TypeReference<Map<String, LoggerLevel>>() { })
+                        .readerFor(new TypeReference<Map<String, LoggerLevel>>() {
+                        })
                         .readValue(responseToString(response));
             } catch (IOException e) {
                 log.error("Could not read logger levels from response: {}",
@@ -837,7 +841,8 @@ abstract class EmbeddedConnect {
             ObjectMapper mapper = new ObjectMapper();
             try {
                 return mapper
-                        .readerFor(new TypeReference<List<String>>() { })
+                        .readerFor(new TypeReference<List<String>>() {
+                        })
                         .readValue(responseToString(response));
             } catch (IOException e) {
                 log.error("Could not read loggers from response: {}",
@@ -990,7 +995,7 @@ abstract class EmbeddedConnect {
      * @throws ConnectException if execution of the HTTP method fails
      */
     protected Response requestHttpMethod(String url, String body, Map<String, String> headers,
-                                         String httpMethod) {
+            String httpMethod) {
         log.debug("Executing {} request to URL={}." + (body != null ? " Payload={}" : ""),
                 httpMethod, url, body);
 

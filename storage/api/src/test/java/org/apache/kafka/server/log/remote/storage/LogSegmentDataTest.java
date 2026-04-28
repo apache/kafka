@@ -33,22 +33,22 @@ public class LogSegmentDataTest {
     public void testOptionalTransactionIndex() {
         File dir = TestUtils.tempDirectory();
         LogSegmentData logSegmentDataWithTransactionIndex = new LogSegmentData(
-                new File(dir, "log-segment").toPath(),
-                new File(dir, "offset-index").toPath(),
-                new File(dir, "time-index").toPath(),
-                Optional.of(new File(dir, "transaction-index").toPath()),
-                new File(dir, "producer-snapshot").toPath(),
-                ByteBuffer.allocate(1)
+               new File(dir, "log-segment").toPath(),
+               new File(dir, "offset-index").toPath(),
+               new File(dir, "time-index").toPath(),
+               Optional.of(new File(dir, "transaction-index").toPath()),
+               new File(dir, "producer-snapshot").toPath(),
+               ByteBuffer.allocate(1)
         );
         Assertions.assertTrue(logSegmentDataWithTransactionIndex.transactionIndex().isPresent());
 
         LogSegmentData logSegmentDataWithNoTransactionIndex = new LogSegmentData(
-                new File(dir, "log-segment").toPath(),
-                new File(dir, "offset-index").toPath(),
-                new File(dir, "time-index").toPath(),
-                Optional.empty(),
-                new File(dir, "producer-snapshot").toPath(),
-                ByteBuffer.allocate(1)
+               new File(dir, "log-segment").toPath(),
+               new File(dir, "offset-index").toPath(),
+               new File(dir, "time-index").toPath(),
+               Optional.empty(),
+               new File(dir, "producer-snapshot").toPath(),
+               ByteBuffer.allocate(1)
         );
         assertFalse(logSegmentDataWithNoTransactionIndex.transactionIndex().isPresent());
     }

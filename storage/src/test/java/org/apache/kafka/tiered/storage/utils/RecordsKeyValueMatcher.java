@@ -65,9 +65,9 @@ public final class RecordsKeyValueMatcher<R1, R2, K, V> extends TypeSafeDiagnosi
      * @param valueSerde The {@link Serde} for the values of the records.
      */
     public RecordsKeyValueMatcher(Collection<R1> expectedRecords,
-                                  TopicPartition topicPartition,
-                                  Serde<K> keySerde,
-                                  Serde<V> valueSerde) {
+            TopicPartition topicPartition,
+            Serde<K> keySerde,
+            Serde<V> valueSerde) {
         this.expectedRecords = expectedRecords;
         this.topicPartition = topicPartition;
         this.keySerde = keySerde;
@@ -121,10 +121,10 @@ public final class RecordsKeyValueMatcher<R1, R2, K, V> extends TypeSafeDiagnosi
     }
 
     private boolean compare(ByteBuffer lhs,
-                            ByteBuffer rhs,
-                            Deserializer<?> deserializer,
-                            String desc,
-                            Description mismatchDescription) {
+            ByteBuffer rhs,
+            Deserializer<?> deserializer,
+            String desc,
+            Description mismatchDescription) {
         if ((lhs != null && !lhs.equals(rhs)) || (lhs == null && rhs != null)) {
             mismatchDescription.appendText(desc).appendText(" mismatch. Expected: ")
                     .appendValue(deserializer.deserialize(topicPartition.topic(), Utils.toNullableArray(lhs)))
@@ -170,9 +170,9 @@ public final class RecordsKeyValueMatcher<R1, R2, K, V> extends TypeSafeDiagnosi
      * @param valueSerde The {@link Serde} for the values of the records.
      */
     public static <R1, R2, K, V> RecordsKeyValueMatcher<R1, R2, K, V> correspondTo(Collection<R1> expectedRecords,
-                                                                                   TopicPartition topicPartition,
-                                                                                   Serde<K> keySerde,
-                                                                                   Serde<V> valueSerde) {
+            TopicPartition topicPartition,
+            Serde<K> keySerde,
+            Serde<V> valueSerde) {
         return new RecordsKeyValueMatcher<>(expectedRecords, topicPartition, keySerde, valueSerde);
     }
 }

@@ -59,12 +59,12 @@ public class FetchCollector<K, V> {
     private final Time time;
 
     public FetchCollector(final LogContext logContext,
-                          final ConsumerMetadata metadata,
-                          final SubscriptionState subscriptions,
-                          final FetchConfig fetchConfig,
-                          final Deserializers<K, V> deserializers,
-                          final FetchMetricsManager metricsManager,
-                          final Time time) {
+        final ConsumerMetadata metadata,
+        final SubscriptionState subscriptions,
+        final FetchConfig fetchConfig,
+        final Deserializers<K, V> deserializers,
+        final FetchMetricsManager metricsManager,
+        final Time time) {
         this.log = logContext.logger(FetchCollector.class);
         this.metadata = metadata;
         this.subscriptions = subscriptions;
@@ -167,21 +167,21 @@ public class FetchCollector<K, V> {
 
             if (nextInLineFetch.nextFetchOffset() == position.offset) {
                 List<ConsumerRecord<K, V>> partRecords = nextInLineFetch.fetchRecords(fetchConfig,
-                        deserializers,
-                        maxRecords);
+                    deserializers,
+                    maxRecords);
 
                 log.trace("Returning {} fetched records at offset {} for assigned partition {}",
-                        partRecords.size(), position, tp);
+                    partRecords.size(), position, tp);
 
                 boolean positionAdvanced = false;
 
                 if (nextInLineFetch.nextFetchOffset() > position.offset) {
                     SubscriptionState.FetchPosition nextPosition = new SubscriptionState.FetchPosition(
-                            nextInLineFetch.nextFetchOffset(),
-                            nextInLineFetch.lastEpoch(),
-                            position.currentLeader);
+                        nextInLineFetch.nextFetchOffset(),
+                        nextInLineFetch.lastEpoch(),
+                        position.currentLeader);
                     log.trace("Updating fetch position from {} to {} for partition {} and returning {} records from `poll()`",
-                            position, nextPosition, tp, partRecords.size());
+                        position, nextPosition, tp, partRecords.size());
                     subscriptions.position(tp, nextPosition);
                     positionAdvanced = true;
                 }
@@ -206,7 +206,7 @@ public class FetchCollector<K, V> {
                 // these records aren't next in line based on the last consumed position, ignore them
                 // they must be from an obsolete request
                 log.debug("Ignoring fetched records for {} at offset {} since the current position is {}",
-                        tp, nextInLineFetch.nextFetchOffset(), position);
+                    tp, nextInLineFetch.nextFetchOffset(), position);
             }
         }
 
@@ -264,14 +264,14 @@ public class FetchCollector<K, V> {
 
         final FetchResponseData.PartitionData partition = completedFetch.partitionData;
         log.trace("Preparing to read {} bytes of data for partition {} with offset {}",
-                FetchResponse.recordsSize(partition), tp, position);
+            FetchResponse.recordsSize(partition), tp, position);
         Iterator<? extends RecordBatch> batches = FetchResponse.recordsOrFail(partition).batches().iterator();
 
         if (!batches.hasNext() && FetchResponse.recordsSize(partition) > 0) {
             // This should not happen with brokers that support FetchRequest/Response V4 or higher (i.e. KIP-74)
             throw new KafkaException("Failed to make progress reading messages at " + tp + "=" +
-                    fetchOffset + ". Received a non-empty fetch response from the server, but no " +
-                    "complete records were found.");
+                fetchOffset + ". Received a non-empty fetch response from the server, but no " +
+                "complete records were found.");
         }
 
         if (!updatePartitionState(partition, tp)) {
@@ -283,7 +283,7 @@ public class FetchCollector<K, V> {
     }
 
     private boolean updatePartitionState(final FetchResponseData.PartitionData partitionData,
-                                         final TopicPartition tp) {
+        final TopicPartition tp) {
         if (partitionData.highWatermark() >= 0) {
             log.trace("Updating high watermark for partition {} to {}", tp, partitionData.highWatermark());
             if (!subscriptions.tryUpdatingHighWatermark(tp, partitionData.highWatermark())) {
@@ -323,10 +323,10 @@ public class FetchCollector<K, V> {
         final long fetchOffset = completedFetch.nextFetchOffset();
 
         if (error == Errors.NOT_LEADER_OR_FOLLOWER ||
-                error == Errors.REPLICA_NOT_AVAILABLE ||
-                error == Errors.KAFKA_STORAGE_ERROR ||
-                error == Errors.FENCED_LEADER_EPOCH ||
-                error == Errors.OFFSET_NOT_AVAILABLE) {
+            error == Errors.REPLICA_NOT_AVAILABLE ||
+            error == Errors.KAFKA_STORAGE_ERROR ||
+            error == Errors.FENCED_LEADER_EPOCH ||
+            error == Errors.OFFSET_NOT_AVAILABLE) {
             log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
             requestMetadataUpdate(metadata, subscriptions, tp);
         } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
@@ -347,7 +347,7 @@ public class FetchCollector<K, V> {
 
                 if (position == null || fetchOffset != position.offset) {
                     log.debug("Discarding stale fetch response for partition {} since the fetched offset {} " +
-                            "does not match the current offset {} or the partition has been unassigned", tp, fetchOffset, position);
+                        "does not match the current offset {} or the partition has been unassigned", tp, fetchOffset, position);
                 } else {
                     String errorMessage = "Fetch position " + position + " is out of range for partition " + tp;
 
@@ -357,12 +357,12 @@ public class FetchCollector<K, V> {
                     } else {
                         log.info("{}, raising error to the application since no reset policy is configured", errorMessage);
                         throw new OffsetOutOfRangeException(errorMessage,
-                                Collections.singletonMap(tp, position.offset));
+                            Collections.singletonMap(tp, position.offset));
                     }
                 }
             } else {
                 log.debug("Unset the preferred read replica {} for partition {} since we got {} when fetching {}",
-                        clearedReplicaId.get(), tp, error, fetchOffset);
+                    clearedReplicaId.get(), tp, error, fetchOffset);
             }
         } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
             //we log the actual partition and not just the topic to help with ACL propagation issues in large clusters
@@ -372,18 +372,18 @@ public class FetchCollector<K, V> {
             log.debug("Received unknown leader epoch error in fetch for partition {}", tp);
         } else if (error == Errors.UNKNOWN_SERVER_ERROR) {
             log.warn("Unknown server error while fetching offset {} for topic-partition {}",
-                    fetchOffset, tp);
+                fetchOffset, tp);
         } else if (error == Errors.CORRUPT_MESSAGE) {
             throw new KafkaException("Encountered corrupt message when fetching offset "
-                    + fetchOffset
-                    + " for topic-partition "
-                    + tp);
+                + fetchOffset
+                + " for topic-partition "
+                + tp);
         } else {
             throw new IllegalStateException("Unexpected error code "
-                    + error.code()
-                    + " while fetching at offset "
-                    + fetchOffset
-                    + " from topic-partition " + tp);
+                + error.code()
+                + " while fetching at offset "
+                + fetchOffset
+                + " from topic-partition " + tp);
         }
     }
 }

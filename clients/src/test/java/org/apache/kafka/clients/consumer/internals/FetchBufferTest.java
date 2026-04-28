@@ -190,13 +190,13 @@ public class FetchBufferTest {
         FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData();
         FetchMetricsAggregator metricsAggregator = new FetchMetricsAggregator(metricsManager, allPartitions);
         return new CompletedFetch(
-                logContext.logger(CompletedFetch.class),
-                subscriptions,
-                BufferSupplier.create(),
-                tp,
-                partitionData,
-                metricsAggregator,
-                0L);
+            logContext.logger(CompletedFetch.class),
+            subscriptions,
+            BufferSupplier.create(),
+            tp,
+            partitionData,
+            metricsAggregator,
+            0L);
     }
 
     /**

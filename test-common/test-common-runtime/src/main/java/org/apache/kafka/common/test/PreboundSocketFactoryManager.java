@@ -40,10 +40,10 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
 
         @Override
         public ServerSocketChannel openServerSocket(
-                String listenerName,
-                InetSocketAddress socketAddress,
-                int listenBacklogSize,
-                int recvBufferSize
+            String listenerName,
+            InetSocketAddress socketAddress,
+            int listenBacklogSize,
+            int recvBufferSize
         ) throws IOException {
             ServerSocketChannel socketChannel = getSocketForListenerAndMarkAsUsed(
                 nodeId,
@@ -60,10 +60,10 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
                 // we need to rebind the socket to the same port.
                 socketAddress = new InetSocketAddress(socketAddress.getHostString(), socketChannel.socket().getLocalPort());
                 socketChannel = ServerSocketFactory.INSTANCE.openServerSocket(
-                        listenerName,
-                        socketAddress,
-                        listenBacklogSize,
-                        recvBufferSize);
+                    listenerName,
+                    socketAddress,
+                    listenBacklogSize,
+                    recvBufferSize);
                 return socketChannel;
             }
             return ServerSocketFactory.INSTANCE.openServerSocket(

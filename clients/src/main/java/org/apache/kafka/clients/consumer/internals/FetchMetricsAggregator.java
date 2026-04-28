@@ -50,7 +50,7 @@ class FetchMetricsAggregator {
 
         // Also aggregate the metrics on a per-topic basis.
         perTopicFetchMetrics.computeIfAbsent(partition.topic(), t -> new FetchMetrics())
-                        .increment(bytes, records);
+            .increment(bytes, records);
 
         maybeRecordMetrics(partition);
     }
@@ -72,7 +72,7 @@ class FetchMetricsAggregator {
         metricsManager.recordRecordsFetched(fetchFetchMetrics.records);
 
         // Also record the metrics aggregated on a per-topic basis.
-        for (Map.Entry<String, FetchMetrics> entry: perTopicFetchMetrics.entrySet()) {
+        for (Map.Entry<String, FetchMetrics> entry : perTopicFetchMetrics.entrySet()) {
             String topic = entry.getKey();
             FetchMetrics fetchMetrics = entry.getValue();
             metricsManager.recordBytesFetched(topic, fetchMetrics.bytes);

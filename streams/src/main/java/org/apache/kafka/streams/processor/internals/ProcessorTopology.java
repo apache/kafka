@@ -47,13 +47,13 @@ public class ProcessorTopology {
     private final Map<String, Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>>> storeNameToReprocessOnRestore;
 
     public ProcessorTopology(final List<ProcessorNode<?, ?, ?, ?>> processorNodes,
-                             final Map<String, SourceNode<?, ?>> sourceNodesByTopic,
-                             final Map<String, SinkNode<?, ?>> sinksByTopic,
-                             final List<StateStore> stateStores,
-                             final List<StateStore> globalStateStores,
-                             final Map<String, String> storeToChangelogTopic,
-                             final Set<String> repartitionTopics,
-                             final Map<String, Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>>> storeNameToReprocessOnRestore) {
+        final Map<String, SourceNode<?, ?>> sourceNodesByTopic,
+        final Map<String, SinkNode<?, ?>> sinksByTopic,
+        final List<StateStore> stateStores,
+        final List<StateStore> globalStateStores,
+        final Map<String, String> storeToChangelogTopic,
+        final Set<String> repartitionTopics,
+        final Map<String, Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>>> storeNameToReprocessOnRestore) {
         this.processorNodes = Collections.unmodifiableList(processorNodes);
         this.sourceNodesByTopic = new HashMap<>(sourceNodesByTopic);
         this.sinksByTopic = Collections.unmodifiableMap(sinksByTopic);
@@ -160,7 +160,7 @@ public class ProcessorTopology {
             final List<String> updatedSourceTopics = allSourceTopicsByNodeName.get(sourceNodeName);
             if (updatedSourceTopics == null) {
                 log.error("Unable to find source node {} in updated topics map {}",
-                          sourceNodeName, allSourceTopicsByNodeName);
+                    sourceNodeName, allSourceTopicsByNodeName);
                 throw new IllegalStateException("Node " + sourceNodeName + " not found in full topology");
             }
 
@@ -168,9 +168,9 @@ public class ProcessorTopology {
             for (final String topic : updatedSourceTopics) {
                 if (sourceNodesByTopic.containsKey(topic)) {
                     log.error("Tried to subscribe topic {} to two nodes when updating topics from {}",
-                              topic, allSourceTopicsByNodeName);
+                        topic, allSourceTopicsByNodeName);
                     throw new IllegalStateException("Topic " + topic + " was already registered to source node "
-                                                        + sourceNodesByTopic.get(topic).name());
+                        + sourceNodesByTopic.get(topic).name());
                 }
                 sourceNodesByTopic.put(topic, sourceNode);
             }

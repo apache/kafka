@@ -94,8 +94,8 @@ public final class ServerTopicConfigSynonyms {
      */
     public static final Map<String, String> TOPIC_CONFIG_SYNONYMS =
         ALL_TOPIC_CONFIG_SYNONYMS.entrySet()
-        .stream()
-        .collect(Collectors.toMap(Entry::getKey, e -> e.getValue().get(0).name()));
+            .stream()
+            .collect(Collectors.toMap(Entry::getKey, e -> e.getValue().get(0).name()));
 
     /**
      * Return the server config with the highest priority for `topicConfigName` if it exists. Otherwise,

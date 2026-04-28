@@ -208,7 +208,7 @@ public class ScramControlManager {
         for (ScramCredentialUpsertion upsertion : request.upsertions()) {
             if (!userToError.containsKey(upsertion.name())) {
                 if (userToDeletion.remove(upsertion.name()) != null ||
-                        userToUpsert.remove(upsertion.name()) != null) {
+                    userToUpsert.remove(upsertion.name()) != null) {
                     userToError.put(upsertion.name(), new ApiError(DUPLICATE_RESOURCE,
                         "A user credential cannot be altered twice in the same request"));
                 } else {
@@ -258,8 +258,8 @@ public class ScramControlManager {
     }
 
     static ApiError finishUpsertion(List<ApiMessageAndVersion> records, ScramCredentialUpsertion upsertion) {
-        org.apache.kafka.common.security.scram.internals.ScramMechanism internalMechanism = 
-                org.apache.kafka.common.security.scram.internals.ScramMechanism.forMechanismName(
+        org.apache.kafka.common.security.scram.internals.ScramMechanism internalMechanism =
+            org.apache.kafka.common.security.scram.internals.ScramMechanism.forMechanismName(
                 ScramMechanism.fromType(upsertion.mechanism()).mechanismName());
 
         try { // Convert from saltedPassword to storedKey and serverKey

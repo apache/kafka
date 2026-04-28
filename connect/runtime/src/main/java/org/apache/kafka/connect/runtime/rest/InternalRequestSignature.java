@@ -56,7 +56,7 @@ public class InternalRequestSignature {
         Mac mac;
         try {
             mac = crypto.mac(signatureAlgorithm);
-        }  catch (NoSuchAlgorithmException e) {
+        } catch (NoSuchAlgorithmException e) {
             throw new ConnectException(e);
         }
         byte[] requestSignature = sign(mac, key, requestBody);
@@ -101,9 +101,9 @@ public class InternalRequestSignature {
         }
 
         return new InternalRequestSignature(
-            requestBody,
-            mac,
-            decodedSignature
+                requestBody,
+                mac,
+                decodedSignature
         );
     }
 
@@ -139,10 +139,10 @@ public class InternalRequestSignature {
             return false;
         InternalRequestSignature that = (InternalRequestSignature) o;
         return MessageDigest.isEqual(requestBody, that.requestBody)
-            && mac.getAlgorithm().equals(that.mac.getAlgorithm())
-            && mac.getMacLength() == that.mac.getMacLength()
-            && mac.getProvider().equals(that.mac.getProvider())
-            && MessageDigest.isEqual(requestSignature, that.requestSignature);
+                && mac.getAlgorithm().equals(that.mac.getAlgorithm())
+                && mac.getMacLength() == that.mac.getMacLength()
+                && mac.getProvider().equals(that.mac.getProvider())
+                && MessageDigest.isEqual(requestSignature, that.requestSignature);
     }
 
     @Override

@@ -118,7 +118,7 @@ public class ReadShareGroupStateResponse extends AbstractResponse {
         request.topics().forEach(topicData -> {
             List<ReadShareGroupStateResponseData.PartitionResult> partitionResults = new ArrayList<>();
             topicData.partitions().forEach(partitionData -> partitionResults.add(
-                toErrorResponsePartitionResult(partitionData.partition(), error, error.message()))
+                    toErrorResponsePartitionResult(partitionData.partition(), error, error.message()))
             );
             readStateResults.add(toResponseReadStateResult(topicData.topicId(), partitionResults));
         });

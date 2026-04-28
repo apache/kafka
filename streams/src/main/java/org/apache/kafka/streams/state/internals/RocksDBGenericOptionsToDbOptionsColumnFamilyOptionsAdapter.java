@@ -70,7 +70,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     private final ColumnFamilyOptions columnFamilyOptions;
 
     RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(final DBOptions dbOptions,
-                                                               final ColumnFamilyOptions columnFamilyOptions) {
+        final ColumnFamilyOptions columnFamilyOptions) {
         this.dbOptions = dbOptions;
         this.columnFamilyOptions = columnFamilyOptions;
     }
@@ -188,7 +188,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     }
 
     @Override
-    public long writeBufferSize()  {
+    public long writeBufferSize() {
         return columnFamilyOptions.writeBufferSize();
     }
 
@@ -577,14 +577,14 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     @Deprecated(since = "4.2", forRemoval = true)
     public Options setRandomAccessMaxBufferSize(final long ignored) {
         log.warn("random_access_max_buffer_size has been removed in RocksDB v9.11.1." +
-                " See https://github.com/facebook/rocksdb/pull/13288");
+            " See https://github.com/facebook/rocksdb/pull/13288");
         return this;
     }
 
     @Deprecated(since = "4.2", forRemoval = true)
     public long randomAccessMaxBufferSize() {
         log.warn("random_access_max_buffer_size has been removed in RocksDB v9.11.1." +
-                " See https://github.com/facebook/rocksdb/pull/13288");
+            " See https://github.com/facebook/rocksdb/pull/13288");
         return 0;
     }
 
@@ -801,7 +801,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     @Override
     public Options setRateLimiter(final RateLimiter rateLimiter) {
         log.warn("rate_limiter has been deprecated in RocksDB v7.6.0." +
-                " See https://github.com/facebook/rocksdb/pull/10378");
+            " See https://github.com/facebook/rocksdb/pull/10378");
         dbOptions.setRateLimiter(rateLimiter);
         return this;
     }
@@ -1653,7 +1653,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     public boolean memtableWholeKeyFiltering() {
         return columnFamilyOptions.memtableWholeKeyFiltering();
     }
-    
+
     @Override
     public Options setExperimentalMempurgeThreshold(final double experimentalMempurgeThreshold) {
         columnFamilyOptions.setExperimentalMempurgeThreshold(experimentalMempurgeThreshold);

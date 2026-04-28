@@ -61,8 +61,8 @@ public class TimestampRecordProcessor implements RecordProcessor {
 
     @JsonCreator
     public TimestampRecordProcessor(@JsonProperty("histogramMaxMs") int histogramMaxMs,
-                                    @JsonProperty("histogramMinMs") int histogramMinMs,
-                                    @JsonProperty("histogramStepMs") int histogramStepMs) {
+        @JsonProperty("histogramMinMs") int histogramMinMs,
+        @JsonProperty("histogramStepMs") int histogramStepMs) {
         this.histogramMaxMs = histogramMaxMs;
         this.histogramMinMs = histogramMinMs;
         this.histogramStepMs = histogramStepMs;
@@ -110,10 +110,10 @@ public class TimestampRecordProcessor implements RecordProcessor {
     public JsonNode processorStatus() {
         Histogram.Summary summary = histogram.summarize(PERCENTILES);
         StatusData statusData = new StatusData(
-                summary.average() * histogramStepMs + histogramMinMs,
-                summary.percentiles().get(0).value() * histogramStepMs + histogramMinMs,
-                summary.percentiles().get(1).value() * histogramStepMs + histogramMinMs,
-                summary.percentiles().get(2).value() * histogramStepMs + histogramMinMs);
+            summary.average() * histogramStepMs + histogramMinMs,
+            summary.percentiles().get(0).value() * histogramStepMs + histogramMinMs,
+            summary.percentiles().get(1).value() * histogramStepMs + histogramMinMs,
+            summary.percentiles().get(2).value() * histogramStepMs + histogramMinMs);
         return JsonUtil.JSON_SERDE.valueToTree(statusData);
     }
 
@@ -131,9 +131,9 @@ public class TimestampRecordProcessor implements RecordProcessor {
 
         @JsonCreator
         StatusData(@JsonProperty("averageLatencyMs") float averageLatencyMs,
-                   @JsonProperty("p50LatencyMs") int p50latencyMs,
-                   @JsonProperty("p95LatencyMs") int p95latencyMs,
-                   @JsonProperty("p99LatencyMs") int p99latencyMs) {
+            @JsonProperty("p50LatencyMs") int p50latencyMs,
+            @JsonProperty("p95LatencyMs") int p95latencyMs,
+            @JsonProperty("p99LatencyMs") int p99latencyMs) {
             this.averageLatencyMs = averageLatencyMs;
             this.p50LatencyMs = p50latencyMs;
             this.p95LatencyMs = p95latencyMs;

@@ -152,11 +152,11 @@ public class SessionKeySchemaTest {
         extractKeyBytes = EXTRACT_KEY_BYTES.get(schemaType);
         extractWindow = EXTRACT_WINDOW.get(schemaType);
         final List<KeyValue<Bytes, Integer>> keys = asList(KeyValue.pair(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new SessionWindow(0, 0))), 1),
-                KeyValue.pair(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0}), new SessionWindow(0, 0))), 2),
-                KeyValue.pair(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new SessionWindow(0, 0))), 3),
-                KeyValue.pair(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0}), new SessionWindow(10, 20))), 4),
-                KeyValue.pair(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new SessionWindow(10, 20))), 5),
-                KeyValue.pair(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new SessionWindow(10, 20))), 6));
+            KeyValue.pair(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0}), new SessionWindow(0, 0))), 2),
+            KeyValue.pair(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new SessionWindow(0, 0))), 3),
+            KeyValue.pair(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0}), new SessionWindow(10, 20))), 4),
+            KeyValue.pair(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new SessionWindow(10, 20))), 5),
+            KeyValue.pair(toBinary.apply(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new SessionWindow(10, 20))), 6));
         iterator = new DelegatingPeekingKeyValueIterator<>("foo", new KeyValueIteratorStub<>(keys.iterator()));
     }
 
@@ -194,7 +194,7 @@ public class SessionKeySchemaTest {
         final List<Integer> results = getValues(hasNextCondition);
         assertThat(results, equalTo(asList(1, 2, 3, 4, 5, 6)));
     }
-    
+
     @ParameterizedTest
     @EnumSource(SchemaType.class)
     public void testUpperBoundWithLargeTimestamps(final SchemaType type) {
@@ -245,7 +245,7 @@ public class SessionKeySchemaTest {
                 new Windowed<>(
                     Bytes.wrap(new byte[]{0xA, (byte) 0x8F}),
                     new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))
-                )
+            )
             ) >= 0
         );
 

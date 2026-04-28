@@ -24,7 +24,7 @@ import java.util.Optional;
 public record LogDeleteRecordsResult(long requestedOffset, long lowWatermark, Optional<Throwable> exception) {
     public Errors error() {
         return exception
-                .map(Errors::forException)
-                .orElse(Errors.NONE);
+            .map(Errors::forException)
+            .orElse(Errors.NONE);
     }
 }

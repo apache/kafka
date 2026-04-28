@@ -33,55 +33,55 @@ import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
  */
 public class ServiceLoaderPlugin implements SamplingTestPlugin, Converter {
 
-  private static final ClassLoader STATIC_CLASS_LOADER;
-  private static final Map<String, SamplingTestPlugin> SAMPLES;
-  private final ClassLoader classloader;
+    private static final ClassLoader STATIC_CLASS_LOADER;
+    private static final Map<String, SamplingTestPlugin> SAMPLES;
+    private final ClassLoader classloader;
 
-  static {
-    STATIC_CLASS_LOADER = Thread.currentThread().getContextClassLoader();
-    SAMPLES = new HashMap<>();
-    Iterator<ServiceLoadedClass> it = ServiceLoader.load(ServiceLoadedClass.class).iterator();
-    while (it.hasNext()) {
-      ServiceLoadedClass loaded = it.next();
-      SAMPLES.put(loaded.getClass().getSimpleName() + ".static", loaded);
+    static {
+        STATIC_CLASS_LOADER = Thread.currentThread().getContextClassLoader();
+        SAMPLES = new HashMap<>();
+        Iterator<ServiceLoadedClass> it = ServiceLoader.load(ServiceLoadedClass.class).iterator();
+        while (it.hasNext()) {
+            ServiceLoadedClass loaded = it.next();
+            SAMPLES.put(loaded.getClass().getSimpleName() + ".static", loaded);
+        }
     }
-  }
 
-  {
-    classloader = Thread.currentThread().getContextClassLoader();
-    Iterator<ServiceLoadedClass> it = ServiceLoader.load(ServiceLoadedClass.class).iterator();
-    while (it.hasNext()) {
-      ServiceLoadedClass loaded = it.next();
-      SAMPLES.put(loaded.getClass().getSimpleName() + ".dynamic", loaded);
+    {
+        classloader = Thread.currentThread().getContextClassLoader();
+        Iterator<ServiceLoadedClass> it = ServiceLoader.load(ServiceLoadedClass.class).iterator();
+        while (it.hasNext()) {
+            ServiceLoadedClass loaded = it.next();
+            SAMPLES.put(loaded.getClass().getSimpleName() + ".dynamic", loaded);
+        }
     }
-  }
 
-  @Override
-  public void configure(final Map<String, ?> configs, final boolean isKey) {
-  }
+    @Override
+    public void configure(final Map<String, ?> configs, final boolean isKey) {
+    }
 
-  @Override
-  public byte[] fromConnectData(final String topic, final Schema schema, final Object value) {
-    return new byte[0];
-  }
+    @Override
+    public byte[] fromConnectData(final String topic, final Schema schema, final Object value) {
+        return new byte[0];
+    }
 
-  @Override
-  public SchemaAndValue toConnectData(final String topic, final byte[] value) {
-    return null;
-  }
+    @Override
+    public SchemaAndValue toConnectData(final String topic, final byte[] value) {
+        return null;
+    }
 
-  @Override
-  public ClassLoader staticClassloader() {
-    return STATIC_CLASS_LOADER;
-  }
+    @Override
+    public ClassLoader staticClassloader() {
+        return STATIC_CLASS_LOADER;
+    }
 
-  @Override
-  public ClassLoader classloader() {
-    return classloader;
-  }
+    @Override
+    public ClassLoader classloader() {
+        return classloader;
+    }
 
-  @Override
-  public Map<String, SamplingTestPlugin> otherSamples() {
-    return SAMPLES;
-  }
+    @Override
+    public Map<String, SamplingTestPlugin> otherSamples() {
+        return SAMPLES;
+    }
 }

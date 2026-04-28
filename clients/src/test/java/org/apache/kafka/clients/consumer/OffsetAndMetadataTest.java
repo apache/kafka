@@ -46,7 +46,7 @@ public class OffsetAndMetadataTest {
     }
 
     private void checkSerde(OffsetAndMetadata offsetAndMetadata) throws IOException, ClassNotFoundException {
-        byte[] bytes =  Serializer.serialize(offsetAndMetadata);
+        byte[] bytes = Serializer.serialize(offsetAndMetadata);
         OffsetAndMetadata deserialized = (OffsetAndMetadata) Serializer.deserialize(bytes);
         assertEquals(offsetAndMetadata, deserialized);
     }

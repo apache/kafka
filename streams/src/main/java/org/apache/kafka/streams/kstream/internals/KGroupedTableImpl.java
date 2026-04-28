@@ -60,10 +60,10 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
     private GraphNode repartitionGraphNode;
 
     KGroupedTableImpl(final InternalStreamsBuilder builder,
-                      final String name,
-                      final Set<String> subTopologySourceNodes,
-                      final GroupedInternal<K, V> groupedInternal,
-                      final GraphNode graphNode) {
+        final String name,
+        final Set<String> subTopologySourceNodes,
+        final GroupedInternal<K, V> groupedInternal,
+        final GraphNode graphNode) {
         super(name, groupedInternal.keySerde(), groupedInternal.valueSerde(), subTopologySourceNodes, graphNode, builder);
 
         this.userProvidedRepartitionTopicName = groupedInternal.name();
@@ -100,18 +100,18 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
 
         // return the KTable representation with the intermediate topic as the sources
         return new KTableImpl<>(funcName,
-                                materialized.keySerde(),
-                                materialized.valueSerde(),
-                                Collections.singleton(sourceName),
-                                materialized.queryableStoreName(),
-                                aggregateSupplier,
-                                statefulProcessorNode,
-                                builder);
+            materialized.keySerde(),
+            materialized.valueSerde(),
+            Collections.singleton(sourceName),
+            materialized.queryableStoreName(),
+            aggregateSupplier,
+            statefulProcessorNode,
+            builder);
     }
 
     private GroupedTableOperationRepartitionNode<K, V> createRepartitionNode(final String sinkName,
-                                                                             final String sourceName,
-                                                                             final String topic) {
+        final String sourceName,
+        final String topic) {
 
         return GroupedTableOperationRepartitionNode.<K, V>groupedTableOperationNodeBuilder()
             .withRepartitionTopic(topic)
@@ -124,16 +124,16 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
 
     @Override
     public KTable<K, V> reduce(final Reducer<V> adder,
-                               final Reducer<V> subtractor,
-                               final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+        final Reducer<V> subtractor,
+        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         return reduce(adder, subtractor, NamedInternal.empty(), materialized);
     }
 
     @Override
     public KTable<K, V> reduce(final Reducer<V> adder,
-                               final Reducer<V> subtractor,
-                               final Named named,
-                               final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+        final Reducer<V> subtractor,
+        final Named named,
+        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(adder, "adder can't be null");
         Objects.requireNonNull(subtractor, "subtractor can't be null");
         Objects.requireNonNull(named, "named can't be null");
@@ -156,7 +156,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
 
     @Override
     public KTable<K, V> reduce(final Reducer<V> adder,
-                               final Reducer<V> subtractor) {
+        final Reducer<V> subtractor) {
         return reduce(adder, subtractor, Materialized.with(keySerde, valueSerde));
     }
 
@@ -199,18 +199,18 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
 
     @Override
     public <VAgg> KTable<K, VAgg> aggregate(final Initializer<VAgg> initializer,
-                                        final Aggregator<? super K, ? super V, VAgg> adder,
-                                        final Aggregator<? super K, ? super V, VAgg> subtractor,
-                                        final Materialized<K, VAgg, KeyValueStore<Bytes, byte[]>> materialized) {
+        final Aggregator<? super K, ? super V, VAgg> adder,
+        final Aggregator<? super K, ? super V, VAgg> subtractor,
+        final Materialized<K, VAgg, KeyValueStore<Bytes, byte[]>> materialized) {
         return aggregate(initializer, adder, subtractor, NamedInternal.empty(), materialized);
     }
 
     @Override
     public <VAgg> KTable<K, VAgg> aggregate(final Initializer<VAgg> initializer,
-                                        final Aggregator<? super K, ? super V, VAgg> adder,
-                                        final Aggregator<? super K, ? super V, VAgg> subtractor,
-                                        final Named named,
-                                        final Materialized<K, VAgg, KeyValueStore<Bytes, byte[]>> materialized) {
+        final Aggregator<? super K, ? super V, VAgg> adder,
+        final Aggregator<? super K, ? super V, VAgg> subtractor,
+        final Named named,
+        final Materialized<K, VAgg, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(adder, "adder can't be null");
         Objects.requireNonNull(subtractor, "subtractor can't be null");
@@ -233,16 +233,16 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
 
     @Override
     public <VAgg> KTable<K, VAgg> aggregate(final Initializer<VAgg> initializer,
-                                      final Aggregator<? super K, ? super V, VAgg> adder,
-                                      final Aggregator<? super K, ? super V, VAgg> subtractor,
-                                      final Named named) {
+        final Aggregator<? super K, ? super V, VAgg> adder,
+        final Aggregator<? super K, ? super V, VAgg> subtractor,
+        final Named named) {
         return aggregate(initializer, adder, subtractor, named, Materialized.with(keySerde, null));
     }
 
     @Override
     public <VAgg> KTable<K, VAgg> aggregate(final Initializer<VAgg> initializer,
-                                      final Aggregator<? super K, ? super V, VAgg> adder,
-                                      final Aggregator<? super K, ? super V, VAgg> subtractor) {
+        final Aggregator<? super K, ? super V, VAgg> adder,
+        final Aggregator<? super K, ? super V, VAgg> subtractor) {
         return aggregate(initializer, adder, subtractor, Materialized.with(keySerde, null));
     }
 

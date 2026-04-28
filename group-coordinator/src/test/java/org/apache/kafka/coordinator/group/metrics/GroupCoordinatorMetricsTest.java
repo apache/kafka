@@ -260,7 +260,7 @@ public class GroupCoordinatorMetricsTest {
             metrics.metricName("group-count", METRICS_GROUP, Map.of("protocol", "share")),
             8
         );
-        
+
         assertEquals(2, shard0.numStreamsGroups());
         assertEquals(3, shard1.numStreamsGroups());
         assertGaugeValue(

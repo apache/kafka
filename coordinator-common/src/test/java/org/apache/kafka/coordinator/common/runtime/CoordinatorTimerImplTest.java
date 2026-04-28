@@ -56,17 +56,17 @@ public class CoordinatorTimerImplTest {
         };
 
         var timer = new CoordinatorTimerImpl<>(
-            LOG_CONTEXT,
-            mockTimer,
-            scheduler
+                LOG_CONTEXT,
+                mockTimer,
+                scheduler
         );
 
         timer.schedule(
-            TIMER_KEY,
-            100,
-            TimeUnit.MILLISECONDS,
-            false,
-            () -> new CoordinatorResult<>(List.of("record"), null)
+                TIMER_KEY,
+                100,
+                TimeUnit.MILLISECONDS,
+                false,
+                () -> new CoordinatorResult<>(List.of("record"), null)
         );
 
         assertTrue(timer.isScheduled(TIMER_KEY));
@@ -91,17 +91,17 @@ public class CoordinatorTimerImplTest {
         };
 
         var timer = new CoordinatorTimerImpl<>(
-            LOG_CONTEXT,
-            mockTimer,
-            scheduler
+                LOG_CONTEXT,
+                mockTimer,
+                scheduler
         );
 
         timer.schedule(
-            TIMER_KEY,
-            100,
-            TimeUnit.MILLISECONDS,
-            false,
-            () -> new CoordinatorResult<>(List.of("record"), null)
+                TIMER_KEY,
+                100,
+                TimeUnit.MILLISECONDS,
+                false,
+                () -> new CoordinatorResult<>(List.of("record"), null)
         );
 
         assertTrue(timer.isScheduled(TIMER_KEY));
@@ -143,18 +143,18 @@ public class CoordinatorTimerImplTest {
         };
 
         var timer = new CoordinatorTimerImpl<>(
-            LOG_CONTEXT,
-            mockTimer,
-            scheduler
+                LOG_CONTEXT,
+                mockTimer,
+                scheduler
         );
         timerRef.set(timer);
 
         timer.schedule(
-            TIMER_KEY,
-            100,
-            TimeUnit.MILLISECONDS,
-            false,
-            () -> new CoordinatorResult<>(List.of("record"), null)
+                TIMER_KEY,
+                100,
+                TimeUnit.MILLISECONDS,
+                false,
+                () -> new CoordinatorResult<>(List.of("record"), null)
         );
 
         assertTrue(timer.isScheduled(TIMER_KEY));
@@ -188,33 +188,33 @@ public class CoordinatorTimerImplTest {
         };
 
         var timer = new CoordinatorTimerImpl<>(
-            LOG_CONTEXT,
-            mockTimer,
-            scheduler
+                LOG_CONTEXT,
+                mockTimer,
+                scheduler
         );
 
         // Schedule first timer.
         timer.schedule(
-            TIMER_KEY,
-            100,
-            TimeUnit.MILLISECONDS,
-            false,
-            () -> {
-                firstOperationCalled.set(true);
-                return new CoordinatorResult<>(List.of("record1"), null);
-            }
+                TIMER_KEY,
+                100,
+                TimeUnit.MILLISECONDS,
+                false,
+                () -> {
+                    firstOperationCalled.set(true);
+                    return new CoordinatorResult<>(List.of("record1"), null);
+                }
         );
 
         // Override with second timer.
         timer.schedule(
-            TIMER_KEY,
-            200,
-            TimeUnit.MILLISECONDS,
-            false,
-            () -> {
-                secondOperationCalled.set(true);
-                return new CoordinatorResult<>(List.of("record2"), null);
-            }
+                TIMER_KEY,
+                200,
+                TimeUnit.MILLISECONDS,
+                false,
+                () -> {
+                    secondOperationCalled.set(true);
+                    return new CoordinatorResult<>(List.of("record2"), null);
+                }
         );
 
         assertTrue(timer.isScheduled(TIMER_KEY));
@@ -245,18 +245,18 @@ public class CoordinatorTimerImplTest {
         };
 
         var timer = new CoordinatorTimerImpl<>(
-            LOG_CONTEXT,
-            mockTimer,
-            scheduler
+                LOG_CONTEXT,
+                mockTimer,
+                scheduler
         );
 
         timer.schedule(
-            TIMER_KEY,
-            100,
-            TimeUnit.MILLISECONDS,
-            true, // retry enabled
-            50,   // retry backoff
-            () -> new CoordinatorResult<>(List.of("record"), null)
+                TIMER_KEY,
+                100,
+                TimeUnit.MILLISECONDS,
+                true, // retry enabled
+                50,   // retry backoff
+                () -> new CoordinatorResult<>(List.of("record"), null)
         );
 
         assertTrue(timer.isScheduled(TIMER_KEY));
@@ -287,17 +287,17 @@ public class CoordinatorTimerImplTest {
         };
 
         var timer = new CoordinatorTimerImpl<>(
-            LOG_CONTEXT,
-            mockTimer,
-            scheduler
+                LOG_CONTEXT,
+                mockTimer,
+                scheduler
         );
 
         timer.schedule(
-            TIMER_KEY,
-            100,
-            TimeUnit.MILLISECONDS,
-            false, // retry disabled
-            () -> new CoordinatorResult<>(List.of("record"), null)
+                TIMER_KEY,
+                100,
+                TimeUnit.MILLISECONDS,
+                false, // retry disabled
+                () -> new CoordinatorResult<>(List.of("record"), null)
         );
 
         assertTrue(timer.isScheduled(TIMER_KEY));
@@ -330,17 +330,17 @@ public class CoordinatorTimerImplTest {
         };
 
         var timer = new CoordinatorTimerImpl<>(
-            LOG_CONTEXT,
-            mockTimer,
-            scheduler
+                LOG_CONTEXT,
+                mockTimer,
+                scheduler
         );
 
         timer.schedule(
-            TIMER_KEY,
-            100,
-            TimeUnit.MILLISECONDS,
-            true, // retry enabled, but should be ignored for NotCoordinatorException
-            () -> new CoordinatorResult<>(List.of("record"), null)
+                TIMER_KEY,
+                100,
+                TimeUnit.MILLISECONDS,
+                true, // retry enabled, but should be ignored for NotCoordinatorException
+                () -> new CoordinatorResult<>(List.of("record"), null)
         );
 
         assertTrue(timer.isScheduled(TIMER_KEY));
@@ -373,17 +373,17 @@ public class CoordinatorTimerImplTest {
         };
 
         var timer = new CoordinatorTimerImpl<>(
-            LOG_CONTEXT,
-            mockTimer,
-            scheduler
+                LOG_CONTEXT,
+                mockTimer,
+                scheduler
         );
 
         timer.schedule(
-            TIMER_KEY,
-            100,
-            TimeUnit.MILLISECONDS,
-            true, // retry enabled, but should be ignored for CoordinatorLoadInProgressException
-            () -> new CoordinatorResult<>(List.of("record"), null)
+                TIMER_KEY,
+                100,
+                TimeUnit.MILLISECONDS,
+                true, // retry enabled, but should be ignored for CoordinatorLoadInProgressException
+                () -> new CoordinatorResult<>(List.of("record"), null)
         );
 
         assertTrue(timer.isScheduled(TIMER_KEY));
@@ -413,20 +413,20 @@ public class CoordinatorTimerImplTest {
         };
 
         var timer = new CoordinatorTimerImpl<>(
-            LOG_CONTEXT,
-            mockTimer,
-            scheduler
+                LOG_CONTEXT,
+                mockTimer,
+                scheduler
         );
 
         timer.scheduleIfAbsent(
-            TIMER_KEY,
-            100,
-            TimeUnit.MILLISECONDS,
-            false,
-            () -> {
-                operationCalled.set(true);
-                return new CoordinatorResult<>(List.of("record"), null);
-            }
+                TIMER_KEY,
+                100,
+                TimeUnit.MILLISECONDS,
+                false,
+                () -> {
+                    operationCalled.set(true);
+                    return new CoordinatorResult<>(List.of("record"), null);
+                }
         );
 
         assertTrue(timer.isScheduled(TIMER_KEY));
@@ -452,21 +452,21 @@ public class CoordinatorTimerImplTest {
         };
 
         var timer = new CoordinatorTimerImpl<>(
-            LOG_CONTEXT,
-            mockTimer,
-            scheduler
+                LOG_CONTEXT,
+                mockTimer,
+                scheduler
         );
 
         // Schedule first timer.
         timer.schedule(
-            TIMER_KEY,
-            100,
-            TimeUnit.MILLISECONDS,
-            false,
-            () -> {
-                firstOperationCalled.set(true);
-                return new CoordinatorResult<>(List.of("record1"), null);
-            }
+                TIMER_KEY,
+                100,
+                TimeUnit.MILLISECONDS,
+                false,
+                () -> {
+                    firstOperationCalled.set(true);
+                    return new CoordinatorResult<>(List.of("record1"), null);
+                }
         );
 
         assertTrue(timer.isScheduled(TIMER_KEY));
@@ -474,14 +474,14 @@ public class CoordinatorTimerImplTest {
 
         // Try to schedule second timer with scheduleIfAbsent - should be ignored.
         timer.scheduleIfAbsent(
-            TIMER_KEY,
-            200,
-            TimeUnit.MILLISECONDS,
-            false,
-            () -> {
-                secondOperationCalled.set(true);
-                return new CoordinatorResult<>(List.of("record2"), null);
-            }
+                TIMER_KEY,
+                200,
+                TimeUnit.MILLISECONDS,
+                false,
+                () -> {
+                    secondOperationCalled.set(true);
+                    return new CoordinatorResult<>(List.of("record2"), null);
+                }
         );
 
         // Size should still be 1.
@@ -508,19 +508,19 @@ public class CoordinatorTimerImplTest {
         };
 
         var timer = new CoordinatorTimerImpl<>(
-            LOG_CONTEXT,
-            mockTimer,
-            scheduler
+                LOG_CONTEXT,
+                mockTimer,
+                scheduler
         );
 
         // Schedule multiple timers.
         for (int i = 0; i < 3; i++) {
             timer.schedule(
-                TIMER_KEY + i,
-                100,
-                TimeUnit.MILLISECONDS,
-                false,
-                () -> new CoordinatorResult<>(List.of("record"), null)
+                    TIMER_KEY + i,
+                    100,
+                    TimeUnit.MILLISECONDS,
+                    false,
+                    () -> new CoordinatorResult<>(List.of("record"), null)
             );
         }
 
@@ -555,18 +555,18 @@ public class CoordinatorTimerImplTest {
         };
 
         var timer = new CoordinatorTimerImpl<>(
-            LOG_CONTEXT,
-            mockTimer,
-            scheduler
+                LOG_CONTEXT,
+                mockTimer,
+                scheduler
         );
 
         // Use the schedule method without explicit retryBackoff (defaults to 500ms).
         timer.schedule(
-            TIMER_KEY,
-            100,
-            TimeUnit.MILLISECONDS,
-            true, // retry enabled
-            () -> new CoordinatorResult<>(List.of("record"), null)
+                TIMER_KEY,
+                100,
+                TimeUnit.MILLISECONDS,
+                true, // retry enabled
+                () -> new CoordinatorResult<>(List.of("record"), null)
         );
 
         assertTrue(timer.isScheduled(TIMER_KEY));
@@ -601,20 +601,20 @@ public class CoordinatorTimerImplTest {
         };
 
         var timer = new CoordinatorTimerImpl<>(
-            LOG_CONTEXT,
-            mockTimer,
-            scheduler
+                LOG_CONTEXT,
+                mockTimer,
+                scheduler
         );
 
         timer.schedule(
-            TIMER_KEY,
-            100,
-            TimeUnit.MILLISECONDS,
-            false,
-            () -> {
-                operationCalled.set(true);
-                return new CoordinatorResult<>(List.of("record"), null);
-            }
+                TIMER_KEY,
+                100,
+                TimeUnit.MILLISECONDS,
+                false,
+                () -> {
+                    operationCalled.set(true);
+                    return new CoordinatorResult<>(List.of("record"), null);
+                }
         );
 
         assertTrue(timer.isScheduled(TIMER_KEY));

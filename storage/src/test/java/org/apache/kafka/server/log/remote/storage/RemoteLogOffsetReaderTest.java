@@ -120,14 +120,14 @@ class RemoteLogOffsetReaderTest {
     public void testThrowErrorOnFindOffsetByTimestamp() throws Exception {
         RemoteStorageException exception = new RemoteStorageException("Error");
         try (RemoteLogManager rlm = new MockRemoteLogManager(2, 1, logDir.toString()) {
-            @Override
-            public Optional<TimestampAndOffset> findOffsetByTimestamp(TopicPartition tp,
-                                                                      long timestamp,
-                                                                      long startingOffset,
-                                                                      LeaderEpochFileCache leaderEpochCache) throws RemoteStorageException {
-                throw exception;
-            }
-        }) {
+                 @Override
+                 public Optional<TimestampAndOffset> findOffsetByTimestamp(TopicPartition tp,
+                         long timestamp,
+                         long startingOffset,
+                         LeaderEpochFileCache leaderEpochCache) throws RemoteStorageException {
+                     throw exception;
+                 }
+             }) {
             AsyncOffsetReadFutureHolder<OffsetResultHolder.FileRecordsOrError> futureHolder
                     = rlm.asyncOffsetRead(topicPartition, time.milliseconds(), 0L, cache, Optional::empty);
             futureHolder.taskFuture().get(1, TimeUnit.SECONDS);
@@ -142,15 +142,16 @@ class RemoteLogOffsetReaderTest {
         private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
         public MockRemoteLogManager(int threads,
-                                    int taskQueueSize,
-                                    String logDir) throws IOException {
+                int taskQueueSize,
+                String logDir) throws IOException {
             super(rlmConfig(threads, taskQueueSize),
                     1,
                     logDir,
                     "mock-cluster-id",
                     new MockTime(),
                     tp -> Optional.empty(),
-                    (tp, logStartOffset) -> { },
+                    (tp, logStartOffset) -> {
+                    },
                     new BrokerTopicStats(true),
                     new Metrics(),
                     Optional.empty()
@@ -159,9 +160,9 @@ class RemoteLogOffsetReaderTest {
 
         @Override
         public Optional<TimestampAndOffset> findOffsetByTimestamp(TopicPartition tp,
-                                                                  long timestamp,
-                                                                  long startingOffset,
-                                                                  LeaderEpochFileCache leaderEpochCache) throws RemoteStorageException {
+                long timestamp,
+                long startingOffset,
+                LeaderEpochFileCache leaderEpochCache) throws RemoteStorageException {
             lock.readLock().lock();
             try {
                 return Optional.of(new TimestampAndOffset(100, 90, Optional.of(3)));

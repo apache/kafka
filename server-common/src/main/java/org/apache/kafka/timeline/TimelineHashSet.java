@@ -32,10 +32,10 @@ import java.util.Set;
  * @param <T>   The value type of the set.
  */
 public class TimelineHashSet<T>
-        extends SnapshottableHashTable<TimelineHashSet.TimelineHashSetEntry<T>>
-        implements Set<T> {
+    extends SnapshottableHashTable<TimelineHashSet.TimelineHashSetEntry<T>>
+    implements Set<T> {
     static class TimelineHashSetEntry<T>
-            implements SnapshottableHashTable.ElementWithStartEpoch {
+        implements SnapshottableHashTable.ElementWithStartEpoch {
         private final T value;
         private long startEpoch;
 
@@ -247,7 +247,7 @@ public class TimelineHashSet<T>
             return false;
         try {
             return containsAll(c);
-        } catch (ClassCastException unused)   {
+        } catch (ClassCastException unused) {
             return false;
         }
     }

@@ -40,14 +40,14 @@ public class MetricsBench {
                 sensor.add(metrics.metricName(sensor.name() + ".count", "grp1"), new WindowedCount());
                 sensor.add(metrics.metricName(sensor.name() + ".max", "grp1"), new Max());
                 sensor.add(new Percentiles(1024,
-                        0.0,
-                        iters,
-                        BucketSizing.CONSTANT,
-                        new Percentile(metrics.metricName(sensor.name() + ".median", "grp1"), 50.0),
-                        new Percentile(metrics.metricName(sensor.name() +  ".p_99", "grp1"), 99.0)));
+                    0.0,
+                    iters,
+                    BucketSizing.CONSTANT,
+                    new Percentile(metrics.metricName(sensor.name() + ".median", "grp1"), 50.0),
+                    new Percentile(metrics.metricName(sensor.name() + ".p_99", "grp1"), 99.0)));
             }
             long start = System.nanoTime();
-            for (int i = 0; i < iters; i++)
+            for (int i = 0;i < iters;i++)
                 parent.record(i);
             double elapsed = (System.nanoTime() - start) / (double) iters;
             System.out.printf("%.2f ns per metric recording.%n", elapsed);

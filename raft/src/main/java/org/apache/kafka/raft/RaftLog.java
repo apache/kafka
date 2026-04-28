@@ -102,8 +102,8 @@ public interface RaftLog extends AutoCloseable {
         Optional<OffsetAndEpoch> earliestSnapshotId = earliestSnapshotId();
         if (earliestSnapshotId.isPresent() &&
             ((offset < startOffset()) ||
-             (offset == startOffset() && epoch != earliestSnapshotId.get().epoch()) ||
-             (epoch < earliestSnapshotId.get().epoch()))
+                (offset == startOffset() && epoch != earliestSnapshotId.get().epoch()) ||
+                (epoch < earliestSnapshotId.get().epoch()))
         ) {
             /* Send a snapshot if the leader has a snapshot at the log start offset and
              * 1. the fetch offset is less than the log start offset or
@@ -299,12 +299,12 @@ public interface RaftLog extends AutoCloseable {
      */
     Optional<RawSnapshotReader> latestSnapshot();
 
-     /**
-      * Returns the latest snapshot id if one exists.
-      *
-      * @return an Optional snapshot id of the latest snapshot if one exists, otherwise returns an
+    /**
+     * Returns the latest snapshot id if one exists.
+     *
+     * @return an Optional snapshot id of the latest snapshot if one exists, otherwise returns an
       *         empty Optional
-      */
+     */
     Optional<OffsetAndEpoch> latestSnapshotId();
 
     /**
@@ -323,5 +323,6 @@ public interface RaftLog extends AutoCloseable {
      */
     void onSnapshotFrozen(OffsetAndEpoch snapshotId);
 
-    default void close() {}
+    default void close() {
+    }
 }

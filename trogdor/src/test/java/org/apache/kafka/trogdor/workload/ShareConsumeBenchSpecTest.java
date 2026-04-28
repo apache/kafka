@@ -52,16 +52,16 @@ class ShareConsumeBenchSpecTest {
     @Test
     public void testDefaultShareGroupName() {
         ShareConsumeBenchSpec shareConsumeBenchSpec = new ShareConsumeBenchSpec(0, 0, "node", "localhost",
-                123, 1234, null, Map.of(), Map.of(), Map.of(), 1,
-                Optional.empty(), List.of("abc"));
+            123, 1234, null, Map.of(), Map.of(), Map.of(), 1,
+            Optional.empty(), List.of("abc"));
         assertEquals("share", shareConsumeBenchSpec.shareGroup());
     }
 
     private ShareConsumeBenchSpec shareConsumeBenchSpec(List<String> activeTopics) {
         return new ShareConsumeBenchSpec(0, 0, "node", "localhost",
-                123, 1234, "sg-1",
-                Map.of(), Map.of(), Map.of(), 1,
-                Optional.empty(), activeTopics);
+            123, 1234, "sg-1",
+            Map.of(), Map.of(), Map.of(), 1,
+            Optional.empty(), activeTopics);
     }
 
 }

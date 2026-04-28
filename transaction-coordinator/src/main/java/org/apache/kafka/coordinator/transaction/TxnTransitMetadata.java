@@ -25,17 +25,18 @@ import java.util.HashSet;
  * Represent the target transition of the transaction metadata. The topicPartitions field is mutable.
  */
 public record TxnTransitMetadata(
-        long producerId,
-        long prevProducerId,
-        long nextProducerId,
-        short producerEpoch,
-        short lastProducerEpoch,
-        int txnTimeoutMs,
-        TransactionState txnState,
-        // The TransactionMetadata#topicPartitions field is mutable.
-        // To avoid deep copy when assigning value from TxnTransitMetadata to TransactionMetadata, use HashSet here.
-        HashSet<TopicPartition> topicPartitions,
-        long txnStartTimestamp,
-        long txnLastUpdateTimestamp,
-        TransactionVersion clientTransactionVersion
-) { }
+long producerId,
+long prevProducerId,
+long nextProducerId,
+short producerEpoch,
+short lastProducerEpoch,
+int txnTimeoutMs,
+TransactionState txnState,
+// The TransactionMetadata#topicPartitions field is mutable.
+// To avoid deep copy when assigning value from TxnTransitMetadata to TransactionMetadata, use HashSet here.
+HashSet<TopicPartition> topicPartitions,
+long txnStartTimestamp,
+long txnLastUpdateTimestamp,
+TransactionVersion clientTransactionVersion
+) {
+}

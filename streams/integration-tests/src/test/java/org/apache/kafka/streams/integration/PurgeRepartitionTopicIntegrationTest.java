@@ -114,8 +114,8 @@ public class PurgeRepartitionTopicIntegrationTest {
                     .get(resource)
                     .get();
                 return config.get(TopicConfig.CLEANUP_POLICY_CONFIG).value().equals(TopicConfig.CLEANUP_POLICY_DELETE)
-                        && config.get(TopicConfig.SEGMENT_MS_CONFIG).value().equals(PURGE_INTERVAL_MS.toString())
-                        && config.get(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG).value().equals(PURGE_SEGMENT_BYTES.toString());
+                    && config.get(TopicConfig.SEGMENT_MS_CONFIG).value().equals(PURGE_INTERVAL_MS.toString())
+                    && config.get(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG).value().equals(PURGE_SEGMENT_BYTES.toString());
             } catch (final Exception e) {
                 return false;
             }
@@ -177,8 +177,8 @@ public class PurgeRepartitionTopicIntegrationTest {
 
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(INPUT_TOPIC)
-               .groupBy(MockMapper.selectKeyKeyValueMapper())
-               .count();
+            .groupBy(MockMapper.selectKeyKeyValueMapper())
+            .count();
 
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration, time);
     }
@@ -201,16 +201,16 @@ public class PurgeRepartitionTopicIntegrationTest {
             messages.add(new KeyValue<>(i, i));
         }
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC,
-                messages,
-                TestUtils.producerConfig(CLUSTER.bootstrapServers(),
-                        IntegerSerializer.class,
-                        IntegerSerializer.class),
-                time.milliseconds());
+            messages,
+            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
+                IntegerSerializer.class,
+                IntegerSerializer.class),
+            time.milliseconds());
 
         kafkaStreams.start();
 
         TestUtils.waitForCondition(new RepartitionTopicCreatedWithExpectedConfigs(), 60000,
-                "Repartition topic " + REPARTITION_TOPIC + " not created with the expected configs after 60000 ms.");
+            "Repartition topic " + REPARTITION_TOPIC + " not created with the expected configs after 60000 ms.");
 
         // wait until we received more than 1 segment of data, so that we can confirm the purge succeeds in next verification
         TestUtils.waitForCondition(
@@ -218,7 +218,7 @@ public class PurgeRepartitionTopicIntegrationTest {
             60000,
             "Repartition topic " + REPARTITION_TOPIC + " not received more than " + PURGE_SEGMENT_BYTES + "B of data after 60000 ms."
         );
-        
+
         final long waitForPurgeMs = 60000;
         TestUtils.waitForCondition(
             new RepartitionTopicVerified(currentSize -> currentSize <= PURGE_SEGMENT_BYTES),

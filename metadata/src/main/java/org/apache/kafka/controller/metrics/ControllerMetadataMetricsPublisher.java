@@ -70,7 +70,7 @@ public class ControllerMetadataMetricsPublisher implements MetadataPublisher {
                     publishDelta(delta);
                 } catch (Throwable e) {
                     faultHandler.handleFault("Failed to publish controller metrics from log delta " +
-                            " ending at offset " + manifest.provenance().lastContainedOffset(), e);
+                        " ending at offset " + manifest.provenance().lastContainedOffset(), e);
                 } finally {
                     prevImage = newImage;
                 }
@@ -80,7 +80,7 @@ public class ControllerMetadataMetricsPublisher implements MetadataPublisher {
                     publishSnapshot(newImage);
                 } catch (Throwable e) {
                     faultHandler.handleFault("Failed to publish controller metrics from " +
-                            manifest.provenance().snapshotName(), e);
+                        manifest.provenance().snapshotName(), e);
                 } finally {
                     prevImage = newImage;
                 }
@@ -105,7 +105,7 @@ public class ControllerMetadataMetricsPublisher implements MetadataPublisher {
                 TopicImage prevTopic = prevImage.topics().topicsById().get(topicId);
                 if (prevTopic == null) {
                     throw new RuntimeException("Unable to find deleted topic id " + topicId +
-                            " in previous topics image.");
+                        " in previous topics image.");
                 }
                 changes.handleDeletedTopic(prevTopic);
             }

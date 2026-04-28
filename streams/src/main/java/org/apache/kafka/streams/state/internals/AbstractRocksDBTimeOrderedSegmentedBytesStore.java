@@ -126,10 +126,10 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Se
     }
 
     AbstractRocksDBTimeOrderedSegmentedBytesStore(final String name,
-                                                  final long retention,
-                                                  final KeySchema baseKeySchema,
-                                                  final Optional<KeySchema> indexKeySchema,
-                                                  final AbstractSegments<S> segments) {
+        final long retention,
+        final KeySchema baseKeySchema,
+        final Optional<KeySchema> indexKeySchema,
+        final AbstractSegments<S> segments) {
         super(name, baseKeySchema, indexKeySchema, segments, retention);
 
         minTimestamp = Long.MAX_VALUE;
@@ -187,15 +187,15 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Se
 
     @Override
     public KeyValueIterator<Bytes, byte[]> fetch(final Bytes key,
-                                                 final long from,
-                                                 final long to) {
+        final long from,
+        final long to) {
         return fetch(key, from, to, true);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> backwardFetch(final Bytes key,
-                                                         final long from,
-                                                         final long to) {
+        final long from,
+        final long to) {
         return fetch(key, from, to, false);
     }
 
@@ -226,9 +226,9 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Se
     }
 
     KeyValueIterator<Bytes, byte[]> fetch(final Bytes key,
-                                          final long from,
-                                          final long to,
-                                          final boolean forward) {
+        final long from,
+        final long to,
+        final boolean forward) {
 
         final long actualFrom = getActualFrom(from, baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema);
 
@@ -268,30 +268,30 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Se
 
     @Override
     public KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom,
-                                                 final Bytes keyTo,
-                                                 final long from,
-                                                 final long to) {
+        final Bytes keyTo,
+        final long from,
+        final long to) {
         return fetch(keyFrom, keyTo, from, to, true);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> backwardFetch(final Bytes keyFrom,
-                                                         final Bytes keyTo,
-                                                         final long from,
-                                                         final long to) {
+        final Bytes keyTo,
+        final long from,
+        final long to) {
         return fetch(keyFrom, keyTo, from, to, false);
     }
 
     KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom,
-                                          final Bytes keyTo,
-                                          final long from,
-                                          final long to,
-                                          final boolean forward) {
+        final Bytes keyTo,
+        final long from,
+        final long to,
+        final boolean forward) {
         if (keyFrom != null && keyTo != null && keyFrom.compareTo(keyTo) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
-                    "This may be due to range arguments set in the wrong order, " +
-                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                    "Note that the built-in numerical serdes do not follow this for negative numbers");
+                "This may be due to range arguments set in the wrong order, " +
+                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
         }
 
@@ -332,7 +332,7 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Se
 
     @Override
     public KeyValueIterator<Bytes, byte[]> fetchAll(final long timeFrom,
-                                                    final long timeTo) {
+        final long timeTo) {
 
         final long actualFrom = getActualFrom(timeFrom, baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema);
 
@@ -345,16 +345,16 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Se
         final Bytes binaryTo = baseKeySchema.upperRange(null, timeTo);
 
         return new SegmentIterator<>(
-                searchSpace.iterator(),
-                baseKeySchema.hasNextCondition(null, null, actualFrom, timeTo, true),
-                binaryFrom,
-                binaryTo,
-                true);
+            searchSpace.iterator(),
+            baseKeySchema.hasNextCondition(null, null, actualFrom, timeTo, true),
+            binaryFrom,
+            binaryTo,
+            true);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> backwardFetchAll(final long timeFrom,
-                                                            final long timeTo) {
+        final long timeTo) {
 
         final long actualFrom = getActualFrom(timeFrom, baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema);
 
@@ -367,10 +367,10 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore<S extends Se
         final Bytes binaryTo = baseKeySchema.upperRange(null, timeTo);
 
         return new SegmentIterator<>(
-                searchSpace.iterator(),
-                baseKeySchema.hasNextCondition(null, null, actualFrom, timeTo, false),
-                binaryFrom,
-                binaryTo,
-                false);
+            searchSpace.iterator(),
+            baseKeySchema.hasNextCondition(null, null, actualFrom, timeTo, false),
+            binaryFrom,
+            binaryTo,
+            false);
     }
 }

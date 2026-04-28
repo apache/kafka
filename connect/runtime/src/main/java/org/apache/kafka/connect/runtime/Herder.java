@@ -124,7 +124,7 @@ public interface Herder {
      * @param callback callback to invoke when the configuration has been written
      */
     void putConnectorConfig(String connName, Map<String, String> config, TargetState targetState, boolean allowReplace,
-                            Callback<Created<ConnectorInfo>> callback);
+            Callback<Created<ConnectorInfo>> callback);
 
     /**
      * Patch the configuration for a connector.

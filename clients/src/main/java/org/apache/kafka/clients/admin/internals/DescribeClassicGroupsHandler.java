@@ -103,9 +103,9 @@ public class DescribeClassicGroupsHandler extends AdminApiHandler.Batched<Coordi
 
     @Override
     public ApiResult<CoordinatorKey, ClassicGroupDescription> handleResponse(
-            Node coordinator,
-            Set<CoordinatorKey> groupIds,
-            AbstractResponse abstractResponse) {
+        Node coordinator,
+        Set<CoordinatorKey> groupIds,
+        AbstractResponse abstractResponse) {
         final DescribeGroupsResponse response = (DescribeGroupsResponse) abstractResponse;
         final Map<CoordinatorKey, ClassicGroupDescription> completed = new HashMap<>();
         final Map<CoordinatorKey, Throwable> failed = new HashMap<>();
@@ -159,11 +159,11 @@ public class DescribeClassicGroupsHandler extends AdminApiHandler.Batched<Coordi
     }
 
     private void handleError(
-            CoordinatorKey groupId,
-            Errors error,
-            String errorMsg,
-            Map<CoordinatorKey, Throwable> failed,
-            Set<CoordinatorKey> groupsToUnmap) {
+        CoordinatorKey groupId,
+        Errors error,
+        String errorMsg,
+        Map<CoordinatorKey, Throwable> failed,
+        Set<CoordinatorKey> groupsToUnmap) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
                 log.debug("`DescribeGroups` request for group id {} failed due to error {}.", groupId.idValue, error);

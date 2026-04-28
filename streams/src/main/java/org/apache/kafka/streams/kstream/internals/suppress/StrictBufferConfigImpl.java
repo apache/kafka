@@ -32,9 +32,9 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
     private final Map<String, String> logConfig;
 
     public StrictBufferConfigImpl(final long maxRecords,
-                                  final long maxBytes,
-                                  final BufferFullStrategy bufferFullStrategy,
-                                  final Map<String, String> logConfig) {
+        final long maxBytes,
+        final BufferFullStrategy bufferFullStrategy,
+        final Map<String, String> logConfig) {
         this.maxRecords = maxRecords;
         this.maxBytes = maxBytes;
         this.bufferFullStrategy = bufferFullStrategy;
@@ -120,6 +120,6 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
             ", maxBytes=" + maxBytes +
             ", bufferFullStrategy=" + bufferFullStrategy +
             ", logConfig=" + logConfig().toString() +
-             '}';
+            '}';
     }
 }

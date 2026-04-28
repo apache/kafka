@@ -139,7 +139,7 @@ public class OptimizedKTableIntegrationTest {
                 final ReadOnlyKeyValueStore<Integer, Integer> store2 = IntegrationTestUtils.getStore(TABLE_NAME, kafkaStreams2, QueryableStoreTypes.keyValueStore());
 
                 final KeyQueryMetadata keyQueryMetadata = kafkaStreams1
-                        .queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> Optional.of(Collections.singleton(0)));
+                    .queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> Optional.of(Collections.singleton(0)));
 
                 try {
                     // Assert that the current value in store reflects all messages being processed

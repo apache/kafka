@@ -70,29 +70,29 @@ public class EndQuorumEpochRequest extends AbstractRequest {
     }
 
     public static EndQuorumEpochRequestData singletonRequest(TopicPartition topicPartition,
-                                                             int leaderEpoch,
-                                                             int leaderId,
-                                                             List<Integer> preferredSuccessors) {
+        int leaderEpoch,
+        int leaderId,
+        List<Integer> preferredSuccessors) {
         return singletonRequest(topicPartition, null, leaderEpoch, leaderId, preferredSuccessors);
     }
 
     public static EndQuorumEpochRequestData singletonRequest(TopicPartition topicPartition,
-                                                             String clusterId,
-                                                             int leaderEpoch,
-                                                             int leaderId,
-                                                             List<Integer> preferredSuccessors) {
+        String clusterId,
+        int leaderEpoch,
+        int leaderId,
+        List<Integer> preferredSuccessors) {
         return new EndQuorumEpochRequestData()
-                   .setClusterId(clusterId)
-                   .setTopics(List.of(
-                       new EndQuorumEpochRequestData.TopicData()
-                           .setTopicName(topicPartition.topic())
-                           .setPartitions(List.of(
-                               new EndQuorumEpochRequestData.PartitionData()
-                                   .setPartitionIndex(topicPartition.partition())
-                                   .setLeaderEpoch(leaderEpoch)
-                                   .setLeaderId(leaderId)
-                                   .setPreferredSuccessors(preferredSuccessors))))
-                   );
+            .setClusterId(clusterId)
+            .setTopics(List.of(
+                new EndQuorumEpochRequestData.TopicData()
+                    .setTopicName(topicPartition.topic())
+                    .setPartitions(List.of(
+                        new EndQuorumEpochRequestData.PartitionData()
+                            .setPartitionIndex(topicPartition.partition())
+                            .setLeaderEpoch(leaderEpoch)
+                            .setLeaderId(leaderId)
+                            .setPreferredSuccessors(preferredSuccessors))))
+            );
     }
 
     public static List<EndQuorumEpochRequestData.ReplicaInfo> preferredCandidates(EndQuorumEpochRequestData.PartitionData partition) {
@@ -101,8 +101,8 @@ public class EndQuorumEpochRequest extends AbstractRequest {
                 .preferredSuccessors()
                 .stream()
                 .map(id -> new EndQuorumEpochRequestData.ReplicaInfo()
-                    .setCandidateId(id)
-                    .setCandidateDirectoryId(Uuid.ZERO_UUID)
+                        .setCandidateId(id)
+                        .setCandidateDirectoryId(Uuid.ZERO_UUID)
                 )
                 .collect(Collectors.toList());
         } else {

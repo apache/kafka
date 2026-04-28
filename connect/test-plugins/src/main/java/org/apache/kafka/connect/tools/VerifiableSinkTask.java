@@ -83,8 +83,8 @@ public class VerifiableSinkTask extends SinkTask {
             }
             System.out.println(dataJson);
             unflushed.computeIfAbsent(
-                    new TopicPartition(record.topic(), record.kafkaPartition()),
-                    tp -> new ArrayList<>()
+                new TopicPartition(record.topic(), record.kafkaPartition()),
+                tp -> new ArrayList<>()
             ).add(data);
         }
     }

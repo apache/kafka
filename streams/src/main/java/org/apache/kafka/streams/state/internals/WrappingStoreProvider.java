@@ -35,7 +35,7 @@ public class WrappingStoreProvider implements StateStoreProvider {
     private StoreQueryParameters storeQueryParameters;
 
     WrappingStoreProvider(final Collection<StreamThreadStateStoreProvider> storeProviders,
-                          final StoreQueryParameters storeQueryParameters) {
+        final StoreQueryParameters storeQueryParameters) {
         this.storeProviders = storeProviders;
         this.storeQueryParameters = storeQueryParameters;
     }
@@ -48,7 +48,7 @@ public class WrappingStoreProvider implements StateStoreProvider {
     @SuppressWarnings("unchecked")
     @Override
     public <T> List<T> stores(final String storeName,
-                              final QueryableStoreType<T> queryableStoreType) {
+        final QueryableStoreType<T> queryableStoreType) {
         final List<T> allStores = new ArrayList<>();
         for (final StreamThreadStateStoreProvider storeProvider : storeProviders) {
             final List<T> stores = storeProvider.stores(storeQueryParameters);
@@ -62,9 +62,9 @@ public class WrappingStoreProvider implements StateStoreProvider {
         if (allStores.isEmpty()) {
             if (storeQueryParameters.partition() != null) {
                 throw new InvalidStateStorePartitionException(
-                        String.format("The specified partition %d for store %s does not exist.",
-                                storeQueryParameters.partition(),
-                                storeName));
+                    String.format("The specified partition %d for store %s does not exist.",
+                        storeQueryParameters.partition(),
+                        storeName));
             }
             throw new InvalidStateStoreException("The state store, " + storeName + ", may have migrated to another instance.");
         }

@@ -71,9 +71,9 @@ public class SslPrincipalMapper {
                 result.add(new Rule());
             } else if (matcher.group(2) != null) {
                 result.add(new Rule(matcher.group(2),
-                                    matcher.group(4),
-                                    "L".equals(matcher.group(6)),
-                                    "U".equals(matcher.group(6))));
+                    matcher.group(4),
+                    "L".equals(matcher.group(6)),
+                    "U".equals(matcher.group(6))));
             }
         }
 

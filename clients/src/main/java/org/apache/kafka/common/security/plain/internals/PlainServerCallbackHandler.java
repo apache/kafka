@@ -46,7 +46,7 @@ public class PlainServerCallbackHandler implements AuthenticateCallbackHandler {
     @Override
     public void handle(Callback[] callbacks) throws IOException, UnsupportedCallbackException {
         String username = null;
-        for (Callback callback: callbacks) {
+        for (Callback callback : callbacks) {
             if (callback instanceof NameCallback)
                 username = ((NameCallback) callback).getDefaultName();
             else if (callback instanceof PlainAuthenticateCallback) {
@@ -63,8 +63,8 @@ public class PlainServerCallbackHandler implements AuthenticateCallbackHandler {
             return false;
         else {
             String expectedPassword = JaasContext.configEntryOption(jaasConfigEntries,
-                    JAAS_USER_PREFIX + username,
-                    PlainLoginModule.class.getName());
+                JAAS_USER_PREFIX + username,
+                PlainLoginModule.class.getName());
             return expectedPassword != null && Utils.isEqualConstantTime(password, expectedPassword.toCharArray());
         }
     }

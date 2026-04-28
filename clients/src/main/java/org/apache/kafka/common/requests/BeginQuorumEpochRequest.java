@@ -75,15 +75,15 @@ public class BeginQuorumEpochRequest extends AbstractRequest {
         int leaderId
     ) {
         return new BeginQuorumEpochRequestData()
-                   .setClusterId(clusterId)
-                   .setTopics(List.of(
-                       new BeginQuorumEpochRequestData.TopicData()
-                           .setTopicName(topicPartition.topic())
-                           .setPartitions(List.of(
-                               new BeginQuorumEpochRequestData.PartitionData()
-                                   .setPartitionIndex(topicPartition.partition())
-                                   .setLeaderEpoch(leaderEpoch)
-                                   .setLeaderId(leaderId))))
-                   );
+            .setClusterId(clusterId)
+            .setTopics(List.of(
+                new BeginQuorumEpochRequestData.TopicData()
+                    .setTopicName(topicPartition.topic())
+                    .setPartitions(List.of(
+                        new BeginQuorumEpochRequestData.PartitionData()
+                            .setPartitionIndex(topicPartition.partition())
+                            .setLeaderEpoch(leaderEpoch)
+                            .setLeaderId(leaderId))))
+            );
     }
 }

@@ -42,7 +42,7 @@ public class ValueAndTimestampSerializerTest {
     private static final Headers HEADERS = new RecordHeaders().add("key", "value".getBytes());
 
     private static final ValueAndTimestampSerde<String> STRING_SERDE =
-            new ValueAndTimestampSerde<>(Serdes.String());
+        new ValueAndTimestampSerde<>(Serdes.String());
 
     @Test
     public void shouldSerializeNonNullDataUsingTheInternalSerializer() {

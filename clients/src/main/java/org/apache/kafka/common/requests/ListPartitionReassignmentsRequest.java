@@ -75,18 +75,18 @@ public class ListPartitionReassignmentsRequest extends AbstractRequest {
         if (data.topics() != null) {
             for (ListPartitionReassignmentsTopics topic : data.topics()) {
                 ongoingTopicReassignments.add(
-                        new OngoingTopicReassignment()
-                                .setName(topic.name())
-                                .setPartitions(topic.partitionIndexes().stream().map(partitionIndex ->
-                                        new OngoingPartitionReassignment().setPartitionIndex(partitionIndex)).collect(Collectors.toList()))
+                    new OngoingTopicReassignment()
+                        .setName(topic.name())
+                        .setPartitions(topic.partitionIndexes().stream().map(partitionIndex ->
+                            new OngoingPartitionReassignment().setPartitionIndex(partitionIndex)).collect(Collectors.toList()))
                 );
             }
         }
         ListPartitionReassignmentsResponseData responseData = new ListPartitionReassignmentsResponseData()
-                .setTopics(ongoingTopicReassignments)
-                .setErrorCode(apiError.error().code())
-                .setErrorMessage(apiError.message())
-                .setThrottleTimeMs(throttleTimeMs);
+            .setTopics(ongoingTopicReassignments)
+            .setErrorCode(apiError.error().code())
+            .setErrorMessage(apiError.message())
+            .setThrottleTimeMs(throttleTimeMs);
         return new ListPartitionReassignmentsResponse(responseData);
     }
 }

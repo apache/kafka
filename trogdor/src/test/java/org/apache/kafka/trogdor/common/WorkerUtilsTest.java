@@ -118,9 +118,9 @@ public class WorkerUtilsTest {
         Map<String, NewTopic> newTopics = new HashMap<>();
         newTopics.put(TEST_TOPIC, NEW_TEST_TOPIC);
         newTopics.put("another-topic",
-                      new NewTopic("another-topic", TEST_PARTITIONS, TEST_REPLICATION_FACTOR));
+            new NewTopic("another-topic", TEST_PARTITIONS, TEST_REPLICATION_FACTOR));
         newTopics.put("one-more-topic",
-                      new NewTopic("one-more-topic", TEST_PARTITIONS, TEST_REPLICATION_FACTOR));
+            new NewTopic("one-more-topic", TEST_PARTITIONS, TEST_REPLICATION_FACTOR));
 
         assertThrows(TopicExistsException.class, () -> WorkerUtils.createTopics(log, adminClient, newTopics, true));
     }
@@ -194,7 +194,7 @@ public class WorkerUtilsTest {
 
         Map<String, NewTopic> topics = new HashMap<>();
         topics.put(existingTopic,
-                   new NewTopic(existingTopic, tpInfo.size(), TEST_REPLICATION_FACTOR));
+            new NewTopic(existingTopic, tpInfo.size(), TEST_REPLICATION_FACTOR));
         topics.put(TEST_TOPIC, NEW_TEST_TOPIC);
 
         WorkerUtils.createTopics(log, adminClient, topics, false);

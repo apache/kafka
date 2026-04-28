@@ -618,7 +618,7 @@ public class LegacyStickyTaskAssignorTest {
             for (final ProcessId otherProcessId : allProcessIds) {
                 if (!uuid.equals(otherProcessId)) {
                     assertThat("clients shouldn't have same task assignment", clients.get(otherProcessId).assignedTasks(),
-                               not(equalTo(taskIds)));
+                        not(equalTo(taskIds)));
                 }
             }
 
@@ -647,7 +647,7 @@ public class LegacyStickyTaskAssignorTest {
             for (final ProcessId otherProcessId : allProcessIds) {
                 if (!uuid.equals(otherProcessId)) {
                     assertThat("clients shouldn't have same task assignment", clients.get(otherProcessId).assignedTasks(),
-                               not(equalTo(taskIds)));
+                        not(equalTo(taskIds)));
                 }
             }
 
@@ -680,7 +680,7 @@ public class LegacyStickyTaskAssignorTest {
             for (final ProcessId otherProcessId : allProcessIds) {
                 if (!uuid.equals(otherProcessId)) {
                     assertThat("clients shouldn't have same task assignment", clients.get(otherProcessId).assignedTasks(),
-                               not(equalTo(taskIds)));
+                        not(equalTo(taskIds)));
                 }
             }
         }
@@ -1322,19 +1322,19 @@ public class LegacyStickyTaskAssignorTest {
     })
     public void shouldRangeAssignTasksWhenStartingEmpty(final String rackAwareStrategy) {
         setUp(rackAwareStrategy);
-        
+
         // Two clients with capacity 1 each, starting empty (no previous tasks)
         createClient(PID_1, 1);
         createClient(PID_2, 1);
-        
+
         // Two subtopologies with 2 tasks each (4 tasks total)
         final boolean probingRebalanceNeeded = assign(1, rackAwareStrategy, TASK_0_0, TASK_0_1, TASK_1_0, TASK_1_1);
         assertThat(probingRebalanceNeeded, is(false));
-        
+
         // Each client should get one active task from each subtopology
         final ClientState client1 = clients.get(PID_1);
         final ClientState client2 = clients.get(PID_2);
-        
+
         // Check that each client has one active task from subtopology 0
         final long client1Subtopology0ActiveCount = client1.activeTasks().stream()
             .filter(task -> task.subtopology() == 0)
@@ -1344,7 +1344,7 @@ public class LegacyStickyTaskAssignorTest {
             .count();
         assertThat(client1Subtopology0ActiveCount, equalTo(1L));
         assertThat(client2Subtopology0ActiveCount, equalTo(1L));
-        
+
         // Check that each client has one active task from subtopology 1
         final long client1Subtopology1ActiveCount = client1.activeTasks().stream()
             .filter(task -> task.subtopology() == 1)
@@ -1354,7 +1354,7 @@ public class LegacyStickyTaskAssignorTest {
             .count();
         assertThat(client1Subtopology1ActiveCount, equalTo(1L));
         assertThat(client2Subtopology1ActiveCount, equalTo(1L));
-        
+
         // Check that each client has one standby task from subtopology 0
         final long client1Subtopology0StandbyCount = client1.standbyTasks().stream()
             .filter(task -> task.subtopology() == 0)
@@ -1364,7 +1364,7 @@ public class LegacyStickyTaskAssignorTest {
             .count();
         assertThat(client1Subtopology0StandbyCount, equalTo(1L));
         assertThat(client2Subtopology0StandbyCount, equalTo(1L));
-        
+
         // Check that each client has one standby task from subtopology 1
         final long client1Subtopology1StandbyCount = client1.standbyTasks().stream()
             .filter(task -> task.subtopology() == 1)

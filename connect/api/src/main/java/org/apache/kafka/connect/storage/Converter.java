@@ -108,7 +108,7 @@ public interface Converter extends Closeable, ConnectPlugin {
     }
 
     @Override
-    default void close() throws IOException  {
+    default void close() throws IOException {
         // no op
     }
 

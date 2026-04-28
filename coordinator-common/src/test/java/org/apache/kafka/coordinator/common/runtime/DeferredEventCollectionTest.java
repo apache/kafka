@@ -37,10 +37,12 @@ public class DeferredEventCollectionTest {
         DeferredEventCollection collection = new DeferredEventCollection(LOG);
         assertEquals(0, collection.size());
 
-        assertTrue(collection.add(t -> { }));
+        assertTrue(collection.add(t -> {
+        }));
         assertEquals(1, collection.size());
 
-        assertTrue(collection.add(t -> { }));
+        assertTrue(collection.add(t -> {
+        }));
         assertEquals(2, collection.size());
     }
 
@@ -98,8 +100,10 @@ public class DeferredEventCollectionTest {
 
     @Test
     public void testOfFactoryMethod() {
-        DeferredEvent event1 = t -> { };
-        DeferredEvent event2 = t -> { };
+        DeferredEvent event1 = t -> {
+        };
+        DeferredEvent event2 = t -> {
+        };
 
         DeferredEventCollection collection = DeferredEventCollection.of(LOG, event1, event2);
 

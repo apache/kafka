@@ -34,9 +34,9 @@ public class DescribeClusterResult {
     private final KafkaFuture<Set<AclOperation>> authorizedOperations;
 
     DescribeClusterResult(KafkaFuture<Collection<Node>> nodes,
-                          KafkaFuture<Node> controller,
-                          KafkaFuture<String> clusterId,
-                          KafkaFuture<Set<AclOperation>> authorizedOperations) {
+        KafkaFuture<Node> controller,
+        KafkaFuture<String> clusterId,
+        KafkaFuture<Set<AclOperation>> authorizedOperations) {
         this.nodes = nodes;
         this.controller = controller;
         this.clusterId = clusterId;

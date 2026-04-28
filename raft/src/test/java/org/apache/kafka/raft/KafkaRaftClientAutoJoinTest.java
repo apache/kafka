@@ -41,7 +41,7 @@ public class KafkaRaftClientAutoJoinTest {
             newFollowerKey.id(),
             newFollowerKey.directoryId().get()
         )
-            .withRaftProtocol(KIP_853_PROTOCOL)
+        .withRaftProtocol(KIP_853_PROTOCOL)
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(leader, oldFollower)), KRaftVersion.KRAFT_VERSION_1
             )
@@ -72,7 +72,7 @@ public class KafkaRaftClientAutoJoinTest {
             newVoter.id(),
             newVoter.directoryId().get()
         )
-            .withRaftProtocol(KIP_853_PROTOCOL)
+        .withRaftProtocol(KIP_853_PROTOCOL)
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(leader, follower)), KRaftVersion.KRAFT_VERSION_1
             )
@@ -118,7 +118,7 @@ public class KafkaRaftClientAutoJoinTest {
             newFollowerKey.id(),
             newFollowerKey.directoryId().get()
         )
-            .withRaftProtocol(KIP_853_PROTOCOL)
+        .withRaftProtocol(KIP_853_PROTOCOL)
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(leader, oldFollower)), KRaftVersion.KRAFT_VERSION_1
             )
@@ -179,7 +179,7 @@ public class KafkaRaftClientAutoJoinTest {
             newObserver.id(),
             newObserver.directoryId().get()
         )
-            .withRaftProtocol(KIP_853_PROTOCOL)
+        .withRaftProtocol(KIP_853_PROTOCOL)
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(leader, follower)), KRaftVersion.KRAFT_VERSION_1
             )
@@ -208,7 +208,7 @@ public class KafkaRaftClientAutoJoinTest {
             observer.id(),
             observer.directoryId().get()
         )
-            .withRaftProtocol(KIP_853_PROTOCOL)
+        .withRaftProtocol(KIP_853_PROTOCOL)
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(leader, follower)), KRaftVersion.KRAFT_VERSION_1
             )
@@ -237,7 +237,7 @@ public class KafkaRaftClientAutoJoinTest {
             observer.id(),
             observer.directoryId().get()
         )
-            .withRaftProtocol(KIP_595_PROTOCOL)
+        .withRaftProtocol(KIP_595_PROTOCOL)
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(leader, follower)), KRaftVersion.KRAFT_VERSION_0
             )

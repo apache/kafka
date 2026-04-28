@@ -55,7 +55,7 @@ public class BrokerHeartbeatManagerTest {
     @Test
     public void testHasValidSession() {
         BrokerHeartbeatManager manager = newBrokerHeartbeatManager();
-        MockTime time = (MockTime)  manager.time();
+        MockTime time = (MockTime) manager.time();
         assertFalse(manager.hasValidSession(0, 100L));
         for (int brokerId = 0; brokerId < 3; brokerId++) {
             manager.register(brokerId, true);
@@ -226,11 +226,11 @@ public class BrokerHeartbeatManagerTest {
             manager.calculateNextBrokerState(5,
                 new BrokerHeartbeatRequestData().setWantShutDown(true), 100, () -> true));
         assertEquals("Broker 6 is not registered.",
-                assertThrows(IllegalStateException.class,
-                        () -> manager.calculateNextBrokerState(6, new BrokerHeartbeatRequestData().setWantShutDown(true), 100, () -> true)).getMessage());
+            assertThrows(IllegalStateException.class,
+                () -> manager.calculateNextBrokerState(6, new BrokerHeartbeatRequestData().setWantShutDown(true), 100, () -> true)).getMessage());
         assertEquals("Broker 7 is not registered.",
-                assertThrows(IllegalStateException.class,
-                        () -> manager.calculateNextBrokerState(7, new BrokerHeartbeatRequestData().setWantShutDown(true), 100, () -> true)).getMessage());
+            assertThrows(IllegalStateException.class,
+                () -> manager.calculateNextBrokerState(7, new BrokerHeartbeatRequestData().setWantShutDown(true), 100, () -> true)).getMessage());
     }
 
     @Test
@@ -239,10 +239,10 @@ public class BrokerHeartbeatManagerTest {
         manager.register(1, true);
         manager.register(3, true);
         assertEquals("Broker 2 is not registered.",
-                assertThrows(IllegalStateException.class,
-                        () -> manager.touch(2, false, 0)).getMessage());
+            assertThrows(IllegalStateException.class,
+                () -> manager.touch(2, false, 0)).getMessage());
         assertEquals("Broker 4 is not registered.",
-                assertThrows(IllegalStateException.class,
-                        () -> manager.touch(4, false, 0)).getMessage());
+            assertThrows(IllegalStateException.class,
+                () -> manager.touch(4, false, 0)).getMessage());
     }
 }

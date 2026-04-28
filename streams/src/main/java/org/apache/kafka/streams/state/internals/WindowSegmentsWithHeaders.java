@@ -33,9 +33,9 @@ class WindowSegmentsWithHeaders extends AbstractSegments<WindowSegmentWithHeader
     private final RocksDBMetricsRecorder metricsRecorder;
 
     WindowSegmentsWithHeaders(final String name,
-                              final String metricsScope,
-                              final long retentionPeriod,
-                              final long segmentInterval) {
+        final String metricsScope,
+        final long retentionPeriod,
+        final long segmentInterval) {
         super(name, retentionPeriod, segmentInterval);
         metricsRecorder = new RocksDBMetricsRecorder(metricsScope, name);
     }

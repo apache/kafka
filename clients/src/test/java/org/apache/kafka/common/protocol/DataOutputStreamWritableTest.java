@@ -38,7 +38,7 @@ public class DataOutputStreamWritableTest {
         ByteBuffer slicedBuffer = sourceBuffer.slice();
 
         Writable writable = new DataOutputStreamWritable(
-                new DataOutputStream(new ByteBufferOutputStream(resultBuffer)));
+            new DataOutputStream(new ByteBufferOutputStream(resultBuffer)));
 
         writable.writeByteBuffer(slicedBuffer);
 
@@ -59,7 +59,7 @@ public class DataOutputStreamWritableTest {
         slicedBuffer.position(1);
 
         Writable writable = new DataOutputStreamWritable(
-                new DataOutputStream(new ByteBufferOutputStream(resultBuffer)));
+            new DataOutputStream(new ByteBufferOutputStream(resultBuffer)));
 
         writable.writeByteBuffer(slicedBuffer);
 

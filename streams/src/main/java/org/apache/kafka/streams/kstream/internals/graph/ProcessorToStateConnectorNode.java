@@ -41,7 +41,7 @@ public class ProcessorToStateConnectorNode<K, V> extends ProcessorGraphNode<K, V
      * be connected with those stores
      */
     public ProcessorToStateConnectorNode(final ProcessorParameters<K, V, ?, ?> processorParameters,
-                                         final Set<KTableValueGetterSupplier<?, ?>> valueGetterSuppliers) {
+        final Set<KTableValueGetterSupplier<?, ?>> valueGetterSuppliers) {
         super(processorParameters.processorName(), processorParameters);
         storeNames = valueGetterSuppliers.stream().flatMap(s -> Arrays.stream(s.storeNames())).toArray(String[]::new);
     }
@@ -50,8 +50,8 @@ public class ProcessorToStateConnectorNode<K, V> extends ProcessorGraphNode<K, V
      * Create a node representing a stateful processor, which needs to be connected to the provided stores
      */
     public ProcessorToStateConnectorNode(final String nodeName,
-                                         final ProcessorParameters<K, V, ?, ?> processorParameters,
-                                         final String[] storeNames) {
+        final ProcessorParameters<K, V, ?, ?> processorParameters,
+        final String[] storeNames) {
         super(nodeName, processorParameters);
         this.storeNames = storeNames;
     }

@@ -179,7 +179,7 @@ public class StreamsGroupCommandTest {
             null);
         resultMap.put(firstGroup, exp);
         when(result.all()).thenReturn(KafkaFuture.completedFuture(resultMap));
-        when(ADMIN_CLIENT.describeStreamsGroups(anyCollection(),  any(DescribeStreamsGroupsOptions.class))).thenReturn(result);
+        when(ADMIN_CLIENT.describeStreamsGroups(anyCollection(), any(DescribeStreamsGroupsOptions.class))).thenReturn(result);
 
         StreamsGroupCommandOptions streamsGroupCommandOptions = new StreamsGroupCommandOptions(
             new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS, "--group", firstGroup, "--describe"});
@@ -311,7 +311,7 @@ public class StreamsGroupCommandTest {
         Map<String, TopicDescription> descriptions = Map.of(
             topic, new TopicDescription(topic, false, List.of(
                 new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of()))
-        ));
+            ));
         when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class)))
             .thenReturn(describeTopicsResult);
         when(describeTopicsResult.allTopicNames()).thenReturn(completedFuture(descriptions));
@@ -441,14 +441,14 @@ public class StreamsGroupCommandTest {
 
         service.close();
     }
-    
+
     @Test
     public void testResetOffsetsWithPartitionNotExist() {
         Admin adminClient = mock(KafkaAdminClient.class);
         String groupId = "foo-group";
         String topic = "topic";
         List<String> args = new ArrayList<>(Arrays.asList("--bootstrap-server", "localhost:9092", "--group", groupId, "--reset-offsets", "--input-topic", "topic:3", "--to-latest"));
-        
+
         when(adminClient.describeStreamsGroups(eq(List.of(groupId)), any(DescribeStreamsGroupsOptions.class)))
             .thenReturn(describeStreamsResult(groupId, GroupState.DEAD));
         DescribeTopicsResult describeTopicsResult = mock(DescribeTopicsResult.class);
@@ -456,7 +456,7 @@ public class StreamsGroupCommandTest {
         Map<String, TopicDescription> descriptions = Map.of(
             topic, new TopicDescription(topic, false, List.of(
                 new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of()))
-        ));
+            ));
         when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class)))
             .thenReturn(describeTopicsResult);
         when(describeTopicsResult.allTopicNames()).thenReturn(completedFuture(descriptions));
@@ -464,12 +464,12 @@ public class StreamsGroupCommandTest {
             .thenReturn(listOffsetsResult());
         ListStreamsGroupOffsetsResult result = mock(ListStreamsGroupOffsetsResult.class);
         Map<TopicPartition, OffsetAndMetadata> committedOffsetsMap = Map.of(
-            new TopicPartition(topic, 0), 
+            new TopicPartition(topic, 0),
             new OffsetAndMetadata(12, Optional.of(0), ""),
             new TopicPartition(topic, 1),
-            new OffsetAndMetadata(12, Optional.of(0), "")  
+            new OffsetAndMetadata(12, Optional.of(0), "")
         );
-        
+
         when(adminClient.listStreamsGroupOffsets(anyMap(), any(ListStreamsGroupOffsetsOptions.class))).thenReturn(result);
         when(result.partitionsToOffsetAndMetadata(anyString())).thenReturn(KafkaFuture.completedFuture(committedOffsetsMap));
         StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args.toArray(new String[0]), adminClient);
@@ -495,9 +495,9 @@ public class StreamsGroupCommandTest {
             String[] args = new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS, "--list"};
             mockedStreamGroupCommand.when(() -> StreamsGroupCommand.execute(any(String[].class))).thenCallRealMethod();
             mockedStreamGroupCommand.when(() -> StreamsGroupCommand.run(any(StreamsGroupCommandOptions.class))).thenThrow(new ExecutionException("ExecutionException", new RuntimeException()));
-            
+
             assertEquals(1, StreamsGroupCommand.execute(args));
-            
+
             mockedStreamGroupCommand.verify(() -> StreamsGroupCommand.run(any(StreamsGroupCommandOptions.class)));
         }
     }
@@ -508,9 +508,9 @@ public class StreamsGroupCommandTest {
             String[] args = new String[]{"--bootstrap-server", BOOTSTRAP_SERVERS, "--list"};
             mockedStreamGroupCommand.when(() -> StreamsGroupCommand.execute(any(String[].class))).thenCallRealMethod();
             mockedStreamGroupCommand.when(() -> StreamsGroupCommand.run(any(StreamsGroupCommandOptions.class))).thenThrow(new InterruptedException("InterruptedException"));
-            
+
             assertEquals(1, StreamsGroupCommand.execute(args));
-            
+
             mockedStreamGroupCommand.verify(() -> StreamsGroupCommand.run(any(StreamsGroupCommandOptions.class)));
         }
     }

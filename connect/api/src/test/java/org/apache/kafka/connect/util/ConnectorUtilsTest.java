@@ -61,6 +61,6 @@ public class ConnectorUtilsTest {
     @Test
     public void testGroupPartitionsInvalidCount() {
         assertThrows(IllegalArgumentException.class,
-            () -> ConnectorUtils.groupPartitions(FIVE_ELEMENTS, 0));
+                () -> ConnectorUtils.groupPartitions(FIVE_ELEMENTS, 0));
     }
 }

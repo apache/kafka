@@ -57,7 +57,7 @@ public class KafkaRaftClientPreVoteTest {
             local.id(),
             local.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, otherNodeKey, electedLeader)), kraftVersion)
+        .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, otherNodeKey, electedLeader)), kraftVersion)
             .withElectedLeader(epoch, electedLeader.id())
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
@@ -111,7 +111,7 @@ public class KafkaRaftClientPreVoteTest {
             localKey.id(),
             localKey.directoryId().get()
         )
-            .withStartingVoters(voters, kraftVersion)
+        .withStartingVoters(voters, kraftVersion)
             .withVotedCandidate(epoch, votedCandidateKey)
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
@@ -158,7 +158,7 @@ public class KafkaRaftClientPreVoteTest {
             localKey.id(),
             localKey.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)), kraftVersion)
+        .withStartingVoters(VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)), kraftVersion)
             .withVotedCandidate(epoch, ReplicaKey.of(localId, localKey.directoryId().get()))
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
@@ -202,7 +202,7 @@ public class KafkaRaftClientPreVoteTest {
             localKey.id(),
             localKey.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(replica1, replica2)), kraftVersion)
+        .withStartingVoters(VoterSetTest.voterSet(Stream.of(replica1, replica2)), kraftVersion)
             .withUnknownLeader(epoch)
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
@@ -248,7 +248,7 @@ public class KafkaRaftClientPreVoteTest {
             localKey.id(),
             localKey.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(replica1, replica2)), kraftVersion)
+        .withStartingVoters(VoterSetTest.voterSet(Stream.of(replica1, replica2)), kraftVersion)
             .withVotedCandidate(epoch, replica2)
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
@@ -293,7 +293,7 @@ public class KafkaRaftClientPreVoteTest {
             localKey.id(),
             localKey.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(replica1, replica2)), kraftVersion)
+        .withStartingVoters(VoterSetTest.voterSet(Stream.of(replica1, replica2)), kraftVersion)
             .withElectedLeader(epoch, leader.id())
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
@@ -339,7 +339,7 @@ public class KafkaRaftClientPreVoteTest {
             localKey.id(),
             localKey.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(leader, follower)), kraftVersion)
+        .withStartingVoters(VoterSetTest.voterSet(Stream.of(leader, follower)), kraftVersion)
             .withElectedLeader(epoch, leader.id())
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
@@ -379,7 +379,7 @@ public class KafkaRaftClientPreVoteTest {
             local.id(),
             local.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, otherNodeKey)), kraftVersion)
+        .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, otherNodeKey)), kraftVersion)
             .withUnknownLeader(epoch)
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
@@ -402,7 +402,7 @@ public class KafkaRaftClientPreVoteTest {
             localKey.id(),
             localKey.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)), kraftVersion)
+        .withStartingVoters(VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)), kraftVersion)
             .withUnknownLeader(2)
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
@@ -429,7 +429,7 @@ public class KafkaRaftClientPreVoteTest {
             localKey.id(),
             localKey.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)), kraftVersion)
+        .withStartingVoters(VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)), kraftVersion)
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
 
@@ -468,7 +468,7 @@ public class KafkaRaftClientPreVoteTest {
             localKey.id(),
             localKey.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)), kraftVersion)
+        .withStartingVoters(VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)), kraftVersion)
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
 
@@ -517,7 +517,7 @@ public class KafkaRaftClientPreVoteTest {
             localKey.id(),
             localKey.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)), kraftVersion)
+        .withStartingVoters(VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)), kraftVersion)
             .withUnknownLeader(4)
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
@@ -546,7 +546,7 @@ public class KafkaRaftClientPreVoteTest {
             localKey.id(),
             localKey.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)), kraftVersion)
+        .withStartingVoters(VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)), kraftVersion)
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
         context.unattachedToLeader();
@@ -578,7 +578,7 @@ public class KafkaRaftClientPreVoteTest {
             localKey.id(),
             localKey.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)), kraftVersion)
+        .withStartingVoters(VoterSetTest.voterSet(Stream.of(localKey, otherNodeKey)), kraftVersion)
             .withElectedLeader(epoch, otherNodeKey.id())
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
@@ -635,7 +635,7 @@ public class KafkaRaftClientPreVoteTest {
             local.id(),
             local.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(replica1, replica2)), kraftVersion)
+        .withStartingVoters(VoterSetTest.voterSet(Stream.of(replica1, replica2)), kraftVersion)
             .withElectedLeader(epoch, replica1.id())
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
@@ -683,7 +683,7 @@ public class KafkaRaftClientPreVoteTest {
             local.id(),
             local.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, replica1, replica2)), kraftVersion)
+        .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, replica1, replica2)), kraftVersion)
             .withUnknownLeader(epoch)
             .withRaftProtocol(KIP_996_PROTOCOL)
             .appendToLog(epoch, List.of("a", "b", "c"))
@@ -719,7 +719,7 @@ public class KafkaRaftClientPreVoteTest {
             local.id(),
             local.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, voter2, voter3)), kraftVersion)
+        .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, voter2, voter3)), kraftVersion)
             .withUnknownLeader(epoch)
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
@@ -772,7 +772,7 @@ public class KafkaRaftClientPreVoteTest {
             local.id(),
             local.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, voter2Key, voter3Key)), kraftVersion)
+        .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, voter2Key, voter3Key)), kraftVersion)
             .withUnknownLeader(epoch)
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
@@ -857,7 +857,7 @@ public class KafkaRaftClientPreVoteTest {
             local.id(),
             local.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, leader)), kraftVersion)
+        .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, leader)), kraftVersion)
             .withUnknownLeader(epoch)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -892,7 +892,7 @@ public class KafkaRaftClientPreVoteTest {
             local.id(),
             local.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, otherNode)), kraftVersion)
+        .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, otherNode)), kraftVersion)
             .withUnknownLeader(epoch)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -945,7 +945,7 @@ public class KafkaRaftClientPreVoteTest {
             local.id(),
             local.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, replica1, replica2)), kraftVersion)
+        .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, replica1, replica2)), kraftVersion)
             .withElectedLeader(epoch, replica1.id())
             .withRaftProtocol(raftProtocol)
             .build();
@@ -1023,7 +1023,7 @@ public class KafkaRaftClientPreVoteTest {
             local.id(),
             local.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, voter1)), kraftVersion)
+        .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, voter1)), kraftVersion)
             .withElectedLeader(epoch, electedLeaderId)
             .withRaftProtocol(KIP_996_PROTOCOL)
             .build();
@@ -1064,7 +1064,7 @@ public class KafkaRaftClientPreVoteTest {
             local.id(),
             local.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, leader, follower)), kraftVersion)
+        .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, leader, follower)), kraftVersion)
             .withUnknownLeader(epoch)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -1106,7 +1106,7 @@ public class KafkaRaftClientPreVoteTest {
             local.id(),
             local.directoryId().get()
         )
-            .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, otherNode)), kraftVersion)
+        .withStartingVoters(VoterSetTest.voterSet(Stream.of(local, otherNode)), kraftVersion)
             .withUnknownLeader(epoch)
             .withRaftProtocol(raftProtocol)
             .build();

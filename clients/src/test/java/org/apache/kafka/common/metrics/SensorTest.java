@@ -80,11 +80,11 @@ public class SensorTest {
 
     @Test
     public void testShouldRecordForInfoLevelSensor() {
-        Sensor infoSensor = new Sensor(null, "infoSensor", null, INFO_CONFIG,  Time.SYSTEM,
+        Sensor infoSensor = new Sensor(null, "infoSensor", null, INFO_CONFIG, Time.SYSTEM,
             0, Sensor.RecordingLevel.INFO);
         assertTrue(infoSensor.shouldRecord());
 
-        infoSensor = new Sensor(null, "infoSensor", null, DEBUG_CONFIG,  Time.SYSTEM,
+        infoSensor = new Sensor(null, "infoSensor", null, DEBUG_CONFIG, Time.SYSTEM,
             0, Sensor.RecordingLevel.INFO);
         assertTrue(infoSensor.shouldRecord());
 
@@ -100,26 +100,26 @@ public class SensorTest {
         assertFalse(debugSensor.shouldRecord());
 
         debugSensor = new Sensor(null, "debugSensor", null, DEBUG_CONFIG, Time.SYSTEM,
-             0, Sensor.RecordingLevel.DEBUG);
+            0, Sensor.RecordingLevel.DEBUG);
         assertTrue(debugSensor.shouldRecord());
 
         debugSensor = new Sensor(null, "debugSensor", null, TRACE_CONFIG, Time.SYSTEM,
-             0, Sensor.RecordingLevel.DEBUG);
+            0, Sensor.RecordingLevel.DEBUG);
         assertTrue(debugSensor.shouldRecord());
     }
 
     @Test
     public void testShouldRecordForTraceLevelSensor() {
         Sensor traceSensor = new Sensor(null, "traceSensor", null, INFO_CONFIG, Time.SYSTEM,
-             0, Sensor.RecordingLevel.TRACE);
+            0, Sensor.RecordingLevel.TRACE);
         assertFalse(traceSensor.shouldRecord());
 
         traceSensor = new Sensor(null, "traceSensor", null, DEBUG_CONFIG, Time.SYSTEM,
-             0, Sensor.RecordingLevel.TRACE);
+            0, Sensor.RecordingLevel.TRACE);
         assertFalse(traceSensor.shouldRecord());
 
         traceSensor = new Sensor(null, "traceSensor", null, TRACE_CONFIG, Time.SYSTEM,
-             0, Sensor.RecordingLevel.TRACE);
+            0, Sensor.RecordingLevel.TRACE);
         assertTrue(traceSensor.shouldRecord());
     }
 
@@ -130,7 +130,7 @@ public class SensorTest {
         try (Metrics metrics = new Metrics(config, Collections.singletonList(new JmxReporter()), mockTime, true)) {
             long inactiveSensorExpirationTimeSeconds = 60L;
             Sensor sensor = new Sensor(metrics, "sensor", null, config, mockTime,
-                    inactiveSensorExpirationTimeSeconds, Sensor.RecordingLevel.INFO);
+                inactiveSensorExpirationTimeSeconds, Sensor.RecordingLevel.INFO);
 
             assertTrue(sensor.add(metrics.metricName("test1", "grp1"), new Avg()));
 
@@ -193,12 +193,12 @@ public class SensorTest {
         List<Future<Throwable>> workers = new ArrayList<>(threadCount);
         boolean needShutdown = true;
         try {
-            for (int i = 0; i != threadCount; ++i) {
+            for (int i = 0;i != threadCount;++i) {
                 final int index = i;
                 workers.add(service.submit(() -> {
                     try {
                         assertTrue(latch.await(5, TimeUnit.SECONDS));
-                        for (int j = 0; j != 20; ++j) {
+                        for (int j = 0;j != 20;++j) {
                             sensor.record(j * index, System.currentTimeMillis() + j, false);
                             sensor.checkQuotas();
                         }

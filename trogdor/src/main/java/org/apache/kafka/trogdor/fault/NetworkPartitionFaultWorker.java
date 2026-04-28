@@ -50,7 +50,7 @@ public class NetworkPartitionFaultWorker implements TaskWorker {
 
     @Override
     public void start(Platform platform, WorkerStatusTracker status,
-                      KafkaFutureImpl<String> errorFuture) throws Exception {
+        KafkaFutureImpl<String> errorFuture) throws Exception {
         log.info("Activating NetworkPartitionFault {}.", id);
         this.status = status;
         this.status.update(new TextNode("creating network partition " + id));
@@ -78,7 +78,7 @@ public class NetworkPartitionFaultWorker implements TaskWorker {
         for (String nodeName : toBlock) {
             Node node = topology.node(nodeName);
             InetAddress addr = InetAddress.getByName(node.hostname());
-            platform.runCommand(new String[] {
+            platform.runCommand(new String[]{
                 "sudo", "iptables", iptablesAction, "INPUT", "-p", "tcp", "-s",
                 addr.getHostAddress(), "-j", "DROP", "-m", "comment", "--comment", nodeName
             });

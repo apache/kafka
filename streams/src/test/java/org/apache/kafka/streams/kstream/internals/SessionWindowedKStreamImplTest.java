@@ -167,7 +167,7 @@ public class SessionWindowedKStreamImplTest {
         }
 
         final ArrayList<KeyValueTimestamp<Windowed<String>, String>> processed =
-                supplier.theCapturedProcessor().processed();
+            supplier.theCapturedProcessor().processed();
 
         if (emitFinal) {
             assertEquals(
@@ -198,9 +198,9 @@ public class SessionWindowedKStreamImplTest {
         setup(inputType, withHeaders);
         final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         stream.aggregate(MockInitializer.STRING_INIT,
-                         MockAggregator.TOSTRING_ADDER,
-                         sessionMerger,
-                         Materialized.with(Serdes.String(), Serdes.String()))
+            MockAggregator.TOSTRING_ADDER,
+            sessionMerger,
+            Materialized.with(Serdes.String(), Serdes.String()))
             .toStream()
             .process(supplier);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -208,7 +208,7 @@ public class SessionWindowedKStreamImplTest {
         }
 
         final ArrayList<KeyValueTimestamp<Windowed<String>, String>> processed =
-                supplier.theCapturedProcessor().processed();
+            supplier.theCapturedProcessor().processed();
 
         if (emitFinal) {
             assertEquals(
@@ -245,17 +245,17 @@ public class SessionWindowedKStreamImplTest {
             final List<KeyValue<Windowed<String>, Long>> data = unwrapAggregations(store.fetch("1", "2"));
             if (!emitFinal) {
                 assertThat(
-                        data,
-                        equalTo(Arrays.asList(
-                                KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), 2L),
-                                KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), 1L),
-                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), 2L))));
+                    data,
+                    equalTo(Arrays.asList(
+                        KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), 2L),
+                        KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), 1L),
+                        KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), 2L))));
             } else {
                 assertThat(
-                        data,
-                        equalTo(Arrays.asList(
-                                KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), 1L),
-                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), 2L))));
+                    data,
+                    equalTo(Arrays.asList(
+                        KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), 1L),
+                        KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), 2L))));
 
             }
         }
@@ -274,17 +274,17 @@ public class SessionWindowedKStreamImplTest {
 
             if (!emitFinal) {
                 assertThat(
-                        data,
-                        equalTo(Arrays.asList(
-                                KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), "1+2"),
-                                KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "3"),
-                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "1+2"))));
+                    data,
+                    equalTo(Arrays.asList(
+                        KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), "1+2"),
+                        KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "3"),
+                        KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "1+2"))));
             } else {
                 assertThat(
-                        data,
-                        equalTo(Arrays.asList(
-                                KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "3"),
-                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "1+2"))));
+                    data,
+                    equalTo(Arrays.asList(
+                        KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "3"),
+                        KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "1+2"))));
 
             }
         }
@@ -306,17 +306,17 @@ public class SessionWindowedKStreamImplTest {
             final List<KeyValue<Windowed<String>, String>> data = unwrapAggregations(sessionStore.fetch("1", "2"));
             if (!emitFinal) {
                 assertThat(
-                        data,
-                        equalTo(Arrays.asList(
-                                KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), "0+0+1+2"),
-                                KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "0+3"),
-                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "0+0+1+2"))));
+                    data,
+                    equalTo(Arrays.asList(
+                        KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), "0+0+1+2"),
+                        KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "0+3"),
+                        KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "0+0+1+2"))));
             } else {
                 assertThat(
-                        data,
-                        equalTo(Arrays.asList(
-                                KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "0+3"),
-                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "0+0+1+2"))));
+                    data,
+                    equalTo(Arrays.asList(
+                        KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "0+3"),
+                        KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "0+0+1+2"))));
 
             }
         }
@@ -420,10 +420,10 @@ public class SessionWindowedKStreamImplTest {
             return;
 
         stream.aggregate(
-                MockInitializer.STRING_INIT,
-                MockAggregator.TOSTRING_ADDER,
-                sessionMerger,
-                Materialized.<String, String, SessionStore<Bytes, byte[]>>as("aggregated").withValueSerde(Serdes.String()));
+            MockInitializer.STRING_INIT,
+            MockAggregator.TOSTRING_ADDER,
+            sessionMerger,
+            Materialized.<String, String, SessionStore<Bytes, byte[]>>as("aggregated").withValueSerde(Serdes.String()));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final StateStore store = driver.getAllStateStores().get("aggregated");
@@ -439,7 +439,7 @@ public class SessionWindowedKStreamImplTest {
 
     private void processData(final TopologyTestDriver driver) {
         final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
+            driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
         inputTopic.pipeInput("1", "1", 10);
         inputTopic.pipeInput("1", "2", 15);
         inputTopic.pipeInput("1", "3", 600);
@@ -448,7 +448,7 @@ public class SessionWindowedKStreamImplTest {
     }
 
     private <V> List<KeyValue<Windowed<String>, V>> unwrapAggregations(
-            final KeyValueIterator<Windowed<String>, V> iterator) {
+        final KeyValueIterator<Windowed<String>, V> iterator) {
         final List<KeyValue<Windowed<String>, V>> result = new ArrayList<>();
         while (iterator.hasNext()) {
             final KeyValue<Windowed<String>, V> next = iterator.next();

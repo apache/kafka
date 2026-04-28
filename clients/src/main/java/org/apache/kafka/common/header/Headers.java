@@ -23,7 +23,7 @@ package org.apache.kafka.common.header;
  * The order of headers is preserved in the order they were added.
  */
 public interface Headers extends Iterable<Header> {
-    
+
     /**
      * Adds a header (key inside), to the end, returning if the operation succeeded.
      * 

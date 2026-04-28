@@ -72,7 +72,7 @@ public class KTableKTableInnerJoinTest {
     public void testJoin(final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final int[] expectedKeys = new int[] {0, 1, 2, 3};
+        final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
@@ -90,7 +90,7 @@ public class KTableKTableInnerJoinTest {
     public void testQueryableJoin(final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final int[] expectedKeys = new int[] {0, 1, 2, 3};
+        final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
@@ -108,7 +108,7 @@ public class KTableKTableInnerJoinTest {
     public void testQueryableNotSendingOldValues(final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final int[] expectedKeys = new int[] {0, 1, 2, 3};
+        final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
@@ -128,7 +128,7 @@ public class KTableKTableInnerJoinTest {
     public void testNotSendingOldValues(final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final int[] expectedKeys = new int[] {0, 1, 2, 3};
+        final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
@@ -148,7 +148,7 @@ public class KTableKTableInnerJoinTest {
     public void testSendingOldValues(final boolean withHeaders) {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final int[] expectedKeys = new int[] {0, 1, 2, 3};
+        final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         final KTable<Integer, String> table1;
         final KTable<Integer, String> table2;
@@ -166,9 +166,9 @@ public class KTableKTableInnerJoinTest {
         setDslStoreFormat(withHeaders);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
-                    driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
-                    driver.createInputTopic(topic2, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic2, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockApiProcessor<Integer, String, Void, Void> proc = supplier.theCapturedProcessor();
 
             assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
@@ -282,19 +282,19 @@ public class KTableKTableInnerJoinTest {
     }
 
     private void doTestNotSendingOldValues(final StreamsBuilder builder,
-                                           final int[] expectedKeys,
-                                           final KTable<Integer, String> table1,
-                                           final KTable<Integer, String> table2,
-                                           final MockApiProcessorSupplier<Integer, String, Void, Void> supplier,
-                                           final KTable<Integer, String> joined,
-                                           final boolean withHeaders) {
+        final int[] expectedKeys,
+        final KTable<Integer, String> table1,
+        final KTable<Integer, String> table2,
+        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier,
+        final KTable<Integer, String> joined,
+        final boolean withHeaders) {
 
         setDslStoreFormat(withHeaders);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
-                    driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
-                    driver.createInputTopic(topic2, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic2, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockApiProcessor<Integer, String, Void, Void> proc = supplier.theCapturedProcessor();
 
             assertFalse(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
@@ -390,11 +390,11 @@ public class KTableKTableInnerJoinTest {
         setDslStoreFormat(withHeaders);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic1 =
-                    driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
-                    driver.createInputTopic(topic2, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic2, Serdes.Integer().serializer(), Serdes.String().serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestOutputTopic<Integer, String> outputTopic =
-                    driver.createOutputTopic(output, Serdes.Integer().deserializer(), Serdes.String().deserializer());
+                driver.createOutputTopic(output, Serdes.Integer().deserializer(), Serdes.String().deserializer());
 
             // push two items to the primary stream. the other table is empty
             for (int i = 0; i < 2; i++) {
@@ -485,9 +485,9 @@ public class KTableKTableInnerJoinTest {
     }
 
     private void assertOutputKeyValueTimestamp(final TestOutputTopic<Integer, String> outputTopic,
-                                               final Integer expectedKey,
-                                               final String expectedValue,
-                                               final long expectedTimestamp) {
+        final Integer expectedKey,
+        final String expectedValue,
+        final long expectedTimestamp) {
         assertThat(outputTopic.readRecord(), equalTo(new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp)));
     }
 

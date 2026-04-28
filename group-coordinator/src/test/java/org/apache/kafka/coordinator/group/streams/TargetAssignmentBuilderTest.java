@@ -139,7 +139,7 @@ public class TargetAssignmentBuilderTest {
         assertEquals(Map.of(), result.targetAssignment());
     }
 
-    
+
     @ParameterizedTest
     @EnumSource(TaskRole.class)
     public void testAssignmentHasNotChanged(TaskRole taskRole) {
@@ -181,11 +181,11 @@ public class TargetAssignmentBuilderTest {
         )), result.records());
 
         Map<String, TasksTuple> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-1", mkTasksTuple(taskRole, 
+        expectedAssignment.put("member-1", mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 1, 2, 3),
             mkTasks(barSubtopologyId, 1, 2, 3)
         ));
-        expectedAssignment.put("member-2", mkTasksTuple(taskRole, 
+        expectedAssignment.put("member-2", mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 4, 5, 6),
             mkTasks(barSubtopologyId, 4, 5, 6)
         ));
@@ -193,7 +193,7 @@ public class TargetAssignmentBuilderTest {
         assertEquals(expectedAssignment, result.targetAssignment());
     }
 
-    
+
     @ParameterizedTest
     @EnumSource(TaskRole.class)
     public void testAssignmentSwapped(TaskRole taskRole) {
@@ -248,11 +248,11 @@ public class TargetAssignmentBuilderTest {
         ), result.records().get(2));
 
         Map<String, TasksTuple> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-2", mkTasksTuple(taskRole, 
+        expectedAssignment.put("member-2", mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 1, 2, 3),
             mkTasks(barSubtopologyId, 1, 2, 3)
         ));
-        expectedAssignment.put("member-1", mkTasksTuple(taskRole, 
+        expectedAssignment.put("member-1", mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 4, 5, 6),
             mkTasks(barSubtopologyId, 4, 5, 6)
         ));
@@ -260,7 +260,7 @@ public class TargetAssignmentBuilderTest {
         assertEquals(expectedAssignment, result.targetAssignment());
     }
 
-    
+
     @ParameterizedTest
     @EnumSource(TaskRole.class)
     public void testNewMember(TaskRole taskRole) {
@@ -326,15 +326,15 @@ public class TargetAssignmentBuilderTest {
         ), result.records().get(3));
 
         Map<String, TasksTuple> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-1", mkTasksTuple(taskRole, 
+        expectedAssignment.put("member-1", mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 1, 2),
             mkTasks(barSubtopologyId, 1, 2)
         ));
-        expectedAssignment.put("member-2", mkTasksTuple(taskRole, 
+        expectedAssignment.put("member-2", mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 3, 4),
             mkTasks(barSubtopologyId, 3, 4)
         ));
-        expectedAssignment.put("member-3", mkTasksTuple(taskRole, 
+        expectedAssignment.put("member-3", mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 5, 6),
             mkTasks(barSubtopologyId, 5, 6)
         ));
@@ -342,7 +342,7 @@ public class TargetAssignmentBuilderTest {
         assertEquals(expectedAssignment, result.targetAssignment());
     }
 
-    
+
     @ParameterizedTest
     @EnumSource(TaskRole.class)
     public void testUpdateMember(TaskRole taskRole) {
@@ -416,15 +416,15 @@ public class TargetAssignmentBuilderTest {
         ), result.records().get(3));
 
         Map<String, TasksTuple> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-1", mkTasksTuple(taskRole, 
+        expectedAssignment.put("member-1", mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 1, 2),
             mkTasks(barSubtopologyId, 1, 2)
         ));
-        expectedAssignment.put("member-2", mkTasksTuple(taskRole, 
+        expectedAssignment.put("member-2", mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 3, 4),
             mkTasks(barSubtopologyId, 3, 4)
         ));
-        expectedAssignment.put("member-3", mkTasksTuple(taskRole, 
+        expectedAssignment.put("member-3", mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 5, 6),
             mkTasks(barSubtopologyId, 5, 6)
         ));
@@ -432,7 +432,7 @@ public class TargetAssignmentBuilderTest {
         assertEquals(expectedAssignment, result.targetAssignment());
     }
 
-    
+
     @ParameterizedTest
     @EnumSource(TaskRole.class)
     public void testPartialAssignmentUpdate(TaskRole taskRole) {
@@ -498,15 +498,15 @@ public class TargetAssignmentBuilderTest {
         ), result.records().get(2));
 
         Map<String, TasksTuple> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-1", mkTasksTuple(taskRole, 
+        expectedAssignment.put("member-1", mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 1, 2),
             mkTasks(barSubtopologyId, 1, 2)
         ));
-        expectedAssignment.put("member-2", mkTasksTuple(taskRole, 
+        expectedAssignment.put("member-2", mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 3, 4, 5),
             mkTasks(barSubtopologyId, 3, 4, 5)
         ));
-        expectedAssignment.put("member-3", mkTasksTuple(taskRole, 
+        expectedAssignment.put("member-3", mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 6),
             mkTasks(barSubtopologyId, 6)
         ));
@@ -514,7 +514,7 @@ public class TargetAssignmentBuilderTest {
         assertEquals(expectedAssignment, result.targetAssignment());
     }
 
-    
+
     @ParameterizedTest
     @EnumSource(TaskRole.class)
     public void testDeleteMember(TaskRole taskRole) {
@@ -576,11 +576,11 @@ public class TargetAssignmentBuilderTest {
         ), result.records().get(2));
 
         Map<String, TasksTuple> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-1", mkTasksTuple(taskRole, 
+        expectedAssignment.put("member-1", mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 1, 2, 3),
             mkTasks(barSubtopologyId, 1, 2, 3)
         ));
-        expectedAssignment.put("member-2", mkTasksTuple(taskRole, 
+        expectedAssignment.put("member-2", mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 4, 5, 6),
             mkTasks(barSubtopologyId, 4, 5, 6)
         ));
@@ -588,7 +588,7 @@ public class TargetAssignmentBuilderTest {
         assertEquals(expectedAssignment, result.targetAssignment());
     }
 
-    
+
     @ParameterizedTest
     @EnumSource(TaskRole.class)
     public void testReplaceStaticMember(TaskRole taskRole) {
@@ -656,16 +656,16 @@ public class TargetAssignmentBuilderTest {
         ), result.records().get(1));
 
         Map<String, TasksTuple> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-1", mkTasksTuple(taskRole, 
+        expectedAssignment.put("member-1", mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 1, 2),
             mkTasks(barSubtopologyId, 1, 2)
         ));
-        expectedAssignment.put("member-2", mkTasksTuple(taskRole, 
+        expectedAssignment.put("member-2", mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 3, 4),
             mkTasks(barSubtopologyId, 3, 4)
         ));
 
-        expectedAssignment.put("member-3-a", mkTasksTuple(taskRole, 
+        expectedAssignment.put("member-3-a", mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 5, 6),
             mkTasks(barSubtopologyId, 5, 6)
         ));
@@ -793,9 +793,9 @@ public class TargetAssignmentBuilderTest {
             // All the existing members are prepared.
             members.forEach((memberId, member) ->
                 memberSpecs.put(memberId, createAssignmentMemberSpec(
-                        member,
-                        targetAssignment.getOrDefault(memberId, TasksTuple.EMPTY)
-                    )
+                    member,
+                    targetAssignment.getOrDefault(memberId, TasksTuple.EMPTY)
+                )
                 ));
 
             // All the updated are added and all the deleted

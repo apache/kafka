@@ -111,8 +111,8 @@ public class MetadataBatchLoaderTest {
 
     static List<ApiMessageAndVersion> noOpRecords(int n) {
         return IntStream.range(0, n)
-                .mapToObj(__ -> new ApiMessageAndVersion(new NoOpRecord(), (short) 0))
-                .toList();
+            .mapToObj(__ -> new ApiMessageAndVersion(new NoOpRecord(), (short) 0))
+            .toList();
     }
 
 
@@ -267,11 +267,11 @@ public class MetadataBatchLoaderTest {
         MockMetadataUpdater updater = new MockMetadataUpdater();
         MockFaultHandler faultHandler = new MockFaultHandler("testUnexpectedAbortTransaction");
         MetadataBatchLoader batchLoader = new MetadataBatchLoader(
-                new LogContext(),
-                new MockTime(),
-                faultHandler,
-                updater,
-                SupportedConfigChecker.TRUE
+            new LogContext(),
+            new MockTime(),
+            faultHandler,
+            updater,
+            SupportedConfigChecker.TRUE
         );
 
         // First batch gets loaded fine
@@ -520,7 +520,7 @@ public class MetadataBatchLoaderTest {
         assertFalse(updater.latestImage.provenance().isOffsetBatchAligned());
 
         batchLoader.loadBatch(Batch.data(
-                22, 42, 0, 10, TXN_BEGIN_SINGLETON), LEADER_AND_EPOCH);
+            22, 42, 0, 10, TXN_BEGIN_SINGLETON), LEADER_AND_EPOCH);
         assertEquals(2, updater.updates);
         assertEquals(100, updater.latestManifest.numBytes());
         assertEquals(21, updater.latestImage.provenance().lastContainedOffset());

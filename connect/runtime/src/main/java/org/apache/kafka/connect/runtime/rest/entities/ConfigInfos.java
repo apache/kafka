@@ -21,9 +21,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 public record ConfigInfos(
-    @JsonProperty("name") String name,
-    @JsonProperty("error_count") int errorCount,
-    @JsonProperty("groups") List<String> groups,
-    @JsonProperty("configs") List<ConfigInfo> configs
+@JsonProperty("name") String name,
+@JsonProperty("error_count") int errorCount,
+@JsonProperty("groups") List<String> groups,
+@JsonProperty("configs") List<ConfigInfo> configs
 ) {
 }

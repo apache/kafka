@@ -162,7 +162,7 @@ public class OffsetCheckpointTest {
 
         final File notExistedFile = new File("/not_existed_dir/not_existed_file");
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(notExistedFile);
-        
+
         final IOException e = assertThrows(IOException.class, () -> checkpoint.write(offsetsToWrite));
         assertThat(e.getMessage(), containsString("No such file or directory"));
     }
@@ -173,7 +173,7 @@ public class OffsetCheckpointTest {
     static void writeVersion0(final Map<TopicPartition, Long> offsets, final File file) throws IOException {
         final FileOutputStream fileOutputStream = new FileOutputStream(file);
         try (final BufferedWriter writer = new BufferedWriter(
-            new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
+                 new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
             writeIntLine(writer, 0);
             writeIntLine(writer, offsets.size());
 

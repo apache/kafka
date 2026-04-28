@@ -22,4 +22,5 @@ package org.apache.kafka.streams.state;
  * @param <K> The key type
  * @param <V> The value type
  */
-public interface TimestampedKeyValueStore<K, V> extends KeyValueStore<K, ValueAndTimestamp<V>> { }
+public interface TimestampedKeyValueStore<K, V> extends KeyValueStore<K, ValueAndTimestamp<V>> {
+}

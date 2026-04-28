@@ -90,7 +90,7 @@ public class AdminClientWithPoliciesIntegrationTest {
             // Set a mutable broker config
             ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "0"); // "0" represents the broker ID
             Map<ConfigResource, Collection<AlterConfigOp>> configOps = Map.of(
-                    brokerResource, List.of(new AlterConfigOp(new ConfigEntry(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, "50000"), OpType.SET))
+                brokerResource, List.of(new AlterConfigOp(new ConfigEntry(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, "50000"), OpType.SET))
             );
             adminClient.incrementalAlterConfigs(configOps).all().get();
             assertEquals(Set.of(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG), validationsForResource(brokerResource).get(0).configs().keySet());
@@ -98,8 +98,8 @@ public class AdminClientWithPoliciesIntegrationTest {
 
             Map<ConfigResource, Collection<AlterConfigOp>> alterConfigs = new HashMap<>();
             alterConfigs.put(topicResource1, List.of(
-                    new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.9"), OpType.SET),
-                    new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2"), OpType.SET)
+                new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.9"), OpType.SET),
+                new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2"), OpType.SET)
             ));
             alterConfigs.put(topicResource2, List.of(new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.8"), OpType.SET)));
             alterConfigs.put(topicResource3, List.of(new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "-1"), OpType.SET)));
@@ -113,7 +113,7 @@ public class AdminClientWithPoliciesIntegrationTest {
             assertFutureThrows(InvalidConfigurationException.class, alterResult.values().get(topicResource3));
             assertFutureThrows(InvalidRequestException.class, alterResult.values().get(brokerResource));
             assertTrue(validationsForResource(brokerResource).isEmpty(),
-                    "Should not see the broker resource in the AlterConfig policy when the broker configs are not being updated.");
+                "Should not see the broker resource in the AlterConfig policy when the broker configs are not being updated.");
             validations.clear();
 
             // Verify that the second resource was updated and the others were not
@@ -138,7 +138,7 @@ public class AdminClientWithPoliciesIntegrationTest {
             assertFutureThrows(InvalidConfigurationException.class, alterResult.values().get(topicResource3));
             assertFutureThrows(InvalidRequestException.class, alterResult.values().get(brokerResource));
             assertTrue(validationsForResource(brokerResource).isEmpty(),
-                    "Should not see the broker resource in the AlterConfig policy when the broker configs are not being updated.");
+                "Should not see the broker resource in the AlterConfig policy when the broker configs are not being updated.");
             validations.clear();
 
             // Verify that no resources are updated since validate_only = true
@@ -156,7 +156,7 @@ public class AdminClientWithPoliciesIntegrationTest {
 
             // Do an incremental alter config on the broker, ensure we don't see the broker config we set earlier in the policy
             alterResult = adminClient.incrementalAlterConfigs(Map.of(
-                    brokerResource, List.of(new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "9999"), OpType.SET))
+                brokerResource, List.of(new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "9999"), OpType.SET))
             ));
             alterResult.all().get();
             assertEquals(Set.of(SocketServerConfigs.MAX_CONNECTIONS_CONFIG), validationsForResource(brokerResource).get(0).configs().keySet());

@@ -66,11 +66,11 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
      * @param store           the RocksDBStore instance (for accessing position, context, and name)
      */
     DualColumnFamilyAccessor(final ColumnFamilyHandle offsetColumnFamily,
-                             final ColumnFamilyHandle oldColumnFamily,
-                             final ColumnFamilyHandle newColumnFamily,
-                             final Function<byte[], byte[]> valueConverter,
-                             final RocksDBStore store,
-                             final AtomicBoolean storeOpen) {
+        final ColumnFamilyHandle oldColumnFamily,
+        final ColumnFamilyHandle newColumnFamily,
+        final Function<byte[], byte[]> valueConverter,
+        final RocksDBStore store,
+        final AtomicBoolean storeOpen) {
         super(offsetColumnFamily, storeOpen);
         this.oldColumnFamily = oldColumnFamily;
         this.newColumnFamily = newColumnFamily;
@@ -80,8 +80,8 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
 
     @Override
     public void put(final DBAccessor accessor,
-                    final byte[] key,
-                    final byte[] value) {
+        final byte[] key,
+        final byte[] value) {
         synchronized (store.position) {
             if (value == null) {
                 try {
@@ -112,7 +112,7 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
 
     @Override
     public void prepareBatch(final List<KeyValue<Bytes, byte[]>> entries,
-                             final WriteBatchInterface batch) throws RocksDBException {
+        final WriteBatchInterface batch) throws RocksDBException {
         for (final KeyValue<Bytes, byte[]> entry : entries) {
             Objects.requireNonNull(entry.key, "key cannot be null");
             addToBatch(entry.key.get(), entry.value, batch);
@@ -127,24 +127,24 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
 
     @Override
     public byte[] get(final DBAccessor accessor, final byte[] key,
-                      final ReadOptions readOptions)
+        final ReadOptions readOptions)
         throws RocksDBException {
         return get(accessor, key, Optional.of(readOptions));
     }
 
     private byte[] get(final DBAccessor accessor, final byte[] key,
-                       final Optional<ReadOptions> readOptions)
+        final Optional<ReadOptions> readOptions)
         throws RocksDBException {
         final byte[] valueInNewFormat = readOptions.isPresent()
-                ? accessor.get(newColumnFamily, readOptions.get(), key)
-                : accessor.get(newColumnFamily, key);
+            ? accessor.get(newColumnFamily, readOptions.get(), key)
+            : accessor.get(newColumnFamily, key);
         if (valueInNewFormat != null) {
             return valueInNewFormat;
         }
 
         final byte[] valueInOldFormat = readOptions.isPresent()
-                ? accessor.get(oldColumnFamily, readOptions.get(), key)
-                : accessor.get(oldColumnFamily, key);
+            ? accessor.get(oldColumnFamily, readOptions.get(), key)
+            : accessor.get(oldColumnFamily, key);
         if (valueInOldFormat != null) {
             final byte[] convertedValue = valueConverter.apply(valueInOldFormat);
             // This does only work because the changelog topic contains correct data already.
@@ -174,9 +174,9 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
 
     @Override
     public ManagedKeyValueIterator<Bytes, byte[]> range(final DBAccessor accessor,
-                                                        final Bytes from,
-                                                        final Bytes to,
-                                                        final boolean forward) {
+        final Bytes from,
+        final Bytes to,
+        final boolean forward) {
         return new RocksDBDualCFRangeIterator(
             store.name(),
             accessor.newIterator(newColumnFamily),
@@ -204,7 +204,7 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
 
     @Override
     public ManagedKeyValueIterator<Bytes, byte[]> all(final DBAccessor accessor,
-                                                      final boolean forward) {
+        final boolean forward) {
         final RocksIterator innerIterNew = accessor.newIterator(newColumnFamily);
         final RocksIterator innerIterOld = accessor.newIterator(oldColumnFamily);
         if (forward) {
@@ -219,7 +219,7 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
 
     @Override
     public ManagedKeyValueIterator<Bytes, byte[]> prefixScan(final DBAccessor accessor,
-                                                             final Bytes prefix) {
+        final Bytes prefix) {
         final Bytes to = incrementWithoutOverflow(prefix);
         return new RocksDBDualCFRangeIterator(
             store.name(),
@@ -237,13 +237,13 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
     public long approximateNumEntries(final DBAccessor accessor)
         throws RocksDBException {
         return accessor.approximateNumEntries(oldColumnFamily)
-                + accessor.approximateNumEntries(newColumnFamily);
+            + accessor.approximateNumEntries(newColumnFamily);
     }
 
     @Override
     public void addToBatch(final byte[] key,
-                           final byte[] value,
-                           final WriteBatchInterface batch) throws RocksDBException {
+        final byte[] value,
+        final WriteBatchInterface batch) throws RocksDBException {
         if (value == null) {
             batch.delete(oldColumnFamily, key);
             batch.delete(newColumnFamily, key);
@@ -283,10 +283,10 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
         private Runnable closeCallback = null;
 
         RocksDBDualCFIterator(final String storeName,
-                              final RocksIterator iterNewFormat,
-                              final RocksIterator iterOldFormat,
-                              final boolean forward,
-                              final Function<byte[], byte[]> valueConverter) {
+            final RocksIterator iterNewFormat,
+            final RocksIterator iterOldFormat,
+            final boolean forward,
+            final Function<byte[], byte[]> valueConverter) {
             this.iterNewFormat = iterNewFormat;
             this.iterOldFormat = iterOldFormat;
             this.storeName = storeName;
@@ -298,7 +298,7 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
         public synchronized boolean hasNext() {
             if (!open) {
                 throw new org.apache.kafka.streams.errors.InvalidStateStoreException(
-                        String.format("RocksDB iterator for store %s has closed", storeName));
+                    String.format("RocksDB iterator for store %s has closed", storeName));
             }
             return super.hasNext();
         }
@@ -370,7 +370,7 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
         public synchronized void close() {
             if (closeCallback == null) {
                 throw new IllegalStateException(
-                        "RocksDBDualCFIterator expects close callback to be set immediately upon creation");
+                    "RocksDBDualCFIterator expects close callback to be set immediately upon creation");
             }
             closeCallback.run();
 
@@ -394,22 +394,22 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
     }
 
     private static class RocksDBDualCFRangeIterator extends RocksDBDualCFIterator {
-    // RocksDB's JNI interface does not expose getters/setters that allow the
-    // comparator to be pluggable, and the default is lexicographic, so it's
-    // safe to just force lexicographic comparator here for now.
+        // RocksDB's JNI interface does not expose getters/setters that allow the
+        // comparator to be pluggable, and the default is lexicographic, so it's
+        // safe to just force lexicographic comparator here for now.
         private final Comparator<byte[]> comparator = ByteUtils.BYTES_LEXICO_COMPARATOR;
         private final byte[] rawLastKey;
         private final boolean forward;
         private final boolean toInclusive;
 
         RocksDBDualCFRangeIterator(final String storeName,
-                                   final RocksIterator iterNewFormat,
-                                   final RocksIterator iterOldFormat,
-                                   final Bytes from,
-                                   final Bytes to,
-                                   final boolean forward,
-                                   final boolean toInclusive,
-                                   final Function<byte[], byte[]> valueConverter) {
+            final RocksIterator iterNewFormat,
+            final RocksIterator iterOldFormat,
+            final Bytes from,
+            final Bytes to,
+            final boolean forward,
+            final boolean toInclusive,
+            final Function<byte[], byte[]> valueConverter) {
             super(storeName, iterNewFormat, iterOldFormat, forward, valueConverter);
             this.forward = forward;
             this.toInclusive = toInclusive;

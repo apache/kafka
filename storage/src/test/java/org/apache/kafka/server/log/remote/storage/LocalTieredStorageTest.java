@@ -219,7 +219,7 @@ public final class LocalTieredStorageTest {
         }
         tieredStorage.deletePartition(topicIdPartition);
         remoteStorageVerifier.assertFileDoesNotExist(remoteStorageVerifier.expectedPartitionPath());
-        for (RemoteLogSegmentMetadata segmentMetadata: segmentMetadatas) {
+        for (RemoteLogSegmentMetadata segmentMetadata : segmentMetadatas) {
             remoteStorageVerifier.verifyLogSegmentFilesAbsent(segmentMetadata);
         }
     }
@@ -335,7 +335,7 @@ public final class LocalTieredStorageTest {
         final RemoteLogSegmentMetadata metadata = newRemoteLogSegmentMetadata(newRemoteLogSegmentId());
 
         assertThrows(RemoteResourceNotFoundException.class,
-            () -> tieredStorage.fetchLogSegment(metadata, 0, metadata.segmentSizeInBytes()));
+                () -> tieredStorage.fetchLogSegment(metadata, 0, metadata.segmentSizeInBytes()));
         assertThrows(RemoteResourceNotFoundException.class, () -> tieredStorage.fetchIndex(metadata, OFFSET));
         assertThrows(RemoteResourceNotFoundException.class, () -> tieredStorage.fetchIndex(metadata, TIMESTAMP));
         assertThrows(RemoteResourceNotFoundException.class, () -> tieredStorage.fetchIndex(metadata, LEADER_EPOCH));
@@ -368,7 +368,7 @@ public final class LocalTieredStorageTest {
         final FileRecords records = FileRecords.open(snapshot.getFile(id, SEGMENT));
         final List<ByteBuffer> buffers = new ArrayList<>();
 
-        for (Record record: records.records()) {
+        for (Record record : records.records()) {
             buffers.add(record.value());
         }
 
@@ -522,8 +522,8 @@ public final class LocalTieredStorageTest {
         }
 
         private void verifyFileContents(final Function<RemoteLogSegmentMetadata, InputStream> actual,
-                                        final RemoteLogSegmentId id,
-                                        final byte[] expected) {
+                final RemoteLogSegmentId id,
+                final byte[] expected) {
             try (final InputStream in = actual.apply(newMetadata(id))) {
                 assertArrayEquals(expected, readFully(in));
             } catch (RemoteStorageException | IOException e) {

@@ -36,8 +36,8 @@ public class CachingKeyValueStoreWithHeaders extends CachingKeyValueStore {
 
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
+        final PositionBound positionBound,
+        final QueryConfig config) {
         return wrapped().query(query, positionBound, config);
     }
 }

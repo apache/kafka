@@ -86,10 +86,12 @@ public class StreamsUpgradeTest {
                     }
 
                     @Override
-                    public void punctuate(final long timestamp) {}
+                    public void punctuate(final long timestamp) {
+                    }
 
                     @Override
-                    public void close() {}
+                    public void close() {
+                    }
                 };
             }
         };

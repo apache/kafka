@@ -93,7 +93,7 @@ public class OffsetCheckpoint {
 
             final FileOutputStream fileOutputStream = new FileOutputStream(temp);
             try (final BufferedWriter writer = new BufferedWriter(
-                    new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
+                     new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
                 writeIntLine(writer, VERSION);
                 writeIntLine(writer, offsets.size());
 
@@ -121,7 +121,7 @@ public class OffsetCheckpoint {
      * @throws IOException if file write operations failed with any IO exception
      */
     static void writeIntLine(final BufferedWriter writer,
-                             final int number) throws IOException {
+        final int number) throws IOException {
         writer.write(Integer.toString(number));
         writer.newLine();
     }
@@ -130,8 +130,8 @@ public class OffsetCheckpoint {
      * @throws IOException if file write operations failed with any IO exception
      */
     static void writeEntry(final BufferedWriter writer,
-                           final TopicPartition part,
-                           final long offset) throws IOException {
+        final TopicPartition part,
+        final long offset) throws IOException {
         writer.write(part.topic());
         writer.write(' ');
         writer.write(Integer.toString(part.partition()));

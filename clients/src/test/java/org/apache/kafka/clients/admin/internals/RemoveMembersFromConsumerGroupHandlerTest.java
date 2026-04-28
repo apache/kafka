@@ -46,11 +46,11 @@ public class RemoveMembersFromConsumerGroupHandlerTest {
     private final LogContext logContext = new LogContext();
     private final String groupId = "group-id";
     private final MemberIdentity m1 = new MemberIdentity()
-            .setMemberId("m1")
-            .setGroupInstanceId("m1-gii");
+        .setMemberId("m1")
+        .setGroupInstanceId("m1-gii");
     private final MemberIdentity m2 = new MemberIdentity()
-            .setMemberId("m2")
-            .setGroupInstanceId("m2-gii");
+        .setMemberId("m2")
+        .setGroupInstanceId("m2-gii");
     private final List<MemberIdentity> members = Arrays.asList(m1, m2);
 
     @Test

@@ -113,7 +113,7 @@ public class TimestampConverterTest {
     @Test
     public void testConfigInvalidTargetType() {
         assertThrows(ConfigException.class,
-            () -> xformValue.configure(Map.of(TimestampConverter.TARGET_TYPE_CONFIG, "invalid")));
+                () -> xformValue.configure(Map.of(TimestampConverter.TARGET_TYPE_CONFIG, "invalid")));
     }
 
     @Test
@@ -135,7 +135,7 @@ public class TimestampConverterTest {
     @Test
     public void testConfigMissingFormat() {
         assertThrows(ConfigException.class,
-            () -> xformValue.configure(Map.of(TimestampConverter.TARGET_TYPE_CONFIG, "string")));
+                () -> xformValue.configure(Map.of(TimestampConverter.TARGET_TYPE_CONFIG, "string")));
     }
 
     @Test
@@ -298,16 +298,19 @@ public class TimestampConverterTest {
         testSchemalessNullValueConversion("string");
         testSchemalessNullFieldConversion("string");
     }
+
     @Test
     public void testSchemalessNullValueToDate() {
         testSchemalessNullValueConversion("Date");
         testSchemalessNullFieldConversion("Date");
     }
+
     @Test
     public void testSchemalessNullValueToTimestamp() {
         testSchemalessNullValueConversion("Timestamp");
         testSchemalessNullFieldConversion("Timestamp");
     }
+
     @Test
     public void testSchemalessNullValueToUnix() {
         testSchemalessNullValueConversion("unix");

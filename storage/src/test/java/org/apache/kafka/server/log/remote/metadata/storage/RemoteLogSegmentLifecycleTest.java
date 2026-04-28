@@ -209,10 +209,10 @@ public class RemoteLogSegmentLifecycleTest {
     }
 
     private RemoteLogSegmentMetadata upsertSegmentState(RemoteLogMetadataManager metadataManager,
-                                                        Map<Integer, Long> segmentLeaderEpochs,
-                                                        long startOffset,
-                                                        long endOffset,
-                                                        RemoteLogSegmentState state)
+            Map<Integer, Long> segmentLeaderEpochs,
+            long startOffset,
+            long endOffset,
+            RemoteLogSegmentState state)
             throws RemoteStorageException, ExecutionException, InterruptedException {
         RemoteLogSegmentId segmentId = new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid());
         RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, startOffset, endOffset,
@@ -228,8 +228,8 @@ public class RemoteLogSegmentLifecycleTest {
     }
 
     private void checkListSegments(RemoteLogMetadataManager metadataManager,
-                                   int leaderEpoch,
-                                   RemoteLogSegmentMetadata expectedMetadata)
+            int leaderEpoch,
+            RemoteLogSegmentMetadata expectedMetadata)
             throws RemoteStorageException {
         // cache.listRemoteLogSegments(leaderEpoch) should contain the above segment.
         Iterator<RemoteLogSegmentMetadata> metadataIter =
@@ -350,7 +350,7 @@ public class RemoteLogSegmentLifecycleTest {
             // listRemoteLogSegments(1) should contain only segment2.
             List<RemoteLogSegmentMetadata> expectedSegmentsForEpoch1 = List.of(segment2);
             assertTrue(TestUtils.sameElementsWithOrder(
-                    expectedSegmentsForEpoch1.iterator(),  metadataManager.listRemoteLogSegments(topicIdPartition, 1)));
+                    expectedSegmentsForEpoch1.iterator(), metadataManager.listRemoteLogSegments(topicIdPartition, 1)));
         }
     }
 }

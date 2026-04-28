@@ -50,7 +50,7 @@ public class RoundTripWorker extends RoundTripWorkerBase {
 
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "round-trip-consumer-group-" + id);
         consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(),
-                new ByteArrayDeserializer());
+            new ByteArrayDeserializer());
         consumer.assign(partitions);
     }
 

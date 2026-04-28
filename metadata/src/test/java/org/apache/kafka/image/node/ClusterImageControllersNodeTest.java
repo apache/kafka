@@ -37,15 +37,15 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 @Timeout(value = 40)
 public class ClusterImageControllersNodeTest {
     private static final ClusterImage TEST_IMAGE = new ClusterImage(
-            Map.of(),
-            Map.of(2, new ControllerRegistration.Builder().
-                    setId(2).
-                    setIncarnationId(Uuid.fromString("adGo6sTPS0uJshjvdTUmqQ")).
-                    setZkMigrationReady(false).
-                    setSupportedFeatures(Map.of(
-                            MetadataVersion.FEATURE_NAME, VersionRange.of(1, 4))).
-                    setListeners(Map.of()).
-                        build()));
+        Map.of(),
+        Map.of(2, new ControllerRegistration.Builder().
+            setId(2).
+            setIncarnationId(Uuid.fromString("adGo6sTPS0uJshjvdTUmqQ")).
+            setZkMigrationReady(false).
+            setSupportedFeatures(Map.of(
+            MetadataVersion.FEATURE_NAME, VersionRange.of(1, 4))).
+            setListeners(Map.of()).
+            build()));
 
     private static final ClusterImageControllersNode NODE = new ClusterImageControllersNode(TEST_IMAGE);
 

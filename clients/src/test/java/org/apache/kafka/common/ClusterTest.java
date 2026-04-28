@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ClusterTest {
 
-    private static final Node[] NODES = new Node[] {
+    private static final Node[] NODES = new Node[]{
         new Node(0, "localhost", 99),
         new Node(1, "localhost", 100),
         new Node(2, "localhost", 101),
@@ -106,7 +106,7 @@ public class ClusterTest {
         Set<String> internalTopics1 = Collections.singleton("topic3");
         Set<String> internalTopics2 = Collections.singleton("topic4");
         Node controller1 = new Node(2, "host2", 100);
-        Node controller2 = new Node(3, "host3", 100); 
+        Node controller2 = new Node(3, "host3", 100);
         Map<String, Uuid> topicIds1 = Collections.singletonMap("topic1", Uuid.randomUuid());
         Map<String, Uuid> topicIds2 = Collections.singletonMap("topic2", Uuid.randomUuid());
 

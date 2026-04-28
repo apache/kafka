@@ -48,15 +48,15 @@ import org.apache.kafka.streams.state.TimestampedBytesStore;
 class RocksDBTimestampedWindowStoreWithHeaders extends RocksDBWindowStore implements TimestampedBytesStore, HeadersBytesStore {
 
     RocksDBTimestampedWindowStoreWithHeaders(final SegmentedBytesStore bytesStore,
-                                             final boolean retainDuplicates,
-                                             final long windowSize) {
+        final boolean retainDuplicates,
+        final long windowSize) {
         super(bytesStore, retainDuplicates, windowSize);
     }
 
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
+        final PositionBound positionBound,
+        final QueryConfig config) {
         final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
         final QueryResult<R> result;
         final Position position = getPosition();

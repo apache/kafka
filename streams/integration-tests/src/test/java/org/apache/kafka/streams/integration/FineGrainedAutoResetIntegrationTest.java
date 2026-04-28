@@ -78,40 +78,40 @@ public class FineGrainedAutoResetIntegrationTest {
     private static final String OUTPUT_TOPIC_5 = "outputTopic_5";
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
-            NUM_BROKERS,
-            mkProperties(
-                    Collections.singletonMap("log.message.timestamp.after.max.ms", String.valueOf(Long.MAX_VALUE))));
+        NUM_BROKERS,
+        mkProperties(
+            Collections.singletonMap("log.message.timestamp.after.max.ms", String.valueOf(Long.MAX_VALUE))));
 
     @BeforeAll
     public static void startCluster() throws IOException, InterruptedException {
         CLUSTER.start();
         CLUSTER.createTopics(
-                TOPIC_1_0,
-                TOPIC_2_0,
-                TOPIC_A_0,
-                TOPIC_C_0,
-                TOPIC_Y_0,
-                TOPIC_Z_0,
-                TOPIC_1_1,
-                TOPIC_2_1,
-                TOPIC_A_1,
-                TOPIC_C_1,
-                TOPIC_Y_1,
-                TOPIC_Z_1,
-                TOPIC_1_2,
-                TOPIC_2_2,
-                TOPIC_A_2,
-                TOPIC_C_2,
-                TOPIC_Y_2,
-                TOPIC_Z_2,
-                TOPIC_DURATION_1,
-                TOPIC_DURATION_1,
-                TOPIC_DURATION_3,
-                NOOP,
-                DEFAULT_OUTPUT_TOPIC,
-                OUTPUT_TOPIC_0,
-                OUTPUT_TOPIC_1,
-                OUTPUT_TOPIC_2);
+            TOPIC_1_0,
+            TOPIC_2_0,
+            TOPIC_A_0,
+            TOPIC_C_0,
+            TOPIC_Y_0,
+            TOPIC_Z_0,
+            TOPIC_1_1,
+            TOPIC_2_1,
+            TOPIC_A_1,
+            TOPIC_C_1,
+            TOPIC_Y_1,
+            TOPIC_Z_1,
+            TOPIC_1_2,
+            TOPIC_2_2,
+            TOPIC_A_2,
+            TOPIC_C_2,
+            TOPIC_Y_2,
+            TOPIC_Z_2,
+            TOPIC_DURATION_1,
+            TOPIC_DURATION_1,
+            TOPIC_DURATION_3,
+            NOOP,
+            DEFAULT_OUTPUT_TOPIC,
+            OUTPUT_TOPIC_0,
+            OUTPUT_TOPIC_1,
+            OUTPUT_TOPIC_2);
     }
 
     @AfterAll
@@ -165,11 +165,11 @@ public class FineGrainedAutoResetIntegrationTest {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         streamsConfiguration = StreamsTestUtils.getStreamsConfig(
-                "testAutoOffsetId",
-                CLUSTER.bootstrapServers(),
-                STRING_SERDE_CLASSNAME,
-                STRING_SERDE_CLASSNAME,
-                props);
+            "testAutoOffsetId",
+            CLUSTER.bootstrapServers(),
+            STRING_SERDE_CLASSNAME,
+            STRING_SERDE_CLASSNAME,
+            props);
 
         // Remove any state from previous test runs
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
@@ -399,11 +399,11 @@ public class FineGrainedAutoResetIntegrationTest {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
 
         final Properties localConfig = StreamsTestUtils.getStreamsConfig(
-                "testAutoOffsetWithNone",
-                CLUSTER.bootstrapServers(),
-                STRING_SERDE_CLASSNAME,
-                STRING_SERDE_CLASSNAME,
-                props);
+            "testAutoOffsetWithNone",
+            CLUSTER.bootstrapServers(),
+            STRING_SERDE_CLASSNAME,
+            STRING_SERDE_CLASSNAME,
+            props);
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> exceptionStream = builder.stream(NOOP);
@@ -426,6 +426,7 @@ public class FineGrainedAutoResetIntegrationTest {
 
     private static final class TestingUncaughtExceptionHandler implements StreamsUncaughtExceptionHandler {
         boolean correctExceptionThrown = false;
+
         @Override
         public StreamThreadExceptionResponse handle(final Throwable throwable) {
             assertThat(throwable.getClass().getSimpleName(), is("StreamsException"));

@@ -115,7 +115,7 @@ public final class MetaPropertiesEnsemble {
             return this;
         }
 
-        public MetaPropertiesEnsemble load() throws IOException  {
+        public MetaPropertiesEnsemble load() throws IOException {
             if (logDirs.isEmpty()) {
                 throw new RuntimeException("You must specify at least one log directory.");
             }
@@ -168,10 +168,10 @@ public final class MetaPropertiesEnsemble {
 
         private PreWriteHandler preWriteHandler = (logDir, isNew, metaProperties) -> {
             LOG.info("Writing out {} {}{}meta.properties file containing {}",
-                    isNew ? "new" : "changed",
-                    logDir,
-                    File.separator,
-                    metaProperties);
+                isNew ? "new" : "changed",
+                logDir,
+                File.separator,
+                metaProperties);
         };
 
         private WriteErrorHandler writeErrorHandler = (logDir, e) -> {
@@ -320,13 +320,13 @@ public final class MetaPropertiesEnsemble {
             for (String logDir : errorLogDirs) {
                 if (logDirProps.containsKey(logDir)) {
                     throw new RuntimeException("Error: log directory " + logDir +
-                            " is in both errorLogDirs and logDirProps.");
+                        " is in both errorLogDirs and logDirProps.");
                 }
             }
             metaLogDir().ifPresent(m -> {
                 if (!(emptyLogDirs.contains(m) ||
-                        logDirProps.containsKey(m) ||
-                        errorLogDirs.contains(m))) {
+                    logDirProps.containsKey(m) ||
+                    errorLogDirs.contains(m))) {
                     throw new RuntimeException("Error: metaLogDir " + m + " does not appear " +
                         "in emptyLogDirs, errorLogDirs, or logDirProps.");
                 }
@@ -421,7 +421,7 @@ public final class MetaPropertiesEnsemble {
         return new Iterator<>() {
             private final Iterator<String> emptyLogDirsIterator = emptyLogDirs.iterator();
             private final Iterator<Entry<String, MetaProperties>> logDirsIterator =
-                    logDirProps.entrySet().iterator();
+                logDirProps.entrySet().iterator();
 
             @Override
             public boolean hasNext() {
@@ -536,7 +536,7 @@ public final class MetaPropertiesEnsemble {
         if (metadataLogDir.isPresent()) {
             if (errorLogDirs.contains(metadataLogDir.get())) {
                 throw new RuntimeException("Encountered I/O error in metadata log directory " +
-                        metadataLogDir.get() + ". Cannot continue.");
+                    metadataLogDir.get() + ". Cannot continue.");
             }
         }
     }

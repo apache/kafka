@@ -38,12 +38,12 @@ class MeteredWindowStoreIterator<V> implements WindowStoreIterator<V>, MeteredIt
     private final Set<MeteredIterator> openIterators;
 
     MeteredWindowStoreIterator(final WindowStoreIterator<byte[]> iter,
-                               final Sensor operationSensor,
-                               final Sensor iteratorSensor,
-                               final Function<byte[], V> valueFrom,
-                               final Time time,
-                               final LongAdder numOpenIterators,
-                               final Set<MeteredIterator> openIterators) {
+        final Sensor operationSensor,
+        final Sensor iteratorSensor,
+        final Function<byte[], V> valueFrom,
+        final Time time,
+        final LongAdder numOpenIterators,
+        final Set<MeteredIterator> openIterators) {
         this.iter = iter;
         this.operationSensor = operationSensor;
         this.iteratorSensor = iteratorSensor;

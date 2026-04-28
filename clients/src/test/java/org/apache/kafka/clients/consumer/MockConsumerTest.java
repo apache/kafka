@@ -40,7 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MockConsumerTest {
-    
+
     private final MockConsumer<String, String> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
 
     @Test
@@ -128,9 +128,9 @@ public class MockConsumerTest {
         durationBasedOffsets.put(new TopicPartition("test", 1), 11L);
         consumer.updateDurationOffsets(durationBasedOffsets);
         ConsumerRecord<String, String> rec1 = new ConsumerRecord<>("test", 0, 10L, 0L, TimestampType.CREATE_TIME,
-                0, 0, "key1", "value1", new RecordHeaders(), Optional.empty());
+            0, 0, "key1", "value1", new RecordHeaders(), Optional.empty());
         ConsumerRecord<String, String> rec2 = new ConsumerRecord<>("test", 0, 11L, 0L, TimestampType.CREATE_TIME,
-                0, 0, "key2", "value2", new RecordHeaders(), Optional.empty());
+            0, 0, "key2", "value2", new RecordHeaders(), Optional.empty());
         consumer.addRecord(rec1);
         consumer.addRecord(rec2);
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1));
@@ -187,7 +187,7 @@ public class MockConsumerTest {
         assertEquals(1, revoked.size());
         assertTrue(revoked.contains(topicPartitionList.get(0)));
     }
-    
+
     @Test
     public void testRe2JPatternSubscription() {
         assertThrows(IllegalArgumentException.class, () -> consumer.subscribe((SubscriptionPattern) null));

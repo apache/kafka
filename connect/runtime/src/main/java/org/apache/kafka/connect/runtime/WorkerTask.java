@@ -85,18 +85,18 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
     protected final PluginMetricsImpl pluginMetrics;
 
     public WorkerTask(ConnectorTaskId id,
-                      TaskStatus.Listener statusListener,
-                      TargetState initialState,
-                      ClassLoader loader,
-                      ConnectMetrics connectMetrics,
-                      ErrorHandlingMetrics errorMetrics,
-                      RetryWithToleranceOperator<T> retryWithToleranceOperator,
-                      TransformationChain<T, R> transformationChain,
-                      Supplier<List<ErrorReporter<T>>> errorReportersSupplier,
-                      Time time,
-                      StatusBackingStore statusBackingStore,
-                      TaskPluginsMetadata pluginsMetadata,
-                      Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
+            TaskStatus.Listener statusListener,
+            TargetState initialState,
+            ClassLoader loader,
+            ConnectMetrics connectMetrics,
+            ErrorHandlingMetrics errorMetrics,
+            RetryWithToleranceOperator<T> retryWithToleranceOperator,
+            TransformationChain<T, R> transformationChain,
+            Supplier<List<ErrorReporter<T>>> errorReportersSupplier,
+            Time time,
+            StatusBackingStore statusBackingStore,
+            TaskPluginsMetadata pluginsMetadata,
+            Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
         this.id = id;
         this.taskMetricsGroup = new TaskMetricsGroup(this.id, connectMetrics, statusListener, pluginsMetadata);
         this.errorMetrics = errorMetrics;
@@ -430,7 +430,7 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
             metricGroup.close();
 
             metricGroup.addValueMetric(registry.taskStatus, now ->
-                taskStateTimer.currentState().toString().toLowerCase(Locale.getDefault())
+                    taskStateTimer.currentState().toString().toLowerCase(Locale.getDefault())
             );
 
             addRatioMetric(State.RUNNING, registry.taskRunningRatio);

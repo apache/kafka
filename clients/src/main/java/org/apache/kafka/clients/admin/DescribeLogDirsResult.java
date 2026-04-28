@@ -50,16 +50,16 @@ public class DescribeLogDirsResult {
     public KafkaFuture<Map<Integer, Map<String, LogDirDescription>>> allDescriptions() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0])).
             thenApply(v -> {
-                Map<Integer, Map<String, LogDirDescription>> descriptions = new HashMap<>(futures.size());
-                for (Map.Entry<Integer, KafkaFuture<Map<String, LogDirDescription>>> entry : futures.entrySet()) {
-                    try {
-                        descriptions.put(entry.getKey(), entry.getValue().get());
-                    } catch (InterruptedException | ExecutionException e) {
-                        // This should be unreachable, because allOf ensured that all the futures completed successfully.
-                        throw new RuntimeException(e);
-                    }
+            Map<Integer, Map<String, LogDirDescription>> descriptions = new HashMap<>(futures.size());
+            for (Map.Entry<Integer, KafkaFuture<Map<String, LogDirDescription>>> entry : futures.entrySet()) {
+                try {
+                    descriptions.put(entry.getKey(), entry.getValue().get());
+                } catch (InterruptedException | ExecutionException e) {
+                    // This should be unreachable, because allOf ensured that all the futures completed successfully.
+                    throw new RuntimeException(e);
                 }
-                return descriptions;
-            });
+            }
+            return descriptions;
+        });
     }
 }

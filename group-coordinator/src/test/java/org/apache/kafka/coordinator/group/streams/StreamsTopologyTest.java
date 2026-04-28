@@ -136,7 +136,7 @@ public class StreamsTopologyTest {
         assertEquals(2, describeTopology.subtopologies().size());
 
         // Verify subtopologies are correctly converted and sorted
-        List<StreamsGroupDescribeResponseData.Subtopology> sortedSubtopologies = 
+        List<StreamsGroupDescribeResponseData.Subtopology> sortedSubtopologies =
             describeTopology.subtopologies().stream()
                 .sorted(Comparator.comparing(StreamsGroupDescribeResponseData.Subtopology::subtopologyId))
                 .toList();
@@ -145,7 +145,7 @@ public class StreamsTopologyTest {
         StreamsGroupDescribeResponseData.Subtopology sub1 = sortedSubtopologies.get(0);
         assertEquals(SUBTOPOLOGY_ID_1, sub1.subtopologyId());
         // Source topics are sorted alphabetically
-        assertEquals(List.of(REPARTITION_TOPIC_1, REPARTITION_TOPIC_2, SOURCE_TOPIC_1, SOURCE_TOPIC_2), 
+        assertEquals(List.of(REPARTITION_TOPIC_1, REPARTITION_TOPIC_2, SOURCE_TOPIC_1, SOURCE_TOPIC_2),
             sub1.sourceTopics());
         assertEquals(List.of(REPARTITION_TOPIC_3), sub1.repartitionSinkTopics());
         assertEquals(2, sub1.repartitionSourceTopics().size());
@@ -174,7 +174,7 @@ public class StreamsTopologyTest {
         // Verify repartition source topics are correctly converted
         List<StreamsGroupDescribeResponseData.TopicInfo> repartitionTopics = describedSub.repartitionSourceTopics();
         assertEquals(2, repartitionTopics.size());
-        
+
         // Find the first repartition topic (they should be sorted by name)
         StreamsGroupDescribeResponseData.TopicInfo firstTopic = repartitionTopics.stream()
             .filter(topic -> topic.name().equals(REPARTITION_TOPIC_1))
@@ -185,7 +185,7 @@ public class StreamsTopologyTest {
         // Verify changelog topics are correctly converted
         List<StreamsGroupDescribeResponseData.TopicInfo> changelogTopics = describedSub.stateChangelogTopics();
         assertEquals(2, changelogTopics.size());
-        
+
         // Find the first changelog topic (they should be sorted by name)
         StreamsGroupDescribeResponseData.TopicInfo firstChangelog = changelogTopics.stream()
             .filter(topic -> topic.name().equals(CHANGELOG_TOPIC_1))
@@ -211,14 +211,14 @@ public class StreamsTopologyTest {
             mkEntry(SUBTOPOLOGY_ID_2, mkSubtopology2())
         );
         StreamsTopology topology = new StreamsTopology(1, subtopologies);
-        
+
         // Verify sourceTopicMap contains all source topics from both subtopologies
         Map<String, Subtopology> sourceTopicMap = topology.sourceTopicMap();
-        
+
         // From subtopology 1: SOURCE_TOPIC_1, SOURCE_TOPIC_2, REPARTITION_TOPIC_1, REPARTITION_TOPIC_2
         // From subtopology 2: SOURCE_TOPIC_3, REPARTITION_TOPIC_3
         assertEquals(6, sourceTopicMap.size());
-        
+
         // Verify regular source topics
         assertTrue(sourceTopicMap.containsKey(SOURCE_TOPIC_1));
         assertEquals(mkSubtopology1(), sourceTopicMap.get(SOURCE_TOPIC_1));
@@ -226,7 +226,7 @@ public class StreamsTopologyTest {
         assertEquals(mkSubtopology1(), sourceTopicMap.get(SOURCE_TOPIC_2));
         assertTrue(sourceTopicMap.containsKey(SOURCE_TOPIC_3));
         assertEquals(mkSubtopology2(), sourceTopicMap.get(SOURCE_TOPIC_3));
-        
+
         // Verify repartition source topics
         assertTrue(sourceTopicMap.containsKey(REPARTITION_TOPIC_1));
         assertEquals(mkSubtopology1(), sourceTopicMap.get(REPARTITION_TOPIC_1));
@@ -242,7 +242,7 @@ public class StreamsTopologyTest {
             mkEntry(SUBTOPOLOGY_ID_1, mkSubtopology1())
         );
         StreamsTopology topology = new StreamsTopology(1, subtopologies);
-        
+
         assertThrows(
             UnsupportedOperationException.class,
             () -> topology.sourceTopicMap().put("test-topic", mkSubtopology1())

@@ -132,7 +132,7 @@ public class FileStreamSourceTaskTest {
 
         OutputStream os = Files.newOutputStream(tempFile.toPath());
         writeTimesAndFlush(os, 10_000,
-                "Neque porro quisquam est qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit...\n".getBytes()
+            "Neque porro quisquam est qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit...\n".getBytes()
         );
 
         assertEquals(2, task.bufferSize());
@@ -178,7 +178,7 @@ public class FileStreamSourceTaskTest {
     }
 
     private void writeAndAssertBufferSize(int batchSize, OutputStream os, byte[] bytes, int expectBufferSize)
-            throws IOException, InterruptedException {
+        throws IOException, InterruptedException {
         writeTimesAndFlush(os, batchSize, bytes);
         List<SourceRecord> records = task.poll();
         assertEquals(batchSize, records.size());

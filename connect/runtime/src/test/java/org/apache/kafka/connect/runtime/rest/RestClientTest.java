@@ -69,7 +69,8 @@ public class RestClientTest {
     private static final String MOCK_URL = "http://localhost:1234/api/endpoint";
     private static final String TEST_METHOD = "GET";
     private static final TestDTO TEST_DTO = new TestDTO("requestBodyData");
-    private static final TypeReference<TestDTO> TEST_TYPE = new TypeReference<>() { };
+    private static final TypeReference<TestDTO> TEST_TYPE = new TypeReference<>() {
+    };
     private static final SecretKey MOCK_SECRET_KEY = getMockSecretKey();
     private static final String TEST_SIGNATURE_ALGORITHM = "HmacSHA1";
 
@@ -231,7 +232,8 @@ public class RestClientTest {
         when(resp.getContentAsString()).thenReturn(toJsonString(TEST_DTO));
         setupHttpClient(statusCode, req, resp);
 
-        TypeReference<Void> voidResponse = new TypeReference<>() { };
+        TypeReference<Void> voidResponse = new TypeReference<>() {
+        };
         RestClient.HttpResponse<Void> httpResp = httpRequest(
                 httpClient, MOCK_URL, TEST_METHOD, voidResponse, TEST_SIGNATURE_ALGORITHM
         );

@@ -93,10 +93,10 @@ public class ProducerIdsBlock {
     @Override
     public String toString() {
         return "ProducerIdsBlock(" +
-                "assignedBrokerId=" + assignedBrokerId +
-                ", firstProducerId=" + firstProducerId +
-                ", size=" + blockSize +
-                ')';
+            "assignedBrokerId=" + assignedBrokerId +
+            ", firstProducerId=" + firstProducerId +
+            ", size=" + blockSize +
+            ')';
     }
 
     @Override

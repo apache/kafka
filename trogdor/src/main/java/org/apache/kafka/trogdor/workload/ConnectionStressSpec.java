@@ -47,13 +47,13 @@ public final class ConnectionStressSpec extends TaskSpec {
 
     @JsonCreator
     public ConnectionStressSpec(@JsonProperty("startMs") long startMs,
-            @JsonProperty("durationMs") long durationMs,
-            @JsonProperty("clientNode") List<String> clientNodes,
-            @JsonProperty("bootstrapServers") String bootstrapServers,
-            @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
-            @JsonProperty("targetConnectionsPerSec") int targetConnectionsPerSec,
-            @JsonProperty("numThreads") int numThreads,
-            @JsonProperty("action") ConnectionStressAction action) {
+        @JsonProperty("durationMs") long durationMs,
+        @JsonProperty("clientNode") List<String> clientNodes,
+        @JsonProperty("bootstrapServers") String bootstrapServers,
+        @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
+        @JsonProperty("targetConnectionsPerSec") int targetConnectionsPerSec,
+        @JsonProperty("numThreads") int numThreads,
+        @JsonProperty("action") ConnectionStressAction action) {
         super(startMs, durationMs);
         this.clientNodes = clientNodes == null ? List.of() : List.copyOf(clientNodes);
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;

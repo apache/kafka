@@ -62,10 +62,10 @@ public interface StreamsMetrics {
      * @see #addSensor(String, Sensor.RecordingLevel, Sensor...)
      */
     Sensor addLatencyRateTotalSensor(final String scopeName,
-                                     final String entityName,
-                                     final String operationName,
-                                     final Sensor.RecordingLevel recordingLevel,
-                                     final String... tags);
+        final String entityName,
+        final String operationName,
+        final Sensor.RecordingLevel recordingLevel,
+        final String... tags);
 
     /**
      * Add a rate and a total sensor for a specific operation, which will include the following metrics:
@@ -92,10 +92,10 @@ public interface StreamsMetrics {
      * @see #addSensor(String, Sensor.RecordingLevel, Sensor...)
      */
     Sensor addRateTotalSensor(final String scopeName,
-                              final String entityName,
-                              final String operationName,
-                              final Sensor.RecordingLevel recordingLevel,
-                              final String... tags);
+        final String entityName,
+        final String operationName,
+        final Sensor.RecordingLevel recordingLevel,
+        final String... tags);
 
     /**
      * Generic method to create a sensor.
@@ -113,7 +113,7 @@ public interface StreamsMetrics {
      * @see #removeSensor(Sensor)
      */
     Sensor addSensor(final String name,
-                     final Sensor.RecordingLevel recordingLevel);
+        final Sensor.RecordingLevel recordingLevel);
 
     /**
      * Generic method to create a sensor with parent sensors.
@@ -131,8 +131,8 @@ public interface StreamsMetrics {
      * @see #removeSensor(Sensor)
      */
     Sensor addSensor(final String name,
-                     final Sensor.RecordingLevel recordingLevel,
-                     final Sensor... parents);
+        final Sensor.RecordingLevel recordingLevel,
+        final Sensor... parents);
 
     /**
      * Remove a sensor.

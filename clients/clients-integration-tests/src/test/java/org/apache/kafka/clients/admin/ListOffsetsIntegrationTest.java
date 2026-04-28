@@ -164,10 +164,10 @@ public class ListOffsetsIntegrationTest {
         // create a producer with large linger.ms and enough batch.size (default is enough for three 10 bytes records),
         // so that we can confirm all records will be accumulated in producer until we flush them into one batch.
         try (Producer<byte[], byte[]> producer = clusterInstance.producer(Map.of(
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers(),
-                ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE,
-                ProducerConfig.LINGER_MS_CONFIG, Integer.MAX_VALUE,
-                ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType))) {
+                 ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers(),
+                 ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE,
+                 ProducerConfig.LINGER_MS_CONFIG, Integer.MAX_VALUE,
+                 ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType))) {
 
             List<Future<RecordMetadata>> futures = records.stream().map(producer::send).toList();
             producer.flush();
@@ -186,8 +186,8 @@ public class ListOffsetsIntegrationTest {
         // create a producer with large linger.ms and enough batch.size (default is enough for three 10 bytes records),
         // so that we can confirm all records will be accumulated in producer until we flush them into one batch.
         try (Producer<byte[], byte[]> producer = clusterInstance.producer(Map.of(
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers(),
-                ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType))) {
+                 ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers(),
+                 ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType))) {
 
             Future<RecordMetadata> future1 = producer.send(record1);
             future1.get();
@@ -282,7 +282,7 @@ public class ListOffsetsIntegrationTest {
     }
 
     private ListOffsetsResultInfo runFetchOffsets(OffsetSpec offsetSpec,
-                                                String topic) throws InterruptedException, ExecutionException {
+                                                  String topic) throws InterruptedException, ExecutionException {
         TopicPartition tp = new TopicPartition(topic, 0);
         return adminClient.listOffsets(Map.of(tp, offsetSpec), new ListOffsetsOptions()).all().get().get(tp);
     }

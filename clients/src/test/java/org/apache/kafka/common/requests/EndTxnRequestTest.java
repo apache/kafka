@@ -67,23 +67,23 @@ public class EndTxnRequestTest {
         short latestVersion = ApiKeys.END_TXN.latestVersion();
 
         EndTxnRequestData requestData = new EndTxnRequestData()
-                .setTransactionalId("txn_id")
-                .setCommitted(true)
-                .setProducerId(1L)
-                .setProducerEpoch((short) 0);
+            .setTransactionalId("txn_id")
+            .setCommitted(true)
+            .setProducerId(1L)
+            .setProducerEpoch((short) 0);
 
         EndTxnRequest.Builder builder = new EndTxnRequest.Builder(
-                requestData,
-                false,
-                isTransactionV2Enabled
+            requestData,
+            false,
+            isTransactionV2Enabled
         );
 
         EndTxnRequest request = builder.build(latestVersion);
 
         // Determine the expected version based on whether transactions V2 is enabled
         short expectedVersion = isTransactionV2Enabled ?
-                latestVersion :
-                LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2;
+            latestVersion :
+            LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2;
 
         // Verify that the request is built with the expected version
         assertEquals(expectedVersion, request.version());

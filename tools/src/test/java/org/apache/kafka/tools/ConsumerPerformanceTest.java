@@ -96,7 +96,7 @@ public class ConsumerPerformanceTest {
         };
 
         String err = ToolsTestUtils.captureStandardErr(() ->
-                new ConsumerPerformance.ConsumerPerfOptions(args));
+            new ConsumerPerformance.ConsumerPerfOptions(args));
         assertTrue(err.contains("Missing required argument \"[bootstrap-server]\""));
     }
 
@@ -108,7 +108,7 @@ public class ConsumerPerformanceTest {
         };
 
         String err = ToolsTestUtils.captureStandardErr(() ->
-                new ConsumerPerformance.ConsumerPerfOptions(args));
+            new ConsumerPerformance.ConsumerPerfOptions(args));
         assertTrue(err.contains("Exactly one of the following arguments is required:"));
     }
 
@@ -134,7 +134,7 @@ public class ConsumerPerformanceTest {
         };
 
         String err = ToolsTestUtils.captureStandardErr(() ->
-                new ConsumerPerformance.ConsumerPerfOptions(args));
+            new ConsumerPerformance.ConsumerPerfOptions(args));
         assertTrue(err.contains("Exactly one of the following arguments is required"));
     }
 
@@ -273,9 +273,9 @@ public class ConsumerPerformanceTest {
         };
 
         String err = ToolsTestUtils.captureStandardErr(() ->
-                new ConsumerPerformance.ConsumerPerfOptions(args));
+            new ConsumerPerformance.ConsumerPerfOptions(args));
         assertTrue(err.contains(String.format("Option \"%s\" can't be used with option \"%s\"",
-                "[consumer.config]", "[command-config]")));
+            "[consumer.config]", "[command-config]")));
     }
 
     @Test

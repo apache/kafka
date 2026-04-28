@@ -44,9 +44,9 @@ public class RenewDelegationTokenRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         return new RenewDelegationTokenResponse(
-                new RenewDelegationTokenResponseData()
-                    .setThrottleTimeMs(throttleTimeMs)
-                    .setErrorCode(Errors.forException(e).code()));
+            new RenewDelegationTokenResponseData()
+                .setThrottleTimeMs(throttleTimeMs)
+                .setErrorCode(Errors.forException(e).code()));
     }
 
     public static class Builder extends AbstractRequest.Builder<RenewDelegationTokenRequest> {

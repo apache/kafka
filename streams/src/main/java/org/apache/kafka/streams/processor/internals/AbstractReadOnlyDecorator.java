@@ -56,7 +56,7 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
 
     @Override
     public void init(final StateStoreContext stateStoreContext,
-                     final StateStore root) {
+        final StateStore root) {
         throw new UnsupportedOperationException(ERROR_MESSAGE);
     }
 
@@ -105,13 +105,13 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
 
         @Override
         public KeyValueIterator<K, V> range(final K from,
-                                            final K to) {
+            final K to) {
             return wrapped().range(from, to);
         }
 
         @Override
         public KeyValueIterator<K, V> reverseRange(final K from,
-                                                   final K to) {
+            final K to) {
             return wrapped().reverseRange(from, to);
         }
 
@@ -127,7 +127,7 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
 
         @Override
         public <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(final P prefix,
-                                                                               final PS prefixKeySerializer) {
+            final PS prefixKeySerializer) {
             return wrapped().prefixScan(prefix, prefixKeySerializer);
         }
 
@@ -138,13 +138,13 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
 
         @Override
         public void put(final K key,
-                        final V value) {
+            final V value) {
             throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 
         @Override
         public V putIfAbsent(final K key,
-                             final V value) {
+            final V value) {
             throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 
@@ -216,44 +216,44 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
 
         @Override
         public void put(final K key,
-                        final V value,
-                        final long windowStartTimestamp) {
+            final V value,
+            final long windowStartTimestamp) {
             throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 
         @Override
         public V fetch(final K key,
-                       final long time) {
+            final long time) {
             return wrapped().fetch(key, time);
         }
 
         @Override
         public WindowStoreIterator<V> fetch(final K key,
-                                            final long timeFrom,
-                                            final long timeTo) {
+            final long timeFrom,
+            final long timeTo) {
             return wrapped().fetch(key, timeFrom, timeTo);
         }
 
         @Override
         public WindowStoreIterator<V> backwardFetch(final K key,
-                                                    final long timeFrom,
-                                                    final long timeTo) {
+            final long timeFrom,
+            final long timeTo) {
             return wrapped().backwardFetch(key, timeFrom, timeTo);
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom,
-                                                      final K keyTo,
-                                                      final long timeFrom,
-                                                      final long timeTo) {
+            final K keyTo,
+            final long timeFrom,
+            final long timeTo) {
             return wrapped().fetch(keyFrom, keyTo, timeFrom, timeTo);
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
-                                                              final K keyTo,
-                                                              final long timeFrom,
-                                                              final long timeTo) {
+            final K keyTo,
+            final long timeFrom,
+            final long timeTo) {
             return wrapped().backwardFetch(keyFrom, keyTo, timeFrom, timeTo);
         }
 
@@ -269,13 +269,13 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
 
         @Override
         public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
-                                                         final long timeTo) {
+            final long timeTo) {
             return wrapped().fetchAll(timeFrom, timeTo);
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final long timeFrom,
-                                                                 final long timeTo) {
+            final long timeTo) {
             return wrapped().backwardFetchAll(timeFrom, timeTo);
         }
     }
@@ -299,16 +299,16 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
 
         @Override
         public KeyValueIterator<Windowed<K>, AGG> findSessions(final K key,
-                                                               final long earliestSessionEndTime,
-                                                               final long latestSessionStartTime) {
+            final long earliestSessionEndTime,
+            final long latestSessionStartTime) {
             return wrapped().findSessions(key, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom,
-                                                               final K keyTo,
-                                                               final long earliestSessionEndTime,
-                                                               final long latestSessionStartTime) {
+            final K keyTo,
+            final long earliestSessionEndTime,
+            final long latestSessionStartTime) {
             return wrapped().findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
         }
 
@@ -319,7 +319,7 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
 
         @Override
         public void put(final Windowed<K> sessionKey,
-                        final AGG aggregate) {
+            final AGG aggregate) {
             throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 
@@ -330,30 +330,30 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
 
         @Override
         public KeyValueIterator<Windowed<K>, AGG> findSessions(final long earliestSessionEndTime,
-                                                               final long latestSessionEndTime) {
+            final long latestSessionEndTime) {
             return wrapped().findSessions(earliestSessionEndTime, latestSessionEndTime);
         }
 
         @Override
         public AGG fetchSession(final K key,
-                                final Instant sessionStartTime,
-                                final Instant sessionEndTime) {
+            final Instant sessionStartTime,
+            final Instant sessionEndTime) {
             return wrapped().fetchSession(key, sessionStartTime, sessionEndTime);
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K keyFrom,
-                                                                       final K keyTo,
-                                                                       final Instant earliestSessionEndTime,
-                                                                       final Instant latestSessionStartTime) {
+            final K keyTo,
+            final Instant earliestSessionEndTime,
+            final Instant latestSessionStartTime) {
             return wrapped().backwardFindSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom,
-                                                               final K keyTo,
-                                                               final Instant earliestSessionEndTime,
-                                                               final Instant latestSessionStartTime) {
+            final K keyTo,
+            final Instant earliestSessionEndTime,
+            final Instant latestSessionStartTime) {
             return wrapped().findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
         }
 
@@ -364,36 +364,36 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
 
         @Override
         public KeyValueIterator<Windowed<K>, AGG> backwardFetch(final K keyFrom,
-                                                                final K keyTo) {
+            final K keyTo) {
             return wrapped().backwardFetch(keyFrom, keyTo);
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K key,
-                                                                       final long earliestSessionEndTime,
-                                                                       final long latestSessionStartTime) {
+            final long earliestSessionEndTime,
+            final long latestSessionStartTime) {
             return wrapped().backwardFindSessions(key, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K keyFrom,
-                                                                       final K keyTo,
-                                                                       final long earliestSessionEndTime,
-                                                                       final long latestSessionStartTime) {
+            final K keyTo,
+            final long earliestSessionEndTime,
+            final long latestSessionStartTime) {
             return wrapped().backwardFindSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K key,
-                                                                       final Instant earliestSessionEndTime,
-                                                                       final Instant latestSessionStartTime) {
+            final Instant earliestSessionEndTime,
+            final Instant latestSessionStartTime) {
             return wrapped().backwardFindSessions(key, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, AGG> findSessions(final K key,
-                                                               final Instant earliestSessionEndTime,
-                                                               final Instant latestSessionStartTime) {
+            final Instant earliestSessionEndTime,
+            final Instant latestSessionStartTime) {
             return wrapped().findSessions(key, earliestSessionEndTime, latestSessionStartTime);
         }
 
@@ -404,7 +404,7 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
 
         @Override
         public KeyValueIterator<Windowed<K>, AGG> fetch(final K keyFrom,
-                                                        final K keyTo) {
+            final K keyTo) {
             return wrapped().fetch(keyFrom, keyTo);
         }
     }

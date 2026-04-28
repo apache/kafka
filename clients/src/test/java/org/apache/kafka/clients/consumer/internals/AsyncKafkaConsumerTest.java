@@ -385,8 +385,8 @@ public class AsyncKafkaConsumerTest {
 
     private static Stream<Exception> commitExceptionSupplier() {
         return Stream.of(
-                new KafkaException("Test exception"),
-                new GroupAuthorizationException("Group authorization exception"));
+            new KafkaException("Test exception"),
+            new GroupAuthorizationException("Group authorization exception"));
     }
 
     @Test
@@ -409,10 +409,10 @@ public class AsyncKafkaConsumerTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = mockTopicPartitionOffset();
         when(applicationEventHandler.addAndGet(
             any(FetchCommittedOffsetsEvent.class))).thenAnswer(invocation -> {
-                CompletableApplicationEvent<?> event = invocation.getArgument(0);
-                assertInstanceOf(FetchCommittedOffsetsEvent.class, event);
-                throw new KafkaException("Test exception");
-            });
+            CompletableApplicationEvent<?> event = invocation.getArgument(0);
+            assertInstanceOf(FetchCommittedOffsetsEvent.class, event);
+            throw new KafkaException("Test exception");
+        });
 
         assertThrows(KafkaException.class, () -> consumer.committed(offsets.keySet(), Duration.ofMillis(1000)));
     }
@@ -1014,19 +1014,19 @@ public class AsyncKafkaConsumerTest {
     public void testOffsetsForTimesFailsOnNegativeTargetTimes() {
         consumer = newConsumer();
         assertThrows(IllegalArgumentException.class,
-                () -> consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(
-                                "topic1", 1), ListOffsetsRequest.EARLIEST_TIMESTAMP),
-                        Duration.ofMillis(1)));
+            () -> consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(
+                    "topic1", 1), ListOffsetsRequest.EARLIEST_TIMESTAMP),
+                Duration.ofMillis(1)));
 
         assertThrows(IllegalArgumentException.class,
-                () -> consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(
-                                "topic1", 1), ListOffsetsRequest.LATEST_TIMESTAMP),
-                        Duration.ofMillis(1)));
+            () -> consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(
+                    "topic1", 1), ListOffsetsRequest.LATEST_TIMESTAMP),
+                Duration.ofMillis(1)));
 
         assertThrows(IllegalArgumentException.class,
-                () -> consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(
-                                "topic1", 1), ListOffsetsRequest.MAX_TIMESTAMP),
-                        Duration.ofMillis(1)));
+            () -> consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(
+                    "topic1", 1), ListOffsetsRequest.MAX_TIMESTAMP),
+                Duration.ofMillis(1)));
     }
 
     @Test
@@ -1037,7 +1037,7 @@ public class AsyncKafkaConsumerTest {
 
         doReturn(expectedResult).when(applicationEventHandler).addAndGet(any());
         Map<TopicPartition, OffsetAndTimestamp> result =
-                assertDoesNotThrow(() -> consumer.offsetsForTimes(timestampToSearch, Duration.ofMillis(1)));
+            assertDoesNotThrow(() -> consumer.offsetsForTimes(timestampToSearch, Duration.ofMillis(1)));
         expectedResult.forEach((key, value) -> {
             OffsetAndTimestamp expected = value.buildOffsetAndTimestamp();
             assertEquals(expected, result.get(key));
@@ -1094,7 +1094,7 @@ public class AsyncKafkaConsumerTest {
         consumer = newConsumer();
         TopicPartition tp = new TopicPartition("topic1", 0);
         Map<TopicPartition, Long> result =
-                assertDoesNotThrow(() -> consumer.beginningOffsets(Collections.singletonList(tp), Duration.ZERO));
+            assertDoesNotThrow(() -> consumer.beginningOffsets(Collections.singletonList(tp), Duration.ZERO));
         assertNotNull(result);
         assertEquals(0, result.size());
         verify(applicationEventHandler).add(ArgumentMatchers.isA(ListOffsetsEvent.class));
@@ -1528,19 +1528,19 @@ public class AsyncKafkaConsumerTest {
     @ParameterizedTest
     @MethodSource("listenerCallbacksInvokeSource")
     public void testListenerCallbacksInvoke(List<ConsumerRebalanceListenerMethodName> methodNames,
-                                            Optional<RuntimeException> revokedError,
-                                            Optional<RuntimeException> assignedError,
-                                            Optional<RuntimeException> lostError,
-                                            int expectedRevokedCount,
-                                            int expectedAssignedCount,
-                                            int expectedLostCount,
-                                            Optional<RuntimeException> expectedException
-                                            ) {
+        Optional<RuntimeException> revokedError,
+        Optional<RuntimeException> assignedError,
+        Optional<RuntimeException> lostError,
+        int expectedRevokedCount,
+        int expectedAssignedCount,
+        int expectedLostCount,
+        Optional<RuntimeException> expectedException
+    ) {
         consumer = newConsumer();
         CounterConsumerRebalanceListener consumerRebalanceListener = new CounterConsumerRebalanceListener(
-                revokedError,
-                assignedError,
-                lostError
+            revokedError,
+            assignedError,
+            lostError
         );
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         completeTopicSubscriptionChangeEventSuccessfully();
@@ -1714,16 +1714,16 @@ public class AsyncKafkaConsumerTest {
     public void testEnsurePollEventSentOnConsumerPoll() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(
-                mock(FetchBuffer.class),
-                new ConsumerInterceptors<>(Collections.emptyList(), metrics),
-                mock(ConsumerRebalanceListenerInvoker.class),
-                subscriptions);
+            mock(FetchBuffer.class),
+            new ConsumerInterceptors<>(Collections.emptyList(), metrics),
+            mock(ConsumerRebalanceListenerInvoker.class),
+            subscriptions);
         final TopicPartition tp = new TopicPartition("topic", 0);
         final List<ConsumerRecord<String, String>> records = singletonList(
-                new ConsumerRecord<>("topic", 0, 2, "key1", "value1"));
+            new ConsumerRecord<>("topic", 0, 2, "key1", "value1"));
         doAnswer(invocation -> Fetch.forPartition(tp, records, true, new OffsetAndMetadata(3, Optional.of(0), "")))
-                .when(fetchCollector)
-                .collectFetch(Mockito.any(FetchBuffer.class));
+            .when(fetchCollector)
+            .collectFetch(Mockito.any(FetchBuffer.class));
 
         completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(singletonList("topic1"));
@@ -2023,7 +2023,7 @@ public class AsyncKafkaConsumerTest {
         // The call to unsubscribe should complete successfully (assignment event not processed and completed exceptionally)
         assertDoesNotThrow(() -> consumer.unsubscribe());
         verify(applicationEventHandler, never().description("Reconciled assignment updates shouldn't be processed while unsubscribing"))
-                .addAndGet(any(ApplyAssignmentEvent.class));
+            .addAndGet(any(ApplyAssignmentEvent.class));
         assertTrue(assignedEvent.future().isCompletedExceptionally());
     }
 
@@ -2165,10 +2165,10 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testRecordBackgroundEventQueueSizeAndBackgroundEventQueueTime() {
         consumer = newConsumer(
-                mock(FetchBuffer.class),
-                mock(ConsumerInterceptors.class),
-                mock(ConsumerRebalanceListenerInvoker.class),
-                mock(SubscriptionState.class));
+            mock(FetchBuffer.class),
+            mock(ConsumerInterceptors.class),
+            mock(ConsumerRebalanceListenerInvoker.class),
+            mock(SubscriptionState.class));
         Metrics metrics = consumer.metricsRegistry();
         AsyncConsumerMetrics asyncConsumerMetrics = consumer.asyncConsumerMetrics();
 
@@ -2341,9 +2341,9 @@ public class AsyncKafkaConsumerTest {
         doAnswer(invocation -> {
             SeekUnvalidatedEvent event = invocation.getArgument(0);
             SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
-                    event.offset(),
-                    event.offsetEpoch(),
-                    metadata.currentLeader(event.partition())
+                event.offset(),
+                event.offsetEpoch(),
+                metadata.currentLeader(event.partition())
             );
             consumer.subscriptions().seekUnvalidated(event.partition(), newPosition);
             event.future().complete(null);
@@ -2368,7 +2368,7 @@ public class AsyncKafkaConsumerTest {
     public void testCloseInvokesStreamsRebalanceListenerOnTasksRevokedWhenMemberEpochPositive() {
         final String groupId = "streamsGroup";
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
-        
+
         try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
             consumer = newConsumerWithStreamRebalanceData(requiredConsumerConfigAndGroupId(groupId), streamsRebalanceData);
             StreamsRebalanceListener mockStreamsListener = mock(StreamsRebalanceListener.class);
@@ -2377,18 +2377,18 @@ public class AsyncKafkaConsumerTest {
             final int memberEpoch = 42;
             final String memberId = "memberId";
             groupMetadataUpdateListener.onMemberEpochUpdated(Optional.of(memberEpoch), memberId);
-            
+
             consumer.close(CloseOptions.timeout(Duration.ZERO));
-            
+
             verify(mockStreamsListener).onTasksRevoked(any());
         }
     }
-    
+
     @Test
     public void testCloseInvokesStreamsRebalanceListenerOnAllTasksLostWhenMemberEpochZeroOrNegative() {
         final String groupId = "streamsGroup";
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
-        
+
         try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
             consumer = newConsumerWithStreamRebalanceData(requiredConsumerConfigAndGroupId(groupId), streamsRebalanceData);
             StreamsRebalanceListener mockStreamsListener = mock(StreamsRebalanceListener.class);
@@ -2397,18 +2397,18 @@ public class AsyncKafkaConsumerTest {
             final int memberEpoch = 0;
             final String memberId = "memberId";
             groupMetadataUpdateListener.onMemberEpochUpdated(Optional.of(memberEpoch), memberId);
-            
+
             consumer.close(CloseOptions.timeout(Duration.ZERO));
-            
+
             verify(mockStreamsListener).onAllTasksLost();
         }
     }
-    
+
     @Test
     public void testCloseWrapsStreamsRebalanceListenerException() {
         final String groupId = "streamsGroup";
         final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Optional.empty(), Map.of(), Map.of());
-        
+
         try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
             consumer = newConsumerWithStreamRebalanceData(requiredConsumerConfigAndGroupId(groupId), streamsRebalanceData);
             StreamsRebalanceListener mockStreamsListener = mock(StreamsRebalanceListener.class);
@@ -2419,8 +2419,8 @@ public class AsyncKafkaConsumerTest {
             final int memberEpoch = 1;
             final String memberId = "memberId";
             groupMetadataUpdateListener.onMemberEpochUpdated(Optional.of(memberEpoch), memberId);
-            
-            KafkaException thrownException = assertThrows(KafkaException.class, 
+
+            KafkaException thrownException = assertThrows(KafkaException.class,
                 () -> consumer.close(CloseOptions.timeout(Duration.ZERO)));
 
             assertInstanceOf(RuntimeException.class, thrownException.getCause());

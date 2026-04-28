@@ -27,7 +27,7 @@ public class To {
     protected long timestamp;
 
     private To(final String childName,
-               final long timestamp) {
+        final long timestamp) {
         this.childName = childName;
         this.timestamp = timestamp;
     }
@@ -92,8 +92,8 @@ public class To {
     @Override
     public String toString() {
         return "To{" +
-               "childName='" + childName + '\'' +
-               ", timestamp=" + timestamp +
-               '}';
+            "childName='" + childName + '\'' +
+            ", timestamp=" + timestamp +
+            '}';
     }
 }

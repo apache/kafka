@@ -28,9 +28,9 @@ public class ListValueStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, KeyV
     private final KeyValueBytesStoreSupplier storeSupplier;
 
     public ListValueStoreBuilder(final KeyValueBytesStoreSupplier storeSupplier,
-                                 final Serde<K> keySerde,
-                                 final Serde<V> valueSerde,
-                                 final Time time) {
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde,
+        final Time time) {
         super(storeSupplier.name(), keySerde, valueSerde, time);
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
         Objects.requireNonNull(storeSupplier.metricsScope(), "storeSupplier's metricsScope can't be null");
@@ -40,11 +40,11 @@ public class ListValueStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, KeyV
     @Override
     public KeyValueStore<K, V> build() {
         return new MeteredKeyValueStore<>(
-                maybeWrapCaching(maybeWrapLogging(new ListValueStore(storeSupplier.get()))),
-                storeSupplier.metricsScope(),
-                time,
-                keySerde,
-                valueSerde);
+            maybeWrapCaching(maybeWrapLogging(new ListValueStore(storeSupplier.get()))),
+            storeSupplier.metricsScope(),
+            time,
+            keySerde,
+            valueSerde);
     }
 
     private KeyValueStore<Bytes, byte[]> maybeWrapCaching(final KeyValueStore<Bytes, byte[]> inner) {

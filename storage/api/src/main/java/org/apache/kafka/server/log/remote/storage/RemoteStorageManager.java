@@ -99,7 +99,7 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * @throws RetriableRemoteStorageException if the error is transient and the operation can be retried.
      */
     Optional<CustomMetadata> copyLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
-                                                LogSegmentData logSegmentData) throws RemoteStorageException;
+           LogSegmentData logSegmentData) throws RemoteStorageException;
 
     /**
      * Returns the remote log segment data file/object as InputStream for the given {@link RemoteLogSegmentMetadata}
@@ -112,7 +112,7 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * @throws RemoteResourceNotFoundException the requested log segment is not found in the remote storage.
      */
     InputStream fetchLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
-                                int startPosition) throws RemoteStorageException;
+           int startPosition) throws RemoteStorageException;
 
     /**
      * Returns the remote log segment data file/object as InputStream for the given {@link RemoteLogSegmentMetadata}
@@ -127,8 +127,8 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * @throws RemoteResourceNotFoundException the requested log segment is not found in the remote storage.
      */
     InputStream fetchLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
-                                int startPosition,
-                                int endPosition) throws RemoteStorageException;
+           int startPosition,
+           int endPosition) throws RemoteStorageException;
 
     /**
      * Returns the index for the respective log segment of {@link RemoteLogSegmentMetadata}.
@@ -143,7 +143,7 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * @throws RemoteResourceNotFoundException the requested index is not found in the remote storage
      */
     InputStream fetchIndex(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
-                           IndexType indexType) throws RemoteStorageException;
+           IndexType indexType) throws RemoteStorageException;
 
     /**
      * Deletes the resources associated with the given {@code remoteLogSegmentMetadata}. Deletion is considered as

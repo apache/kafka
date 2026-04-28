@@ -197,8 +197,8 @@ public class AssignmentsManagerTest {
             this.backoff = new ExponentialBackoff(1, 2, 4, 0);
             this.channelManager = new MockNodeToControllerChannelManager();
             this.assignmentsManager = new AssignmentsManager(
-                    backoff, Time.SYSTEM, channelManager, 1, () -> TEST_IMAGE,
-                    Uuid::toString, metricsRegistry);
+                backoff, Time.SYSTEM, channelManager, 1, () -> TEST_IMAGE,
+                Uuid::toString, metricsRegistry);
             this.successes = new HashMap<>();
         }
 
@@ -225,12 +225,12 @@ public class AssignmentsManagerTest {
                 assertEquals(0, topicData.partitions().get(0).partitionIndex());
                 return mockClientResponse(new AssignReplicasToDirsResponseData().
                     setDirectories(List.of(new AssignReplicasToDirsResponseData.DirectoryData().
-                        setId(DIR_1).
-                        setTopics(List.of(new AssignReplicasToDirsResponseData.TopicData().
-                            setTopicId(TOPIC_1).
-                            setPartitions(List.of(new AssignReplicasToDirsResponseData.PartitionData().
-                                setPartitionIndex(0).
-                                setErrorCode((short) 0))))))));
+                    setId(DIR_1).
+                    setTopics(List.of(new AssignReplicasToDirsResponseData.TopicData().
+                    setTopicId(TOPIC_1).
+                    setPartitions(List.of(new AssignReplicasToDirsResponseData.PartitionData().
+                    setPartitionIndex(0).
+                    setErrorCode((short) 0))))))));
             });
         }
 
@@ -246,14 +246,14 @@ public class AssignmentsManagerTest {
         @SuppressWarnings("unchecked") // do not warn about Gauge typecast.
         int queuedReplicaToDirAssignments() {
             Gauge<Integer> queuedReplicaToDirAssignments =
-                    (Gauge<Integer>) findMetric(QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC);
+                (Gauge<Integer>) findMetric(QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC);
             return queuedReplicaToDirAssignments.value();
         }
 
         @SuppressWarnings({"unchecked", "deprecation"}) // do not warn about Gauge typecast or the deprecation.
         int deprecatedQueuedReplicaToDirAssignments() {
             Gauge<Integer> queuedReplicaToDirAssignments =
-                    (Gauge<Integer>) findMetric(AssignmentsManager.DEPRECATED_QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC);
+                (Gauge<Integer>) findMetric(AssignmentsManager.DEPRECATED_QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC);
             return queuedReplicaToDirAssignments.value();
         }
 
@@ -314,7 +314,7 @@ public class AssignmentsManagerTest {
             TestUtils.retryOnExceptionWithTimeout(60_000, () -> assertEquals(1, testEnv.assignmentsManager.numPending()));
             if (failureType.equals("invalidRequest")) {
                 testEnv.channelManager.completeCallback(req -> mockClientResponse(new AssignReplicasToDirsResponseData()
-                        .setErrorCode(Errors.INVALID_REQUEST.code())));
+                    .setErrorCode(Errors.INVALID_REQUEST.code())));
             } else if (failureType.equals("timeout")) {
                 testEnv.channelManager.completeCallback(req -> Optional.empty());
             }
@@ -387,10 +387,10 @@ public class AssignmentsManagerTest {
                 }
                 return mockClientResponse(new AssignReplicasToDirsResponseData().
                     setDirectories(List.of(new AssignReplicasToDirsResponseData.DirectoryData().
-                        setId(DIR_1).
-                        setTopics(List.of(new AssignReplicasToDirsResponseData.TopicData().
-                            setTopicId(TOPIC_1).
-                            setPartitions(partitions))))));
+                    setId(DIR_1).
+                    setTopics(List.of(new AssignReplicasToDirsResponseData.TopicData().
+                    setTopicId(TOPIC_1).
+                    setPartitions(partitions))))));
             });
             TestUtils.retryOnExceptionWithTimeout(60_000, () -> {
                 assertEquals(1, testEnv.assignmentsManager.numPending());
@@ -438,7 +438,7 @@ public class AssignmentsManagerTest {
         assertEquals(Optional.of("Disconnected[Timeout]"),
             AssignmentsManager.globalResponseError(Optional.of(
                 new ClientResponse(null, null, "", 0, 0, true, true,
-                   null, null, null))));
+                    null, null, null))));
     }
 
     @Test
@@ -446,7 +446,7 @@ public class AssignmentsManagerTest {
         assertEquals(Optional.of("EmptyResponse"),
             AssignmentsManager.globalResponseError(Optional.of(
                 new ClientResponse(null, null, "", 0, 0, false, false,
-                        null, null, null))));
+                    null, null, null))));
     }
 
     @Test
@@ -462,9 +462,9 @@ public class AssignmentsManagerTest {
         assertEquals(Optional.of("Response-level error: INVALID_REQUEST"),
             AssignmentsManager.globalResponseError(Optional.of(
                 new ClientResponse(null, null, "", 0, 0, false, false,
-                        null, null, new AssignReplicasToDirsResponse(
-                            new AssignReplicasToDirsResponseData().
-                                setErrorCode(Errors.INVALID_REQUEST.code()))))));
+                    null, null, new AssignReplicasToDirsResponse(
+                        new AssignReplicasToDirsResponseData().
+                            setErrorCode(Errors.INVALID_REQUEST.code()))))));
     }
 
     @Test
@@ -476,44 +476,45 @@ public class AssignmentsManagerTest {
         assignments.put(new TopicIdPartition(TOPIC_1, 4), DIR_1);
         assignments.put(new TopicIdPartition(TOPIC_2, 5), DIR_2);
         Map<TopicIdPartition, Assignment> targetAssignments = new LinkedHashMap<>();
-        assignments.forEach((key, value) -> targetAssignments.put(key, new Assignment(key, value, 0, () -> { })));
+        assignments.forEach((key, value) -> targetAssignments.put(key, new Assignment(key, value, 0, () -> {
+        })));
         AssignReplicasToDirsRequestData built =
             AssignmentsManager.buildRequestData(8, 100L, targetAssignments);
         AssignReplicasToDirsRequestData expected = new AssignReplicasToDirsRequestData().
             setBrokerId(8).
             setBrokerEpoch(100L).
             setDirectories(List.of(
-                new AssignReplicasToDirsRequestData.DirectoryData().
-                    setId(DIR_2).
-                    setTopics(List.of(
-                        new AssignReplicasToDirsRequestData.TopicData().
-                            setTopicId(TOPIC_1).
-                            setPartitions(List.of(
-                                new AssignReplicasToDirsRequestData.PartitionData().
-                                    setPartitionIndex(2))),
-                        new AssignReplicasToDirsRequestData.TopicData().
-                            setTopicId(TOPIC_2).
-                            setPartitions(List.of(
-                                new AssignReplicasToDirsRequestData.PartitionData().
-                                    setPartitionIndex(5))))),
-                new AssignReplicasToDirsRequestData.DirectoryData().
-                    setId(DIR_3).
-                    setTopics(List.of(
-                        new AssignReplicasToDirsRequestData.TopicData().
-                            setTopicId(TOPIC_1).
-                            setPartitions(List.of(
-                                new AssignReplicasToDirsRequestData.PartitionData().
-                                    setPartitionIndex(3))))),
-                new AssignReplicasToDirsRequestData.DirectoryData().
-                    setId(DIR_1).
-                    setTopics(List.of(
-                        new AssignReplicasToDirsRequestData.TopicData().
-                            setTopicId(TOPIC_1).
-                            setPartitions(List.of(
-                                new AssignReplicasToDirsRequestData.PartitionData().
-                                    setPartitionIndex(1),
-                                new AssignReplicasToDirsRequestData.PartitionData().
-                                    setPartitionIndex(4)))))));
+            new AssignReplicasToDirsRequestData.DirectoryData().
+                setId(DIR_2).
+                setTopics(List.of(
+                new AssignReplicasToDirsRequestData.TopicData().
+                    setTopicId(TOPIC_1).
+                    setPartitions(List.of(
+                    new AssignReplicasToDirsRequestData.PartitionData().
+                        setPartitionIndex(2))),
+                new AssignReplicasToDirsRequestData.TopicData().
+                    setTopicId(TOPIC_2).
+                    setPartitions(List.of(
+                    new AssignReplicasToDirsRequestData.PartitionData().
+                        setPartitionIndex(5))))),
+            new AssignReplicasToDirsRequestData.DirectoryData().
+                setId(DIR_3).
+                setTopics(List.of(
+                new AssignReplicasToDirsRequestData.TopicData().
+                    setTopicId(TOPIC_1).
+                    setPartitions(List.of(
+                    new AssignReplicasToDirsRequestData.PartitionData().
+                        setPartitionIndex(3))))),
+            new AssignReplicasToDirsRequestData.DirectoryData().
+                setId(DIR_1).
+                setTopics(List.of(
+                new AssignReplicasToDirsRequestData.TopicData().
+                    setTopicId(TOPIC_1).
+                    setPartitions(List.of(
+                    new AssignReplicasToDirsRequestData.PartitionData().
+                        setPartitionIndex(1),
+                    new AssignReplicasToDirsRequestData.PartitionData().
+                        setPartitionIndex(4)))))));
         assertEquals(expected, built);
     }
 }

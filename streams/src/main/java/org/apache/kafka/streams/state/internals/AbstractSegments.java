@@ -86,7 +86,7 @@ public abstract class AbstractSegments<S extends Segment> implements Segments<S>
 
     @Override
     public S getOrCreateSegment(final long segmentId,
-                                final StateStoreContext context) {
+        final StateStoreContext context) {
         if (segments.containsKey(segmentId)) {
             return segments.get(segmentId);
         } else {
@@ -103,8 +103,8 @@ public abstract class AbstractSegments<S extends Segment> implements Segments<S>
 
     @Override
     public S getOrCreateSegmentIfLive(final long segmentId,
-                                      final StateStoreContext context,
-                                      final long streamTime) {
+        final StateStoreContext context,
+        final long streamTime) {
         final long minLiveTimestamp = streamTime - retentionPeriod;
         final long minLiveSegment = segmentId(minLiveTimestamp);
 
@@ -124,10 +124,10 @@ public abstract class AbstractSegments<S extends Segment> implements Segments<S>
         if (dir.exists() && dir.isDirectory()) {
             final String[] list = dir.list();
             Arrays.stream(list)
-                    .map(segment -> segmentIdFromSegmentName(segment, dir))
-                    .filter(segmentId -> segmentId >= 0)
-                    .sorted() // open segments in the id order
-                    .forEach(segmentId -> getOrCreateSegment(segmentId, context));
+                .map(segment -> segmentIdFromSegmentName(segment, dir))
+                .filter(segmentId -> segmentId >= 0)
+                .sorted() // open segments in the id order
+                .forEach(segmentId -> getOrCreateSegment(segmentId, context));
         } else {
             if (!dir.mkdir()) {
                 throw new ProcessorStateException(String.format("dir %s doesn't exist and cannot be created for segments %s", dir, name));
@@ -228,7 +228,7 @@ public abstract class AbstractSegments<S extends Segment> implements Segments<S>
     }
 
     private long segmentIdFromSegmentName(final String segmentName,
-                                          final File parent) {
+        final File parent) {
         final int segmentSeparatorIndex = name.length();
         final char segmentSeparator = segmentName.charAt(segmentSeparatorIndex);
         final String segmentIdString = segmentName.substring(segmentSeparatorIndex + 1);
@@ -262,8 +262,8 @@ public abstract class AbstractSegments<S extends Segment> implements Segments<S>
     }
 
     private void renameSegmentFile(final File parent,
-                                   final String segmentName,
-                                   final long segmentId) {
+        final String segmentName,
+        final long segmentId) {
         final File newName = new File(parent, segmentName(segmentId));
         final File oldName = new File(parent, segmentName);
         if (!oldName.renameTo(newName)) {

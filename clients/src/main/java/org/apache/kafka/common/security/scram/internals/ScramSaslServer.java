@@ -101,7 +101,7 @@ public class ScramSaslServer implements SaslServer {
                     this.scramExtensions = clientFirstMessage.extensions();
                     if (!SUPPORTED_EXTENSIONS.containsAll(scramExtensions.map().keySet())) {
                         log.debug("Unsupported extensions will be ignored, supported {}, provided {}",
-                                SUPPORTED_EXTENSIONS, scramExtensions.map().keySet());
+                            SUPPORTED_EXTENSIONS, scramExtensions.map().keySet());
                     }
                     String serverNonce = formatter.secureRandomString();
                     try {
@@ -131,11 +131,11 @@ public class ScramSaslServer implements SaslServer {
                             throw new SaslAuthenticationException("Authentication failed: Client requested an authorization id that is different from username");
 
                         if (scramCredential.iterations() < mechanism.minIterations())
-                            throw new SaslException("Iterations " + scramCredential.iterations() +  " is less than the minimum " + mechanism.minIterations() + " for " + mechanism);
+                            throw new SaslException("Iterations " + scramCredential.iterations() + " is less than the minimum " + mechanism.minIterations() + " for " + mechanism);
                         this.serverFirstMessage = new ServerFirstMessage(clientFirstMessage.nonce(),
-                                serverNonce,
-                                scramCredential.salt(),
-                                scramCredential.iterations());
+                            serverNonce,
+                            scramCredential.salt(),
+                            scramCredential.iterations());
                         setState(State.RECEIVE_CLIENT_FINAL_MESSAGE);
                         return serverFirstMessage.toBytes();
                     } catch (SaslException | AuthenticationException e) {
@@ -250,7 +250,7 @@ public class ScramSaslServer implements SaslServer {
 
             if (!ScramMechanism.isScram(mechanism)) {
                 throw new SaslException(String.format("Requested mechanism '%s' is not supported. Supported mechanisms are '%s'.",
-                        mechanism, ScramMechanism.mechanismNames()));
+                    mechanism, ScramMechanism.mechanismNames()));
             }
             try {
                 return new ScramSaslServer(ScramMechanism.forMechanismName(mechanism), props, cbh);

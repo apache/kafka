@@ -38,15 +38,15 @@ public abstract class MockLog extends UnifiedLog {
 
     public MockLog(TopicPartition tp) throws IOException {
         super(
-            0,
-            createMockLocalLog(tp),
-            mock(BrokerTopicStats.class),
-            Integer.MAX_VALUE,
-            mock(LeaderEpochFileCache.class),
-            mock(ProducerStateManager.class),
-            Optional.empty(),
-            false,
-            LogOffsetsListener.NO_OP_OFFSETS_LISTENER
+                0,
+                createMockLocalLog(tp),
+                mock(BrokerTopicStats.class),
+                Integer.MAX_VALUE,
+                mock(LeaderEpochFileCache.class),
+                mock(ProducerStateManager.class),
+                Optional.empty(),
+                false,
+                LogOffsetsListener.NO_OP_OFFSETS_LISTENER
         );
     }
 

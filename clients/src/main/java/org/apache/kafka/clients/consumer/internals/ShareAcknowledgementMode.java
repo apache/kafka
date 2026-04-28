@@ -90,8 +90,8 @@ public class ShareAcknowledgementMode {
     @Override
     public String toString() {
         return "ShareAcknowledgementMode{" +
-                "mode=" + acknowledgementMode +
-                '}';
+            "mode=" + acknowledgementMode +
+            '}';
     }
 
     public static class Validator implements ConfigDef.Validator {
@@ -102,14 +102,14 @@ public class ShareAcknowledgementMode {
                 fromString(acknowledgementMode);
             } catch (Exception e) {
                 throw new ConfigException(name, value, "Invalid value `" + acknowledgementMode + "` for configuration " +
-                        name + ". The value must either be 'implicit' or 'explicit'.");
+                    name + ". The value must either be 'implicit' or 'explicit'.");
             }
         }
 
         @Override
         public String toString() {
             String values = Arrays.stream(ShareAcknowledgementMode.AcknowledgementMode.values())
-                    .map(ShareAcknowledgementMode.AcknowledgementMode::toString).collect(Collectors.joining(", "));
+                .map(ShareAcknowledgementMode.AcknowledgementMode::toString).collect(Collectors.joining(", "));
             return "[" + values + "]";
         }
     }

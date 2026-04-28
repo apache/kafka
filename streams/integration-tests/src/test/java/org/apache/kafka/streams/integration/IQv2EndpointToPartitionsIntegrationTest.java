@@ -99,9 +99,9 @@ public class IQv2EndpointToPartitionsIntegrationTest {
     @ParameterizedTest(name = "{3}")
     @MethodSource("groupProtocolParameters")
     public void shouldGetCorrectHostPartitionInformation(final String groupProtocolConfig,
-                                                         final boolean usingStandbyReplicas,
-                                                         final int numStandbyReplicas,
-                                                         final String testName) throws Exception {
+        final boolean usingStandbyReplicas,
+        final int numStandbyReplicas,
+        final String testName) throws Exception {
         try {
             startCluster(usingStandbyReplicas ? numStandbyReplicas : 0);
             setUp();
@@ -130,11 +130,11 @@ public class IQv2EndpointToPartitionsIntegrationTest {
             try (final KafkaStreams streamsOne = new KafkaStreams(topology, streamsApplicationProperties)) {
                 IntegrationTestUtils.startApplicationAndWaitUntilRunning(streamsOne);
                 waitForCondition(() -> !streamsOne.metadataForAllStreamsClients().isEmpty(),
-                        IntegrationTestUtils.DEFAULT_TIMEOUT,
-                        () -> "Kafka Streams didn't get metadata about the client.");
+                    IntegrationTestUtils.DEFAULT_TIMEOUT,
+                    () -> "Kafka Streams didn't get metadata about the client.");
                 waitForCondition(() -> streamsOne.metadataForAllStreamsClients().iterator().next().topicPartitions().size() == 4,
-                        IntegrationTestUtils.DEFAULT_TIMEOUT,
-                        () -> "Kafka Streams one didn't get 4 tasks");
+                    IntegrationTestUtils.DEFAULT_TIMEOUT,
+                    () -> "Kafka Streams one didn't get 4 tasks");
                 final List<StreamsMetadata> streamsMetadataAllClients = new ArrayList<>(streamsOne.metadataForAllStreamsClients());
                 assertEquals(1, streamsMetadataAllClients.size());
                 final StreamsMetadata streamsOneInitialMetadata = streamsMetadataAllClients.get(0);
@@ -152,32 +152,32 @@ public class IQv2EndpointToPartitionsIntegrationTest {
                 try (final KafkaStreams streamsTwo = new KafkaStreams(topology, streamsSecondApplicationProperties)) {
                     streamsTwo.start();
                     waitForCondition(() -> KafkaStreams.State.RUNNING == streamsTwo.state() && KafkaStreams.State.RUNNING == streamsOne.state(),
-                            IntegrationTestUtils.DEFAULT_TIMEOUT,
-                            () -> "Kafka Streams one or two never transitioned to a RUNNING state.");
-
-                    waitForCondition(() ->  {
-                        final ThreadMetadata threadMetadata = streamsOne.metadataForLocalThreads().iterator().next();
-                        return threadMetadata.activeTasks().size() == 2 && threadMetadata.standbyTasks().size() == expectedStandbyCount;
-                    }, TestUtils.DEFAULT_MAX_WAIT_MS,
-                            "KafkaStreams one never released active tasks and received standby task");
+                        IntegrationTestUtils.DEFAULT_TIMEOUT,
+                        () -> "Kafka Streams one or two never transitioned to a RUNNING state.");
 
                     waitForCondition(() -> {
-                        final ThreadMetadata threadMetadata = streamsTwo.metadataForLocalThreads().iterator().next();
-                        return threadMetadata.activeTasks().size() == 2 && threadMetadata.standbyTasks().size() == expectedStandbyCount;
-                    }, TestUtils.DEFAULT_MAX_WAIT_MS,
-                            "KafkaStreams two never received active tasks and standby");
+                            final ThreadMetadata threadMetadata = streamsOne.metadataForLocalThreads().iterator().next();
+                            return threadMetadata.activeTasks().size() == 2 && threadMetadata.standbyTasks().size() == expectedStandbyCount;
+                        }, TestUtils.DEFAULT_MAX_WAIT_MS,
+                        "KafkaStreams one never released active tasks and received standby task");
 
                     waitForCondition(() -> {
-                        final List<StreamsMetadata> metadata = new ArrayList<>(streamsTwo.metadataForAllStreamsClients());
-                        return metadata.size() == 2 &&
-                               metadata.get(0).standbyTopicPartitions().size() == expectedStandbyCount &&
-                               metadata.get(1).standbyTopicPartitions().size() == expectedStandbyCount;
-                    }, TestUtils.DEFAULT_MAX_WAIT_MS,
-                            "Kafka Streams clients 1 and 2 never got metadata about standby tasks");
+                            final ThreadMetadata threadMetadata = streamsTwo.metadataForLocalThreads().iterator().next();
+                            return threadMetadata.activeTasks().size() == 2 && threadMetadata.standbyTasks().size() == expectedStandbyCount;
+                        }, TestUtils.DEFAULT_MAX_WAIT_MS,
+                        "KafkaStreams two never received active tasks and standby");
+
+                    waitForCondition(() -> {
+                            final List<StreamsMetadata> metadata = new ArrayList<>(streamsTwo.metadataForAllStreamsClients());
+                            return metadata.size() == 2 &&
+                                metadata.get(0).standbyTopicPartitions().size() == expectedStandbyCount &&
+                                metadata.get(1).standbyTopicPartitions().size() == expectedStandbyCount;
+                        }, TestUtils.DEFAULT_MAX_WAIT_MS,
+                        "Kafka Streams clients 1 and 2 never got metadata about standby tasks");
 
                     waitForCondition(() -> streamsOne.metadataForAllStreamsClients().iterator().next().topicPartitions().size() == 2,
-                            IntegrationTestUtils.DEFAULT_TIMEOUT,
-                            () -> "Kafka Streams one didn't give up active tasks");
+                        IntegrationTestUtils.DEFAULT_TIMEOUT,
+                        () -> "Kafka Streams one didn't give up active tasks");
 
                     final List<StreamsMetadata> allClientMetadataUpdated = new ArrayList<>(streamsTwo.metadataForAllStreamsClients());
 
@@ -240,9 +240,9 @@ public class IQv2EndpointToPartitionsIntegrationTest {
 
     private static Stream<Arguments> groupProtocolParameters() {
         return Stream.of(Arguments.of("streams", false, 0, "STREAMS protocol No standby"),
-                Arguments.of("classic", false, 0, "CLASSIC protocol No standby"),
-                Arguments.of("streams", true, 1, "STREAMS protocol With standby"),
-                Arguments.of("classic", true, 1, "CLASSIC protocol With standby"));
+            Arguments.of("classic", false, 0, "CLASSIC protocol No standby"),
+            Arguments.of("streams", true, 1, "STREAMS protocol With standby"),
+            Arguments.of("classic", true, 1, "CLASSIC protocol With standby"));
     }
 
     private Properties props(final Properties extraProperties) {
@@ -261,10 +261,10 @@ public class IQv2EndpointToPartitionsIntegrationTest {
     private Topology complexTopology() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(inputTopicTwoPartitions, Consumed.with(Serdes.String(), Serdes.String()))
-                .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
-                .groupBy((key, value) -> value, Grouped.as("IQTest"))
-                .count(Materialized.as(EXPECTED_STORE_NAME))
-                .toStream().to(outputTopicTwoPartitions, Produced.with(Serdes.String(), Serdes.Long()));
+            .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
+            .groupBy((key, value) -> value, Grouped.as("IQTest"))
+            .count(Materialized.as(EXPECTED_STORE_NAME))
+            .toStream().to(outputTopicTwoPartitions, Produced.with(Serdes.String(), Serdes.Long()));
         return builder.build();
     }
 }

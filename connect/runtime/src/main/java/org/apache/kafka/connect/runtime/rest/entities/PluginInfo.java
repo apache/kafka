@@ -23,11 +23,11 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public record PluginInfo(
-    @JsonProperty("class") String className,
-    @JsonProperty("type") PluginType type,
-    @JsonProperty("version")
-    @JsonInclude(value = JsonInclude.Include.CUSTOM, valueFilter = NoVersionFilter.class)
-    String version
+@JsonProperty("class") String className,
+@JsonProperty("type") PluginType type,
+@JsonProperty("version")
+@JsonInclude(value = JsonInclude.Include.CUSTOM, valueFilter = NoVersionFilter.class)
+String version
 ) {
     public PluginInfo(PluginDesc<?> plugin) {
         this(plugin.className(), plugin.type(), plugin.version());

@@ -54,7 +54,7 @@ public class ListShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coordi
     private final CoordinatorStrategy lookupStrategy;
 
     public ListShareGroupOffsetsHandler(Map<String, ListShareGroupOffsetsSpec> groupSpecs,
-                                        LogContext logContext) {
+        LogContext logContext) {
         this.groupSpecs = groupSpecs;
         this.log = logContext.logger(ListShareGroupOffsetsHandler.class);
         this.lookupStrategy = new CoordinatorStrategy(CoordinatorType.GROUP, logContext);
@@ -92,9 +92,9 @@ public class ListShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coordi
                 Map<String, DescribeShareGroupOffsetsRequestTopic> requestTopics = new HashMap<>();
                 for (TopicPartition tp : spec.topicPartitions()) {
                     requestTopics.computeIfAbsent(tp.topic(), t ->
-                            new DescribeShareGroupOffsetsRequestTopic()
-                                .setTopicName(tp.topic())
-                                .setPartitions(new ArrayList<>()))
+                        new DescribeShareGroupOffsetsRequestTopic()
+                            .setTopicName(tp.topic())
+                            .setPartitions(new ArrayList<>()))
                         .partitions()
                         .add(tp.partition());
                 }
@@ -111,8 +111,8 @@ public class ListShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coordi
 
     @Override
     public ApiResult<CoordinatorKey, Map<TopicPartition, SharePartitionOffsetInfo>> handleResponse(Node coordinator,
-                                                                                                   Set<CoordinatorKey> groupIds,
-                                                                                                   AbstractResponse abstractResponse) {
+        Set<CoordinatorKey> groupIds,
+        AbstractResponse abstractResponse) {
         validateKeys(groupIds);
 
         final DescribeShareGroupOffsetsResponse response = (DescribeShareGroupOffsetsResponse) abstractResponse;
@@ -168,9 +168,9 @@ public class ListShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coordi
     }
 
     private void handleGroupError(CoordinatorKey groupId,
-                                  Throwable exception,
-                                  Map<CoordinatorKey, Throwable> failed,
-                                  List<CoordinatorKey> groupsToUnmap) {
+        Throwable exception,
+        Map<CoordinatorKey, Throwable> failed,
+        List<CoordinatorKey> groupsToUnmap) {
         Errors error = Errors.forException(exception);
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:

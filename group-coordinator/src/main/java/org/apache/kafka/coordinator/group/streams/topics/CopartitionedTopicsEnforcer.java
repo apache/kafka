@@ -112,7 +112,7 @@ public class CopartitionedTopicsEnforcer {
             if (fixedRepartitionTopics.contains(repartitionTopic.getKey())
                 && repartitionTopic.getValue() != numPartitionsToUseForRepartitionTopics) {
                 final String msg = String.format("Number of partitions [%d] of repartition topic [%s] " +
-                        "doesn't match number of partitions [%d] of the source topic.",
+                    "doesn't match number of partitions [%d] of the source topic.",
                     repartitionTopic.getValue(),
                     repartitionTopic.getKey(),
                     numPartitionsToUseForRepartitionTopics);

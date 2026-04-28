@@ -24,7 +24,8 @@ import java.util.List;
 public class ThrottledReplicaListValidator implements Validator {
     public static final Validator INSTANCE = new ThrottledReplicaListValidator();
 
-    private ThrottledReplicaListValidator() { }
+    private ThrottledReplicaListValidator() {
+    }
 
     public static void ensureValidString(String name, String value) {
         INSTANCE.ensureValid(name, List.of(value.split(",")));
@@ -37,7 +38,7 @@ public class ThrottledReplicaListValidator implements Validator {
             if (!(proposed.stream().allMatch(s -> s.matches("([0-9]+:[0-9]+)?"))
                     || String.join("", proposed).equals("*")))
                 throw new ConfigException(name, value, name +
-                    " must be the literal '*' or a list of replicas in the following format: [partitionId]:[brokerId],[partitionId]:[brokerId],...");
+                        " must be the literal '*' or a list of replicas in the following format: [partitionId]:[brokerId],[partitionId]:[brokerId],...");
         } else
             throw new ConfigException(name, value, name + " must be a List but was " + value.getClass().getName());
     }

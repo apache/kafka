@@ -140,28 +140,32 @@ public class CoordinatorClient {
     public CoordinatorStatusResponse status() throws Exception {
         HttpResponse<CoordinatorStatusResponse> resp =
             JsonRestServer.httpRequest(url("/coordinator/status"), "GET",
-                null, new TypeReference<CoordinatorStatusResponse>() { }, maxTries);
+                null, new TypeReference<CoordinatorStatusResponse>() {
+                }, maxTries);
         return resp.body();
     }
 
     public UptimeResponse uptime() throws Exception {
         HttpResponse<UptimeResponse> resp =
             JsonRestServer.httpRequest(url("/coordinator/uptime"), "GET",
-                null, new TypeReference<UptimeResponse>() { }, maxTries);
+                null, new TypeReference<UptimeResponse>() {
+                }, maxTries);
         return resp.body();
     }
 
     public void createTask(CreateTaskRequest request) throws Exception {
         HttpResponse<Empty> resp =
             JsonRestServer.httpRequest(log, url("/coordinator/task/create"), "POST",
-                request, new TypeReference<Empty>() { }, maxTries);
+                request, new TypeReference<Empty>() {
+                }, maxTries);
         resp.body();
     }
 
     public void stopTask(StopTaskRequest request) throws Exception {
         HttpResponse<Empty> resp =
             JsonRestServer.httpRequest(log, url("/coordinator/task/stop"), "PUT",
-                request, new TypeReference<Empty>() { }, maxTries);
+                request, new TypeReference<Empty>() {
+                }, maxTries);
         resp.body();
     }
 
@@ -170,7 +174,8 @@ public class CoordinatorClient {
         uriBuilder.queryParam("taskId", request.id());
         HttpResponse<Empty> resp =
             JsonRestServer.httpRequest(log, uriBuilder.build().toString(), "DELETE",
-                null, new TypeReference<Empty>() { }, maxTries);
+                null, new TypeReference<Empty>() {
+                }, maxTries);
         resp.body();
     }
 
@@ -186,21 +191,24 @@ public class CoordinatorClient {
         }
         HttpResponse<TasksResponse> resp =
             JsonRestServer.httpRequest(log, uriBuilder.build().toString(), "GET",
-                null, new TypeReference<TasksResponse>() { }, maxTries);
+                null, new TypeReference<TasksResponse>() {
+                }, maxTries);
         return resp.body();
     }
 
     public TaskState task(TaskRequest request) throws Exception {
         String uri = UriBuilder.fromPath(url("/coordinator/tasks/{taskId}")).build(request.taskId()).toString();
         HttpResponse<TaskState> resp = JsonRestServer.httpRequest(log, uri, "GET",
-            null, new TypeReference<TaskState>() { }, maxTries);
+            null, new TypeReference<TaskState>() {
+            }, maxTries);
         return resp.body();
     }
 
     public void shutdown() throws Exception {
         HttpResponse<Empty> resp =
             JsonRestServer.httpRequest(log, url("/coordinator/shutdown"), "PUT",
-                null, new TypeReference<Empty>() { }, maxTries);
+                null, new TypeReference<Empty>() {
+                }, maxTries);
         resp.body();
     }
 

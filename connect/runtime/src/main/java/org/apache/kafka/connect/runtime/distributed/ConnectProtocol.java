@@ -146,7 +146,7 @@ public class ConnectProtocol {
                 new JoinGroupRequestProtocol()
                         .setName(EAGER.protocol())
                         .setMetadata(ConnectProtocol.serializeMetadata(workerState).array()))
-                );
+        );
     }
 
     /**
@@ -297,7 +297,7 @@ public class ConnectProtocol {
          * @param taskIds list of task IDs that the worker should instantiate and run; may not be null
          */
         public Assignment(short error, String leader, String leaderUrl, long configOffset,
-                          Collection<String> connectorIds, Collection<ConnectorTaskId> taskIds) {
+                Collection<String> connectorIds, Collection<ConnectorTaskId> taskIds) {
             this.error = error;
             this.leader = leader;
             this.leaderUrl = leaderUrl;

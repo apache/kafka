@@ -94,8 +94,8 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
         Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(
-            mkEntry(OFFSET_KEY_SERIALIZED, null),
-            mkEntry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED))
+                mkEntry(OFFSET_KEY_SERIALIZED, null),
+                mkEntry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED))
         ), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
@@ -127,8 +127,8 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
         Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(
-            mkEntry(OFFSET_KEY_SERIALIZED, null),
-            mkEntry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED)
+                mkEntry(OFFSET_KEY_SERIALIZED, null),
+                mkEntry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED)
         )), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
@@ -162,8 +162,8 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
         Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(
-            mkEntry(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED),
-            mkEntry(OFFSET_KEY_SERIALIZED_1, null))
+                mkEntry(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED),
+                mkEntry(OFFSET_KEY_SERIALIZED_1, null))
         ), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
@@ -187,19 +187,19 @@ public class ConnectorOffsetBackingStoreTest {
         KafkaOffsetBackingStore workerStore = createStore("topic2", workerStoreProducer);
 
         ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
-            () -> LoggingContext.forConnector("source-connector"),
-            workerStore,
-            connectorStore,
-            "offsets-topic",
-            mock(TopicAdmin.class));
+                () -> LoggingContext.forConnector("source-connector"),
+                workerStore,
+                connectorStore,
+                "offsets-topic",
+                mock(TopicAdmin.class));
 
         AtomicBoolean callbackInvoked = new AtomicBoolean();
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
         Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(
-            mkEntry(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED),
-            mkEntry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED)
+                mkEntry(OFFSET_KEY_SERIALIZED, OFFSET_VALUE_SERIALIZED),
+                mkEntry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED)
         )), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
@@ -231,8 +231,8 @@ public class ConnectorOffsetBackingStoreTest {
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
         Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(
-            mkEntry(OFFSET_KEY_SERIALIZED, null),
-            mkEntry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED)
+                mkEntry(OFFSET_KEY_SERIALIZED, null),
+                mkEntry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED)
         )), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
@@ -277,10 +277,10 @@ public class ConnectorOffsetBackingStoreTest {
         KafkaOffsetBackingStore connectorStore = createStore("topic1", connectorStoreProducer);
 
         ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withOnlyConnectorStore(
-            () -> LoggingContext.forConnector("source-connector"),
-            connectorStore,
-            "offsets-topic",
-            mock(TopicAdmin.class));
+                () -> LoggingContext.forConnector("source-connector"),
+                connectorStore,
+                "offsets-topic",
+                mock(TopicAdmin.class));
 
         AtomicBoolean callbackInvoked = new AtomicBoolean();
         AtomicReference<Object> callbackResult = new AtomicReference<>();
@@ -305,11 +305,11 @@ public class ConnectorOffsetBackingStoreTest {
         KafkaOffsetBackingStore workerStore = createStore("topic2", workerStoreProducer);
 
         ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
-            () -> LoggingContext.forConnector("source-connector"),
-            workerStore,
-            connectorStore,
-            "offsets-topic",
-            mock(TopicAdmin.class));
+                () -> LoggingContext.forConnector("source-connector"),
+                workerStore,
+                connectorStore,
+                "offsets-topic",
+                mock(TopicAdmin.class));
 
         AtomicBoolean callbackInvoked = new AtomicBoolean();
         AtomicReference<Object> callbackResult = new AtomicReference<>();
@@ -335,11 +335,11 @@ public class ConnectorOffsetBackingStoreTest {
         KafkaOffsetBackingStore workerStore = createStore("topic2", workerStoreProducer);
 
         ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
-            () -> LoggingContext.forConnector("source-connector"),
-            workerStore,
-            connectorStore,
-            "offsets-topic",
-            mock(TopicAdmin.class));
+                () -> LoggingContext.forConnector("source-connector"),
+                workerStore,
+                connectorStore,
+                "offsets-topic",
+                mock(TopicAdmin.class));
 
         AtomicBoolean callbackInvoked = new AtomicBoolean();
         AtomicReference<Object> callbackResult = new AtomicReference<>();
@@ -364,19 +364,19 @@ public class ConnectorOffsetBackingStoreTest {
         KafkaOffsetBackingStore workerStore = createStore("topic2", workerStoreProducer);
 
         ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
-            () -> LoggingContext.forConnector("source-connector"),
-            workerStore,
-            connectorStore,
-            "offsets-topic",
-            mock(TopicAdmin.class));
+                () -> LoggingContext.forConnector("source-connector"),
+                workerStore,
+                connectorStore,
+                "offsets-topic",
+                mock(TopicAdmin.class));
 
         AtomicBoolean callbackInvoked = new AtomicBoolean();
         AtomicReference<Object> callbackResult = new AtomicReference<>();
         AtomicReference<Throwable> callbackError = new AtomicReference<>();
 
         Future<Void> setFuture = offsetBackingStore.set(getSerialisedOffsets(mkMap(
-            mkEntry(OFFSET_KEY_SERIALIZED, null),
-            mkEntry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED)
+                mkEntry(OFFSET_KEY_SERIALIZED, null),
+                mkEntry(OFFSET_KEY_SERIALIZED_1, OFFSET_VALUE_SERIALIZED)
         )), (error, result) -> {
             callbackInvoked.set(true);
             callbackResult.set(result);
@@ -417,10 +417,10 @@ public class ConnectorOffsetBackingStoreTest {
 
     @SuppressWarnings("unchecked")
     private KafkaOffsetBackingStore createStore(String topic, Producer<byte[], byte[]> producer) {
-        KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(() -> mock(TopicAdmin.class), () -> "connect",  mock(Converter.class));
+        KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(() -> mock(TopicAdmin.class), () -> "connect", mock(Converter.class));
         KafkaBasedLog<byte[], byte[]> kafkaBasedLog = new KafkaBasedLog<byte[], byte[]>(
-            topic, new HashMap<>(), new HashMap<>(),
-            () -> mock(TopicAdmin.class), mock(Callback.class), new MockTime(), null) {
+                topic, new HashMap<>(), new HashMap<>(),
+                () -> mock(TopicAdmin.class), mock(Callback.class), new MockTime(), null) {
             @Override
             protected Producer<byte[], byte[]> createProducer() {
                 return producer;
@@ -451,9 +451,9 @@ public class ConnectorOffsetBackingStoreTest {
 
     private Map<ByteBuffer, ByteBuffer> getSerialisedOffsets(Map<byte[], byte[]> offsets) {
         Map<ByteBuffer, ByteBuffer> serialisedOffsets = new HashMap<>();
-        for (Map.Entry<byte[], byte[]> offsetEntry: offsets.entrySet()) {
+        for (Map.Entry<byte[], byte[]> offsetEntry : offsets.entrySet()) {
             serialisedOffsets.put(ByteBuffer.wrap(offsetEntry.getKey()),
-                offsetEntry.getValue() == null ? null : ByteBuffer.wrap(offsetEntry.getValue()));
+                    offsetEntry.getValue() == null ? null : ByteBuffer.wrap(offsetEntry.getValue()));
         }
         return serialisedOffsets;
     }

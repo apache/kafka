@@ -35,26 +35,26 @@ public class StructRegistryTest {
     @Test
     public void testCommonStructs() throws Exception {
         MessageSpec testMessageSpec = MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
-                "{",
-                "  \"type\": \"request\",",
-                "  \"name\": \"LeaderAndIsrRequest\",",
-                "  \"validVersions\": \"0-4\",",
-                "  \"deprecatedVersions\": \"0-1\",",
-                "  \"flexibleVersions\": \"0+\",",
-                "  \"fields\": [",
-                "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\" },",
-                "    { \"name\": \"field2\", \"type\": \"[]TestCommonStruct\", \"versions\": \"1+\" },",
-                "    { \"name\": \"field3\", \"type\": \"[]TestInlineStruct\", \"versions\": \"0+\", ",
-                "    \"fields\": [",
-                "      { \"name\": \"inlineField1\", \"type\": \"int64\", \"versions\": \"0+\" }",
-                "    ]}",
-                "  ],",
-                "  \"commonStructs\": [",
-                "    { \"name\": \"TestCommonStruct\", \"versions\": \"0+\", \"fields\": [",
-                "      { \"name\": \"commonField1\", \"type\": \"int64\", \"versions\": \"0+\" }",
-                "    ]}",
-                "  ]",
-                "}")), MessageSpec.class);
+            "{",
+            "  \"type\": \"request\",",
+            "  \"name\": \"LeaderAndIsrRequest\",",
+            "  \"validVersions\": \"0-4\",",
+            "  \"deprecatedVersions\": \"0-1\",",
+            "  \"flexibleVersions\": \"0+\",",
+            "  \"fields\": [",
+            "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\" },",
+            "    { \"name\": \"field2\", \"type\": \"[]TestCommonStruct\", \"versions\": \"1+\" },",
+            "    { \"name\": \"field3\", \"type\": \"[]TestInlineStruct\", \"versions\": \"0+\", ",
+            "    \"fields\": [",
+            "      { \"name\": \"inlineField1\", \"type\": \"int64\", \"versions\": \"0+\" }",
+            "    ]}",
+            "  ],",
+            "  \"commonStructs\": [",
+            "    { \"name\": \"TestCommonStruct\", \"versions\": \"0+\", \"fields\": [",
+            "      { \"name\": \"commonField1\", \"type\": \"int64\", \"versions\": \"0+\" }",
+            "    ]}",
+            "  ]",
+            "}")), MessageSpec.class);
         StructRegistry structRegistry = new StructRegistry();
         structRegistry.register(testMessageSpec);
         assertEquals(Collections.singleton("TestCommonStruct"), structRegistry.commonStructNames());
@@ -67,54 +67,54 @@ public class StructRegistryTest {
     @Test
     public void testReSpecifiedCommonStructError() throws Exception {
         MessageSpec testMessageSpec = MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
-                "{",
-                "  \"type\": \"request\",",
-                "  \"name\": \"LeaderAndIsrRequest\",",
-                "  \"validVersions\": \"0-2\",",
-                "  \"flexibleVersions\": \"0+\",",
-                "  \"fields\": [",
-                "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\" },",
-                "    { \"name\": \"field2\", \"type\": \"[]TestCommonStruct\", \"versions\": \"0+\", ",
-                "    \"fields\": [",
-                "      { \"name\": \"inlineField1\", \"type\": \"int64\", \"versions\": \"0+\" }",
-                "    ]}",
-                "  ],",
-                "  \"commonStructs\": [",
-                "    { \"name\": \"TestCommonStruct\", \"versions\": \"0+\", \"fields\": [",
-                "      { \"name\": \"commonField1\", \"type\": \"int64\", \"versions\": \"0+\" }",
-                "    ]}",
-                "  ]",
-                "}")), MessageSpec.class);
+            "{",
+            "  \"type\": \"request\",",
+            "  \"name\": \"LeaderAndIsrRequest\",",
+            "  \"validVersions\": \"0-2\",",
+            "  \"flexibleVersions\": \"0+\",",
+            "  \"fields\": [",
+            "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\" },",
+            "    { \"name\": \"field2\", \"type\": \"[]TestCommonStruct\", \"versions\": \"0+\", ",
+            "    \"fields\": [",
+            "      { \"name\": \"inlineField1\", \"type\": \"int64\", \"versions\": \"0+\" }",
+            "    ]}",
+            "  ],",
+            "  \"commonStructs\": [",
+            "    { \"name\": \"TestCommonStruct\", \"versions\": \"0+\", \"fields\": [",
+            "      { \"name\": \"commonField1\", \"type\": \"int64\", \"versions\": \"0+\" }",
+            "    ]}",
+            "  ]",
+            "}")), MessageSpec.class);
         StructRegistry structRegistry = new StructRegistry();
         try {
             structRegistry.register(testMessageSpec);
             fail("Expected StructRegistry#registry to fail");
         } catch (RuntimeException e) {
             assertTrue(e.getMessage().contains("Can't re-specify the common struct TestCommonStruct " +
-                    "as an inline struct."));
+                "as an inline struct."));
         }
     }
 
     @Test
     public void testDuplicateCommonStructError() throws Exception {
         MessageSpec testMessageSpec = MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
-                "{",
-                "  \"type\": \"request\",",
-                "  \"name\": \"LeaderAndIsrRequest\",",
-                "  \"validVersions\": \"0-2\",",
-                "  \"flexibleVersions\": \"0+\",",
-                "  \"fields\": [",
-                "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\" }",
-                "  ],",
-                "  \"commonStructs\": [",
-                "    { \"name\": \"TestCommonStruct\", \"versions\": \"0+\", \"fields\": [",
-                "      { \"name\": \"commonField1\", \"type\": \"int64\", \"versions\": \"0+\" }",
-                "    ]},",
-                "    { \"name\": \"TestCommonStruct\", \"versions\": \"0+\", \"fields\": [",
-                "      { \"name\": \"commonField1\", \"type\": \"int64\", \"versions\": \"0+\" }",
-                "    ]}",
-                "  ]",
-                "}")), MessageSpec.class);
+            "{",
+            "  \"type\": \"request\",",
+            "  \"name\": \"LeaderAndIsrRequest\",",
+            "  \"validVersions\": \"0-2\",",
+            "  \"flexibleVersions\": \"0+\",",
+            "  \"fields\": [",
+            "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\" }",
+            "  ],",
+            "  \"commonStructs\": [",
+            "    { \"name\": \"TestCommonStruct\", \"versions\": \"0+\", \"fields\": [",
+            "      { \"name\": \"commonField1\", \"type\": \"int64\", \"versions\": \"0+\" }",
+            "    ]},",
+            "    { \"name\": \"TestCommonStruct\", \"versions\": \"0+\", \"fields\": [",
+            "      { \"name\": \"commonField1\", \"type\": \"int64\", \"versions\": \"0+\" }",
+            "    ]}",
+            "  ]",
+            "}")), MessageSpec.class);
         StructRegistry structRegistry = new StructRegistry();
         try {
             structRegistry.register(testMessageSpec);
@@ -127,19 +127,19 @@ public class StructRegistryTest {
     @Test
     public void testSingleStruct() throws Exception {
         MessageSpec testMessageSpec = MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
-                "{",
-                "  \"type\": \"request\",",
-                "  \"name\": \"LeaderAndIsrRequest\",",
-                "  \"validVersions\": \"0-2\",",
-                "  \"flexibleVersions\": \"0+\",",
-                "  \"fields\": [",
-                "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\" },",
-                "    { \"name\": \"field2\", \"type\": \"TestInlineStruct\", \"versions\": \"0+\", ",
-                "    \"fields\": [",
-                "      { \"name\": \"inlineField1\", \"type\": \"int64\", \"versions\": \"0+\" }",
-                "    ]}",
-                "  ]",
-                "}")), MessageSpec.class);
+            "{",
+            "  \"type\": \"request\",",
+            "  \"name\": \"LeaderAndIsrRequest\",",
+            "  \"validVersions\": \"0-2\",",
+            "  \"flexibleVersions\": \"0+\",",
+            "  \"fields\": [",
+            "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\" },",
+            "    { \"name\": \"field2\", \"type\": \"TestInlineStruct\", \"versions\": \"0+\", ",
+            "    \"fields\": [",
+            "      { \"name\": \"inlineField1\", \"type\": \"int64\", \"versions\": \"0+\" }",
+            "    ]}",
+            "  ]",
+            "}")), MessageSpec.class);
         StructRegistry structRegistry = new StructRegistry();
         structRegistry.register(testMessageSpec);
 
@@ -155,11 +155,11 @@ public class StructRegistryTest {
     @Test
     public void testValidVersionsIsNone() throws Exception {
         MessageSpec testMessageSpec = MessageGenerator.JSON_SERDE.readValue(String.join("", List.of(
-                "{",
-                "  \"type\": \"request\",",
-                "  \"name\": \"FooBar\",",
-                "  \"validVersions\": \"none\"",
-                "}")), MessageSpec.class);
+            "{",
+            "  \"type\": \"request\",",
+            "  \"name\": \"FooBar\",",
+            "  \"validVersions\": \"none\"",
+            "}")), MessageSpec.class);
         StructRegistry structRegistry = new StructRegistry();
         structRegistry.register(testMessageSpec);
 

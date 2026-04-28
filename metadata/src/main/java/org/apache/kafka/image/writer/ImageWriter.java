@@ -55,11 +55,11 @@ public interface ImageWriter extends AutoCloseable {
         close(false);
     }
 
-   /**
-    * Close the image writer. Calling this function more than once has no effect.
-    *
-    * @param complete               True if we should complete the image successfully.
+    /**
+     * Close the image writer. Calling this function more than once has no effect.
+     *
+     * @param complete               True if we should complete the image successfully.
     *                               False if we should discard all progress.
-    */
+     */
     void close(boolean complete);
 }

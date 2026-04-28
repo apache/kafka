@@ -25,7 +25,7 @@ public abstract class KTableKTableAbstractJoinValueGetterSupplier<K, R, V1, V2> 
     final KTableValueGetterSupplier<K, V2> valueGetterSupplier2;
 
     KTableKTableAbstractJoinValueGetterSupplier(final KTableValueGetterSupplier<K, V1> valueGetterSupplier1,
-                                                final KTableValueGetterSupplier<K, V2> valueGetterSupplier2) {
+        final KTableValueGetterSupplier<K, V2> valueGetterSupplier2) {
         this.valueGetterSupplier1 = valueGetterSupplier1;
         this.valueGetterSupplier2 = valueGetterSupplier2;
     }

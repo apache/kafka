@@ -40,7 +40,8 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueMetricToSensor;
 
 public class ThreadMetrics {
-    private ThreadMetrics() {}
+    private ThreadMetrics() {
+    }
 
     private static final String COMMIT = "commit";
     private static final String POLL = "poll";
@@ -49,7 +50,7 @@ public class ThreadMetrics {
     private static final String CREATE_TASK = "task-created";
     private static final String CLOSE_TASK = "task-closed";
     private static final String BLOCKED_TIME = "blocked-time-ns-total";
-    private static final String STATE  = "state";
+    private static final String STATE = "state";
     private static final String THREAD_START_TIME = "thread-start-time";
     private static final String THREAD_STATE = "thread-state";
 
@@ -103,7 +104,7 @@ public class ThreadMetrics {
         "The current state of the thread";
 
     public static Sensor createTaskSensor(final String threadId,
-                                          final StreamsMetricsImpl streamsMetrics) {
+        final StreamsMetricsImpl streamsMetrics) {
         return invocationRateAndCountSensor(
             threadId,
             CREATE_TASK,
@@ -115,7 +116,7 @@ public class ThreadMetrics {
     }
 
     public static Sensor closeTaskSensor(final String threadId,
-                                         final StreamsMetricsImpl streamsMetrics) {
+        final StreamsMetricsImpl streamsMetrics) {
         return invocationRateAndCountSensor(
             threadId,
             CLOSE_TASK,
@@ -127,7 +128,7 @@ public class ThreadMetrics {
     }
 
     public static Sensor commitSensor(final String threadId,
-                                      final StreamsMetricsImpl streamsMetrics) {
+        final StreamsMetricsImpl streamsMetrics) {
         return invocationRateAndCountAndAvgAndMaxLatencySensor(
             threadId,
             COMMIT,
@@ -141,7 +142,7 @@ public class ThreadMetrics {
     }
 
     public static Sensor pollSensor(final String threadId,
-                                    final StreamsMetricsImpl streamsMetrics) {
+        final StreamsMetricsImpl streamsMetrics) {
         return invocationRateAndCountAndAvgAndMaxLatencySensor(
             threadId,
             POLL,
@@ -155,7 +156,7 @@ public class ThreadMetrics {
     }
 
     public static Sensor processLatencySensor(final String threadId,
-                                              final StreamsMetricsImpl streamsMetrics) {
+        final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
             streamsMetrics.threadLevelSensor(threadId, PROCESS + LATENCY_SUFFIX, RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
@@ -171,7 +172,7 @@ public class ThreadMetrics {
     }
 
     public static Sensor pollRecordsSensor(final String threadId,
-                                           final StreamsMetricsImpl streamsMetrics) {
+        final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
             streamsMetrics.threadLevelSensor(threadId, POLL + RECORDS_SUFFIX, RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
@@ -187,7 +188,7 @@ public class ThreadMetrics {
     }
 
     public static Sensor processRecordsSensor(final String threadId,
-                                              final StreamsMetricsImpl streamsMetrics) {
+        final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
             streamsMetrics.threadLevelSensor(threadId, PROCESS + RECORDS_SUFFIX, RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
@@ -203,7 +204,7 @@ public class ThreadMetrics {
     }
 
     public static Sensor processRateSensor(final String threadId,
-                                           final StreamsMetricsImpl streamsMetrics) {
+        final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
             streamsMetrics.threadLevelSensor(threadId, PROCESS + RATE_SUFFIX, RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
@@ -219,7 +220,7 @@ public class ThreadMetrics {
     }
 
     public static Sensor punctuateSensor(final String threadId,
-                                         final StreamsMetricsImpl streamsMetrics) {
+        final StreamsMetricsImpl streamsMetrics) {
         return invocationRateAndCountAndAvgAndMaxLatencySensor(
             threadId,
             PUNCTUATE,
@@ -233,7 +234,7 @@ public class ThreadMetrics {
     }
 
     public static Sensor processRatioSensor(final String threadId,
-                                            final StreamsMetricsImpl streamsMetrics) {
+        final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
             streamsMetrics.threadLevelSensor(threadId, PROCESS + RATIO_SUFFIX, Sensor.RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
@@ -248,7 +249,7 @@ public class ThreadMetrics {
     }
 
     public static Sensor punctuateRatioSensor(final String threadId,
-                                              final StreamsMetricsImpl streamsMetrics) {
+        final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
             streamsMetrics.threadLevelSensor(threadId, PUNCTUATE + RATIO_SUFFIX, Sensor.RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
@@ -263,7 +264,7 @@ public class ThreadMetrics {
     }
 
     public static Sensor pollRatioSensor(final String threadId,
-                                         final StreamsMetricsImpl streamsMetrics) {
+        final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
             streamsMetrics.threadLevelSensor(threadId, POLL + RATIO_SUFFIX, Sensor.RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
@@ -278,7 +279,7 @@ public class ThreadMetrics {
     }
 
     public static Sensor commitRatioSensor(final String threadId,
-                                           final StreamsMetricsImpl streamsMetrics) {
+        final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
             streamsMetrics.threadLevelSensor(threadId, COMMIT + RATIO_SUFFIX, Sensor.RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
@@ -293,8 +294,8 @@ public class ThreadMetrics {
     }
 
     public static void addThreadStartTimeMetric(final String threadId,
-                                                final StreamsMetricsImpl streamsMetrics,
-                                                final long startTime) {
+        final StreamsMetricsImpl streamsMetrics,
+        final long startTime) {
         streamsMetrics.addThreadLevelImmutableMetric(
             THREAD_START_TIME,
             THREAD_START_TIME_DESCRIPTION,
@@ -304,9 +305,9 @@ public class ThreadMetrics {
     }
 
     public static void addThreadStateTelemetryMetric(final String processId,
-                                                     final String threadId,
-                                                     final StreamsMetricsImpl streamsMetrics,
-                                                     final Gauge<Integer> threadStateProvider) {
+        final String threadId,
+        final StreamsMetricsImpl streamsMetrics,
+        final Gauge<Integer> threadStateProvider) {
         streamsMetrics.addThreadLevelMutableMetric(
             THREAD_STATE,
             THREAD_STATE_DESCRIPTION,
@@ -317,8 +318,8 @@ public class ThreadMetrics {
     }
 
     public static void addThreadStateMetric(final String threadId,
-                                            final StreamsMetricsImpl streamsMetrics,
-                                            final Gauge<String> threadStateProvider) {
+        final StreamsMetricsImpl streamsMetrics,
+        final Gauge<String> threadStateProvider) {
         streamsMetrics.addThreadLevelMutableMetric(
             STATE,
             THREAD_STATE_DESCRIPTION,
@@ -328,10 +329,9 @@ public class ThreadMetrics {
     }
 
 
-
     public static void addThreadBlockedTimeMetric(final String threadId,
-                                                  final StreamThreadTotalBlockedTime blockedTime,
-                                                  final StreamsMetricsImpl streamsMetrics) {
+        final StreamThreadTotalBlockedTime blockedTime,
+        final StreamsMetricsImpl streamsMetrics) {
         streamsMetrics.addThreadLevelMutableMetric(
             BLOCKED_TIME,
             BLOCKED_TIME_DESCRIPTION,
@@ -341,11 +341,11 @@ public class ThreadMetrics {
     }
 
     private static Sensor invocationRateAndCountSensor(final String threadId,
-                                                       final String operation,
-                                                       final String descriptionOfRate,
-                                                       final String descriptionOfCount,
-                                                       final RecordingLevel recordingLevel,
-                                                       final StreamsMetricsImpl streamsMetrics) {
+        final String operation,
+        final String descriptionOfRate,
+        final String descriptionOfCount,
+        final RecordingLevel recordingLevel,
+        final StreamsMetricsImpl streamsMetrics) {
         // use operation name as the sensor suffix, and metric names
         final Sensor sensor = streamsMetrics.threadLevelSensor(threadId, operation, recordingLevel);
         addInvocationRateAndCountToSensor(
@@ -360,13 +360,13 @@ public class ThreadMetrics {
     }
 
     private static Sensor invocationRateAndCountAndAvgAndMaxLatencySensor(final String threadId,
-                                                                          final String operation,
-                                                                          final String descriptionOfRate,
-                                                                          final String descriptionOfCount,
-                                                                          final String descriptionOfAvg,
-                                                                          final String descriptionOfMax,
-                                                                          final RecordingLevel recordingLevel,
-                                                                          final StreamsMetricsImpl streamsMetrics) {
+        final String operation,
+        final String descriptionOfRate,
+        final String descriptionOfCount,
+        final String descriptionOfAvg,
+        final String descriptionOfMax,
+        final RecordingLevel recordingLevel,
+        final StreamsMetricsImpl streamsMetrics) {
         // use operation name as the sensor suffix, and metric names
         final Sensor sensor = streamsMetrics.threadLevelSensor(threadId, operation, recordingLevel);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);

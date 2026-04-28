@@ -123,16 +123,16 @@ public class ConsumerPerformance {
     }
 
     private static void consume(Consumer<byte[], byte[]> consumer,
-                                ConsumerPerfOptions options,
-                                AtomicLong totalRecordsRead,
-                                AtomicLong totalBytesRead,
-                                AtomicLong joinTimeMs,
-                                long bytesRead,
-                                long recordsRead,
-                                long lastBytesRead,
-                                long lastRecordsRead,
-                                long joinStartMs,
-                                AtomicLong joinTimeMsInSingleRound) {
+        ConsumerPerfOptions options,
+        AtomicLong totalRecordsRead,
+        AtomicLong totalBytesRead,
+        AtomicLong joinTimeMs,
+        long bytesRead,
+        long recordsRead,
+        long lastBytesRead,
+        long lastRecordsRead,
+        long joinStartMs,
+        AtomicLong joinTimeMsInSingleRound) {
         long numRecords = options.numRecords();
         long recordFetchTimeoutMs = options.recordFetchTimeoutMs();
         long reportingIntervalMs = options.reportingIntervalMs();
@@ -182,27 +182,27 @@ public class ConsumerPerformance {
     }
 
     protected static void printConsumerProgress(int id,
-                                                long bytesRead,
-                                                long lastBytesRead,
-                                                long recordsRead,
-                                                long lastRecordsRead,
-                                                long startMs,
-                                                long endMs,
-                                                SimpleDateFormat dateFormat,
-                                                long joinTimeMsInSingleRound) {
+        long bytesRead,
+        long lastBytesRead,
+        long recordsRead,
+        long lastRecordsRead,
+        long startMs,
+        long endMs,
+        SimpleDateFormat dateFormat,
+        long joinTimeMsInSingleRound) {
         printBasicProgress(id, bytesRead, lastBytesRead, recordsRead, lastRecordsRead, startMs, endMs, dateFormat);
         printExtendedProgress(bytesRead, lastBytesRead, recordsRead, lastRecordsRead, startMs, endMs, joinTimeMsInSingleRound);
         System.out.println();
     }
 
     private static void printBasicProgress(int id,
-                                           long bytesRead,
-                                           long lastBytesRead,
-                                           long recordsRead,
-                                           long lastRecordsRead,
-                                           long startMs,
-                                           long endMs,
-                                           SimpleDateFormat dateFormat) {
+        long bytesRead,
+        long lastBytesRead,
+        long recordsRead,
+        long lastRecordsRead,
+        long startMs,
+        long endMs,
+        SimpleDateFormat dateFormat) {
         double elapsedMs = endMs - startMs;
         double totalMbRead = (bytesRead * 1.0) / (1024 * 1024);
         double intervalMbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024);
@@ -213,12 +213,12 @@ public class ConsumerPerformance {
     }
 
     private static void printExtendedProgress(long bytesRead,
-                                              long lastBytesRead,
-                                              long recordsRead,
-                                              long lastRecordsRead,
-                                              long startMs,
-                                              long endMs,
-                                              long joinTimeMsInSingleRound) {
+        long lastBytesRead,
+        long recordsRead,
+        long lastRecordsRead,
+        long startMs,
+        long endMs,
+        long joinTimeMsInSingleRound) {
         long fetchTimeMs = endMs - startMs - joinTimeMsInSingleRound;
         double intervalMbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024);
         long intervalRecordsRead = recordsRead - lastRecordsRead;
@@ -307,7 +307,7 @@ public class ConsumerPerformance {
                 .ofType(Integer.class)
                 .defaultsTo(1024 * 1024);
             commandPropertiesOpt = parser.accepts("command-property", "Kafka consumer related configuration properties like client.id. " +
-                    "These configs take precedence over those passed via --command-config or --consumer.config.")
+                "These configs take precedence over those passed via --command-config or --consumer.config.")
                 .withRequiredArg()
                 .describedAs("prop1=val1")
                 .ofType(String.class);
@@ -319,7 +319,7 @@ public class ConsumerPerformance {
                 .ofType(Integer.class)
                 .defaultsTo(2 * 1024 * 1024);
             consumerConfigOpt = parser.accepts("consumer.config", "(DEPRECATED) Consumer config properties file. " +
-                            "This option will be removed in a future version. Use --command-config instead.")
+                "This option will be removed in a future version. Use --command-config instead.")
                 .withRequiredArg()
                 .describedAs("config file")
                 .ofType(String.class);
@@ -336,7 +336,7 @@ public class ConsumerPerformance {
                 .ofType(Long.class)
                 .defaultsTo(10_000L);
             numMessagesOpt = parser.accepts("messages", "(DEPRECATED) The number of records to consume. " +
-                            "This option will be removed in a future version. Use --num-records instead.")
+                "This option will be removed in a future version. Use --num-records instead.")
                 .withRequiredArg()
                 .describedAs("count")
                 .ofType(Long.class);
@@ -351,7 +351,7 @@ public class ConsumerPerformance {
                 .ofType(Long.class)
                 .defaultsTo(5_000L);
             dateFormatOpt = parser.accepts("date-format", "The date format to use for formatting the time field. " +
-                    "See java.text.SimpleDateFormat for options.")
+                "See java.text.SimpleDateFormat for options.")
                 .withRequiredArg()
                 .describedAs("date format")
                 .ofType(String.class)
@@ -391,8 +391,8 @@ public class ConsumerPerformance {
 
         private Properties readProps(List<String> commandProperties, String commandConfigFile) throws IOException {
             Properties props = commandConfigFile != null
-                    ? Utils.loadProps(commandConfigFile)
-                    : new Properties();
+                ? Utils.loadProps(commandConfigFile)
+                : new Properties();
             props.putAll(parseKeyValueArgs(commandProperties));
             return props;
         }
@@ -422,20 +422,20 @@ public class ConsumerPerformance {
 
         public Optional<Collection<String>> topic() {
             return options.has(topicOpt)
-                    ? Optional.of(List.of(options.valueOf(topicOpt)))
-                    : Optional.empty();
+                ? Optional.of(List.of(options.valueOf(topicOpt)))
+                : Optional.empty();
         }
 
         public Optional<Pattern> include() {
             return options.has(includeOpt)
-                    ? Optional.of(Pattern.compile(options.valueOf(includeOpt)))
-                    : Optional.empty();
+                ? Optional.of(Pattern.compile(options.valueOf(includeOpt)))
+                : Optional.empty();
         }
 
         public long numRecords() {
             return options.has(numMessagesOpt)
-                    ? options.valueOf(numMessagesOpt)
-                    : options.valueOf(numRecordsOpt);
+                ? options.valueOf(numMessagesOpt)
+                : options.valueOf(numRecordsOpt);
         }
 
         public long reportingIntervalMs() {

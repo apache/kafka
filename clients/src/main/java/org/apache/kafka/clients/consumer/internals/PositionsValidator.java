@@ -61,9 +61,9 @@ public class PositionsValidator {
     private final AtomicInteger metadataUpdateVersion = new AtomicInteger(-1);
 
     public PositionsValidator(LogContext logContext,
-                              Time time,
-                              SubscriptionState subscriptions,
-                              ConsumerMetadata metadata) {
+        Time time,
+        SubscriptionState subscriptions,
+        ConsumerMetadata metadata) {
         this.log = requireNonNull(logContext).logger(getClass());
         this.time = requireNonNull(time);
         this.metadata = requireNonNull(metadata);

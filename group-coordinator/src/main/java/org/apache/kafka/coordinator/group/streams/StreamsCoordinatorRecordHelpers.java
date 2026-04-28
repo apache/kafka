@@ -329,15 +329,15 @@ public class StreamsCoordinatorRecordHelpers {
             List<Map.Entry<Integer, Integer>> sortedEntries = partitionEpochMap.entrySet().stream()
                 .sorted(Comparator.comparingInt(Map.Entry::getKey))
                 .toList();
-            
+
             List<Integer> partitions = new ArrayList<>(sortedEntries.size());
             List<Integer> epochs = new ArrayList<>(sortedEntries.size());
-            
+
             for (Map.Entry<Integer, Integer> entry : sortedEntries) {
                 partitions.add(entry.getKey());
                 epochs.add(entry.getValue());
             }
-            
+
             taskIds.add(new StreamsGroupCurrentMemberAssignmentValue.TaskIds()
                 .setSubtopologyId(subtopologyId)
                 .setPartitions(partitions)
@@ -405,9 +405,9 @@ public class StreamsCoordinatorRecordHelpers {
             List<StreamsGroupTopologyValue.CopartitionGroup> copartitionGroups =
                 subtopology.copartitionGroups().stream()
                     .map(copartitionGroup -> new StreamsGroupTopologyValue.CopartitionGroup()
-                        .setSourceTopics(copartitionGroup.sourceTopics())
-                        .setSourceTopicRegex(copartitionGroup.sourceTopicRegex())
-                        .setRepartitionSourceTopics(copartitionGroup.repartitionSourceTopics())
+                            .setSourceTopics(copartitionGroup.sourceTopics())
+                            .setSourceTopicRegex(copartitionGroup.sourceTopicRegex())
+                            .setRepartitionSourceTopics(copartitionGroup.repartitionSourceTopics())
                     )
                     .toList();
 

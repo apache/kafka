@@ -118,7 +118,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
     public static Stream<Arguments> getKeySchemas() {
         return Stream.of(Arguments.of(new SessionKeySchema()),
-                Arguments.of(new WindowKeySchema()));
+            Arguments.of(new WindowKeySchema()));
     }
 
     public void before(final SegmentedBytesStore.KeySchema schema) {
@@ -172,12 +172,12 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
         streamsProps.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         return new InternalMockProcessorContext<>(
-                stateDir,
-                Serdes.String(),
-                Serdes.Long(),
-                new MockRecordCollector(),
-                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
-                new StreamsConfig(streamsProps));
+            stateDir,
+            Serdes.String(),
+            Serdes.Long(),
+            new MockRecordCollector(),
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+            new StreamsConfig(streamsProps));
     }
 
     abstract AbstractRocksDBSegmentedBytesStore<S> getBytesStore();
@@ -197,28 +197,28 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         bytesStore.put(serializeKey(new Windowed<>(keyC, windows[3])), serializeValue(200));
 
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
-            Bytes.wrap(keyA.getBytes()), 0, windows[2].start())) {
+                 Bytes.wrap(keyA.getBytes()), 0, windows[2].start())) {
             // All Records expired as observed stream time = 60000 implying actual-from = 59001 (60000 - 1000 + 1)
             // for WindowKeySchema, to = 60000 while for SessionKeySchema, to = 30000
             assertEquals(Collections.emptyList(), toListAndCloseIterator(values));
         }
 
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
-            Bytes.wrap(keyA.getBytes()), Bytes.wrap(keyB.getBytes()), 0, windows[2].start())) {
+                 Bytes.wrap(keyA.getBytes()), Bytes.wrap(keyB.getBytes()), 0, windows[2].start())) {
             // All Records expired as observed stream time = 60000 implying actual-from = 59001 (60000 - 1000 + 1)
             // for WindowKeySchema, to = 60000 while for SessionKeySchema, to = 30000
             assertEquals(Collections.emptyList(), toListAndCloseIterator(values));
         }
 
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
-            null, Bytes.wrap(keyB.getBytes()), 0, windows[2].start())) {
+                 null, Bytes.wrap(keyB.getBytes()), 0, windows[2].start())) {
             // All Records expired as observed stream time = 60000 implying actual-from = 59001 (60000 - 1000 + 1)
             // for WindowKeySchema, to = 60000 while for SessionKeySchema, to = 30000
             assertEquals(Collections.emptyList(), toListAndCloseIterator(values));
         }
 
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
-            Bytes.wrap(keyB.getBytes()), null, 0, windows[3].start())) {
+                 Bytes.wrap(keyB.getBytes()), null, 0, windows[3].start())) {
             // Only 1 record not expired as observed stream time = 60000 implying actual-from = 59001 (60000 - 1000 + 1)
             // for WindowKeySchema, to = 60000 while for SessionKeySchema, to = 30000
             final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
@@ -229,7 +229,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         }
 
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
-            null, null, 0, windows[3].start())) {
+                 null, null, 0, windows[3].start())) {
             // Only 1 record not expired as observed stream time = 60000 implying actual-from = 59001 (60000 - 1000 + 1)
             // for WindowKeySchema, to = 60000 while for SessionKeySchema, to = 30000
             final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
@@ -253,7 +253,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         bytesStore.put(serializeKey(new Windowed<>(keyC, windows[3])), serializeValue(200));
 
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
-            Bytes.wrap(keyA.getBytes()), 0, windows[2].start())) {
+                 Bytes.wrap(keyA.getBytes()), 0, windows[2].start())) {
 
             // All Records expired as observed stream time = 60000 implying actual-from = 59001 (60000 - 1000 + 1)
             // for WindowKeySchema, to = 60000 while for SessionKeySchema, to = 30000
@@ -261,7 +261,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         }
 
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
-            Bytes.wrap(keyA.getBytes()), Bytes.wrap(keyB.getBytes()), 0, windows[2].start())) {
+                 Bytes.wrap(keyA.getBytes()), Bytes.wrap(keyB.getBytes()), 0, windows[2].start())) {
 
             // All Records expired as observed stream time = 60000 implying actual-from = 59001 (60000 - 1000 + 1)
             // for WindowKeySchema, to = 60000 while for SessionKeySchema, to = 30000
@@ -269,7 +269,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         }
 
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
-            null, Bytes.wrap(keyB.getBytes()), 0, windows[2].start())) {
+                 null, Bytes.wrap(keyB.getBytes()), 0, windows[2].start())) {
 
             // All Records expired as observed stream time = 60000 implying actual-from = 59001 (60000 - 1000 + 1)
             // for WindowKeySchema, to = 60000 while for SessionKeySchema, to = 30000
@@ -277,7 +277,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         }
 
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
-            Bytes.wrap(keyB.getBytes()), null, 0, windows[3].start())) {
+                 Bytes.wrap(keyB.getBytes()), null, 0, windows[3].start())) {
             // Only 1 record not expired as observed stream time = 60000 implying actual-from = 59001 (60000 - 1000 + 1)
             // for WindowKeySchema, to = 60000 while for SessionKeySchema, to = 30000
             final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
@@ -288,7 +288,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         }
 
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
-            null, null, 0, windows[3].start())) {
+                 null, null, 0, windows[3].start())) {
             // Only 1 record not expired as observed stream time = 60000 implying actual-from = 59001 (60000 - 1000 + 1)
             // for WindowKeySchema, to = 60000 while for SessionKeySchema, to = 30000
             final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
@@ -570,17 +570,17 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
         final String dbPath = new File(new File(stateDir, "bytes-store"), "bytes-store.0").getAbsolutePath();
         final List<ColumnFamilyDescriptor> existingColumnFamilies = RocksDB.listColumnFamilies(new Options(), dbPath).stream()
-                .map(b -> new ColumnFamilyDescriptor(b, columnFamilyOptions))
-                .collect(Collectors.toList());
+            .map(b -> new ColumnFamilyDescriptor(b, columnFamilyOptions))
+            .collect(Collectors.toList());
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(existingColumnFamilies.size());
         RocksDB db = null;
         ColumnFamilyHandle offsetsColumnFamily = null;
         try {
             db = RocksDB.open(
-                    dbOptions,
-                    new File(new File(stateDir, "bytes-store"), "bytes-store.0").getAbsolutePath(),
-                    existingColumnFamilies,
-                    columnFamilies);
+                dbOptions,
+                new File(new File(stateDir, "bytes-store"), "bytes-store.0").getAbsolutePath(),
+                existingColumnFamilies,
+                columnFamilies);
             final byte[] statusKey = stringSerializer.serialize(null, "status");
 
             offsetsColumnFamily = columnFamilies.get(columnFamilies.size() - 1);
@@ -652,14 +652,14 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         final File dir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext<>(
-                dir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
-                new StreamsConfig(props),
-                MockRecordCollector::new,
-                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
-                Time.SYSTEM
+            dir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
+            new StreamsConfig(props),
+            MockRecordCollector::new,
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+            Time.SYSTEM
         );
         bytesStore = getBytesStore();
         bytesStore.init(context, bytesStore);
@@ -692,14 +692,14 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         final File dir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext<>(
-                dir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
-                new StreamsConfig(props),
-                MockRecordCollector::new,
-                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
-                Time.SYSTEM
+            dir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
+            new StreamsConfig(props),
+            MockRecordCollector::new,
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+            Time.SYSTEM
         );
         bytesStore = getBytesStore();
         bytesStore.init(context, bytesStore);
@@ -734,14 +734,14 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         final File dir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext<>(
-                dir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
-                new StreamsConfig(props),
-                MockRecordCollector::new,
-                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
-                Time.SYSTEM
+            dir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
+            new StreamsConfig(props),
+            MockRecordCollector::new,
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+            Time.SYSTEM
         );
         bytesStore = getBytesStore();
         bytesStore.init(context, bytesStore);
@@ -778,14 +778,14 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         final File dir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext<>(
-                dir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
-                new StreamsConfig(props),
-                MockRecordCollector::new,
-                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
-                Time.SYSTEM
+            dir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
+            new StreamsConfig(props),
+            MockRecordCollector::new,
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+            Time.SYSTEM
         );
         bytesStore = getBytesStore();
         bytesStore.init(context, bytesStore);
@@ -857,29 +857,29 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         position1 = position1.withComponent("", 0, 1);
         headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
         headers.add(new RecordHeader(
-                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
-                PositionSerde.serialize(position1).array())
+            ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+            PositionSerde.serialize(position1).array())
         );
-        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
-                serializeKey(new Windowed<>("a", windows[0])).get(), serializeValue(50L), headers, Optional.empty()));
+        records.add(new ConsumerRecord<>("", 0, 0L, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+            serializeKey(new Windowed<>("a", windows[0])).get(), serializeValue(50L), headers, Optional.empty()));
 
         headers.remove(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
         position1 = position1.withComponent("", 0, 2);
         headers.add(new RecordHeader(
-                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
-                PositionSerde.serialize(position1).array())
+            ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+            PositionSerde.serialize(position1).array())
         );
-        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
-                serializeKey(new Windowed<>("a", windows[2])).get(), serializeValue(100L), headers, Optional.empty()));
+        records.add(new ConsumerRecord<>("", 0, 0L, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+            serializeKey(new Windowed<>("a", windows[2])).get(), serializeValue(100L), headers, Optional.empty()));
 
         headers.remove(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
         position1 = position1.withComponent("", 0, 3);
         headers.add(new RecordHeader(
-                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
-                PositionSerde.serialize(position1).array())
+            ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+            PositionSerde.serialize(position1).array())
         );
-        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
-                serializeKey(new Windowed<>("a", windows[3])).get(), serializeValue(200L), headers, Optional.empty()));
+        records.add(new ConsumerRecord<>("", 0, 0L, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+            serializeKey(new Windowed<>("a", windows[3])).get(), serializeValue(200L), headers, Optional.empty()));
 
         return records;
     }
@@ -892,29 +892,29 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         position1 = position1.withComponent("A", 0, 1);
         headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
         headers.add(new RecordHeader(
-                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
-                PositionSerde.serialize(position1).array())
+            ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+            PositionSerde.serialize(position1).array())
         );
-        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
-                serializeKey(new Windowed<>("a", windows[0])).get(), serializeValue(50L), headers, Optional.empty()));
+        records.add(new ConsumerRecord<>("", 0, 0L, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+            serializeKey(new Windowed<>("a", windows[0])).get(), serializeValue(50L), headers, Optional.empty()));
 
         headers.remove(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
         position1 = position1.withComponent("B", 0, 2);
         headers.add(new RecordHeader(
-                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
-                PositionSerde.serialize(position1).array())
+            ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+            PositionSerde.serialize(position1).array())
         );
-        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
-                serializeKey(new Windowed<>("a", windows[2])).get(), serializeValue(100L), headers, Optional.empty()));
+        records.add(new ConsumerRecord<>("", 0, 0L, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+            serializeKey(new Windowed<>("a", windows[2])).get(), serializeValue(100L), headers, Optional.empty()));
 
         headers.remove(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
         position1 = position1.withComponent("A", 0, 3);
         headers.add(new RecordHeader(
-                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
-                PositionSerde.serialize(position1).array())
+            ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+            PositionSerde.serialize(position1).array())
         );
-        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
-                serializeKey(new Windowed<>("a", windows[3])).get(), serializeValue(200L), headers, Optional.empty()));
+        records.add(new ConsumerRecord<>("", 0, 0L, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+            serializeKey(new Windowed<>("a", windows[3])).get(), serializeValue(200L), headers, Optional.empty()));
 
         return records;
     }
@@ -927,18 +927,18 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         position = position.withComponent("A", 0, 1);
         headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
         headers.add(new RecordHeader(
-                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
-                PositionSerde.serialize(position).array()));
-        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
-                serializeKey(new Windowed<>("a", windows[0])).get(), serializeValue(50L), headers, Optional.empty()));
+            ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+            PositionSerde.serialize(position).array()));
+        records.add(new ConsumerRecord<>("", 0, 0L, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+            serializeKey(new Windowed<>("a", windows[0])).get(), serializeValue(50L), headers, Optional.empty()));
 
         position = position.withComponent("A", 0, 2);
         headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
         headers.add(new RecordHeader(
-                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
-                PositionSerde.serialize(position).array()));
-        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
-                serializeKey(new Windowed<>("a", windows[2])).get(), null, headers, Optional.empty()));
+            ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+            PositionSerde.serialize(position).array()));
+        records.add(new ConsumerRecord<>("", 0, 0L, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+            serializeKey(new Windowed<>("a", windows[2])).get(), null, headers, Optional.empty()));
 
         return records;
     }
@@ -948,7 +948,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         records.add(new ConsumerRecord<>("", 0, 0L, serializeKey(new Windowed<>("a", windows[2])).get(), serializeValue(50L)));
         return records;
     }
-    
+
     @ParameterizedTest
     @MethodSource("getKeySchemas")
     public void shouldMeasureExpiredRecords(final SegmentedBytesStore.KeySchema schema) {

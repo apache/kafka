@@ -259,11 +259,11 @@ public class EosIntegrationTest {
     }
 
     private void runSimpleCopyTest(final int numberOfRestarts,
-                                   final String inputTopic,
-                                   final String throughTopic,
-                                   final String outputTopic,
-                                   final boolean inputTopicTransactional,
-                                   final String groupProtocol) throws Exception {
+        final String inputTopic,
+        final String throughTopic,
+        final String outputTopic,
+        final boolean inputTopicTransactional,
+        final String groupProtocol) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, Long> input = builder.stream(inputTopic);
         KStream<Long, Long> output = input;
@@ -317,8 +317,8 @@ public class EosIntegrationTest {
     }
 
     private void checkResultPerKey(final List<KeyValue<Long, Long>> result,
-                                   final List<KeyValue<Long, Long>> expectedResult,
-                                   final String reason) {
+        final List<KeyValue<Long, Long>> expectedResult,
+        final String reason) {
         final Set<Long> allKeys = new HashSet<>();
         addAllKeys(allKeys, result);
         addAllKeys(allKeys, expectedResult);
@@ -753,7 +753,7 @@ public class EosIntegrationTest {
             final List<KeyValue<Long, Long>> allCommittedRecords = readResult(
                 SINGLE_PARTITION_OUTPUT_TOPIC,
                 committedDataBeforeStall.size() + uncommittedDataBeforeStall.size()
-                + dataToTriggerFirstRebalance.size() + dataAfterSecondRebalance.size(),
+                    + dataToTriggerFirstRebalance.size() + dataAfterSecondRebalance.size(),
                 CONSUMER_GROUP_ID + "_ALL");
 
             final int allCommittedRecordsAfterRecoverySize = committedDataBeforeStall.size() +
@@ -783,20 +783,20 @@ public class EosIntegrationTest {
             startApplicationAndWaitUntilRunning(streams);
 
             waitForCondition(
-                    () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
-                    "StreamsTasks did not request commit.");
+                () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
+                "StreamsTasks did not request commit.");
 
             final List<KeyValue<Long, Long>> committedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, writtenData.size(), CONSUMER_GROUP_ID);
 
             checkResultPerKey(
-                    committedRecords,
-                    expectedResult,
-                    "The committed records do not match what expected");
+                committedRecords,
+                expectedResult,
+                "The committed records do not match what expected");
 
             verifyStateStore(
-                    streams,
-                    getMaxPerKey(expectedResult),
-                    "The state store content do not match what expected");
+                streams,
+                getMaxPerKey(expectedResult),
+                "The state store content do not match what expected");
         }
 
         verifyOffsetsAreInCheckpoint(0);
@@ -806,7 +806,7 @@ public class EosIntegrationTest {
     @ParameterizedTest
     @MethodSource("groupProtocolAndProcessingThreadsParameters")
     public void shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoring(
-            final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
+        final String groupProtocol, final boolean processingThreadsEnabled) throws Exception {
 
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
@@ -883,15 +883,16 @@ public class EosIntegrationTest {
         kafkaStreams.setGlobalStateRestoreListener(new StateRestoreListener() {
             @Override
             public void onRestoreStart(final TopicPartition topicPartition,
-                                       final String storeName,
-                                       final long startingOffset,
-                                       final long endingOffset) {}
+                final String storeName,
+                final long startingOffset,
+                final long endingOffset) {
+            }
 
             @Override
             public void onBatchRestored(final TopicPartition topicPartition,
-                                        final String storeName,
-                                        final long batchEndOffset,
-                                        final long numRestored) {
+                final String storeName,
+                final long batchEndOffset,
+                final long numRestored) {
                 if (topicPartition.partition() == 0) {
                     restoredOffsetsForPartition0.set(batchEndOffset);
                     if (batchEndOffset > 100) {
@@ -902,8 +903,9 @@ public class EosIntegrationTest {
 
             @Override
             public void onRestoreEnd(final TopicPartition topicPartition,
-                                     final String storeName,
-                                     final long totalRestored) {}
+                final String storeName,
+                final long totalRestored) {
+            }
         });
         startApplicationAndWaitUntilRunning(Collections.singletonList(kafkaStreams), Duration.ofSeconds(60));
         ensureCommittedRecordsInTopicPartition(
@@ -1103,8 +1105,8 @@ public class EosIntegrationTest {
     }
 
     private List<KeyValue<Long, Long>> prepareData(final long fromInclusive,
-                                                   final long toExclusive,
-                                                   final Long... keys) {
+        final long toExclusive,
+        final Long... keys) {
         final long dataSize = keys.length * (toExclusive - fromInclusive);
         final List<KeyValue<Long, Long>> data = new ArrayList<>((int) dataSize);
 
@@ -1119,11 +1121,11 @@ public class EosIntegrationTest {
 
     // the threads should no longer fail one thread one at a time
     private KafkaStreams getKafkaStreams(final String dummyHostName,
-                                         final boolean withState,
-                                         final String appDir,
-                                         final int numberOfStreamsThreads,
-                                         final String groupProtocol,
-                                         final boolean processingThreadsEnabled) {
+        final boolean withState,
+        final String appDir,
+        final int numberOfStreamsThreads,
+        final String groupProtocol,
+        final boolean processingThreadsEnabled) {
         commitRequested = new AtomicInteger(0);
         errorInjected = new AtomicBoolean(false);
         stallInjected = new AtomicBoolean(false);
@@ -1132,7 +1134,7 @@ public class EosIntegrationTest {
 
         String[] storeNames = new String[0];
         if (withState) {
-            storeNames = new String[] {storeName};
+            storeNames = new String[]{storeName};
             final StoreBuilder<KeyValueStore<Long, Long>> storeBuilder = Stores
                 .keyValueStoreBuilder(Stores.persistentKeyValueStore(storeName), Serdes.Long(), Serdes.Long())
                 .withCachingEnabled();
@@ -1142,73 +1144,73 @@ public class EosIntegrationTest {
 
         final KStream<Long, Long> input = builder.stream(MULTI_PARTITION_INPUT_TOPIC);
         input.process(() -> new Processor<Long, Long, Long, Long>() {
-                ProcessorContext<Long, Long> context;
-                KeyValueStore<Long, Long> state = null;
+            ProcessorContext<Long, Long> context;
+            KeyValueStore<Long, Long> state = null;
 
-                @Override
-                public void init(final ProcessorContext<Long, Long> context) {
-                    this.context = context;
+            @Override
+            public void init(final ProcessorContext<Long, Long> context) {
+                this.context = context;
 
-                    if (withState) {
-                        state = context.getStateStore(storeName);
-                    }
+                if (withState) {
+                    state = context.getStateStore(storeName);
                 }
+            }
 
-                @Override
-                public void process(final Record<Long, Long> record) {
-                    if (stallInjected.compareAndSet(true, false)) {
-                        LOG.info(dummyHostName + " is executing the injected stall");
-                        stallingHost.set(dummyHostName);
-                        while (doStall) {
-                            final Thread thread = Thread.currentThread();
-                            if (thread.isInterrupted()) {
+            @Override
+            public void process(final Record<Long, Long> record) {
+                if (stallInjected.compareAndSet(true, false)) {
+                    LOG.info(dummyHostName + " is executing the injected stall");
+                    stallingHost.set(dummyHostName);
+                    while (doStall) {
+                        final Thread thread = Thread.currentThread();
+                        if (thread.isInterrupted()) {
+                            throw new RuntimeException("Detected we've been interrupted.");
+                        }
+                        if (!processingThreadsEnabled) {
+                            if (!((StreamThread) thread).isRunning()) {
                                 throw new RuntimeException("Detected we've been interrupted.");
                             }
-                            if (!processingThreadsEnabled) {
-                                if (!((StreamThread) thread).isRunning()) {
-                                    throw new RuntimeException("Detected we've been interrupted.");
-                                }
-                            }
-                            try {
-                                Thread.sleep(100);
-                            } catch (final InterruptedException e) {
-                                throw new RuntimeException(e);
-                            }
                         }
-                    }
-
-                    final long key = record.key();
-                    final long value = record.value();
-
-                    if ((value + 1) % 10 == 0) {
-                        context.commit();
-                        commitRequested.incrementAndGet();
-                    }
-
-                    if (state != null) {
-                        Long sum = state.get(key);
-
-                        if (sum == null) {
-                            sum = value;
-                        } else {
-                            sum += value;
+                        try {
+                            Thread.sleep(100);
+                        } catch (final InterruptedException e) {
+                            throw new RuntimeException(e);
                         }
-                        state.put(key, sum);
-                    }
-
-
-                    if (errorInjected.compareAndSet(true, false)) {
-                        // only tries to fail once on one of the task
-                        throw new RuntimeException("Injected test exception.");
-                    }
-
-                    if (state != null) {
-                        context.forward(record.withValue(state.get(key)));
-                    } else {
-                        context.forward(record);
                     }
                 }
-            }, storeNames)
+
+                final long key = record.key();
+                final long value = record.value();
+
+                if ((value + 1) % 10 == 0) {
+                    context.commit();
+                    commitRequested.incrementAndGet();
+                }
+
+                if (state != null) {
+                    Long sum = state.get(key);
+
+                    if (sum == null) {
+                        sum = value;
+                    } else {
+                        sum += value;
+                    }
+                    state.put(key, sum);
+                }
+
+
+                if (errorInjected.compareAndSet(true, false)) {
+                    // only tries to fail once on one of the task
+                    throw new RuntimeException("Injected test exception.");
+                }
+
+                if (state != null) {
+                    context.forward(record.withValue(state.get(key)));
+                } else {
+                    context.forward(record);
+                }
+            }
+        }, storeNames)
             .to(SINGLE_PARTITION_OUTPUT_TOPIC);
 
         stateTmpDir = TestUtils.tempDirectory().getPath() + File.separator;
@@ -1264,24 +1266,24 @@ public class EosIntegrationTest {
     }
 
     private List<KeyValue<Long, Long>> readResult(final String topic,
-                                                  final int numberOfRecords,
-                                                  final String groupId) throws Exception {
+        final int numberOfRecords,
+        final String groupId) throws Exception {
         return readResult(topic, numberOfRecords, LongDeserializer.class, LongDeserializer.class, groupId, DEFAULT_TIMEOUT);
     }
 
     private List<KeyValue<Long, Long>> readResult(final String topic,
-                                                  final int numberOfRecords,
-                                                  final String groupId,
-                                                  final long timeout) throws Exception {
+        final int numberOfRecords,
+        final String groupId,
+        final long timeout) throws Exception {
         return readResult(topic, numberOfRecords, LongDeserializer.class, LongDeserializer.class, groupId, timeout);
     }
 
     private <K, V> List<KeyValue<K, V>> readResult(final String topic,
-                                                   final int numberOfRecords,
-                                                   final Class<? extends Deserializer<K>> keyDeserializer,
-                                                   final Class<? extends Deserializer<V>> valueDeserializer,
-                                                   final String groupId,
-                                                   final long timeout) throws Exception {
+        final int numberOfRecords,
+        final Class<? extends Deserializer<K>> keyDeserializer,
+        final Class<? extends Deserializer<V>> valueDeserializer,
+        final String groupId,
+        final long timeout) throws Exception {
         if (groupId != null) {
             return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
                 TestUtils.consumerConfig(
@@ -1308,8 +1310,8 @@ public class EosIntegrationTest {
     }
 
     private <K, V> void ensureCommittedRecordsInTopicPartition(final String topic,
-                                                               final int partition,
-                                                               final int numberOfRecords) throws Exception {
+        final int partition,
+        final int numberOfRecords) throws Exception {
         final long timeoutMs = 2 * DEFAULT_TIMEOUT;
         final int maxTries = 10;
         final long deadline = System.currentTimeMillis() + timeoutMs;
@@ -1386,15 +1388,15 @@ public class EosIntegrationTest {
     }
 
     private void verifyStateStore(final KafkaStreams streams,
-                                  final Set<KeyValue<Long, Long>> expectedStoreContent,
-                                  final String reason) {
+        final Set<KeyValue<Long, Long>> expectedStoreContent,
+        final String reason) {
         final StateQueryRequest<KeyValueIterator<Long, Long>> request =
-                inStore(storeName).withQuery(RangeQuery.withNoBounds());
+            inStore(storeName).withQuery(RangeQuery.withNoBounds());
 
         final StateQueryResult<KeyValueIterator<Long, Long>> result =
-                IntegrationTestUtils.iqv2WaitForResult(streams, request);
+            IntegrationTestUtils.iqv2WaitForResult(streams, request);
 
-        for (final QueryResult<KeyValueIterator<Long, Long>> partitionResult: result.getPartitionResults().values()) {
+        for (final QueryResult<KeyValueIterator<Long, Long>> partitionResult : result.getPartitionResults().values()) {
             try (final KeyValueIterator<Long, Long> it = partitionResult.getResult()) {
                 while (it.hasNext()) {
                     assertTrue(expectedStoreContent.remove(it.next()), reason);

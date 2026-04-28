@@ -102,17 +102,17 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     private KerberosShortNamer kerberosShortNamer;
 
     public SaslChannelBuilder(ConnectionMode connectionMode,
-                              Map<String, JaasContext> jaasContexts,
-                              SecurityProtocol securityProtocol,
-                              ListenerName listenerName,
-                              boolean isInterBrokerListener,
-                              String clientSaslMechanism,
-                              CredentialCache credentialCache,
-                              DelegationTokenCache tokenCache,
-                              String sslClientAuthOverride,
-                              Time time,
-                              LogContext logContext,
-                              Function<Short, ApiVersionsResponse> apiVersionSupplier) {
+        Map<String, JaasContext> jaasContexts,
+        SecurityProtocol securityProtocol,
+        ListenerName listenerName,
+        boolean isInterBrokerListener,
+        String clientSaslMechanism,
+        CredentialCache credentialCache,
+        DelegationTokenCache tokenCache,
+        String sslClientAuthOverride,
+        Time time,
+        LogContext logContext,
+        Function<Short, ApiVersionsResponse> apiVersionSupplier) {
         this.connectionMode = connectionMode;
         this.jaasContexts = jaasContexts;
         this.loginManagers = new HashMap<>(jaasContexts.size());
@@ -213,7 +213,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
 
     @Override
     public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
-                                     MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException {
+        MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException {
         TransportLayer transportLayer = null;
         try {
             SocketChannel socketChannel = (SocketChannel) key.channel();
@@ -223,21 +223,21 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
             Supplier<Authenticator> authenticatorCreator;
             if (connectionMode == ConnectionMode.SERVER) {
                 authenticatorCreator = () -> buildServerAuthenticator(configs,
-                        Collections.unmodifiableMap(saslCallbackHandlers),
-                        id,
-                        finalTransportLayer,
-                        Collections.unmodifiableMap(subjects),
-                        Collections.unmodifiableMap(connectionsMaxReauthMsByMechanism),
-                        metadataRegistry);
+                    Collections.unmodifiableMap(saslCallbackHandlers),
+                    id,
+                    finalTransportLayer,
+                    Collections.unmodifiableMap(subjects),
+                    Collections.unmodifiableMap(connectionsMaxReauthMsByMechanism),
+                    metadataRegistry);
             } else {
                 LoginManager loginManager = loginManagers.get(clientSaslMechanism);
                 authenticatorCreator = () -> buildClientAuthenticator(configs,
-                        saslCallbackHandlers.get(clientSaslMechanism),
-                        id,
-                        socket.getInetAddress().getHostName(),
-                        loginManager.serviceName(),
-                        finalTransportLayer,
-                        subjects.get(clientSaslMechanism));
+                    saslCallbackHandlers.get(clientSaslMechanism),
+                    id,
+                    socket.getInetAddress().getHostName(),
+                    loginManager.serviceName(),
+                    finalTransportLayer,
+                    subjects.get(clientSaslMechanism));
             }
             return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize,
                 memoryPool != null ? memoryPool : MemoryPool.NONE, metadataRegistry);
@@ -250,7 +250,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     }
 
     @Override
-    public void close()  {
+    public void close() {
         for (LoginManager loginManager : loginManagers.values())
             loginManager.release();
         loginManagers.clear();
@@ -261,7 +261,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
 
     // Visible to override for testing
     protected TransportLayer buildTransportLayer(String id, SelectionKey key, SocketChannel socketChannel,
-                                                 ChannelMetadataRegistry metadataRegistry) throws IOException {
+        ChannelMetadataRegistry metadataRegistry) throws IOException {
         if (this.securityProtocol == SecurityProtocol.SASL_SSL) {
             return SslTransportLayer.create(id, key,
                 sslFactory.createSslEngine(socketChannel.socket()),
@@ -273,26 +273,26 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
 
     // Visible to override for testing
     protected SaslServerAuthenticator buildServerAuthenticator(Map<String, ?> configs,
-                                                               Map<String, AuthenticateCallbackHandler> callbackHandlers,
-                                                               String id,
-                                                               TransportLayer transportLayer,
-                                                               Map<String, Subject> subjects,
-                                                               Map<String, Long> connectionsMaxReauthMsByMechanism,
-                                                               ChannelMetadataRegistry metadataRegistry) {
+        Map<String, AuthenticateCallbackHandler> callbackHandlers,
+        String id,
+        TransportLayer transportLayer,
+        Map<String, Subject> subjects,
+        Map<String, Long> connectionsMaxReauthMsByMechanism,
+        ChannelMetadataRegistry metadataRegistry) {
         return new SaslServerAuthenticator(configs, callbackHandlers, id, subjects,
-                kerberosShortNamer, listenerName, securityProtocol, transportLayer,
-                connectionsMaxReauthMsByMechanism, metadataRegistry, time, apiVersionSupplier);
+            kerberosShortNamer, listenerName, securityProtocol, transportLayer,
+            connectionsMaxReauthMsByMechanism, metadataRegistry, time, apiVersionSupplier);
     }
 
     // Visible to override for testing
     protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs,
-                                                               AuthenticateCallbackHandler callbackHandler,
-                                                               String id,
-                                                               String serverHost,
-                                                               String servicePrincipal,
-                                                               TransportLayer transportLayer, Subject subject) {
+        AuthenticateCallbackHandler callbackHandler,
+        String id,
+        String serverHost,
+        String servicePrincipal,
+        TransportLayer transportLayer, Subject subject) {
         return new SaslClientAuthenticator(configs, callbackHandler, id, subject, servicePrincipal,
-                serverHost, clientSaslMechanism, transportLayer, time, logContext);
+            serverHost, clientSaslMechanism, transportLayer, time, logContext);
     }
 
     // Package private for testing
@@ -320,7 +320,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
             String prefix = ListenerName.saslMechanismPrefix(mechanism);
             @SuppressWarnings("unchecked")
             Class<? extends AuthenticateCallbackHandler> clazz =
-                    (Class<? extends AuthenticateCallbackHandler>) configs.get(prefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG);
+                (Class<? extends AuthenticateCallbackHandler>) configs.get(prefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG);
             if (clazz != null)
                 callbackHandler = Utils.newInstance(clazz);
             else if (mechanism.equals(PlainSaslServer.PLAIN_MECHANISM))
@@ -392,7 +392,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                 Oid krb5Mechanism = new Oid("1.2.840.113554.1.2.2");
                 GSSName gssName = manager.createName(servicePrincipalName + "@" + serviceHostname, GSSName.NT_HOSTBASED_SERVICE);
                 GSSCredential cred = manager.createCredential(gssName,
-                        GSSContext.INDEFINITE_LIFETIME, krb5Mechanism, GSSCredential.ACCEPT_ONLY);
+                    GSSContext.INDEFINITE_LIFETIME, krb5Mechanism, GSSCredential.ACCEPT_ONLY);
                 subject.getPrivateCredentials().add(cred);
                 log.info("Configured native GSSAPI private credentials for {}@{}", serviceHostname, serviceHostname);
             } catch (GSSException ex) {

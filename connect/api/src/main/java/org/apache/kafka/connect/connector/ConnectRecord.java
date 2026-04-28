@@ -42,16 +42,16 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
     private final Headers headers;
 
     public ConnectRecord(String topic, Integer kafkaPartition,
-                         Schema keySchema, Object key,
-                         Schema valueSchema, Object value,
-                         Long timestamp) {
+            Schema keySchema, Object key,
+            Schema valueSchema, Object value,
+            Long timestamp) {
         this(topic, kafkaPartition, keySchema, key, valueSchema, value, timestamp, new ConnectHeaders());
     }
 
     public ConnectRecord(String topic, Integer kafkaPartition,
-                         Schema keySchema, Object key,
-                         Schema valueSchema, Object value,
-                         Long timestamp, Iterable<Header> headers) {
+            Schema keySchema, Object key,
+            Schema valueSchema, Object value,
+            Long timestamp, Iterable<Header> headers) {
         this.topic = topic;
         this.kafkaPartition = kafkaPartition;
         this.keySchema = keySchema;
@@ -158,13 +158,13 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
         ConnectRecord<?> that = (ConnectRecord<?>) o;
 
         return Objects.equals(kafkaPartition, that.kafkaPartition)
-               && Objects.equals(topic, that.topic)
-               && Objects.equals(keySchema, that.keySchema)
-               && Objects.equals(key, that.key)
-               && Objects.equals(valueSchema, that.valueSchema)
-               && Objects.equals(value, that.value)
-               && Objects.equals(timestamp, that.timestamp)
-               && Objects.equals(headers, that.headers);
+                && Objects.equals(topic, that.topic)
+                && Objects.equals(keySchema, that.keySchema)
+                && Objects.equals(key, that.key)
+                && Objects.equals(valueSchema, that.valueSchema)
+                && Objects.equals(value, that.value)
+                && Objects.equals(timestamp, that.timestamp)
+                && Objects.equals(headers, that.headers);
     }
 
     @Override

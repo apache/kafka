@@ -81,9 +81,9 @@ public class ExpectedTasks {
 
         @JsonCreator
         private ExpectedTask(@JsonProperty("id") String id,
-                     @JsonProperty("taskSpec") TaskSpec taskSpec,
-                     @JsonProperty("taskState") TaskState taskState,
-                     @JsonProperty("workerState") WorkerState workerState) {
+            @JsonProperty("taskSpec") TaskSpec taskSpec,
+            @JsonProperty("taskState") TaskState taskState,
+            @JsonProperty("workerState") WorkerState workerState) {
             this.id = id;
             this.taskSpec = taskSpec;
             this.taskState = taskState;

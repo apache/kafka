@@ -37,14 +37,14 @@ import java.util.Map;
  * </pre>
  */
 public record ConnectorOffset(
-    @JsonProperty("partition") Map<String, ?> partition,
-    @JsonProperty("offset") Map<String, ?> offset
+@JsonProperty("partition") Map<String, ?> partition,
+@JsonProperty("offset") Map<String, ?> offset
 ) {
     @Override
     public String toString() {
         return "{" +
-            "partition=" + partition +
-            ", offset=" + offset +
-            '}';
+                "partition=" + partition +
+                ", offset=" + offset +
+                '}';
     }
 }

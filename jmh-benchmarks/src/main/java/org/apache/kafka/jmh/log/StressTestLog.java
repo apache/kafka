@@ -67,22 +67,22 @@ public class StressTestLog {
 
         int fiveMinutesInMillis = (int) Duration.ofMinutes(5).toMillis();
         UnifiedLog log = UnifiedLog.create(
-            dir,
-            new LogConfig(logProperties),
-            0L,
-            0L,
-            time.scheduler,
-            new BrokerTopicStats(),
-            time,
-            fiveMinutesInMillis,
-            new ProducerStateManagerConfig(600000, false),
-            fiveMinutesInMillis,
-            new LogDirFailureChannel(10),
-            true,
-            Optional.empty(),
-            new ConcurrentHashMap<>(),
-            false,
-            LogOffsetsListener.NO_OP_OFFSETS_LISTENER
+                dir,
+                new LogConfig(logProperties),
+                0L,
+                0L,
+                time.scheduler,
+                new BrokerTopicStats(),
+                time,
+                fiveMinutesInMillis,
+                new ProducerStateManagerConfig(600000, false),
+                fiveMinutesInMillis,
+                new LogDirFailureChannel(10),
+                true,
+                Optional.empty(),
+                new ConcurrentHashMap<>(),
+                false,
+                LogOffsetsListener.NO_OP_OFFSETS_LISTENER
         );
 
         WriterThread writer = new WriterThread(log);
@@ -170,7 +170,7 @@ public class StressTestLog {
                     TV_UNKNOWN);
 
             if ((logAppendInfo.firstOffset() != -1 && logAppendInfo.firstOffset() != currentOffset)
-                || logAppendInfo.lastOffset() != currentOffset) {
+                    || logAppendInfo.lastOffset() != currentOffset) {
                 throw new RuntimeException("Offsets do not match");
             }
 
@@ -192,10 +192,10 @@ public class StressTestLog {
         protected void work() throws Exception {
             try {
                 FetchDataInfo fetchDataInfo = log.read(
-                    currentOffset,
-                    1,
-                    FetchIsolation.LOG_END,
-                    true
+                        currentOffset,
+                        1,
+                        FetchIsolation.LOG_END,
+                        true
                 );
 
                 Records records = fetchDataInfo.records;

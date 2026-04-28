@@ -31,8 +31,8 @@ public class EnvelopeResponse extends AbstractResponse {
     public EnvelopeResponse(ByteBuffer responseData, Errors error) {
         super(ApiKeys.ENVELOPE);
         this.data = new EnvelopeResponseData()
-                        .setResponseData(responseData)
-                        .setErrorCode(error.code());
+            .setResponseData(responseData)
+            .setErrorCode(error.code());
     }
 
     public EnvelopeResponse(Errors error) {

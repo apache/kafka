@@ -127,7 +127,7 @@ public class SkimpyOffsetMap implements OffsetMap {
     public void put(ByteBuffer key, long offset) throws DigestException {
         if (entries >= slots)
             throw new IllegalArgumentException("Attempted to add a new entry to a full offset map, "
-                + "entries: " + entries + ", slots: " + slots);
+                    + "entries: " + entries + ", slots: " + slots);
 
         hashInto(key, hash1);
 
@@ -191,8 +191,8 @@ public class SkimpyOffsetMap implements OffsetMap {
      */
     private boolean isEmpty(int position) {
         return bytes.getLong(position) == 0
-            && bytes.getLong(position + 8) == 0
-            && bytes.getLong(position + 16) == 0;
+                && bytes.getLong(position + 8) == 0
+                && bytes.getLong(position + 16) == 0;
     }
 
     /**

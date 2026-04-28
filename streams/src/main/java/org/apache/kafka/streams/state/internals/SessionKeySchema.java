@@ -106,16 +106,16 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
 
     @Override
     public <S extends Segment> List<S> segmentsToSearch(final Segments<S> segments,
-                                                        final long from,
-                                                        final long to,
-                                                        final boolean forward) {
+        final long from,
+        final long to,
+        final boolean forward) {
         return segments.segments(from, Long.MAX_VALUE, forward);
     }
 
     private static <K> K extractKey(final byte[] binaryKey,
-                                    final Deserializer<K> deserializer,
-                                    final Headers headers,
-                                    final String topic) {
+        final Deserializer<K> deserializer,
+        final Headers headers,
+        final String topic) {
         return deserializer.deserialize(topic, headers, extractKeyBytes(binaryKey));
     }
 
@@ -141,9 +141,9 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     }
 
     public static <K> Windowed<K> from(final byte[] binaryKey,
-                                       final Deserializer<K> keyDeserializer,
-                                       final Headers headers,
-                                       final String topic) {
+        final Deserializer<K> keyDeserializer,
+        final Headers headers,
+        final String topic) {
         final K key = extractKey(binaryKey, keyDeserializer, headers, topic);
         final Window window = extractWindow(binaryKey);
         return new Windowed<>(key, window);
@@ -156,17 +156,17 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     }
 
     public static <K> Windowed<K> from(final Windowed<Bytes> keyBytes,
-                                       final Deserializer<K> keyDeserializer,
-                                       final Headers headers,
-                                       final String topic) {
+        final Deserializer<K> keyDeserializer,
+        final Headers headers,
+        final String topic) {
         final K key = keyDeserializer.deserialize(topic, headers, keyBytes.key().get());
         return new Windowed<>(key, keyBytes.window());
     }
 
     public static <K> byte[] toBinary(final Windowed<K> sessionKey,
-                                      final Serializer<K> serializer,
-                                      final Headers headers,
-                                      final String topic) {
+        final Serializer<K> serializer,
+        final Headers headers,
+        final String topic) {
         final byte[] bytes = serializer.serialize(topic, headers, sessionKey.key());
         return toBinary(Bytes.wrap(bytes), sessionKey.window().start(), sessionKey.window().end()).get();
     }
@@ -176,8 +176,8 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     }
 
     public static Bytes toBinary(final Bytes key,
-                                 final long startTime,
-                                 final long endTime) {
+        final long startTime,
+        final long endTime) {
         final ByteBuffer buf = ByteBuffer.allocate(keyByteLength(key));
         writeBinary(buf, key, startTime, endTime);
         return Bytes.wrap(buf.array());
@@ -188,9 +188,9 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     }
 
     public static void writeBinary(final ByteBuffer buf,
-                                   final Bytes key,
-                                   final long startTime,
-                                   final long endTime) {
+        final Bytes key,
+        final long startTime,
+        final long endTime) {
         // we search for the session window that can overlap with the [ESET, LSST] range
         // since the session window length can vary, we define the search boundary as:
         // lower: [0, ESET]

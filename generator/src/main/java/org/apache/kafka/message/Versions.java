@@ -50,7 +50,7 @@ public final class Versions {
         }
         if (trimmedInput.endsWith("+")) {
             return new Versions(Short.parseShort(
-            trimmedInput.substring(0, trimmedInput.length() - 1)),
+                    trimmedInput.substring(0, trimmedInput.length() - 1)),
                 Short.MAX_VALUE);
         } else {
             int dashIndex = trimmedInput.indexOf("-");
@@ -194,6 +194,6 @@ public final class Versions {
         }
         Versions otherVersions = (Versions) other;
         return lowest == otherVersions.lowest &&
-               highest == otherVersions.highest;
+            highest == otherVersions.highest;
     }
 }

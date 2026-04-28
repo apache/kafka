@@ -53,8 +53,8 @@ public class JaasBasicAuthFilter implements ContainerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(JaasBasicAuthFilter.class);
     private static final Set<RequestMatcher> INTERNAL_REQUEST_MATCHERS = Set.of(
-            new RequestMatcher(HttpMethod.POST, "/?connectors/([^/]+)/tasks/?"),
-            new RequestMatcher(HttpMethod.PUT, "/?connectors/[^/]+/fence/?")
+        new RequestMatcher(HttpMethod.POST, "/?connectors/([^/]+)/tasks/?"),
+        new RequestMatcher(HttpMethod.PUT, "/?connectors/[^/]+/fence/?")
     );
     private static final String CONNECT_LOGIN_MODULE = "KafkaConnect";
 
@@ -75,7 +75,7 @@ public class JaasBasicAuthFilter implements ContainerRequestFilter {
         @Override
         public boolean test(ContainerRequestContext requestContext) {
             return requestContext.getMethod().equals(method)
-                    && path.matcher(requestContext.getUriInfo().getPath()).matches();
+                && path.matcher(requestContext.getUriInfo().getPath()).matches();
         }
     }
 
@@ -165,7 +165,7 @@ public class JaasBasicAuthFilter implements ContainerRequestFilter {
 
             @Override
             public boolean isSecure() {
-                return  "https".equalsIgnoreCase(requestContext.getUriInfo().getRequestUri().getScheme());
+                return "https".equalsIgnoreCase(requestContext.getUriInfo().getRequestUri().getScheme());
             }
 
             @Override
@@ -201,7 +201,7 @@ public class JaasBasicAuthFilter implements ContainerRequestFilter {
 
             authorizationHeader = authorizationHeader.substring(spaceIndex + 1);
             authorizationHeader = new String(Base64.getDecoder().decode(authorizationHeader),
-                    StandardCharsets.UTF_8);
+                StandardCharsets.UTF_8);
             int i = authorizationHeader.indexOf(':');
             if (i <= 0) {
                 log.trace("Request credentials were malformed; no colon present between username and password");

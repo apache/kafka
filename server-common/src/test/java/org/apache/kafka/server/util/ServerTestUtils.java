@@ -28,7 +28,7 @@ public final class ServerTestUtils {
      */
     public static void clearYammerMetrics() {
         KafkaYammerMetrics.defaultRegistry().allMetrics().keySet().forEach(
-                metricName -> KafkaYammerMetrics.defaultRegistry().removeMetric(metricName));
+            metricName -> KafkaYammerMetrics.defaultRegistry().removeMetric(metricName));
     }
 
     /**

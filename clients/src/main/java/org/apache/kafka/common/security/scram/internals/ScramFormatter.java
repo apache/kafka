@@ -67,7 +67,7 @@ public class ScramFormatter {
         if (first.length != second.length)
             throw new IllegalArgumentException("Argument arrays must be of the same length");
         byte[] result = new byte[first.length];
-        for (int i = 0; i < result.length; i++)
+        for (int i = 0;i < result.length;i++)
             result[i] = (byte) (first[i] ^ second[i]);
         return result;
     }
@@ -78,7 +78,7 @@ public class ScramFormatter {
         byte[] u1 = mac.doFinal(new byte[]{0, 0, 0, 1});
         byte[] prev = u1;
         byte[] result = u1;
-        for (int i = 2; i <= iterations; i++) {
+        for (int i = 2;i <= iterations;i++) {
             byte[] ui = hmac(str, prev);
             result = xor(result, ui);
             prev = ui;
@@ -133,8 +133,8 @@ public class ScramFormatter {
 
     private byte[] authMessage(ClientFirstMessage clientFirstMessage, ServerFirstMessage serverFirstMessage, ClientFinalMessage clientFinalMessage) {
         return toBytes(authMessage(clientFirstMessage.clientFirstMessageBare(),
-                serverFirstMessage.toMessage(),
-                clientFinalMessage.clientFinalMessageWithoutProof()));
+            serverFirstMessage.toMessage(),
+            clientFinalMessage.clientFinalMessageWithoutProof()));
     }
 
     public byte[] storedKey(byte[] clientSignature, byte[] clientProof) {

@@ -43,7 +43,7 @@ public class SanitizerTest {
     @Test
     public void testJmxSanitize() throws MalformedObjectNameException {
         int unquoted = 0;
-        for (int i = 0; i < 65536; i++) {
+        for (int i = 0;i < 65536;i++) {
             char c = (char) i;
             String value = "value" + c;
             String jmxSanitizedValue = Sanitizer.jmxSanitize(value);

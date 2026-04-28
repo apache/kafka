@@ -64,7 +64,7 @@ public class ControllerExceptions {
     public static NotControllerException newWrongControllerException(OptionalInt controllerId) {
         if (controllerId.isPresent()) {
             return new NotControllerException("The active controller appears to be node " +
-                    controllerId.getAsInt() + ".");
+                controllerId.getAsInt() + ".");
         } else {
             return new NotControllerException("No controller appears to be active.");
         }

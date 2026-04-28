@@ -75,8 +75,8 @@ public class AlterConfigsRequest extends AbstractRequest {
                         .setResourceType(entry.getKey().type().id());
                 for (ConfigEntry x : entry.getValue().entries) {
                     resource.configs().add(new AlterConfigsRequestData.AlterableConfig()
-                                               .setName(x.name())
-                                               .setValue(x.value()));
+                        .setName(x.name())
+                        .setValue(x.value()));
                 }
                 this.data.resources().add(resource);
             }
@@ -104,11 +104,11 @@ public class AlterConfigsRequest extends AbstractRequest {
     public Map<ConfigResource, Config> configs() {
         return data.resources().stream().collect(Collectors.toMap(
             resource -> new ConfigResource(
-                    ConfigResource.Type.forId(resource.resourceType()),
-                    resource.resourceName()),
+                ConfigResource.Type.forId(resource.resourceType()),
+                resource.resourceName()),
             resource -> new Config(resource.configs().stream()
-                    .map(entry -> new ConfigEntry(entry.name(), entry.value()))
-                    .collect(Collectors.toList()))));
+                .map(entry -> new ConfigEntry(entry.name(), entry.value()))
+                .collect(Collectors.toList()))));
     }
 
     public boolean validateOnly() {
@@ -124,13 +124,13 @@ public class AlterConfigsRequest extends AbstractRequest {
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         ApiError error = ApiError.fromThrowable(e);
         AlterConfigsResponseData data = new AlterConfigsResponseData()
-                .setThrottleTimeMs(throttleTimeMs);
+            .setThrottleTimeMs(throttleTimeMs);
         for (AlterConfigsRequestData.AlterConfigsResource resource : this.data.resources()) {
             data.responses().add(new AlterConfigsResponseData.AlterConfigsResourceResponse()
-                    .setResourceType(resource.resourceType())
-                    .setResourceName(resource.resourceName())
-                    .setErrorMessage(error.message())
-                    .setErrorCode(error.error().code()));
+                .setResourceType(resource.resourceType())
+                .setResourceName(resource.resourceName())
+                .setErrorMessage(error.message())
+                .setErrorCode(error.error().code()));
         }
         return new AlterConfigsResponse(data);
 

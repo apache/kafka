@@ -44,29 +44,29 @@ public class RawTaggedFieldWriterTest {
     @Test
     public void testWritingSeveralRawTaggedFields() {
         List<RawTaggedField> tags = Arrays.asList(
-            new RawTaggedField(2, new byte[] {0x1, 0x2, 0x3}),
-            new RawTaggedField(5, new byte[] {0x4, 0x5})
+            new RawTaggedField(2, new byte[]{0x1, 0x2, 0x3}),
+            new RawTaggedField(5, new byte[]{0x4, 0x5})
         );
         RawTaggedFieldWriter writer = RawTaggedFieldWriter.forFields(tags);
         assertEquals(2, writer.numFields());
         byte[] arr = new byte[9];
         ByteBufferAccessor accessor = new ByteBufferAccessor(ByteBuffer.wrap(arr));
         writer.writeRawTags(accessor, 1);
-        assertArrayEquals(new byte[] {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}, arr);
+        assertArrayEquals(new byte[]{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}, arr);
         writer.writeRawTags(accessor, 3);
-        assertArrayEquals(new byte[] {0x2, 0x3, 0x1, 0x2, 0x3, 0x0, 0x0, 0x0, 0x0}, arr);
+        assertArrayEquals(new byte[]{0x2, 0x3, 0x1, 0x2, 0x3, 0x0, 0x0, 0x0, 0x0}, arr);
         writer.writeRawTags(accessor, 7);
-        assertArrayEquals(new byte[] {0x2, 0x3, 0x1, 0x2, 0x3, 0x5, 0x2, 0x4, 0x5}, arr);
+        assertArrayEquals(new byte[]{0x2, 0x3, 0x1, 0x2, 0x3, 0x5, 0x2, 0x4, 0x5}, arr);
         writer.writeRawTags(accessor, Integer.MAX_VALUE);
-        assertArrayEquals(new byte[] {0x2, 0x3, 0x1, 0x2, 0x3, 0x5, 0x2, 0x4, 0x5}, arr);
+        assertArrayEquals(new byte[]{0x2, 0x3, 0x1, 0x2, 0x3, 0x5, 0x2, 0x4, 0x5}, arr);
     }
 
     @Test
     public void testInvalidNextDefinedTag() {
         List<RawTaggedField> tags = Arrays.asList(
-            new RawTaggedField(2, new byte[] {0x1, 0x2, 0x3}),
-            new RawTaggedField(5, new byte[] {0x4, 0x5, 0x6}),
-            new RawTaggedField(7, new byte[] {0x0})
+            new RawTaggedField(2, new byte[]{0x1, 0x2, 0x3}),
+            new RawTaggedField(5, new byte[]{0x4, 0x5, 0x6}),
+            new RawTaggedField(7, new byte[]{0x0})
         );
         RawTaggedFieldWriter writer = RawTaggedFieldWriter.forFields(tags);
         assertEquals(3, writer.numFields());
@@ -81,9 +81,9 @@ public class RawTaggedFieldWriterTest {
     @Test
     public void testOutOfOrderTags() {
         List<RawTaggedField> tags = Arrays.asList(
-            new RawTaggedField(5, new byte[] {0x4, 0x5, 0x6}),
-            new RawTaggedField(2, new byte[] {0x1, 0x2, 0x3}),
-            new RawTaggedField(7, new byte[] {0x0 })
+            new RawTaggedField(5, new byte[]{0x4, 0x5, 0x6}),
+            new RawTaggedField(2, new byte[]{0x1, 0x2, 0x3}),
+            new RawTaggedField(7, new byte[]{0x0})
         );
         RawTaggedFieldWriter writer = RawTaggedFieldWriter.forFields(tags);
         assertEquals(3, writer.numFields());

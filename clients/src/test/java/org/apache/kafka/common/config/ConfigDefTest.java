@@ -54,15 +54,15 @@ public class ConfigDefTest {
     @Test
     public void testBasicTypes() {
         ConfigDef def = new ConfigDef().define("a", Type.INT, 5, Range.between(0, 14), Importance.HIGH, "docs")
-                                       .define("b", Type.LONG, Importance.HIGH, "docs")
-                                       .define("c", Type.STRING, "hello", Importance.HIGH, "docs")
-                                       .define("d", Type.LIST, Importance.HIGH, "docs")
-                                       .define("e", Type.DOUBLE, Importance.HIGH, "docs")
-                                       .define("f", Type.CLASS, Importance.HIGH, "docs")
-                                       .define("g", Type.BOOLEAN, Importance.HIGH, "docs")
-                                       .define("h", Type.BOOLEAN, Importance.HIGH, "docs")
-                                       .define("i", Type.BOOLEAN, Importance.HIGH, "docs")
-                                       .define("j", Type.PASSWORD, Importance.HIGH, "docs");
+            .define("b", Type.LONG, Importance.HIGH, "docs")
+            .define("c", Type.STRING, "hello", Importance.HIGH, "docs")
+            .define("d", Type.LIST, Importance.HIGH, "docs")
+            .define("e", Type.DOUBLE, Importance.HIGH, "docs")
+            .define("f", Type.CLASS, Importance.HIGH, "docs")
+            .define("g", Type.BOOLEAN, Importance.HIGH, "docs")
+            .define("h", Type.BOOLEAN, Importance.HIGH, "docs")
+            .define("i", Type.BOOLEAN, Importance.HIGH, "docs")
+            .define("j", Type.PASSWORD, Importance.HIGH, "docs");
 
         Properties props = new Properties();
         props.put("a", "1   ");
@@ -110,7 +110,7 @@ public class ConfigDefTest {
     @Test
     public void testParsingEmptyDefaultValueForStringFieldShouldSucceed() {
         new ConfigDef().define("a", Type.STRING, "", ConfigDef.Importance.HIGH, "docs")
-                .parse(new HashMap<String, Object>());
+            .parse(new HashMap<String, Object>());
     }
 
     @Test
@@ -164,15 +164,15 @@ public class ConfigDefTest {
     public void testValidators() {
         testValidators(Type.INT, Range.between(0, 10), 5, new Object[]{1, 5, 9}, new Object[]{-1, 11, null});
         testValidators(Type.STRING, ValidString.in("good", "values", "default"), "default",
-                new Object[]{"good", "values", "default"}, new Object[]{"bad", "inputs", "DEFAULT", null});
+            new Object[]{"good", "values", "default"}, new Object[]{"bad", "inputs", "DEFAULT", null});
         testValidators(Type.STRING, CaseInsensitiveValidString.in("good", "values", "default"), "default",
             new Object[]{"gOOd", "VALUES", "default"}, new Object[]{"Bad", "iNPUts", null});
         testValidators(Type.LIST, ConfigDef.ValidList.in("1", "2", "3"), "1", new Object[]{"1", "2", "3"}, new Object[]{"4", "5", "6"});
-        testValidators(Type.STRING, new ConfigDef.NonNullValidator(), "a", new Object[]{"abb"}, new Object[] {null});
-        testValidators(Type.STRING, ConfigDef.CompositeValidator.of(new ConfigDef.NonNullValidator(), ValidString.in("a", "b")), "a", new Object[]{"a", "b"}, new Object[] {null, -1, "c"});
+        testValidators(Type.STRING, new ConfigDef.NonNullValidator(), "a", new Object[]{"abb"}, new Object[]{null});
+        testValidators(Type.STRING, ConfigDef.CompositeValidator.of(new ConfigDef.NonNullValidator(), ValidString.in("a", "b")), "a", new Object[]{"a", "b"}, new Object[]{null, -1, "c"});
         testValidators(Type.STRING, new ConfigDef.NonEmptyStringWithoutControlChars(), "defaultname",
-                new Object[]{"test", "name", "test/test", "test\u1234", "\u1324name\\", "/+%>&):??<&()?-", "+1", "\uD83D\uDE01", "\uF3B1", "     test   \n\r", "\n  hello \t"},
-                new Object[]{"nontrailing\nnotallowed", "as\u0001cii control char", "tes\rt", "test\btest", "1\t2", ""});
+            new Object[]{"test", "name", "test/test", "test\u1234", "\u1324name\\", "/+%>&):??<&()?-", "+1", "\uD83D\uDE01", "\uF3B1", "     test   \n\r", "\n  hello \t"},
+            new Object[]{"nontrailing\nnotallowed", "as\u0001cii control char", "tes\rt", "test\btest", "1\t2", ""});
     }
 
     @Test
@@ -200,7 +200,7 @@ public class ConfigDefTest {
 
         ConfigDef def = new ConfigDef();
         def.define(key, Type.STRING, ConfigDef.NO_DEFAULT_VALUE,
-                   ValidString.in("ONE", "TWO", "THREE"), Importance.HIGH, "docs");
+            ValidString.in("ONE", "TWO", "THREE"), Importance.HIGH, "docs");
 
         Properties props = new Properties();
         props.put(key, "ONE");
@@ -330,7 +330,7 @@ public class ConfigDefTest {
         props.put("a", "1");
 
         List<ConfigValue> configs = def.validate(props);
-        for (ConfigValue config: configs) {
+        for (ConfigValue config : configs) {
             String name = config.name();
             ConfigValue expectedConfig = expected.get(name);
             assertEquals(expectedConfig, config);
@@ -349,7 +349,7 @@ public class ConfigDefTest {
         props.put("a", "non_integer");
 
         List<ConfigValue> configs = def.validate(props);
-        for (ConfigValue config: configs) {
+        for (ConfigValue config : configs) {
             String name = config.name();
             ConfigValue expectedConfig = expected.get(name);
             assertEquals(expectedConfig, config);
@@ -384,9 +384,9 @@ public class ConfigDefTest {
     @Test
     public void testDynamicUpdateModeInDocs() {
         final ConfigDef configDef = new ConfigDef()
-                .define("my.broker.config", Type.LONG, Importance.HIGH, "docs")
-                .define("my.cluster.config", Type.LONG, Importance.HIGH, "docs")
-                .define("my.readonly.config", Type.LONG, Importance.HIGH, "docs");
+            .define("my.broker.config", Type.LONG, Importance.HIGH, "docs")
+            .define("my.cluster.config", Type.LONG, Importance.HIGH, "docs")
+            .define("my.readonly.config", Type.LONG, Importance.HIGH, "docs");
         final Map<String, String> updateModes = new HashMap<>();
         updateModes.put("my.broker.config", "per-broker");
         updateModes.put("my.cluster.config", "cluster-wide");
@@ -410,8 +410,8 @@ public class ConfigDefTest {
     @Test
     public void testNames() {
         final ConfigDef configDef = new ConfigDef()
-                .define("a", Type.STRING, Importance.LOW, "docs")
-                .define("b", Type.STRING, Importance.LOW, "docs");
+            .define("a", Type.STRING, Importance.LOW, "docs")
+            .define("b", Type.STRING, Importance.LOW, "docs");
         Set<String> names = configDef.names();
         assertEquals(Set.of("a", "b"), names);
         // should be unmodifiable
@@ -427,7 +427,7 @@ public class ConfigDefTest {
     public void testMissingDependentConfigs() {
         // Should not be possible to parse a config if a dependent config has not been defined
         final ConfigDef configDef = new ConfigDef()
-                .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", singletonList("child"));
+            .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", singletonList("child"));
         assertThrows(ConfigException.class, () -> configDef.parse(Collections.emptyMap()));
     }
 
@@ -439,8 +439,8 @@ public class ConfigDefTest {
         assertEquals(Set.of("a"), baseConfigDef.getConfigsWithNoParent());
 
         final ConfigDef configDef = new ConfigDef(baseConfigDef)
-                .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", singletonList("child"))
-                .define("child", Type.STRING, Importance.HIGH, "docs");
+            .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", singletonList("child"))
+            .define("child", Type.STRING, Importance.HIGH, "docs");
 
         assertEquals(Set.of("a", "parent"), configDef.getConfigsWithNoParent());
     }
@@ -492,13 +492,13 @@ public class ConfigDefTest {
     @Test
     public void toRst() {
         final ConfigDef def = new ConfigDef()
-                .define("opt1", Type.STRING, "a", ValidString.in("a", "b", "c"), Importance.HIGH, "docs1")
-                .define("opt2", Type.INT, Importance.MEDIUM, "docs2")
-                .define("opt3", Type.LIST, Arrays.asList("a", "b"), Importance.LOW, "docs3")
-                .define("opt4", Type.BOOLEAN, false, Importance.LOW, null);
+            .define("opt1", Type.STRING, "a", ValidString.in("a", "b", "c"), Importance.HIGH, "docs1")
+            .define("opt2", Type.INT, Importance.MEDIUM, "docs2")
+            .define("opt3", Type.LIST, Arrays.asList("a", "b"), Importance.LOW, "docs3")
+            .define("opt4", Type.BOOLEAN, false, Importance.LOW, null);
 
         final String expectedRst =
-                "``opt2``\n" +
+            "``opt2``\n" +
                 "  docs2\n" +
                 "\n" +
                 "  * Type: int\n" +
@@ -532,18 +532,18 @@ public class ConfigDefTest {
     @Test
     public void toEnrichedRst() {
         final ConfigDef def = new ConfigDef()
-                .define("opt1.of.group1", Type.STRING, "a", ValidString.in("a", "b", "c"), Importance.HIGH, "Doc doc.",
-                        "Group One", 0, Width.NONE, "..", Collections.emptyList())
-                .define("opt2.of.group1", Type.INT, ConfigDef.NO_DEFAULT_VALUE, Importance.MEDIUM, "Doc doc doc.",
-                        "Group One", 1, Width.NONE, "..", Arrays.asList("some.option1", "some.option2"))
-                .define("opt2.of.group2", Type.BOOLEAN, false, Importance.HIGH, "Doc doc doc doc.",
-                        "Group Two", 1, Width.NONE, "..", Collections.emptyList())
-                .define("opt1.of.group2", Type.BOOLEAN, false, Importance.HIGH, "Doc doc doc doc doc.",
-                        "Group Two", 0, Width.NONE, "..", singletonList("some.option"))
-                .define("poor.opt", Type.STRING, "foo", Importance.HIGH, "Doc doc doc doc.");
+            .define("opt1.of.group1", Type.STRING, "a", ValidString.in("a", "b", "c"), Importance.HIGH, "Doc doc.",
+                "Group One", 0, Width.NONE, "..", Collections.emptyList())
+            .define("opt2.of.group1", Type.INT, ConfigDef.NO_DEFAULT_VALUE, Importance.MEDIUM, "Doc doc doc.",
+                "Group One", 1, Width.NONE, "..", Arrays.asList("some.option1", "some.option2"))
+            .define("opt2.of.group2", Type.BOOLEAN, false, Importance.HIGH, "Doc doc doc doc.",
+                "Group Two", 1, Width.NONE, "..", Collections.emptyList())
+            .define("opt1.of.group2", Type.BOOLEAN, false, Importance.HIGH, "Doc doc doc doc doc.",
+                "Group Two", 0, Width.NONE, "..", singletonList("some.option"))
+            .define("poor.opt", Type.STRING, "foo", Importance.HIGH, "Doc doc doc doc.");
 
         final String expectedRst =
-                "``poor.opt``\n" +
+            "``poor.opt``\n" +
                 "  Doc doc doc doc.\n" +
                 "\n" +
                 "  * Type: string\n" +
@@ -618,8 +618,8 @@ public class ConfigDefTest {
     public void testConvertValueToStringDouble() {
         assertEquals("3.125", ConfigDef.convertToString(3.125d, Type.DOUBLE));
         assertEquals("1.7976931348623157E308", ConfigDef.convertToString(Double.MAX_VALUE, Type.DOUBLE));
-        assertEquals("1.024E8",  ConfigDef.convertToString(102400000d, Type.DOUBLE));
-        assertEquals("-1.024E8",  ConfigDef.convertToString(-102400000d, Type.DOUBLE));
+        assertEquals("1.024E8", ConfigDef.convertToString(102400000d, Type.DOUBLE));
+        assertEquals("-1.024E8", ConfigDef.convertToString(-102400000d, Type.DOUBLE));
         assertNull(ConfigDef.convertToString(null, Type.DOUBLE));
     }
 
@@ -732,34 +732,34 @@ public class ConfigDefTest {
     @Test
     public void testThrowsExceptionWhenListSizeExceedsLimit() {
         final ConfigException exception = assertThrows(ConfigException.class, () -> new ConfigDef().define("lst",
-                                                                                                           Type.LIST,
-                                                                                                           asList("a", "b"),
-                                                                                                           ListSize.atMostOfSize(1),
-                                                                                                           Importance.HIGH,
-                                                                                                           "lst doc"));
+            Type.LIST,
+            asList("a", "b"),
+            ListSize.atMostOfSize(1),
+            Importance.HIGH,
+            "lst doc"));
         assertEquals("Invalid value [a, b] for configuration lst: exceeds maximum list size of [1].",
-                     exception.getMessage());
+            exception.getMessage());
     }
 
     @Test
     public void testNoExceptionIsThrownWhenListSizeEqualsTheLimit() {
         final List<String> lst = asList("a", "b", "c");
         assertDoesNotThrow(() -> new ConfigDef().define("lst",
-                                                        Type.LIST,
-                                                        lst,
-                                                        ListSize.atMostOfSize(lst.size()),
-                                                        Importance.HIGH,
-                                                        "lst doc"));
+            Type.LIST,
+            lst,
+            ListSize.atMostOfSize(lst.size()),
+            Importance.HIGH,
+            "lst doc"));
     }
 
     @Test
     public void testNoExceptionIsThrownWhenListSizeIsBelowTheLimit() {
         assertDoesNotThrow(() -> new ConfigDef().define("lst",
-                                                        Type.LIST,
-                                                        asList("a", "b"),
-                                                        ListSize.atMostOfSize(3),
-                                                        Importance.HIGH,
-                                                        "lst doc"));
+            Type.LIST,
+            asList("a", "b"),
+            ListSize.atMostOfSize(3),
+            Importance.HIGH,
+            "lst doc"));
     }
 
     @Test

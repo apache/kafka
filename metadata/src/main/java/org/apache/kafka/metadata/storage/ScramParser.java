@@ -50,14 +50,14 @@ public class ScramParser {
         int equalsIndex = input.indexOf('=');
         if (equalsIndex < 0) {
             throw new FormatterException("Failed to find equals sign in SCRAM " +
-                    "argument '" + input + "'");
+                "argument '" + input + "'");
         }
         String mechanismString = input.substring(0, equalsIndex);
         String configString = input.substring(equalsIndex + 1);
         ScramMechanism mechanism = ScramMechanism.forMechanismName(mechanismString);
         if (mechanism == null) {
             throw new FormatterException("The add-scram mechanism " + mechanismString +
-                    " is not supported.");
+                " is not supported.");
         }
         if (!configString.startsWith("[")) {
             throw new FormatterException("Expected configuration string to start with [");
@@ -134,7 +134,7 @@ public class ScramParser {
             if (passwordString == null) {
                 if (saltedPasswordString == null) {
                     throw new FormatterException("You must supply one of 'password' or 'saltedpassword' " +
-                            "to add-scram");
+                        "to add-scram");
                 } else if (configuredSalt.isEmpty()) {
                     throw new FormatterException("You must supply 'salt' with 'saltedpassword' to add-scram");
                 }
@@ -143,7 +143,7 @@ public class ScramParser {
                     this.configuredSaltedPassword = Optional.of(Base64.getDecoder().decode(saltedPasswordString));
                 } catch (IllegalArgumentException e) {
                     throw new FormatterException("Failed to decode given saltedPassword: " +
-                            saltedPasswordString, e);
+                        saltedPasswordString, e);
                 }
             } else {
                 this.configuredPasswordString = Optional.of(passwordString);
@@ -173,9 +173,9 @@ public class ScramParser {
                 return configuredSaltedPassword.get();
             }
             return new ScramFormatter(mechanism).saltedPassword(
-                    configuredPasswordString.get(),
-                    salt,
-                    iterations);
+                configuredPasswordString.get(),
+                salt,
+                iterations);
         }
 
         UserScramCredentialRecord toRecord() throws Exception {
@@ -184,20 +184,20 @@ public class ScramParser {
             int iterations = iterations();
             if (iterations < mechanism.minIterations()) {
                 throw new FormatterException("The 'iterations' value must be >= " +
-                        mechanism.minIterations() + " for add-scram using " + mechanism);
+                    mechanism.minIterations() + " for add-scram using " + mechanism);
             }
             if (iterations > mechanism.maxIterations()) {
                 throw new FormatterException("The 'iterations' value must be <= " +
-                        mechanism.maxIterations() + " for add-scram using " + mechanism);
+                    mechanism.maxIterations() + " for add-scram using " + mechanism);
             }
             byte[] saltedPassword = saltedPassword(salt, iterations);
             return new UserScramCredentialRecord().
-                    setName(configuredName).
-                    setMechanism(mechanism.type()).
-                    setSalt(salt).
-                    setStoredKey(formatter.storedKey(formatter.clientKey(saltedPassword))).
-                    setServerKey(formatter.serverKey(saltedPassword)).
-                    setIterations(iterations);
+                setName(configuredName).
+                setMechanism(mechanism.type()).
+                setSalt(salt).
+                setStoredKey(formatter.storedKey(formatter.clientKey(saltedPassword))).
+                setServerKey(formatter.serverKey(saltedPassword)).
+                setIterations(iterations);
         }
 
         @Override

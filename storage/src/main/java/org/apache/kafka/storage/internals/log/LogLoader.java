@@ -219,8 +219,8 @@ public class LogLoader {
 
         leaderEpochCache.truncateFromEndAsyncFlush(recoveryOffsets.nextOffset);
         long newLogStartOffset = isRemoteLogEnabled
-            ? logStartOffsetCheckpoint
-            : Math.max(logStartOffsetCheckpoint, segments.firstSegment().get().baseOffset());
+                ? logStartOffsetCheckpoint
+                : Math.max(logStartOffsetCheckpoint, segments.firstSegment().get().baseOffset());
 
         // The earliest leader epoch may not be flushed during a hard failure. Recover it here.
         leaderEpochCache.truncateFromStartAsyncFlush(logStartOffsetCheckpoint);

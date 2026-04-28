@@ -46,8 +46,8 @@ public final class BrokerLocalStorage {
     private final Time time = Time.SYSTEM;
 
     public BrokerLocalStorage(Integer brokerId,
-                              Set<String> storageDirNames,
-                              Integer storageWaitTimeoutSec) {
+            Set<String> storageDirNames,
+            Integer storageWaitTimeoutSec) {
         this.brokerId = brokerId;
         this.brokerStorageDirectories = storageDirNames.stream().map(File::new).collect(Collectors.toSet());
         this.storageWaitTimeoutSec = storageWaitTimeoutSec;
@@ -72,7 +72,7 @@ public final class BrokerLocalStorage {
      *                        offset.
      */
     public void waitForEarliestLocalOffset(TopicPartition topicPartition,
-                                           Long offset) {
+            Long offset) {
         Function<OffsetHolder, Optional<String>> relativePosFunc = offsetHolder -> {
             Optional<String> result = Optional.empty();
             if (offsetHolder.firstLogFileBaseOffset < offset &&
@@ -97,7 +97,7 @@ public final class BrokerLocalStorage {
      *                        offset.
      */
     public void waitForAtLeastEarliestLocalOffset(TopicPartition topicPartition,
-                                                  Long offset) {
+            Long offset) {
         Function<OffsetHolder, Optional<String>> relativePosFunc = offsetHolder -> {
             Optional<String> result = Optional.empty();
             if (offsetHolder.firstLogFileBaseOffset < offset &&
@@ -110,8 +110,8 @@ public final class BrokerLocalStorage {
     }
 
     private void waitForOffset(TopicPartition topicPartition,
-                               Long offset,
-                               Function<OffsetHolder, Optional<String>> relativePosFunc) {
+            Long offset,
+            Function<OffsetHolder, Optional<String>> relativePosFunc) {
         Timer timer = time.timer(TimeUnit.SECONDS.toMillis(storageWaitTimeoutSec));
         OffsetHolder offsetHolder = new OffsetHolder(0L, List.of());
         while (timer.notExpired() && offsetHolder.firstLogFileBaseOffset < offset) {
@@ -122,8 +122,8 @@ public final class BrokerLocalStorage {
         if (relativePos.isPresent()) {
             String pos = relativePos.get();
             String message = String.format("[BrokerId=%d] The base offset of the first log segment of %s " +
-                            "in the log directory is %d which is %s the expected offset %s. The directory of %s is " +
-                            "made of the following files: %s", brokerId, topicPartition,
+                    "in the log directory is %d which is %s the expected offset %s. The directory of %s is " +
+                    "made of the following files: %s", brokerId, topicPartition,
                     offsetHolder.firstLogFileBaseOffset, pos, offset, topicPartition,
                     String.join(System.lineSeparator(), offsetHolder.partitionFiles));
             throw new AssertionError(message);
@@ -138,8 +138,8 @@ public final class BrokerLocalStorage {
      * @return true if the offset is present in the first local segment, false otherwise.
      */
     private boolean isOffsetPresentInFirstLocalSegment(TopicPartition topicPartition,
-                                                       Long firstLogFileBaseOffset,
-                                                       Long offsetToSearch)  {
+            Long firstLogFileBaseOffset,
+            Long offsetToSearch) {
         if (offsetToSearch < firstLogFileBaseOffset) {
             return false;
         }
@@ -150,7 +150,7 @@ public final class BrokerLocalStorage {
                 .filter(dir -> dirContainsTopicPartition(topicPartition, dir))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException(String.format("[BrokerId=%d] Directory for the topic-partition %s " +
-                "was not found", brokerId, topicPartition)));
+                        "was not found", brokerId, topicPartition)));
         File partitionDir = new File(logDir.getAbsolutePath(), topicPartition.toString());
         File firstSegmentFile = new File(partitionDir.getAbsolutePath(),
                 LogFileUtils.filenamePrefixFromOffset(firstLogFileBaseOffset) + LogFileUtils.LOG_FILE_SUFFIX);

@@ -151,11 +151,11 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
 
 
     public RocksDBTimeOrderedKeyValueBuffer(final RocksDBTimeOrderedKeyValueBytesStore store,
-                                            final Serde<K> keySerde,
-                                            final Serde<V> valueSerde,
-                                            final Duration gracePeriod,
-                                            final String topic,
-                                            final boolean loggingEnabled) {
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde,
+        final Duration gracePeriod,
+        final String topic,
+        final boolean loggingEnabled) {
         this.store = store;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
@@ -225,7 +225,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
                 start = minTimestamp();
             }
             try (final KeyValueIterator<Bytes, byte[]> iterator = store
-                .fetchAll(start, observedStreamTime() - gracePeriod)) {
+                     .fetchAll(start, observedStreamTime() - gracePeriod)) {
                 while (iterator.hasNext() && predicate.get()) {
                     keyValue = iterator.next();
 

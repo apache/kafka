@@ -60,26 +60,26 @@ public class RegexResolutionBenchmark {
     private static final String GROUP_ID = "my-group-id";
 
     private static final List<String> WORDS = List.of(
-        "data",
-        "stream",
-        "queue",
-        "analytics",
-        "service",
-        "event",
-        "log",
-        "cloud",
-        "process",
-        "system",
-        "message",
-        "broker",
-        "partition",
-        "key",
-        "value",
-        "cluster",
-        "zookeeper",
-        "replication",
-        "topic",
-        "producer"
+            "data",
+            "stream",
+            "queue",
+            "analytics",
+            "service",
+            "event",
+            "log",
+            "cloud",
+            "process",
+            "system",
+            "message",
+            "broker",
+            "partition",
+            "key",
+            "value",
+            "cluster",
+            "zookeeper",
+            "replication",
+            "topic",
+            "producer"
     );
 
     @Param({"10000", "100000", "1000000"})
@@ -97,17 +97,17 @@ public class RegexResolutionBenchmark {
         Random random = new Random();
 
         MetadataDelta delta = new MetadataDelta.Builder()
-            .setImage(MetadataImage.EMPTY)
-            .build();
+                .setImage(MetadataImage.EMPTY)
+                .build();
         for (int i = 0; i < topicCount; i++) {
             String topicName =
-                WORDS.get(random.nextInt(WORDS.size())) + "_" +
-                WORDS.get(random.nextInt(WORDS.size())) + "_" +
-                i;
+                    WORDS.get(random.nextInt(WORDS.size())) + "_" +
+                            WORDS.get(random.nextInt(WORDS.size())) + "_" +
+                            i;
 
             delta.replay(new TopicRecord()
-                .setTopicId(Uuid.randomUuid())
-                .setName(topicName));
+                    .setTopicId(Uuid.randomUuid())
+                    .setName(topicName));
         }
         image = delta.apply(MetadataProvenance.EMPTY);
 
@@ -122,15 +122,15 @@ public class RegexResolutionBenchmark {
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public void run() {
         TopicRegexResolver resolver = new TopicRegexResolver(
-            Optional::empty,
-            TIME
+                Optional::empty,
+                TIME
         );
         resolver.resolveRegularExpressions(
-            null,
-            GROUP_ID,
-            LOG,
-            new KRaftCoordinatorMetadataImage(image),
-            regexes
+                null,
+                GROUP_ID,
+                LOG,
+                new KRaftCoordinatorMetadataImage(image),
+                regexes
         );
     }
 }

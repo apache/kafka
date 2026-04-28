@@ -220,9 +220,9 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
         partitionsPerTopic.put(topic1, partitionInfos(topic1, 4));
 
         subscriptions.put("c0", buildSubscriptionV2Above(topics(topic1), partitions(tp(topic1, 0), tp(topic1, 1)),
-                generationId, 0));
+            generationId, 0));
         subscriptions.put("c1", buildSubscriptionV2Above(topics(topic1), partitions(tp(topic1, 2), tp(topic1, 3)),
-                generationId, 1));
+            generationId, 1));
 
         assignor.assignPartitions(partitionsPerTopic, subscriptions);
         assertEquals(2, assignor.partitionsTransferringOwnership().size());
@@ -240,8 +240,8 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
      */
     @Override
     public void verifyValidityAndBalance(Map<String, Subscription> subscriptions,
-                                         Map<String, List<TopicPartition>> assignments,
-                                         Map<String, List<PartitionInfo>> partitionsPerTopic) {
+        Map<String, List<TopicPartition>> assignments,
+        Map<String, List<PartitionInfo>> partitionsPerTopic) {
         int rebalances = 0;
         // partitions are being revoked, we must go through another assignment to get the final state
         while (verifyCooperativeValidity(subscriptions, assignments)) {
@@ -287,7 +287,7 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
         intersection.retainAll(allRevokedPartitions);
         assertTrue(intersection.isEmpty(),
             "Error: Some partitions were assigned to a new consumer during the same rebalance they are being " +
-            "revoked from their previous owner. Partitions: " + intersection);
+                "revoked from their previous owner. Partitions: " + intersection);
 
         return !allRevokedPartitions.isEmpty();
     }

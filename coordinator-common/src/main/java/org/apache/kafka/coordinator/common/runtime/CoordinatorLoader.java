@@ -32,7 +32,8 @@ public interface CoordinatorLoader<U> extends AutoCloseable {
      * Object that is returned as part of the future from load(). Holds the partition load time and the
      * end time.
      */
-    record LoadSummary(long startTimeMs, long endTimeMs, long schedulerQueueTimeMs, long numRecords, long numBytes) { }
+    record LoadSummary(long startTimeMs, long endTimeMs, long schedulerQueueTimeMs, long numRecords, long numBytes) {
+    }
 
     /**
      * Loads the coordinator by reading all the records from the TopicPartition
@@ -42,7 +43,7 @@ public interface CoordinatorLoader<U> extends AutoCloseable {
      * @param coordinator   The object to apply records to.
      */
     CompletableFuture<LoadSummary> load(
-        TopicPartition tp,
-        CoordinatorPlayback<U> coordinator
+            TopicPartition tp,
+            CoordinatorPlayback<U> coordinator
     );
 }

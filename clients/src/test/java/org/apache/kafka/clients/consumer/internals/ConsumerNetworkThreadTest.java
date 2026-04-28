@@ -84,14 +84,14 @@ public class ConsumerNetworkThreadTest {
         LogContext logContext = new LogContext();
 
         this.consumerNetworkThread = new ConsumerNetworkThread(
-                logContext,
-                time,
-                applicationEventQueue,
-                applicationEventReaper,
-                () -> applicationEventProcessor,
-                () -> networkClientDelegate,
-                () -> requestManagers,
-                asyncConsumerMetrics
+            logContext,
+            time,
+            applicationEventQueue,
+            applicationEventReaper,
+            () -> applicationEventProcessor,
+            () -> networkClientDelegate,
+            () -> requestManagers,
+            asyncConsumerMetrics
         );
     }
 
@@ -147,12 +147,12 @@ public class ConsumerNetworkThreadTest {
         // There's a nonzero amount of time between starting the thread and having it
         // begin to execute our code. Wait for a bit before checking...
         TestUtils.waitForCondition(isStarted,
-                "The consumer network thread did not start within " + DEFAULT_MAX_WAIT_MS + " ms");
+            "The consumer network thread did not start within " + DEFAULT_MAX_WAIT_MS + " ms");
 
         consumerNetworkThread.close(Duration.ofMillis(DEFAULT_MAX_WAIT_MS));
 
         TestUtils.waitForCondition(isClosed,
-                "The consumer network thread did not stop within " + DEFAULT_MAX_WAIT_MS + " ms");
+            "The consumer network thread did not stop within " + DEFAULT_MAX_WAIT_MS + " ms");
     }
 
     @Test
@@ -213,14 +213,14 @@ public class ConsumerNetworkThreadTest {
         try (Metrics metrics = new Metrics();
              AsyncConsumerMetrics asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, groupName);
              ConsumerNetworkThread consumerNetworkThread = new ConsumerNetworkThread(
-                     new LogContext(),
-                     time,
-                     applicationEventQueue,
-                     applicationEventReaper,
-                     () -> applicationEventProcessor,
-                     () -> networkClientDelegate,
-                     () -> requestManagers,
-                     asyncConsumerMetrics
+                 new LogContext(),
+                 time,
+                 applicationEventQueue,
+                 applicationEventReaper,
+                 () -> applicationEventProcessor,
+                 () -> networkClientDelegate,
+                 () -> requestManagers,
+                 asyncConsumerMetrics
              )) {
             consumerNetworkThread.initializeResources();
 
@@ -248,14 +248,14 @@ public class ConsumerNetworkThreadTest {
         try (Metrics metrics = new Metrics();
              AsyncConsumerMetrics asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, groupName);
              ConsumerNetworkThread consumerNetworkThread = new ConsumerNetworkThread(
-                     new LogContext(),
-                     time,
-                     applicationEventQueue,
-                     applicationEventReaper,
-                     () -> applicationEventProcessor,
-                     () -> networkClientDelegate,
-                     () -> requestManagers,
-                     asyncConsumerMetrics
+                 new LogContext(),
+                 time,
+                 applicationEventQueue,
+                 applicationEventReaper,
+                 () -> applicationEventProcessor,
+                 () -> networkClientDelegate,
+                 () -> requestManagers,
+                 asyncConsumerMetrics
              )) {
             consumerNetworkThread.initializeResources();
 
@@ -321,20 +321,20 @@ public class ConsumerNetworkThreadTest {
      * logic in {@link ConsumerNetworkThread#cleanup()} will not throw errors when closing.
      */
     private void testInitializeResourcesError(Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-                                              Supplier<RequestManagers> requestManagersSupplier) {
+        Supplier<RequestManagers> requestManagersSupplier) {
         // A new ConsumerNetworkThread is created because the shared one doesn't have any issues initializing its
         // resources. However, most of the mocks can be reused, so this is mostly boilerplate except for the error
         // when a supplier is invoked.
         try (ConsumerNetworkThread thread = new ConsumerNetworkThread(
-            new LogContext(),
-            time,
-            applicationEventQueue,
-            applicationEventReaper,
-            () -> applicationEventProcessor,
-            networkClientDelegateSupplier,
-            requestManagersSupplier,
-            asyncConsumerMetrics
-        )) {
+                 new LogContext(),
+                 time,
+                 applicationEventQueue,
+                 applicationEventReaper,
+                 () -> applicationEventProcessor,
+                 networkClientDelegateSupplier,
+                 requestManagersSupplier,
+                 asyncConsumerMetrics
+             )) {
             assertThrows(KafkaException.class, thread::initializeResources, "initializeResources should fail because one or more Supplier throws an error on get()");
             assertDoesNotThrow(thread::cleanup, "cleanup() should not cause an error because all references are checked before use");
         }

@@ -575,9 +575,9 @@ public class KafkaAdminClient extends AdminClient {
 
     // Visible for tests
     static KafkaAdminClient createInternal(AdminClientConfig config,
-                                           AdminMetadataManager metadataManager,
-                                           KafkaClient client,
-                                           Time time) {
+        AdminMetadataManager metadataManager,
+        KafkaClient client,
+        Time time) {
         Metrics metrics = null;
         String clientId = generateClientId(config);
         List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
@@ -600,14 +600,14 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private KafkaAdminClient(AdminClientConfig config,
-                             String clientId,
-                             Time time,
-                             AdminMetadataManager metadataManager,
-                             Metrics metrics,
-                             KafkaClient client,
-                             TimeoutProcessorFactory timeoutProcessorFactory,
-                             LogContext logContext,
-                             Optional<ClientTelemetryReporter> clientTelemetryReporter) {
+        String clientId,
+        Time time,
+        AdminMetadataManager metadataManager,
+        Metrics metrics,
+        KafkaClient client,
+        TimeoutProcessorFactory timeoutProcessorFactory,
+        LogContext logContext,
+        Optional<ClientTelemetryReporter> clientTelemetryReporter) {
         this.clientId = clientId;
         this.log = logContext.logger(KafkaAdminClient.class);
         this.logContext = logContext;
@@ -860,11 +860,11 @@ public class KafkaAdminClient extends AdminClient {
         private long nextAllowedTryMs;
 
         Call(boolean internal,
-             String callName,
-             long nextAllowedTryMs,
-             int tries,
-             long deadlineMs,
-             NodeProvider nodeProvider
+            String callName,
+            long nextAllowedTryMs,
+            int tries,
+            long deadlineMs,
+            NodeProvider nodeProvider
         ) {
             this.internal = internal;
             this.callName = callName;
@@ -1051,7 +1051,7 @@ public class KafkaAdminClient extends AdminClient {
          */
         int handleTimeouts(Collection<Call> calls, String msg) {
             int numTimedOut = 0;
-            for (Iterator<Call> iter = calls.iterator(); iter.hasNext(); ) {
+            for (Iterator<Call> iter = calls.iterator();iter.hasNext();) {
                 Call call = iter.next();
                 int remainingMs = calcTimeoutMsRemainingAsInt(now, call.deadlineMs);
                 if (remainingMs < 0) {
@@ -1196,7 +1196,7 @@ public class KafkaAdminClient extends AdminClient {
             int pendingSize = pendingCalls.size();
             // pendingCalls could be modified in this loop,
             // hence using for-loop instead of iterator to avoid ConcurrentModificationException.
-            for (int i = 0; i < pendingSize; i++) {
+            for (int i = 0;i < pendingSize;i++) {
                 Call call = pendingCalls.get(i);
                 // If the call is being retried, await the proper backoff before finding the node
                 if (now < call.nextAllowedTryMs) {
@@ -1246,7 +1246,7 @@ public class KafkaAdminClient extends AdminClient {
          */
         private long sendEligibleCalls(long now) {
             long pollTimeout = Long.MAX_VALUE;
-            for (Iterator<Map.Entry<Node, List<Call>>> iter = callsToSend.entrySet().iterator(); iter.hasNext(); ) {
+            for (Iterator<Map.Entry<Node, List<Call>>> iter = callsToSend.entrySet().iterator();iter.hasNext();) {
                 Map.Entry<Node, List<Call>> entry = iter.next();
                 List<Call> calls = entry.getValue();
                 if (calls.isEmpty()) {
@@ -1264,7 +1264,7 @@ public class KafkaAdminClient extends AdminClient {
                     if (deadline != null) {
                         if (now >= deadline) {
                             log.info("Disconnecting from {} and revoking {} node assignment(s) " +
-                                    "because the node is taking too long to become ready.",
+                                "because the node is taking too long to become ready.",
                                 node.idString(), calls.size());
                             transitionToPendingAndClearList(calls);
                             client.disconnect(node.idString());
@@ -1357,7 +1357,7 @@ public class KafkaAdminClient extends AdminClient {
                     // If the server returns information about a correlation ID we didn't use yet,
                     // an internal server error has occurred. Close the connection and log an error message.
                     log.error("Internal server error on {}: server returned information about unknown " +
-                            "correlation ID {}, requestHeader = {}", response.destination(), correlationId,
+                        "correlation ID {}, requestHeader = {}", response.destination(), correlationId,
                         response.requestHeader());
                     client.disconnect(response.destination());
                     continue;
@@ -1407,7 +1407,7 @@ public class KafkaAdminClient extends AdminClient {
          *                       be put back in the pendingCalls collection and they will be reassigned
          */
         private void unassignUnsentCalls(Predicate<Node> shouldUnassign) {
-            for (Iterator<Map.Entry<Node, List<Call>>> iter = callsToSend.entrySet().iterator(); iter.hasNext(); ) {
+            for (Iterator<Map.Entry<Node, List<Call>>> iter = callsToSend.entrySet().iterator();iter.hasNext();) {
                 Map.Entry<Node, List<Call>> entry = iter.next();
                 Node node = entry.getKey();
                 List<Call> awaitingCalls = entry.getValue();
@@ -1774,7 +1774,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public CreateTopicsResult createTopics(final Collection<NewTopic> newTopics,
-                                           final CreateTopicsOptions options) {
+        final CreateTopicsOptions options) {
         final Map<String, KafkaFutureImpl<TopicMetadataAndConfig>> topicFutures = new HashMap<>(newTopics.size());
         final CreatableTopicCollection topics = new CreatableTopicCollection();
         for (NewTopic newTopic : newTopics) {
@@ -1799,11 +1799,11 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private Call getCreateTopicsCall(final CreateTopicsOptions options,
-                                     final Map<String, KafkaFutureImpl<TopicMetadataAndConfig>> futures,
-                                     final CreatableTopicCollection topics,
-                                     final Map<String, ThrottlingQuotaExceededException> quotaExceededExceptions,
-                                     final long now,
-                                     final long deadline) {
+        final Map<String, KafkaFutureImpl<TopicMetadataAndConfig>> futures,
+        final CreatableTopicCollection topics,
+        final Map<String, ThrottlingQuotaExceededException> quotaExceededExceptions,
+        final long now,
+        final long deadline) {
         return new Call("createTopics", deadline, new ControllerNodeProvider()) {
             @Override
             public CreateTopicsRequest.Builder createRequest(int timeoutMs) {
@@ -1901,7 +1901,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DeleteTopicsResult deleteTopics(final TopicCollection topics,
-                                           final DeleteTopicsOptions options) {
+        final DeleteTopicsOptions options) {
         if (topics instanceof TopicIdCollection)
             return DeleteTopicsResult.ofTopicIds(handleDeleteTopicsUsingIds(((TopicIdCollection) topics).topicIds(), options));
         else if (topics instanceof TopicNameCollection)
@@ -1911,7 +1911,7 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private Map<String, KafkaFuture<Void>> handleDeleteTopicsUsingNames(final Collection<String> topicNames,
-                                                                        final DeleteTopicsOptions options) {
+        final DeleteTopicsOptions options) {
         final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(topicNames.size());
         final List<String> validTopicNames = new ArrayList<>(topicNames.size());
         for (String topicName : topicNames) {
@@ -1936,7 +1936,7 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private Map<Uuid, KafkaFuture<Void>> handleDeleteTopicsUsingIds(final Collection<Uuid> topicIds,
-                                                                    final DeleteTopicsOptions options) {
+        final DeleteTopicsOptions options) {
         final Map<Uuid, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(topicIds.size());
         final List<Uuid> validTopicIds = new ArrayList<>(topicIds.size());
         for (Uuid topicId : topicIds) {
@@ -1961,11 +1961,11 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private Call getDeleteTopicsCall(final DeleteTopicsOptions options,
-                                     final Map<String, KafkaFutureImpl<Void>> futures,
-                                     final List<String> topics,
-                                     final Map<String, ThrottlingQuotaExceededException> quotaExceededExceptions,
-                                     final long now,
-                                     final long deadline) {
+        final Map<String, KafkaFutureImpl<Void>> futures,
+        final List<String> topics,
+        final Map<String, ThrottlingQuotaExceededException> quotaExceededExceptions,
+        final long now,
+        final long deadline) {
         return new Call("deleteTopics", deadline, new ControllerNodeProvider()) {
             @Override
             DeleteTopicsRequest.Builder createRequest(int timeoutMs) {
@@ -2033,11 +2033,11 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private Call getDeleteTopicsWithIdsCall(final DeleteTopicsOptions options,
-                                            final Map<Uuid, KafkaFutureImpl<Void>> futures,
-                                            final List<Uuid> topicIds,
-                                            final Map<Uuid, ThrottlingQuotaExceededException> quotaExceededExceptions,
-                                            final long now,
-                                            final long deadline) {
+        final Map<Uuid, KafkaFutureImpl<Void>> futures,
+        final List<Uuid> topicIds,
+        final Map<Uuid, ThrottlingQuotaExceededException> quotaExceededExceptions,
+        final long now,
+        final long deadline) {
         return new Call("deleteTopics", deadline, new ControllerNodeProvider()) {
             @Override
             DeleteTopicsRequest.Builder createRequest(int timeoutMs) {
@@ -2440,7 +2440,7 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private TopicDescription getTopicDescriptionFromCluster(Cluster cluster, String topicName, Uuid topicId,
-                                                            Integer authorizedOperations) {
+        Integer authorizedOperations) {
         boolean isInternal = cluster.internalTopics().contains(topicName);
         List<PartitionInfo> partitionInfos = cluster.partitionsForTopic(topicName);
         List<TopicPartitionInfo> partitions = new ArrayList<>(partitionInfos.size());
@@ -2849,7 +2849,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs,
-                                                      final AlterConfigsOptions options) {
+        final AlterConfigsOptions options) {
         final Map<ConfigResource, KafkaFutureImpl<Void>> allFutures = new HashMap<>();
         // BROKER_LOGGER requests always go to a specific, constant broker or controller node.
         //
@@ -2881,9 +2881,9 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private Map<ConfigResource, KafkaFutureImpl<Void>> incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs,
-                                                                               final AlterConfigsOptions options,
-                                                                               Collection<ConfigResource> resources,
-                                                                               NodeProvider nodeProvider) {
+        final AlterConfigsOptions options,
+        Collection<ConfigResource> resources,
+        NodeProvider nodeProvider) {
         final Map<ConfigResource, KafkaFutureImpl<Void>> futures = new HashMap<>();
         for (ConfigResource resource : resources)
             futures.put(resource, new KafkaFutureImpl<>());
@@ -3164,7 +3164,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public CreatePartitionsResult createPartitions(final Map<String, NewPartitions> newPartitions,
-                                                   final CreatePartitionsOptions options) {
+        final CreatePartitionsOptions options) {
         final Map<String, KafkaFutureImpl<Void>> futures = new HashMap<>(newPartitions.size());
         final CreatePartitionsTopicCollection topics = new CreatePartitionsTopicCollection(newPartitions.size());
         for (Map.Entry<String, NewPartitions> entry : newPartitions.entrySet()) {
@@ -3192,11 +3192,11 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private Call getCreatePartitionsCall(final CreatePartitionsOptions options,
-                                         final Map<String, KafkaFutureImpl<Void>> futures,
-                                         final CreatePartitionsTopicCollection topics,
-                                         final Map<String, ThrottlingQuotaExceededException> quotaExceededExceptions,
-                                         final long now,
-                                         final long deadline) {
+        final Map<String, KafkaFutureImpl<Void>> futures,
+        final CreatePartitionsTopicCollection topics,
+        final Map<String, ThrottlingQuotaExceededException> quotaExceededExceptions,
+        final long now,
+        final long deadline) {
         return new Call("createPartitions", deadline, new ControllerNodeProvider()) {
             @Override
             public CreatePartitionsRequest.Builder createRequest(int timeoutMs) {
@@ -3267,7 +3267,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DeleteRecordsResult deleteRecords(final Map<TopicPartition, RecordsToDelete> recordsToDelete,
-                                             final DeleteRecordsOptions options) {
+        final DeleteRecordsOptions options) {
         PartitionLeaderStrategy.PartitionLeaderFuture<DeletedRecords> future =
             DeleteRecordsHandler.newFuture(recordsToDelete.keySet(), partitionLeaderCache);
         int timeoutMs = defaultApiTimeoutMs;
@@ -3435,7 +3435,7 @@ public class KafkaAdminClient extends AdminClient {
         private final KafkaFutureImpl<Collection<Object>> future;
 
         ListGroupsResults(Collection<Node> leaders,
-                          KafkaFutureImpl<Collection<Object>> future) {
+            KafkaFutureImpl<Collection<Object>> future) {
             this.errors = new ArrayList<>();
             this.listings = new HashMap<>();
             this.remaining = new HashSet<>(leaders);
@@ -3579,7 +3579,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeConsumerGroupsResult describeConsumerGroups(final Collection<String> groupIds,
-                                                               final DescribeConsumerGroupsOptions options) {
+        final DescribeConsumerGroupsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, ConsumerGroupDescription> future =
             DescribeConsumerGroupsHandler.newFuture(groupIds);
         DescribeConsumerGroupsHandler handler = new DescribeConsumerGroupsHandler(options.includeAuthorizedOperations(), logContext);
@@ -3597,7 +3597,7 @@ public class KafkaAdminClient extends AdminClient {
         private final KafkaFutureImpl<Collection<Object>> future;
 
         ListConsumerGroupsResults(Collection<Node> leaders,
-                                  KafkaFutureImpl<Collection<Object>> future) {
+            KafkaFutureImpl<Collection<Object>> future) {
             this.errors = new ArrayList<>();
             this.listings = new HashMap<>();
             this.remaining = new HashSet<>(leaders);
@@ -3737,7 +3737,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(Map<String, ListConsumerGroupOffsetsSpec> groupSpecs,
-                                                                   ListConsumerGroupOffsetsOptions options) {
+        ListConsumerGroupOffsetsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> future =
             ListConsumerGroupOffsetsHandler.newFuture(groupSpecs.keySet());
         ListConsumerGroupOffsetsHandler handler =
@@ -3748,7 +3748,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public ListStreamsGroupOffsetsResult listStreamsGroupOffsets(Map<String, ListStreamsGroupOffsetsSpec> groupSpecs,
-                                                                 ListStreamsGroupOffsetsOptions options) {
+        ListStreamsGroupOffsetsOptions options) {
         Map<String, ListConsumerGroupOffsetsSpec> consumerGroupSpecs = groupSpecs.entrySet().stream()
             .collect(Collectors.toMap(
                 Map.Entry::getKey,
@@ -3801,7 +3801,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeShareGroupsResult describeShareGroups(final Collection<String> groupIds,
-                                                         final DescribeShareGroupsOptions options) {
+        final DescribeShareGroupsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, ShareGroupDescription> future =
             DescribeShareGroupsHandler.newFuture(groupIds);
         DescribeShareGroupsHandler handler = new DescribeShareGroupsHandler(options.includeAuthorizedOperations(), logContext);
@@ -3812,8 +3812,8 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public AlterShareGroupOffsetsResult alterShareGroupOffsets(final String groupId,
-                                                               final Map<TopicPartition, Long> offsets,
-                                                               final AlterShareGroupOffsetsOptions options) {
+        final Map<TopicPartition, Long> offsets,
+        final AlterShareGroupOffsetsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, ApiException>> future = AlterShareGroupOffsetsHandler.newFuture(groupId);
         AlterShareGroupOffsetsHandler handler = new AlterShareGroupOffsetsHandler(groupId, offsets, logContext);
         invokeDriver(handler, future, options.timeoutMs);
@@ -3822,7 +3822,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public ListShareGroupOffsetsResult listShareGroupOffsets(final Map<String, ListShareGroupOffsetsSpec> groupSpecs,
-                                                             final ListShareGroupOffsetsOptions options) {
+        final ListShareGroupOffsetsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, SharePartitionOffsetInfo>> future = ListShareGroupOffsetsHandler.newFuture(groupSpecs.keySet());
         ListShareGroupOffsetsHandler handler = new ListShareGroupOffsetsHandler(groupSpecs, logContext);
         invokeDriver(handler, future, options.timeoutMs);
@@ -3831,8 +3831,8 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DeleteShareGroupOffsetsResult deleteShareGroupOffsets(final String groupId,
-                                                                 final Set<String> topics,
-                                                                 final DeleteShareGroupOffsetsOptions options) {
+        final Set<String> topics,
+        final DeleteShareGroupOffsetsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, Map<String, ApiException>> future = DeleteShareGroupOffsetsHandler.newFuture(groupId);
         DeleteShareGroupOffsetsHandler handler = new DeleteShareGroupOffsetsHandler(groupId, topics, logContext);
         invokeDriver(handler, future, options.timeoutMs);
@@ -3841,7 +3841,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeStreamsGroupsResult describeStreamsGroups(final Collection<String> groupIds,
-                                                             final DescribeStreamsGroupsOptions options) {
+        final DescribeStreamsGroupsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, StreamsGroupDescription> future =
             DescribeStreamsGroupsHandler.newFuture(groupIds);
         DescribeStreamsGroupsHandler handler = new DescribeStreamsGroupsHandler(options.includeAuthorizedOperations(), logContext);
@@ -3852,7 +3852,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeClassicGroupsResult describeClassicGroups(final Collection<String> groupIds,
-                                                             final DescribeClassicGroupsOptions options) {
+        final DescribeClassicGroupsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, ClassicGroupDescription> future =
             DescribeClassicGroupsHandler.newFuture(groupIds);
         DescribeClassicGroupsHandler handler = new DescribeClassicGroupsHandler(options.includeAuthorizedOperations(), logContext);
@@ -4038,7 +4038,7 @@ public class KafkaAdminClient extends AdminClient {
             }
 
             private int validateTopicResponses(List<ReassignableTopicResponse> topicResponses,
-                                               Map<TopicPartition, ApiException> errors) {
+                Map<TopicPartition, ApiException> errors) {
                 int receivedResponsesCount = 0;
 
                 for (ReassignableTopicResponse topicResponse : topicResponses) {
@@ -4074,7 +4074,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public ListPartitionReassignmentsResult listPartitionReassignments(Optional<Set<TopicPartition>> partitions,
-                                                                       ListPartitionReassignmentsOptions options) {
+        ListPartitionReassignmentsOptions options) {
         final KafkaFutureImpl<Map<TopicPartition, PartitionReassignment>> partitionReassignmentsFuture = new KafkaFutureImpl<>();
         if (partitions.isPresent()) {
             for (TopicPartition tp : partitions.get()) {
@@ -4219,7 +4219,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId,
-                                                                               RemoveMembersFromConsumerGroupOptions options) {
+        RemoveMembersFromConsumerGroupOptions options) {
         String reason = options.reason() == null || options.reason().isEmpty() ?
             DEFAULT_LEAVE_GROUP_REASON : JoinGroupRequest.maybeTruncateReason(options.reason());
 
@@ -4274,7 +4274,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
-                                         ListOffsetsOptions options) {
+        ListOffsetsOptions options) {
         PartitionLeaderStrategy.PartitionLeaderFuture<ListOffsetsResultInfo> future =
             ListOffsetsHandler.newFuture(topicPartitionOffsets.keySet(), partitionLeaderCache);
         Map<TopicPartition, Long> offsetQueriesByPartition = topicPartitionOffsets.entrySet().stream()
@@ -4391,7 +4391,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public AlterUserScramCredentialsResult alterUserScramCredentials(List<UserScramCredentialAlteration> alterations,
-                                                                     AlterUserScramCredentialsOptions options) {
+        AlterUserScramCredentialsOptions options) {
         final long now = time.milliseconds();
         final Map<String, KafkaFutureImpl<Void>> futures = new HashMap<>();
         for (UserScramCredentialAlteration alteration : alterations) {
@@ -4458,10 +4458,10 @@ public class KafkaAdminClient extends AdminClient {
             public AlterUserScramCredentialsRequest.Builder createRequest(int timeoutMs) {
                 return new AlterUserScramCredentialsRequest.Builder(
                     new AlterUserScramCredentialsRequestData().setUpsertions(alterations.stream()
-                            .filter(a -> a instanceof UserScramCredentialUpsertion)
-                            .filter(a -> !userIllegalAlterationExceptions.containsKey(a.user()))
-                            .map(a -> userInsertions.get(a.user()).get(((UserScramCredentialUpsertion) a).credentialInfo().mechanism()))
-                            .collect(Collectors.toList()))
+                        .filter(a -> a instanceof UserScramCredentialUpsertion)
+                        .filter(a -> !userIllegalAlterationExceptions.containsKey(a.user()))
+                        .map(a -> userInsertions.get(a.user()).get(((UserScramCredentialUpsertion) a).credentialInfo().mechanism()))
+                        .collect(Collectors.toList()))
                         .setDeletions(alterations.stream()
                             .filter(a -> a instanceof UserScramCredentialDeletion)
                             .filter(a -> !userIllegalAlterationExceptions.containsKey(a.user()))
@@ -4588,7 +4588,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public UpdateFeaturesResult updateFeatures(final Map<String, FeatureUpdate> featureUpdates,
-                                               final UpdateFeaturesOptions options) {
+        final UpdateFeaturesOptions options) {
         if (featureUpdates.isEmpty()) {
             throw new IllegalArgumentException("Feature updates can not be null or empty.");
         }

@@ -28,7 +28,7 @@ public class StreamsOnAllTasksLostCallbackCompletedEvent extends ApplicationEven
     private final Optional<KafkaException> error;
 
     public StreamsOnAllTasksLostCallbackCompletedEvent(final CompletableFuture<Void> future,
-                                                       final Optional<KafkaException> error) {
+        final Optional<KafkaException> error) {
         super(Type.STREAMS_ON_ALL_TASKS_LOST_CALLBACK_COMPLETED);
         this.future = Objects.requireNonNull(future);
         this.error = Objects.requireNonNull(error);

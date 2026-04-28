@@ -143,7 +143,7 @@ public class ShareFetchUtilsTest {
                 OptionalInt.empty(), false))
         );
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData =
-                ShareFetchUtils.processFetchResponse(shareFetch, responseData, sharePartitions, mock(ReplicaManager.class), EXCEPTION_HANDLER);
+            ShareFetchUtils.processFetchResponse(shareFetch, responseData, sharePartitions, mock(ReplicaManager.class), EXCEPTION_HANDLER);
 
         assertEquals(2, resultData.size());
         assertTrue(resultData.containsKey(tp0));
@@ -153,11 +153,11 @@ public class ShareFetchUtilsTest {
         assertEquals(Errors.NONE.code(), resultData.get(tp0).errorCode());
         assertEquals(Errors.NONE.code(), resultData.get(tp1).errorCode());
         assertEquals(List.of(new ShareFetchResponseData.AcquiredRecords()
-                        .setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)),
-                resultData.get(tp0).acquiredRecords());
+                .setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)),
+            resultData.get(tp0).acquiredRecords());
         assertEquals(List.of(new ShareFetchResponseData.AcquiredRecords()
-                        .setFirstOffset(100).setLastOffset(103).setDeliveryCount((short) 1)),
-                resultData.get(tp1).acquiredRecords());
+                .setFirstOffset(100).setLastOffset(103).setDeliveryCount((short) 1)),
+            resultData.get(tp1).acquiredRecords());
     }
 
     @Test

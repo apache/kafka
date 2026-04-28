@@ -91,9 +91,9 @@ public abstract class AbstractRecords implements Records {
     }
 
     public static int estimateSizeInBytes(byte magic,
-                                          long baseOffset,
-                                          CompressionType compressionType,
-                                          Iterable<Record> records) {
+        long baseOffset,
+        CompressionType compressionType,
+        Iterable<Record> records) {
         int size = 0;
         if (magic <= RecordBatch.MAGIC_VALUE_V1) {
             for (Record record : records)
@@ -105,8 +105,8 @@ public abstract class AbstractRecords implements Records {
     }
 
     public static int estimateSizeInBytes(byte magic,
-                                          CompressionType compressionType,
-                                          Iterable<SimpleRecord> records) {
+        CompressionType compressionType,
+        Iterable<SimpleRecord> records) {
         int size = 0;
         if (magic <= RecordBatch.MAGIC_VALUE_V1) {
             for (SimpleRecord record : records)
@@ -134,7 +134,7 @@ public abstract class AbstractRecords implements Records {
      * an estimate because it does not take into account overhead from the compression algorithm.
      */
     public static int estimateSizeInBytesUpperBound(byte magic, CompressionType compressionType, ByteBuffer key,
-                                                    ByteBuffer value, Header[] headers) {
+        ByteBuffer value, Header[] headers) {
         if (magic >= RecordBatch.MAGIC_VALUE_V2)
             return DefaultRecordBatch.estimateBatchSizeUpperBound(key, value, headers);
         else if (compressionType != CompressionType.NONE)

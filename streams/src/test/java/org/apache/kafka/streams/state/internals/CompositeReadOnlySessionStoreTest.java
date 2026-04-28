@@ -71,8 +71,8 @@ public class CompositeReadOnlySessionStoreTest {
 
         final List<KeyValue<Windowed<String>, Long>> results = toListAndCloseIterator(sessionStore.fetch("a"));
         assertEquals(Arrays.asList(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L),
-                                   KeyValue.pair(new Windowed<>("a", new SessionWindow(10, 10)), 2L)),
-                     results);
+                KeyValue.pair(new Windowed<>("a", new SessionWindow(10, 10)), 2L)),
+            results);
     }
 
     @Test
@@ -85,7 +85,7 @@ public class CompositeReadOnlySessionStoreTest {
     @Test
     public void shouldFindValueForKeyWhenMultiStores() {
         final ReadOnlySessionStoreStub<String, Long> secondUnderlying = new
-                ReadOnlySessionStoreStub<>();
+            ReadOnlySessionStoreStub<>();
         stubProviderTwo.addStore(storeName, secondUnderlying);
 
         final Windowed<String> keyOne = new Windowed<>("key-one", new SessionWindow(0, 0));
@@ -131,7 +131,8 @@ public class CompositeReadOnlySessionStoreTest {
         try {
             sessionStore.fetch("key");
             fail("Should have thrown InvalidStateStoreException with session store");
-        } catch (final InvalidStateStoreException e) { }
+        } catch (final InvalidStateStoreException e) {
+        }
     }
 
     @Test
@@ -142,7 +143,7 @@ public class CompositeReadOnlySessionStoreTest {
     @Test
     public void shouldFetchKeyRangeAcrossStores() {
         final ReadOnlySessionStoreStub<String, Long> secondUnderlying = new
-                ReadOnlySessionStoreStub<>();
+            ReadOnlySessionStoreStub<>();
         stubProviderTwo.addStore(storeName, secondUnderlying);
         underlyingSessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 0L);
         secondUnderlying.put(new Windowed<>("b", new SessionWindow(0, 0)), 10L);

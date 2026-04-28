@@ -63,9 +63,9 @@ public class ReplicaInfo {
     @Override
     public String toString() {
         return "ReplicaInfo(" +
-                "size=" + size +
-                ", offsetLag=" + offsetLag +
-                ", isFuture=" + isFuture +
-                ')';
+            "size=" + size +
+            ", offsetLag=" + offsetLag +
+            ", isFuture=" + isFuture +
+            ')';
     }
 }

@@ -147,13 +147,13 @@ public abstract class GraphNode {
     public String toString() {
         final String[] parentNames = parentNodeNames();
         return "StreamsGraphNode{" +
-               "nodeName='" + nodeName + '\'' +
-               ", buildPriority=" + buildPriority +
-               ", hasWrittenToTopology=" + hasWrittenToTopology +
-               ", keyChangingOperation=" + keyChangingOperation +
-               ", valueChangingOperation=" + valueChangingOperation +
-               ", mergeNode=" + mergeNode +
-               ", parentNodes=" + Arrays.toString(parentNames) + '}';
+            "nodeName='" + nodeName + '\'' +
+            ", buildPriority=" + buildPriority +
+            ", hasWrittenToTopology=" + hasWrittenToTopology +
+            ", keyChangingOperation=" + keyChangingOperation +
+            ", valueChangingOperation=" + valueChangingOperation +
+            ", mergeNode=" + mergeNode +
+            ", parentNodes=" + Arrays.toString(parentNames) + '}';
     }
 
     public void addLabel(final Label label) {

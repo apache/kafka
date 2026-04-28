@@ -60,7 +60,7 @@ public interface Producer<K, V> extends Closeable {
      * See {@link KafkaProducer#sendOffsetsToTransaction(Map, ConsumerGroupMetadata)}
      */
     void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                  ConsumerGroupMetadata groupMetadata) throws ProducerFencedException;
+        ConsumerGroupMetadata groupMetadata) throws ProducerFencedException;
 
     /**
      * See {@link KafkaProducer#prepareTransaction()}

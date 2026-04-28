@@ -61,23 +61,23 @@ public class MirrorHeartbeatConfig extends MirrorConnectorConfig {
     private static ConfigDef defineHeartbeatConfig(ConfigDef baseConfig) {
         return baseConfig
                 .define(
-                    EMIT_HEARTBEATS_ENABLED,
-                    ConfigDef.Type.BOOLEAN,
-                    EMIT_HEARTBEATS_ENABLED_DEFAULT,
-                    ConfigDef.Importance.LOW,
-                    EMIT_HEARTBEATS_ENABLED_DOC)
+                        EMIT_HEARTBEATS_ENABLED,
+                        ConfigDef.Type.BOOLEAN,
+                        EMIT_HEARTBEATS_ENABLED_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        EMIT_HEARTBEATS_ENABLED_DOC)
                 .define(
-                    EMIT_HEARTBEATS_INTERVAL_SECONDS,
-                    ConfigDef.Type.LONG,
-                    EMIT_HEARTBEATS_INTERVAL_SECONDS_DEFAULT,
-                    ConfigDef.Importance.LOW,
-                    EMIT_HEARTBEATS_INTERVAL_SECONDS_DOC)
+                        EMIT_HEARTBEATS_INTERVAL_SECONDS,
+                        ConfigDef.Type.LONG,
+                        EMIT_HEARTBEATS_INTERVAL_SECONDS_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        EMIT_HEARTBEATS_INTERVAL_SECONDS_DOC)
                 .define(
-                    HEARTBEATS_TOPIC_REPLICATION_FACTOR,
-                    ConfigDef.Type.SHORT,
-                    HEARTBEATS_TOPIC_REPLICATION_FACTOR_DEFAULT,
-                    ConfigDef.Importance.LOW,
-                    HEARTBEATS_TOPIC_REPLICATION_FACTOR_DOC);
+                        HEARTBEATS_TOPIC_REPLICATION_FACTOR,
+                        ConfigDef.Type.SHORT,
+                        HEARTBEATS_TOPIC_REPLICATION_FACTOR_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        HEARTBEATS_TOPIC_REPLICATION_FACTOR_DOC);
     }
 
     protected static final ConfigDef CONNECTOR_CONFIG_DEF = defineHeartbeatConfig(new ConfigDef(BASE_CONNECTOR_CONFIG_DEF));

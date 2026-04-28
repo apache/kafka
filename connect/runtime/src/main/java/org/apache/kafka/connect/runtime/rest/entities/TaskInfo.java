@@ -23,7 +23,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Map;
 
 public record TaskInfo(
-    @JsonProperty("id") ConnectorTaskId id,
-    @JsonProperty("config") Map<String, String> config
+@JsonProperty("id") ConnectorTaskId id,
+@JsonProperty("config") Map<String, String> config
 ) {
 }

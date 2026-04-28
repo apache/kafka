@@ -26,7 +26,8 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxToSensor;
 
 public class RebalanceListenerMetrics {
-    private RebalanceListenerMetrics() {}
+    private RebalanceListenerMetrics() {
+    }
 
     private static final String TASKS_REVOKED = "tasks-revoked";
     private static final String TASKS_ASSIGNED = "tasks-assigned";
@@ -40,7 +41,7 @@ public class RebalanceListenerMetrics {
     private static final String TASKS_LOST_MAX_LATENCY_DESCRIPTION = "The max time taken for tasks-lost rebalance listener callback";
 
     public static Sensor tasksRevokedSensor(final String threadId,
-                                            final StreamsMetricsImpl streamsMetrics) {
+        final StreamsMetricsImpl streamsMetrics) {
         return rebalanceLatencySensor(
             threadId,
             TASKS_REVOKED,
@@ -51,7 +52,7 @@ public class RebalanceListenerMetrics {
     }
 
     public static Sensor tasksAssignedSensor(final String threadId,
-                                             final StreamsMetricsImpl streamsMetrics) {
+        final StreamsMetricsImpl streamsMetrics) {
         return rebalanceLatencySensor(
             threadId,
             TASKS_ASSIGNED,
@@ -62,7 +63,7 @@ public class RebalanceListenerMetrics {
     }
 
     public static Sensor tasksLostSensor(final String threadId,
-                                         final StreamsMetricsImpl streamsMetrics) {
+        final StreamsMetricsImpl streamsMetrics) {
         return rebalanceLatencySensor(
             threadId,
             TASKS_LOST,
@@ -73,10 +74,10 @@ public class RebalanceListenerMetrics {
     }
 
     private static Sensor rebalanceLatencySensor(final String threadId,
-                                                 final String operation,
-                                                 final String avgDescription,
-                                                 final String maxDescription,
-                                                 final StreamsMetricsImpl streamsMetrics) {
+        final String operation,
+        final String avgDescription,
+        final String maxDescription,
+        final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor = streamsMetrics.threadLevelSensor(threadId, operation + LATENCY_SUFFIX, RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
         addAvgAndMaxToSensor(

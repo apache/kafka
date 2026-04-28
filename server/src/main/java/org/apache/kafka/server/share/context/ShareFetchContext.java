@@ -49,7 +49,7 @@ public abstract class ShareFetchContext {
      */
     public ShareFetchResponse throttleResponse(int throttleTimeMs) {
         return ShareFetchResponse.of(Errors.NONE, throttleTimeMs,
-                new LinkedHashMap<>(), List.of(), 0);
+            new LinkedHashMap<>(), List.of(), 0);
     }
 
     /**
@@ -65,7 +65,7 @@ public abstract class ShareFetchContext {
      * @return - The size of the response.
      */
     public abstract int responseSize(LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates,
-                              short version);
+                                     short version);
 
     /**
      * Updates the share fetch context with new partition information. Generates response data.

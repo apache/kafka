@@ -187,9 +187,9 @@ public interface Authorizer extends Configurable, Closeable {
         // Check a hard-coded name to ensure that super users are granted
         // access regardless of DENY ACLs.
         if (authorize(requestContext, Collections.singletonList(new Action(
-                op, new ResourcePattern(resourceType, "hardcode", PatternType.LITERAL),
-                0, true, false)))
-                .get(0) == AuthorizationResult.ALLOWED) {
+            op, new ResourcePattern(resourceType, "hardcode", PatternType.LITERAL),
+            0, true, false)))
+            .get(0) == AuthorizationResult.ALLOWED) {
             return AuthorizationResult.ALLOWED;
         }
 
@@ -201,15 +201,19 @@ public interface Authorizer extends Configurable, Closeable {
             resourceTypeFilter, AccessControlEntryFilter.ANY);
 
         EnumMap<PatternType, Set<String>> denyPatterns =
-            new EnumMap<>(PatternType.class) {{
+            new EnumMap<>(PatternType.class) {
+                {
                     put(PatternType.LITERAL, new HashSet<>());
                     put(PatternType.PREFIXED, new HashSet<>());
-                }};
+                }
+            };
         EnumMap<PatternType, Set<String>> allowPatterns =
-            new EnumMap<>(PatternType.class) {{
+            new EnumMap<>(PatternType.class) {
+                {
                     put(PatternType.LITERAL, new HashSet<>());
                     put(PatternType.PREFIXED, new HashSet<>());
-                }};
+                }
+            };
 
         boolean hasWildCardAllow = false;
 
@@ -223,11 +227,11 @@ public interface Authorizer extends Configurable, Closeable {
                 continue;
 
             if (!SecurityUtils.parseKafkaPrincipal(binding.entry().principal()).equals(principal)
-                    && !binding.entry().principal().equals("User:*"))
+                && !binding.entry().principal().equals("User:*"))
                 continue;
 
             if (binding.entry().operation() != op
-                    && binding.entry().operation() != AclOperation.ALL)
+                && binding.entry().operation() != AclOperation.ALL)
                 continue;
 
             if (binding.entry().permissionType() == AclPermissionType.DENY) {
@@ -273,7 +277,7 @@ public interface Authorizer extends Configurable, Closeable {
         for (Map.Entry<PatternType, Set<String>> entry : allowPatterns.entrySet()) {
             for (String allowStr : entry.getValue()) {
                 if (entry.getKey() == PatternType.LITERAL
-                        && denyPatterns.get(PatternType.LITERAL).contains(allowStr))
+                    && denyPatterns.get(PatternType.LITERAL).contains(allowStr))
                     continue;
                 StringBuilder sb = new StringBuilder();
                 boolean hasDominatedDeny = false;

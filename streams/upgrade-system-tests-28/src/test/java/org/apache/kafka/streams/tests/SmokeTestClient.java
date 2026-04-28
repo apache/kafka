@@ -171,7 +171,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         final Consumed<String, Integer> stringIntConsumed = Consumed.with(stringSerde, intSerde);
         final KStream<String, Integer> source = builder.stream("data", stringIntConsumed);
         source.filterNot((k, v) -> k.equals("flush"))
-              .to("echo", Produced.with(stringSerde, intSerde));
+            .to("echo", Produced.with(stringSerde, intSerde));
         final KStream<String, Integer> data = source.filter((key, value) -> value == null || value != END);
         data.process(SmokeTestUtil.printProcessorSupplier("data", name));
 
@@ -279,12 +279,12 @@ public class SmokeTestClient extends SmokeTestUtil {
         // test repartition
         final Agg agg = new Agg();
         cntTable.groupBy(agg.selector(), Grouped.with(stringSerde, longSerde))
-                .aggregate(agg.init(), agg.adder(), agg.remover(),
-                           Materialized.<String, Long>as(Stores.inMemoryKeyValueStore("cntByCnt"))
-                               .withKeySerde(Serdes.String())
-                               .withValueSerde(Serdes.Long()))
-                .toStream()
-                .to("tagg", Produced.with(stringSerde, longSerde));
+            .aggregate(agg.init(), agg.adder(), agg.remover(),
+                Materialized.<String, Long>as(Stores.inMemoryKeyValueStore("cntByCnt"))
+                    .withKeySerde(Serdes.String())
+                    .withValueSerde(Serdes.Long()))
+            .toStream()
+            .to("tagg", Produced.with(stringSerde, longSerde));
 
         return builder.build();
     }

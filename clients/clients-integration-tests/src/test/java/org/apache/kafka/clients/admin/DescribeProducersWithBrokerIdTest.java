@@ -44,7 +44,7 @@ public class DescribeProducersWithBrokerIdTest {
     private static final short REPLICATION_FACTOR = 3;
 
     private static final TopicPartition TOPIC_PARTITION = new TopicPartition(TOPIC_NAME, 0);
-    
+
     private final ClusterInstance clusterInstance;
 
     public DescribeProducersWithBrokerIdTest(ClusterInstance clusterInstance) {
@@ -55,7 +55,7 @@ public class DescribeProducersWithBrokerIdTest {
         producer.send(new ProducerRecord<>(TOPIC_NAME, TOPIC_PARTITION.partition(), "key-0".getBytes(), "value-0".getBytes()));
         producer.flush();
     }
-    
+
     @BeforeEach
     void setUp() throws InterruptedException {
         clusterInstance.createTopic(TOPIC_NAME, NUM_PARTITIONS, REPLICATION_FACTOR);
@@ -67,7 +67,7 @@ public class DescribeProducersWithBrokerIdTest {
             .map(Node::id)
             .toList();
     }
-    
+
     private int getNonReplicaBrokerId(Admin admin) throws Exception {
         var replicaBrokerIds = getReplicaBrokerIds(admin);
         return clusterInstance.brokerIds().stream()
@@ -75,7 +75,7 @@ public class DescribeProducersWithBrokerIdTest {
             .findFirst()
             .orElseThrow(() -> new IllegalStateException("No non-replica broker found"));
     }
-    
+
     private int getFollowerBrokerId(Admin admin) throws Exception {
         var replicaBrokerIds = getReplicaBrokerIds(admin);
         var leaderBrokerId = clusterInstance.getLeaderBrokerId(TOPIC_PARTITION);
@@ -90,16 +90,16 @@ public class DescribeProducersWithBrokerIdTest {
         try (Producer<byte[], byte[]> producer = clusterInstance.producer();
              var admin = clusterInstance.admin()) {
             sendTestRecords(producer);
-            
+
             var stateWithExplicitLeader = admin.describeProducers(
-                List.of(TOPIC_PARTITION), 
+                List.of(TOPIC_PARTITION),
                 new DescribeProducersOptions().brokerId(clusterInstance.getLeaderBrokerId(TOPIC_PARTITION))
             ).partitionResult(TOPIC_PARTITION).get();
-            
+
             var stateWithDefaultRouting = admin.describeProducers(
                 List.of(TOPIC_PARTITION)
             ).partitionResult(TOPIC_PARTITION).get();
-            
+
             assertNotNull(stateWithDefaultRouting);
             assertFalse(stateWithDefaultRouting.activeProducers().isEmpty());
             assertEquals(stateWithExplicitLeader.activeProducers(), stateWithDefaultRouting.activeProducers());
@@ -113,10 +113,10 @@ public class DescribeProducersWithBrokerIdTest {
             sendTestRecords(producer);
 
             var followerState = admin.describeProducers(
-                List.of(TOPIC_PARTITION), 
+                List.of(TOPIC_PARTITION),
                 new DescribeProducersOptions().brokerId(getFollowerBrokerId(admin))
             ).partitionResult(TOPIC_PARTITION).get();
-            
+
             var leaderState = admin.describeProducers(
                 List.of(TOPIC_PARTITION)
             ).partitionResult(TOPIC_PARTITION).get();
@@ -133,11 +133,11 @@ public class DescribeProducersWithBrokerIdTest {
              var admin = clusterInstance.admin()) {
             sendTestRecords(producer);
 
-            TestUtils.assertFutureThrows(NotLeaderOrFollowerException.class, 
+            TestUtils.assertFutureThrows(NotLeaderOrFollowerException.class,
                 admin.describeProducers(
-                    List.of(TOPIC_PARTITION), 
+                    List.of(TOPIC_PARTITION),
                     new DescribeProducersOptions().brokerId(getNonReplicaBrokerId(admin))
-                ).partitionResult(TOPIC_PARTITION)); 
+                ).partitionResult(TOPIC_PARTITION));
         }
     }
 }

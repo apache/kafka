@@ -120,9 +120,9 @@ public class BrokerRegistrationTracker implements MetadataPublisher {
         // of course, as soon as a snapshot is made, we will no longer need to worry about those
         // old metadata log entries being replayed on startup.
         if (metadataVersion.isAtLeast(MetadataVersion.IBP_3_7_IV2) &&
-                registration.directories().isEmpty()) {
+            registration.directories().isEmpty()) {
             log.info("Current directory set is empty, but MV supports JBOD. Resending " +
-                    "broker registration.");
+                "broker registration.");
             return true;
         }
         log.debug("Broker registration does not need to be resent.");

@@ -145,43 +145,43 @@ public class StreamsGraphTest {
             };
 
         final KStream<String, String> retryStream = builder.stream("retryTopic", Consumed.with(Serdes.String(), Serdes.String()))
-                .process(processorSupplier)
-                .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-                .aggregate(initializer,
-                        aggregator,
-                        Materialized.with(Serdes.String(), Serdes.String()))
-                .suppress(Suppressed.untilTimeLimit(Duration.ofSeconds(500), Suppressed.BufferConfig.maxBytes(64_000_000)))
-                .toStream()
-                .flatMap((k, v) -> new ArrayList<>());
+            .process(processorSupplier)
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+            .aggregate(initializer,
+                aggregator,
+                Materialized.with(Serdes.String(), Serdes.String()))
+            .suppress(Suppressed.untilTimeLimit(Duration.ofSeconds(500), Suppressed.BufferConfig.maxBytes(64_000_000)))
+            .toStream()
+            .flatMap((k, v) -> new ArrayList<>());
 
         final KTable<String, String> idTable = builder.stream("id-table-topic", Consumed.with(Serdes.String(), Serdes.String()))
-                .flatMap((k, v) -> new ArrayList<KeyValue<String, String>>())
-                .peek((subscriptionId, recipientId) -> System.out.println("data " + subscriptionId + " " + recipientId))
-                .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-                .aggregate(initializer,
-                        aggregator,
-                        Materialized.with(Serdes.String(), Serdes.String()));
+            .flatMap((k, v) -> new ArrayList<KeyValue<String, String>>())
+            .peek((subscriptionId, recipientId) -> System.out.println("data " + subscriptionId + " " + recipientId))
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+            .aggregate(initializer,
+                aggregator,
+                Materialized.with(Serdes.String(), Serdes.String()));
 
         final KStream<String, String> joinStream = builder.stream("internal-topic-command", Consumed.with(Serdes.String(), Serdes.String()))
-                .peek((subscriptionId, command) -> System.out.println("stdoutput"))
-                .mapValues((k, v) -> v)
-                .merge(retryStream)
-                .leftJoin(idTable, (v1, v2) -> v1 + v2,
-                        Joined.with(Serdes.String(), Serdes.String(), Serdes.String()));
+            .peek((subscriptionId, command) -> System.out.println("stdoutput"))
+            .mapValues((k, v) -> v)
+            .merge(retryStream)
+            .leftJoin(idTable, (v1, v2) -> v1 + v2,
+                Joined.with(Serdes.String(), Serdes.String(), Serdes.String()));
 
 
         joinStream.split()
-                .branch((k, v) -> v.equals("some-value"), Branched.withConsumer(ks -> ks.map(KeyValue::pair)
-                                .peek((recipientId, command) -> System.out.println("printing out"))
-                                .to("external-command", Produced.with(Serdes.String(), Serdes.String()))
-                ))
-                .defaultBranch(Branched.withConsumer(ks -> {
-                    ks.filter((k, v) -> v != null)
-                            .peek((subscriptionId, wrapper) -> System.out.println("Printing output"))
-                            .mapValues((k, v) -> v)
-                            .to("dlq-topic", Produced.with(Serdes.String(), Serdes.String()));
-                    ks.map(KeyValue::pair).to("retryTopic", Produced.with(Serdes.String(), Serdes.String()));
-                }));
+            .branch((k, v) -> v.equals("some-value"), Branched.withConsumer(ks -> ks.map(KeyValue::pair)
+                    .peek((recipientId, command) -> System.out.println("printing out"))
+                    .to("external-command", Produced.with(Serdes.String(), Serdes.String()))
+            ))
+            .defaultBranch(Branched.withConsumer(ks -> {
+                ks.filter((k, v) -> v != null)
+                    .peek((subscriptionId, wrapper) -> System.out.println("Printing output"))
+                    .mapValues((k, v) -> v)
+                    .to("dlq-topic", Produced.with(Serdes.String(), Serdes.String()));
+                ks.map(KeyValue::pair).to("retryTopic", Produced.with(Serdes.String(), Serdes.String()));
+            }));
 
         final Topology topology = builder.build(properties);
         assertEquals(expectedComplexMergeOptimizeTopology, topology.describe().toString());
@@ -193,142 +193,142 @@ public class StreamsGraphTest {
         final Topology noOptimization = getTopologyWithChangingValuesAfterChangingKey(StreamsConfig.NO_OPTIMIZATION, false);
 
         assertEquals("Topologies:\n" +
-                "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
-                "      --> KSTREAM-KEY-SELECT-0000000001\n" +
-                "    Processor: KSTREAM-KEY-SELECT-0000000001 (stores: [])\n" +
-                "      --> KSTREAM-FLATMAPVALUES-0000000010, KSTREAM-MAPVALUES-0000000002, KSTREAM-PROCESSVALUES-0000000018\n" +
-                "      <-- KSTREAM-SOURCE-0000000000\n" +
-                "    Processor: KSTREAM-FLATMAPVALUES-0000000010 (stores: [])\n" +
-                "      --> KSTREAM-FILTER-0000000014\n" +
-                "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
-                "    Processor: KSTREAM-MAPVALUES-0000000002 (stores: [])\n" +
-                "      --> KSTREAM-FILTER-0000000006\n" +
-                "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
-                "    Processor: KSTREAM-PROCESSVALUES-0000000018 (stores: [])\n" +
-                "      --> KSTREAM-FILTER-0000000022\n" +
-                "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
-                "    Processor: KSTREAM-FILTER-0000000006 (stores: [])\n" +
-                "      --> KSTREAM-SINK-0000000005\n" +
-                "      <-- KSTREAM-MAPVALUES-0000000002\n" +
-                "    Processor: KSTREAM-FILTER-0000000014 (stores: [])\n" +
-                "      --> KSTREAM-SINK-0000000013\n" +
-                "      <-- KSTREAM-FLATMAPVALUES-0000000010\n" +
-                "    Processor: KSTREAM-FILTER-0000000022 (stores: [])\n" +
-                "      --> KSTREAM-SINK-0000000021\n" +
-                "      <-- KSTREAM-PROCESSVALUES-0000000018\n" +
-                "    Sink: KSTREAM-SINK-0000000005 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition)\n" +
-                "      <-- KSTREAM-FILTER-0000000006\n" +
-                "    Sink: KSTREAM-SINK-0000000013 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition)\n" +
-                "      <-- KSTREAM-FILTER-0000000014\n" +
-                "    Sink: KSTREAM-SINK-0000000021 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000019-repartition)\n" +
-                "      <-- KSTREAM-FILTER-0000000022\n" +
-                "\n" +
-                "  Sub-topology: 1\n" +
-                "    Source: KSTREAM-SOURCE-0000000007 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition])\n" +
-                "      --> KSTREAM-AGGREGATE-0000000004\n" +
-                "    Processor: KSTREAM-AGGREGATE-0000000004 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
-                "      --> KTABLE-TOSTREAM-0000000008\n" +
-                "      <-- KSTREAM-SOURCE-0000000007\n" +
-                "    Processor: KTABLE-TOSTREAM-0000000008 (stores: [])\n" +
-                "      --> KSTREAM-SINK-0000000009\n" +
-                "      <-- KSTREAM-AGGREGATE-0000000004\n" +
-                "    Sink: KSTREAM-SINK-0000000009 (topic: output)\n" +
-                "      <-- KTABLE-TOSTREAM-0000000008\n" +
-                "\n" +
-                "  Sub-topology: 2\n" +
-                "    Source: KSTREAM-SOURCE-0000000015 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition])\n" +
-                "      --> KSTREAM-AGGREGATE-0000000012\n" +
-                "    Processor: KSTREAM-AGGREGATE-0000000012 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000011])\n" +
-                "      --> KTABLE-TOSTREAM-0000000016\n" +
-                "      <-- KSTREAM-SOURCE-0000000015\n" +
-                "    Processor: KTABLE-TOSTREAM-0000000016 (stores: [])\n" +
-                "      --> KSTREAM-SINK-0000000017\n" +
-                "      <-- KSTREAM-AGGREGATE-0000000012\n" +
-                "    Sink: KSTREAM-SINK-0000000017 (topic: windowed-output)\n" +
-                "      <-- KTABLE-TOSTREAM-0000000016\n" +
-                "\n" +
-                "  Sub-topology: 3\n" +
-                "    Source: KSTREAM-SOURCE-0000000023 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000019-repartition])\n" +
-                "      --> KSTREAM-AGGREGATE-0000000020\n" +
-                "    Processor: KSTREAM-AGGREGATE-0000000020 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000019])\n" +
-                "      --> KTABLE-TOSTREAM-0000000024\n" +
-                "      <-- KSTREAM-SOURCE-0000000023\n" +
-                "    Processor: KTABLE-TOSTREAM-0000000024 (stores: [])\n" +
-                "      --> KSTREAM-SINK-0000000025\n" +
-                "      <-- KSTREAM-AGGREGATE-0000000020\n" +
-                "    Sink: KSTREAM-SINK-0000000025 (topic: output)\n" +
-                "      <-- KTABLE-TOSTREAM-0000000024\n" +
-                "\n",
+            "   Sub-topology: 0\n" +
+            "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
+            "      --> KSTREAM-KEY-SELECT-0000000001\n" +
+            "    Processor: KSTREAM-KEY-SELECT-0000000001 (stores: [])\n" +
+            "      --> KSTREAM-FLATMAPVALUES-0000000010, KSTREAM-MAPVALUES-0000000002, KSTREAM-PROCESSVALUES-0000000018\n" +
+            "      <-- KSTREAM-SOURCE-0000000000\n" +
+            "    Processor: KSTREAM-FLATMAPVALUES-0000000010 (stores: [])\n" +
+            "      --> KSTREAM-FILTER-0000000014\n" +
+            "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
+            "    Processor: KSTREAM-MAPVALUES-0000000002 (stores: [])\n" +
+            "      --> KSTREAM-FILTER-0000000006\n" +
+            "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
+            "    Processor: KSTREAM-PROCESSVALUES-0000000018 (stores: [])\n" +
+            "      --> KSTREAM-FILTER-0000000022\n" +
+            "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
+            "    Processor: KSTREAM-FILTER-0000000006 (stores: [])\n" +
+            "      --> KSTREAM-SINK-0000000005\n" +
+            "      <-- KSTREAM-MAPVALUES-0000000002\n" +
+            "    Processor: KSTREAM-FILTER-0000000014 (stores: [])\n" +
+            "      --> KSTREAM-SINK-0000000013\n" +
+            "      <-- KSTREAM-FLATMAPVALUES-0000000010\n" +
+            "    Processor: KSTREAM-FILTER-0000000022 (stores: [])\n" +
+            "      --> KSTREAM-SINK-0000000021\n" +
+            "      <-- KSTREAM-PROCESSVALUES-0000000018\n" +
+            "    Sink: KSTREAM-SINK-0000000005 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition)\n" +
+            "      <-- KSTREAM-FILTER-0000000006\n" +
+            "    Sink: KSTREAM-SINK-0000000013 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition)\n" +
+            "      <-- KSTREAM-FILTER-0000000014\n" +
+            "    Sink: KSTREAM-SINK-0000000021 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000019-repartition)\n" +
+            "      <-- KSTREAM-FILTER-0000000022\n" +
+            "\n" +
+            "  Sub-topology: 1\n" +
+            "    Source: KSTREAM-SOURCE-0000000007 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition])\n" +
+            "      --> KSTREAM-AGGREGATE-0000000004\n" +
+            "    Processor: KSTREAM-AGGREGATE-0000000004 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
+            "      --> KTABLE-TOSTREAM-0000000008\n" +
+            "      <-- KSTREAM-SOURCE-0000000007\n" +
+            "    Processor: KTABLE-TOSTREAM-0000000008 (stores: [])\n" +
+            "      --> KSTREAM-SINK-0000000009\n" +
+            "      <-- KSTREAM-AGGREGATE-0000000004\n" +
+            "    Sink: KSTREAM-SINK-0000000009 (topic: output)\n" +
+            "      <-- KTABLE-TOSTREAM-0000000008\n" +
+            "\n" +
+            "  Sub-topology: 2\n" +
+            "    Source: KSTREAM-SOURCE-0000000015 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition])\n" +
+            "      --> KSTREAM-AGGREGATE-0000000012\n" +
+            "    Processor: KSTREAM-AGGREGATE-0000000012 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000011])\n" +
+            "      --> KTABLE-TOSTREAM-0000000016\n" +
+            "      <-- KSTREAM-SOURCE-0000000015\n" +
+            "    Processor: KTABLE-TOSTREAM-0000000016 (stores: [])\n" +
+            "      --> KSTREAM-SINK-0000000017\n" +
+            "      <-- KSTREAM-AGGREGATE-0000000012\n" +
+            "    Sink: KSTREAM-SINK-0000000017 (topic: windowed-output)\n" +
+            "      <-- KTABLE-TOSTREAM-0000000016\n" +
+            "\n" +
+            "  Sub-topology: 3\n" +
+            "    Source: KSTREAM-SOURCE-0000000023 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000019-repartition])\n" +
+            "      --> KSTREAM-AGGREGATE-0000000020\n" +
+            "    Processor: KSTREAM-AGGREGATE-0000000020 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000019])\n" +
+            "      --> KTABLE-TOSTREAM-0000000024\n" +
+            "      <-- KSTREAM-SOURCE-0000000023\n" +
+            "    Processor: KTABLE-TOSTREAM-0000000024 (stores: [])\n" +
+            "      --> KSTREAM-SINK-0000000025\n" +
+            "      <-- KSTREAM-AGGREGATE-0000000020\n" +
+            "    Sink: KSTREAM-SINK-0000000025 (topic: output)\n" +
+            "      <-- KTABLE-TOSTREAM-0000000024\n" +
+            "\n",
             noOptimization.describe().toString()
         );
         assertEquals("Topologies:\n" +
-                "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
-                "      --> KSTREAM-KEY-SELECT-0000000001\n" +
-                "    Processor: KSTREAM-KEY-SELECT-0000000001 (stores: [])\n" +
-                "      --> KSTREAM-FLATMAPVALUES-0000000010, KSTREAM-MAPVALUES-0000000002, KSTREAM-PROCESSVALUES-0000000018\n" +
-                "      <-- KSTREAM-SOURCE-0000000000\n" +
-                "    Processor: KSTREAM-FLATMAPVALUES-0000000010 (stores: [])\n" +
-                "      --> KSTREAM-FILTER-0000000014\n" +
-                "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
-                "    Processor: KSTREAM-MAPVALUES-0000000002 (stores: [])\n" +
-                "      --> KSTREAM-FILTER-0000000006\n" +
-                "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
-                "    Processor: KSTREAM-PROCESSVALUES-0000000018 (stores: [])\n" +
-                "      --> KSTREAM-FILTER-0000000022\n" +
-                "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
-                "    Processor: KSTREAM-FILTER-0000000006 (stores: [])\n" +
-                "      --> KSTREAM-SINK-0000000005\n" +
-                "      <-- KSTREAM-MAPVALUES-0000000002\n" +
-                "    Processor: KSTREAM-FILTER-0000000014 (stores: [])\n" +
-                "      --> KSTREAM-SINK-0000000013\n" +
-                "      <-- KSTREAM-FLATMAPVALUES-0000000010\n" +
-                "    Processor: KSTREAM-FILTER-0000000022 (stores: [])\n" +
-                "      --> KSTREAM-SINK-0000000021\n" +
-                "      <-- KSTREAM-PROCESSVALUES-0000000018\n" +
-                "    Sink: KSTREAM-SINK-0000000005 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition)\n" +
-                "      <-- KSTREAM-FILTER-0000000006\n" +
-                "    Sink: KSTREAM-SINK-0000000013 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition)\n" +
-                "      <-- KSTREAM-FILTER-0000000014\n" +
-                "    Sink: KSTREAM-SINK-0000000021 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000019-repartition)\n" +
-                "      <-- KSTREAM-FILTER-0000000022\n" +
-                "\n" +
-                "  Sub-topology: 1\n" +
-                "    Source: KSTREAM-SOURCE-0000000007 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition])\n" +
-                "      --> KSTREAM-AGGREGATE-0000000004\n" +
-                "    Processor: KSTREAM-AGGREGATE-0000000004 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
-                "      --> KTABLE-TOSTREAM-0000000008\n" +
-                "      <-- KSTREAM-SOURCE-0000000007\n" +
-                "    Processor: KTABLE-TOSTREAM-0000000008 (stores: [])\n" +
-                "      --> KSTREAM-SINK-0000000009\n" +
-                "      <-- KSTREAM-AGGREGATE-0000000004\n" +
-                "    Sink: KSTREAM-SINK-0000000009 (topic: output)\n" +
-                "      <-- KTABLE-TOSTREAM-0000000008\n" +
-                "\n" +
-                "  Sub-topology: 2\n" +
-                "    Source: KSTREAM-SOURCE-0000000015 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition])\n" +
-                "      --> KSTREAM-AGGREGATE-0000000012\n" +
-                "    Processor: KSTREAM-AGGREGATE-0000000012 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000011])\n" +
-                "      --> KTABLE-TOSTREAM-0000000016\n" +
-                "      <-- KSTREAM-SOURCE-0000000015\n" +
-                "    Processor: KTABLE-TOSTREAM-0000000016 (stores: [])\n" +
-                "      --> KSTREAM-SINK-0000000017\n" +
-                "      <-- KSTREAM-AGGREGATE-0000000012\n" +
-                "    Sink: KSTREAM-SINK-0000000017 (topic: windowed-output)\n" +
-                "      <-- KTABLE-TOSTREAM-0000000016\n" +
-                "\n" +
-                "  Sub-topology: 3\n" +
-                "    Source: KSTREAM-SOURCE-0000000023 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000019-repartition])\n" +
-                "      --> KSTREAM-AGGREGATE-0000000020\n" +
-                "    Processor: KSTREAM-AGGREGATE-0000000020 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000019])\n" +
-                "      --> KTABLE-TOSTREAM-0000000024\n" +
-                "      <-- KSTREAM-SOURCE-0000000023\n" +
-                "    Processor: KTABLE-TOSTREAM-0000000024 (stores: [])\n" +
-                "      --> KSTREAM-SINK-0000000025\n" +
-                "      <-- KSTREAM-AGGREGATE-0000000020\n" +
-                "    Sink: KSTREAM-SINK-0000000025 (topic: output)\n" +
-                "      <-- KTABLE-TOSTREAM-0000000024\n\n",
+            "   Sub-topology: 0\n" +
+            "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
+            "      --> KSTREAM-KEY-SELECT-0000000001\n" +
+            "    Processor: KSTREAM-KEY-SELECT-0000000001 (stores: [])\n" +
+            "      --> KSTREAM-FLATMAPVALUES-0000000010, KSTREAM-MAPVALUES-0000000002, KSTREAM-PROCESSVALUES-0000000018\n" +
+            "      <-- KSTREAM-SOURCE-0000000000\n" +
+            "    Processor: KSTREAM-FLATMAPVALUES-0000000010 (stores: [])\n" +
+            "      --> KSTREAM-FILTER-0000000014\n" +
+            "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
+            "    Processor: KSTREAM-MAPVALUES-0000000002 (stores: [])\n" +
+            "      --> KSTREAM-FILTER-0000000006\n" +
+            "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
+            "    Processor: KSTREAM-PROCESSVALUES-0000000018 (stores: [])\n" +
+            "      --> KSTREAM-FILTER-0000000022\n" +
+            "      <-- KSTREAM-KEY-SELECT-0000000001\n" +
+            "    Processor: KSTREAM-FILTER-0000000006 (stores: [])\n" +
+            "      --> KSTREAM-SINK-0000000005\n" +
+            "      <-- KSTREAM-MAPVALUES-0000000002\n" +
+            "    Processor: KSTREAM-FILTER-0000000014 (stores: [])\n" +
+            "      --> KSTREAM-SINK-0000000013\n" +
+            "      <-- KSTREAM-FLATMAPVALUES-0000000010\n" +
+            "    Processor: KSTREAM-FILTER-0000000022 (stores: [])\n" +
+            "      --> KSTREAM-SINK-0000000021\n" +
+            "      <-- KSTREAM-PROCESSVALUES-0000000018\n" +
+            "    Sink: KSTREAM-SINK-0000000005 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition)\n" +
+            "      <-- KSTREAM-FILTER-0000000006\n" +
+            "    Sink: KSTREAM-SINK-0000000013 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition)\n" +
+            "      <-- KSTREAM-FILTER-0000000014\n" +
+            "    Sink: KSTREAM-SINK-0000000021 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000019-repartition)\n" +
+            "      <-- KSTREAM-FILTER-0000000022\n" +
+            "\n" +
+            "  Sub-topology: 1\n" +
+            "    Source: KSTREAM-SOURCE-0000000007 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition])\n" +
+            "      --> KSTREAM-AGGREGATE-0000000004\n" +
+            "    Processor: KSTREAM-AGGREGATE-0000000004 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
+            "      --> KTABLE-TOSTREAM-0000000008\n" +
+            "      <-- KSTREAM-SOURCE-0000000007\n" +
+            "    Processor: KTABLE-TOSTREAM-0000000008 (stores: [])\n" +
+            "      --> KSTREAM-SINK-0000000009\n" +
+            "      <-- KSTREAM-AGGREGATE-0000000004\n" +
+            "    Sink: KSTREAM-SINK-0000000009 (topic: output)\n" +
+            "      <-- KTABLE-TOSTREAM-0000000008\n" +
+            "\n" +
+            "  Sub-topology: 2\n" +
+            "    Source: KSTREAM-SOURCE-0000000015 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition])\n" +
+            "      --> KSTREAM-AGGREGATE-0000000012\n" +
+            "    Processor: KSTREAM-AGGREGATE-0000000012 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000011])\n" +
+            "      --> KTABLE-TOSTREAM-0000000016\n" +
+            "      <-- KSTREAM-SOURCE-0000000015\n" +
+            "    Processor: KTABLE-TOSTREAM-0000000016 (stores: [])\n" +
+            "      --> KSTREAM-SINK-0000000017\n" +
+            "      <-- KSTREAM-AGGREGATE-0000000012\n" +
+            "    Sink: KSTREAM-SINK-0000000017 (topic: windowed-output)\n" +
+            "      <-- KTABLE-TOSTREAM-0000000016\n" +
+            "\n" +
+            "  Sub-topology: 3\n" +
+            "    Source: KSTREAM-SOURCE-0000000023 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000019-repartition])\n" +
+            "      --> KSTREAM-AGGREGATE-0000000020\n" +
+            "    Processor: KSTREAM-AGGREGATE-0000000020 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000019])\n" +
+            "      --> KTABLE-TOSTREAM-0000000024\n" +
+            "      <-- KSTREAM-SOURCE-0000000023\n" +
+            "    Processor: KTABLE-TOSTREAM-0000000024 (stores: [])\n" +
+            "      --> KSTREAM-SINK-0000000025\n" +
+            "      <-- KSTREAM-AGGREGATE-0000000020\n" +
+            "    Sink: KSTREAM-SINK-0000000025 (topic: output)\n" +
+            "      <-- KTABLE-TOSTREAM-0000000024\n\n",
             noOptimization.describe().toString()
         );
         assertEquals(3, getCountOfRepartitionTopicsFound(attemptedOptimize.describe().toString()));
@@ -378,7 +378,7 @@ public class StreamsGraphTest {
     }
 
     private Topology getTopologyWithChangingValuesAfterChangingKey(final String optimizeConfig,
-                                                                   final boolean enableFix) {
+        final boolean enableFix) {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "application-id");
         properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
@@ -438,81 +438,81 @@ public class StreamsGraphTest {
     }
 
     private final String expectedJoinedTopology = "Topologies:\n"
-                                            + "   Sub-topology: 0\n"
-                                            + "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n"
-                                            + "      --> KSTREAM-WINDOWED-0000000002\n"
-                                            + "    Source: KSTREAM-SOURCE-0000000001 (topics: [other-topic])\n"
-                                            + "      --> KSTREAM-WINDOWED-0000000003\n"
-                                            + "    Processor: KSTREAM-WINDOWED-0000000002 (stores: [KSTREAM-JOINTHIS-0000000004-store])\n"
-                                            + "      --> KSTREAM-JOINTHIS-0000000004\n"
-                                            + "      <-- KSTREAM-SOURCE-0000000000\n"
-                                            + "    Processor: KSTREAM-WINDOWED-0000000003 (stores: [KSTREAM-JOINOTHER-0000000005-store])\n"
-                                            + "      --> KSTREAM-JOINOTHER-0000000005\n"
-                                            + "      <-- KSTREAM-SOURCE-0000000001\n"
-                                            + "    Processor: KSTREAM-JOINOTHER-0000000005 (stores: [KSTREAM-JOINTHIS-0000000004-store])\n"
-                                            + "      --> KSTREAM-MERGE-0000000006\n"
-                                            + "      <-- KSTREAM-WINDOWED-0000000003\n"
-                                            + "    Processor: KSTREAM-JOINTHIS-0000000004 (stores: [KSTREAM-JOINOTHER-0000000005-store])\n"
-                                            + "      --> KSTREAM-MERGE-0000000006\n"
-                                            + "      <-- KSTREAM-WINDOWED-0000000002\n"
-                                            + "    Processor: KSTREAM-MERGE-0000000006 (stores: [])\n"
-                                            + "      --> none\n"
-                                            + "      <-- KSTREAM-JOINTHIS-0000000004, KSTREAM-JOINOTHER-0000000005\n\n";
+        + "   Sub-topology: 0\n"
+        + "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n"
+        + "      --> KSTREAM-WINDOWED-0000000002\n"
+        + "    Source: KSTREAM-SOURCE-0000000001 (topics: [other-topic])\n"
+        + "      --> KSTREAM-WINDOWED-0000000003\n"
+        + "    Processor: KSTREAM-WINDOWED-0000000002 (stores: [KSTREAM-JOINTHIS-0000000004-store])\n"
+        + "      --> KSTREAM-JOINTHIS-0000000004\n"
+        + "      <-- KSTREAM-SOURCE-0000000000\n"
+        + "    Processor: KSTREAM-WINDOWED-0000000003 (stores: [KSTREAM-JOINOTHER-0000000005-store])\n"
+        + "      --> KSTREAM-JOINOTHER-0000000005\n"
+        + "      <-- KSTREAM-SOURCE-0000000001\n"
+        + "    Processor: KSTREAM-JOINOTHER-0000000005 (stores: [KSTREAM-JOINTHIS-0000000004-store])\n"
+        + "      --> KSTREAM-MERGE-0000000006\n"
+        + "      <-- KSTREAM-WINDOWED-0000000003\n"
+        + "    Processor: KSTREAM-JOINTHIS-0000000004 (stores: [KSTREAM-JOINOTHER-0000000005-store])\n"
+        + "      --> KSTREAM-MERGE-0000000006\n"
+        + "      <-- KSTREAM-WINDOWED-0000000002\n"
+        + "    Processor: KSTREAM-MERGE-0000000006 (stores: [])\n"
+        + "      --> none\n"
+        + "      <-- KSTREAM-JOINTHIS-0000000004, KSTREAM-JOINOTHER-0000000005\n\n";
 
     private final String expectedJoinedFilteredTopology = "Topologies:\n"
-                                                    + "   Sub-topology: 0\n"
-                                                    + "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n"
-                                                    + "      --> KSTREAM-WINDOWED-0000000002\n"
-                                                    + "    Source: KSTREAM-SOURCE-0000000001 (topics: [other-topic])\n"
-                                                    + "      --> KSTREAM-WINDOWED-0000000003\n"
-                                                    + "    Processor: KSTREAM-WINDOWED-0000000002 (stores: [KSTREAM-JOINTHIS-0000000004-store])\n"
-                                                    + "      --> KSTREAM-JOINTHIS-0000000004\n"
-                                                    + "      <-- KSTREAM-SOURCE-0000000000\n"
-                                                    + "    Processor: KSTREAM-WINDOWED-0000000003 (stores: [KSTREAM-JOINOTHER-0000000005-store])\n"
-                                                    + "      --> KSTREAM-JOINOTHER-0000000005\n"
-                                                    + "      <-- KSTREAM-SOURCE-0000000001\n"
-                                                    + "    Processor: KSTREAM-JOINOTHER-0000000005 (stores: [KSTREAM-JOINTHIS-0000000004-store])\n"
-                                                    + "      --> KSTREAM-MERGE-0000000006\n"
-                                                    + "      <-- KSTREAM-WINDOWED-0000000003\n"
-                                                    + "    Processor: KSTREAM-JOINTHIS-0000000004 (stores: [KSTREAM-JOINOTHER-0000000005-store])\n"
-                                                    + "      --> KSTREAM-MERGE-0000000006\n"
-                                                    + "      <-- KSTREAM-WINDOWED-0000000002\n"
-                                                    + "    Processor: KSTREAM-MERGE-0000000006 (stores: [])\n"
-                                                    + "      --> KSTREAM-FILTER-0000000007\n"
-                                                    + "      <-- KSTREAM-JOINTHIS-0000000004, KSTREAM-JOINOTHER-0000000005\n"
-                                                    + "    Processor: KSTREAM-FILTER-0000000007 (stores: [])\n"
-                                                    + "      --> none\n"
-                                                    + "      <-- KSTREAM-MERGE-0000000006\n\n";
+        + "   Sub-topology: 0\n"
+        + "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n"
+        + "      --> KSTREAM-WINDOWED-0000000002\n"
+        + "    Source: KSTREAM-SOURCE-0000000001 (topics: [other-topic])\n"
+        + "      --> KSTREAM-WINDOWED-0000000003\n"
+        + "    Processor: KSTREAM-WINDOWED-0000000002 (stores: [KSTREAM-JOINTHIS-0000000004-store])\n"
+        + "      --> KSTREAM-JOINTHIS-0000000004\n"
+        + "      <-- KSTREAM-SOURCE-0000000000\n"
+        + "    Processor: KSTREAM-WINDOWED-0000000003 (stores: [KSTREAM-JOINOTHER-0000000005-store])\n"
+        + "      --> KSTREAM-JOINOTHER-0000000005\n"
+        + "      <-- KSTREAM-SOURCE-0000000001\n"
+        + "    Processor: KSTREAM-JOINOTHER-0000000005 (stores: [KSTREAM-JOINTHIS-0000000004-store])\n"
+        + "      --> KSTREAM-MERGE-0000000006\n"
+        + "      <-- KSTREAM-WINDOWED-0000000003\n"
+        + "    Processor: KSTREAM-JOINTHIS-0000000004 (stores: [KSTREAM-JOINOTHER-0000000005-store])\n"
+        + "      --> KSTREAM-MERGE-0000000006\n"
+        + "      <-- KSTREAM-WINDOWED-0000000002\n"
+        + "    Processor: KSTREAM-MERGE-0000000006 (stores: [])\n"
+        + "      --> KSTREAM-FILTER-0000000007\n"
+        + "      <-- KSTREAM-JOINTHIS-0000000004, KSTREAM-JOINOTHER-0000000005\n"
+        + "    Processor: KSTREAM-FILTER-0000000007 (stores: [])\n"
+        + "      --> none\n"
+        + "      <-- KSTREAM-MERGE-0000000006\n\n";
 
     private final String expectedFullTopology = "Topologies:\n"
-                                          + "   Sub-topology: 0\n"
-                                          + "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n"
-                                          + "      --> KSTREAM-WINDOWED-0000000002\n"
-                                          + "    Source: KSTREAM-SOURCE-0000000001 (topics: [other-topic])\n"
-                                          + "      --> KSTREAM-WINDOWED-0000000003\n"
-                                          + "    Processor: KSTREAM-WINDOWED-0000000002 (stores: [KSTREAM-JOINTHIS-0000000004-store])\n"
-                                          + "      --> KSTREAM-JOINTHIS-0000000004\n"
-                                          + "      <-- KSTREAM-SOURCE-0000000000\n"
-                                          + "    Processor: KSTREAM-WINDOWED-0000000003 (stores: [KSTREAM-JOINOTHER-0000000005-store])\n"
-                                          + "      --> KSTREAM-JOINOTHER-0000000005\n"
-                                          + "      <-- KSTREAM-SOURCE-0000000001\n"
-                                          + "    Processor: KSTREAM-JOINOTHER-0000000005 (stores: [KSTREAM-JOINTHIS-0000000004-store])\n"
-                                          + "      --> KSTREAM-MERGE-0000000006\n"
-                                          + "      <-- KSTREAM-WINDOWED-0000000003\n"
-                                          + "    Processor: KSTREAM-JOINTHIS-0000000004 (stores: [KSTREAM-JOINOTHER-0000000005-store])\n"
-                                          + "      --> KSTREAM-MERGE-0000000006\n"
-                                          + "      <-- KSTREAM-WINDOWED-0000000002\n"
-                                          + "    Processor: KSTREAM-MERGE-0000000006 (stores: [])\n"
-                                          + "      --> KSTREAM-FILTER-0000000007\n"
-                                          + "      <-- KSTREAM-JOINTHIS-0000000004, KSTREAM-JOINOTHER-0000000005\n"
-                                          + "    Processor: KSTREAM-FILTER-0000000007 (stores: [])\n"
-                                          + "      --> KSTREAM-MAPVALUES-0000000008\n"
-                                          + "      <-- KSTREAM-MERGE-0000000006\n"
-                                          + "    Processor: KSTREAM-MAPVALUES-0000000008 (stores: [])\n"
-                                          + "      --> KSTREAM-SINK-0000000009\n"
-                                          + "      <-- KSTREAM-FILTER-0000000007\n"
-                                          + "    Sink: KSTREAM-SINK-0000000009 (topic: output-topic)\n"
-                                          + "      <-- KSTREAM-MAPVALUES-0000000008\n\n";
+        + "   Sub-topology: 0\n"
+        + "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n"
+        + "      --> KSTREAM-WINDOWED-0000000002\n"
+        + "    Source: KSTREAM-SOURCE-0000000001 (topics: [other-topic])\n"
+        + "      --> KSTREAM-WINDOWED-0000000003\n"
+        + "    Processor: KSTREAM-WINDOWED-0000000002 (stores: [KSTREAM-JOINTHIS-0000000004-store])\n"
+        + "      --> KSTREAM-JOINTHIS-0000000004\n"
+        + "      <-- KSTREAM-SOURCE-0000000000\n"
+        + "    Processor: KSTREAM-WINDOWED-0000000003 (stores: [KSTREAM-JOINOTHER-0000000005-store])\n"
+        + "      --> KSTREAM-JOINOTHER-0000000005\n"
+        + "      <-- KSTREAM-SOURCE-0000000001\n"
+        + "    Processor: KSTREAM-JOINOTHER-0000000005 (stores: [KSTREAM-JOINTHIS-0000000004-store])\n"
+        + "      --> KSTREAM-MERGE-0000000006\n"
+        + "      <-- KSTREAM-WINDOWED-0000000003\n"
+        + "    Processor: KSTREAM-JOINTHIS-0000000004 (stores: [KSTREAM-JOINOTHER-0000000005-store])\n"
+        + "      --> KSTREAM-MERGE-0000000006\n"
+        + "      <-- KSTREAM-WINDOWED-0000000002\n"
+        + "    Processor: KSTREAM-MERGE-0000000006 (stores: [])\n"
+        + "      --> KSTREAM-FILTER-0000000007\n"
+        + "      <-- KSTREAM-JOINTHIS-0000000004, KSTREAM-JOINOTHER-0000000005\n"
+        + "    Processor: KSTREAM-FILTER-0000000007 (stores: [])\n"
+        + "      --> KSTREAM-MAPVALUES-0000000008\n"
+        + "      <-- KSTREAM-MERGE-0000000006\n"
+        + "    Processor: KSTREAM-MAPVALUES-0000000008 (stores: [])\n"
+        + "      --> KSTREAM-SINK-0000000009\n"
+        + "      <-- KSTREAM-FILTER-0000000007\n"
+        + "    Sink: KSTREAM-SINK-0000000009 (topic: output-topic)\n"
+        + "      <-- KSTREAM-MAPVALUES-0000000008\n\n";
 
 
     private final String expectedMergeOptimizedTopology = "Topologies:\n" +
@@ -542,107 +542,107 @@ public class StreamsGraphTest {
 
 
     private final String expectedComplexMergeOptimizeTopology = "Topologies:\n" +
-            "   Sub-topology: 0\n" +
-            "    Source: KSTREAM-SOURCE-0000000000 (topics: [retryTopic])\n" +
-            "      --> KSTREAM-PROCESSOR-0000000001\n" +
-            "    Processor: KSTREAM-PROCESSOR-0000000001 (stores: [])\n" +
-            "      --> KSTREAM-FILTER-0000000005\n" +
-            "      <-- KSTREAM-SOURCE-0000000000\n" +
-            "    Processor: KSTREAM-FILTER-0000000005 (stores: [])\n" +
-            "      --> KSTREAM-SINK-0000000004\n" +
-            "      <-- KSTREAM-PROCESSOR-0000000001\n" +
-            "    Sink: KSTREAM-SINK-0000000004 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition)\n" +
-            "      <-- KSTREAM-FILTER-0000000005\n" +
-            "\n" +
-            "  Sub-topology: 1\n" +
-            "    Source: KSTREAM-SOURCE-0000000006 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition])\n" +
-            "      --> KSTREAM-AGGREGATE-0000000003\n" +
-            "    Processor: KSTREAM-AGGREGATE-0000000003 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000002])\n" +
-            "      --> KTABLE-SUPPRESS-0000000007\n" +
-            "      <-- KSTREAM-SOURCE-0000000006\n" +
-            "    Source: KSTREAM-SOURCE-0000000019 (topics: [internal-topic-command])\n" +
-            "      --> KSTREAM-PEEK-0000000020\n" +
-            "    Processor: KTABLE-SUPPRESS-0000000007 (stores: [KTABLE-SUPPRESS-STATE-STORE-0000000008])\n" +
-            "      --> KTABLE-TOSTREAM-0000000009\n" +
-            "      <-- KSTREAM-AGGREGATE-0000000003\n" +
-            "    Processor: KSTREAM-PEEK-0000000020 (stores: [])\n" +
-            "      --> KSTREAM-MAPVALUES-0000000021\n" +
-            "      <-- KSTREAM-SOURCE-0000000019\n" +
-            "    Processor: KTABLE-TOSTREAM-0000000009 (stores: [])\n" +
-            "      --> KSTREAM-FLATMAP-0000000010\n" +
-            "      <-- KTABLE-SUPPRESS-0000000007\n" +
-            "    Processor: KSTREAM-FLATMAP-0000000010 (stores: [])\n" +
-            "      --> KSTREAM-MERGE-0000000022\n" +
-            "      <-- KTABLE-TOSTREAM-0000000009\n" +
-            "    Processor: KSTREAM-MAPVALUES-0000000021 (stores: [])\n" +
-            "      --> KSTREAM-MERGE-0000000022\n" +
-            "      <-- KSTREAM-PEEK-0000000020\n" +
-            "    Processor: KSTREAM-MERGE-0000000022 (stores: [])\n" +
-            "      --> KSTREAM-FILTER-0000000024\n" +
-            "      <-- KSTREAM-MAPVALUES-0000000021, KSTREAM-FLATMAP-0000000010\n" +
-            "    Processor: KSTREAM-FILTER-0000000024 (stores: [])\n" +
-            "      --> KSTREAM-SINK-0000000023\n" +
-            "      <-- KSTREAM-MERGE-0000000022\n" +
-            "    Sink: KSTREAM-SINK-0000000023 (topic: KSTREAM-MERGE-0000000022-repartition)\n" +
-            "      <-- KSTREAM-FILTER-0000000024\n" +
-            "\n" +
-            "  Sub-topology: 2\n" +
-            "    Source: KSTREAM-SOURCE-0000000011 (topics: [id-table-topic])\n" +
-            "      --> KSTREAM-FLATMAP-0000000012\n" +
-            "    Processor: KSTREAM-FLATMAP-0000000012 (stores: [])\n" +
-            "      --> KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition-filter\n" +
-            "      <-- KSTREAM-SOURCE-0000000011\n" +
-            "    Processor: KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition-filter (stores: [])\n" +
-            "      --> KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition-sink\n" +
-            "      <-- KSTREAM-FLATMAP-0000000012\n" +
-            "    Sink: KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition-sink (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition)\n" +
-            "      <-- KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition-filter\n" +
-            "\n" +
-            "  Sub-topology: 3\n" +
-            "    Source: KSTREAM-SOURCE-0000000025 (topics: [KSTREAM-MERGE-0000000022-repartition])\n" +
-            "      --> KSTREAM-LEFTJOIN-0000000026\n" +
-            "    Processor: KSTREAM-LEFTJOIN-0000000026 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000014])\n" +
-            "      --> KSTREAM-BRANCH-0000000027\n" +
-            "      <-- KSTREAM-SOURCE-0000000025\n" +
-            "    Processor: KSTREAM-BRANCH-0000000027 (stores: [])\n" +
-            "      --> KSTREAM-BRANCH-00000000270, KSTREAM-BRANCH-00000000271\n" +
-            "      <-- KSTREAM-LEFTJOIN-0000000026\n" +
-            "    Processor: KSTREAM-BRANCH-00000000270 (stores: [])\n" +
-            "      --> KSTREAM-FILTER-0000000033, KSTREAM-MAP-0000000037\n" +
-            "      <-- KSTREAM-BRANCH-0000000027\n" +
-            "    Processor: KSTREAM-BRANCH-00000000271 (stores: [])\n" +
-            "      --> KSTREAM-MAP-0000000029\n" +
-            "      <-- KSTREAM-BRANCH-0000000027\n" +
-            "    Processor: KSTREAM-FILTER-0000000033 (stores: [])\n" +
-            "      --> KSTREAM-PEEK-0000000034\n" +
-            "      <-- KSTREAM-BRANCH-00000000270\n" +
-            "    Source: KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition-source (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition])\n" +
-            "      --> KSTREAM-PEEK-0000000013\n" +
-            "    Processor: KSTREAM-MAP-0000000029 (stores: [])\n" +
-            "      --> KSTREAM-PEEK-0000000030\n" +
-            "      <-- KSTREAM-BRANCH-00000000271\n" +
-            "    Processor: KSTREAM-PEEK-0000000034 (stores: [])\n" +
-            "      --> KSTREAM-MAPVALUES-0000000035\n" +
-            "      <-- KSTREAM-FILTER-0000000033\n" +
-            "    Processor: KSTREAM-MAP-0000000037 (stores: [])\n" +
-            "      --> KSTREAM-SINK-0000000038\n" +
-            "      <-- KSTREAM-BRANCH-00000000270\n" +
-            "    Processor: KSTREAM-MAPVALUES-0000000035 (stores: [])\n" +
-            "      --> KSTREAM-SINK-0000000036\n" +
-            "      <-- KSTREAM-PEEK-0000000034\n" +
-            "    Processor: KSTREAM-PEEK-0000000013 (stores: [])\n" +
-            "      --> KSTREAM-AGGREGATE-0000000015\n" +
-            "      <-- KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition-source\n" +
-            "    Processor: KSTREAM-PEEK-0000000030 (stores: [])\n" +
-            "      --> KSTREAM-SINK-0000000031\n" +
-            "      <-- KSTREAM-MAP-0000000029\n" +
-            "    Processor: KSTREAM-AGGREGATE-0000000015 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000014])\n" +
-            "      --> none\n" +
-            "      <-- KSTREAM-PEEK-0000000013\n" +
-            "    Sink: KSTREAM-SINK-0000000031 (topic: external-command)\n" +
-            "      <-- KSTREAM-PEEK-0000000030\n" +
-            "    Sink: KSTREAM-SINK-0000000036 (topic: dlq-topic)\n" +
-            "      <-- KSTREAM-MAPVALUES-0000000035\n" +
-            "    Sink: KSTREAM-SINK-0000000038 (topic: retryTopic)\n" +
-            "      <-- KSTREAM-MAP-0000000037\n\n";
+        "   Sub-topology: 0\n" +
+        "    Source: KSTREAM-SOURCE-0000000000 (topics: [retryTopic])\n" +
+        "      --> KSTREAM-PROCESSOR-0000000001\n" +
+        "    Processor: KSTREAM-PROCESSOR-0000000001 (stores: [])\n" +
+        "      --> KSTREAM-FILTER-0000000005\n" +
+        "      <-- KSTREAM-SOURCE-0000000000\n" +
+        "    Processor: KSTREAM-FILTER-0000000005 (stores: [])\n" +
+        "      --> KSTREAM-SINK-0000000004\n" +
+        "      <-- KSTREAM-PROCESSOR-0000000001\n" +
+        "    Sink: KSTREAM-SINK-0000000004 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition)\n" +
+        "      <-- KSTREAM-FILTER-0000000005\n" +
+        "\n" +
+        "  Sub-topology: 1\n" +
+        "    Source: KSTREAM-SOURCE-0000000006 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition])\n" +
+        "      --> KSTREAM-AGGREGATE-0000000003\n" +
+        "    Processor: KSTREAM-AGGREGATE-0000000003 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000002])\n" +
+        "      --> KTABLE-SUPPRESS-0000000007\n" +
+        "      <-- KSTREAM-SOURCE-0000000006\n" +
+        "    Source: KSTREAM-SOURCE-0000000019 (topics: [internal-topic-command])\n" +
+        "      --> KSTREAM-PEEK-0000000020\n" +
+        "    Processor: KTABLE-SUPPRESS-0000000007 (stores: [KTABLE-SUPPRESS-STATE-STORE-0000000008])\n" +
+        "      --> KTABLE-TOSTREAM-0000000009\n" +
+        "      <-- KSTREAM-AGGREGATE-0000000003\n" +
+        "    Processor: KSTREAM-PEEK-0000000020 (stores: [])\n" +
+        "      --> KSTREAM-MAPVALUES-0000000021\n" +
+        "      <-- KSTREAM-SOURCE-0000000019\n" +
+        "    Processor: KTABLE-TOSTREAM-0000000009 (stores: [])\n" +
+        "      --> KSTREAM-FLATMAP-0000000010\n" +
+        "      <-- KTABLE-SUPPRESS-0000000007\n" +
+        "    Processor: KSTREAM-FLATMAP-0000000010 (stores: [])\n" +
+        "      --> KSTREAM-MERGE-0000000022\n" +
+        "      <-- KTABLE-TOSTREAM-0000000009\n" +
+        "    Processor: KSTREAM-MAPVALUES-0000000021 (stores: [])\n" +
+        "      --> KSTREAM-MERGE-0000000022\n" +
+        "      <-- KSTREAM-PEEK-0000000020\n" +
+        "    Processor: KSTREAM-MERGE-0000000022 (stores: [])\n" +
+        "      --> KSTREAM-FILTER-0000000024\n" +
+        "      <-- KSTREAM-MAPVALUES-0000000021, KSTREAM-FLATMAP-0000000010\n" +
+        "    Processor: KSTREAM-FILTER-0000000024 (stores: [])\n" +
+        "      --> KSTREAM-SINK-0000000023\n" +
+        "      <-- KSTREAM-MERGE-0000000022\n" +
+        "    Sink: KSTREAM-SINK-0000000023 (topic: KSTREAM-MERGE-0000000022-repartition)\n" +
+        "      <-- KSTREAM-FILTER-0000000024\n" +
+        "\n" +
+        "  Sub-topology: 2\n" +
+        "    Source: KSTREAM-SOURCE-0000000011 (topics: [id-table-topic])\n" +
+        "      --> KSTREAM-FLATMAP-0000000012\n" +
+        "    Processor: KSTREAM-FLATMAP-0000000012 (stores: [])\n" +
+        "      --> KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition-filter\n" +
+        "      <-- KSTREAM-SOURCE-0000000011\n" +
+        "    Processor: KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition-filter (stores: [])\n" +
+        "      --> KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition-sink\n" +
+        "      <-- KSTREAM-FLATMAP-0000000012\n" +
+        "    Sink: KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition-sink (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition)\n" +
+        "      <-- KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition-filter\n" +
+        "\n" +
+        "  Sub-topology: 3\n" +
+        "    Source: KSTREAM-SOURCE-0000000025 (topics: [KSTREAM-MERGE-0000000022-repartition])\n" +
+        "      --> KSTREAM-LEFTJOIN-0000000026\n" +
+        "    Processor: KSTREAM-LEFTJOIN-0000000026 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000014])\n" +
+        "      --> KSTREAM-BRANCH-0000000027\n" +
+        "      <-- KSTREAM-SOURCE-0000000025\n" +
+        "    Processor: KSTREAM-BRANCH-0000000027 (stores: [])\n" +
+        "      --> KSTREAM-BRANCH-00000000270, KSTREAM-BRANCH-00000000271\n" +
+        "      <-- KSTREAM-LEFTJOIN-0000000026\n" +
+        "    Processor: KSTREAM-BRANCH-00000000270 (stores: [])\n" +
+        "      --> KSTREAM-FILTER-0000000033, KSTREAM-MAP-0000000037\n" +
+        "      <-- KSTREAM-BRANCH-0000000027\n" +
+        "    Processor: KSTREAM-BRANCH-00000000271 (stores: [])\n" +
+        "      --> KSTREAM-MAP-0000000029\n" +
+        "      <-- KSTREAM-BRANCH-0000000027\n" +
+        "    Processor: KSTREAM-FILTER-0000000033 (stores: [])\n" +
+        "      --> KSTREAM-PEEK-0000000034\n" +
+        "      <-- KSTREAM-BRANCH-00000000270\n" +
+        "    Source: KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition-source (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition])\n" +
+        "      --> KSTREAM-PEEK-0000000013\n" +
+        "    Processor: KSTREAM-MAP-0000000029 (stores: [])\n" +
+        "      --> KSTREAM-PEEK-0000000030\n" +
+        "      <-- KSTREAM-BRANCH-00000000271\n" +
+        "    Processor: KSTREAM-PEEK-0000000034 (stores: [])\n" +
+        "      --> KSTREAM-MAPVALUES-0000000035\n" +
+        "      <-- KSTREAM-FILTER-0000000033\n" +
+        "    Processor: KSTREAM-MAP-0000000037 (stores: [])\n" +
+        "      --> KSTREAM-SINK-0000000038\n" +
+        "      <-- KSTREAM-BRANCH-00000000270\n" +
+        "    Processor: KSTREAM-MAPVALUES-0000000035 (stores: [])\n" +
+        "      --> KSTREAM-SINK-0000000036\n" +
+        "      <-- KSTREAM-PEEK-0000000034\n" +
+        "    Processor: KSTREAM-PEEK-0000000013 (stores: [])\n" +
+        "      --> KSTREAM-AGGREGATE-0000000015\n" +
+        "      <-- KSTREAM-AGGREGATE-STATE-STORE-0000000014-repartition-source\n" +
+        "    Processor: KSTREAM-PEEK-0000000030 (stores: [])\n" +
+        "      --> KSTREAM-SINK-0000000031\n" +
+        "      <-- KSTREAM-MAP-0000000029\n" +
+        "    Processor: KSTREAM-AGGREGATE-0000000015 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000014])\n" +
+        "      --> none\n" +
+        "      <-- KSTREAM-PEEK-0000000013\n" +
+        "    Sink: KSTREAM-SINK-0000000031 (topic: external-command)\n" +
+        "      <-- KSTREAM-PEEK-0000000030\n" +
+        "    Sink: KSTREAM-SINK-0000000036 (topic: dlq-topic)\n" +
+        "      <-- KSTREAM-MAPVALUES-0000000035\n" +
+        "    Sink: KSTREAM-SINK-0000000038 (topic: retryTopic)\n" +
+        "      <-- KSTREAM-MAP-0000000037\n\n";
 }

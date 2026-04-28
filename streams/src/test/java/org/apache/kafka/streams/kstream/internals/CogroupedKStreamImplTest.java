@@ -151,7 +151,7 @@ public class CogroupedKStreamImplTest {
     @ValueSource(booleans = {false, true})
     public void shouldNotHaveNullNamedOnAggregateWithMateriazlied(final boolean withHeaders) {
         setup(withHeaders);
-        assertThrows(NullPointerException.class, () -> cogroupedStream.aggregate(STRING_INITIALIZER,  null,  Materialized.as("store")));
+        assertThrows(NullPointerException.class, () -> cogroupedStream.aggregate(STRING_INITIALIZER, null, Materialized.as("store")));
     }
 
     @ParameterizedTest
@@ -240,47 +240,47 @@ public class CogroupedKStreamImplTest {
         final KGroupedStream<String, String> groupedTwo = test2.groupByKey();
 
         final KTable<String, String> customers = groupedOne
-                .cogroup(STRING_AGGREGATOR)
-                .cogroup(groupedTwo, STRING_AGGREGATOR)
-                .aggregate(STRING_INITIALIZER);
+            .cogroup(STRING_AGGREGATOR)
+            .cogroup(groupedTwo, STRING_AGGREGATOR)
+            .aggregate(STRING_INITIALIZER);
 
         customers.toStream().to(OUTPUT);
 
         final String topologyDescription = builder.build().describe().toString();
 
         assertThat(
-                topologyDescription,
-                equalTo("Topologies:\n" +
-                        "   Sub-topology: 0\n" +
-                        "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
-                        "      --> KSTREAM-MAP-0000000002\n" +
-                        "    Processor: KSTREAM-MAP-0000000002 (stores: [])\n" +
-                        "      --> repartition-test-repartition-filter\n" +
-                        "      <-- KSTREAM-SOURCE-0000000000\n" +
-                        "    Processor: repartition-test-repartition-filter (stores: [])\n" +
-                        "      --> repartition-test-repartition-sink\n" +
-                        "      <-- KSTREAM-MAP-0000000002\n" +
-                        "    Sink: repartition-test-repartition-sink (topic: repartition-test-repartition)\n" +
-                        "      <-- repartition-test-repartition-filter\n\n" +
-                        "  Sub-topology: 1\n" +
-                        "    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000008\n" +
-                        "    Source: repartition-test-repartition-source (topics: [repartition-test-repartition])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000007\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000007 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
-                        "      <-- repartition-test-repartition-source\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000008 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
-                        "      <-- KSTREAM-SOURCE-0000000001\n" +
-                        "    Processor: COGROUPKSTREAM-MERGE-0000000009 (stores: [])\n" +
-                        "      --> KTABLE-TOSTREAM-0000000010\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000007, COGROUPKSTREAM-AGGREGATE-0000000008\n" +
-                        "    Processor: KTABLE-TOSTREAM-0000000010 (stores: [])\n" +
-                        "      --> KSTREAM-SINK-0000000011\n" +
-                        "      <-- COGROUPKSTREAM-MERGE-0000000009\n" +
-                        "    Sink: KSTREAM-SINK-0000000011 (topic: output)\n" +
-                        "      <-- KTABLE-TOSTREAM-0000000010\n\n"));
+            topologyDescription,
+            equalTo("Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
+                "      --> KSTREAM-MAP-0000000002\n" +
+                "    Processor: KSTREAM-MAP-0000000002 (stores: [])\n" +
+                "      --> repartition-test-repartition-filter\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: repartition-test-repartition-filter (stores: [])\n" +
+                "      --> repartition-test-repartition-sink\n" +
+                "      <-- KSTREAM-MAP-0000000002\n" +
+                "    Sink: repartition-test-repartition-sink (topic: repartition-test-repartition)\n" +
+                "      <-- repartition-test-repartition-filter\n\n" +
+                "  Sub-topology: 1\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000008\n" +
+                "    Source: repartition-test-repartition-source (topics: [repartition-test-repartition])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000007\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000007 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
+                "      <-- repartition-test-repartition-source\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000008 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
+                "      <-- KSTREAM-SOURCE-0000000001\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000009 (stores: [])\n" +
+                "      --> KTABLE-TOSTREAM-0000000010\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000007, COGROUPKSTREAM-AGGREGATE-0000000008\n" +
+                "    Processor: KTABLE-TOSTREAM-0000000010 (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000011\n" +
+                "      <-- COGROUPKSTREAM-MERGE-0000000009\n" +
+                "    Sink: KSTREAM-SINK-0000000011 (topic: output)\n" +
+                "      <-- KTABLE-TOSTREAM-0000000010\n\n"));
     }
 
     @ParameterizedTest
@@ -295,47 +295,47 @@ public class CogroupedKStreamImplTest {
         final KGroupedStream<String, String> groupedTwo = test2.groupByKey();
 
         final KTable<String, String> customers = groupedOne
-                .cogroup(STRING_AGGREGATOR)
-                .cogroup(groupedTwo, STRING_AGGREGATOR)
-                .aggregate(STRING_INITIALIZER, Named.as("test"), Materialized.as("store"));
+            .cogroup(STRING_AGGREGATOR)
+            .cogroup(groupedTwo, STRING_AGGREGATOR)
+            .aggregate(STRING_INITIALIZER, Named.as("test"), Materialized.as("store"));
 
         customers.toStream().to(OUTPUT);
 
         final String topologyDescription = builder.build().describe().toString();
 
         assertThat(
-                topologyDescription,
-                equalTo("Topologies:\n" +
-                        "   Sub-topology: 0\n" +
-                        "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
-                        "      --> KSTREAM-MAP-0000000002\n" +
-                        "    Processor: KSTREAM-MAP-0000000002 (stores: [])\n" +
-                        "      --> store-repartition-filter\n" +
-                        "      <-- KSTREAM-SOURCE-0000000000\n" +
-                        "    Processor: store-repartition-filter (stores: [])\n" +
-                        "      --> store-repartition-sink\n" +
-                        "      <-- KSTREAM-MAP-0000000002\n" +
-                        "    Sink: store-repartition-sink (topic: store-repartition)\n" +
-                        "      <-- store-repartition-filter\n\n" +
-                        "  Sub-topology: 1\n" +
-                        "    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n" +
-                        "      --> test-cogroup-agg-1\n" +
-                        "    Source: store-repartition-source (topics: [store-repartition])\n" +
-                        "      --> test-cogroup-agg-0\n" +
-                        "    Processor: test-cogroup-agg-0 (stores: [store])\n" +
-                        "      --> test-cogroup-merge\n" +
-                        "      <-- store-repartition-source\n" +
-                        "    Processor: test-cogroup-agg-1 (stores: [store])\n" +
-                        "      --> test-cogroup-merge\n" +
-                        "      <-- KSTREAM-SOURCE-0000000001\n" +
-                        "    Processor: test-cogroup-merge (stores: [])\n" +
-                        "      --> KTABLE-TOSTREAM-0000000009\n" +
-                        "      <-- test-cogroup-agg-0, test-cogroup-agg-1\n" +
-                        "    Processor: KTABLE-TOSTREAM-0000000009 (stores: [])\n" +
-                        "      --> KSTREAM-SINK-0000000010\n" +
-                        "      <-- test-cogroup-merge\n" +
-                        "    Sink: KSTREAM-SINK-0000000010 (topic: output)\n" +
-                        "      <-- KTABLE-TOSTREAM-0000000009\n\n"));
+            topologyDescription,
+            equalTo("Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
+                "      --> KSTREAM-MAP-0000000002\n" +
+                "    Processor: KSTREAM-MAP-0000000002 (stores: [])\n" +
+                "      --> store-repartition-filter\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: store-repartition-filter (stores: [])\n" +
+                "      --> store-repartition-sink\n" +
+                "      <-- KSTREAM-MAP-0000000002\n" +
+                "    Sink: store-repartition-sink (topic: store-repartition)\n" +
+                "      <-- store-repartition-filter\n\n" +
+                "  Sub-topology: 1\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n" +
+                "      --> test-cogroup-agg-1\n" +
+                "    Source: store-repartition-source (topics: [store-repartition])\n" +
+                "      --> test-cogroup-agg-0\n" +
+                "    Processor: test-cogroup-agg-0 (stores: [store])\n" +
+                "      --> test-cogroup-merge\n" +
+                "      <-- store-repartition-source\n" +
+                "    Processor: test-cogroup-agg-1 (stores: [store])\n" +
+                "      --> test-cogroup-merge\n" +
+                "      <-- KSTREAM-SOURCE-0000000001\n" +
+                "    Processor: test-cogroup-merge (stores: [])\n" +
+                "      --> KTABLE-TOSTREAM-0000000009\n" +
+                "      <-- test-cogroup-agg-0, test-cogroup-agg-1\n" +
+                "    Processor: KTABLE-TOSTREAM-0000000009 (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000010\n" +
+                "      <-- test-cogroup-merge\n" +
+                "    Sink: KSTREAM-SINK-0000000010 (topic: output)\n" +
+                "      <-- KTABLE-TOSTREAM-0000000009\n\n"));
     }
 
     @ParameterizedTest
@@ -351,14 +351,14 @@ public class CogroupedKStreamImplTest {
         final KGroupedStream<String, String> groupedTwo = stream2.groupByKey();
 
         final KTable<String, String> cogroupedTwo = groupedOne
-                .cogroup(STRING_AGGREGATOR)
-                .cogroup(groupedTwo, STRING_AGGREGATOR)
-                .aggregate(STRING_INITIALIZER);
+            .cogroup(STRING_AGGREGATOR)
+            .cogroup(groupedTwo, STRING_AGGREGATOR)
+            .aggregate(STRING_INITIALIZER);
 
         final KTable<String, String> cogroupedOne = groupedOne
-                .cogroup(STRING_AGGREGATOR)
-                .cogroup(groupedTwo, STRING_AGGREGATOR)
-                .aggregate(STRING_INITIALIZER);
+            .cogroup(STRING_AGGREGATOR)
+            .cogroup(groupedTwo, STRING_AGGREGATOR)
+            .aggregate(STRING_INITIALIZER);
 
         cogroupedOne.toStream().to(OUTPUT);
         cogroupedTwo.toStream().to("OUTPUT2");
@@ -366,59 +366,59 @@ public class CogroupedKStreamImplTest {
         final String topologyDescription = builder.build().describe().toString();
 
         assertThat(
-                topologyDescription,
-                equalTo("Topologies:\n" +
-                        "   Sub-topology: 0\n" +
-                        "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
-                        "      --> KSTREAM-MAP-0000000002\n" +
-                        "    Processor: KSTREAM-MAP-0000000002 (stores: [])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-filter, COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter\n" +
-                        "      <-- KSTREAM-SOURCE-0000000000\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter (stores: [])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-sink\n" +
-                        "      <-- KSTREAM-MAP-0000000002\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-filter (stores: [])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-sink\n" +
-                        "      <-- KSTREAM-MAP-0000000002\n" +
-                        "    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition)\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter\n" +
-                        "    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition)\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-filter\n\n" +
-                        "  Sub-topology: 1\n" +
-                        "    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000008, COGROUPKSTREAM-AGGREGATE-0000000015\n" +
-                        "    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000007\n" +
-                        "    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000014\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000007 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000008 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
-                        "      <-- KSTREAM-SOURCE-0000000001\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000014 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000016\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-source\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000015 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000016\n" +
-                        "      <-- KSTREAM-SOURCE-0000000001\n" +
-                        "    Processor: COGROUPKSTREAM-MERGE-0000000009 (stores: [])\n" +
-                        "      --> KTABLE-TOSTREAM-0000000019\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000007, COGROUPKSTREAM-AGGREGATE-0000000008\n" +
-                        "    Processor: COGROUPKSTREAM-MERGE-0000000016 (stores: [])\n" +
-                        "      --> KTABLE-TOSTREAM-0000000017\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000014, COGROUPKSTREAM-AGGREGATE-0000000015\n" +
-                        "    Processor: KTABLE-TOSTREAM-0000000017 (stores: [])\n" +
-                        "      --> KSTREAM-SINK-0000000018\n" +
-                        "      <-- COGROUPKSTREAM-MERGE-0000000016\n" +
-                        "    Processor: KTABLE-TOSTREAM-0000000019 (stores: [])\n" +
-                        "      --> KSTREAM-SINK-0000000020\n" +
-                        "      <-- COGROUPKSTREAM-MERGE-0000000009\n" +
-                        "    Sink: KSTREAM-SINK-0000000018 (topic: output)\n" +
-                        "      <-- KTABLE-TOSTREAM-0000000017\n" +
-                        "    Sink: KSTREAM-SINK-0000000020 (topic: OUTPUT2)\n" +
-                        "      <-- KTABLE-TOSTREAM-0000000019\n\n"));
+            topologyDescription,
+            equalTo("Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
+                "      --> KSTREAM-MAP-0000000002\n" +
+                "    Processor: KSTREAM-MAP-0000000002 (stores: [])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-filter, COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter (stores: [])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-sink\n" +
+                "      <-- KSTREAM-MAP-0000000002\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-filter (stores: [])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-sink\n" +
+                "      <-- KSTREAM-MAP-0000000002\n" +
+                "    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition)\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter\n" +
+                "    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition)\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-filter\n\n" +
+                "  Sub-topology: 1\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000008, COGROUPKSTREAM-AGGREGATE-0000000015\n" +
+                "    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000007\n" +
+                "    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000014\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000007 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000008 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
+                "      <-- KSTREAM-SOURCE-0000000001\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000014 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000016\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition-source\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000015 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000016\n" +
+                "      <-- KSTREAM-SOURCE-0000000001\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000009 (stores: [])\n" +
+                "      --> KTABLE-TOSTREAM-0000000019\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000007, COGROUPKSTREAM-AGGREGATE-0000000008\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000016 (stores: [])\n" +
+                "      --> KTABLE-TOSTREAM-0000000017\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000014, COGROUPKSTREAM-AGGREGATE-0000000015\n" +
+                "    Processor: KTABLE-TOSTREAM-0000000017 (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000018\n" +
+                "      <-- COGROUPKSTREAM-MERGE-0000000016\n" +
+                "    Processor: KTABLE-TOSTREAM-0000000019 (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000020\n" +
+                "      <-- COGROUPKSTREAM-MERGE-0000000009\n" +
+                "    Sink: KSTREAM-SINK-0000000018 (topic: output)\n" +
+                "      <-- KTABLE-TOSTREAM-0000000017\n" +
+                "    Sink: KSTREAM-SINK-0000000020 (topic: OUTPUT2)\n" +
+                "      <-- KTABLE-TOSTREAM-0000000019\n\n"));
     }
 
     @ParameterizedTest
@@ -435,14 +435,14 @@ public class CogroupedKStreamImplTest {
         final KGroupedStream<String, String> groupedTwo = stream2.groupByKey();
 
         final KTable<String, String> cogroupedTwo = groupedOne
-                .cogroup(STRING_AGGREGATOR)
-                .cogroup(groupedTwo, STRING_AGGREGATOR)
-                .aggregate(STRING_INITIALIZER);
+            .cogroup(STRING_AGGREGATOR)
+            .cogroup(groupedTwo, STRING_AGGREGATOR)
+            .aggregate(STRING_INITIALIZER);
 
         final KTable<String, String> cogroupedOne = groupedOne
-                .cogroup(STRING_AGGREGATOR)
-                .cogroup(groupedTwo, STRING_AGGREGATOR)
-                .aggregate(STRING_INITIALIZER);
+            .cogroup(STRING_AGGREGATOR)
+            .cogroup(groupedTwo, STRING_AGGREGATOR)
+            .aggregate(STRING_INITIALIZER);
 
         cogroupedOne.toStream().to(OUTPUT);
         cogroupedTwo.toStream().to("OUTPUT2");
@@ -450,52 +450,52 @@ public class CogroupedKStreamImplTest {
         final String topologyDescription = builder.build(props).describe().toString();
 
         assertThat(
-                topologyDescription,
-                equalTo("Topologies:\n" +
-                        "   Sub-topology: 0\n" +
-                        "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
-                        "      --> KSTREAM-MAP-0000000002\n" +
-                        "    Processor: KSTREAM-MAP-0000000002 (stores: [])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter\n" +
-                        "      <-- KSTREAM-SOURCE-0000000000\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter (stores: [])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-sink\n" +
-                        "      <-- KSTREAM-MAP-0000000002\n" +
-                        "    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition)\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter\n\n" +
-                        "  Sub-topology: 1\n" +
-                        "    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000014, COGROUPKSTREAM-AGGREGATE-0000000007\n" +
-                        "    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000015, COGROUPKSTREAM-AGGREGATE-0000000008\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000007 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000008 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
-                        "      <-- KSTREAM-SOURCE-0000000001\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000014 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000016\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000015 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000016\n" +
-                        "      <-- KSTREAM-SOURCE-0000000001\n" +
-                        "    Processor: COGROUPKSTREAM-MERGE-0000000009 (stores: [])\n" +
-                        "      --> KTABLE-TOSTREAM-0000000019\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000007, COGROUPKSTREAM-AGGREGATE-0000000008\n" +
-                        "    Processor: COGROUPKSTREAM-MERGE-0000000016 (stores: [])\n" +
-                        "      --> KTABLE-TOSTREAM-0000000017\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000014, COGROUPKSTREAM-AGGREGATE-0000000015\n" +
-                        "    Processor: KTABLE-TOSTREAM-0000000017 (stores: [])\n" +
-                        "      --> KSTREAM-SINK-0000000018\n" +
-                        "      <-- COGROUPKSTREAM-MERGE-0000000016\n" +
-                        "    Processor: KTABLE-TOSTREAM-0000000019 (stores: [])\n" +
-                        "      --> KSTREAM-SINK-0000000020\n" +
-                        "      <-- COGROUPKSTREAM-MERGE-0000000009\n" +
-                        "    Sink: KSTREAM-SINK-0000000018 (topic: output)\n" +
-                        "      <-- KTABLE-TOSTREAM-0000000017\n" +
-                        "    Sink: KSTREAM-SINK-0000000020 (topic: OUTPUT2)\n" +
-                        "      <-- KTABLE-TOSTREAM-0000000019\n\n"));
+            topologyDescription,
+            equalTo("Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
+                "      --> KSTREAM-MAP-0000000002\n" +
+                "    Processor: KSTREAM-MAP-0000000002 (stores: [])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter (stores: [])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-sink\n" +
+                "      <-- KSTREAM-MAP-0000000002\n" +
+                "    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition)\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter\n\n" +
+                "  Sub-topology: 1\n" +
+                "    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000014, COGROUPKSTREAM-AGGREGATE-0000000007\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000015, COGROUPKSTREAM-AGGREGATE-0000000008\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000007 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000008 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
+                "      <-- KSTREAM-SOURCE-0000000001\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000014 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000016\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000015 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000010])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000016\n" +
+                "      <-- KSTREAM-SOURCE-0000000001\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000009 (stores: [])\n" +
+                "      --> KTABLE-TOSTREAM-0000000019\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000007, COGROUPKSTREAM-AGGREGATE-0000000008\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000016 (stores: [])\n" +
+                "      --> KTABLE-TOSTREAM-0000000017\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000014, COGROUPKSTREAM-AGGREGATE-0000000015\n" +
+                "    Processor: KTABLE-TOSTREAM-0000000017 (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000018\n" +
+                "      <-- COGROUPKSTREAM-MERGE-0000000016\n" +
+                "    Processor: KTABLE-TOSTREAM-0000000019 (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000020\n" +
+                "      <-- COGROUPKSTREAM-MERGE-0000000009\n" +
+                "    Sink: KSTREAM-SINK-0000000018 (topic: output)\n" +
+                "      <-- KTABLE-TOSTREAM-0000000017\n" +
+                "    Sink: KSTREAM-SINK-0000000020 (topic: OUTPUT2)\n" +
+                "      <-- KTABLE-TOSTREAM-0000000019\n\n"));
     }
 
     @ParameterizedTest
@@ -513,62 +513,62 @@ public class CogroupedKStreamImplTest {
         final KGroupedStream<String, String> groupedThree = stream3.groupByKey();
 
         groupedOne.cogroup(STRING_AGGREGATOR)
-                .cogroup(groupedThree, STRING_AGGREGATOR)
-                .aggregate(STRING_INITIALIZER);
+            .cogroup(groupedThree, STRING_AGGREGATOR)
+            .aggregate(STRING_INITIALIZER);
 
         groupedOne.cogroup(STRING_AGGREGATOR)
-                .cogroup(groupedTwo, STRING_AGGREGATOR)
-                .aggregate(STRING_INITIALIZER);
+            .cogroup(groupedTwo, STRING_AGGREGATOR)
+            .aggregate(STRING_INITIALIZER);
 
         final String topologyDescription = builder.build().describe().toString();
 
         assertThat(
-                topologyDescription,
-                equalTo("Topologies:\n" +
-                        "   Sub-topology: 0\n" +
-                        "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
-                        "      --> KSTREAM-MAP-0000000003\n" +
-                        "    Processor: KSTREAM-MAP-0000000003 (stores: [])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-filter, COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition-filter\n" +
-                        "      <-- KSTREAM-SOURCE-0000000000\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-filter (stores: [])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-sink\n" +
-                        "      <-- KSTREAM-MAP-0000000003\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition-filter (stores: [])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition-sink\n" +
-                        "      <-- KSTREAM-MAP-0000000003\n" +
-                        "    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition)\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-filter\n" +
-                        "    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition)\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition-filter\n\n" +
-                        "  Sub-topology: 1\n" +
-                        "    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000015\n" +
-                        "    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000016\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000015 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000017\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition-source\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000016 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000017\n" +
-                        "      <-- KSTREAM-SOURCE-0000000001\n" +
-                        "    Processor: COGROUPKSTREAM-MERGE-0000000017 (stores: [])\n" +
-                        "      --> none\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000015, COGROUPKSTREAM-AGGREGATE-0000000016\n\n" +
-                        "  Sub-topology: 2\n" +
-                        "    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000008\n" +
-                        "    Source: KSTREAM-SOURCE-0000000002 (topics: [three])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000009\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000008 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000010\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-source\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000009 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000010\n" +
-                        "      <-- KSTREAM-SOURCE-0000000002\n" +
-                        "    Processor: COGROUPKSTREAM-MERGE-0000000010 (stores: [])\n" +
-                        "      --> none\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000008, COGROUPKSTREAM-AGGREGATE-0000000009\n\n"));
+            topologyDescription,
+            equalTo("Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
+                "      --> KSTREAM-MAP-0000000003\n" +
+                "    Processor: KSTREAM-MAP-0000000003 (stores: [])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-filter, COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition-filter\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-filter (stores: [])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-sink\n" +
+                "      <-- KSTREAM-MAP-0000000003\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition-filter (stores: [])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition-sink\n" +
+                "      <-- KSTREAM-MAP-0000000003\n" +
+                "    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition)\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-filter\n" +
+                "    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition)\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition-filter\n\n" +
+                "  Sub-topology: 1\n" +
+                "    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000015\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000016\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000015 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000017\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011-repartition-source\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000016 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000017\n" +
+                "      <-- KSTREAM-SOURCE-0000000001\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000017 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000015, COGROUPKSTREAM-AGGREGATE-0000000016\n\n" +
+                "  Sub-topology: 2\n" +
+                "    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000008\n" +
+                "    Source: KSTREAM-SOURCE-0000000002 (topics: [three])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000009\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000008 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000010\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-source\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000009 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000010\n" +
+                "      <-- KSTREAM-SOURCE-0000000002\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000010 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000008, COGROUPKSTREAM-AGGREGATE-0000000009\n\n"));
     }
 
     @ParameterizedTest
@@ -589,54 +589,54 @@ public class CogroupedKStreamImplTest {
         final KGroupedStream<String, String> groupedThree = stream3.groupByKey();
 
         groupedOne.cogroup(STRING_AGGREGATOR)
-                .cogroup(groupedThree, STRING_AGGREGATOR)
-                .aggregate(STRING_INITIALIZER);
+            .cogroup(groupedThree, STRING_AGGREGATOR)
+            .aggregate(STRING_INITIALIZER);
 
         groupedOne.cogroup(STRING_AGGREGATOR)
-                .cogroup(groupedTwo, STRING_AGGREGATOR)
-                .aggregate(STRING_INITIALIZER);
+            .cogroup(groupedTwo, STRING_AGGREGATOR)
+            .aggregate(STRING_INITIALIZER);
 
         final String topologyDescription = builder.build(properties).describe().toString();
 
         assertThat(
-                topologyDescription,
-                equalTo("Topologies:\n" +
-                        "   Sub-topology: 0\n" +
-                        "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
-                        "      --> KSTREAM-MAP-0000000003\n" +
-                        "    Processor: KSTREAM-MAP-0000000003 (stores: [])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-filter\n" +
-                        "      <-- KSTREAM-SOURCE-0000000000\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-filter (stores: [])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-sink\n" +
-                        "      <-- KSTREAM-MAP-0000000003\n" +
-                        "    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition)\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-filter\n\n" +
-                        "  Sub-topology: 1\n" +
-                        "    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000008, COGROUPKSTREAM-AGGREGATE-0000000015\n" +
-                        "    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000016\n" +
-                        "    Source: KSTREAM-SOURCE-0000000002 (topics: [three])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000009\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000008 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000010\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-source\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000009 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000010\n" +
-                        "      <-- KSTREAM-SOURCE-0000000002\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000015 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000017\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-source\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000016 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000017\n" +
-                        "      <-- KSTREAM-SOURCE-0000000001\n" +
-                        "    Processor: COGROUPKSTREAM-MERGE-0000000010 (stores: [])\n" +
-                        "      --> none\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000008, COGROUPKSTREAM-AGGREGATE-0000000009\n" +
-                        "    Processor: COGROUPKSTREAM-MERGE-0000000017 (stores: [])\n" +
-                        "      --> none\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000015, COGROUPKSTREAM-AGGREGATE-0000000016\n\n"));
+            topologyDescription,
+            equalTo("Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
+                "      --> KSTREAM-MAP-0000000003\n" +
+                "    Processor: KSTREAM-MAP-0000000003 (stores: [])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-filter\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-filter (stores: [])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-sink\n" +
+                "      <-- KSTREAM-MAP-0000000003\n" +
+                "    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition)\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-filter\n\n" +
+                "  Sub-topology: 1\n" +
+                "    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000008, COGROUPKSTREAM-AGGREGATE-0000000015\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000016\n" +
+                "    Source: KSTREAM-SOURCE-0000000002 (topics: [three])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000009\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000008 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000010\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-source\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000009 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000010\n" +
+                "      <-- KSTREAM-SOURCE-0000000002\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000015 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000017\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000004-repartition-source\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000016 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000011])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000017\n" +
+                "      <-- KSTREAM-SOURCE-0000000001\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000010 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000008, COGROUPKSTREAM-AGGREGATE-0000000009\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000017 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000015, COGROUPKSTREAM-AGGREGATE-0000000016\n\n"));
     }
 
     @ParameterizedTest
@@ -652,52 +652,52 @@ public class CogroupedKStreamImplTest {
         final KGroupedStream<String, String> groupedTwo = stream2.groupByKey();
 
         groupedOne.cogroup(STRING_AGGREGATOR)
-                .cogroup(groupedTwo, STRING_AGGREGATOR)
-                .aggregate(STRING_INITIALIZER);
+            .cogroup(groupedTwo, STRING_AGGREGATOR)
+            .aggregate(STRING_INITIALIZER);
 
         groupedOne.aggregate(STRING_INITIALIZER, STRING_AGGREGATOR);
 
         final String topologyDescription = builder.build().describe().toString();
 
         assertThat(
-                topologyDescription,
-                equalTo("Topologies:\n" +
-                        "   Sub-topology: 0\n" +
-                        "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
-                        "      --> KSTREAM-MAP-0000000002\n" +
-                        "    Processor: KSTREAM-MAP-0000000002 (stores: [])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter, KSTREAM-FILTER-0000000013\n" +
-                        "      <-- KSTREAM-SOURCE-0000000000\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter (stores: [])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-sink\n" +
-                        "      <-- KSTREAM-MAP-0000000002\n" +
-                        "    Processor: KSTREAM-FILTER-0000000013 (stores: [])\n" +
-                        "      --> KSTREAM-SINK-0000000012\n" +
-                        "      <-- KSTREAM-MAP-0000000002\n" +
-                        "    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition)\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter\n" +
-                        "    Sink: KSTREAM-SINK-0000000012 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition)\n" +
-                        "      <-- KSTREAM-FILTER-0000000013\n\n" +
-                        "  Sub-topology: 1\n" +
-                        "    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000007\n" +
-                        "    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000008\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000007 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000008 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
-                        "      <-- KSTREAM-SOURCE-0000000001\n" +
-                        "    Processor: COGROUPKSTREAM-MERGE-0000000009 (stores: [])\n" +
-                        "      --> none\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000007, COGROUPKSTREAM-AGGREGATE-0000000008\n\n" +
-                        "  Sub-topology: 2\n" +
-                        "    Source: KSTREAM-SOURCE-0000000014 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition])\n" +
-                        "      --> KSTREAM-AGGREGATE-0000000011\n" +
-                        "    Processor: KSTREAM-AGGREGATE-0000000011 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000010])\n" +
-                        "      --> none\n" +
-                        "      <-- KSTREAM-SOURCE-0000000014\n\n"));
+            topologyDescription,
+            equalTo("Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
+                "      --> KSTREAM-MAP-0000000002\n" +
+                "    Processor: KSTREAM-MAP-0000000002 (stores: [])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter, KSTREAM-FILTER-0000000013\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter (stores: [])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-sink\n" +
+                "      <-- KSTREAM-MAP-0000000002\n" +
+                "    Processor: KSTREAM-FILTER-0000000013 (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000012\n" +
+                "      <-- KSTREAM-MAP-0000000002\n" +
+                "    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition)\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter\n" +
+                "    Sink: KSTREAM-SINK-0000000012 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition)\n" +
+                "      <-- KSTREAM-FILTER-0000000013\n\n" +
+                "  Sub-topology: 1\n" +
+                "    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000007\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000008\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000007 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000008 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
+                "      <-- KSTREAM-SOURCE-0000000001\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000009 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000007, COGROUPKSTREAM-AGGREGATE-0000000008\n\n" +
+                "  Sub-topology: 2\n" +
+                "    Source: KSTREAM-SOURCE-0000000014 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000010-repartition])\n" +
+                "      --> KSTREAM-AGGREGATE-0000000011\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000011 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000010])\n" +
+                "      --> none\n" +
+                "      <-- KSTREAM-SOURCE-0000000014\n\n"));
     }
 
     @ParameterizedTest
@@ -716,44 +716,44 @@ public class CogroupedKStreamImplTest {
         final KGroupedStream<String, String> groupedTwo = stream2.groupByKey();
 
         groupedOne.cogroup(STRING_AGGREGATOR)
-                .cogroup(groupedTwo, STRING_AGGREGATOR)
-                .aggregate(STRING_INITIALIZER);
+            .cogroup(groupedTwo, STRING_AGGREGATOR)
+            .aggregate(STRING_INITIALIZER);
 
         groupedOne.aggregate(STRING_INITIALIZER, STRING_AGGREGATOR);
 
         final String topologyDescription = builder.build(properties).describe().toString();
 
         assertThat(
-                topologyDescription,
-                equalTo("Topologies:\n" +
-                        "   Sub-topology: 0\n" +
-                        "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
-                        "      --> KSTREAM-MAP-0000000002\n" +
-                        "    Processor: KSTREAM-MAP-0000000002 (stores: [])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter\n" +
-                        "      <-- KSTREAM-SOURCE-0000000000\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter (stores: [])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-sink\n" +
-                        "      <-- KSTREAM-MAP-0000000002\n" +
-                        "    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition)\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter\n\n" +
-                        "  Sub-topology: 1\n" +
-                        "    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000007, KSTREAM-AGGREGATE-0000000011\n" +
-                        "    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000008\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000007 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000008 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
-                        "      <-- KSTREAM-SOURCE-0000000001\n" +
-                        "    Processor: COGROUPKSTREAM-MERGE-0000000009 (stores: [])\n" +
-                        "      --> none\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000007, COGROUPKSTREAM-AGGREGATE-0000000008\n" +
-                        "    Processor: KSTREAM-AGGREGATE-0000000011 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000010])\n" +
-                        "      --> none\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source\n\n"));
+            topologyDescription,
+            equalTo("Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
+                "      --> KSTREAM-MAP-0000000002\n" +
+                "    Processor: KSTREAM-MAP-0000000002 (stores: [])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter (stores: [])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-sink\n" +
+                "      <-- KSTREAM-MAP-0000000002\n" +
+                "    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition)\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-filter\n\n" +
+                "  Sub-topology: 1\n" +
+                "    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000007, KSTREAM-AGGREGATE-0000000011\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000008\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000007 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000008 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000009\n" +
+                "      <-- KSTREAM-SOURCE-0000000001\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000009 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000007, COGROUPKSTREAM-AGGREGATE-0000000008\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000011 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000010])\n" +
+                "      --> none\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition-source\n\n"));
     }
 
     @ParameterizedTest
@@ -776,66 +776,66 @@ public class CogroupedKStreamImplTest {
 
 
         groupedOne.cogroup(STRING_AGGREGATOR)
-                .cogroup(groupedTwo, STRING_AGGREGATOR)
-                .aggregate(STRING_INITIALIZER);
+            .cogroup(groupedTwo, STRING_AGGREGATOR)
+            .aggregate(STRING_INITIALIZER);
 
         groupedThree.cogroup(STRING_AGGREGATOR)
-                .cogroup(groupedFour, STRING_AGGREGATOR)
-                .aggregate(STRING_INITIALIZER);
+            .cogroup(groupedFour, STRING_AGGREGATOR)
+            .aggregate(STRING_INITIALIZER);
 
 
         final String topologyDescription = builder.build(properties).describe().toString();
 
         assertThat(
-                topologyDescription,
-                equalTo("Topologies:\n" +
-                        "   Sub-topology: 0\n" +
-                        "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
-                        "      --> KSTREAM-MAP-0000000003, KSTREAM-MAP-0000000004\n" +
-                        "    Processor: KSTREAM-MAP-0000000003 (stores: [])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition-filter\n" +
-                        "      <-- KSTREAM-SOURCE-0000000000\n" +
-                        "    Processor: KSTREAM-MAP-0000000004 (stores: [])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition-filter\n" +
-                        "      <-- KSTREAM-SOURCE-0000000000\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition-filter (stores: [])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition-sink\n" +
-                        "      <-- KSTREAM-MAP-0000000003\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition-filter (stores: [])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition-sink\n" +
-                        "      <-- KSTREAM-MAP-0000000004\n" +
-                        "    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition)\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition-filter\n" +
-                        "    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition)\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition-filter\n\n" +
-                        "  Sub-topology: 1\n" +
-                        "    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000009\n" +
-                        "    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000010\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000009 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000011\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition-source\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000010 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000011\n" +
-                        "      <-- KSTREAM-SOURCE-0000000001\n" +
-                        "    Processor: COGROUPKSTREAM-MERGE-0000000011 (stores: [])\n" +
-                        "      --> none\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000009, COGROUPKSTREAM-AGGREGATE-0000000010\n\n" +
-                        "  Sub-topology: 2\n" +
-                        "    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000017\n" +
-                        "    Source: KSTREAM-SOURCE-0000000002 (topics: [three])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000016\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000016 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000018\n" +
-                        "      <-- KSTREAM-SOURCE-0000000002\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000017 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000018\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition-source\n" +
-                        "    Processor: COGROUPKSTREAM-MERGE-0000000018 (stores: [])\n" +
-                        "      --> none\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000016, COGROUPKSTREAM-AGGREGATE-0000000017\n\n"));
+            topologyDescription,
+            equalTo("Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
+                "      --> KSTREAM-MAP-0000000003, KSTREAM-MAP-0000000004\n" +
+                "    Processor: KSTREAM-MAP-0000000003 (stores: [])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition-filter\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: KSTREAM-MAP-0000000004 (stores: [])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition-filter\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition-filter (stores: [])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition-sink\n" +
+                "      <-- KSTREAM-MAP-0000000003\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition-filter (stores: [])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition-sink\n" +
+                "      <-- KSTREAM-MAP-0000000004\n" +
+                "    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition)\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition-filter\n" +
+                "    Sink: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition-sink (topic: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition)\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition-filter\n\n" +
+                "  Sub-topology: 1\n" +
+                "    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000009\n" +
+                "    Source: KSTREAM-SOURCE-0000000001 (topics: [two])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000010\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000009 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000011\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition-source\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000010 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000005])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000011\n" +
+                "      <-- KSTREAM-SOURCE-0000000001\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000011 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000009, COGROUPKSTREAM-AGGREGATE-0000000010\n\n" +
+                "  Sub-topology: 2\n" +
+                "    Source: COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition-source (topics: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000017\n" +
+                "    Source: KSTREAM-SOURCE-0000000002 (topics: [three])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000016\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000016 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000018\n" +
+                "      <-- KSTREAM-SOURCE-0000000002\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000017 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000018\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition-source\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000018 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000016, COGROUPKSTREAM-AGGREGATE-0000000017\n\n"));
     }
 
     @ParameterizedTest
@@ -857,34 +857,34 @@ public class CogroupedKStreamImplTest {
         final String topologyDescription = builder.build(properties).describe().toString();
 
         assertThat(
-                topologyDescription,
-                equalTo("Topologies:\n" +
-                        "   Sub-topology: 0\n" +
-                        "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
-                        "      --> KSTREAM-MAP-0000000001\n" +
-                        "    Processor: KSTREAM-MAP-0000000001 (stores: [])\n" +
-                        "      --> foo-repartition-filter\n" +
-                        "      <-- KSTREAM-SOURCE-0000000000\n" +
-                        "    Processor: foo-repartition-filter (stores: [])\n" +
-                        "      --> foo-repartition-sink\n" +
-                        "      <-- KSTREAM-MAP-0000000001\n" +
-                        "    Sink: foo-repartition-sink (topic: foo-repartition)\n" +
-                        "      <-- foo-repartition-filter\n\n" +
-                        "  Sub-topology: 1\n" +
-                        "    Source: foo-repartition-source (topics: [foo-repartition])\n" +
-                        "      --> COGROUPKSTREAM-AGGREGATE-0000000006, COGROUPKSTREAM-AGGREGATE-0000000012\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000006 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000002])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000007\n" +
-                        "      <-- foo-repartition-source\n" +
-                        "    Processor: COGROUPKSTREAM-AGGREGATE-0000000012 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000008])\n" +
-                        "      --> COGROUPKSTREAM-MERGE-0000000013\n" +
-                        "      <-- foo-repartition-source\n" +
-                        "    Processor: COGROUPKSTREAM-MERGE-0000000007 (stores: [])\n" +
-                        "      --> none\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000006\n" +
-                        "    Processor: COGROUPKSTREAM-MERGE-0000000013 (stores: [])\n" +
-                        "      --> none\n" +
-                        "      <-- COGROUPKSTREAM-AGGREGATE-0000000012\n\n"));
+            topologyDescription,
+            equalTo("Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [one])\n" +
+                "      --> KSTREAM-MAP-0000000001\n" +
+                "    Processor: KSTREAM-MAP-0000000001 (stores: [])\n" +
+                "      --> foo-repartition-filter\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: foo-repartition-filter (stores: [])\n" +
+                "      --> foo-repartition-sink\n" +
+                "      <-- KSTREAM-MAP-0000000001\n" +
+                "    Sink: foo-repartition-sink (topic: foo-repartition)\n" +
+                "      <-- foo-repartition-filter\n\n" +
+                "  Sub-topology: 1\n" +
+                "    Source: foo-repartition-source (topics: [foo-repartition])\n" +
+                "      --> COGROUPKSTREAM-AGGREGATE-0000000006, COGROUPKSTREAM-AGGREGATE-0000000012\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000006 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000002])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000007\n" +
+                "      <-- foo-repartition-source\n" +
+                "    Processor: COGROUPKSTREAM-AGGREGATE-0000000012 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000008])\n" +
+                "      --> COGROUPKSTREAM-MERGE-0000000013\n" +
+                "      <-- foo-repartition-source\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000007 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000006\n" +
+                "    Processor: COGROUPKSTREAM-MERGE-0000000013 (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- COGROUPKSTREAM-AGGREGATE-0000000012\n\n"));
     }
 
     @ParameterizedTest
@@ -1312,18 +1312,18 @@ public class CogroupedKStreamImplTest {
     }
 
     private void assertOutputKeyValueTimestamp(final TestOutputTopic<String, String> outputTopic,
-                                               final String expectedKey,
-                                               final String expectedValue,
-                                               final long expectedTimestamp) {
+        final String expectedKey,
+        final String expectedValue,
+        final long expectedTimestamp) {
         assertThat(
             outputTopic.readRecord(),
             equalTo(new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp)));
     }
 
     private void assertOutputKeyValueTimestamp(final TestOutputTopic<String, Integer> outputTopic,
-                                               final String expectedKey,
-                                               final Integer expectedValue,
-                                               final long expectedTimestamp) {
+        final String expectedKey,
+        final Integer expectedValue,
+        final long expectedTimestamp) {
         assertThat(
             outputTopic.readRecord(),
             equalTo(new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp)));

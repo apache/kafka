@@ -39,10 +39,10 @@ public class TaskMetadataImpl implements TaskMetadata {
     private final Optional<Long> timeCurrentIdlingStarted;
 
     public TaskMetadataImpl(final TaskId taskId,
-                            final Set<TopicPartition> topicPartitions,
-                            final Map<TopicPartition, Long> committedOffsets,
-                            final Map<TopicPartition, Long> endOffsets,
-                            final Optional<Long> timeCurrentIdlingStarted) {
+        final Set<TopicPartition> topicPartitions,
+        final Map<TopicPartition, Long> committedOffsets,
+        final Map<TopicPartition, Long> endOffsets,
+        final Optional<Long> timeCurrentIdlingStarted) {
         this.taskId = taskId;
         this.topicPartitions = Collections.unmodifiableSet(topicPartitions);
         this.committedOffsets = Collections.unmodifiableMap(committedOffsets);
@@ -85,7 +85,7 @@ public class TaskMetadataImpl implements TaskMetadata {
         }
         final TaskMetadataImpl that = (TaskMetadataImpl) o;
         return Objects.equals(taskId, that.taskId) &&
-                Objects.equals(topicPartitions, that.topicPartitions);
+            Objects.equals(topicPartitions, that.topicPartitions);
     }
 
     @Override
@@ -96,11 +96,11 @@ public class TaskMetadataImpl implements TaskMetadata {
     @Override
     public String toString() {
         return "TaskMetadata{" +
-                "taskId=" + taskId +
-                ", topicPartitions=" + topicPartitions +
-                ", committedOffsets=" + committedOffsets +
-                ", endOffsets=" + endOffsets +
-                ", timeCurrentIdlingStarted=" + timeCurrentIdlingStarted +
-                '}';
+            "taskId=" + taskId +
+            ", topicPartitions=" + topicPartitions +
+            ", committedOffsets=" + committedOffsets +
+            ", endOffsets=" + endOffsets +
+            ", timeCurrentIdlingStarted=" + timeCurrentIdlingStarted +
+            '}';
     }
 }

@@ -47,7 +47,8 @@ import java.util.function.Function;
 public class ChannelBuilders {
     private static final Logger log = LoggerFactory.getLogger(ChannelBuilders.class);
 
-    private ChannelBuilders() { }
+    private ChannelBuilders() {
+    }
 
     /**
      * @param securityProtocol the securityProtocol
@@ -62,13 +63,13 @@ public class ChannelBuilders {
      * @throws IllegalArgumentException if `mode` invariants described above is not maintained
      */
     public static ChannelBuilder clientChannelBuilder(
-            SecurityProtocol securityProtocol,
-            JaasContext.Type contextType,
-            AbstractConfig config,
-            ListenerName listenerName,
-            String clientSaslMechanism,
-            Time time,
-            LogContext logContext) {
+        SecurityProtocol securityProtocol,
+        JaasContext.Type contextType,
+        AbstractConfig config,
+        ListenerName listenerName,
+        String clientSaslMechanism,
+        Time time,
+        LogContext logContext) {
 
         if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL) {
             if (contextType == null)
@@ -94,31 +95,31 @@ public class ChannelBuilders {
      * @return the configured `ChannelBuilder`
      */
     public static ChannelBuilder serverChannelBuilder(ListenerName listenerName,
-                                                      boolean isInterBrokerListener,
-                                                      SecurityProtocol securityProtocol,
-                                                      AbstractConfig config,
-                                                      CredentialCache credentialCache,
-                                                      DelegationTokenCache tokenCache,
-                                                      Time time,
-                                                      LogContext logContext,
-                                                      Function<Short, ApiVersionsResponse> apiVersionSupplier) {
+        boolean isInterBrokerListener,
+        SecurityProtocol securityProtocol,
+        AbstractConfig config,
+        CredentialCache credentialCache,
+        DelegationTokenCache tokenCache,
+        Time time,
+        LogContext logContext,
+        Function<Short, ApiVersionsResponse> apiVersionSupplier) {
         return create(securityProtocol, ConnectionMode.SERVER, JaasContext.Type.SERVER, config, listenerName,
-                isInterBrokerListener, null, credentialCache, tokenCache, time, logContext,
-                apiVersionSupplier);
+            isInterBrokerListener, null, credentialCache, tokenCache, time, logContext,
+            apiVersionSupplier);
     }
 
     private static ChannelBuilder create(SecurityProtocol securityProtocol,
-                                         ConnectionMode connectionMode,
-                                         JaasContext.Type contextType,
-                                         AbstractConfig config,
-                                         ListenerName listenerName,
-                                         boolean isInterBrokerListener,
-                                         String clientSaslMechanism,
-                                         CredentialCache credentialCache,
-                                         DelegationTokenCache tokenCache,
-                                         Time time,
-                                         LogContext logContext,
-                                         Function<Short, ApiVersionsResponse> apiVersionSupplier) {
+        ConnectionMode connectionMode,
+        JaasContext.Type contextType,
+        AbstractConfig config,
+        ListenerName listenerName,
+        boolean isInterBrokerListener,
+        String clientSaslMechanism,
+        CredentialCache credentialCache,
+        DelegationTokenCache tokenCache,
+        Time time,
+        LogContext logContext,
+        Function<Short, ApiVersionsResponse> apiVersionSupplier) {
         Map<String, Object> configs = channelBuilderConfigs(config, listenerName);
 
         ChannelBuilder channelBuilder;
@@ -143,7 +144,7 @@ public class ChannelBuilders {
                     if (listenerName != null && securityProtocol == SecurityProtocol.SASL_SSL) {
                         String configuredClientAuth = (String) configs.get(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG);
                         String listenerClientAuth = (String) config.originalsWithPrefix(listenerName.configPrefix(), true)
-                                .get(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG);
+                            .get(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG);
 
                         // If `ssl.client.auth` is configured at the listener-level, we don't set an override and SslFactory
                         // uses the value from `configs`. If not, we propagate `sslClientAuthOverride=NONE` to SslFactory and
@@ -153,30 +154,30 @@ public class ChannelBuilders {
                             sslClientAuthOverride = SslClientAuth.NONE.name().toLowerCase(Locale.ROOT);
                             if (configuredClientAuth != null && !configuredClientAuth.equalsIgnoreCase(SslClientAuth.NONE.name())) {
                                 log.warn("Broker configuration '{}' is applied only to SSL listeners. Listener-prefixed configuration can be used" +
-                                        " to enable SSL client authentication for SASL_SSL listeners. In future releases, broker-wide option without" +
-                                        " listener prefix may be applied to SASL_SSL listeners as well. All configuration options intended for specific" +
-                                        " listeners should be listener-prefixed.", BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG);
+                                    " to enable SSL client authentication for SASL_SSL listeners. In future releases, broker-wide option without" +
+                                    " listener prefix may be applied to SASL_SSL listeners as well. All configuration options intended for specific" +
+                                    " listeners should be listener-prefixed.", BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG);
                             }
                         }
                     }
                 } else {
                     // Use server context for inter-broker client connections and client context for other clients
                     JaasContext jaasContext = contextType == JaasContext.Type.CLIENT ? JaasContext.loadClientContext(configs) :
-                            JaasContext.loadServerContext(listenerName, clientSaslMechanism, configs);
+                        JaasContext.loadServerContext(listenerName, clientSaslMechanism, configs);
                     jaasContexts = Collections.singletonMap(clientSaslMechanism, jaasContext);
                 }
                 channelBuilder = new SaslChannelBuilder(connectionMode,
-                        jaasContexts,
-                        securityProtocol,
-                        listenerName,
-                        isInterBrokerListener,
-                        clientSaslMechanism,
-                        credentialCache,
-                        tokenCache,
-                        sslClientAuthOverride,
-                        time,
-                        logContext,
-                        apiVersionSupplier);
+                    jaasContexts,
+                    securityProtocol,
+                    listenerName,
+                    isInterBrokerListener,
+                    clientSaslMechanism,
+                    credentialCache,
+                    tokenCache,
+                    sslClientAuthOverride,
+                    time,
+                    logContext,
+                    apiVersionSupplier);
                 break;
             case PLAINTEXT:
                 channelBuilder = new PlaintextChannelBuilder(listenerName);
@@ -217,8 +218,8 @@ public class ChannelBuilders {
     }
 
     public static KafkaPrincipalBuilder createPrincipalBuilder(Map<String, ?> configs,
-                                                               KerberosShortNamer kerberosShortNamer,
-                                                               SslPrincipalMapper sslPrincipalMapper) {
+        KerberosShortNamer kerberosShortNamer,
+        SslPrincipalMapper sslPrincipalMapper) {
         Class<?> principalBuilderClass = (Class<?>) configs.get(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG);
         final KafkaPrincipalBuilder builder;
 
@@ -228,7 +229,7 @@ public class ChannelBuilders {
             builder = (KafkaPrincipalBuilder) Utils.newInstance(principalBuilderClass);
         } else {
             throw new InvalidConfigurationException("Type " + principalBuilderClass.getName() + " is not " +
-                    "an instance of " + KafkaPrincipalBuilder.class.getName());
+                "an instance of " + KafkaPrincipalBuilder.class.getName());
         }
 
         if (builder instanceof Configurable)

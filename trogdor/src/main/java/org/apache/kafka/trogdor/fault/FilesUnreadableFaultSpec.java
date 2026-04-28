@@ -39,11 +39,11 @@ public class FilesUnreadableFaultSpec extends TaskSpec {
 
     @JsonCreator
     public FilesUnreadableFaultSpec(@JsonProperty("startMs") long startMs,
-                                    @JsonProperty("durationMs") long durationMs,
-                                    @JsonProperty("nodeNames") Set<String> nodeNames,
-                                    @JsonProperty("mountPath") String mountPath,
-                                    @JsonProperty("prefix") String prefix,
-                                    @JsonProperty("errorCode") int errorCode) {
+        @JsonProperty("durationMs") long durationMs,
+        @JsonProperty("nodeNames") Set<String> nodeNames,
+        @JsonProperty("mountPath") String mountPath,
+        @JsonProperty("prefix") String prefix,
+        @JsonProperty("errorCode") int errorCode) {
         super(startMs, durationMs);
         this.nodeNames = nodeNames == null ? new HashSet<>() : nodeNames;
         this.mountPath = mountPath == null ? "" : mountPath;

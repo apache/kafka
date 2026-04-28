@@ -27,8 +27,8 @@ public class RocksDbTimeOrderedSessionHeadersBytesStoreSupplier implements Sessi
     private final boolean withIndex;
 
     public RocksDbTimeOrderedSessionHeadersBytesStoreSupplier(final String name,
-                                                              final long retentionPeriod,
-                                                              final boolean withIndex) {
+        final long retentionPeriod,
+        final boolean withIndex) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.withIndex = withIndex;

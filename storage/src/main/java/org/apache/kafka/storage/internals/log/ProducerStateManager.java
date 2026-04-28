@@ -158,7 +158,7 @@ public class ProducerStateManager {
      */
     public VerificationStateEntry maybeCreateVerificationStateEntry(long producerId, int sequence, short epoch, boolean supportsEpochBump) {
         VerificationStateEntry entry = verificationStates.computeIfAbsent(producerId, pid ->
-            new VerificationStateEntry(time.milliseconds(), sequence, epoch, supportsEpochBump)
+                new VerificationStateEntry(time.milliseconds(), sequence, epoch, supportsEpochBump)
         );
         entry.maybeUpdateLowestSequenceAndEpoch(sequence, epoch);
         return entry;
@@ -339,7 +339,7 @@ public class ProducerStateManager {
         producerIdCount = producers.size();
 
         verificationStates.entrySet().removeIf(entry ->
-            (currentTimeMs - entry.getValue().timestamp()) >= producerStateManagerConfig.producerIdExpirationMs()
+                (currentTimeMs - entry.getValue().timestamp()) >= producerStateManagerConfig.producerIdExpirationMs()
         );
     }
 

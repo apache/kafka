@@ -48,10 +48,10 @@ public class BootstrapMetadataTest {
     @Test
     public void testFromVersion() {
         assertEquals(new BootstrapMetadata(List.of(
-            new ApiMessageAndVersion(new FeatureLevelRecord().
-                setName(FEATURE_NAME).
-                setFeatureLevel((short) 7), (short) 0)),
-                    IBP_3_3_IV3.featureLevel(), "foo"),
+                    new ApiMessageAndVersion(new FeatureLevelRecord().
+                        setName(FEATURE_NAME).
+                        setFeatureLevel((short) 7), (short) 0)),
+                IBP_3_3_IV3.featureLevel(), "foo"),
             BootstrapMetadata.fromVersion(IBP_3_3_IV3, "foo"));
     }
 
@@ -65,7 +65,7 @@ public class BootstrapMetadataTest {
     public void testFromRecordsListWithoutMetadataVersion() {
         assertEquals("No FeatureLevelRecord for metadata.version was found in the bootstrap " +
             "metadata from quux", assertThrows(RuntimeException.class,
-                () -> BootstrapMetadata.fromRecords(List.of(), "quux")).getMessage());
+            () -> BootstrapMetadata.fromRecords(List.of(), "quux")).getMessage());
     }
 
     private static final ApiMessageAndVersion MV_10 =
@@ -99,7 +99,7 @@ public class BootstrapMetadataTest {
     public void testFeatureLevelForMetadataVersion() {
         assertEquals((short) 11, BootstrapMetadata.
             fromRecords(List.of(MV_10, MV_11), "src").
-                featureLevel(FEATURE_NAME));
+            featureLevel(FEATURE_NAME));
     }
 
     @Test
@@ -122,15 +122,15 @@ public class BootstrapMetadataTest {
     }
 
     static final List<ApiMessageAndVersion> RECORDS_WITH_OLD_METADATA_VERSION = List.of(
-            new ApiMessageAndVersion(new FeatureLevelRecord().
-                setName(FEATURE_NAME).
-                setFeatureLevel(MetadataVersionTestUtils.IBP_3_0_IV1_FEATURE_LEVEL), (short) 0));
+        new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName(FEATURE_NAME).
+            setFeatureLevel(MetadataVersionTestUtils.IBP_3_0_IV1_FEATURE_LEVEL), (short) 0));
 
     @Test
     public void testFromRecordsListWithOldMetadataVersion() {
         BootstrapMetadata bootstrapMetadata = BootstrapMetadata.fromRecords(RECORDS_WITH_OLD_METADATA_VERSION, "quux");
         assertEquals("No MetadataVersion with feature level 1. Valid feature levels are from " + MetadataVersion.MINIMUM_VERSION.featureLevel()
             + " to " + MetadataVersion.latestTesting().featureLevel() + ".",
-                assertThrows(RuntimeException.class, bootstrapMetadata::metadataVersion).getMessage());
+            assertThrows(RuntimeException.class, bootstrapMetadata::metadataVersion).getMessage());
     }
 }

@@ -46,11 +46,11 @@ public class LogSegmentData {
      * @param leaderEpochIndex      leader-epoch-index until this segment
      */
     public LogSegmentData(Path logSegment,
-                          Path offsetIndex,
-                          Path timeIndex,
-                          Optional<Path> transactionIndex,
-                          Path producerSnapshotIndex,
-                          ByteBuffer leaderEpochIndex) {
+           Path offsetIndex,
+           Path timeIndex,
+           Optional<Path> transactionIndex,
+           Path producerSnapshotIndex,
+           ByteBuffer leaderEpochIndex) {
         this.logSegment = Objects.requireNonNull(logSegment, "logSegment can not be null");
         this.offsetIndex = Objects.requireNonNull(offsetIndex, "offsetIndex can not be null");
         this.timeIndex = Objects.requireNonNull(timeIndex, "timeIndex can not be null");

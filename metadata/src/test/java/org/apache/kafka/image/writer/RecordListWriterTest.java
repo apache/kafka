@@ -54,8 +54,8 @@ public class RecordListWriterTest {
         RecordListWriter writer = new RecordListWriter();
         writer.close(true);
         assertThrows(ImageWriterClosedException.class, () ->
-                writer.write(0, new TopicRecord().
-                        setName("foo").
-                        setTopicId(Uuid.fromString("3B134hrsQgKtz8Sp6QBIfg"))));
+            writer.write(0, new TopicRecord().
+                setName("foo").
+                setTopicId(Uuid.fromString("3B134hrsQgKtz8Sp6QBIfg"))));
     }
 }

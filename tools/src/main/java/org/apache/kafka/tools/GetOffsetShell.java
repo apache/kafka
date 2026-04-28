@@ -107,32 +107,32 @@ public class GetOffsetShell {
             super(args);
 
             bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
-                    .withRequiredArg()
-                    .describedAs("HOST1:PORT1,...,HOST3:PORT3")
-                    .ofType(String.class);
+                .withRequiredArg()
+                .describedAs("HOST1:PORT1,...,HOST3:PORT3")
+                .ofType(String.class);
             topicPartitionsOpt = parser.accepts("topic-partitions", "Comma separated list of topic-partition patterns to get the offsets for, with the format of '" + TOPIC_PARTITION_PATTERN + "'." +
-                            " The first group is an optional regex for the topic name, if omitted, it matches any topic name." +
-                            " The section after ':' describes a 'partition' pattern, which can be: a number, a range in the format of 'NUMBER-NUMBER' (lower inclusive, upper exclusive), an inclusive lower bound in the format of 'NUMBER-', an exclusive upper bound in the format of '-NUMBER' or may be omitted to accept all partitions.")
-                    .withRequiredArg()
-                    .describedAs("topic1:1,topic2:0-3,topic3,topic4:5-,topic5:-3")
-                    .ofType(String.class);
+                " The first group is an optional regex for the topic name, if omitted, it matches any topic name." +
+                " The section after ':' describes a 'partition' pattern, which can be: a number, a range in the format of 'NUMBER-NUMBER' (lower inclusive, upper exclusive), an inclusive lower bound in the format of 'NUMBER-', an exclusive upper bound in the format of '-NUMBER' or may be omitted to accept all partitions.")
+                .withRequiredArg()
+                .describedAs("topic1:1,topic2:0-3,topic3,topic4:5-,topic5:-3")
+                .ofType(String.class);
             topicOpt = parser.accepts("topic", "The topic to get the offsets for. It also accepts a regular expression. If not present, all authorized topics are queried. Cannot be used if --topic-partitions is present.")
-                    .withRequiredArg()
-                    .describedAs("topic")
-                    .ofType(String.class);
+                .withRequiredArg()
+                .describedAs("topic")
+                .ofType(String.class);
             partitionsOpt = parser.accepts("partitions", "Comma separated list of partition ids to get the offsets for. If not present, all partitions of the authorized topics are queried. Cannot be used if --topic-partitions is present.")
-                    .withRequiredArg()
-                    .describedAs("partition ids")
-                    .ofType(String.class);
+                .withRequiredArg()
+                .describedAs("partition ids")
+                .ofType(String.class);
             timeOpt = parser.accepts("time", "timestamp of the offsets before that. [Note: No offset is returned, if the timestamp greater than recently committed record timestamp is given.]")
-                    .withRequiredArg()
-                    .describedAs("<timestamp> / -1 or latest / -2 or earliest / -3 or max-timestamp / -4 or earliest-local / -5 or latest-tiered / -6 or earliest-pending-upload")
-                    .ofType(String.class)
-                    .defaultsTo("latest");
+                .withRequiredArg()
+                .describedAs("<timestamp> / -1 or latest / -2 or earliest / -3 or max-timestamp / -4 or earliest-local / -5 or latest-tiered / -6 or earliest-pending-upload")
+                .ofType(String.class)
+                .defaultsTo("latest");
             commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client.")
-                    .withRequiredArg()
-                    .describedAs("config file")
-                    .ofType(String.class);
+                .withRequiredArg()
+                .describedAs("config file")
+                .ofType(String.class);
             excludeInternalTopicsOpt = parser.accepts("exclude-internal-topics", "By default, internal topics are included. If specified, internal topics are excluded.");
 
             if (args.length == 0) {
@@ -285,7 +285,7 @@ public class GetOffsetShell {
                     timestamp = Long.parseLong(listOffsetsTimestamp);
                 } catch (NumberFormatException e) {
                     throw new TerseException("Malformed time argument " + listOffsetsTimestamp + ". " +
-                            "Please use -1 or latest / -2 or earliest / -3 or max-timestamp / -4 or earliest-local / -5 or latest-tiered / -6 or earliest-pending-upload, or a specified long format timestamp");
+                        "Please use -1 or latest / -2 or earliest / -3 or max-timestamp / -4 or earliest-local / -5 or latest-tiered / -6 or earliest-pending-upload, or a specified long format timestamp");
                 }
 
                 if (timestamp == ListOffsetsRequest.EARLIEST_TIMESTAMP) {
@@ -332,8 +332,8 @@ public class GetOffsetShell {
      */
     public TopicPartitionFilter createTopicPartitionFilterWithTopicAndPartitionPattern(String topicOpt, String partitionIds) throws TerseException {
         return new TopicFilterAndPartitionFilter(
-                new IncludeList(topicOpt != null ? topicOpt : ".*"),
-                new PartitionsSetFilter(createPartitionSet(partitionIds))
+            new IncludeList(topicOpt != null ? topicOpt : ".*"),
+            new PartitionsSetFilter(createPartitionSet(partitionIds))
         );
     }
 
@@ -347,7 +347,7 @@ public class GetOffsetShell {
                 partitions = Arrays.stream(partitionsString.split(",")).map(Integer::parseInt).collect(Collectors.toSet());
             } catch (NumberFormatException e) {
                 throw new TerseException("--partitions expects a comma separated list of numeric " +
-                        "partition ids, but received: " + partitionsString);
+                    "partition ids, but received: " + partitionsString);
             }
         }
 
@@ -358,18 +358,18 @@ public class GetOffsetShell {
      * Return the partition infos. Filter them with topicPartitionFilter.
      */
     private List<TopicPartition> listPartitionInfos(
-            Admin client,
-            TopicPartitionFilter topicPartitionFilter,
-            boolean excludeInternalTopics
+        Admin client,
+        TopicPartitionFilter topicPartitionFilter,
+        boolean excludeInternalTopics
     ) throws ExecutionException, InterruptedException {
         ListTopicsOptions listTopicsOptions = new ListTopicsOptions().listInternal(!excludeInternalTopics);
         Set<String> topics = client.listTopics(listTopicsOptions).names().get();
         Set<String> filteredTopics = topics.stream().filter(topicPartitionFilter::isTopicAllowed).collect(Collectors.toSet());
 
         return client.describeTopics(filteredTopics).allTopicNames().get().entrySet().stream().flatMap(
-                topic -> topic.getValue().partitions().stream().map(
-                        tp -> new TopicPartition(topic.getKey(), tp.partition())
-                ).filter(topicPartitionFilter::isTopicPartitionAllowed)
+            topic -> topic.getValue().partitions().stream().map(
+                tp -> new TopicPartition(topic.getKey(), tp.partition())
+            ).filter(topicPartitionFilter::isTopicPartitionAllowed)
         ).collect(Collectors.toList());
     }
 

@@ -60,19 +60,19 @@ public final class FieldSpec {
 
     @JsonCreator
     public FieldSpec(@JsonProperty("name") String name,
-                     @JsonProperty("versions") String versions,
-                     @JsonProperty("fields") List<FieldSpec> fields,
-                     @JsonProperty("type") String type,
-                     @JsonProperty("mapKey") boolean mapKey,
-                     @JsonProperty("nullableVersions") String nullableVersions,
-                     @JsonProperty("default") String fieldDefault,
-                     @JsonProperty("ignorable") boolean ignorable,
-                     @JsonProperty("entityType") EntityType entityType,
-                     @JsonProperty("about") String about,
-                     @JsonProperty("taggedVersions") String taggedVersions,
-                     @JsonProperty("flexibleVersions") String flexibleVersions,
-                     @JsonProperty("tag") Integer tag,
-                     @JsonProperty("zeroCopy") boolean zeroCopy) {
+        @JsonProperty("versions") String versions,
+        @JsonProperty("fields") List<FieldSpec> fields,
+        @JsonProperty("type") String type,
+        @JsonProperty("mapKey") boolean mapKey,
+        @JsonProperty("nullableVersions") String nullableVersions,
+        @JsonProperty("default") String fieldDefault,
+        @JsonProperty("ignorable") boolean ignorable,
+        @JsonProperty("entityType") EntityType entityType,
+        @JsonProperty("about") String about,
+        @JsonProperty("taggedVersions") String taggedVersions,
+        @JsonProperty("flexibleVersions") String flexibleVersions,
+        @JsonProperty("tag") Integer tag,
+        @JsonProperty("zeroCopy") boolean zeroCopy) {
         this.name = Objects.requireNonNull(name);
         if (!VALID_FIELD_NAMES.matcher(this.name).matches()) {
             throw new RuntimeException("Invalid field name " + this.name);
@@ -289,7 +289,7 @@ public final class FieldSpec {
      *                          generated code.
      */
     String fieldDefault(HeaderGenerator headerGenerator,
-                        StructRegistry structRegistry) {
+        StructRegistry structRegistry) {
         if (type instanceof FieldType.BoolFieldType) {
             if (fieldDefault.isEmpty()) {
                 return "false";
@@ -345,7 +345,7 @@ public final class FieldSpec {
                         int value = Integer.valueOf(defaultString, base);
                         if (value < 0 || value > MessageGenerator.UNSIGNED_SHORT_MAX) {
                             throw new RuntimeException("Invalid default for uint16 field " +
-                                    name + ": out of range.");
+                                name + ": out of range.");
                         }
                     } catch (NumberFormatException e) {
                         throw new RuntimeException("Invalid default for uint16 field " +
@@ -361,11 +361,11 @@ public final class FieldSpec {
                         long value = Long.valueOf(defaultString, base);
                         if (value < 0 || value > MessageGenerator.UNSIGNED_INT_MAX) {
                             throw new RuntimeException("Invalid default for uint32 field " +
-                                    name + ": out of range.");
+                                name + ": out of range.");
                         }
                     } catch (NumberFormatException e) {
                         throw new RuntimeException("Invalid default for uint32 field " +
-                                name + ": " + defaultString, e);
+                            name + ": " + defaultString, e);
                     }
                     return fieldDefault;
                 }
@@ -492,7 +492,7 @@ public final class FieldSpec {
      * @return                  The abstract java type name.
      */
     String fieldAbstractJavaType(HeaderGenerator headerGenerator,
-                                 StructRegistry structRegistry) {
+        StructRegistry structRegistry) {
         if (type instanceof FieldType.BoolFieldType) {
             return "boolean";
         } else if (type instanceof FieldType.Int8FieldType) {
@@ -550,7 +550,7 @@ public final class FieldSpec {
      * @return                  The abstract java type name.
      */
     String concreteJavaType(HeaderGenerator headerGenerator,
-                            StructRegistry structRegistry) {
+        StructRegistry structRegistry) {
         if (type.isArray()) {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
             if (structRegistry.isStructArrayWithKeys(this)) {
@@ -582,10 +582,10 @@ public final class FieldSpec {
      *                          that cannot be null).
      */
     void generateNonDefaultValueCheck(HeaderGenerator headerGenerator,
-                                      StructRegistry structRegistry,
-                                      CodeBuffer buffer,
-                                      String fieldPrefix,
-                                      Versions nullableVersions) {
+        StructRegistry structRegistry,
+        CodeBuffer buffer,
+        String fieldPrefix,
+        Versions nullableVersions) {
         String fieldDefault = fieldDefault(headerGenerator, structRegistry);
         if (type().isArray()) {
             if (fieldDefault.equals("null")) {
@@ -647,15 +647,15 @@ public final class FieldSpec {
      * @param buffer            The code buffer to write to.
      */
     void generateNonIgnorableFieldCheck(HeaderGenerator headerGenerator,
-                                        StructRegistry structRegistry,
-                                        String fieldPrefix,
-                                        CodeBuffer buffer) {
+        StructRegistry structRegistry,
+        String fieldPrefix,
+        CodeBuffer buffer) {
         generateNonDefaultValueCheck(headerGenerator, structRegistry,
             buffer, fieldPrefix, nullableVersions());
         buffer.incrementIndent();
         headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
         buffer.printf("throw new UnsupportedVersionException(" +
-                "\"Attempted to write a non-default %s at version \" + _version);%n",
+            "\"Attempted to write a non-default %s at version \" + _version);%n",
             camelCaseName());
         buffer.decrementIndent();
         buffer.printf("}%n");

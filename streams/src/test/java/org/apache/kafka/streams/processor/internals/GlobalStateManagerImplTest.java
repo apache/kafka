@@ -112,16 +112,16 @@ public class GlobalStateManagerImplTest {
     private Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>> optionalMockReprocessFactory;
 
     static ProcessorTopology withGlobalStores(final List<StateStore> stateStores,
-                                              final Map<String, String> storeToChangelogTopic,
-                                              final Map<String, Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>>> reprocessFactoryMap) {
+        final Map<String, String> storeToChangelogTopic,
+        final Map<String, Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>>> reprocessFactoryMap) {
         return new ProcessorTopology(Collections.emptyList(),
-                                     Collections.emptyMap(),
-                                     Collections.emptyMap(),
-                                     Collections.emptyList(),
-                                     stateStores,
-                                     storeToChangelogTopic,
-                                     Collections.emptySet(),
-                                     reprocessFactoryMap);
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyList(),
+            stateStores,
+            storeToChangelogTopic,
+            Collections.emptySet(),
+            reprocessFactoryMap);
     }
 
     @SuppressWarnings("unchecked")
@@ -184,11 +184,11 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize();
         final Map<TopicPartition, Long> offsets = stateManager.changelogOffsets();
         assertEquals(mkMap(
-                mkEntry(t1, 1L),
-                mkEntry(t2, 0L),
-                mkEntry(t3, 0L),
-                mkEntry(t4, 0L),
-                mkEntry(t5, 0L)
+            mkEntry(t1, 1L),
+            mkEntry(t2, 0L),
+            mkEntry(t3, 0L),
+            mkEntry(t4, 0L),
+            mkEntry(t5, 0L)
         ), offsets);
     }
 
@@ -213,9 +213,9 @@ public class GlobalStateManagerImplTest {
             stateManager.commit();
             assertThat(appender.getMessages(), hasItem(containsString(
                 "Failed to write offset checkpoint file to [" + storeCheckpointFile.getPath() + "]. " +
-                "This may occur if OS cleaned the state.dir in case when it located in ${java.io.tmpdir} directory. " +
-                "This may also occur due to running multiple instances on the same machine using the same state dir. " +
-                "Changing the location of state.dir may resolve the problem.")));
+                    "This may occur if OS cleaned the state.dir in case when it located in ${java.io.tmpdir} directory. " +
+                    "This may also occur due to running multiple instances on the same machine using the same state dir. " +
+                    "Changing the location of state.dir may resolve the problem.")));
         }
     }
 
@@ -386,7 +386,7 @@ public class GlobalStateManagerImplTest {
         processorContext.setStateManger(stateManager);
 
         final OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint(new File(stateManager.baseDir(),
-                                                                                StateManagerUtil.CHECKPOINT_FILE_NAME));
+            StateManagerUtil.CHECKPOINT_FILE_NAME));
         offsetCheckpoint.write(Collections.singletonMap(t1, 5L));
 
         stateManager.initialize();
@@ -524,11 +524,11 @@ public class GlobalStateManagerImplTest {
 
         assertThat(readOffsetsCheckpoint(storeName1), equalTo(offsets));
         assertThat(stateManager.changelogOffsets(), equalTo(mkMap(
-                mkEntry(t1, 25_000L),
-                mkEntry(t2, 0L),
-                mkEntry(t3, 0L),
-                mkEntry(t4, 0L),
-                mkEntry(t5, 0L)
+            mkEntry(t1, 25_000L),
+            mkEntry(t2, 0L),
+            mkEntry(t3, 0L),
+            mkEntry(t4, 0L),
+            mkEntry(t5, 0L)
         )));
     }
 
@@ -586,11 +586,11 @@ public class GlobalStateManagerImplTest {
         final Map<TopicPartition, Long> checkpointMap = stateManager.changelogOffsets();
         // changelogOffsets() returns offsets for *all* stores
         assertThat(checkpointMap, equalTo(mkMap(
-                mkEntry(t1, 10L),
-                mkEntry(t2, 0L),
-                mkEntry(t3, 0L),
-                mkEntry(t4, 0L),
-                mkEntry(t5, 0L)
+            mkEntry(t1, 10L),
+            mkEntry(t2, 0L),
+            mkEntry(t3, 0L),
+            mkEntry(t4, 0L),
+            mkEntry(t5, 0L)
         )));
 
         assertThat(readOffsetsCheckpoint(storeName1), equalTo(mkMap(mkEntry(t1, 10L))));
@@ -609,7 +609,7 @@ public class GlobalStateManagerImplTest {
 
     private Map<TopicPartition, Long> readOffsetsCheckpoint(final String storeName) throws IOException {
         final OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint(new File(stateManager.baseDir(),
-                StateManagerUtil.CHECKPOINT_FILE_NAME + "_" + storeName));
+            StateManagerUtil.CHECKPOINT_FILE_NAME + "_" + storeName));
         return offsetCheckpoint.read();
     }
 
@@ -1294,8 +1294,8 @@ public class GlobalStateManagerImplTest {
 
     private static class ConverterStore<K, V> extends NoOpReadOnlyStore<K, V> implements TimestampedBytesStore {
         ConverterStore(final String name,
-                       final boolean rocksdbStore,
-                       final StateRestoreCallback stateRestoreCallback) {
+            final boolean rocksdbStore,
+            final StateRestoreCallback stateRestoreCallback) {
             super(name, rocksdbStore, stateRestoreCallback);
         }
     }

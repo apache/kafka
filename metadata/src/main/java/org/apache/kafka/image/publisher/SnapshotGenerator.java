@@ -239,7 +239,7 @@ public class SnapshotGenerator implements MetadataPublisher {
                 log.trace("Not scheduling bytes-based snapshot because event queue is not empty yet.");
             }
         } else if (maxTimeSinceLastSnapshotNs != 0 &&
-                (time.nanoseconds() - lastSnapshotTimeNs >= maxTimeSinceLastSnapshotNs)) {
+            (time.nanoseconds() - lastSnapshotTimeNs >= maxTimeSinceLastSnapshotNs)) {
             if (eventQueue.isEmpty()) {
                 maybeScheduleEmit("we have waited at least " +
                     TimeUnit.NANOSECONDS.toMinutes(maxTimeSinceLastSnapshotNs) +
@@ -268,7 +268,7 @@ public class SnapshotGenerator implements MetadataPublisher {
             eventQueue.append(() -> {
                 resetSnapshotCounters();
                 log.info("Creating new KRaft snapshot file {} because {}.",
-                        image.provenance().snapshotName(), reason);
+                    image.provenance().snapshotName(), reason);
                 try {
                     emitter.maybeEmit(image);
                 } catch (Throwable e) {

@@ -1124,7 +1124,7 @@ public class ConsumerGroupTest {
     public void testValidateOffsetFetch() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConsumerGroup group = new ConsumerGroup(
-            new LogContext(), 
+            new LogContext(),
             snapshotRegistry,
             "group-foo"
         );
@@ -1227,13 +1227,13 @@ public class ConsumerGroupTest {
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
 
         group.updateMember(new ConsumerGroupMember.Builder("member1")
-                .setMemberEpoch(1)
-                .setSubscribedTopicNames(List.of("foo"))
-                .setServerAssignorName("assignorName")
-                .build());
+            .setMemberEpoch(1)
+            .setSubscribedTopicNames(List.of("foo"))
+            .setServerAssignorName("assignorName")
+            .build());
         group.updateMember(new ConsumerGroupMember.Builder("member2")
-                .setMemberEpoch(1)
-                .build());
+            .setMemberEpoch(1)
+            .build());
         snapshotRegistry.idempotentCreateSnapshot(1);
 
         ConsumerGroupDescribeResponseData.DescribedGroup expected = new ConsumerGroupDescribeResponseData.DescribedGroup()
@@ -1481,11 +1481,11 @@ public class ConsumerGroupTest {
                 new JoinGroupRequestData.JoinGroupRequestProtocol()
                     .setName("range")
                     .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-                            Arrays.asList(fooTopicName, barTopicName),
-                            null,
-                            Arrays.asList(
-                                new TopicPartition(fooTopicName, 0),
-                                new TopicPartition(barTopicName, 0))))))
+                        Arrays.asList(fooTopicName, barTopicName),
+                        null,
+                        Arrays.asList(
+                            new TopicPartition(fooTopicName, 0),
+                            new TopicPartition(barTopicName, 0))))))
             ).iterator()),
             Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(Arrays.asList(
                 new TopicPartition(fooTopicName, 0),
@@ -1503,7 +1503,7 @@ public class ConsumerGroupTest {
         );
 
         ConsumerGroup expectedConsumerGroup = new ConsumerGroup(
-            new LogContext(), 
+            new LogContext(),
             new SnapshotRegistry(logContext),
             groupId
         );

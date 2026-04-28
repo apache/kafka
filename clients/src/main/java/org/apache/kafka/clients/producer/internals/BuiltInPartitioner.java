@@ -286,7 +286,7 @@ public class BuiltInPartitioner {
         // See also RecordAccumulator#partitionReady where the queueSizes are built.
         if (length < 1 || queueSizes.length < 2) {
             log.trace("The number of partitions is too small: available={}, all={}, not using adaptive for topic {}",
-                    length, queueSizes.length, topic);
+                length, queueSizes.length, topic);
             partitionLoadStatsHolder = null;
             return;
         }
@@ -311,7 +311,7 @@ public class BuiltInPartitioner {
         // Calculate max queue size + 1 and check if all sizes are the same.
         int maxSizePlus1 = queueSizes[0];
         boolean allEqual = true;
-        for (int i = 1; i < length; i++) {
+        for (int i = 1;i < length;i++) {
             if (queueSizes[i] != maxSizePlus1)
                 allEqual = false;
             if (queueSizes[i] > maxSizePlus1)
@@ -335,7 +335,7 @@ public class BuiltInPartitioner {
         invertAndFoldQueueSizeArray(queueSizes, maxSizePlus1, length);
 
         log.trace("Partition load stats for topic {}: CFT={}, IDs={}, length={}",
-                topic, queueSizes, partitionIds, length);
+            topic, queueSizes, partitionIds, length);
         partitionLoadStatsHolder = new PartitionLoadStatsHolder(
             new PartitionLoadStats(queueSizes, partitionIds, length),
             partitionLoadStatsInThisRack
@@ -351,7 +351,7 @@ public class BuiltInPartitioner {
         int lengthInThisRack = 0;
         int maxSizePlus1InThisRack = -1;
 
-        for (int i = 0; i < length; i++) {
+        for (int i = 0;i < length;i++) {
             if (rack.equals(partitionLeaderRacks[i])) {
                 queueSizesInThisRack[lengthInThisRack] = queueSizes[i];
                 partitionIdsInThisRack[lengthInThisRack] = partitionIds[i];
@@ -370,7 +370,7 @@ public class BuiltInPartitioner {
 
     private void invertAndFoldQueueSizeArray(int[] queueSizes, int maxSizePlus1, int length) {
         queueSizes[0] = maxSizePlus1 - queueSizes[0];
-        for (int i = 1; i < length; i++) {
+        for (int i = 1;i < length;i++) {
             queueSizes[i] = maxSizePlus1 - queueSizes[i] + queueSizes[i - 1];
         }
     }
@@ -420,7 +420,7 @@ public class BuiltInPartitioner {
         final PartitionLoadStats inThisRack;
 
         private PartitionLoadStatsHolder(PartitionLoadStats total,
-                                         PartitionLoadStats inThisRack) {
+            PartitionLoadStats inThisRack) {
             this.total = total;
             this.inThisRack = inThisRack;
         }

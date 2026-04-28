@@ -234,14 +234,14 @@ public class Struct {
     public String toString() {
         StringBuilder b = new StringBuilder();
         b.append('{');
-        for (int i = 0; i < this.values.length; i++) {
+        for (int i = 0;i < this.values.length;i++) {
             BoundField f = this.schema.get(i);
             b.append(f.def.name);
             b.append('=');
             if (f.def.type.isArray() && this.values[i] != null) {
                 Object[] arrayValue = (Object[]) this.values[i];
                 b.append('[');
-                for (int j = 0; j < arrayValue.length; j++) {
+                for (int j = 0;j < arrayValue.length;j++) {
                     b.append(arrayValue[j]);
                     if (j < arrayValue.length - 1)
                         b.append(',');
@@ -260,12 +260,12 @@ public class Struct {
     public int hashCode() {
         final int prime = 31;
         int result = 1;
-        for (int i = 0; i < this.values.length; i++) {
+        for (int i = 0;i < this.values.length;i++) {
             BoundField f = this.schema.get(i);
             if (f.def.type.isArray()) {
                 if (this.get(f) != null) {
                     Object[] arrayObject = (Object[]) this.get(f);
-                    for (Object arrayItem: arrayObject)
+                    for (Object arrayItem : arrayObject)
                         result = prime * result + arrayItem.hashCode();
                 }
             } else {
@@ -289,7 +289,7 @@ public class Struct {
         Struct other = (Struct) obj;
         if (schema != other.schema)
             return false;
-        for (int i = 0; i < this.values.length; i++) {
+        for (int i = 0;i < this.values.length;i++) {
             BoundField f = this.schema.get(i);
             boolean result;
             if (f.def.type.isArray()) {

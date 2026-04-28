@@ -31,7 +31,7 @@ public class CreateTaskRequest extends Message {
 
     @JsonCreator
     public CreateTaskRequest(@JsonProperty("id") String id,
-            @JsonProperty("spec") TaskSpec spec) {
+        @JsonProperty("spec") TaskSpec spec) {
         this.id = id;
         this.spec = spec;
     }

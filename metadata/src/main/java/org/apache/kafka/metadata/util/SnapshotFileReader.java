@@ -172,7 +172,8 @@ public final class SnapshotFileReader implements AutoCloseable {
                         messages
                     )
                 ),
-                reader -> { }
+                reader -> {
+                }
             )
         );
     }

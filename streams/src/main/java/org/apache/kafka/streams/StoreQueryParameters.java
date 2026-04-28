@@ -30,7 +30,7 @@ public class StoreQueryParameters<T> {
     private final String storeName;
     private final QueryableStoreType<T> queryableStoreType;
 
-    protected StoreQueryParameters(final String storeName, final QueryableStoreType<T>  queryableStoreType, final Integer partition, final boolean staleStores) {
+    protected StoreQueryParameters(final String storeName, final QueryableStoreType<T> queryableStoreType, final Integer partition, final boolean staleStores) {
         this.storeName = storeName;
         this.queryableStoreType = queryableStoreType;
         this.partition = partition;
@@ -38,7 +38,7 @@ public class StoreQueryParameters<T> {
     }
 
     public static <T> StoreQueryParameters<T> fromNameAndType(final String storeName,
-                                                              final QueryableStoreType<T>  queryableStoreType) {
+        final QueryableStoreType<T> queryableStoreType) {
         return new StoreQueryParameters<>(storeName, queryableStoreType, null, false);
     }
 
@@ -107,19 +107,19 @@ public class StoreQueryParameters<T> {
         }
         final StoreQueryParameters<?> storeQueryParameters = (StoreQueryParameters<?>) obj;
         return Objects.equals(storeQueryParameters.partition, partition)
-                && Objects.equals(storeQueryParameters.staleStores, staleStores)
-                && Objects.equals(storeQueryParameters.storeName, storeName)
-                && Objects.equals(storeQueryParameters.queryableStoreType, queryableStoreType);
+            && Objects.equals(storeQueryParameters.staleStores, staleStores)
+            && Objects.equals(storeQueryParameters.storeName, storeName)
+            && Objects.equals(storeQueryParameters.queryableStoreType, queryableStoreType);
     }
 
     @Override
     public String toString() {
         return "StoreQueryParameters {" +
-                "partition=" + partition +
-                ", staleStores=" + staleStores +
-                ", storeName=" + storeName +
-                ", queryableStoreType=" + queryableStoreType +
-                '}';
+            "partition=" + partition +
+            ", staleStores=" + staleStores +
+            ", storeName=" + storeName +
+            ", queryableStoreType=" + queryableStoreType +
+            '}';
     }
 
     @Override

@@ -55,7 +55,7 @@ public class PluginTest {
         }
     }
 
-    static class SomeMonitorablePlugin extends SomePlugin implements Monitorable  {
+    static class SomeMonitorablePlugin extends SomePlugin implements Monitorable {
 
         @Override
         public void withPluginMetrics(PluginMetrics metrics) {
@@ -88,7 +88,7 @@ public class PluginTest {
         List<SomeMonitorablePlugin> someMonitorablePlugins = Arrays.asList(new SomeMonitorablePlugin(), new SomeMonitorablePlugin());
         List<Plugin<SomeMonitorablePlugin>> pluginsMonitorable = Plugin.wrapInstances(someMonitorablePlugins, METRICS, CONFIG);
         assertEquals(someMonitorablePlugins.size(), pluginsMonitorable.size());
-        for (int i = 0; i < pluginsMonitorable.size(); i++) {
+        for (int i = 0;i < pluginsMonitorable.size();i++) {
             Plugin<SomeMonitorablePlugin> plugin = pluginsMonitorable.get(i);
             SomeMonitorablePlugin somePlugin = someMonitorablePlugins.get(i);
             checkPlugin(plugin, somePlugin, true);
@@ -97,7 +97,7 @@ public class PluginTest {
         someMonitorablePlugins = Arrays.asList(new SomeMonitorablePlugin(), new SomeMonitorablePlugin());
         pluginsMonitorable = Plugin.wrapInstances(someMonitorablePlugins, null, CONFIG);
         assertEquals(someMonitorablePlugins.size(), pluginsMonitorable.size());
-        for (int i = 0; i < pluginsMonitorable.size(); i++) {
+        for (int i = 0;i < pluginsMonitorable.size();i++) {
             Plugin<SomeMonitorablePlugin> plugin = pluginsMonitorable.get(i);
             SomeMonitorablePlugin somePlugin = someMonitorablePlugins.get(i);
             checkPlugin(plugin, somePlugin, false);
@@ -106,7 +106,7 @@ public class PluginTest {
         List<SomePlugin> somePlugins = Arrays.asList(new SomePlugin(), new SomePlugin());
         List<Plugin<SomePlugin>> plugins = Plugin.wrapInstances(somePlugins, METRICS, CONFIG);
         assertEquals(somePlugins.size(), plugins.size());
-        for (int i = 0; i < plugins.size(); i++) {
+        for (int i = 0;i < plugins.size();i++) {
             Plugin<SomePlugin> plugin = plugins.get(i);
             SomePlugin somePlugin = somePlugins.get(i);
             assertSame(somePlugin, plugin.get());

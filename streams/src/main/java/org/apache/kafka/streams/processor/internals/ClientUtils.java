@@ -81,7 +81,7 @@ public class ClientUtils {
     }
 
     public static Map<MetricName, Metric> consumerMetrics(final Consumer<byte[], byte[]> mainConsumer,
-                                                          final Consumer<byte[], byte[]> restoreConsumer) {
+        final Consumer<byte[], byte[]> restoreConsumer) {
         final Map<MetricName, ? extends Metric> consumerMetrics = mainConsumer.metrics();
         final Map<MetricName, ? extends Metric> restoreConsumerMetrics = restoreConsumer.metrics();
         final LinkedHashMap<MetricName, Metric> result = new LinkedHashMap<>();
@@ -111,7 +111,7 @@ public class ClientUtils {
      * @throws org.apache.kafka.common.errors.TimeoutException if the request times out
      */
     public static Map<TopicPartition, Long> fetchCommittedOffsets(final Set<TopicPartition> partitions,
-                                                                  final Consumer<byte[], byte[]> consumer) {
+        final Consumer<byte[], byte[]> consumer) {
         if (partitions.isEmpty()) {
             return Collections.emptyMap();
         }
@@ -133,21 +133,21 @@ public class ClientUtils {
     }
 
     public static KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> fetchEndOffsetsFuture(final Collection<TopicPartition> partitions,
-                                                                                                final Admin adminClient) {
+        final Admin adminClient) {
         return adminClient.listOffsets(
             partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()))
         ).all();
     }
 
     public static ListOffsetsResult fetchEndOffsetsResult(final Collection<TopicPartition> partitions,
-                                                          final Admin adminClient) {
+        final Admin adminClient) {
         return adminClient.listOffsets(
             partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()))
         );
     }
 
     public static Map<TopicPartition, ListOffsetsResultInfo> getEndOffsets(final ListOffsetsResult resultFuture,
-                                                                           final Collection<TopicPartition> partitions) {
+        final Collection<TopicPartition> partitions) {
         final Map<TopicPartition, ListOffsetsResultInfo> result = new HashMap<>();
         for (final TopicPartition partition : partitions) {
             try {
@@ -190,7 +190,7 @@ public class ClientUtils {
      * @throws StreamsException if the admin client request throws an exception
      */
     public static Map<TopicPartition, ListOffsetsResultInfo> fetchEndOffsets(final Collection<TopicPartition> partitions,
-                                                                             final Admin adminClient) {
+        final Admin adminClient) {
         if (partitions.isEmpty()) {
             return Collections.emptyMap();
         }
@@ -216,9 +216,9 @@ public class ClientUtils {
     }
 
     private static long recordSizeInBytes(final long keyBytes,
-                                          final long valueBytes,
-                                          final String topic,
-                                          final Headers headers) {
+        final long valueBytes,
+        final String topic,
+        final Headers headers) {
         long headerSizeInBytes = 0L;
 
         if (headers != null) {

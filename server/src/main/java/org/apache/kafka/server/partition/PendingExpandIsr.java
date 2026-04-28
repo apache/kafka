@@ -59,9 +59,9 @@ public record PendingExpandIsr(int newInSyncReplicaId,
     @Override
     public String toString() {
         return "PendingExpandIsr(newInSyncReplicaId=" + newInSyncReplicaId +
-                ", sentLeaderAndIsr=" + sentLeaderAndIsr +
-                ", leaderRecoveryState=" + leaderRecoveryState() +
-                ", lastCommittedState=" + lastCommittedState +
-                ")";
+            ", sentLeaderAndIsr=" + sentLeaderAndIsr +
+            ", leaderRecoveryState=" + leaderRecoveryState() +
+            ", lastCommittedState=" + lastCommittedState +
+            ")";
     }
 }

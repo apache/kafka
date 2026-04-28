@@ -62,7 +62,7 @@ public class DescribeReplicaLogDirsResult {
     }
 
     public static class ReplicaLogDirInfo {
-        
+
         private final String currentReplicaLogDir;
         private final long currentReplicaOffsetLag;
         private final String futureReplicaLogDir;
@@ -73,9 +73,9 @@ public class DescribeReplicaLogDirsResult {
         }
 
         ReplicaLogDirInfo(String currentReplicaLogDir,
-                          long currentReplicaOffsetLag,
-                          String futureReplicaLogDir,
-                          long futureReplicaOffsetLag) {
+            long currentReplicaOffsetLag,
+            String futureReplicaLogDir,
+            long futureReplicaOffsetLag) {
             this.currentReplicaLogDir = currentReplicaLogDir;
             this.currentReplicaOffsetLag = currentReplicaOffsetLag;
             this.futureReplicaLogDir = futureReplicaLogDir;

@@ -44,8 +44,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ProduceRequestTest {
 
     private final SimpleRecord simpleRecord = new SimpleRecord(System.currentTimeMillis(),
-                                                               "key".getBytes(),
-                                                               "value".getBytes());
+        "key".getBytes(),
+        "value".getBytes());
 
     @Test
     public void shouldBeFlaggedAsTransactionalWhenTransactionalRecords() {
@@ -104,10 +104,10 @@ public class ProduceRequestTest {
             new ProduceRequestData()
                 .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
                     new ProduceRequestData.TopicProduceData()
-                            .setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
-                            .setPartitionData(Collections.singletonList(
-                                    new ProduceRequestData.PartitionProduceData().setIndex(9).setRecords(builder.build()))))
-                    ))
+                        .setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
+                        .setPartitionData(Collections.singletonList(
+                            new ProduceRequestData.PartitionProduceData().setIndex(9).setRecords(builder.build()))))
+                ))
                 .setAcks((short) 1)
                 .setTimeoutMs(5000),
             false);
@@ -119,19 +119,19 @@ public class ProduceRequestTest {
     public void testBuildWithCurrentMessageFormatWithoutTopicId() {
         ByteBuffer buffer = ByteBuffer.allocate(256);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE,
-                Compression.NONE, TimestampType.CREATE_TIME, 0L);
+            Compression.NONE, TimestampType.CREATE_TIME, 0L);
         builder.append(10L, null, "a".getBytes());
         ProduceRequest.Builder requestBuilder = ProduceRequest.builder(
-                new ProduceRequestData()
-                        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
-                                        new ProduceRequestData.TopicProduceData()
-                                                .setName("topic")  // TopicId will default to Uuid.ZERO and client will get UNKNOWN_TOPIC_ID error.
-                                                .setPartitionData(Collections.singletonList(
-                                                        new ProduceRequestData.PartitionProduceData().setIndex(9).setRecords(builder.build()))))
-                                ))
-                        .setAcks((short) 1)
-                        .setTimeoutMs(5000),
-                false);
+            new ProduceRequestData()
+                .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+                    new ProduceRequestData.TopicProduceData()
+                        .setName("topic")  // TopicId will default to Uuid.ZERO and client will get UNKNOWN_TOPIC_ID error.
+                        .setPartitionData(Collections.singletonList(
+                            new ProduceRequestData.PartitionProduceData().setIndex(9).setRecords(builder.build()))))
+                ))
+                .setAcks((short) 1)
+                .setTimeoutMs(5000),
+            false);
         assertEquals(ApiKeys.PRODUCE.oldestVersion(), requestBuilder.oldestAllowedVersion());
         assertEquals(ApiKeys.PRODUCE.latestVersion(), requestBuilder.latestAllowedVersion());
     }
@@ -157,7 +157,7 @@ public class ProduceRequestTest {
                     .setPartitionData(Collections.singletonList(
                         new ProduceRequestData.PartitionProduceData()
                             .setIndex(0)
-                                .setRecords(MemoryRecords.readableRecords(buffer)))))))
+                            .setRecords(MemoryRecords.readableRecords(buffer)))))))
             .setAcks((short) 1)
             .setTimeoutMs(5000));
         assertThrowsForAllVersions(requestBuilder, InvalidRecordException.class);
@@ -212,7 +212,7 @@ public class ProduceRequestTest {
                     .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
                         .setIndex(0)
                         .setRecords(builder.build()))))
-                ))
+            ))
             .setAcks((short) 1)
             .setTimeoutMs(5000));
         assertThrowsForAllVersions(requestBuilder, InvalidRecordException.class);
@@ -232,11 +232,11 @@ public class ProduceRequestTest {
                     .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
                         .setIndex(0)
                         .setRecords(builder.build()))))
-                ))
+            ))
             .setAcks((short) 1)
             .setTimeoutMs(1000);
         // Can't create ProduceRequest instance with version within [3, 7)
-        for (short version = ApiKeys.PRODUCE.oldestVersion(); version < 7; version++) {
+        for (short version = ApiKeys.PRODUCE.oldestVersion();version < 7;version++) {
             ProduceRequest.Builder requestBuilder = new ProduceRequest.Builder(version, version, produceData);
             assertThrowsForAllVersions(requestBuilder, UnsupportedCompressionTypeException.class);
         }
@@ -260,12 +260,12 @@ public class ProduceRequestTest {
             new ProduceRequestData()
                 .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Arrays.asList(
                     new ProduceRequestData.TopicProduceData().setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
-                            .setPartitionData(Collections.singletonList(
-                                    new ProduceRequestData.PartitionProduceData().setIndex(0).setRecords(txnRecords))),
+                        .setPartitionData(Collections.singletonList(
+                            new ProduceRequestData.PartitionProduceData().setIndex(0).setRecords(txnRecords))),
                     new ProduceRequestData.TopicProduceData().setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
-                            .setPartitionData(Collections.singletonList(
-                                    new ProduceRequestData.PartitionProduceData().setIndex(1).setRecords(nonTxnRecords))))
-                    ))
+                        .setPartitionData(Collections.singletonList(
+                            new ProduceRequestData.PartitionProduceData().setIndex(1).setRecords(nonTxnRecords))))
+                ))
                 .setAcks((short) -1)
                 .setTimeoutMs(5000),
             true);
@@ -289,12 +289,12 @@ public class ProduceRequestTest {
             new ProduceRequestData()
                 .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Arrays.asList(
                     new ProduceRequestData.TopicProduceData().setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
-                            .setPartitionData(Collections.singletonList(
-                                    new ProduceRequestData.PartitionProduceData().setIndex(0).setRecords(idempotentRecords))),
+                        .setPartitionData(Collections.singletonList(
+                            new ProduceRequestData.PartitionProduceData().setIndex(0).setRecords(idempotentRecords))),
                     new ProduceRequestData.TopicProduceData().setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
-                            .setPartitionData(Collections.singletonList(
-                                    new ProduceRequestData.PartitionProduceData().setIndex(1).setRecords(nonIdempotentRecords))))
-                    ))
+                        .setPartitionData(Collections.singletonList(
+                            new ProduceRequestData.PartitionProduceData().setIndex(1).setRecords(nonIdempotentRecords))))
+                ))
                 .setAcks((short) -1)
                 .setTimeoutMs(5000),
             true);
@@ -321,7 +321,7 @@ public class ProduceRequestTest {
     }
 
     private static <T extends Throwable> void assertThrowsForAllVersions(ProduceRequest.Builder builder,
-                                                                         Class<T> expectedType) {
+        Class<T> expectedType) {
         IntStream.range(builder.oldestAllowedVersion(), builder.latestAllowedVersion() + 1)
             .forEach(version -> assertThrows(expectedType, () -> builder.build((short) version).serialize()));
     }
@@ -330,11 +330,11 @@ public class ProduceRequestTest {
         return ProduceRequest.builder(new ProduceRequestData()
             .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
                 new ProduceRequestData.TopicProduceData()
-                     .setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
+                    .setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
                     .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
                         .setIndex(1)
                         .setRecords(MemoryRecords.withRecords(Compression.NONE, simpleRecord)))))
-                ))
+            ))
             .setAcks((short) -1)
             .setTimeoutMs(10)).build();
     }

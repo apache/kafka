@@ -46,7 +46,7 @@ public class MetadataRequestTest {
 
     @Test
     public void testEmptyMeansEmptyForVersionsAboveV0() {
-        for (int i = 1; i < MetadataRequestData.SCHEMAS.length; i++) {
+        for (int i = 1;i < MetadataRequestData.SCHEMAS.length;i++) {
             MetadataRequestData data = new MetadataRequestData();
             data.setAllowAutoTopicCreation(true);
             MetadataRequest parsedRequest = new MetadataRequest(data, (short) i);
@@ -77,10 +77,10 @@ public class MetadataRequestTest {
     public void testTopicIdAndNullTopicNameRequests() {
         // Construct invalid MetadataRequestTopics. We will build each one separately and ensure the error is thrown.
         List<MetadataRequestData.MetadataRequestTopic> topics = Arrays.asList(
-                new MetadataRequestData.MetadataRequestTopic().setName(null).setTopicId(Uuid.randomUuid()),
-                new MetadataRequestData.MetadataRequestTopic().setName(null),
-                new MetadataRequestData.MetadataRequestTopic().setTopicId(Uuid.randomUuid()),
-                new MetadataRequestData.MetadataRequestTopic().setName("topic").setTopicId(Uuid.randomUuid()));
+            new MetadataRequestData.MetadataRequestTopic().setName(null).setTopicId(Uuid.randomUuid()),
+            new MetadataRequestData.MetadataRequestTopic().setName(null),
+            new MetadataRequestData.MetadataRequestTopic().setTopicId(Uuid.randomUuid()),
+            new MetadataRequestData.MetadataRequestTopic().setName("topic").setTopicId(Uuid.randomUuid()));
 
         // if version is 10 or 11, the invalid topic metadata should return an error
         List<Short> invalidVersions = Arrays.asList((short) 10, (short) 11);
@@ -94,9 +94,9 @@ public class MetadataRequestTest {
     @Test
     public void testTopicIdWithZeroUuid() {
         List<MetadataRequestData.MetadataRequestTopic> topics = Arrays.asList(
-                new MetadataRequestData.MetadataRequestTopic().setName("topic").setTopicId(Uuid.ZERO_UUID),
-                new MetadataRequestData.MetadataRequestTopic().setName("topic").setTopicId(new Uuid(0L, 0L)),
-                new MetadataRequestData.MetadataRequestTopic().setName("topic"));
+            new MetadataRequestData.MetadataRequestTopic().setName("topic").setTopicId(Uuid.ZERO_UUID),
+            new MetadataRequestData.MetadataRequestTopic().setName("topic").setTopicId(new Uuid(0L, 0L)),
+            new MetadataRequestData.MetadataRequestTopic().setName("topic"));
 
         List<Short> invalidVersions = Arrays.asList((short) 10, (short) 11);
         invalidVersions.forEach(version -> topics.forEach(topic -> {

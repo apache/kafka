@@ -37,7 +37,7 @@ public class OAuthBearerClientInitialResponse {
     private static final String KVPAIRS = String.format("(%s=%s%s)*", KEY, VALUE, SEPARATOR);
     private static final Pattern AUTH_PATTERN = Pattern.compile("(?<scheme>[\\w]+)[ ]+(?<token>[-_~+/\\.a-zA-Z0-9]+([=]*))");
     private static final Pattern CLIENT_INITIAL_RESPONSE_PATTERN = Pattern.compile(
-            String.format("n,(a=(?<authzid>%s))?,%s(?<kvpairs>%s)%s", SASLNAME, SEPARATOR, KVPAIRS, SEPARATOR));
+        String.format("n,(a=(?<authzid>%s))?,%s(?<kvpairs>%s)%s", SASLNAME, SEPARATOR, KVPAIRS, SEPARATOR));
     public static final String AUTH_KEY = "auth";
 
     private final String tokenValue;
@@ -69,7 +69,7 @@ public class OAuthBearerClientInitialResponse {
             throw new SaslException("Invalid OAUTHBEARER client first message: invalid 'auth' format");
         if (!"bearer".equalsIgnoreCase(authMatcher.group("scheme"))) {
             String msg = String.format("Invalid scheme in OAUTHBEARER client first message: %s",
-                    matcher.group("scheme"));
+                matcher.group("scheme"));
             throw new SaslException(msg);
         }
         this.tokenValue = authMatcher.group("token");
@@ -128,7 +128,7 @@ public class OAuthBearerClientInitialResponse {
             extensions = SEPARATOR + extensions;
 
         String message = String.format("n,%s,%sauth=Bearer %s%s%s%s", authzid,
-                SEPARATOR, tokenValue, extensions, SEPARATOR, SEPARATOR);
+            SEPARATOR, tokenValue, extensions, SEPARATOR, SEPARATOR);
 
         return message.getBytes(StandardCharsets.UTF_8);
     }

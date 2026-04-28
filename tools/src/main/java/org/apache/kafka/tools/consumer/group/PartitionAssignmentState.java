@@ -21,7 +21,7 @@ import org.apache.kafka.common.Node;
 import java.util.Optional;
 
 record PartitionAssignmentState(String group, Optional<Node> coordinator, Optional<String> topic,
-                                Optional<Integer> partition, Optional<Long> offset, Optional<Long> lag,
-                                Optional<String> consumerId, Optional<String> host, Optional<String> clientId,
-                                Optional<Long> logEndOffset, Optional<Integer> leaderEpoch) {
+Optional<Integer> partition, Optional<Long> offset, Optional<Long> lag,
+Optional<String> consumerId, Optional<String> host, Optional<String> clientId,
+Optional<Long> logEndOffset, Optional<Integer> leaderEpoch) {
 }

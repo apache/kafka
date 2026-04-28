@@ -123,11 +123,11 @@ public class ShareConsumerPerformance {
     }
 
     private static void consume(List<ShareConsumer<byte[], byte[]>> shareConsumers,
-                                ShareConsumerPerfOptions options,
-                                AtomicLong totalRecordsRead,
-                                AtomicLong totalBytesRead,
-                                long startMs,
-                                List<String> clientIds) throws ExecutionException, InterruptedException {
+        ShareConsumerPerfOptions options,
+        AtomicLong totalRecordsRead,
+        AtomicLong totalBytesRead,
+        long startMs,
+        List<String> clientIds) throws ExecutionException, InterruptedException {
         long numRecords = options.numRecords();
         long recordFetchTimeoutMs = options.recordFetchTimeoutMs();
         shareConsumers.forEach(shareConsumer -> shareConsumer.subscribe(options.topic()));
@@ -191,18 +191,18 @@ public class ShareConsumerPerformance {
 
         if (recordsRead.get() < numRecords) {
             System.out.printf("WARNING: Exiting before consuming the expected number of records: timeout (%d ms) exceeded. " +
-                    "You can use the --timeout option to increase the timeout.%n", recordFetchTimeoutMs);
+                "You can use the --timeout option to increase the timeout.%n", recordFetchTimeoutMs);
         }
         totalRecordsRead.set(recordsRead.get());
         totalBytesRead.set(bytesRead.get());
     }
 
     private static void consumeRecordsForSingleShareConsumer(ShareConsumer<byte[], byte[]> shareConsumer,
-                                                              AtomicLong totalRecordsRead,
-                                                              AtomicLong totalBytesRead,
-                                                              ShareConsumerPerfOptions options,
-                                                              ShareConsumerConsumption shareConsumerConsumption,
-                                                              int index) throws InterruptedException {
+        AtomicLong totalRecordsRead,
+        AtomicLong totalBytesRead,
+        ShareConsumerPerfOptions options,
+        ShareConsumerConsumption shareConsumerConsumption,
+        int index) throws InterruptedException {
         SimpleDateFormat dateFormat = options.dateFormat();
         long currentTimeMs = System.currentTimeMillis();
         long lastConsumedTimeMs = currentTimeMs;
@@ -231,7 +231,7 @@ public class ShareConsumerPerformance {
                 if (currentTimeMs - lastReportTimeMs >= options.reportingIntervalMs()) {
                     if (options.showDetailedStats())
                         printShareConsumerProgress(bytesReadByConsumer, lastBytesRead, recordsReadByConsumer, lastRecordsRead,
-                                lastReportTimeMs, currentTimeMs, dateFormat, index);
+                            lastReportTimeMs, currentTimeMs, dateFormat, index);
                     lastReportTimeMs = currentTimeMs;
                     lastRecordsRead = recordsReadByConsumer;
                     lastBytesRead = bytesReadByConsumer;
@@ -243,13 +243,13 @@ public class ShareConsumerPerformance {
     }
 
     protected static void printShareConsumerProgress(long bytesRead,
-                                                long lastBytesRead,
-                                                long recordsRead,
-                                                long lastRecordsRead,
-                                                long startMs,
-                                                long endMs,
-                                                SimpleDateFormat dateFormat,
-                                                int index) {
+        long lastBytesRead,
+        long recordsRead,
+        long lastRecordsRead,
+        long startMs,
+        long endMs,
+        SimpleDateFormat dateFormat,
+        int index) {
         double elapsedMs = endMs - startMs;
         double totalMbRead = (bytesRead * 1.0) / (1024 * 1024);
         double intervalMbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024);
@@ -274,15 +274,15 @@ public class ShareConsumerPerformance {
         int index) {
         double totalMbRead = (bytesRead * 1.0) / (1024 * 1024);
         System.out.printf("Share consumer %s having client id %s consumption metrics- %s, %s, %.4f, %.4f, %.4f, %d, %d%n",
-                index,
-                clientId,
-                dateFormat.format(startMs),
-                dateFormat.format(endMs),
-                totalMbRead,
-                totalMbRead / elapsedSec,
-                recordsRead / elapsedSec,
-                recordsRead,
-                fetchTimeInMs
+            index,
+            clientId,
+            dateFormat.format(startMs),
+            dateFormat.format(endMs),
+            totalMbRead,
+            totalMbRead / elapsedSec,
+            recordsRead / elapsedSec,
+            recordsRead,
+            fetchTimeInMs
         );
     }
 
@@ -331,79 +331,79 @@ public class ShareConsumerPerformance {
         public ShareConsumerPerfOptions(String[] args) {
             super(args);
             bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED. The server(s) to connect to.")
-                    .withRequiredArg()
-                    .describedAs("server to connect to")
-                    .ofType(String.class);
+                .withRequiredArg()
+                .describedAs("server to connect to")
+                .ofType(String.class);
             topicOpt = parser.accepts("topic", "REQUIRED: The topic to consume from.")
-                    .withRequiredArg()
-                    .describedAs("topic")
-                    .ofType(String.class);
+                .withRequiredArg()
+                .describedAs("topic")
+                .ofType(String.class);
             groupIdOpt = parser.accepts("group", "The group id to consume on.")
-                    .withRequiredArg()
-                    .describedAs("gid")
-                    .defaultsTo("perf-share-consumer")
-                    .ofType(String.class);
+                .withRequiredArg()
+                .describedAs("gid")
+                .defaultsTo("perf-share-consumer")
+                .ofType(String.class);
             fetchSizeOpt = parser.accepts("fetch-size", "The amount of data to fetch in a single request.")
-                    .withRequiredArg()
-                    .describedAs("size")
-                    .ofType(Integer.class)
-                    .defaultsTo(1024 * 1024);
+                .withRequiredArg()
+                .describedAs("size")
+                .ofType(Integer.class)
+                .defaultsTo(1024 * 1024);
             commandPropertiesOpt = parser.accepts("command-property", "Kafka share consumer related configuration properties like client.id. " +
-                            "These configs take precedence over those passed via --command-config or --consumer.config.")
-                    .withRequiredArg()
-                    .describedAs("prop1=val1")
-                    .ofType(String.class);
+                "These configs take precedence over those passed via --command-config or --consumer.config.")
+                .withRequiredArg()
+                .describedAs("prop1=val1")
+                .ofType(String.class);
             socketBufferSizeOpt = parser.accepts("socket-buffer-size", "The size of the tcp RECV size.")
-                    .withRequiredArg()
-                    .describedAs("size")
-                    .ofType(Integer.class)
-                    .defaultsTo(2 * 1024 * 1024);
+                .withRequiredArg()
+                .describedAs("size")
+                .ofType(Integer.class)
+                .defaultsTo(2 * 1024 * 1024);
             consumerConfigOpt = parser.accepts("consumer.config", "(DEPRECATED) Share consumer config properties file. " +
-                    "This option will be removed in a future version. Use --command-config instead.")
-                    .withRequiredArg()
-                    .describedAs("config file")
-                    .ofType(String.class);
+                "This option will be removed in a future version. Use --command-config instead.")
+                .withRequiredArg()
+                .describedAs("config file")
+                .ofType(String.class);
             commandConfigOpt = parser.accepts("command-config", "Config properties file.")
-                    .withRequiredArg()
-                    .describedAs("config file")
-                    .ofType(String.class);
+                .withRequiredArg()
+                .describedAs("config file")
+                .ofType(String.class);
             printMetricsOpt = parser.accepts("print-metrics", "Print out the metrics.");
             showDetailedStatsOpt = parser.accepts("show-detailed-stats", "If set, stats are reported for each reporting " +
-                    "interval as configured by reporting-interval.");
+                "interval as configured by reporting-interval.");
             recordFetchTimeoutOpt = parser.accepts("timeout", "The maximum allowed time in milliseconds between returned records.")
-                    .withOptionalArg()
-                    .describedAs("milliseconds")
-                    .ofType(Long.class)
-                    .defaultsTo(10_000L);
+                .withOptionalArg()
+                .describedAs("milliseconds")
+                .ofType(Long.class)
+                .defaultsTo(10_000L);
             numMessagesOpt = parser.accepts("messages", "(DEPRECATED) The number of records to consume. " +
-                            "This option will be removed in a future version. Use --num-records instead.")
-                    .withRequiredArg()
-                    .describedAs("count")
-                    .ofType(Long.class);
+                "This option will be removed in a future version. Use --num-records instead.")
+                .withRequiredArg()
+                .describedAs("count")
+                .ofType(Long.class);
             numRecordsOpt = parser.accepts("num-records", "REQUIRED: The number of records to consume.")
-                    .withRequiredArg()
-                    .describedAs("count")
-                    .ofType(Long.class);
+                .withRequiredArg()
+                .describedAs("count")
+                .ofType(Long.class);
             reportingIntervalOpt = parser.accepts("reporting-interval", "Interval in milliseconds at which to print progress info.")
-                    .withRequiredArg()
-                    .withValuesConvertedBy(regex("^\\d+$"))
-                    .describedAs("interval_ms")
-                    .ofType(Long.class)
-                    .defaultsTo(5_000L);
+                .withRequiredArg()
+                .withValuesConvertedBy(regex("^\\d+$"))
+                .describedAs("interval_ms")
+                .ofType(Long.class)
+                .defaultsTo(5_000L);
             dateFormatOpt = parser.accepts("date-format", "The date format to use for formatting the time field. " +
-                            "See java.text.SimpleDateFormat for options.")
-                    .withRequiredArg()
-                    .describedAs("date format")
-                    .ofType(String.class)
-                    .defaultsTo("yyyy-MM-dd HH:mm:ss:SSS");
+                "See java.text.SimpleDateFormat for options.")
+                .withRequiredArg()
+                .describedAs("date format")
+                .ofType(String.class)
+                .defaultsTo("yyyy-MM-dd HH:mm:ss:SSS");
             hideHeaderOpt = parser.accepts("hide-header", "If set, skips printing the header for the stats.");
             numThreadsOpt = parser.accepts("threads", "The number of share consumers to use for sharing the load.")
-                    .withRequiredArg()
-                    .describedAs("count")
-                    .ofType(Integer.class)
-                    .defaultsTo(1);
+                .withRequiredArg()
+                .describedAs("count")
+                .ofType(Integer.class)
+                .defaultsTo(1);
             showShareConsumerStatsOpt = parser.accepts("show-consumer-stats", "If set, stats are reported for each share " +
-                    "consumer depending on the no. of threads.");
+                "consumer depending on the no. of threads.");
             try {
                 options = parser.parse(args);
             } catch (OptionException e) {
@@ -437,8 +437,8 @@ public class ShareConsumerPerformance {
 
         private Properties readProps(List<String> commandProperties, String commandConfigFile) throws IOException {
             Properties props = commandConfigFile != null
-                    ? Utils.loadProps(commandConfigFile)
-                    : new Properties();
+                ? Utils.loadProps(commandConfigFile)
+                : new Properties();
             props.putAll(parseKeyValueArgs(commandProperties));
             return props;
         }
@@ -470,8 +470,8 @@ public class ShareConsumerPerformance {
 
         public long numRecords() {
             return options.has(numMessagesOpt)
-                    ? options.valueOf(numMessagesOpt)
-                    : options.valueOf(numRecordsOpt);
+                ? options.valueOf(numMessagesOpt)
+                : options.valueOf(numRecordsOpt);
         }
 
         public int threads() {

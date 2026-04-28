@@ -61,7 +61,7 @@ public class DynamicVoterTest {
         assertEquals("No @ found in dynamic voter string.",
             assertThrows(IllegalArgumentException.class,
                 () -> DynamicVoter.parse("localhost:8020:K90IZ-0DRNazJ49kCZ1EMQ")).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -69,7 +69,7 @@ public class DynamicVoterTest {
         assertEquals("Invalid @ at beginning of dynamic voter string.",
             assertThrows(IllegalArgumentException.class,
                 () -> DynamicVoter.parse("@localhost:8020:K90IZ-0DRNazJ49kCZ1EMQ")).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -77,7 +77,7 @@ public class DynamicVoterTest {
         assertEquals("Invalid negative node id -1 in dynamic voter string.",
             assertThrows(IllegalArgumentException.class,
                 () -> DynamicVoter.parse("-1@localhost:8020:K90IZ-0DRNazJ49kCZ1EMQ")).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -85,7 +85,7 @@ public class DynamicVoterTest {
         assertEquals("Failed to parse node id in dynamic voter string.",
             assertThrows(IllegalArgumentException.class,
                 () -> DynamicVoter.parse("blah@localhost:8020:K90IZ-0DRNazJ49kCZ1EMQ")).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -93,7 +93,7 @@ public class DynamicVoterTest {
         assertEquals("No hostname found after node id.",
             assertThrows(IllegalArgumentException.class,
                 () -> DynamicVoter.parse("2@")).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -101,7 +101,7 @@ public class DynamicVoterTest {
         assertEquals("Hostname began with left bracket, but no right bracket was found.",
             assertThrows(IllegalArgumentException.class,
                 () -> DynamicVoter.parse("5@[2001:4860:4860::8888:8020:__0IZ-0DRNazJ49kCZ1EMQ")).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -109,7 +109,7 @@ public class DynamicVoterTest {
         assertEquals("No colon following hostname could be found.",
             assertThrows(IllegalArgumentException.class,
                 () -> DynamicVoter.parse("2@localhost8020K90IZ-0DRNazJ49kCZ1EMQ")).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -117,7 +117,7 @@ public class DynamicVoterTest {
         assertEquals("Port section must start with a colon.",
             assertThrows(IllegalArgumentException.class,
                 () -> DynamicVoter.parse("5@[2001:4860:4860::8888]8020:__0IZ-0DRNazJ49kCZ1EMQ")).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -125,7 +125,7 @@ public class DynamicVoterTest {
         assertEquals("No colon following port could be found.",
             assertThrows(IllegalArgumentException.class,
                 () -> DynamicVoter.parse("5@[2001:4860:4860::8888]:8020__0IZ-0DRNazJ49kCZ1EMQ")).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -133,7 +133,7 @@ public class DynamicVoterTest {
         assertEquals("Failed to parse port in dynamic voter string.",
             assertThrows(IllegalArgumentException.class,
                 () -> DynamicVoter.parse("5@[2001:4860:4860::8888]:8020m:__0IZ-0DRNazJ49kCZ1EMQ")).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -141,7 +141,7 @@ public class DynamicVoterTest {
         assertEquals("Invalid port -8020 in dynamic voter string.",
             assertThrows(IllegalArgumentException.class,
                 () -> DynamicVoter.parse("5@[2001:4860:4860::8888]:-8020:__0IZ-0DRNazJ49kCZ1EMQ")).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -149,7 +149,7 @@ public class DynamicVoterTest {
         assertEquals("Invalid port 666666 in dynamic voter string.",
             assertThrows(IllegalArgumentException.class,
                 () -> DynamicVoter.parse("5@[2001:4860:4860::8888]:666666:__0IZ-0DRNazJ49kCZ1EMQ")).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -157,7 +157,7 @@ public class DynamicVoterTest {
         assertEquals("Failed to parse directory ID in dynamic voter string.",
             assertThrows(IllegalArgumentException.class,
                 () -> DynamicVoter.parse("5@[2001:4860:4860::8888]:8020:%_0IZ-0DRNazJ49kCZ1EMQ")).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -165,7 +165,7 @@ public class DynamicVoterTest {
         assertEquals("Failed to parse directory ID in dynamic voter string.",
             assertThrows(IllegalArgumentException.class,
                 () -> DynamicVoter.parse("5@[2001:4860:4860::8888]:8020:")).
-                    getMessage());
+                getMessage());
     }
 
     @Test

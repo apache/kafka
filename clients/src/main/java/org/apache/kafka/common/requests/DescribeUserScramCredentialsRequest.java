@@ -51,7 +51,7 @@ public class DescribeUserScramCredentialsRequest extends AbstractRequest {
 
     public static DescribeUserScramCredentialsRequest parse(Readable readable, short version) {
         return new DescribeUserScramCredentialsRequest(new DescribeUserScramCredentialsRequestData(
-                readable, version), version);
+            readable, version), version);
     }
 
     @Override
@@ -63,9 +63,9 @@ public class DescribeUserScramCredentialsRequest extends AbstractRequest {
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         ApiError apiError = ApiError.fromThrowable(e);
         DescribeUserScramCredentialsResponseData response = new DescribeUserScramCredentialsResponseData()
-                .setThrottleTimeMs(throttleTimeMs)
-                .setErrorCode(apiError.error().code())
-                .setErrorMessage(apiError.message());
+            .setThrottleTimeMs(throttleTimeMs)
+            .setErrorCode(apiError.error().code())
+            .setErrorMessage(apiError.message());
 
         data.users().forEach(__ ->
             response.results().add(new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()

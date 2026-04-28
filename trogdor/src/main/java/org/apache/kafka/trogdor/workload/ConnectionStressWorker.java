@@ -98,7 +98,7 @@ public class ConnectionStressWorker implements TaskWorker {
 
     @Override
     public void start(Platform platform, WorkerStatusTracker status,
-                      KafkaFutureImpl<String> doneFuture) throws Exception {
+        KafkaFutureImpl<String> doneFuture) throws Exception {
         if (!running.compareAndSet(false, true)) {
             throw new IllegalStateException("ConnectionStressWorker is already running.");
         }
@@ -163,23 +163,23 @@ public class ConnectionStressWorker implements TaskWorker {
                 ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(conf, Time.SYSTEM, logContext);
                 try (Metrics metrics = new Metrics()) {
                     try (Selector selector = new Selector(conf.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
-                        metrics, Time.SYSTEM, "", channelBuilder, logContext)) {
+                             metrics, Time.SYSTEM, "", channelBuilder, logContext)) {
                         try (NetworkClient client = new NetworkClient(selector,
-                            updater,
-                            "ConnectionStressWorker",
-                            1,
-                            1000,
-                            1000,
-                            4096,
-                            4096,
-                            1000,
-                            10 * 1000,
-                            127 * 1000,
-                            Time.SYSTEM,
-                            false,
-                            new ApiVersions(),
-                            logContext,
-                            MetadataRecoveryStrategy.NONE)) {
+                                 updater,
+                                 "ConnectionStressWorker",
+                                 1,
+                                 1000,
+                                 1000,
+                                 4096,
+                                 4096,
+                                 1000,
+                                 10 * 1000,
+                                 127 * 1000,
+                                 Time.SYSTEM,
+                                 false,
+                                 new ApiVersions(),
+                                 logContext,
+                                 MetadataRecoveryStrategy.NONE)) {
                             NetworkClientUtils.awaitReady(client, targetNode, Time.SYSTEM, 500);
                         }
                     }
@@ -196,7 +196,7 @@ public class ConnectionStressWorker implements TaskWorker {
         }
     }
 
-    static class FetchMetadataStressor  implements Stressor {
+    static class FetchMetadataStressor implements Stressor {
         private final Properties props;
 
         FetchMetadataStressor(ConnectionStressSpec spec) {
@@ -209,7 +209,7 @@ public class ConnectionStressWorker implements TaskWorker {
         public boolean tryConnect() {
             try (Admin client = Admin.create(this.props)) {
                 client.describeCluster().nodes().get();
-            } catch (ExecutionException | InterruptedException  e) {
+            } catch (ExecutionException | InterruptedException e) {
                 return false;
             }
             return true;
@@ -272,8 +272,8 @@ public class ConnectionStressWorker implements TaskWorker {
 
         @JsonCreator
         StatusData(@JsonProperty("totalConnections") long totalConnections,
-                   @JsonProperty("totalFailedConnections") long totalFailedConnections,
-                   @JsonProperty("connectsPerSec") double connectsPerSec) {
+            @JsonProperty("totalFailedConnections") long totalFailedConnections,
+            @JsonProperty("connectsPerSec") double connectsPerSec) {
             this.totalConnections = totalConnections;
             this.totalFailedConnections = totalFailedConnections;
             this.connectsPerSec = connectsPerSec;

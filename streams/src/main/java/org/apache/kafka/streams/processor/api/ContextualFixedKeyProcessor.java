@@ -27,7 +27,8 @@ public abstract class ContextualFixedKeyProcessor<KIn, VIn, VOut> implements Fix
 
     private FixedKeyProcessorContext<KIn, VOut> context;
 
-    protected ContextualFixedKeyProcessor() {}
+    protected ContextualFixedKeyProcessor() {
+    }
 
     @Override
     public void init(final FixedKeyProcessorContext<KIn, VOut> context) {

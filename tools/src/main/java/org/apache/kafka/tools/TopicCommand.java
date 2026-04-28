@@ -285,7 +285,7 @@ public abstract class TopicCommand {
                 .filter(config -> !config.isDefault())
                 .map(ce -> ce.name() + "=" + ce.value())
                 .collect(Collectors.joining(","));
-            System.out.print("Topic: " +  topic);
+            System.out.print("Topic: " + topic);
             if (!topicId.equals(Uuid.ZERO_UUID))
                 System.out.print("\tTopicId: " + topicId);
             System.out.print("\tPartitionCount: " + numPartitions);
@@ -302,9 +302,9 @@ public abstract class TopicCommand {
         private final PartitionReassignment reassignment;
 
         PartitionDescription(String topic,
-                             TopicPartitionInfo info,
-                             Config config,
-                             PartitionReassignment reassignment) {
+            TopicPartitionInfo info,
+            Config config,
+            PartitionReassignment reassignment) {
             this.topic = topic;
             this.info = info;
             this.config = config;
@@ -591,8 +591,8 @@ public abstract class TopicCommand {
         }
 
         private void printPartitionDescription(DescribeOptions describeOptions, Map<TopicPartition, PartitionReassignment> reassignments,
-                                               org.apache.kafka.clients.admin.TopicDescription td, String topicName, Config config,
-                                               ArrayList<TopicPartitionInfo> sortedPartitions) {
+            org.apache.kafka.clients.admin.TopicDescription td, String topicName, Config config,
+            ArrayList<TopicPartitionInfo> sortedPartitions) {
             if (describeOptions.describePartitions) {
                 for (TopicPartitionInfo partition : sortedPartitions) {
                     PartitionReassignment reassignment =
@@ -605,8 +605,8 @@ public abstract class TopicCommand {
         }
 
         private void printDescribeConfig(TopicCommandOptions opts, DescribeOptions describeOptions, Map<TopicPartition, PartitionReassignment> reassignments,
-                                         org.apache.kafka.clients.admin.TopicDescription td, String topicName, Uuid topicId,
-                                         Config config, ArrayList<TopicPartitionInfo> sortedPartitions) {
+            org.apache.kafka.clients.admin.TopicDescription td, String topicName, Uuid topicId,
+            Config config, ArrayList<TopicPartitionInfo> sortedPartitions) {
             if (describeOptions.describeConfigs) {
                 List<ConfigEntry> entries = new ArrayList<>(config.entries());
                 boolean hasNonDefault = entries.stream().anyMatch(e -> !e.isDefault());
@@ -677,7 +677,7 @@ public abstract class TopicCommand {
         private final ArgumentAcceptingOptionSpec<String> topicIdOpt;
 
         private static final String KAFKA_CONFIGS_CLI_SUPPORTS_ALTERING_TOPIC_CONFIGS =
-                " (To alter topic configurations, the kafka-configs tool can be used.)";
+            " (To alter topic configurations, the kafka-configs tool can be used.)";
 
         private final ArgumentAcceptingOptionSpec<String> configOpt;
 
@@ -730,10 +730,10 @@ public abstract class TopicCommand {
             createOpt = parser.accepts("create", "Create a new topic.");
             deleteOpt = parser.accepts("delete", "Delete a topic.");
             alterOpt = parser.accepts("alter", "Alter the number of partitions and replica assignment." +
-                    KAFKA_CONFIGS_CLI_SUPPORTS_ALTERING_TOPIC_CONFIGS);
+                KAFKA_CONFIGS_CLI_SUPPORTS_ALTERING_TOPIC_CONFIGS);
             describeOpt = parser.accepts("describe", "List details for the given topics.");
             topicOpt = parser.accepts("topic", "The topic to create, alter, describe or delete. It also accepts a regular " +
-                            "expression, except for --create option.")
+                "expression, except for --create option.")
                 .withRequiredArg()
                 .describedAs("topic")
                 .ofType(String.class);
@@ -744,11 +744,11 @@ public abstract class TopicCommand {
             String nl = System.lineSeparator();
 
             String logConfigNames = LogConfig.nonInternalConfigNames().stream().map(config -> "\t" + config).collect(Collectors.joining(nl));
-            configOpt = parser.accepts("config",  "A topic configuration override for the topic being created." +
-                            " The following is a list of valid configurations: " + nl + logConfigNames + nl +
-                            "See the Kafka documentation for full details on the topic configs." +
-                            " It is supported only in combination with --create." +
-                            KAFKA_CONFIGS_CLI_SUPPORTS_ALTERING_TOPIC_CONFIGS)
+            configOpt = parser.accepts("config", "A topic configuration override for the topic being created." +
+                " The following is a list of valid configurations: " + nl + logConfigNames + nl +
+                "See the Kafka documentation for full details on the topic configs." +
+                " It is supported only in combination with --create." +
+                KAFKA_CONFIGS_CLI_SUPPORTS_ALTERING_TOPIC_CONFIGS)
                 .withRequiredArg()
                 .describedAs("name=value")
                 .ofType(String.class);
@@ -758,7 +758,7 @@ public abstract class TopicCommand {
                 .describedAs("name")
                 .ofType(String.class);
             partitionsOpt = parser.accepts("partitions", "The number of partitions for the topic being created or " +
-                    "altered. If not supplied with --create, the topic uses the cluster default. (WARNING: If partitions are increased for a topic that has a key, the partition logic or ordering of the messages will be affected).")
+                "altered. If not supplied with --create, the topic uses the cluster default. (WARNING: If partitions are increased for a topic that has a key, the partition logic or ordering of the messages will be affected).")
                 .withRequiredArg()
                 .describedAs("# of partitions")
                 .ofType(java.lang.Integer.class);
@@ -767,9 +767,9 @@ public abstract class TopicCommand {
                 .describedAs("replication factor")
                 .ofType(java.lang.Integer.class);
             replicaAssignmentOpt = parser.accepts("replica-assignment", "A list of manual partition-to-broker assignments for the topic being created or altered.")
-                    .withRequiredArg()
-                    .describedAs("broker_id_for_part1_replica1 : broker_id_for_part1_replica2 , " +
-                            "broker_id_for_part2_replica1 : broker_id_for_part2_replica2 , ...")
+                .withRequiredArg()
+                .describedAs("broker_id_for_part1_replica1 : broker_id_for_part1_replica2 , " +
+                    "broker_id_for_part2_replica1 : broker_id_for_part2_replica2 , ...")
                 .ofType(String.class);
             reportUnderReplicatedPartitionsOpt = parser.accepts("under-replicated-partitions",
                 "If set when describing topics, only show under-replicated partitions.");
@@ -789,9 +789,9 @@ public abstract class TopicCommand {
                 "Exclude internal topics when listing or describing topics. By default, the internal topics are included.");
             partitionSizeLimitPerResponseOpt = parser.accepts("partition-size-limit-per-response",
                 "The maximum partition size to be included in one DescribeTopicPartitions response.")
-                    .withRequiredArg()
-                    .describedAs("maximum number of partitions per response")
-                    .ofType(java.lang.Integer.class);
+                .withRequiredArg()
+                .describedAs("maximum number of partitions per response")
+                .ofType(java.lang.Integer.class);
             options = parser.parse(args);
 
             allTopicLevelOpts = Set.of(alterOpt, createOpt, describeOpt, listOpt, deleteOpt);

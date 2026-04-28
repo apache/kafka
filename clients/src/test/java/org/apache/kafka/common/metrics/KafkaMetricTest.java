@@ -70,7 +70,7 @@ public class KafkaMetricTest {
     @Test
     public void testConstructorWithNullProvider() {
         assertThrows(NullPointerException.class, () ->
-                new KafkaMetric(new Object(), METRIC_NAME, null, new MetricConfig(), new MockTime())
+            new KafkaMetric(new Object(), METRIC_NAME, null, new MetricConfig(), new MockTime())
         );
     }
 }

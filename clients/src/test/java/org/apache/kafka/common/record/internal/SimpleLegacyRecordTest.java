@@ -40,7 +40,7 @@ public class SimpleLegacyRecordTest {
         DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
         AbstractLegacyRecordBatch.writeHeader(out, 0L, LegacyRecord.RECORD_OVERHEAD_V1);
         LegacyRecord.write(out, RecordBatch.MAGIC_VALUE_V1, 1L, (byte[]) null, null,
-                CompressionType.GZIP, TimestampType.CREATE_TIME);
+            CompressionType.GZIP, TimestampType.CREATE_TIME);
 
         buffer.flip();
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
@@ -52,7 +52,7 @@ public class SimpleLegacyRecordTest {
         ByteBuffer emptyCompressedValue = ByteBuffer.allocate(64);
         Compression gzip = Compression.gzip().build();
         OutputStream gzipOutput = gzip.wrapForOutput(new ByteBufferOutputStream(emptyCompressedValue),
-                RecordBatch.MAGIC_VALUE_V1);
+            RecordBatch.MAGIC_VALUE_V1);
         gzipOutput.close();
         emptyCompressedValue.flip();
 
@@ -60,7 +60,7 @@ public class SimpleLegacyRecordTest {
         DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
         AbstractLegacyRecordBatch.writeHeader(out, 0L, LegacyRecord.RECORD_OVERHEAD_V1 + emptyCompressedValue.remaining());
         LegacyRecord.write(out, RecordBatch.MAGIC_VALUE_V1, 1L, null, Utils.toArray(emptyCompressedValue),
-                CompressionType.GZIP, TimestampType.CREATE_TIME);
+            CompressionType.GZIP, TimestampType.CREATE_TIME);
 
         buffer.flip();
 

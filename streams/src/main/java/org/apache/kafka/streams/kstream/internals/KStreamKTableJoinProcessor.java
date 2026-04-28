@@ -60,11 +60,11 @@ class KStreamKTableJoinProcessor<StreamKey, StreamValue, TableKey, TableValue, V
     private final String storeName;
 
     KStreamKTableJoinProcessor(final KTableValueGetter<TableKey, TableValue> valueGetter,
-                               final KeyValueMapper<? super StreamKey, ? super StreamValue, ? extends TableKey> keyMapper,
-                               final ValueJoinerWithKey<? super StreamKey, ? super StreamValue, ? super TableValue, ? extends VOut> joiner,
-                               final boolean leftJoin,
-                               final Optional<Duration> gracePeriod,
-                               final Optional<String> storeName) {
+        final KeyValueMapper<? super StreamKey, ? super StreamValue, ? extends TableKey> keyMapper,
+        final ValueJoinerWithKey<? super StreamKey, ? super StreamValue, ? super TableValue, ? extends VOut> joiner,
+        final boolean leftJoin,
+        final Optional<Duration> gracePeriod,
+        final Optional<String> storeName) {
         this.valueGetter = valueGetter;
         this.keyMapper = keyMapper;
         this.joiner = joiner;

@@ -43,5 +43,6 @@ public interface PartitionMetadataClient extends AutoCloseable {
     record OffsetResponse(
         long offset,
         Errors error
-    ) { }
+    ) {
+    }
 }

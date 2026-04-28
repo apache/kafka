@@ -47,8 +47,8 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, K, V> {
     private boolean sendOldValues = false;
 
     KTableReduce(final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized,
-                 final Reducer<V> addReducer,
-                 final Reducer<V> removeReducer) {
+        final Reducer<V> addReducer,
+        final Reducer<V> removeReducer) {
         this.storeFactory = new KeyValueStoreMaterializer<>(materialized);
         this.storeName = materialized.storeName();
         this.addReducer = addReducer;

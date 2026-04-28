@@ -192,10 +192,10 @@ public class DumpLogSegments {
 
     // Visible for testing
     static void dumpIndex(File file,
-                          boolean indexSanityOnly,
-                          boolean verifyOnly,
-                          Map<String, Map<Long, Long>> misMatchesForIndexFilesMap,
-                          int maxMessageSize) throws IOException {
+        boolean indexSanityOnly,
+        boolean verifyOnly,
+        Map<String, Map<Long, Long>> misMatchesForIndexFilesMap,
+        int maxMessageSize) throws IOException {
         long startOffset = Long.parseLong(file.getName().split("\\.")[0]);
         File logFile = new File(file.getAbsoluteFile().getParent(),
             file.getName().split("\\.")[0] + UnifiedLog.LOG_FILE_SUFFIX);
@@ -239,9 +239,9 @@ public class DumpLogSegments {
 
     // Visible for testing
     static void dumpTimeIndex(File file,
-                              boolean indexSanityOnly,
-                              boolean verifyOnly,
-                              TimeIndexDumpErrors timeIndexDumpErrors) throws IOException {
+        boolean indexSanityOnly,
+        boolean verifyOnly,
+        TimeIndexDumpErrors timeIndexDumpErrors) throws IOException {
         long startOffset = Long.parseLong(file.getName().split("\\.")[0]);
         File logFile = new File(file.getAbsoluteFile().getParent(),
             file.getName().split("\\.")[0] + UnifiedLog.LOG_FILE_SUFFIX);
@@ -325,7 +325,8 @@ public class DumpLogSegments {
         ParseResult<K, V> parse(Record record);
     }
 
-    record ParseResult<K, V>(Optional<K> key, Optional<V> value) { }
+    record ParseResult<K, V>(Optional<K> key, Optional<V> value) {
+    }
 
     static class DecoderMessageParser<K, V> implements MessageParser<K, V> {
         private final Decoder<K> keyDecoder;
@@ -355,12 +356,12 @@ public class DumpLogSegments {
 
     /* print out the contents of the log */
     private static void dumpLog(File file,
-                                boolean printContents,
-                                Map<String, Map<Long, Long>> nonConsecutivePairsForLogFilesMap,
-                                boolean isDeepIteration,
-                                MessageParser<?, ?> parser,
-                                boolean skipRecordMetadata,
-                                int maxBytes) throws IOException {
+        boolean printContents,
+        Map<String, Map<Long, Long>> nonConsecutivePairsForLogFilesMap,
+        boolean isDeepIteration,
+        MessageParser<?, ?> parser,
+        boolean skipRecordMetadata,
+        int maxBytes) throws IOException {
         if (file.getName().endsWith(UnifiedLog.LOG_FILE_SUFFIX)) {
             long startOffset = Long.parseLong(file.getName().split("\\.")[0]);
             System.out.println("Log starting offset: " + startOffset);
@@ -370,7 +371,7 @@ public class DumpLogSegments {
             } else {
                 Optional<SnapshotPath> pathOpt = Snapshots.parse(file.toPath());
                 System.out.println("Snapshot end offset: " + pathOpt.get().snapshotId().offset() +
-                        ", epoch: " + pathOpt.get().snapshotId().epoch());
+                    ", epoch: " + pathOpt.get().snapshotId().epoch());
             }
         }
 
@@ -398,12 +399,12 @@ public class DumpLogSegments {
     }
 
     private static void dumpBatchRecords(FileLogInputStream.FileChannelRecordBatch batch,
-                                         AtomicLong lastOffset,
-                                         File file,
-                                         Map<String, Map<Long, Long>> nonConsecutivePairsForLogFilesMap,
-                                         boolean skipRecordMetadata,
-                                         boolean printContents,
-                                         MessageParser<?, ?> parser) {
+        AtomicLong lastOffset,
+        File file,
+        Map<String, Map<Long, Long>> nonConsecutivePairsForLogFilesMap,
+        boolean skipRecordMetadata,
+        boolean printContents,
+        MessageParser<?, ?> parser) {
         for (Record record : batch) {
             long previousOffset = lastOffset.get();
             if (record.offset() != previousOffset + 1) {
@@ -426,7 +427,7 @@ public class DumpLogSegments {
     }
 
     private static void printRecordMetadata(FileLogInputStream.FileChannelRecordBatch batch,
-                                            Record record) {
+        Record record) {
         System.out.print(RECORD_INDENT + " " + "offset: " + record.offset() +
             " " + batch.timestampType() + ": " + record.timestamp() +
             " keySize: " + record.keySize() + " valueSize: " + record.valueSize());
@@ -434,8 +435,8 @@ public class DumpLogSegments {
         if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
             System.out.print(" sequence: " + record.sequence() +
                 " headerKeys: " + Arrays.stream(record.headers())
-                    .map(Header::key)
-                    .collect(Collectors.joining(",", "[", "]")));
+                .map(Header::key)
+                .collect(Collectors.joining(",", "[", "]")));
         }
 
         if (record instanceof AbstractLegacyRecordBatch r) {
@@ -631,6 +632,7 @@ public class DumpLogSegments {
         }
 
         protected abstract JsonNode keyAsJson(ApiMessage message);
+
         protected abstract JsonNode valueAsJson(ApiMessage message, short version);
     }
 
@@ -817,9 +819,9 @@ public class DumpLogSegments {
                 "If set, just verify the index log without printing its content.");
             indexSanityOpt = parser.accepts("index-sanity-check",
                 "If set, just checks the index sanity without printing its content. " +
-                "This is the same check that is executed on broker startup to determine if an index needs rebuilding or not.");
+                    "This is the same check that is executed on broker startup to determine if an index needs rebuilding or not.");
             filesOpt = parser.accepts("files",
-                    "REQUIRED: The comma separated list of data and index log files to be dumped.")
+                "REQUIRED: The comma separated list of data and index log files to be dumped.")
                 .withRequiredArg()
                 .describedAs("file1, file2, ...")
                 .ofType(String.class);
@@ -829,7 +831,7 @@ public class DumpLogSegments {
                 .ofType(Integer.class)
                 .defaultsTo(5 * 1024 * 1024);
             maxBytesOpt = parser.accepts("max-bytes",
-                    "Limit the amount of total batches read in bytes avoiding reading the whole .log file(s).")
+                "Limit the amount of total batches read in bytes avoiding reading the whole .log file(s).")
                 .withRequiredArg()
                 .describedAs("size")
                 .ofType(Integer.class)
@@ -837,12 +839,12 @@ public class DumpLogSegments {
             deepIterationOpt = parser.accepts("deep-iteration",
                 "If set, uses deep instead of shallow iteration. Automatically set if print-data-log is enabled.");
             valueDecoderOpt = parser.accepts("value-decoder-class",
-                    "If set, used to deserialize the messages. This class should implement org.apache.kafka.tools.api.Decoder trait. Custom jar should be available in kafka/libs directory.")
+                "If set, used to deserialize the messages. This class should implement org.apache.kafka.tools.api.Decoder trait. Custom jar should be available in kafka/libs directory.")
                 .withOptionalArg()
                 .ofType(String.class)
                 .defaultsTo(StringDecoder.class.getName());
             keyDecoderOpt = parser.accepts("key-decoder-class",
-                    "If set, used to deserialize the keys. This class should implement org.apache.kafka.tools.api.Decoder trait. Custom jar should be available in kafka/libs directory.")
+                "If set, used to deserialize the keys. This class should implement org.apache.kafka.tools.api.Decoder trait. Custom jar should be available in kafka/libs directory.")
                 .withOptionalArg()
                 .ofType(String.class)
                 .defaultsTo(StringDecoder.class.getName());
@@ -854,7 +856,7 @@ public class DumpLogSegments {
                 "If set, log data will be parsed as cluster metadata records.");
             remoteMetadataOpt = parser.accepts("remote-log-metadata-decoder",
                 "If set, log data will be parsed as TopicBasedRemoteLogMetadataManager (RLMM) metadata records. " +
-                "Instead, the value-decoder-class option can be used if a custom RLMM implementation is configured.");
+                    "Instead, the value-decoder-class option can be used if a custom RLMM implementation is configured.");
             shareStateOpt = parser.accepts("share-group-state-decoder",
                 "If set, log data will be parsed as share group state data from the __share_group_state topic.");
             skipRecordMetadataOpt = parser.accepts("skip-record-metadata",

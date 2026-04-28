@@ -115,7 +115,7 @@ public class ShareGroupCommand {
         Set<GroupState> validStates = GroupState.groupStatesForType(GroupType.SHARE);
         if (!validStates.containsAll(parsedStates)) {
             throw new IllegalArgumentException("Invalid state list '" + input + "'. Valid states are: " +
-                    validStates.stream().map(GroupState::toString).collect(Collectors.joining(", ")));
+                validStates.stream().map(GroupState::toString).collect(Collectors.joining(", ")));
         }
         return parsedStates;
     }
@@ -655,7 +655,7 @@ public class ShareGroupCommand {
             Map<String, List<TopicPartition>> grouped = new HashMap<>();
             assignment.topicPartitions().forEach(tp ->
                 grouped
-                   .computeIfAbsent(tp.topic(), key -> new ArrayList<>())
+                    .computeIfAbsent(tp.topic(), key -> new ArrayList<>())
                     .add(tp)
             );
             return grouped.entrySet().stream().map(entry -> {
@@ -683,6 +683,6 @@ public class ShareGroupCommand {
     }
 
     record SharePartitionOffsetInformation(String group, String topic, int partition, Optional<Long> offset,
-                                           Optional<Integer> leaderEpoch, Optional<Long> lag) {
+    Optional<Integer> leaderEpoch, Optional<Long> lag) {
     }
 }

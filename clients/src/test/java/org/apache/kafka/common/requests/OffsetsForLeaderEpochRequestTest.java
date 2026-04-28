@@ -30,12 +30,12 @@ public class OffsetsForLeaderEpochRequestTest {
     @Test
     public void testForConsumerRequiresVersion3() {
         OffsetsForLeaderEpochRequest.Builder builder = OffsetsForLeaderEpochRequest.Builder.forConsumer(new OffsetForLeaderTopicCollection());
-        for (short version = 0; version < 3; version++) {
+        for (short version = 0;version < 3;version++) {
             final short v = version;
             assertThrows(UnsupportedVersionException.class, () -> builder.build(v));
         }
 
-        for (short version = 3; version <= ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(); version++) {
+        for (short version = 3;version <= ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion();version++) {
             OffsetsForLeaderEpochRequest request = builder.build(version);
             assertEquals(OffsetsForLeaderEpochRequest.CONSUMER_REPLICA_ID, request.replicaId());
         }
@@ -46,7 +46,7 @@ public class OffsetsForLeaderEpochRequestTest {
         short version = 4;
         int replicaId = 1;
         OffsetsForLeaderEpochRequest.Builder builder = OffsetsForLeaderEpochRequest.Builder.forFollower(
-                new OffsetForLeaderTopicCollection(), replicaId);
+            new OffsetForLeaderTopicCollection(), replicaId);
         OffsetsForLeaderEpochRequest request = builder.build();
         OffsetsForLeaderEpochRequest parsed = OffsetsForLeaderEpochRequest.parse(request.serialize(), version);
         assertEquals(replicaId, parsed.replicaId());

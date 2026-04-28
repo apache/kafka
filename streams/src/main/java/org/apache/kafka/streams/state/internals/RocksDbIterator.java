@@ -38,8 +38,8 @@ class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
     private Runnable closeCallback = null;
 
     RocksDbIterator(final String storeName,
-                    final RocksIterator iter,
-                    final boolean forward) {
+        final RocksIterator iter,
+        final boolean forward) {
         this.storeName = storeName;
         this.iter = iter;
         this.advanceIterator = forward ? RocksIterator::next : RocksIterator::prev;

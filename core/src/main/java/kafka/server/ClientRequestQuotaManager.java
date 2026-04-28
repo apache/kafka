@@ -50,10 +50,10 @@ public class ClientRequestQuotaManager extends ClientQuotaManager {
     private final Sensor exemptSensor;
 
     public ClientRequestQuotaManager(
-            ClientQuotaManagerConfig config, 
-            Metrics metrics, Time time, 
-            String threadNamePrefix, 
-            Optional<Plugin<ClientQuotaCallback>> quotaCallbackPlugin
+        ClientQuotaManagerConfig config,
+        Metrics metrics, Time time,
+        String threadNamePrefix,
+        Optional<Plugin<ClientQuotaCallback>> quotaCallbackPlugin
     ) {
         super(config, metrics, QuotaType.REQUEST, time, threadNamePrefix, quotaCallbackPlugin);
         this.maxThrottleTimeMs = TimeUnit.SECONDS.toMillis(config.quotaWindowSizeSeconds());

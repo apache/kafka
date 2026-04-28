@@ -72,9 +72,9 @@ public class ShareFetchResponse extends AbstractResponse {
         Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
         updateErrorCounts(counts, Errors.forCode(data.errorCode()));
         data.responses().forEach(
-                topic -> topic.partitions().forEach(
-                        partition -> updateErrorCounts(counts, Errors.forCode(partition.errorCode()))
-                )
+            topic -> topic.partitions().forEach(
+                partition -> updateErrorCounts(counts, Errors.forCode(partition.errorCode()))
+            )
         );
         return counts;
     }
@@ -85,7 +85,7 @@ public class ShareFetchResponse extends AbstractResponse {
             String name = topicNames.get(topicResponse.topicId());
             if (name != null) {
                 topicResponse.partitions().forEach(partitionData -> responseData.put(new TopicIdPartition(topicResponse.topicId(),
-                        new TopicPartition(name, partitionData.partitionIndex())), partitionData));
+                    new TopicPartition(name, partitionData.partitionIndex())), partitionData));
             }
         });
         return responseData;
@@ -110,7 +110,7 @@ public class ShareFetchResponse extends AbstractResponse {
      */
     public static ShareFetchResponse parse(Readable readable, short version) {
         return new ShareFetchResponse(
-                new ShareFetchResponseData(readable, version)
+            new ShareFetchResponseData(readable, version)
         );
     }
 
@@ -124,7 +124,7 @@ public class ShareFetchResponse extends AbstractResponse {
         if (partition.records() == null) return MemoryRecords.EMPTY;
         if (partition.records() instanceof Records) return (Records) partition.records();
         throw new ClassCastException("The record type is " + partition.records().getClass().getSimpleName() + ", which is not a subtype of " +
-                Records.class.getSimpleName() + ". This method is only safe to call if the `ShareFetchResponse` was deserialized from bytes.");
+            Records.class.getSimpleName() + ". This method is only safe to call if the `ShareFetchResponse` was deserialized from bytes.");
     }
 
     /**
@@ -135,7 +135,7 @@ public class ShareFetchResponse extends AbstractResponse {
      * @return              The response size in bytes.
      */
     public static int sizeOf(short version,
-                             Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> partIterator) {
+        Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> partIterator) {
         // Since the throttleTimeMs and metadata field sizes are constant and fixed, we can
         // use arbitrary values here without affecting the result.
         ShareFetchResponseData data = toMessage(Errors.NONE, 0, partIterator, List.of(), 0);
@@ -158,15 +158,15 @@ public class ShareFetchResponse extends AbstractResponse {
      * <p><strong>This method should only be used in server-side.</strong></p>
      */
     public static ShareFetchResponse of(Errors error,
-                                        int throttleTimeMs,
-                                        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseData,
-                                        List<Node> nodeEndpoints, int acquisitionLockTimeout) {
+        int throttleTimeMs,
+        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseData,
+        List<Node> nodeEndpoints, int acquisitionLockTimeout) {
         return new ShareFetchResponse(toMessage(error, throttleTimeMs, responseData.entrySet().iterator(), nodeEndpoints, acquisitionLockTimeout));
     }
 
     private static ShareFetchResponseData toMessage(Errors error, int throttleTimeMs,
-                                                   Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> partIterator,
-                                                   List<Node> nodeEndpoints, int acquisitionLockTimeout) {
+        Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> partIterator,
+        List<Node> nodeEndpoints, int acquisitionLockTimeout) {
         ShareFetchResponseData.ShareFetchableTopicResponseCollection topicResponses = new ShareFetchResponseData.ShareFetchableTopicResponseCollection();
         while (partIterator.hasNext()) {
             Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData> entry = partIterator.next();
@@ -182,8 +182,8 @@ public class ShareFetchResponse extends AbstractResponse {
             ShareFetchResponseData.ShareFetchableTopicResponse topicResponse = topicResponses.find(entry.getKey().topicId());
             if (topicResponse == null) {
                 topicResponse = new ShareFetchResponseData.ShareFetchableTopicResponse()
-                        .setTopicId(entry.getKey().topicId())
-                        .setPartitions(new ArrayList<>());
+                    .setTopicId(entry.getKey().topicId())
+                    .setPartitions(new ArrayList<>());
                 topicResponses.add(topicResponse);
             }
             topicResponse.partitions().add(partitionData);
@@ -191,15 +191,15 @@ public class ShareFetchResponse extends AbstractResponse {
         ShareFetchResponseData data = new ShareFetchResponseData();
         // KafkaApis should only pass in node endpoints on error, otherwise this should be an empty list
         nodeEndpoints.forEach(endpoint -> data.nodeEndpoints().add(
-                new ShareFetchResponseData.NodeEndpoint()
-                        .setNodeId(endpoint.id())
-                        .setHost(endpoint.host())
-                        .setPort(endpoint.port())
-                        .setRack(endpoint.rack())));
+            new ShareFetchResponseData.NodeEndpoint()
+                .setNodeId(endpoint.id())
+                .setHost(endpoint.host())
+                .setPort(endpoint.port())
+                .setRack(endpoint.rack())));
         return data.setThrottleTimeMs(throttleTimeMs)
-                .setErrorCode(error.code())
-                .setAcquisitionLockTimeoutMs(acquisitionLockTimeout)
-                .setResponses(topicResponses);
+            .setErrorCode(error.code())
+            .setAcquisitionLockTimeoutMs(acquisitionLockTimeout)
+            .setResponses(topicResponses);
     }
 
     public static ShareFetchResponseData.PartitionData partitionResponse(TopicIdPartition topicIdPartition, Errors error) {
@@ -208,8 +208,8 @@ public class ShareFetchResponse extends AbstractResponse {
 
     private static ShareFetchResponseData.PartitionData partitionResponse(int partition, Errors error) {
         return new ShareFetchResponseData.PartitionData()
-                .setPartitionIndex(partition)
-                .setErrorCode(error.code())
-                .setRecords(MemoryRecords.EMPTY);
+            .setPartitionIndex(partition)
+            .setErrorCode(error.code())
+            .setRecords(MemoryRecords.EMPTY);
     }
 }

@@ -264,7 +264,7 @@ public class MeteredWindowStoreTest {
     @Test
     public void shouldReturnNoRecordWhenFetchedKeyHasExpired() {
         when(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 1, 1 + RETENTION_PERIOD))
-                .thenReturn(KeyValueIterators.emptyWindowStoreIterator());
+            .thenReturn(KeyValueIterators.emptyWindowStoreIterator());
 
         store.init(context, store);
         store.fetch("a", ofEpochMilli(1), ofEpochMilli(1).plus(RETENTION_PERIOD, ChronoUnit.MILLIS)).close(); // recorded on close;
@@ -420,11 +420,12 @@ public class MeteredWindowStoreTest {
             valueSerde
         );
         metered.init(context, metered);
-        assertTrue(metered.setFlushListener(record -> { }, false));
+        assertTrue(metered.setFlushListener(record -> {
+        }, false));
 
         final RecordHeaders headers = new RecordHeaders();
         headers.add(headerKey, "new".getBytes(StandardCharsets.UTF_8));
-        
+
         context.setRecordContext(new ProcessorRecordContext(TIMESTAMP, 0L, 0, "topic", headers));
         metered.put(KEY, "value", TIMESTAMP);
 

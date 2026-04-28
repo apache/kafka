@@ -86,10 +86,10 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
     public static final String REPLICATION_POLICY_SEPARATOR_DEFAULT =
             MirrorClientConfig.REPLICATION_POLICY_SEPARATOR_DEFAULT;
 
-    private static final String INTERNAL_TOPIC_SEPARATOR_ENABLED =  MirrorClientConfig.INTERNAL_TOPIC_SEPARATOR_ENABLED;
+    private static final String INTERNAL_TOPIC_SEPARATOR_ENABLED = MirrorClientConfig.INTERNAL_TOPIC_SEPARATOR_ENABLED;
     private static final String INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC = MirrorClientConfig.INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC;
     public static final Boolean INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT =
-        DefaultReplicationPolicy.INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT;
+            DefaultReplicationPolicy.INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT;
 
     public static final String ADMIN_TASK_TIMEOUT_MILLIS = "admin.timeout.ms";
     private static final String ADMIN_TASK_TIMEOUT_MILLIS_DOC = "Timeout for administrative tasks, e.g. detecting new topics.";
@@ -330,7 +330,7 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
                     ConfigDef.Type.LIST,
                     List.of(),
                     ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                    ConfigDef.Importance.LOW, 
+                    ConfigDef.Importance.LOW,
                     CONFIG_PROVIDERS_DOC)
             .withClientSslSupport()
             .withClientSaslSupport();

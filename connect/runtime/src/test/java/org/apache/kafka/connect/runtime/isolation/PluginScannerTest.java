@@ -146,8 +146,8 @@ public class PluginScannerTest {
         Set<Path> isolatedClassPathPlugin = TestPlugins.pluginPath(TestPlugins.TestPlugin.CLASSPATH_CONVERTER);
         PluginScanResult result = scan(scanner, isolatedClassPathPlugin);
         Optional<PluginDesc<Converter>> pluginDesc = result.converters().stream()
-            .filter(desc -> desc.className().equals(TestPlugins.TestPlugin.CLASSPATH_CONVERTER.className()))
-            .findFirst();
+                .filter(desc -> desc.className().equals(TestPlugins.TestPlugin.CLASSPATH_CONVERTER.className()))
+                .findFirst();
         assertTrue(pluginDesc.isPresent());
         assertInstanceOf(PluginClassLoader.class, pluginDesc.get().loader());
     }

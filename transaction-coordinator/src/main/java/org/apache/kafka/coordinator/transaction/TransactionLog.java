@@ -57,7 +57,7 @@ public class TransactionLog {
      */
     public static byte[] keyToBytes(String transactionalId) {
         return MessageUtil.toCoordinatorTypePrefixedBytes(
-                new TransactionLogKey().setTransactionalId(transactionalId)
+            new TransactionLogKey().setTransactionalId(transactionalId)
         );
     }
 
@@ -67,33 +67,33 @@ public class TransactionLog {
      * @return value payload bytes
      */
     public static byte[] valueToBytes(TxnTransitMetadata txnMetadata,
-                                      TransactionVersion transactionVersionLevel) {
+        TransactionVersion transactionVersionLevel) {
         if (txnMetadata.txnState() == TransactionState.EMPTY && !txnMetadata.topicPartitions().isEmpty()) {
             throw new IllegalStateException("Transaction is not expected to have any partitions since its state is "
-                    + txnMetadata.txnState() + ": " + txnMetadata);
+                + txnMetadata.txnState() + ": " + txnMetadata);
         }
 
         List<TransactionLogValue.PartitionsSchema> transactionPartitions = null;
 
         if (txnMetadata.txnState() != TransactionState.EMPTY) {
             transactionPartitions = txnMetadata.topicPartitions().stream()
-                    .collect(Collectors.groupingBy(TopicPartition::topic))
-                    .entrySet().stream()
-                    .map(entry ->
-                        new TransactionLogValue.PartitionsSchema().setTopic(entry.getKey())
-                            .setPartitionIds(entry.getValue().stream().map(TopicPartition::partition).toList())).toList();
+                .collect(Collectors.groupingBy(TopicPartition::topic))
+                .entrySet().stream()
+                .map(entry ->
+                    new TransactionLogValue.PartitionsSchema().setTopic(entry.getKey())
+                        .setPartitionIds(entry.getValue().stream().map(TopicPartition::partition).toList())).toList();
         }
 
         short logValueVersion = transactionVersionLevel.transactionLogValueVersion();
         TransactionLogValue value = new TransactionLogValue()
-                        .setProducerId(txnMetadata.producerId())
-                        .setProducerEpoch(txnMetadata.producerEpoch())
-                        .setTransactionTimeoutMs(txnMetadata.txnTimeoutMs())
-                        .setTransactionStatus(txnMetadata.txnState().id())
-                        .setTransactionLastUpdateTimestampMs(txnMetadata.txnLastUpdateTimestamp())
-                        .setTransactionStartTimestampMs(txnMetadata.txnStartTimestamp())
-                        .setTransactionPartitions(transactionPartitions)
-                        .setClientTransactionVersion(txnMetadata.clientTransactionVersion().featureLevel());
+            .setProducerId(txnMetadata.producerId())
+            .setProducerEpoch(txnMetadata.producerEpoch())
+            .setTransactionTimeoutMs(txnMetadata.txnTimeoutMs())
+            .setTransactionStatus(txnMetadata.txnState().id())
+            .setTransactionLastUpdateTimestampMs(txnMetadata.txnLastUpdateTimestamp())
+            .setTransactionStartTimestampMs(txnMetadata.txnStartTimestamp())
+            .setTransactionPartitions(transactionPartitions)
+            .setClientTransactionVersion(txnMetadata.clientTransactionVersion().featureLevel());
 
         if (logValueVersion >= 1) {
             value.setPreviousProducerId(txnMetadata.prevProducerId());
@@ -119,16 +119,20 @@ public class TransactionLog {
     }
 
 
+    public sealed interface ReadResult permits TxnRecord, TxnTombstone, UnknownKeyVersion, UnknownValueVersion {
+    }
 
-    public sealed interface ReadResult permits TxnRecord, TxnTombstone, UnknownKeyVersion, UnknownValueVersion { }
+    public record TxnRecord(String transactionId, TransactionMetadata metadata) implements ReadResult {
+    }
 
-    public record TxnRecord(String transactionId, TransactionMetadata metadata) implements ReadResult { }
+    public record TxnTombstone(String transactionId) implements ReadResult {
+    }
 
-    public record TxnTombstone(String transactionId) implements ReadResult { }
+    public record UnknownKeyVersion(short version) implements ReadResult {
+    }
 
-    public record UnknownKeyVersion(short version) implements ReadResult { }
-
-    public record UnknownValueVersion(short version) implements ReadResult { }
+    public record UnknownValueVersion(short version) implements ReadResult {
+    }
 
     /**
      * Decodes the transaction log messages' key and value, returning a structured result.

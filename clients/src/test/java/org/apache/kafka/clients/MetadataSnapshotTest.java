@@ -51,13 +51,13 @@ public class MetadataSnapshotTest {
         TopicPartition topicPartition = new TopicPartition("topic", 0);
 
         MetadataResponse.PartitionMetadata partitionMetadata = new MetadataResponse.PartitionMetadata(
-                Errors.NONE,
-                topicPartition,
-                Optional.of(5),
-                Optional.of(10),
-                Arrays.asList(5, 6, 7),
-                Arrays.asList(5, 6, 7),
-                Collections.emptyList());
+            Errors.NONE,
+            topicPartition,
+            Optional.of(5),
+            Optional.of(10),
+            Arrays.asList(5, 6, 7),
+            Arrays.asList(5, 6, 7),
+            Collections.emptyList());
 
         Map<Integer, Node> nodesById = new HashMap<>();
         nodesById.put(6, new Node(6, "localhost", 2077));
@@ -65,20 +65,20 @@ public class MetadataSnapshotTest {
         nodesById.put(8, new Node(8, "localhost", 2079));
 
         MetadataSnapshot cache = new MetadataSnapshot("clusterId",
-                nodesById,
-                Collections.singleton(partitionMetadata),
-                Collections.emptySet(),
-                Collections.emptySet(),
-                Collections.emptySet(),
-                null,
-                Collections.emptyMap());
+            nodesById,
+            Collections.singleton(partitionMetadata),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            null,
+            Collections.emptyMap());
 
         Cluster cluster = cache.cluster();
         assertNull(cluster.leaderFor(topicPartition));
 
         PartitionInfo partitionInfo = cluster.partition(topicPartition);
         Map<Integer, Node> replicas = Arrays.stream(partitionInfo.replicas())
-                .collect(Collectors.toMap(Node::id, Function.identity()));
+            .collect(Collectors.toMap(Node::id, Function.identity()));
         assertNull(partitionInfo.leader());
         assertEquals(3, replicas.size());
         assertTrue(replicas.get(5).isEmpty());
@@ -158,17 +158,17 @@ public class MetadataSnapshotTest {
         topicIds.put("topic2", Uuid.randomUuid());
 
         MetadataSnapshot cache = new MetadataSnapshot("clusterId",
-                Collections.singletonMap(6, new Node(6, "localhost", 2077)),
-                Collections.emptyList(),
-                Collections.emptySet(),
-                Collections.emptySet(),
-                Collections.emptySet(),
-                null,
-                topicIds);
+            Collections.singletonMap(6, new Node(6, "localhost", 2077)),
+            Collections.emptyList(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            null,
+            topicIds);
 
         Map<Uuid, String> expectedNamesCache =
-                topicIds.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue,
-                        Map.Entry::getKey));
+            topicIds.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue,
+                Map.Entry::getKey));
         assertEquals(expectedNamesCache, cache.topicNames());
     }
 
@@ -177,13 +177,13 @@ public class MetadataSnapshotTest {
         Map<String, Uuid> topicIds = new HashMap<>();
 
         MetadataSnapshot cache = new MetadataSnapshot("clusterId",
-                Collections.singletonMap(6, new Node(6, "localhost", 2077)),
-                Collections.emptyList(),
-                Collections.emptySet(),
-                Collections.emptySet(),
-                Collections.emptySet(),
-                null,
-                topicIds);
+            Collections.singletonMap(6, new Node(6, "localhost", 2077)),
+            Collections.emptyList(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            null,
+            topicIds);
         assertEquals(Collections.emptyMap(), cache.topicNames());
     }
 

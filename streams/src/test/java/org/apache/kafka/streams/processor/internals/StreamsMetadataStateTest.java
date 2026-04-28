@@ -85,16 +85,16 @@ public class StreamsMetadataStateTest {
         two.groupByKey().count(Materialized.as("table-two"));
 
         builder.stream("topic-three")
-                .groupByKey()
-                .count(Materialized.as("table-three"));
+            .groupByKey()
+            .count(Materialized.as("table-three"));
 
         one.merge(two).groupByKey().count(Materialized.as("merged-table"));
 
         builder.stream("topic-four").mapValues(value -> value);
 
         builder.globalTable("global-topic",
-                            Consumed.with(null, null),
-                            Materialized.as(globalTable));
+            Consumed.with(null, null),
+            Materialized.as(globalTable));
 
         TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("appId");
 
@@ -190,7 +190,7 @@ public class StreamsMetadataStateTest {
             Collections.singletonMap(tp5, new PartitionInfo("topic-five", 1, null, null, null)));
 
         final StreamsMetadata expected = new StreamsMetadataImpl(hostFour, Collections.singleton(globalTable),
-                Collections.singleton(tp5), Collections.emptySet(), Collections.emptySet());
+            Collections.singleton(tp5), Collections.emptySet(), Collections.emptySet());
         final Collection<StreamsMetadata> actual = metadataState.allMetadata();
         assertTrue(actual.contains(expected), "expected " + actual + " to contain " + expected);
     }
@@ -238,8 +238,8 @@ public class StreamsMetadataStateTest {
 
         final KeyQueryMetadata expected = new KeyQueryMetadata(hostThree, Set.of(hostTwo), 0);
         final KeyQueryMetadata actual = metadataState.keyQueryMetadataForKey("table-three",
-                                                                    "the-key",
-                                                                    Serdes.String().serializer());
+            "the-key",
+            Serdes.String().serializer());
         assertEquals(expected, actual);
     }
 
@@ -254,8 +254,8 @@ public class StreamsMetadataStateTest {
         final KeyQueryMetadata expected = new KeyQueryMetadata(hostTwo, Collections.emptySet(), 1);
 
         final KeyQueryMetadata actual = metadataState.keyQueryMetadataForKey("table-three",
-                "the-key",
-                partitioner);
+            "the-key",
+            partitioner);
         assertEquals(expected, actual);
         assertEquals(1, actual.partition());
     }
@@ -266,12 +266,12 @@ public class StreamsMetadataStateTest {
         hostToActivePartitions.put(hostTwo, Set.of(topic2P0, tp4));
 
         metadataState.onChange(hostToActivePartitions, hostToStandbyPartitions,
-                Collections.singletonMap(tp4, new PartitionInfo("topic-three", 1, null, null, null)));
+            Collections.singletonMap(tp4, new PartitionInfo("topic-three", 1, null, null, null)));
 
 
         assertThrows(IllegalArgumentException.class, () -> metadataState.keyQueryMetadataForKey("table-three",
-                "the-key",
-                new MultiValuedPartitioner()));
+            "the-key",
+            new MultiValuedPartitioner()));
     }
 
     @Test
@@ -287,11 +287,11 @@ public class StreamsMetadataStateTest {
         hostToActivePartitions.put(hostTwo, Set.of(topic2P0, topic1P1, topic2P2));
         hostToStandbyPartitions.put(hostOne, Set.of(topic2P0, topic1P1, topic2P2));
         metadataState.onChange(hostToActivePartitions, hostToStandbyPartitions,
-                Collections.singletonMap(topic2P2, new PartitionInfo("topic-two", 2, null, null, null)));
+            Collections.singletonMap(topic2P2, new PartitionInfo("topic-two", 2, null, null, null)));
 
         final KeyQueryMetadata expected = new KeyQueryMetadata(hostTwo, Set.of(hostOne), 2);
 
-        final KeyQueryMetadata actual = metadataState.keyQueryMetadataForKey("merged-table",  "the-key",
+        final KeyQueryMetadata actual = metadataState.keyQueryMetadataForKey("merged-table", "the-key",
             (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(2)));
 
         assertEquals(expected, actual);
@@ -300,8 +300,8 @@ public class StreamsMetadataStateTest {
     @Test
     public void shouldReturnNullOnGetWithKeyWhenStoreDoesntExist() {
         final KeyQueryMetadata actual = metadataState.keyQueryMetadataForKey("not-a-store",
-                "key",
-                Serdes.String().serializer());
+            "key",
+            Serdes.String().serializer());
         assertNull(actual);
     }
 

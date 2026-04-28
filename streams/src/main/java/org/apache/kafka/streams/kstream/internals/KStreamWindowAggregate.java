@@ -62,10 +62,10 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
     private boolean sendOldValues = false;
 
     public KStreamWindowAggregate(final Windows<W> windows,
-                                  final StoreFactory storeFactory,
-                                  final EmitStrategy emitStrategy,
-                                  final Initializer<VAgg> initializer,
-                                  final Aggregator<? super KIn, ? super VIn, VAgg> aggregator) {
+        final StoreFactory storeFactory,
+        final EmitStrategy emitStrategy,
+        final Initializer<VAgg> initializer,
+        final Aggregator<? super KIn, ? super VIn, VAgg> aggregator) {
         this.windows = windows;
         this.storeName = storeFactory.storeName();
         this.storeFactory = storeFactory;
@@ -189,7 +189,7 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
 
                 if (matchedCloseWindows.equals(matchedEmitWindows)) {
                     log.trace("No new windows to emit. LastEmitCloseTime={}, emitRangeLowerBound={}, emitRangeUpperBound={}",
-                            lastEmitWindowCloseTime, emitRangeLowerBound, emitRangeUpperBound);
+                        lastEmitWindowCloseTime, emitRangeLowerBound, emitRangeUpperBound);
                     return false;
                 }
             }
@@ -208,7 +208,7 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
 
             @Override
             public String[] storeNames() {
-                return new String[] {storeName};
+                return new String[]{storeName};
             }
         };
     }

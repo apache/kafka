@@ -95,9 +95,11 @@ public interface RaftClient<T> extends AutoCloseable {
          *
          * @param leader the current leader and epoch
          */
-        default void handleLeaderChange(LeaderAndEpoch leader) {}
+        default void handleLeaderChange(LeaderAndEpoch leader) {
+        }
 
-        default void beginShutdown() {}
+        default void beginShutdown() {
+        }
     }
 
     /**

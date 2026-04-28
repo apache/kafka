@@ -33,7 +33,7 @@ public final class ExpectBrokerInISRAction implements TieredStorageTestAction {
     private final Integer replicaId;
 
     public ExpectBrokerInISRAction(TopicPartition topicPartition,
-                                   Integer replicaId) {
+            Integer replicaId) {
         this.topicPartition = topicPartition;
         this.replicaId = replicaId;
     }

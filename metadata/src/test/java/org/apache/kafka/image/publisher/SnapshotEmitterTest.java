@@ -162,12 +162,12 @@ public class SnapshotEmitterTest {
         assertEquals(0L, emitter.metrics().latestSnapshotGeneratedAgeMs());
         assertEquals(1500L, emitter.metrics().latestSnapshotGeneratedBytes());
         FakeSnapshotWriter writer = mockRaftClient.writers.get(
-                MetadataImageTest.IMAGE1.provenance().snapshotId());
+            MetadataImageTest.IMAGE1.provenance().snapshotId());
         assertNotNull(writer);
         assertEquals(MetadataImageTest.IMAGE1.highestOffsetAndEpoch().offset(),
-                writer.lastContainedLogOffset());
+            writer.lastContainedLogOffset());
         assertEquals(MetadataImageTest.IMAGE1.highestOffsetAndEpoch().epoch(),
-                writer.lastContainedLogEpoch());
+            writer.lastContainedLogEpoch());
         assertTrue(writer.isFrozen());
         assertTrue(writer.isClosed());
 

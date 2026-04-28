@@ -103,12 +103,12 @@ public class ListOffsetsResponse extends AbstractResponse {
 
     public static ListOffsetsTopicResponse singletonListOffsetsTopicResponse(TopicPartition tp, Errors error, long timestamp, long offset, int epoch) {
         return new ListOffsetsTopicResponse()
-                 .setName(tp.topic())
-                 .setPartitions(List.of(new ListOffsetsPartitionResponse()
-                         .setPartitionIndex(tp.partition())
-                         .setErrorCode(error.code())
-                         .setTimestamp(timestamp)
-                         .setOffset(offset)
-                         .setLeaderEpoch(epoch)));
+            .setName(tp.topic())
+            .setPartitions(List.of(new ListOffsetsPartitionResponse()
+                .setPartitionIndex(tp.partition())
+                .setErrorCode(error.code())
+                .setTimestamp(timestamp)
+                .setOffset(offset)
+                .setLeaderEpoch(epoch)));
     }
 }

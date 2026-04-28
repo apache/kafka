@@ -90,7 +90,7 @@ public class ShareGroupBuilder {
 
         // Add current assignment records for members.
         members.forEach((memberId, member) ->
-                records.add(GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, member))
+            records.add(GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, member))
         );
 
         return records;

@@ -316,10 +316,10 @@ public class DeleteStreamsGroupOffsetTest {
     }
 
     private void assertError(Map.Entry<Errors, Map<TopicPartition, Throwable>> res,
-                          String inputTopic,
-                          int inputPartition,
-                          int expectedPartition,
-                          Errors expectedError) {
+        String inputTopic,
+        int inputPartition,
+        int expectedPartition,
+        Errors expectedError) {
         Errors topLevelError = res.getKey();
         Map<TopicPartition, Throwable> partitions = res.getValue();
         TopicPartition tp = new TopicPartition(inputTopic, expectedPartition);

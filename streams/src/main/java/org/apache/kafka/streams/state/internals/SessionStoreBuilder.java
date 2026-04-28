@@ -30,9 +30,9 @@ public class SessionStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, Sessio
     private final SessionBytesStoreSupplier storeSupplier;
 
     public SessionStoreBuilder(final SessionBytesStoreSupplier storeSupplier,
-                               final Serde<K> keySerde,
-                               final Serde<V> valueSerde,
-                               final Time time) {
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde,
+        final Time time) {
         super(Objects.requireNonNull(storeSupplier, "storeSupplier cannot be null").name(), keySerde, valueSerde, time);
         Objects.requireNonNull(storeSupplier.metricsScope(), "storeSupplier's metricsScope can't be null");
         this.storeSupplier = storeSupplier;

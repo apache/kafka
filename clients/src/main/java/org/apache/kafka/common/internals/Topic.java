@@ -67,7 +67,7 @@ public class Topic {
     public static void validate(String name, String logPrefix, Consumer<String> throwableConsumer) {
         String reasonInvalid = detectInvalidTopic(name);
         if (reasonInvalid != null) {
-            throwableConsumer.accept(logPrefix + " is invalid: " +  reasonInvalid);
+            throwableConsumer.accept(logPrefix + " is invalid: " + reasonInvalid);
         }
     }
 
@@ -111,12 +111,12 @@ public class Topic {
      * Valid characters for Kafka topics are the ASCII alphanumerics, '.', '_', and '-'
      */
     static boolean containsValidPattern(String topic) {
-        for (int i = 0; i < topic.length(); ++i) {
+        for (int i = 0;i < topic.length();++i) {
             char c = topic.charAt(i);
 
             // We don't use Character.isLetterOrDigit(c) because it's slower
             boolean validChar = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || c == '.' ||
-                    c == '_' || c == '-';
+                c == '_' || c == '-';
             if (!validChar)
                 return false;
         }

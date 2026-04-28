@@ -59,7 +59,7 @@ public class MetricsUtils {
             throw new IllegalArgumentException("keyValue needs to be specified in pairs");
         Map<String, String> tags = new LinkedHashMap<>(keyValue.length / 2);
 
-        for (int i = 0; i < keyValue.length; i += 2)
+        for (int i = 0;i < keyValue.length;i += 2)
             tags.put(keyValue[i], keyValue[i + 1]);
         return tags;
     }

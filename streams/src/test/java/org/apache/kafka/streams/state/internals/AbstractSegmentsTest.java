@@ -71,24 +71,24 @@ abstract class AbstractSegmentsTest<S extends Segments> {
 
     private InternalMockProcessorContext<?, ?> getProcessorContext() {
         return new InternalMockProcessorContext<>(
-                TestUtils.tempDirectory(),
-                Serdes.String(),
-                Serdes.Long(),
-                new MockRecordCollector(),
-                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
-                new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
+            TestUtils.tempDirectory(),
+            Serdes.String(),
+            Serdes.Long(),
+            new MockRecordCollector(),
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
     }
 
     private InternalMockProcessorContext<?, ?> getEOSProcessorContext() {
         final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
         streamsProps.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         return new InternalMockProcessorContext<>(
-                TestUtils.tempDirectory(),
-                Serdes.String(),
-                Serdes.Long(),
-                new MockRecordCollector(),
-                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
-                new StreamsConfig(streamsProps));
+            TestUtils.tempDirectory(),
+            Serdes.String(),
+            Serdes.Long(),
+            new MockRecordCollector(),
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+            new StreamsConfig(streamsProps));
     }
 
     @AfterEach
@@ -120,17 +120,17 @@ abstract class AbstractSegmentsTest<S extends Segments> {
                 final Long openState = 1L;
                 final String dbPath = storeDir.getAbsolutePath();
                 final List<ColumnFamilyDescriptor> existingColumnFamilies = RocksDB.listColumnFamilies(new Options(), dbPath).stream()
-                        .map(b -> new ColumnFamilyDescriptor(b, columnFamilyOptions))
-                        .collect(Collectors.toList());
+                    .map(b -> new ColumnFamilyDescriptor(b, columnFamilyOptions))
+                    .collect(Collectors.toList());
                 final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(existingColumnFamilies.size());
                 RocksDB db = null;
                 ColumnFamilyHandle offsetsColumnFamily = null;
                 try {
                     db = RocksDB.open(
-                            dbOptions,
-                            storeDir.getAbsolutePath(),
-                            existingColumnFamilies,
-                            columnFamilies);
+                        dbOptions,
+                        storeDir.getAbsolutePath(),
+                        existingColumnFamilies,
+                        columnFamilies);
                     final byte[] statusKey = stringSerializer.serialize(null, "status");
 
                     offsetsColumnFamily = columnFamilies.get(columnFamilies.size() - 1);

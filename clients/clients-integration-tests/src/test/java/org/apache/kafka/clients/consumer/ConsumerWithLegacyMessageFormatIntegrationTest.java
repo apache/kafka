@@ -80,32 +80,32 @@ public class ConsumerWithLegacyMessageFormatIntegrationTest {
         }
 
         ByteBuffer buffer = ByteBuffer.allocate(AbstractRecords.estimateSizeInBytes(magicValue,
-                CompressionType.NONE, records));
+            CompressionType.NONE, records));
         MemoryRecordsBuilder builder = MemoryRecords.builder(
-                buffer,
-                magicValue,
-                Compression.of(CompressionType.NONE).build(),
-                TimestampType.CREATE_TIME,
-                0L,
-                RecordBatch.NO_TIMESTAMP,
-                RecordBatch.NO_PRODUCER_ID,
-                RecordBatch.NO_PRODUCER_EPOCH,
-                0,
-                false,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH
+            buffer,
+            magicValue,
+            Compression.of(CompressionType.NONE).build(),
+            TimestampType.CREATE_TIME,
+            0L,
+            RecordBatch.NO_TIMESTAMP,
+            RecordBatch.NO_PRODUCER_ID,
+            RecordBatch.NO_PRODUCER_EPOCH,
+            0,
+            false,
+            RecordBatch.NO_PARTITION_LEADER_EPOCH
         );
 
         records.forEach(builder::append);
 
         cluster.brokers().values().stream()
-                .filter(b -> b.config().brokerId() == brokerId)
-                .forEach(b -> {
-                    UnifiedLog unifiedLog = b.replicaManager().logManager().getLog(tp, false).get();
-                    unifiedLog.appendAsLeaderWithRecordVersion(builder.build(), 0, RecordVersion.lookup(magicValue));
-                    // Default isolation.level is read_uncommitted. It makes Partition#fetchOffsetForTimestamp to return UnifiedLog#highWatermark,
-                    // so increasing high watermark to make it return the correct offset.
-                    assertDoesNotThrow(() -> unifiedLog.maybeIncrementHighWatermark(unifiedLog.logEndOffsetMetadata()));
-                });
+            .filter(b -> b.config().brokerId() == brokerId)
+            .forEach(b -> {
+                UnifiedLog unifiedLog = b.replicaManager().logManager().getLog(tp, false).get();
+                unifiedLog.appendAsLeaderWithRecordVersion(builder.build(), 0, RecordVersion.lookup(magicValue));
+                // Default isolation.level is read_uncommitted. It makes Partition#fetchOffsetForTimestamp to return UnifiedLog#highWatermark,
+                // so increasing high watermark to make it return the correct offset.
+                assertDoesNotThrow(() -> unifiedLog.maybeIncrementHighWatermark(unifiedLog.logEndOffsetMetadata()));
+            });
     }
 
     private void createTopicWithAssignment(String topic, Map<Integer, List<Integer>> assignment) throws InterruptedException {
@@ -145,19 +145,19 @@ public class ConsumerWithLegacyMessageFormatIntegrationTest {
 
     public void testOffsetsForTimes(GroupProtocol groupProtocol) {
         try (Consumer<Object, Object> consumer = cluster.consumer(Map.of(
-                GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT)))
+                 GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT)))
         ) {
             // Test negative target time
             assertThrows(IllegalArgumentException.class, () ->
-                    consumer.offsetsForTimes(Map.of(t1p0, -1L)));
+                consumer.offsetsForTimes(Map.of(t1p0, -1L)));
 
             Map<TopicPartition, Long> timestampsToSearch = Map.of(
-                    t1p0, 0L,
-                    t1p1, 20L,
-                    t2p0, 40L,
-                    t2p1, 60L,
-                    t3p0, 80L,
-                    t3p1, 100L
+                t1p0, 0L,
+                t1p1, 20L,
+                t2p0, 40L,
+                t2p1, 60L,
+                t3p0, 80L,
+                t3p1, 100L
             );
 
             Map<TopicPartition, OffsetAndTimestamp> timestampOffsets = consumer.offsetsForTimes(timestampsToSearch);
@@ -202,7 +202,7 @@ public class ConsumerWithLegacyMessageFormatIntegrationTest {
         Set<TopicPartition> partitions = Set.of(t1p0, t1p1, t2p0, t2p1, t3p0, t3p1);
 
         try (Consumer<Object, Object> consumer = cluster.consumer(Map.of(
-                GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT)))
+                 GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT)))
         ) {
             Map<TopicPartition, Long> earliests = consumer.beginningOffsets(partitions);
             assertEquals(0L, earliests.get(t1p0));

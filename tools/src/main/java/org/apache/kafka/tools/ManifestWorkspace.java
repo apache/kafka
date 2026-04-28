@@ -237,9 +237,9 @@ public class ManifestWorkspace {
 
         public boolean hasManifest(PluginType type, String className) {
             return manifests.values()
-                    .stream()
-                    .map(m -> m.get(type))
-                    .anyMatch(s -> s.contains(className));
+                .stream()
+                .map(m -> m.get(type))
+                .anyMatch(s -> s.contains(className));
         }
 
         public void forEach(BiConsumer<String, PluginType> consumer) {
@@ -378,9 +378,9 @@ public class ManifestWorkspace {
             createJar(writableJar);
         }
         try (FileSystem jar = FileSystems.newFileSystem(
-                new URI("jar", writableJar.toUri().toString(), ""),
-                Map.of()
-        )) {
+                 new URI("jar", writableJar.toUri().toString(), ""),
+                 Map.of()
+             )) {
             Path zipRoot = jar.getRootDirectories().iterator().next();
             // Set dryRun to false because this jar file is already a writable copy.
             rewriteClassHierarchyManifest(false, zipRoot, manifestElements);
@@ -399,11 +399,11 @@ public class ManifestWorkspace {
     private void createJar(Path path) throws IOException {
         Objects.requireNonNull(path, "path must be non-null");
         try (ZipOutputStream stream = new ZipOutputStream(Files.newOutputStream(
-                path,
-                StandardOpenOption.CREATE,
-                StandardOpenOption.WRITE,
-                StandardOpenOption.TRUNCATE_EXISTING
-        ))) {
+                 path,
+                 StandardOpenOption.CREATE,
+                 StandardOpenOption.WRITE,
+                 StandardOpenOption.TRUNCATE_EXISTING
+             ))) {
             stream.closeEntry();
         }
     }
@@ -411,9 +411,9 @@ public class ManifestWorkspace {
     private boolean jarIsEmpty(Path path) throws IOException {
         Objects.requireNonNull(path, "path must be non-null");
         try (ZipInputStream stream = new ZipInputStream(Files.newInputStream(
-                path,
-                StandardOpenOption.READ
-        ))) {
+                 path,
+                 StandardOpenOption.READ
+             ))) {
             return stream.getNextEntry() == null;
         }
     }
@@ -495,11 +495,11 @@ public class ManifestWorkspace {
             log.debug("Write {} with content {}", filePath, elements);
             if (!dryRun) {
                 try (OutputStream stream = new BufferedOutputStream(Files.newOutputStream(
-                        writableFile,
-                        StandardOpenOption.CREATE,
-                        StandardOpenOption.WRITE,
-                        StandardOpenOption.TRUNCATE_EXISTING
-                ))) {
+                         writableFile,
+                         StandardOpenOption.CREATE,
+                         StandardOpenOption.WRITE,
+                         StandardOpenOption.TRUNCATE_EXISTING
+                     ))) {
                     byte[] newline = System.lineSeparator().getBytes(StandardCharsets.UTF_8);
                     stream.write(MANIFEST_HEADER.getBytes(StandardCharsets.UTF_8));
                     stream.write(newline);
@@ -552,7 +552,7 @@ public class ManifestWorkspace {
             uc.setUseCaches(false);
             try (InputStream in = uc.getInputStream();
                  BufferedReader r
-                         = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+                     = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
                 int lc = 1;
                 while ((lc = parseLine(u, r, lc, names)) >= 0) {
                     // pass

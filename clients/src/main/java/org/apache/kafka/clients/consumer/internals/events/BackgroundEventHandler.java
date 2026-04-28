@@ -38,8 +38,8 @@ public class BackgroundEventHandler {
     private final AsyncConsumerMetrics asyncConsumerMetrics;
 
     public BackgroundEventHandler(final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                                  final Time time,
-                                  final AsyncConsumerMetrics asyncConsumerMetrics) {
+        final Time time,
+        final AsyncConsumerMetrics asyncConsumerMetrics) {
         this.backgroundEventQueue = backgroundEventQueue;
         this.time = time;
         this.asyncConsumerMetrics = asyncConsumerMetrics;

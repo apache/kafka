@@ -351,7 +351,6 @@ public class SchemaBuilder implements Schema {
     }
 
 
-
     // Maps & Arrays
 
     /**

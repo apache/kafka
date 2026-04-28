@@ -90,7 +90,7 @@ public class ChangelogTopicsTest {
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(mkEntry(SUBTOPOLOGY_0, Set.of(TASK_0_0, TASK_0_1, TASK_0_2)));
 
         final ChangelogTopics changelogTopics =
-                new ChangelogTopics(internalTopicManager, topicGroups, tasksForTopicGroup, "[test] ");
+            new ChangelogTopics(internalTopicManager, topicGroups, tasksForTopicGroup, "[test] ");
         changelogTopics.setup();
 
         assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_0), is(Collections.emptySet()));
@@ -109,7 +109,7 @@ public class ChangelogTopicsTest {
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(mkEntry(SUBTOPOLOGY_0, tasks));
 
         final ChangelogTopics changelogTopics =
-                new ChangelogTopics(internalTopicManager, topicGroups, tasksForTopicGroup, "[test] ");
+            new ChangelogTopics(internalTopicManager, topicGroups, tasksForTopicGroup, "[test] ");
         changelogTopics.setup();
 
         assertThat(CHANGELOG_TOPIC_CONFIG.numberOfPartitions().orElse(Integer.MIN_VALUE), is(3));
@@ -129,7 +129,7 @@ public class ChangelogTopicsTest {
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(mkEntry(SUBTOPOLOGY_0, tasks));
 
         final ChangelogTopics changelogTopics =
-                new ChangelogTopics(internalTopicManager, topicGroups, tasksForTopicGroup, "[test] ");
+            new ChangelogTopics(internalTopicManager, topicGroups, tasksForTopicGroup, "[test] ");
         changelogTopics.setup();
 
         assertThat(CHANGELOG_TOPIC_CONFIG.numberOfPartitions().orElse(Integer.MIN_VALUE), is(3));
@@ -154,7 +154,7 @@ public class ChangelogTopicsTest {
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(mkEntry(SUBTOPOLOGY_0, tasks));
 
         final ChangelogTopics changelogTopics =
-                new ChangelogTopics(internalTopicManager, topicGroups, tasksForTopicGroup, "[test] ");
+            new ChangelogTopics(internalTopicManager, topicGroups, tasksForTopicGroup, "[test] ");
         changelogTopics.setup();
 
         final TopicPartition changelogPartition0 = new TopicPartition(SOURCE_TOPIC_NAME, 0);
@@ -179,7 +179,7 @@ public class ChangelogTopicsTest {
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(mkEntry(SUBTOPOLOGY_0, tasks));
 
         final ChangelogTopics changelogTopics =
-                new ChangelogTopics(internalTopicManager, topicGroups, tasksForTopicGroup, "[test] ");
+            new ChangelogTopics(internalTopicManager, topicGroups, tasksForTopicGroup, "[test] ");
         changelogTopics.setup();
 
         assertThat(CHANGELOG_TOPIC_CONFIG.numberOfPartitions().orElse(Integer.MIN_VALUE), is(3));

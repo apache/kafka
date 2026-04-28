@@ -46,7 +46,7 @@ public class MergedSortedCacheWrappedSessionStoreIteratorTest {
 
     private final SessionWindow storeWindow = new SessionWindow(0, 1);
     private final Iterator<KeyValue<Windowed<Bytes>, byte[]>> storeKvs = Collections.singleton(
-            KeyValue.pair(new Windowed<>(storeKey, storeWindow), storeKey.get())).iterator();
+        KeyValue.pair(new Windowed<>(storeKey, storeWindow), storeKey.get())).iterator();
     private final SessionWindow cacheWindow = new SessionWindow(10, 20);
     private final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs = Collections.singleton(
         KeyValue.pair(
@@ -143,8 +143,8 @@ public class MergedSortedCacheWrappedSessionStoreIteratorTest {
     }
 
     private MergedSortedCacheSessionStoreIterator createIterator(final Iterator<KeyValue<Windowed<Bytes>, byte[]>> storeKvs,
-                                                                 final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs,
-                                                                 final boolean forward) {
+        final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs,
+        final boolean forward) {
         final DelegatingPeekingKeyValueIterator<Windowed<Bytes>, byte[]> storeIterator =
             new DelegatingPeekingKeyValueIterator<>("store", new KeyValueIteratorStub<>(storeKvs));
 

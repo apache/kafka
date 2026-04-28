@@ -58,16 +58,16 @@ public final class HdrHistogram {
     private volatile Timestamped<Histogram> timestampedHistogramSnapshot;
 
     public HdrHistogram(
-        long highestTrackableValue,
-        int numberOfSignificantValueDigits
+            long highestTrackableValue,
+            int numberOfSignificantValueDigits
     ) {
         this(DEFAULT_MAX_SNAPSHOT_AGE_MS, highestTrackableValue, numberOfSignificantValueDigits);
     }
 
     HdrHistogram(
-        long maxSnapshotAgeMs,
-        long highestTrackableValue,
-        int numberOfSignificantValueDigits
+            long maxSnapshotAgeMs,
+            long highestTrackableValue,
+            int numberOfSignificantValueDigits
     ) {
         this.maxSnapshotAgeMs = maxSnapshotAgeMs;
         recorder = new Recorder(highestTrackableValue, numberOfSignificantValueDigits);
@@ -133,6 +133,7 @@ public final class HdrHistogram {
      * A simple tuple of a timestamp and a value. Can be used updating a value and recording the
      * timestamp of the update in a single atomic operation.
      */
-    private record Timestamped<T>(long timestamp, T value) { }
+    private record Timestamped<T>(long timestamp, T value) {
+    }
 
 }

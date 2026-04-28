@@ -68,7 +68,7 @@ public class DeleteConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<C
     }
 
     public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, Errors>> newFuture(
-            String groupId
+        String groupId
     ) {
         return AdminApiFuture.forKeys(Collections.singleton(CoordinatorKey.byGroupId(groupId)));
     }
@@ -87,11 +87,11 @@ public class DeleteConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<C
         final OffsetDeleteRequestTopicCollection topics = new OffsetDeleteRequestTopicCollection();
         partitions.stream().collect(Collectors.groupingBy(TopicPartition::topic)).forEach((topic, topicPartitions) -> topics.add(
             new OffsetDeleteRequestTopic()
-            .setName(topic)
-            .setPartitions(topicPartitions.stream()
-                .map(tp -> new OffsetDeleteRequestPartition().setPartitionIndex(tp.partition()))
-                .collect(Collectors.toList())
-            )
+                .setName(topic)
+                .setPartitions(topicPartitions.stream()
+                    .map(tp -> new OffsetDeleteRequestPartition().setPartitionIndex(tp.partition()))
+                    .collect(Collectors.toList())
+                )
         ));
 
         return new OffsetDeleteRequest.Builder(

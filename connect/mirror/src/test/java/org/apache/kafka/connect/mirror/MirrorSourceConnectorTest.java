@@ -91,7 +91,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testReplicatesHeartbeatsByDefault() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
+                new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
         assertTrue(connector.shouldReplicateTopic("heartbeats"), "should replicate heartbeats");
         assertTrue(connector.shouldReplicateTopic("us-west.heartbeats"), "should replicate upstream heartbeats");
     }
@@ -100,7 +100,7 @@ public class MirrorSourceConnectorTest {
     public void testReplicatesHeartbeatsDespiteFilter() {
         DefaultReplicationPolicy defaultReplicationPolicy = new DefaultReplicationPolicy();
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            defaultReplicationPolicy, x -> false, new DefaultConfigPropertyFilter());
+                defaultReplicationPolicy, x -> false, new DefaultConfigPropertyFilter());
         assertTrue(connector.shouldReplicateTopic("heartbeats"), "should replicate heartbeats");
         assertTrue(connector.shouldReplicateTopic("us-west.heartbeats"), "should replicate upstream heartbeats");
 
@@ -129,7 +129,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testNoCycles() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter());
+                new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter());
         assertFalse(connector.shouldReplicateTopic("source.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("target.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("target.source.topic1"), "should not allow cycles");
@@ -146,7 +146,7 @@ public class MirrorSourceConnectorTest {
         props.put("source.cluster.alias", "source");
         identityReplicationPolicy.configure(props);
         connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            identityReplicationPolicy, x -> true, x -> true);
+                identityReplicationPolicy, x -> true, x -> true);
         assertTrue(connector.shouldReplicateTopic("source.topic1"), "should not consider this a cycle");
         assertTrue(connector.shouldReplicateTopic("target.topic1"), "should not consider this a cycle");
         assertTrue(connector.shouldReplicateTopic("target.source.topic1"), "should not consider this a cycle");
@@ -160,7 +160,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testIdentityReplication() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new IdentityReplicationPolicy(), x -> true, getConfigPropertyFilter());
+                new IdentityReplicationPolicy(), x -> true, getConfigPropertyFilter());
         assertTrue(connector.shouldReplicateTopic("target.topic1"), "should allow cycles");
         assertTrue(connector.shouldReplicateTopic("target.source.topic1"), "should allow cycles");
         assertTrue(connector.shouldReplicateTopic("source.target.topic1"), "should allow cycles");
@@ -180,32 +180,32 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testAclFiltering() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter());
+                new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter());
         assertFalse(connector.shouldReplicateAcl(
-            new AclBinding(new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
-                new AccessControlEntry("kafka", "", AclOperation.WRITE, AclPermissionType.ALLOW))), "should not replicate ALLOW WRITE");
+                new AclBinding(new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
+                        new AccessControlEntry("kafka", "", AclOperation.WRITE, AclPermissionType.ALLOW))), "should not replicate ALLOW WRITE");
         assertTrue(connector.shouldReplicateAcl(
-            new AclBinding(new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
-                new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.ALLOW))), "should replicate ALLOW ALL");
+                new AclBinding(new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
+                        new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.ALLOW))), "should replicate ALLOW ALL");
     }
 
     @Test
     public void testAclTransformation() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter());
+                new DefaultReplicationPolicy(), x -> true, getConfigPropertyFilter());
         AclBinding allowAllAclBinding = new AclBinding(
-            new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
-            new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.ALLOW));
+                new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
+                new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.ALLOW));
         AclBinding processedAllowAllAclBinding = connector.targetAclBinding(allowAllAclBinding);
         String expectedRemoteTopicName = "source" + DefaultReplicationPolicy.SEPARATOR_DEFAULT
-            + allowAllAclBinding.pattern().name();
+                + allowAllAclBinding.pattern().name();
         assertEquals(expectedRemoteTopicName, processedAllowAllAclBinding.pattern().name(), "should change topic name");
         assertEquals(AclOperation.READ, processedAllowAllAclBinding.entry().operation(), "should change ALL to READ");
         assertEquals(AclPermissionType.ALLOW, processedAllowAllAclBinding.entry().permissionType(), "should not change ALLOW");
 
         AclBinding denyAllAclBinding = new AclBinding(
-            new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
-            new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.DENY));
+                new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
+                new AccessControlEntry("kafka", "", AclOperation.ALL, AclPermissionType.DENY));
         AclBinding processedDenyAllAclBinding = connector.targetAclBinding(denyAllAclBinding);
         assertEquals(AclOperation.ALL, processedDenyAllAclBinding.entry().operation(), "should not change ALL");
         assertEquals(AclPermissionType.DENY, processedDenyAllAclBinding.entry().permissionType(), "should not change DENY");
@@ -293,7 +293,7 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testConfigPropertyFiltering() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> true, new DefaultConfigPropertyFilter());
+                new DefaultReplicationPolicy(), x -> true, new DefaultConfigPropertyFilter());
         ArrayList<ConfigEntry> entries = new ArrayList<>();
         entries.add(new ConfigEntry("name-1", "value-1"));
         entries.add(new ConfigEntry("name-2", "value-2", ConfigEntry.ConfigSource.DEFAULT_CONFIG, false, false, List.of(), ConfigEntry.ConfigType.STRING, ""));
@@ -301,11 +301,11 @@ public class MirrorSourceConnectorTest {
         Config config = new Config(entries);
         Config targetConfig = connector.targetConfig(config, true);
         assertTrue(targetConfig.entries().stream()
-            .anyMatch(x -> x.name().equals("name-1")), "should replicate properties");
+                .anyMatch(x -> x.name().equals("name-1")), "should replicate properties");
         assertTrue(targetConfig.entries().stream()
-            .anyMatch(x -> x.name().equals("name-2")), "should include default properties");
+                .anyMatch(x -> x.name().equals("name-2")), "should include default properties");
         assertFalse(targetConfig.entries().stream()
-            .anyMatch(x -> x.name().equals("min.insync.replicas")), "should not replicate excluded properties");
+                .anyMatch(x -> x.name().equals("min.insync.replicas")), "should not replicate excluded properties");
     }
 
     @Test
@@ -321,11 +321,11 @@ public class MirrorSourceConnectorTest {
         Config config = new Config(entries);
         Config targetConfig = connector.targetConfig(config, false);
         assertTrue(targetConfig.entries().stream()
-            .anyMatch(x -> x.name().equals("name-1")), "should replicate properties");
+                .anyMatch(x -> x.name().equals("name-1")), "should replicate properties");
         assertFalse(targetConfig.entries().stream()
-            .anyMatch(x -> x.name().equals("name-2")), "should not replicate default properties");
+                .anyMatch(x -> x.name().equals("name-2")), "should not replicate default properties");
         assertFalse(targetConfig.entries().stream()
-            .anyMatch(x -> x.name().equals("min.insync.replicas")), "should not replicate excluded properties");
+                .anyMatch(x -> x.name().equals("min.insync.replicas")), "should not replicate excluded properties");
     }
 
     @Test
@@ -336,7 +336,7 @@ public class MirrorSourceConnectorTest {
         filter.configure(filterConfig);
 
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(),  x -> true, filter);
+                new DefaultReplicationPolicy(), x -> true, filter);
         List<ConfigEntry> entries = new ArrayList<>();
         entries.add(new ConfigEntry("name-1", "value-1"));
         // When "use.defaults.from" explicitly set to "source", the config with default value should be replicated

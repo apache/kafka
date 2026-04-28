@@ -66,8 +66,8 @@ class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V, K, V> {
             if (record.key() != null) {
                 // Every record basically starts a new window. We're using a window store mostly for the retention.
                 window.put(record.key(),
-                        ValueTimestampHeaders.make(record.value(), record.timestamp(), record.headers()),
-                        record.timestamp());
+                    ValueTimestampHeaders.make(record.value(), record.timestamp(), record.headers()),
+                    record.timestamp());
             }
         }
     }

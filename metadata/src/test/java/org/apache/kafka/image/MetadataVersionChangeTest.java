@@ -53,27 +53,27 @@ public class MetadataVersionChangeTest {
     public void testMetadataVersionChangeExceptionToString() {
         assertEquals("org.apache.kafka.image.MetadataVersionChangeException: The metadata.version " +
             "is changing from " + MetadataVersion.MINIMUM_VERSION + " to " + MetadataVersion.latestProduction(),
-                new MetadataVersionChangeException(CHANGE_MINIMUM_TO_LATEST).toString());
+            new MetadataVersionChangeException(CHANGE_MINIMUM_TO_LATEST).toString());
         assertEquals("org.apache.kafka.image.MetadataVersionChangeException: The metadata.version " +
             "is changing from " + MetadataVersion.latestProduction() + " to " + MetadataVersion.MINIMUM_VERSION,
-                new MetadataVersionChangeException(CHANGE_LATEST_TO_MINIMUM).toString());
+            new MetadataVersionChangeException(CHANGE_LATEST_TO_MINIMUM).toString());
     }
 
     @Test
     public void testConstructorThrowsExceptionWhenOldVersionIsNull() {
-        assertThrows(NullPointerException.class, () -> 
+        assertThrows(NullPointerException.class, () ->
             new MetadataVersionChange(null, MetadataVersion.MINIMUM_VERSION));
     }
 
     @Test
     public void testConstructorThrowsExceptionWhenNewVersionIsNull() {
-        assertThrows(NullPointerException.class, () -> 
+        assertThrows(NullPointerException.class, () ->
             new MetadataVersionChange(MetadataVersion.MINIMUM_VERSION, null));
     }
 
     @Test
     public void testConstructorThrowsExceptionWhenBothVersionsAreNull() {
-        assertThrows(NullPointerException.class, () -> 
+        assertThrows(NullPointerException.class, () ->
             new MetadataVersionChange(null, null));
     }
 }

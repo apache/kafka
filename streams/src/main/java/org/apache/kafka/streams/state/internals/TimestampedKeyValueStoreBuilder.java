@@ -41,9 +41,9 @@ public class TimestampedKeyValueStoreBuilder<K, V>
     private final KeyValueBytesStoreSupplier storeSupplier;
 
     public TimestampedKeyValueStoreBuilder(final KeyValueBytesStoreSupplier storeSupplier,
-                                           final Serde<K> keySerde,
-                                           final Serde<V> valueSerde,
-                                           final Time time) {
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde,
+        final Time time) {
         super(
             storeSupplier.name(),
             keySerde,
@@ -99,13 +99,13 @@ public class TimestampedKeyValueStoreBuilder<K, V>
 
         @Override
         public void put(final Bytes key,
-                        final byte[] value) {
+            final byte[] value) {
             wrapped().put(key, value);
         }
 
         @Override
         public byte[] putIfAbsent(final Bytes key,
-                                  final byte[] value) {
+            final byte[] value) {
             return wrapped().putIfAbsent(key, value);
         }
 
@@ -126,13 +126,13 @@ public class TimestampedKeyValueStoreBuilder<K, V>
 
         @Override
         public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
-                                                     final Bytes to) {
+            final Bytes to) {
             return wrapped().range(from, to);
         }
 
         @Override
         public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
-                                                            final Bytes to) {
+            final Bytes to) {
             return wrapped().reverseRange(from, to);
         }
 
@@ -148,7 +148,7 @@ public class TimestampedKeyValueStoreBuilder<K, V>
 
         @Override
         public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
-                                                                                        final PS prefixKeySerializer) {
+            final PS prefixKeySerializer) {
             return wrapped().prefixScan(prefix, prefixKeySerializer);
         }
 

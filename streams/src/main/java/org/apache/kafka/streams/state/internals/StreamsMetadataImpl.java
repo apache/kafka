@@ -47,10 +47,10 @@ public class StreamsMetadataImpl implements StreamsMetadata {
     private final String topologyName;
 
     public StreamsMetadataImpl(final HostInfo hostInfo,
-                               final Set<String> stateStoreNames,
-                               final Set<TopicPartition> topicPartitions,
-                               final Set<String> standbyStoreNames,
-                               final Set<TopicPartition> standbyTopicPartitions) {
+        final Set<String> stateStoreNames,
+        final Set<TopicPartition> topicPartitions,
+        final Set<String> standbyStoreNames,
+        final Set<TopicPartition> standbyTopicPartitions) {
         this(
             hostInfo,
             stateStoreNames,
@@ -62,11 +62,11 @@ public class StreamsMetadataImpl implements StreamsMetadata {
     }
 
     public StreamsMetadataImpl(final HostInfo hostInfo,
-                               final Set<String> stateStoreNames,
-                               final Set<TopicPartition> topicPartitions,
-                               final Set<String> standbyStoreNames,
-                               final Set<TopicPartition> standbyTopicPartitions,
-                               final String topologyName) {
+        final Set<String> stateStoreNames,
+        final Set<TopicPartition> topicPartitions,
+        final Set<String> standbyStoreNames,
+        final Set<TopicPartition> standbyTopicPartitions,
+        final String topologyName) {
         this.hostInfo = hostInfo;
         this.stateStoreNames = Collections.unmodifiableSet(stateStoreNames);
         this.topicPartitions = Collections.unmodifiableSet(topicPartitions);

@@ -46,12 +46,12 @@ public class ProducerMetadata extends Metadata {
     private Map<String, Errors> errors = null;
 
     public ProducerMetadata(long refreshBackoffMs,
-                            long refreshBackoffMaxMs,
-                            long metadataExpireMs,
-                            long metadataIdleMs,
-                            LogContext logContext,
-                            ClusterResourceListeners clusterResourceListeners,
-                            Time time) {
+        long refreshBackoffMaxMs,
+        long metadataExpireMs,
+        long metadataIdleMs,
+        LogContext logContext,
+        ClusterResourceListeners clusterResourceListeners,
+        Time time) {
         super(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, logContext, clusterResourceListeners);
         this.metadataIdleMs = metadataIdleMs;
         this.log = logContext.logger(ProducerMetadata.class);

@@ -43,8 +43,8 @@ public class RaftSnapshotWriterTest {
         assertTrue(snapshotWriter.isFrozen());
         assertTrue(snapshotWriter.isClosed());
         assertEquals(List.of(
-                List.of(testRecord(0), testRecord(1)),
-                List.of(testRecord(2))), snapshotWriter.batches());
+            List.of(testRecord(0), testRecord(1)),
+            List.of(testRecord(2))), snapshotWriter.batches());
     }
 
     @Test

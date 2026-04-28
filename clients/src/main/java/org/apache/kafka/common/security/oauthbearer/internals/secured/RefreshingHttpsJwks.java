@@ -127,11 +127,11 @@ public final class RefreshingHttpsJwks implements OAuthBearerConfigurable {
 
     // VisibleForTesting
     RefreshingHttpsJwks(Time time,
-                        HttpsJwks httpsJwks,
-                        long refreshMs,
-                        long refreshRetryBackoffMs,
-                        long refreshRetryBackoffMaxMs,
-                        ScheduledExecutorService executorService) {
+        HttpsJwks httpsJwks,
+        long refreshMs,
+        long refreshRetryBackoffMs,
+        long refreshRetryBackoffMaxMs,
+        ScheduledExecutorService executorService) {
         if (refreshMs <= 0)
             throw new IllegalArgumentException("JWKS validation key refresh configuration value retryWaitMs value must be positive");
 
@@ -163,10 +163,10 @@ public final class RefreshingHttpsJwks implements OAuthBearerConfigurable {
      */
 
     public RefreshingHttpsJwks(Time time,
-                               HttpsJwks httpsJwks,
-                               long refreshMs,
-                               long refreshRetryBackoffMs,
-                               long refreshRetryBackoffMaxMs) {
+        HttpsJwks httpsJwks,
+        long refreshMs,
+        long refreshRetryBackoffMs,
+        long refreshRetryBackoffMaxMs) {
         this(time, httpsJwks, refreshMs, refreshRetryBackoffMs, refreshRetryBackoffMaxMs, Executors.newSingleThreadScheduledExecutor());
     }
 
@@ -194,9 +194,9 @@ public final class RefreshingHttpsJwks implements OAuthBearerConfigurable {
             //
             // Note: we refer to this as a _scheduled_ refresh.
             executorService.scheduleAtFixedRate(this::refresh,
-                    refreshMs,
-                    refreshMs,
-                    TimeUnit.MILLISECONDS);
+                refreshMs,
+                refreshMs,
+                TimeUnit.MILLISECONDS);
 
             log.info("JWKS validation key refresh thread started with a refresh interval of {} ms", refreshMs);
         } finally {
@@ -217,7 +217,7 @@ public final class RefreshingHttpsJwks implements OAuthBearerConfigurable {
 
                 if (!executorService.awaitTermination(SHUTDOWN_TIMEOUT, SHUTDOWN_TIME_UNIT)) {
                     log.warn("JWKS validation key refresh thread termination did not end after {} {}",
-                            SHUTDOWN_TIMEOUT, SHUTDOWN_TIME_UNIT);
+                        SHUTDOWN_TIMEOUT, SHUTDOWN_TIME_UNIT);
                 }
             } catch (InterruptedException e) {
                 log.warn("JWKS validation key refresh thread error during close", e);

@@ -41,8 +41,8 @@ public final class RemoteStorageThreadPool extends ThreadPoolExecutor {
 
     @SuppressWarnings("deprecation")
     public RemoteStorageThreadPool(String threadNamePattern,
-                                   int numThreads,
-                                   int maxPendingTasks) {
+            int numThreads,
+            int maxPendingTasks) {
         super(numThreads,
                 numThreads,
                 0L,

@@ -68,7 +68,7 @@ public class EndToEndLatencyTest {
 
     private static class ArgsBuilder {
         private final Map<String, String> params = new LinkedHashMap<>();
-        
+
         private ArgsBuilder() {
             params.put("--bootstrap-server", "localhost:9092");
             params.put("--topic", "test-topic");
@@ -76,26 +76,26 @@ public class EndToEndLatencyTest {
             params.put("--producer-acks", "1");
             params.put("--record-size", "200");
         }
-        
+
         public static ArgsBuilder defaults() {
             return new ArgsBuilder();
         }
-        
+
         public ArgsBuilder with(String param, String value) {
             params.put(param, value);
             return this;
         }
-        
+
         public String[] build() {
             return params.entrySet().stream()
-                    .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue()))
-                    .toArray(String[]::new);
+                .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue()))
+                .toArray(String[]::new);
         }
 
         public ArgsBuilder withNegative(String param) {
             return with(param, "-1");
         }
-        
+
         public ArgsBuilder withZero(String param) {
             return with(param, "0");
         }
@@ -146,7 +146,7 @@ public class EndToEndLatencyTest {
     private void testInvalidNumHeaders() {
         String expectedMsg = "Value for --num-headers must be a non-negative integer.";
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                ArgsBuilder.defaults().withNegative("--num-headers").build(), expectedMsg);
+            ArgsBuilder.defaults().withNegative("--num-headers").build(), expectedMsg);
     }
 
     private void testInvalidRecordHeaderKey() {
@@ -164,7 +164,7 @@ public class EndToEndLatencyTest {
     private void testInvalidProducerAcks() {
         String expectedMsg = "Invalid value for --producer-acks. Latency testing requires synchronous acknowledgement. Please use '1' or 'all'.";
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                ArgsBuilder.defaults().withZero("--producer-acks").build(), expectedMsg);
+            ArgsBuilder.defaults().withZero("--producer-acks").build(), expectedMsg);
     }
 
     private void assertInitializeInvalidOptionsExitCodeAndMsg(String[] args, String expectedMsg) {
@@ -225,8 +225,8 @@ public class EndToEndLatencyTest {
         when(record.key()).thenReturn(RECORD_KEY_DIFFERENT);
 
         assertThrows(RuntimeException.class, () ->
-                EndToEndLatency.validate(consumer, RECORD_VALUE, records,
-                        RECORD_KEY, null));
+            EndToEndLatency.validate(consumer, RECORD_VALUE, records,
+                RECORD_KEY, null));
     }
 
     @Test
@@ -252,7 +252,7 @@ public class EndToEndLatencyTest {
         List<Header> sentHeaders = List.of(sentHeader);
 
         assertThrows(RuntimeException.class, () ->
-                EndToEndLatency.validate(consumer, RECORD_VALUE, records, null, sentHeaders));
+            EndToEndLatency.validate(consumer, RECORD_VALUE, records, null, sentHeaders));
     }
 
     @Test
@@ -277,7 +277,7 @@ public class EndToEndLatencyTest {
         when(headerIterator.next()).thenReturn(receivedHeader);
 
         assertThrows(RuntimeException.class, () ->
-                EndToEndLatency.validate(consumer, RECORD_VALUE, records, null, sentHeaders));
+            EndToEndLatency.validate(consumer, RECORD_VALUE, records, null, sentHeaders));
     }
 
     @Test

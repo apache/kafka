@@ -24,9 +24,9 @@ import java.util.List;
 import java.util.Map;
 
 public record ConnectorInfo(
-    @JsonProperty("name") String name,
-    @JsonProperty("config") Map<String, String> config,
-    @JsonProperty("tasks") List<ConnectorTaskId> tasks,
-    @JsonProperty("type") ConnectorType type
+@JsonProperty("name") String name,
+@JsonProperty("config") Map<String, String> config,
+@JsonProperty("tasks") List<ConnectorTaskId> tasks,
+@JsonProperty("type") ConnectorType type
 ) {
 }

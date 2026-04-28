@@ -41,21 +41,21 @@ public class ShareGroupDescription {
     private final Set<AclOperation> authorizedOperations;
 
     public ShareGroupDescription(String groupId,
-                                 Collection<ShareMemberDescription> members,
-                                 GroupState groupState,
-                                 Node coordinator,
-                                 int groupEpoch,
-                                 int targetAssignmentEpoch) {
+        Collection<ShareMemberDescription> members,
+        GroupState groupState,
+        Node coordinator,
+        int groupEpoch,
+        int targetAssignmentEpoch) {
         this(groupId, members, groupState, coordinator, groupEpoch, targetAssignmentEpoch, Collections.emptySet());
     }
 
     public ShareGroupDescription(String groupId,
-                                 Collection<ShareMemberDescription> members,
-                                 GroupState groupState,
-                                 Node coordinator,
-                                 int groupEpoch,
-                                 int targetAssignmentEpoch,
-                                 Set<AclOperation> authorizedOperations) {
+        Collection<ShareMemberDescription> members,
+        GroupState groupState,
+        Node coordinator,
+        int groupEpoch,
+        int targetAssignmentEpoch,
+        Set<AclOperation> authorizedOperations) {
         this.groupId = groupId == null ? "" : groupId;
         this.members = members == null ? Collections.emptyList() : List.copyOf(members);
         this.groupState = groupState;

@@ -141,7 +141,7 @@ public final class ListenerInfo {
             SecurityProtocol protocol = SecurityProtocol.forId(listener.securityProtocol());
             if (protocol == null) {
                 throw new RuntimeException("Unknown security protocol " +
-                        (int) listener.securityProtocol() + " in listener " + listener.name());
+                    (int) listener.securityProtocol() + " in listener " + listener.name());
             }
             listeners.put(listener.name(), new Endpoint(listener.name(),
                 protocol,
@@ -166,12 +166,12 @@ public final class ListenerInfo {
             SecurityProtocol protocol = SecurityProtocol.forId(listener.securityProtocol());
             if (protocol == null) {
                 throw new RuntimeException("Unknown security protocol " +
-                        (int) listener.securityProtocol() + " in listener " + listener.name());
+                    (int) listener.securityProtocol() + " in listener " + listener.name());
             }
             listeners.put(listener.name(), new Endpoint(listener.name(),
-                    protocol,
-                    listener.host(),
-                    listener.port()));
+                protocol,
+                listener.host(),
+                listener.port()));
         });
         return new ListenerInfo(listeners);
     }
@@ -237,11 +237,11 @@ public final class ListenerInfo {
                 String newHost = InetAddress.getLocalHost().getCanonicalHostName();
                 Endpoint prevEndpoint = entry.getValue();
                 newListeners.put(entry.getKey(), new Endpoint(prevEndpoint.listener(),
-                        prevEndpoint.securityProtocol(),
-                        newHost,
-                        prevEndpoint.port()));
+                    prevEndpoint.securityProtocol(),
+                    newHost,
+                    prevEndpoint.port()));
                 log.info("{}: resolved wildcard host to {}", entry.getValue().listener(),
-                        newHost);
+                    newHost);
             } else {
                 newListeners.put(entry.getKey(), entry.getValue());
             }
@@ -269,11 +269,11 @@ public final class ListenerInfo {
                 int newPort = getBoundPortCallback.apply(entry.getKey());
                 checkPortIsSerializable(newPort);
                 log.info("{}: resolved ephemeral port to {}", entry.getValue().listener(),
-                        newPort);
+                    newPort);
                 newListeners.put(entry.getKey(), new Endpoint(prevEndpoint.listener(),
-                        prevEndpoint.securityProtocol(),
-                        prevEndpoint.host(),
-                        newPort));
+                    prevEndpoint.securityProtocol(),
+                    prevEndpoint.host(),
+                    newPort));
             } else {
                 newListeners.put(entry.getKey(), entry.getValue());
             }
@@ -318,7 +318,7 @@ public final class ListenerInfo {
 
     public RegisterControllerRecord.ControllerEndpointCollection toControllerRegistrationRecord() {
         RegisterControllerRecord.ControllerEndpointCollection collection =
-                new RegisterControllerRecord.ControllerEndpointCollection();
+            new RegisterControllerRecord.ControllerEndpointCollection();
         listeners.values().forEach(endpoint -> {
             checkPortIsSerializable(endpoint.port());
             checkHostIsSerializable(endpoint.host());
@@ -333,7 +333,7 @@ public final class ListenerInfo {
 
     public BrokerRegistrationRequestData.ListenerCollection toBrokerRegistrationRequest() {
         BrokerRegistrationRequestData.ListenerCollection collection =
-                new BrokerRegistrationRequestData.ListenerCollection();
+            new BrokerRegistrationRequestData.ListenerCollection();
         listeners.values().forEach(endpoint -> {
             checkPortIsSerializable(endpoint.port());
             checkHostIsSerializable(endpoint.host());
@@ -348,7 +348,7 @@ public final class ListenerInfo {
 
     public RegisterBrokerRecord.BrokerEndpointCollection toBrokerRegistrationRecord() {
         RegisterBrokerRecord.BrokerEndpointCollection collection =
-                new RegisterBrokerRecord.BrokerEndpointCollection();
+            new RegisterBrokerRecord.BrokerEndpointCollection();
         listeners.values().forEach(endpoint -> {
             checkPortIsSerializable(endpoint.port());
             checkHostIsSerializable(endpoint.host());
@@ -366,7 +366,7 @@ public final class ListenerInfo {
         if (o == null || (!(o.getClass().equals(ListenerInfo.class)))) return false;
         ListenerInfo other = (ListenerInfo) o;
         return listeners.equals(other.listeners) &&
-                firstListener().equals(other.firstListener());
+            firstListener().equals(other.firstListener());
     }
 
     @Override

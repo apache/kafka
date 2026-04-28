@@ -129,8 +129,10 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             if (metrics == null) {
                 metrics = new MetadataLoaderMetrics(
                     Optional.empty(),
-                    __ -> { },
-                    __ -> { },
+                    __ -> {
+                    },
+                    __ -> {
+                    },
                     new AtomicReference<>(MetadataProvenance.EMPTY));
             }
             return new MetadataLoader(
@@ -254,21 +256,21 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         OptionalLong highWaterMark = highWaterMarkAccessor.get();
         if (highWaterMark.isEmpty()) {
             log.info("{}: the loader is still catching up because we still don't know the high " +
-                    "water mark yet.", where);
+                "water mark yet.", where);
             return true;
         }
         if (highWaterMark.getAsLong() - 1 > offset) {
             log.info("{}: The loader is still catching up because we have loaded up to offset " +
-                    offset + ", but the high water mark is {}", where, highWaterMark.getAsLong());
+                offset + ", but the high water mark is {}", where, highWaterMark.getAsLong());
             return true;
         }
         if (!batchLoader.hasSeenRecord()) {
             log.info("{}: The loader is still catching up because we have not loaded a controller record as of offset " +
-                    offset + " and high water mark is {}", where, highWaterMark.getAsLong());
+                offset + " and high water mark is {}", where, highWaterMark.getAsLong());
             return true;
         }
         log.info("{}: The loader finished catching up to the current high water mark of {}",
-                where, highWaterMark.getAsLong());
+            where, highWaterMark.getAsLong());
         catchingUp = false;
         return false;
     }
@@ -300,41 +302,41 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         if (stillNeedToCatchUp("initializeNewPublishers", image.highestOffsetAndEpoch().offset())) {
             // Reschedule the initialization for later.
             log.debug("InitializeNewPublishers: unable to initialize new publisher(s) {} " +
-                            "because we are still catching up with quorum metadata. Rescheduling.",
-                    uninitializedPublisherNames());
+                "because we are still catching up with quorum metadata. Rescheduling.",
+                uninitializedPublisherNames());
             scheduleInitializeNewPublishers(TimeUnit.MILLISECONDS.toNanos(100));
             return;
         }
         log.debug("InitializeNewPublishers: setting up snapshot image for new publisher(s): {}",
-                uninitializedPublisherNames());
+            uninitializedPublisherNames());
         long startNs = time.nanoseconds();
         // We base this delta off of the empty image, reflecting the fact that these publishers
         // haven't seen anything previously.
         MetadataDelta delta = new MetadataDelta.Builder().
-                setImage(MetadataImage.EMPTY).
-                setSupportedConfigChecker(supportedConfigChecker).
-                build();
+            setImage(MetadataImage.EMPTY).
+            setSupportedConfigChecker(supportedConfigChecker).
+            build();
         ImageReWriter writer = new ImageReWriter(delta);
         image.write(writer, new ImageWriterOptions.Builder(image.features().metadataVersionOrThrow()).
-                setEligibleLeaderReplicasEnabled(image.features().isElrEnabled()).
-                build());
+            setEligibleLeaderReplicasEnabled(image.features().isElrEnabled()).
+            build());
         // ImageReWriter#close invokes finishSnapshot, so we don't need to invoke it here.
         SnapshotManifest manifest = new SnapshotManifest(
-                image.provenance(),
-                time.nanoseconds() - startNs);
+            image.provenance(),
+            time.nanoseconds() - startNs);
         for (Iterator<MetadataPublisher> iter = uninitializedPublishers.values().iterator();
-                iter.hasNext(); ) {
+             iter.hasNext(); ) {
             MetadataPublisher publisher = iter.next();
             iter.remove();
             try {
                 log.info("InitializeNewPublishers: initializing {} with a snapshot at offset {}",
-                        publisher.name(), image.highestOffsetAndEpoch().offset());
+                    publisher.name(), image.highestOffsetAndEpoch().offset());
                 publisher.onMetadataUpdate(delta, image, manifest);
                 publisher.onControllerChange(currentLeaderAndEpoch);
                 publishers.put(publisher.name(), publisher);
             } catch (Throwable e) {
                 faultHandler.handleFault("Unhandled error initializing " + publisher.name() +
-                        " with a snapshot at offset " + image.highestOffsetAndEpoch().offset(), e);
+                    " with a snapshot at offset " + image.highestOffsetAndEpoch().offset(), e);
             }
         }
     }
@@ -408,7 +410,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 // This is a general catch-all block where we don't expect to end up;
                 // failure-prone operations should have individual try/catch blocks around them.
                 faultHandler.handleFault("Unhandled fault in MetadataLoader#handleCommit. " +
-                        "Last image offset was " + image.offset(), e);
+                    "Last image offset was " + image.offset(), e);
             }
         });
     }
@@ -427,9 +429,9 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                     build();
                 SnapshotManifest manifest = loadSnapshot(delta, reader);
                 log.info("handleLoadSnapshot({}): generated a metadata delta between offset {} " +
-                        "and this snapshot in {} us.", snapshotName,
-                        image.provenance().lastContainedOffset(),
-                        NANOSECONDS.toMicros(manifest.elapsedNs()));
+                    "and this snapshot in {} us.", snapshotName,
+                    image.provenance().lastContainedOffset(),
+                    NANOSECONDS.toMicros(manifest.elapsedNs()));
                 MetadataImage image = delta.apply(manifest.provenance());
                 batchLoader.resetToImage(image);
                 maybePublishMetadata(delta, image, manifest);
@@ -437,7 +439,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 // This is a general catch-all block where we don't expect to end up;
                 // failure-prone operations should have individual try/catch blocks around them.
                 faultHandler.handleFault("Unhandled fault in MetadataLoader#handleLoadSnapshot. " +
-                        "Snapshot offset was " + reader.lastContainedLogOffset(), e);
+                    "Snapshot offset was " + reader.lastContainedLogOffset(), e);
             } finally {
                 reader.close();
             }
@@ -460,8 +462,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
      * @return          A manifest of what was loaded.
      */
     SnapshotManifest loadSnapshot(
-            MetadataDelta delta,
-            SnapshotReader<ApiMessageAndVersion> reader
+        MetadataDelta delta,
+        SnapshotReader<ApiMessageAndVersion> reader
     ) {
         long startNs = time.nanoseconds();
         int snapshotIndex = 0;
@@ -473,16 +475,16 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                     delta.replay(record.message());
                 } catch (Throwable e) {
                     faultHandler.handleFault("Error loading metadata log record " + snapshotIndex +
-                            " in snapshot at offset " + reader.lastContainedLogOffset(), e);
+                        " in snapshot at offset " + reader.lastContainedLogOffset(), e);
                 }
                 snapshotIndex++;
             }
         }
         delta.finishSnapshot();
         MetadataProvenance provenance = new MetadataProvenance(reader.lastContainedLogOffset(),
-                reader.lastContainedLogEpoch(), reader.lastContainedLogTimestamp(), true);
+            reader.lastContainedLogEpoch(), reader.lastContainedLogTimestamp(), true);
         return new SnapshotManifest(provenance,
-                time.nanoseconds() - startNs);
+            time.nanoseconds() - startNs);
     }
 
     void loadControlRecords(Batch<ApiMessageAndVersion> batch) {
@@ -534,11 +536,11 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                     if (prev != null) {
                         if (prev == newPublisher) {
                             throw faultHandler.handleFault("Attempted to install publisher " +
-                                    newPublisher.name() + ", which is already installed.");
+                                newPublisher.name() + ", which is already installed.");
                         } else {
                             throw faultHandler.handleFault("Attempted to install a new publisher " +
-                                    "named " + newPublisher.name() + ", but there is already a publisher " +
-                                    "with that name.");
+                                "named " + newPublisher.name() + ", but there is already a publisher " +
+                                "with that name.");
                         }
                     }
                 }
@@ -551,7 +553,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 future.complete(null);
             } catch (Throwable e) {
                 future.completeExceptionally(faultHandler.handleFault("Unhandled fault in " +
-                        "MetadataLoader#installPublishers", e));
+                    "MetadataLoader#installPublishers", e));
             }
         });
         return future;
@@ -579,7 +581,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 if (!publishers.remove(publisher.name(), publisher)) {
                     if (!uninitializedPublishers.remove(publisher.name(), publisher)) {
                         throw faultHandler.handleFault("Attempted to remove publisher " + publisher.name() +
-                                ", which is not installed.");
+                            ", which is not installed.");
                     }
                 }
                 closePublisher(publisher);
@@ -625,7 +627,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             publisher.close();
         } catch (Throwable e) {
             faultHandler.handleFault("Got unexpected exception while closing " +
-                    "publisher " + publisher.name(), e);
+                "publisher " + publisher.name(), e);
         }
     }
 

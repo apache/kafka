@@ -138,7 +138,7 @@ public abstract class Connector implements ConnectPlugin {
         ConfigDef configDef = config();
         if (null == configDef) {
             throw new ConnectException(
-                String.format("%s.config() must return a ConfigDef that is not null.", this.getClass().getName())
+                    String.format("%s.config() must return a ConfigDef that is not null.", this.getClass().getName())
             );
         }
         List<ConfigValue> configValues = configDef.validate(connectorConfigs);

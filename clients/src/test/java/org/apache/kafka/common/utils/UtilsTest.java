@@ -110,7 +110,7 @@ public class UtilsTest {
         cases.put("a-little-bit-long-string".getBytes(), -985981536);
         cases.put("a-little-bit-longer-string".getBytes(), -1486304829);
         cases.put("lkjh234lh9fiuh90y23oiuhsafujhadof229phr9h19h89h8".getBytes(), -58897971);
-        cases.put(new byte[] {'a', 'b', 'c'}, 479470107);
+        cases.put(new byte[]{'a', 'b', 'c'}, 479470107);
 
         for (Map.Entry<byte[], Integer> c : cases.entrySet()) {
             assertEquals(c.getValue().intValue(), murmur2(c.getKey()));
@@ -135,9 +135,9 @@ public class UtilsTest {
         SplittableRandom random = new SplittableRandom(seed);
         long checksum = 0;
 
-        for (int len = 0; len <= maxLen; ++len) {
+        for (int len = 0;len <= maxLen;++len) {
             byte[] data = new byte[len];
-            for (int i = 0; i < numTrials; ++i) {
+            for (int i = 0;i < numTrials;++i) {
                 random.nextBytes(data);
                 int hash = Utils.murmur2(data);
                 checksum += Integer.toUnsignedLong(hash);
@@ -267,11 +267,11 @@ public class UtilsTest {
         assertArrayEquals(input, Utils.toArray(buffer));
         assertEquals(0, buffer.position());
 
-        assertArrayEquals(new byte[] {1, 2}, Utils.toArray(buffer, 1, 2));
+        assertArrayEquals(new byte[]{1, 2}, Utils.toArray(buffer, 1, 2));
         assertEquals(0, buffer.position());
 
         buffer.position(2);
-        assertArrayEquals(new byte[] {2, 3, 4}, Utils.toArray(buffer));
+        assertArrayEquals(new byte[]{2, 3, 4}, Utils.toArray(buffer));
         assertEquals(2, buffer.position());
     }
 
@@ -285,11 +285,11 @@ public class UtilsTest {
         assertArrayEquals(input, Utils.toArray(buffer));
         assertEquals(0, buffer.position());
 
-        assertArrayEquals(new byte[] {1, 2}, Utils.toArray(buffer, 1, 2));
+        assertArrayEquals(new byte[]{1, 2}, Utils.toArray(buffer, 1, 2));
         assertEquals(0, buffer.position());
 
         buffer.position(2);
-        assertArrayEquals(new byte[] {2, 3, 4}, Utils.toArray(buffer));
+        assertArrayEquals(new byte[]{2, 3, 4}, Utils.toArray(buffer));
         assertEquals(2, buffer.position());
     }
 
@@ -298,7 +298,7 @@ public class UtilsTest {
         byte[] input = {0, 0, 0, 2, 1, 0};
         final ByteBuffer buffer = ByteBuffer.wrap(input);
         final byte[] array = Utils.getNullableSizePrefixedArray(buffer);
-        assertArrayEquals(new byte[] {1, 0}, array);
+        assertArrayEquals(new byte[]{1, 0}, array);
         assertEquals(6, buffer.position());
         assertFalse(buffer.hasRemaining());
     }
@@ -308,7 +308,7 @@ public class UtilsTest {
         byte[] input = {0, 0, 0, 0};
         final ByteBuffer buffer = ByteBuffer.wrap(input);
         final byte[] array = Utils.getNullableSizePrefixedArray(buffer);
-        assertArrayEquals(new byte[] {}, array);
+        assertArrayEquals(new byte[]{}, array);
         assertEquals(4, buffer.position());
         assertFalse(buffer.hasRemaining());
     }
@@ -318,7 +318,7 @@ public class UtilsTest {
         byte[] input = {0, 0, 0, 2, 1, 0, 9};
         final ByteBuffer buffer = ByteBuffer.wrap(input);
         final byte[] array = Utils.getNullableSizePrefixedArray(buffer);
-        assertArrayEquals(new byte[] {1, 0}, array);
+        assertArrayEquals(new byte[]{1, 0}, array);
         assertEquals(6, buffer.position());
         assertTrue(buffer.hasRemaining());
     }
@@ -527,7 +527,7 @@ public class UtilsTest {
         assertEquals(15, newByteBuffer2.capacity());
 
         ByteBuffer byteBuffer3 = ByteBuffer.allocate(10);
-        for (int i = 1; i <= 10; i++) {
+        for (int i = 1;i <= 10;i++) {
             byteBuffer3.put((byte) i);
         }
         ByteBuffer newByteBuffer3 = Utils.ensureCapacity(byteBuffer3, 15);
@@ -691,7 +691,7 @@ public class UtilsTest {
      * @throws IOException          If an I/O error occurs
      */
     private String fileChannelMockExpectReadWithRandomBytes(final FileChannel channelMock,
-                                                            final int bufferSize) throws IOException {
+        final int bufferSize) throws IOException {
         final int step = 20;
         final Random random = new Random();
         int remainingBytes = bufferSize;
@@ -731,7 +731,7 @@ public class UtilsTest {
 
         static TestCloseable[] createCloseables(boolean... exceptionOnClose) {
             TestCloseable[] closeables = new TestCloseable[exceptionOnClose.length];
-            for (int i = 0; i < closeables.length; i++)
+            for (int i = 0;i < closeables.length;i++)
                 closeables[i] = new TestCloseable(i, exceptionOnClose[i]);
             return closeables;
         }
@@ -745,7 +745,7 @@ public class UtilsTest {
             assertEquals(closeablesWithException[0].closeException, e);
             Throwable[] suppressed = e.getSuppressed();
             assertEquals(closeablesWithException.length - 1, suppressed.length);
-            for (int i = 1; i < closeablesWithException.length; i++)
+            for (int i = 1;i < closeablesWithException.length;i++)
                 assertEquals(closeablesWithException[i].closeException, suppressed[i - 1]);
         }
     }
@@ -1321,6 +1321,7 @@ public class UtilsTest {
 
     private static class TestException extends Exception {
         final String key;
+
         TestException(String key) {
             this.key = key;
         }

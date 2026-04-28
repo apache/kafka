@@ -54,7 +54,7 @@ public class ShareGroupDescribeResponse extends AbstractResponse {
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
         data.groups().forEach(
-                group -> updateErrorCounts(counts, Errors.forCode(group.errorCode()))
+            group -> updateErrorCounts(counts, Errors.forCode(group.errorCode()))
         );
         return counts;
     }
@@ -71,7 +71,7 @@ public class ShareGroupDescribeResponse extends AbstractResponse {
 
     public static ShareGroupDescribeResponse parse(Readable readable, short version) {
         return new ShareGroupDescribeResponse(
-                new ShareGroupDescribeResponseData(readable, version)
+            new ShareGroupDescribeResponseData(readable, version)
         );
     }
 }

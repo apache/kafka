@@ -32,7 +32,8 @@ import java.util.Map;
  */
 public interface RecordReader extends Closeable, Configurable {
 
-    default void configure(Map<String, ?> configs) {}
+    default void configure(Map<String, ?> configs) {
+    }
 
     /**
      * read byte array from input stream and then generate an iterator of producer record
@@ -47,5 +48,6 @@ public interface RecordReader extends Closeable, Configurable {
      * Closes this reader.
      * This method is invoked if the iterator from readRecords either has no more records or throws exception.
      */
-    default void close() {}
+    default void close() {
+    }
 }

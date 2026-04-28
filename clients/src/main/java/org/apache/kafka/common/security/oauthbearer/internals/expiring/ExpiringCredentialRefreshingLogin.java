@@ -44,10 +44,10 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
      */
     static class LoginContextFactory {
         public LoginContext createLoginContext(ExpiringCredentialRefreshingLogin expiringCredentialRefreshingLogin)
-                throws LoginException {
+            throws LoginException {
             return new LoginContext(expiringCredentialRefreshingLogin.contextName(),
-                    expiringCredentialRefreshingLogin.subject(), expiringCredentialRefreshingLogin.callbackHandler(),
-                    expiringCredentialRefreshingLogin.configuration());
+                expiringCredentialRefreshingLogin.subject(), expiringCredentialRefreshingLogin.callbackHandler(),
+                expiringCredentialRefreshingLogin.configuration());
         }
 
         public void refresherThreadStarted() {
@@ -86,15 +86,15 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
                 // should generally never happen except due to a bug
                 if (nextRefreshMs < nowMs) {
                     log.warn("[Principal={}]: Expiring credential re-login sleep time was calculated to be in the past! Will explicitly adjust. ({})", principalLogText(),
-                            new Date(nextRefreshMs));
+                        new Date(nextRefreshMs));
                     nextRefreshMs = nowMs + 10 * 1000; // refresh in 10 seconds
                 }
                 log.info("[Principal={}]: Expiring credential re-login sleeping until: {}", principalLogText(),
-                        new Date(nextRefreshMs));
+                    new Date(nextRefreshMs));
                 time.sleep(nextRefreshMs - nowMs);
                 if (Thread.currentThread().isInterrupted()) {
                     log.info("[Principal={}]: Expiring credential re-login thread has been interrupted and will exit.",
-                            principalLogText());
+                        principalLogText());
                     loginContextFactory.refresherThreadDone();
                     return;
                 }
@@ -114,13 +114,13 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
                         log.warn(String.format(
                                 "[Principal=%s]: LoginException during login retry; will sleep %d seconds before trying again.",
                                 principalLogText(), DELAY_SECONDS_BEFORE_NEXT_RETRY_WHEN_RELOGIN_FAILS),
-                                loginException);
+                            loginException);
                         // Sleep and allow loop to run/try again unless interrupted
                         time.sleep(DELAY_SECONDS_BEFORE_NEXT_RETRY_WHEN_RELOGIN_FAILS * 1000);
                         if (Thread.currentThread().isInterrupted()) {
                             log.error(
-                                    "[Principal={}]: Interrupted while trying to perform a subsequent expiring credential re-login after one or more initial re-login failures: re-login thread exiting now: {}",
-                                    principalLogText(), loginException.getMessage());
+                                "[Principal={}]: Interrupted while trying to perform a subsequent expiring credential re-login after one or more initial re-login failures: re-login thread exiting now: {}",
+                                principalLogText(), loginException.getMessage());
                             loginContextFactory.refresherThreadDone();
                             return;
                         }
@@ -151,22 +151,22 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
     private final Class<?> mandatoryClassToSynchronizeOnPriorToRefresh;
 
     public ExpiringCredentialRefreshingLogin(String contextName, Configuration configuration,
-            ExpiringCredentialRefreshConfig expiringCredentialRefreshConfig,
-            AuthenticateCallbackHandler callbackHandler, Class<?> mandatoryClassToSynchronizeOnPriorToRefresh) {
+        ExpiringCredentialRefreshConfig expiringCredentialRefreshConfig,
+        AuthenticateCallbackHandler callbackHandler, Class<?> mandatoryClassToSynchronizeOnPriorToRefresh) {
         this(contextName, configuration, expiringCredentialRefreshConfig, callbackHandler,
-                mandatoryClassToSynchronizeOnPriorToRefresh, new LoginContextFactory(), Time.SYSTEM);
+            mandatoryClassToSynchronizeOnPriorToRefresh, new LoginContextFactory(), Time.SYSTEM);
     }
 
     public ExpiringCredentialRefreshingLogin(String contextName, Configuration configuration,
-            ExpiringCredentialRefreshConfig expiringCredentialRefreshConfig,
-            AuthenticateCallbackHandler callbackHandler, Class<?> mandatoryClassToSynchronizeOnPriorToRefresh,
-            LoginContextFactory loginContextFactory, Time time) {
+        ExpiringCredentialRefreshConfig expiringCredentialRefreshConfig,
+        AuthenticateCallbackHandler callbackHandler, Class<?> mandatoryClassToSynchronizeOnPriorToRefresh,
+        LoginContextFactory loginContextFactory, Time time) {
         this.contextName = Objects.requireNonNull(contextName);
         this.configuration = Objects.requireNonNull(configuration);
         this.expiringCredentialRefreshConfig = Objects.requireNonNull(expiringCredentialRefreshConfig);
         this.callbackHandler = callbackHandler;
         this.mandatoryClassToSynchronizeOnPriorToRefresh = Objects
-                .requireNonNull(mandatoryClassToSynchronizeOnPriorToRefresh);
+            .requireNonNull(mandatoryClassToSynchronizeOnPriorToRefresh);
         this.loginContextFactory = loginContextFactory;
         this.time = Objects.requireNonNull(time);
     }
@@ -223,11 +223,11 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
         long nowMs = currentMs();
         if (nowMs > expireTimeMs) {
             log.error(
-                    "[Principal={}]: Current clock: {} is later than expiry {}. This may indicate a clock skew problem."
-                            + " Check that this host's and remote host's clocks are in sync. Not starting refresh thread."
-                            + " This process is likely unable to authenticate SASL connections (for example, it is unlikely"
-                            + " to be able to authenticate a connection with a Kafka Broker).",
-                    principalLogText(), new Date(nowMs), new Date(expireTimeMs));
+                "[Principal={}]: Current clock: {} is later than expiry {}. This may indicate a clock skew problem."
+                    + " Check that this host's and remote host's clocks are in sync. Not starting refresh thread."
+                    + " This process is likely unable to authenticate SASL connections (for example, it is unlikely"
+                    + " to be able to authenticate a connection with a Kafka Broker).",
+                principalLogText(), new Date(nowMs), new Date(expireTimeMs));
             return loginContext;
         }
 
@@ -239,7 +239,7 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
          * credential and refresh-related configuration values.
          */
         refresherThread = KafkaThread.daemon(String.format("kafka-expiring-relogin-thread-%s", principalName),
-                new Refresher());
+            new Refresher());
         refresherThread.start();
         loginContextFactory.refresherThreadStarted();
         return loginContext;
@@ -252,7 +252,7 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
                 refresherThread.join();
             } catch (InterruptedException e) {
                 log.warn("[Principal={}]: Interrupted while waiting for re-login thread to shutdown.",
-                        principalLogText(), e);
+                    principalLogText(), e);
                 Thread.currentThread().interrupt();
             }
         }
@@ -279,7 +279,7 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
              */
             long retvalNextRefreshMs = relativeToMs + DELAY_SECONDS_BEFORE_NEXT_RETRY_WHEN_RELOGIN_FAILS * 1000L;
             log.warn("[Principal={}]: No Expiring credential found: will try again at {}", principalLogText(),
-                    new Date(retvalNextRefreshMs));
+                new Date(retvalNextRefreshMs));
             return retvalNextRefreshMs;
         }
         long expireTimeMs = expiringCredential.expireTimeMs();
@@ -287,9 +287,9 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
             boolean logoutRequiredBeforeLoggingBackIn = isLogoutRequiredBeforeLoggingBackIn();
             if (logoutRequiredBeforeLoggingBackIn) {
                 log.error(
-                        "[Principal={}]: Current clock: {} is later than expiry {}. This may indicate a clock skew problem."
-                                + " Check that this host's and remote host's clocks are in sync. Exiting refresh thread.",
-                        principalLogText(), new Date(relativeToMs), new Date(expireTimeMs));
+                    "[Principal={}]: Current clock: {} is later than expiry {}. This may indicate a clock skew problem."
+                        + " Check that this host's and remote host's clocks are in sync. Exiting refresh thread.",
+                    principalLogText(), new Date(relativeToMs), new Date(expireTimeMs));
                 return null;
             } else {
                 /*
@@ -301,26 +301,26 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
                  */
                 long retvalNextRefreshMs = relativeToMs + DELAY_SECONDS_BEFORE_NEXT_RETRY_WHEN_RELOGIN_FAILS * 1000L;
                 log.warn("[Principal={}]: Expiring credential already expired at {}: will try to refresh again at {}",
-                        principalLogText(), new Date(expireTimeMs), new Date(retvalNextRefreshMs));
+                    principalLogText(), new Date(expireTimeMs), new Date(retvalNextRefreshMs));
                 return retvalNextRefreshMs;
             }
         }
         Long absoluteLastRefreshTimeMs = expiringCredential.absoluteLastRefreshTimeMs();
         if (absoluteLastRefreshTimeMs != null && absoluteLastRefreshTimeMs < expireTimeMs) {
             log.warn("[Principal={}]: Expiring credential refresh thread exiting because the"
-                    + " expiring credential's current expiration time ({}) exceeds the latest possible refresh time ({})."
-                    + " This process will not be able to authenticate new SASL connections after that"
-                    + " time (for example, it will not be able to authenticate a new connection with a Kafka Broker).",
-                    principalLogText(), new Date(expireTimeMs), new Date(absoluteLastRefreshTimeMs));
+                + " expiring credential's current expiration time ({}) exceeds the latest possible refresh time ({})."
+                + " This process will not be able to authenticate new SASL connections after that"
+                + " time (for example, it will not be able to authenticate a new connection with a Kafka Broker).",
+                principalLogText(), new Date(expireTimeMs), new Date(absoluteLastRefreshTimeMs));
             return null;
         }
         Long optionalStartTime = expiringCredential.startTimeMs();
         long startMs = optionalStartTime != null ? optionalStartTime : relativeToMs;
         log.info("[Principal={}]: Expiring credential valid from {} to {}", expiringCredential.principalName(),
-                new java.util.Date(startMs), new java.util.Date(expireTimeMs));
+            new java.util.Date(startMs), new java.util.Date(expireTimeMs));
 
         double pct = expiringCredentialRefreshConfig.loginRefreshWindowFactor()
-                + (expiringCredentialRefreshConfig.loginRefreshWindowJitter() * RNG.nextDouble());
+            + (expiringCredentialRefreshConfig.loginRefreshWindowJitter() * RNG.nextDouble());
         /*
          * Ignore buffer times if the credential's remaining lifetime is less than their
          * sum.
@@ -330,10 +330,10 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
         if (relativeToMs + 1000L * (refreshMinPeriodSeconds + clientRefreshBufferSeconds) > expireTimeMs) {
             long retvalRefreshMs = relativeToMs + (long) ((expireTimeMs - relativeToMs) * pct);
             log.warn(
-                    "[Principal={}]: Expiring credential expires at {}, so buffer times of {} and {} seconds"
-                            + " at the front and back, respectively, cannot be accommodated.  We will refresh at {}.",
-                    principalLogText(), new Date(expireTimeMs), refreshMinPeriodSeconds, clientRefreshBufferSeconds,
-                    new Date(retvalRefreshMs));
+                "[Principal={}]: Expiring credential expires at {}, so buffer times of {} and {} seconds"
+                    + " at the front and back, respectively, cannot be accommodated.  We will refresh at {}.",
+                principalLogText(), new Date(expireTimeMs), refreshMinPeriodSeconds, clientRefreshBufferSeconds,
+                new Date(retvalRefreshMs));
             return retvalRefreshMs;
         }
         long proposedRefreshMs = startMs + (long) ((expireTimeMs - startMs) * pct);
@@ -341,19 +341,19 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
         long beginningOfEndBufferTimeMs = expireTimeMs - clientRefreshBufferSeconds * 1000;
         if (proposedRefreshMs > beginningOfEndBufferTimeMs) {
             log.info(
-                    "[Principal={}]: Proposed refresh time of {} extends into the desired buffer time of {} seconds before expiration, so refresh it at the desired buffer begin point, at {}",
-                    expiringCredential.principalName(), new Date(proposedRefreshMs), clientRefreshBufferSeconds,
-                    new Date(beginningOfEndBufferTimeMs));
+                "[Principal={}]: Proposed refresh time of {} extends into the desired buffer time of {} seconds before expiration, so refresh it at the desired buffer begin point, at {}",
+                expiringCredential.principalName(), new Date(proposedRefreshMs), clientRefreshBufferSeconds,
+                new Date(beginningOfEndBufferTimeMs));
             return beginningOfEndBufferTimeMs;
         }
         // Don't let it violate the minimum refresh period
         long endOfMinRefreshBufferTime = relativeToMs + 1000 * refreshMinPeriodSeconds;
         if (proposedRefreshMs < endOfMinRefreshBufferTime) {
             log.info(
-                    "[Principal={}]: Expiring credential re-login thread time adjusted from {} to {} since the former is sooner "
-                            + "than the minimum refresh interval ({} seconds from now).",
-                    principalLogText(), new Date(proposedRefreshMs), new Date(endOfMinRefreshBufferTime),
-                    refreshMinPeriodSeconds);
+                "[Principal={}]: Expiring credential re-login thread time adjusted from {} to {} since the former is sooner "
+                    + "than the minimum refresh interval ({} seconds from now).",
+                principalLogText(), new Date(proposedRefreshMs), new Date(endOfMinRefreshBufferTime),
+                refreshMinPeriodSeconds);
             return endOfMinRefreshBufferTime;
         }
         // Proposed refresh time doesn't violate any constraints
@@ -374,8 +374,8 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
                 if (hasExpiringCredential)
                     // We can't force the removal because we don't know how to do it, so abort
                     throw new ExitRefresherThreadDueToIllegalStateException(String.format(
-                            "Subject's private credentials still contains an instance of %s even though logout() was invoked; exiting refresh thread",
-                            expiringCredential.getClass().getName()));
+                        "Subject's private credentials still contains an instance of %s even though logout() was invoked; exiting refresh thread",
+                        expiringCredential.getClass().getName()));
             }
             /*
              * Perform a login, making note of any credential that might need a logout()
@@ -387,7 +387,7 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
             try {
                 loginContext = loginContextFactory.createLoginContext(ExpiringCredentialRefreshingLogin.this);
                 log.info("Initiating re-login for {}, logout() still needs to be called on a previous login = {}",
-                        principalName, optionalCredentialToLogout != null);
+                    principalName, optionalCredentialToLogout != null);
                 loginContext.login();
                 cleanLogin = true; // no need to restore the original
                 // Perform a logout() on any original credential if necessary
@@ -420,19 +420,19 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
                      * don't know how to fix this, so abort.
                      */
                     throw new ExitRefresherThreadDueToIllegalStateException(String.format(
-                            "Subject's private credentials still contains the previous, soon-to-expire instance of %s even though login() followed by logout() was invoked; exiting refresh thread",
-                            expiringCredential.getClass().getName()));
+                        "Subject's private credentials still contains the previous, soon-to-expire instance of %s even though login() followed by logout() was invoked; exiting refresh thread",
+                        expiringCredential.getClass().getName()));
                 principalName = expiringCredential.principalName();
                 if (log.isDebugEnabled())
                     log.debug("[Principal={}]: It is an expiring credential after re-login as expected",
-                            principalLogText());
+                        principalLogText());
             }
         }
     }
 
     private String principalLogText() {
         return expiringCredential == null ? principalName
-                : expiringCredential.getClass().getSimpleName() + ":" + principalName;
+            : expiringCredential.getClass().getSimpleName() + ":" + principalName;
     }
 
     private long currentMs() {

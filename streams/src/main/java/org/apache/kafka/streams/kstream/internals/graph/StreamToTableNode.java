@@ -27,7 +27,7 @@ public class StreamToTableNode<K, V> extends GraphNode {
     private final ProcessorParameters<K, V, ?, ?> processorParameters;
 
     public StreamToTableNode(final String nodeName,
-                             final ProcessorParameters<K, V, ?, ?> processorParameters) {
+        final ProcessorParameters<K, V, ?, ?> processorParameters) {
         super(nodeName);
         this.processorParameters = processorParameters;
     }

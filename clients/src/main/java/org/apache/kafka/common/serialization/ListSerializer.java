@@ -52,7 +52,8 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
     private Serializer<Inner> inner;
     private SerializationStrategy serStrategy;
 
-    public ListSerializer() {}
+    public ListSerializer() {
+    }
 
     public ListSerializer(Serializer<Inner> inner) {
         if (inner == null) {
@@ -96,7 +97,7 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
     private void serializeNullIndexList(final DataOutputStream out, List<Inner> data) throws IOException {
         int i = 0;
         List<Integer> nullIndexList = new ArrayList<>();
-        for (Iterator<Inner> it = data.listIterator(); it.hasNext(); i++) {
+        for (Iterator<Inner> it = data.listIterator();it.hasNext();i++) {
             if (it.next() == null) {
                 nullIndexList.add(i);
             }

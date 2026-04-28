@@ -31,22 +31,22 @@ public class FetchDataInfo {
     public final Optional<RemoteStorageFetchInfo> delayedRemoteStorageFetch;
 
     public FetchDataInfo(LogOffsetMetadata fetchOffsetMetadata,
-                         Records records) {
+            Records records) {
         this(fetchOffsetMetadata, records, false, Optional.empty());
     }
 
     public FetchDataInfo(LogOffsetMetadata fetchOffsetMetadata,
-                         Records records,
-                         boolean firstEntryIncomplete,
-                         Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions) {
+            Records records,
+            boolean firstEntryIncomplete,
+            Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions) {
         this(fetchOffsetMetadata, records, firstEntryIncomplete, abortedTransactions, Optional.empty());
     }
 
     public FetchDataInfo(LogOffsetMetadata fetchOffsetMetadata,
-                         Records records,
-                         boolean firstEntryIncomplete,
-                         Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions,
-                         Optional<RemoteStorageFetchInfo> delayedRemoteStorageFetch) {
+            Records records,
+            boolean firstEntryIncomplete,
+            Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions,
+            Optional<RemoteStorageFetchInfo> delayedRemoteStorageFetch) {
         this.fetchOffsetMetadata = fetchOffsetMetadata;
         this.records = records;
         this.firstEntryIncomplete = firstEntryIncomplete;

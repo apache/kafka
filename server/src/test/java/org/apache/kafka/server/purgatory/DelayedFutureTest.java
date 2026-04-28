@@ -50,10 +50,10 @@ public class DelayedFutureTest {
                 .anyMatch(name -> name.contains("DelayedExecutor-" + purgatoryName));
 
             Consumer<List<CompletableFuture<Integer>>> updateResult = futures ->
-                    result.set(futures.stream()
-                            .filter(Predicate.not(CompletableFuture::isCompletedExceptionally))
-                            .mapToInt(future -> assertDoesNotThrow(() -> future.get()))
-                            .sum());
+                result.set(futures.stream()
+                    .filter(Predicate.not(CompletableFuture::isCompletedExceptionally))
+                    .mapToInt(future -> assertDoesNotThrow(() -> future.get()))
+                    .sum());
 
             assertFalse(hasExecutorThread.get(), "Unnecessary thread created");
 

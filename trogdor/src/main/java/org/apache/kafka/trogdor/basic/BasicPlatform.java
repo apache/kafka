@@ -60,11 +60,11 @@ public class BasicPlatform implements Platform {
     }
 
     public BasicPlatform(String curNodeName, BasicTopology topology,
-                         Scheduler scheduler, CommandRunner commandRunner) {
+        Scheduler scheduler, CommandRunner commandRunner) {
         this.curNode = topology.node(curNodeName);
         if (this.curNode == null) {
             throw new RuntimeException(String.format("No node named %s found " +
-                    "in the cluster!  Cluster nodes are: %s", curNodeName,
+                "in the cluster!  Cluster nodes are: %s", curNodeName,
                 String.join(",", topology.nodes().keySet())));
         }
         this.topology = topology;

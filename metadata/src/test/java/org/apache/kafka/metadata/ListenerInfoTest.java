@@ -72,7 +72,7 @@ public class ListenerInfoTest {
     @Test
     public void testNullHostnameGetsResolved() throws Exception {
         assertNotNull(ListenerInfo.create(List.of(INTERNAL)).
-                withWildcardHostnamesResolved().firstListener().host());
+            withWildcardHostnamesResolved().firstListener().host());
     }
 
     @Test
@@ -83,7 +83,7 @@ public class ListenerInfoTest {
     @Test
     public void testEmptyHostnameGetsResolved() throws Exception {
         assertNotEquals("", ListenerInfo.create(List.of(SSL)).
-                withWildcardHostnamesResolved().firstListener().host());
+            withWildcardHostnamesResolved().firstListener().host());
     }
 
     @ParameterizedTest
@@ -187,7 +187,7 @@ public class ListenerInfoTest {
             withWildcardHostnamesResolved().
             withEphemeralPortsCorrected(__ -> 9094);
         ListenerInfo newListenerInfo = ListenerInfo.fromBrokerRegistrationRecord(
-                listenerInfo.toBrokerRegistrationRecord());
+            listenerInfo.toBrokerRegistrationRecord());
         assertEquals(listenerInfo, newListenerInfo);
     }
 

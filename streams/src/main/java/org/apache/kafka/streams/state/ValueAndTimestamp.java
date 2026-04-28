@@ -30,7 +30,7 @@ public final class ValueAndTimestamp<V> {
     private final long timestamp;
 
     private ValueAndTimestamp(final V value,
-                              final long timestamp) {
+        final long timestamp) {
         this.value = value;
         this.timestamp = timestamp;
     }
@@ -45,7 +45,7 @@ public final class ValueAndTimestamp<V> {
      *         otherwise {@code null} is returned
      */
     public static <V> ValueAndTimestamp<V> make(final V value,
-                                                final long timestamp) {
+        final long timestamp) {
         return value == null ? null : new ValueAndTimestamp<>(value, timestamp);
     }
 

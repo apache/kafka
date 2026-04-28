@@ -171,15 +171,15 @@ public class SaslClientAuthenticator implements Authenticator {
 
     @SuppressWarnings("this-escape")
     public SaslClientAuthenticator(Map<String, ?> configs,
-                                   AuthenticateCallbackHandler callbackHandler,
-                                   String node,
-                                   Subject subject,
-                                   String servicePrincipal,
-                                   String host,
-                                   String mechanism,
-                                   TransportLayer transportLayer,
-                                   Time time,
-                                   LogContext logContext) {
+        AuthenticateCallbackHandler callbackHandler,
+        String node,
+        Subject subject,
+        String servicePrincipal,
+        String host,
+        String mechanism,
+        TransportLayer transportLayer,
+        Time time,
+        LogContext logContext) {
         this.node = node;
         this.subject = subject;
         this.callbackHandler = callbackHandler;
@@ -278,7 +278,7 @@ public class SaslClientAuthenticator implements Authenticator {
             case REAUTH_PROCESS_ORIG_APIVERSIONS_RESPONSE:
                 setSaslAuthenticateAndHandshakeVersions(reauthInfo.apiVersionsResponseFromOriginalAuthentication);
                 setSaslState(SaslState.REAUTH_SEND_HANDSHAKE_REQUEST); // Will set immediately
-                // Fall through to send handshake request with the latest supported version
+            // Fall through to send handshake request with the latest supported version
             case REAUTH_SEND_HANDSHAKE_REQUEST:
                 sendHandshakeRequest(saslHandshakeVersion);
                 setSaslState(SaslState.REAUTH_RECEIVE_HANDSHAKE_OR_OTHER_RESPONSE);
@@ -289,13 +289,13 @@ public class SaslClientAuthenticator implements Authenticator {
                     break;
                 handleSaslHandshakeResponse(handshakeResponse);
                 setSaslState(SaslState.REAUTH_INITIAL); // Will set immediately
-                /*
-                 * Fall through and start SASL authentication using the configured client
-                 * mechanism. Note that we have to either fall through or add a loop to enter
-                 * the switch statement again. We will fall through to avoid adding the loop and
-                 * therefore minimize the changes to authentication-related code due to the
-                 * changes related to re-authentication.
-                 */
+            /*
+             * Fall through and start SASL authentication using the configured client
+             * mechanism. Note that we have to either fall through or add a loop to enter
+             * the switch statement again. We will fall through to avoid adding the loop and
+             * therefore minimize the changes to authentication-related code due to the
+             * changes related to re-authentication.
+             */
             case REAUTH_INITIAL:
                 sendInitialToken();
                 setSaslState(SaslState.INTERMEDIATE);
@@ -337,12 +337,12 @@ public class SaslClientAuthenticator implements Authenticator {
     @Override
     public void reauthenticate(ReauthenticationContext reauthenticationContext) throws IOException {
         SaslClientAuthenticator previousSaslClientAuthenticator = (SaslClientAuthenticator) Objects
-                .requireNonNull(reauthenticationContext).previousAuthenticator();
+            .requireNonNull(reauthenticationContext).previousAuthenticator();
         ApiVersionsResponse apiVersionsResponseFromOriginalAuthentication = previousSaslClientAuthenticator.reauthInfo
-                .apiVersionsResponse();
+            .apiVersionsResponse();
         previousSaslClientAuthenticator.close();
         reauthInfo.reauthenticating(apiVersionsResponseFromOriginalAuthentication,
-                reauthenticationContext.reauthenticationBeginNanos());
+            reauthenticationContext.reauthenticationBeginNanos());
         netInBuffer = reauthenticationContext.networkReceive();
         setSaslState(SaslState.REAUTH_PROCESS_ORIG_APIVERSIONS_RESPONSE); // Will set immediately
         authenticate();
@@ -386,7 +386,7 @@ public class SaslClientAuthenticator implements Authenticator {
     // Visible to override for testing
     protected SaslHandshakeRequest createSaslHandshakeRequest(short version) {
         return new SaslHandshakeRequest.Builder(
-                new SaslHandshakeRequestData().setMechanism(mechanism)).build(version);
+            new SaslHandshakeRequestData().setMechanism(mechanism)).build(version);
     }
 
     // Visible to override for testing
@@ -394,12 +394,12 @@ public class SaslClientAuthenticator implements Authenticator {
         ApiVersion authenticateVersion = apiVersionsResponse.apiVersion(ApiKeys.SASL_AUTHENTICATE.id);
         if (authenticateVersion != null) {
             this.saslAuthenticateVersion = (short) Math.min(authenticateVersion.maxVersion(),
-                    ApiKeys.SASL_AUTHENTICATE.latestVersion());
+                ApiKeys.SASL_AUTHENTICATE.latestVersion());
         }
         ApiVersion handshakeVersion = apiVersionsResponse.apiVersion(ApiKeys.SASL_HANDSHAKE.id);
         if (handshakeVersion != null) {
             this.saslHandshakeVersion = (short) Math.min(handshakeVersion.maxVersion(),
-                    ApiKeys.SASL_HANDSHAKE.latestVersion());
+                ApiKeys.SASL_HANDSHAKE.latestVersion());
         }
     }
 
@@ -439,7 +439,7 @@ public class SaslClientAuthenticator implements Authenticator {
                     send = ByteBufferSend.sizePrefixed(tokenBuf);
                 } else {
                     SaslAuthenticateRequestData data = new SaslAuthenticateRequestData()
-                            .setAuthBytes(tokenBuf.array());
+                        .setAuthBytes(tokenBuf.array());
                     SaslAuthenticateRequest request = new SaslAuthenticateRequest.Builder(data).build(saslAuthenticateVersion);
                     send = request.toSend(nextRequestHeader(ApiKeys.SASL_AUTHENTICATE, saslAuthenticateVersion));
                 }
@@ -647,9 +647,9 @@ public class SaslClientAuthenticator implements Authenticator {
         public Long clientSessionReauthenticationTimeNanos;
 
         public void reauthenticating(ApiVersionsResponse apiVersionsResponseFromOriginalAuthentication,
-                                     long reauthenticationBeginNanos) {
+            long reauthenticationBeginNanos) {
             this.apiVersionsResponseFromOriginalAuthentication = Objects
-                    .requireNonNull(apiVersionsResponseFromOriginalAuthentication);
+                .requireNonNull(apiVersionsResponseFromOriginalAuthentication);
             this.reauthenticationBeginNanos = reauthenticationBeginNanos;
         }
 
@@ -659,7 +659,7 @@ public class SaslClientAuthenticator implements Authenticator {
 
         public ApiVersionsResponse apiVersionsResponse() {
             return reauthenticating() ? apiVersionsResponseFromOriginalAuthentication
-                    : apiVersionsResponseReceivedFromBroker;
+                : apiVersionsResponseReceivedFromBroker;
         }
 
         /**
@@ -688,21 +688,21 @@ public class SaslClientAuthenticator implements Authenticator {
                 double pctWindowFactorToTakeNetworkLatencyAndClockDriftIntoAccount = 0.85;
                 double pctWindowJitterToAvoidReauthenticationStormAcrossManyChannelsSimultaneously = 0.10;
                 double pctToUse = pctWindowFactorToTakeNetworkLatencyAndClockDriftIntoAccount + RNG.nextDouble()
-                        * pctWindowJitterToAvoidReauthenticationStormAcrossManyChannelsSimultaneously;
+                    * pctWindowJitterToAvoidReauthenticationStormAcrossManyChannelsSimultaneously;
                 sessionLifetimeMsToUse = (long) (positiveSessionLifetimeMs * pctToUse);
                 clientSessionReauthenticationTimeNanos = Math.addExact(authenticationEndNanos, Utils.msToNs(sessionLifetimeMsToUse));
                 log.debug(
-                        "Finished {} with session expiration in {} ms and session re-authentication on or after {} ms",
-                        authenticationOrReauthenticationText(), positiveSessionLifetimeMs, sessionLifetimeMsToUse);
+                    "Finished {} with session expiration in {} ms and session re-authentication on or after {} ms",
+                    authenticationOrReauthenticationText(), positiveSessionLifetimeMs, sessionLifetimeMsToUse);
             } else
                 log.debug("Finished {} with no session expiration and no session re-authentication",
-                        authenticationOrReauthenticationText());
+                    authenticationOrReauthenticationText());
         }
 
         public Long reauthenticationLatencyMs() {
             return reauthenticating()
-                    ? Math.round((authenticationEndNanos - reauthenticationBeginNanos) / 1000.0 / 1000.0)
-                    : null;
+                ? Math.round((authenticationEndNanos - reauthenticationBeginNanos) / 1000.0 / 1000.0)
+                : null;
         }
 
         private String authenticationOrReauthenticationText() {

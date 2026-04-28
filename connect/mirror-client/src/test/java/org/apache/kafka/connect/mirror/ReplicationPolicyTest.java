@@ -37,7 +37,7 @@ public class ReplicationPolicyTest {
 
     @Test
     public void testInternalTopic() {
-        Map<String, Object> config =  new HashMap<>();
+        Map<String, Object> config = new HashMap<>();
         config.put(MirrorClientConfig.REPLICATION_POLICY_SEPARATOR, ".");
         DEFAULT_REPLICATION_POLICY.configure(config);
 
@@ -55,7 +55,7 @@ public class ReplicationPolicyTest {
 
     @Test
     public void offsetSyncsTopic_shouldBeEffectedByInternalTopicSeparatorEnabled() {
-        Map<String, Object> config =  new HashMap<>();
+        Map<String, Object> config = new HashMap<>();
         config.put(MirrorClientConfig.REPLICATION_POLICY_SEPARATOR, "__");
 
         config.put(MirrorClientConfig.INTERNAL_TOPIC_SEPARATOR_ENABLED, false);
@@ -69,7 +69,7 @@ public class ReplicationPolicyTest {
 
     @Test
     public void checkpointsTopic_shouldBeEffectedByInternalTopicSeparatorEnabled() {
-        Map<String, Object> config =  new HashMap<>();
+        Map<String, Object> config = new HashMap<>();
         config.put(MirrorClientConfig.REPLICATION_POLICY_SEPARATOR, "__");
 
         config.put(MirrorClientConfig.INTERNAL_TOPIC_SEPARATOR_ENABLED, false);
@@ -83,7 +83,7 @@ public class ReplicationPolicyTest {
 
     @Test
     public void heartbeatsTopic_shouldNotBeEffectedByInternalTopicSeparatorConfig() {
-        Map<String, Object> config =  new HashMap<>();
+        Map<String, Object> config = new HashMap<>();
         config.put(MirrorClientConfig.REPLICATION_POLICY_SEPARATOR, "__");
 
         config.put(MirrorClientConfig.INTERNAL_TOPIC_SEPARATOR_ENABLED, true);

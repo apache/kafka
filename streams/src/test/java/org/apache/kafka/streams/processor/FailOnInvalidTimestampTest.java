@@ -34,6 +34,6 @@ public class FailOnInvalidTimestampTest extends TimestampExtractorTest {
     public void failOnInvalidTimestamp() {
         final TimestampExtractor extractor = new FailOnInvalidTimestamp();
         assertThrows(StreamsException.class, () -> extractor.extract(new ConsumerRecord<>("anyTopic",
-                0, 0, null, null), 42));
+            0, 0, null, null), 42));
     }
 }

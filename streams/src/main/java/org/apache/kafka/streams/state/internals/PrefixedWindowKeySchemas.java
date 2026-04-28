@@ -161,47 +161,47 @@ public class PrefixedWindowKeySchemas {
         }
 
         public static Bytes toStoreKeyBinary(final Windowed<Bytes> timeKey,
-                                             final int seqnum) {
+            final int seqnum) {
             return toStoreKeyBinary(timeKey.key().get(), timeKey.window().start(), seqnum);
         }
 
         public static <K> Windowed<K> fromStoreKey(final byte[] binaryKey,
-                                                   final long windowSize,
-                                                   final Deserializer<K> deserializer,
-                                                   final Headers headers,
-                                                   final String topic) {
+            final long windowSize,
+            final Deserializer<K> deserializer,
+            final Headers headers,
+            final String topic) {
             final K key = deserializer.deserialize(topic, headers, extractStoreKeyBytes(binaryKey));
             final Window window = extractStoreWindow(binaryKey, windowSize);
             return new Windowed<>(key, window);
         }
 
         public static <K> Bytes toStoreKeyBinary(final Windowed<K> timeKey,
-                                                 final int seqnum,
-                                                 final Headers headers,
-                                                 final StateSerdes<K, ?> serdes) {
+            final int seqnum,
+            final Headers headers,
+            final StateSerdes<K, ?> serdes) {
             final byte[] serializedKey = serdes.rawKey(timeKey.key(), headers);
             return toStoreKeyBinary(serializedKey, timeKey.window().start(), seqnum);
         }
 
         public static <K> Bytes toStoreKeyBinary(final K key,
-                                                 final long timestamp,
-                                                 final int seqnum,
-                                                 final Headers headers,
-                                                 final StateSerdes<K, ?> serdes) {
+            final long timestamp,
+            final int seqnum,
+            final Headers headers,
+            final StateSerdes<K, ?> serdes) {
             final byte[] serializedKey = serdes.rawKey(key, headers);
             return toStoreKeyBinary(serializedKey, timestamp, seqnum);
         }
 
         // for store serdes
         public static Bytes toStoreKeyBinary(final Bytes key,
-                                             final long timestamp,
-                                             final int seqnum) {
+            final long timestamp,
+            final int seqnum) {
             return toStoreKeyBinary(key.get(), timestamp, seqnum);
         }
 
         static Bytes toStoreKeyBinary(final byte[] serializedKey,
-                                      final long timestamp,
-                                      final int seqnum) {
+            final long timestamp,
+            final int seqnum) {
             final ByteBuffer buf = ByteBuffer.allocate(
                 PREFIX_SIZE + TIMESTAMP_SIZE + serializedKey.length + SEQNUM_SIZE);
             buf.put(TIME_FIRST_PREFIX);
@@ -213,14 +213,14 @@ public class PrefixedWindowKeySchemas {
         }
 
         public static Windowed<Bytes> fromStoreBytesKey(final byte[] binaryKey,
-                                                        final long windowSize) {
+            final long windowSize) {
             final Bytes key = Bytes.wrap(extractStoreKeyBytes(binaryKey));
             final Window window = extractStoreWindow(binaryKey, windowSize);
             return new Windowed<>(key, window);
         }
 
         static Window extractStoreWindow(final byte[] binaryKey,
-                                         final long windowSize) {
+            final long windowSize) {
             final long start = extractStoreTimestamp(binaryKey);
             return timeWindowForSize(start, windowSize);
         }
@@ -274,10 +274,10 @@ public class PrefixedWindowKeySchemas {
 
         @Override
         public HasNextCondition hasNextCondition(final Bytes binaryKeyFrom,
-                                                 final Bytes binaryKeyTo,
-                                                 final long from,
-                                                 final long to,
-                                                 final boolean forward) {
+            final Bytes binaryKeyTo,
+            final long from,
+            final long to,
+            final boolean forward) {
             return iterator -> {
                 while (iterator.hasNext()) {
                     final Bytes bytes = iterator.peekNextKey();
@@ -303,44 +303,44 @@ public class PrefixedWindowKeySchemas {
 
         @Override
         public <S extends Segment> List<S> segmentsToSearch(final Segments<S> segments,
-                                                            final long from,
-                                                            final long to,
-                                                            final boolean forward) {
+            final long from,
+            final long to,
+            final boolean forward) {
             return segments.segments(from, to, forward);
         }
 
         public static <K> Bytes toStoreKeyBinary(final K key,
-                                                 final long timestamp,
-                                                 final int seqnum,
-                                                 final Headers headers,
-                                                 final StateSerdes<K, ?> serdes) {
+            final long timestamp,
+            final int seqnum,
+            final Headers headers,
+            final StateSerdes<K, ?> serdes) {
             final byte[] serializedKey = serdes.rawKey(key, headers);
             return toStoreKeyBinary(serializedKey, timestamp, seqnum);
         }
 
         public static Bytes toStoreKeyBinary(final Windowed<Bytes> timeKey,
-                                             final int seqnum) {
+            final int seqnum) {
             return toStoreKeyBinary(timeKey.key().get(), timeKey.window().start(), seqnum);
         }
 
         public static <K> Bytes toStoreKeyBinary(final Windowed<K> timeKey,
-                                                 final int seqnum,
-                                                 final Headers headers,
-                                                 final StateSerdes<K, ?> serdes) {
+            final int seqnum,
+            final Headers headers,
+            final StateSerdes<K, ?> serdes) {
             final byte[] serializedKey = serdes.rawKey(timeKey.key(), headers);
             return toStoreKeyBinary(serializedKey, timeKey.window().start(), seqnum);
         }
 
         public static Bytes toStoreKeyBinary(final Bytes key,
-                                             final long timestamp,
-                                             final int seqnum) {
+            final long timestamp,
+            final int seqnum) {
             return toStoreKeyBinary(key.get(), timestamp, seqnum);
         }
 
         // package private for testing
         public static Bytes toStoreKeyBinary(final byte[] serializedKey,
-                                      final long timestamp,
-                                      final int seqnum) {
+            final long timestamp,
+            final int seqnum) {
             final ByteBuffer buf = ByteBuffer.allocate(PREFIX_SIZE + serializedKey.length + TIMESTAMP_SIZE + SEQNUM_SIZE);
             buf.put(KEY_FIRST_PREFIX);
             buf.put(serializedKey);
@@ -357,7 +357,7 @@ public class PrefixedWindowKeySchemas {
         }
 
         public static Windowed<Bytes> fromStoreBytesKey(final byte[] binaryKey,
-                                                        final long windowSize) {
+            final long windowSize) {
             final Bytes key = Bytes.wrap(extractStoreKeyBytes(binaryKey));
             final Window window = extractStoreWindow(binaryKey, windowSize);
             return new Windowed<>(key, window);
@@ -372,16 +372,16 @@ public class PrefixedWindowKeySchemas {
         }
 
         static Window extractStoreWindow(final byte[] binaryKey,
-                                     final long windowSize) {
+            final long windowSize) {
             final long start = KeyFirstWindowKeySchema.extractStoreTimestamp(binaryKey);
             return timeWindowForSize(start, windowSize);
         }
 
         public static <K> Windowed<K> fromStoreKey(final byte[] binaryKey,
-                                                   final long windowSize,
-                                                   final Deserializer<K> deserializer,
-                                                   final Headers headers,
-                                                   final String topic) {
+            final long windowSize,
+            final Deserializer<K> deserializer,
+            final Headers headers,
+            final String topic) {
             final K key = deserializer.deserialize(topic, headers, extractStoreKeyBytes(binaryKey));
             final Window window = extractStoreWindow(binaryKey, windowSize);
             return new Windowed<>(key, window);

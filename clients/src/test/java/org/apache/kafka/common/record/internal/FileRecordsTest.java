@@ -67,10 +67,10 @@ import static org.mockito.Mockito.when;
 
 public class FileRecordsTest {
 
-    private final byte[][] values = new byte[][] {
-            "abcd".getBytes(),
-            "efgh".getBytes(),
-            "ijkl".getBytes()
+    private final byte[][] values = new byte[][]{
+        "abcd".getBytes(),
+        "efgh".getBytes(),
+        "ijkl".getBytes()
     };
     private FileRecords fileRecords;
 
@@ -115,7 +115,7 @@ public class FileRecordsTest {
     @Test
     public void testFileSize() throws IOException {
         assertEquals(fileRecords.channel().size(), fileRecords.sizeInBytes());
-        for (int i = 0; i < 20; i++) {
+        for (int i = 0;i < 20;i++) {
             fileRecords.append(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("abcd".getBytes())));
             assertEquals(fileRecords.channel().size(), fileRecords.sizeInBytes());
         }
@@ -165,7 +165,7 @@ public class FileRecordsTest {
 
     private void testPartialWrite(int size, FileRecords fileRecords) throws IOException {
         ByteBuffer buffer = ByteBuffer.allocate(size);
-        for (int i = 0; i < size; i++)
+        for (int i = 0;i < size;i++)
             buffer.put((byte) 0);
 
         buffer.rewind();
@@ -223,13 +223,13 @@ public class FileRecordsTest {
 
         // read from second message and size is past the end of the file on a view/slice
         read = fileRecords.slice(1, fileRecords.sizeInBytes() - 1)
-                .slice(first.sizeInBytes() - 1, fileRecords.sizeInBytes());
+            .slice(first.sizeInBytes() - 1, fileRecords.sizeInBytes());
         assertEquals(fileRecords.sizeInBytes() - first.sizeInBytes(), read.sizeInBytes());
         assertEquals(items.subList(1, items.size()), batches(read), "Read starting from the second message");
 
         // read from second message and position + size overflows on a view/slice
         read = fileRecords.slice(1, fileRecords.sizeInBytes() - 1)
-                .slice(first.sizeInBytes() - 1, Integer.MAX_VALUE);
+            .slice(first.sizeInBytes() - 1, Integer.MAX_VALUE);
         assertEquals(fileRecords.sizeInBytes() - first.sizeInBytes(), read.sizeInBytes());
         assertEquals(items.subList(1, items.size()), batches(read), "Read starting from the second message");
 
@@ -272,7 +272,7 @@ public class FileRecordsTest {
             fileRecords.searchForOffsetFromPosition(3, position),
             "Should be able to find fourth message from a non-existent offset");
         assertEquals(new FileRecords.LogOffsetPosition(50L, position, message4Size),
-            fileRecords.searchForOffsetFromPosition(50,  position),
+            fileRecords.searchForOffsetFromPosition(50, position),
             "Should be able to find fourth message by correct offset");
     }
 
@@ -426,7 +426,7 @@ public class FileRecordsTest {
      */
     @Test
     public void testSliceForAlreadySlicedFileRecords() throws IOException {
-        byte[][] values = new byte[][] {
+        byte[][] values = new byte[][]{
             "abcd".getBytes(),
             "efgh".getBytes(),
             "ijkl".getBytes(),
@@ -438,7 +438,7 @@ public class FileRecordsTest {
 
             // Slice from fourth message until the end.
             int position = IntStream.range(0, 3).map(i -> items.get(i).sizeInBytes()).sum();
-            Records sliced  = fileRecords.slice(position, fileRecords.sizeInBytes() - position);
+            Records sliced = fileRecords.slice(position, fileRecords.sizeInBytes() - position);
             assertEquals(fileRecords.sizeInBytes() - position, sliced.sizeInBytes());
             assertEquals(items.subList(3, items.size()), batches(sliced), "Read starting from the fourth message");
 
@@ -458,17 +458,17 @@ public class FileRecordsTest {
         appendWithOffsetAndTimestamp(fileRecords, version, 11L, 6, 1);
 
         assertFoundTimestamp(new FileRecords.TimestampAndOffset(10L, 5, Optional.of(0)),
-                fileRecords.searchForTimestamp(9L, 0, 0L), version);
+            fileRecords.searchForTimestamp(9L, 0, 0L), version);
         assertFoundTimestamp(new FileRecords.TimestampAndOffset(10L, 5, Optional.of(0)),
-                fileRecords.searchForTimestamp(10L, 0, 0L), version);
+            fileRecords.searchForTimestamp(10L, 0, 0L), version);
         assertFoundTimestamp(new FileRecords.TimestampAndOffset(11L, 6, Optional.of(1)),
-                fileRecords.searchForTimestamp(11L, 0, 0L), version);
+            fileRecords.searchForTimestamp(11L, 0, 0L), version);
         assertNull(fileRecords.searchForTimestamp(12L, 0, 0L));
     }
 
     private void assertFoundTimestamp(FileRecords.TimestampAndOffset expected,
-                                      FileRecords.TimestampAndOffset actual,
-                                      RecordVersion version) {
+        FileRecords.TimestampAndOffset actual,
+        RecordVersion version) {
         if (version == RecordVersion.V0) {
             assertNull(actual, "Expected no match for message format v0");
         } else {
@@ -476,19 +476,19 @@ public class FileRecordsTest {
             assertEquals(expected.timestamp, actual.timestamp, "Expected matching timestamps for message format" + version);
             assertEquals(expected.offset, actual.offset, "Expected matching offsets for message format " + version);
             Optional<Integer> expectedLeaderEpoch = version.value >= RecordVersion.V2.value ?
-                    expected.leaderEpoch : Optional.empty();
+                expected.leaderEpoch : Optional.empty();
             assertEquals(expectedLeaderEpoch, actual.leaderEpoch, "Non-matching leader epoch for version " + version);
         }
     }
 
     private void appendWithOffsetAndTimestamp(FileRecords fileRecords,
-                                              RecordVersion recordVersion,
-                                              long timestamp,
-                                              long offset,
-                                              int leaderEpoch) throws IOException {
+        RecordVersion recordVersion,
+        long timestamp,
+        long offset,
+        int leaderEpoch) throws IOException {
         ByteBuffer buffer = ByteBuffer.allocate(128);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, recordVersion.value,
-                Compression.NONE, TimestampType.CREATE_TIME, offset, timestamp, leaderEpoch);
+            Compression.NONE, TimestampType.CREATE_TIME, offset, timestamp, leaderEpoch);
         builder.append(new SimpleRecord(timestamp, new byte[0], new byte[0]));
         fileRecords.append(builder.build());
     }
@@ -706,45 +706,45 @@ public class FileRecordsTest {
     private void mockFileRecordBatches(FileRecords fileRecords, FileLogInputStream.FileChannelRecordBatch... batch) {
         List<FileLogInputStream.FileChannelRecordBatch> batches = asList(batch);
         doReturn((Iterable<FileLogInputStream.FileChannelRecordBatch>) batches::iterator)
-                .when(fileRecords)
-                .batchesFrom(anyInt());
+            .when(fileRecords)
+            .batchesFrom(anyInt());
     }
 
     private void doTestConversion(Compression compression, byte toMagic) throws IOException {
         List<Long> offsets = asList(0L, 2L, 3L, 9L, 11L, 15L, 16L, 17L, 22L, 24L);
 
         Header[] headers = {new RecordHeader("headerKey1", "headerValue1".getBytes()),
-                            new RecordHeader("headerKey2", "headerValue2".getBytes()),
-                            new RecordHeader("headerKey3", "headerValue3".getBytes())};
+            new RecordHeader("headerKey2", "headerValue2".getBytes()),
+            new RecordHeader("headerKey3", "headerValue3".getBytes())};
 
         List<SimpleRecord> records = asList(
-                new SimpleRecord(1L, "k1".getBytes(), "hello".getBytes()),
-                new SimpleRecord(2L, "k2".getBytes(), "goodbye".getBytes()),
-                new SimpleRecord(3L, "k3".getBytes(), "hello again".getBytes()),
-                new SimpleRecord(4L, "k4".getBytes(), "goodbye for now".getBytes()),
-                new SimpleRecord(5L, "k5".getBytes(), "hello again".getBytes()),
-                new SimpleRecord(6L, "k6".getBytes(), "I sense indecision".getBytes()),
-                new SimpleRecord(7L, "k7".getBytes(), "what now".getBytes()),
-                new SimpleRecord(8L, "k8".getBytes(), "running out".getBytes(), headers),
-                new SimpleRecord(9L, "k9".getBytes(), "ok, almost done".getBytes()),
-                new SimpleRecord(10L, "k10".getBytes(), "finally".getBytes(), headers));
+            new SimpleRecord(1L, "k1".getBytes(), "hello".getBytes()),
+            new SimpleRecord(2L, "k2".getBytes(), "goodbye".getBytes()),
+            new SimpleRecord(3L, "k3".getBytes(), "hello again".getBytes()),
+            new SimpleRecord(4L, "k4".getBytes(), "goodbye for now".getBytes()),
+            new SimpleRecord(5L, "k5".getBytes(), "hello again".getBytes()),
+            new SimpleRecord(6L, "k6".getBytes(), "I sense indecision".getBytes()),
+            new SimpleRecord(7L, "k7".getBytes(), "what now".getBytes()),
+            new SimpleRecord(8L, "k8".getBytes(), "running out".getBytes(), headers),
+            new SimpleRecord(9L, "k9".getBytes(), "ok, almost done".getBytes()),
+            new SimpleRecord(10L, "k10".getBytes(), "finally".getBytes(), headers));
         assertEquals(offsets.size(), records.size(), "incorrect test setup");
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V0, compression,
-                TimestampType.CREATE_TIME, 0L);
-        for (int i = 0; i < 3; i++)
+            TimestampType.CREATE_TIME, 0L);
+        for (int i = 0;i < 3;i++)
             builder.appendWithOffset(offsets.get(i), records.get(i));
         builder.close();
 
         builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, compression, TimestampType.CREATE_TIME,
-                0L);
-        for (int i = 3; i < 6; i++)
+            0L);
+        for (int i = 3;i < 6;i++)
             builder.appendWithOffset(offsets.get(i), records.get(i));
         builder.close();
 
         builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, compression, TimestampType.CREATE_TIME, 0L);
-        for (int i = 6; i < 10; i++)
+        for (int i = 6;i < 10;i++)
             builder.appendWithOffset(offsets.get(i), records.get(i));
         builder.close();
 
@@ -784,7 +784,7 @@ public class FileRecordsTest {
         for (byte[] value : values) {
             ByteBuffer buffer = ByteBuffer.allocate(128);
             MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE,
-                    Compression.NONE, TimestampType.CREATE_TIME, offset);
+                Compression.NONE, TimestampType.CREATE_TIME, offset);
             builder.appendWithOffset(offset++, System.currentTimeMillis(), null, value);
             fileRecords.append(builder.build());
         }

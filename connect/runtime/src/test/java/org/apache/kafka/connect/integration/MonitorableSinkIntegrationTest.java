@@ -85,11 +85,11 @@ public class MonitorableSinkIntegrationTest {
         connect.kafka().createTopic("test-topic");
 
         Map<String, String> props = Map.of(
-            CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName(),
-            TASKS_MAX_CONFIG, "1",
-            TOPICS_CONFIG, "test-topic",
-            KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName(),
-            VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+                CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName(),
+                TASKS_MAX_CONFIG, "1",
+                TOPICS_CONFIG, "test-topic",
+                KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName(),
+                VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
 
         // set expected records to successfully reach the task
         connectorHandle.taskHandle(TASK_ID).expectedRecords(NUM_RECORDS_PRODUCED);
@@ -157,7 +157,7 @@ public class MonitorableSinkIntegrationTest {
             ConnectorStateInfo info = connect.connectorStatus(CONNECTOR_NAME);
             return info != null && info.tasks().size() == NUM_TASKS
                     && connectorHandle.taskHandle(TASK_ID).numPartitionsAssigned() == 1;
-        }  catch (Exception e) {
+        } catch (Exception e) {
             // Log the exception and return that the partitions were not assigned
             log.error("Could not check connector state info.", e);
             return false;

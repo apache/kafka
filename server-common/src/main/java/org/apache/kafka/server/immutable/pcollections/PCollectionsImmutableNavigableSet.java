@@ -265,8 +265,8 @@ public class PCollectionsImmutableNavigableSet<E> implements ImmutableNavigableS
     @Override
     public String toString() {
         return "PCollectionsImmutableNavigableSet{" +
-                "underlying=" + underlying() +
-                '}';
+            "underlying=" + underlying() +
+            '}';
     }
 
     // package-private for testing

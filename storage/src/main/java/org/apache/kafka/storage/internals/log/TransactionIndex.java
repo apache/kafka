@@ -51,7 +51,7 @@ public class TransactionIndex implements Closeable {
     // Note: if new fields are added to AbortedTxn, this code may need to be changed to read the
     // version bytes first for each record and then determine the record body size based on the version.
     private static final int ABORTED_TXN_RECORD_SIZE =
-        MessageUtil.toVersionPrefixedByteBuffer(AbortedTxn.HIGHEST_SUPPORTED_VERSION, new AbortedTxn()).remaining();
+            MessageUtil.toVersionPrefixedByteBuffer(AbortedTxn.HIGHEST_SUPPORTED_VERSION, new AbortedTxn()).remaining();
 
     private record AbortedTxnWithPosition(AbortedTxn txn, int position) {
     }
@@ -84,8 +84,8 @@ public class TransactionIndex implements Closeable {
         lastOffset.ifPresent(offset -> {
             if (offset >= abortedTxn.lastOffset())
                 throw new IllegalArgumentException("The last offset of appended transactions must increase sequentially, but "
-                    + abortedTxn.lastOffset() + " is not greater than current last offset " + offset + " of index "
-                    + file.getAbsolutePath());
+                        + abortedTxn.lastOffset() + " is not greater than current last offset " + offset + " of index "
+                        + file.getAbsolutePath());
         });
         lastOffset = OptionalLong.of(abortedTxn.lastOffset());
         ByteBuffer buffer = MessageUtil.toVersionPrefixedByteBuffer(AbortedTxn.HIGHEST_SUPPORTED_VERSION, abortedTxn);
@@ -187,7 +187,7 @@ public class TransactionIndex implements Closeable {
             AbortedTxn abortedTxn = txnWithPosition.txn;
             if (abortedTxn.lastOffset() < startOffset)
                 throw new CorruptIndexException("Last offset of aborted transaction " + abortedTxn + " in index "
-                    + file.getAbsolutePath() + " is less than start offset " + startOffset);
+                        + file.getAbsolutePath() + " is less than start offset " + startOffset);
         }
     }
 
@@ -247,8 +247,8 @@ public class TransactionIndex implements Closeable {
                     short version = buffer.getShort();
                     if (version < AbortedTxn.LOWEST_SUPPORTED_VERSION || version > AbortedTxn.HIGHEST_SUPPORTED_VERSION)
                         throw new KafkaException("Unexpected aborted transaction version " + version
-                            + " in transaction index " + file.getAbsolutePath() + ", supported version range is "
-                            + AbortedTxn.LOWEST_SUPPORTED_VERSION + " to " + AbortedTxn.HIGHEST_SUPPORTED_VERSION);
+                                + " in transaction index " + file.getAbsolutePath() + ", supported version range is "
+                                + AbortedTxn.LOWEST_SUPPORTED_VERSION + " to " + AbortedTxn.HIGHEST_SUPPORTED_VERSION);
                     AbortedTxn abortedTxn = new AbortedTxn(new ByteBufferAccessor(buffer), version);
                     AbortedTxnWithPosition nextEntry = new AbortedTxnWithPosition(abortedTxn, position);
                     position += ABORTED_TXN_RECORD_SIZE;

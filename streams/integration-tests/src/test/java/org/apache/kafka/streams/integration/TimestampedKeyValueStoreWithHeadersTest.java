@@ -406,8 +406,8 @@ public class TimestampedKeyValueStoreWithHeadersTest {
     @SuppressWarnings("varargs")
     @SafeVarargs
     private final int produceDataToTopic(final String topic,
-                                         final long timestamp,
-                                         final KeyValue<Integer, String>... keyValues) {
+        final long timestamp,
+        final KeyValue<Integer, String>... keyValues) {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             topic,
             Arrays.asList(keyValues),
@@ -419,7 +419,6 @@ public class TimestampedKeyValueStoreWithHeadersTest {
     }
 
 
-
     /**
      * Produce records with headers.
      *
@@ -428,9 +427,9 @@ public class TimestampedKeyValueStoreWithHeadersTest {
     @SuppressWarnings("varargs")
     @SafeVarargs
     private final int produceDataToTopicWithHeaders(final String topic,
-                                                    final long timestamp,
-                                                    final Headers headers,
-                                                    final KeyValue<Integer, String>... keyValues) {
+        final long timestamp,
+        final Headers headers,
+        final KeyValue<Integer, String>... keyValues) {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             topic,
             Arrays.asList(keyValues),

@@ -28,19 +28,20 @@ import java.util.function.Function;
 import static java.util.stream.Collectors.toMap;
 
 final class StandbyTaskAssignmentUtils {
-    private StandbyTaskAssignmentUtils() {}
+    private StandbyTaskAssignmentUtils() {
+    }
 
     static ConstrainedPrioritySet createLeastLoadedPrioritySetConstrainedByAssignedTask(final Map<ProcessId, ClientState> clients) {
         return new ConstrainedPrioritySet((client, t) -> !clients.get(client).hasAssignedTask(t),
-                                          client -> clients.get(client).assignedTaskLoad());
+            client -> clients.get(client).assignedTaskLoad());
     }
 
     static void pollClientAndMaybeAssignAndUpdateRemainingStandbyTasks(final int numStandbyReplicas,
-                                                                       final Map<ProcessId, ClientState> clients,
-                                                                       final Map<TaskId, Integer> tasksToRemainingStandbys,
-                                                                       final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
-                                                                       final TaskId activeTaskId,
-                                                                       final Logger log) {
+        final Map<ProcessId, ClientState> clients,
+        final Map<TaskId, Integer> tasksToRemainingStandbys,
+        final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
+        final TaskId activeTaskId,
+        final Logger log) {
         int numRemainingStandbys = tasksToRemainingStandbys.get(activeTaskId);
         while (numRemainingStandbys > 0) {
             final ProcessId client = standbyTaskClientsByTaskLoad.poll(activeTaskId);
@@ -55,15 +56,15 @@ final class StandbyTaskAssignmentUtils {
 
         if (numRemainingStandbys > 0) {
             log.warn("Unable to assign {} of {} standby tasks for task [{}]. " +
-                     "There is not enough available capacity. You should " +
-                     "increase the number of application instances " +
-                     "to maintain the requested number of standby replicas.",
-                     numRemainingStandbys, numStandbyReplicas, activeTaskId);
+                "There is not enough available capacity. You should " +
+                "increase the number of application instances " +
+                "to maintain the requested number of standby replicas.",
+                numRemainingStandbys, numStandbyReplicas, activeTaskId);
         }
     }
 
     static Map<TaskId, Integer> computeTasksToRemainingStandbys(final int numStandbyReplicas,
-                                                                final Set<TaskId> statefulTaskIds) {
+        final Set<TaskId> statefulTaskIds) {
         return statefulTaskIds.stream().collect(toMap(Function.identity(), t -> numStandbyReplicas));
     }
 }

@@ -40,24 +40,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class NetworkTestUtils {
     public static NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol,
-                                                 AbstractConfig serverConfig, CredentialCache credentialCache, Time time) throws Exception {
+        AbstractConfig serverConfig, CredentialCache credentialCache, Time time) throws Exception {
         return createEchoServer(listenerName, securityProtocol, serverConfig, credentialCache, 100, time);
     }
 
     public static NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol,
-                                                 AbstractConfig serverConfig, CredentialCache credentialCache,
-                                                 int failedAuthenticationDelayMs, Time time) throws Exception {
+        AbstractConfig serverConfig, CredentialCache credentialCache,
+        int failedAuthenticationDelayMs, Time time) throws Exception {
         NioEchoServer server = new NioEchoServer(listenerName, securityProtocol, serverConfig, "localhost",
-                null, credentialCache, failedAuthenticationDelayMs, time);
+            null, credentialCache, failedAuthenticationDelayMs, time);
         server.start();
         return server;
     }
 
     public static NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol,
-            AbstractConfig serverConfig, CredentialCache credentialCache,
-            int failedAuthenticationDelayMs, Time time, DelegationTokenCache tokenCache) throws Exception {
+        AbstractConfig serverConfig, CredentialCache credentialCache,
+        int failedAuthenticationDelayMs, Time time, DelegationTokenCache tokenCache) throws Exception {
         NioEchoServer server = new NioEchoServer(listenerName, securityProtocol, serverConfig, "localhost",
-                null, credentialCache, failedAuthenticationDelayMs, time, tokenCache);
+            null, credentialCache, failedAuthenticationDelayMs, time, tokenCache);
         server.start();
         return server;
     }
@@ -82,7 +82,7 @@ public class NetworkTestUtils {
                 responses++;
             }
 
-            for (int i = 0; i < selector.completedSends().size() && requests < messageCount && selector.isChannelReady(node); i++, requests++) {
+            for (int i = 0;i < selector.completedSends().size() && requests < messageCount && selector.isChannelReady(node);i++, requests++) {
                 selector.send(new NetworkSend(node, ByteBufferSend.sizePrefixed(ByteBuffer.wrap((prefix + "-" + requests).getBytes()))));
             }
         }
@@ -91,7 +91,7 @@ public class NetworkTestUtils {
     public static void waitForChannelConnected(Selector selector, String node) throws IOException {
         int secondsLeft = 30;
         while (selector.channel(node) != null
-                && !selector.channel(node).isConnected() && secondsLeft-- > 0) {
+            && !selector.channel(node).isConnected() && secondsLeft-- > 0) {
             selector.poll(1000L);
         }
         assertNotNull(selector.channel(node));
@@ -112,9 +112,9 @@ public class NetworkTestUtils {
     }
 
     public static ChannelState waitForChannelClose(Selector selector, String node, ChannelState.State channelState, int delayBetweenPollMs)
-            throws IOException {
+        throws IOException {
         boolean closed = false;
-        for (int i = 0; i < 300; i++) {
+        for (int i = 0;i < 300;i++) {
             if (delayBetweenPollMs > 0)
                 Utils.sleep(delayBetweenPollMs);
             selector.poll(100L);

@@ -48,7 +48,7 @@ public class RecordSendTest {
     public void testTimeout() throws Exception {
         ProduceRequestResult request = new ProduceRequestResult(topicPartition);
         FutureRecordMetadata future = new FutureRecordMetadata(request, relOffset,
-                RecordBatch.NO_TIMESTAMP, 0, 0, Time.SYSTEM);
+            RecordBatch.NO_TIMESTAMP, 0, 0, Time.SYSTEM);
         assertFalse(future.isDone(), "Request is not completed");
         try {
             future.get(5, TimeUnit.MILLISECONDS);
@@ -68,7 +68,7 @@ public class RecordSendTest {
     @Test
     public void testError() {
         FutureRecordMetadata future = new FutureRecordMetadata(asyncRequest(baseOffset, new CorruptRecordException(), 50L),
-                relOffset, RecordBatch.NO_TIMESTAMP, 0, 0, Time.SYSTEM);
+            relOffset, RecordBatch.NO_TIMESTAMP, 0, 0, Time.SYSTEM);
         assertThrows(ExecutionException.class, future::get);
     }
 
@@ -78,7 +78,7 @@ public class RecordSendTest {
     @Test
     public void testBlocking() throws Exception {
         FutureRecordMetadata future = new FutureRecordMetadata(asyncRequest(baseOffset, null, 50L),
-                relOffset, RecordBatch.NO_TIMESTAMP, 0, 0, Time.SYSTEM);
+            relOffset, RecordBatch.NO_TIMESTAMP, 0, 0, Time.SYSTEM);
         assertEquals(baseOffset + relOffset, future.get().offset());
     }
 
@@ -95,7 +95,8 @@ public class RecordSendTest {
                 }
 
                 request.done();
-            } catch (InterruptedException e) { }
+            } catch (InterruptedException e) {
+            }
         });
         thread.start();
         return request;

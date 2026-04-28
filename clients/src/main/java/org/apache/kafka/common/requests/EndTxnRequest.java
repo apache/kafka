@@ -74,8 +74,8 @@ public class EndTxnRequest extends AbstractRequest {
     @Override
     public EndTxnResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         return new EndTxnResponse(new EndTxnResponseData()
-                                      .setErrorCode(Errors.forException(e).code())
-                                      .setThrottleTimeMs(throttleTimeMs)
+            .setErrorCode(Errors.forException(e).code())
+            .setThrottleTimeMs(throttleTimeMs)
         );
     }
 

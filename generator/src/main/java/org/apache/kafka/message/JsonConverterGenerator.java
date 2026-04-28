@@ -44,7 +44,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
 
     @Override
     public void generateAndWrite(MessageSpec message, BufferedWriter writer)
-            throws Exception {
+        throws Exception {
         structRegistry.register(message);
         headerGenerator.addStaticImport(String.format("%s.%s.*",
             packageName, message.dataClassName()));
@@ -54,7 +54,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
         generateConverters(message.dataClassName(), message.struct(),
             message.validVersions());
         for (Iterator<StructRegistry.StructInfo> iter = structRegistry.structs();
-                iter.hasNext(); ) {
+             iter.hasNext(); ) {
             StructRegistry.StructInfo info = iter.next();
             buffer.printf("%n");
             buffer.printf("public static class %s {%n",
@@ -73,16 +73,16 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
     }
 
     private void generateConverters(String name,
-                                    StructSpec spec,
-                                    Versions parentVersions) {
+        StructSpec spec,
+        Versions parentVersions) {
         generateRead(name, spec, parentVersions);
         generateWrite(name, spec, parentVersions);
         generateOverloadWrite(name);
     }
 
     private void generateRead(String className,
-                              StructSpec struct,
-                              Versions parentVersions) {
+        StructSpec struct,
+        Versions parentVersions) {
         headerGenerator.addImport(MessageGenerator.JSON_NODE_CLASS);
         buffer.printf("public static %s read(JsonNode _node, short _version) {%n",
             className);
@@ -91,10 +91,10 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
         VersionConditional.forVersions(struct.versions(), parentVersions).
             allowMembershipCheckAlwaysFalse(false).
             ifNotMember(__ -> {
-                headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
-                buffer.printf("throw new UnsupportedVersionException(\"Can't read " +
-                    "version \" + _version + \" of %s\");%n", className);
-            }).
+            headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+            buffer.printf("throw new UnsupportedVersionException(\"Can't read " +
+                "version \" + _version + \" of %s\");%n", className);
+        }).
             generate(buffer);
         Versions curVersions = parentVersions.intersect(struct.versions());
         for (FieldSpec field : struct.fields()) {
@@ -107,22 +107,22 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
             Versions mandatoryVersions = field.versions().subtract(field.taggedVersions());
             VersionConditional.forVersions(mandatoryVersions, curVersions).
                 ifMember(__ -> buffer.printf("throw new RuntimeException(\"%s: unable to locate " +
-                        "field '%s', which is mandatory in version \" + _version);%n",
-                    className, field.camelCaseName())).
+                "field '%s', which is mandatory in version \" + _version);%n",
+                className, field.camelCaseName())).
                 ifNotMember(__ -> buffer.printf("_object.%s = %s;%n", field.camelCaseName(),
-                    field.fieldDefault(headerGenerator, structRegistry))).
+                field.fieldDefault(headerGenerator, structRegistry))).
                 generate(buffer);
             buffer.decrementIndent();
             buffer.printf("} else {%n");
             buffer.incrementIndent();
             VersionConditional.forVersions(struct.versions(), curVersions).
                 ifMember(presentVersions -> generateTargetFromJson(new Target(field,
-                        sourceVariable,
-                        className,
+                    sourceVariable,
+                    className,
                     input -> String.format("_object.%s = %s", field.camelCaseName(), input)),
-                    curVersions)).ifNotMember(__ -> buffer.printf("throw new RuntimeException(\"%s: field '%s' is not " +
-                        "supported in version \" + _version);%n",
-                        className, field.camelCaseName())).generate(buffer);
+                curVersions)).ifNotMember(__ -> buffer.printf("throw new RuntimeException(\"%s: field '%s' is not " +
+                "supported in version \" + _version);%n",
+                className, field.camelCaseName())).generate(buffer);
             buffer.decrementIndent();
             buffer.printf("}%n");
         }
@@ -159,8 +159,8 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
         } else if (target.field().type() instanceof FieldType.Uint32FieldType) {
             headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
             buffer.printf("%s;%n", target.assignmentStatement(
-                 String.format("MessageUtil.jsonNodeToUnsignedInt(%s, \"%s\")",
-                     target.sourceVariable(), target.humanReadableName())));
+                String.format("MessageUtil.jsonNodeToUnsignedInt(%s, \"%s\")",
+                    target.sourceVariable(), target.humanReadableName())));
         } else if (target.field().type() instanceof FieldType.Int32FieldType) {
             headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
             buffer.printf("%s;%n", target.assignmentStatement(
@@ -193,7 +193,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
                 nullableVersions(target.field().nullableVersions()).
                 possibleVersions(curVersions).
                 conditionalGenerator((name, negated) ->
-                    String.format("%s%s.isNull()", negated ? "!" : "", name)).
+                String.format("%s%s.isNull()", negated ? "!" : "", name)).
                 ifNull(() -> buffer.printf("%s;%n", target.assignmentStatement("null"))).
                 ifShouldNotBeNull(() -> generateVariableLengthTargetFromJson(target, curVersions)).
                 generate(buffer);
@@ -243,7 +243,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
             buffer.printf("for (JsonNode _element : %s) {%n", target.sourceVariable());
             buffer.incrementIndent();
             generateTargetFromJson(target.arrayElementTarget(
-                input -> String.format("_collection.add(%s)", input)),
+                    input -> String.format("_collection.add(%s)", input)),
                 curVersions);
             buffer.decrementIndent();
             buffer.printf("}%n");
@@ -258,7 +258,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
 
     private void generateOverloadWrite(String className) {
         buffer.printf("public static JsonNode write(%s _object, short _version) {%n",
-                className);
+            className);
         buffer.incrementIndent();
         buffer.printf("return write(_object, _version, true);%n");
         buffer.decrementIndent();
@@ -266,8 +266,8 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
     }
 
     private void generateWrite(String className,
-                               StructSpec struct,
-                               Versions parentVersions) {
+        StructSpec struct,
+        Versions parentVersions) {
         headerGenerator.addImport(MessageGenerator.JSON_NODE_CLASS);
         buffer.printf("public static JsonNode write(%s _object, short _version, boolean _serializeRecords) {%n",
             className);
@@ -275,10 +275,10 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
         VersionConditional.forVersions(struct.versions(), parentVersions).
             allowMembershipCheckAlwaysFalse(false).
             ifNotMember(__ -> {
-                headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
-                buffer.printf("throw new UnsupportedVersionException(\"Can't write " +
-                    "version \" + _version + \" of %s\");%n", className);
-            }).
+            headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+            buffer.printf("throw new UnsupportedVersionException(\"Can't write " +
+                "version \" + _version + \" of %s\");%n", className);
+        }).
             generate(buffer);
         Versions curVersions = parentVersions.intersect(struct.versions());
         headerGenerator.addImport(MessageGenerator.OBJECT_NODE_CLASS);
@@ -291,22 +291,22 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
                 input -> String.format("_node.set(\"%s\", %s)", field.camelCaseName(), input));
             VersionConditional cond = VersionConditional.forVersions(field.versions(), curVersions).
                 ifMember(presentVersions -> VersionConditional.forVersions(field.taggedVersions(), presentVersions).
-                    ifMember(presentAndTaggedVersions -> {
-                        field.generateNonDefaultValueCheck(headerGenerator,
-                            structRegistry, buffer, "_object.", field.nullableVersions());
-                        buffer.incrementIndent();
-                        if (field.defaultString().equals("null")) {
-                            // If the default was null, and we already checked that this field was not
-                            // the default, we can omit further null checks.
-                            generateTargetToJson(target.nonNullableCopy(), presentAndTaggedVersions);
-                        } else {
-                            generateTargetToJson(target, presentAndTaggedVersions);
-                        }
-                        buffer.decrementIndent();
-                        buffer.printf("}%n");
-                    }).
-                    ifNotMember(presentAndNotTaggedVersions -> generateTargetToJson(target, presentAndNotTaggedVersions)).
-                    generate(buffer));
+                ifMember(presentAndTaggedVersions -> {
+                field.generateNonDefaultValueCheck(headerGenerator,
+                    structRegistry, buffer, "_object.", field.nullableVersions());
+                buffer.incrementIndent();
+                if (field.defaultString().equals("null")) {
+                    // If the default was null, and we already checked that this field was not
+                    // the default, we can omit further null checks.
+                    generateTargetToJson(target.nonNullableCopy(), presentAndTaggedVersions);
+                } else {
+                    generateTargetToJson(target, presentAndTaggedVersions);
+                }
+                buffer.decrementIndent();
+                buffer.printf("}%n");
+            }).
+                ifNotMember(presentAndNotTaggedVersions -> generateTargetToJson(target, presentAndNotTaggedVersions)).
+                generate(buffer));
             if (!field.ignorable()) {
                 cond.ifNotMember(__ -> field.generateNonIgnorableFieldCheck(headerGenerator,
                     structRegistry, "_object.", buffer));
@@ -324,17 +324,17 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
             buffer.printf("%s;%n", target.assignmentStatement(
                 String.format("BooleanNode.valueOf(%s)", target.sourceVariable())));
         } else if ((target.field().type() instanceof FieldType.Int8FieldType) ||
-                (target.field().type() instanceof FieldType.Int16FieldType)) {
+            (target.field().type() instanceof FieldType.Int16FieldType)) {
             headerGenerator.addImport(MessageGenerator.SHORT_NODE_CLASS);
             buffer.printf("%s;%n", target.assignmentStatement(
                 String.format("new ShortNode(%s)", target.sourceVariable())));
         } else if ((target.field().type() instanceof FieldType.Int32FieldType) ||
-                (target.field().type() instanceof FieldType.Uint16FieldType)) {
+            (target.field().type() instanceof FieldType.Uint16FieldType)) {
             headerGenerator.addImport(MessageGenerator.INT_NODE_CLASS);
             buffer.printf("%s;%n", target.assignmentStatement(
                 String.format("new IntNode(%s)", target.sourceVariable())));
         } else if (target.field().type() instanceof FieldType.Int64FieldType ||
-                (target.field().type() instanceof FieldType.Uint32FieldType)) {
+            (target.field().type() instanceof FieldType.Uint32FieldType)) {
             headerGenerator.addImport(MessageGenerator.LONG_NODE_CLASS);
             buffer.printf("%s;%n", target.assignmentStatement(
                 String.format("new LongNode(%s)", target.sourceVariable())));
@@ -353,11 +353,11 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
                 nullableVersions(target.field().nullableVersions()).
                 possibleVersions(versions).
                 conditionalGenerator((name, negated) ->
-                    String.format("%s %s= null", name, negated ? "!" : "=")).
+                String.format("%s %s= null", name, negated ? "!" : "=")).
                 ifNull(() -> {
-                    headerGenerator.addImport(MessageGenerator.NULL_NODE_CLASS);
-                    buffer.printf("%s;%n", target.assignmentStatement("NullNode.instance"));
-                }).
+                headerGenerator.addImport(MessageGenerator.NULL_NODE_CLASS);
+                buffer.printf("%s;%n", target.assignmentStatement("NullNode.instance"));
+            }).
                 ifShouldNotBeNull(() -> generateVariableLengthTargetToJson(target, versions)).
                 generate(buffer);
         }
@@ -379,7 +379,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
                 headerGenerator.addImport(MessageGenerator.ARRAYS_CLASS);
                 buffer.printf("%s;%n", target.assignmentStatement(
                     String.format("new BinaryNode(Arrays.copyOf(%s, %s.length))",
-                            target.sourceVariable(), target.sourceVariable())));
+                        target.sourceVariable(), target.sourceVariable())));
             }
         } else if (target.field().type().isRecords()) {
             headerGenerator.addImport(MessageGenerator.BINARY_NODE_CLASS);
@@ -394,8 +394,8 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
             buffer.printf("} else {%n");
             buffer.incrementIndent();
             buffer.printf("_node.set(\"%sSizeInBytes\", new IntNode(%s.sizeInBytes()));%n",
-                    target.field().camelCaseName(),
-                    target.sourceVariable());
+                target.field().camelCaseName(),
+                target.sourceVariable());
             buffer.decrementIndent();
             buffer.printf("}%n");
         } else if (target.field().type().isArray()) {
@@ -411,7 +411,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
                 elementType.getBoxedJavaType(headerGenerator), target.sourceVariable());
             buffer.incrementIndent();
             generateTargetToJson(target.arrayElementTarget(
-                input -> String.format("%s.add(%s)", arrayInstanceName, input)),
+                    input -> String.format("%s.add(%s)", arrayInstanceName, input)),
                 versions);
             buffer.decrementIndent();
             buffer.printf("}%n");

@@ -87,7 +87,7 @@ public final class Snapshots {
         } catch (IOException e) {
             throw new UncheckedIOException(
                 String.format("Error creating temporary file, logDir = %s, snapshotId = %s.",
-                     dir.toAbsolutePath(), snapshotId), e);
+                    dir.toAbsolutePath(), snapshotId), e);
         }
     }
 
@@ -163,14 +163,14 @@ public final class Snapshots {
     public static long lastContainedLogTimestamp(RawSnapshotReader reader, LogContext logContext) {
         try (var bufferSupplier = new BufferSupplier.GrowableBufferSupplier();
              RecordsSnapshotReader<ByteBuffer> recordsSnapshotReader =
-                RecordsSnapshotReader.of(
-                    reader,
-                    IdentitySerde.INSTANCE,
-                    bufferSupplier,
-                    KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-                    true,
-                    logContext
-                )
+                 RecordsSnapshotReader.of(
+                     reader,
+                     IdentitySerde.INSTANCE,
+                     bufferSupplier,
+                     KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+                     true,
+                     logContext
+                 )
         ) {
             return recordsSnapshotReader.lastContainedLogTimestamp();
         }

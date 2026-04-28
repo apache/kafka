@@ -682,7 +682,7 @@ public class ConsoleConsumerOptionsTest {
         String[] noOpMessageFormatter = generateArgsForFormatter("org.apache.kafka.tools.consumer.NoOpMessageFormatter");
         assertInstanceOf(NoOpMessageFormatter.class, new ConsoleConsumerOptions(noOpMessageFormatter).formatter());
     }
-    
+
     private String[] generateArgsForFormatter(String formatter) {
         return new String[]{
             "--bootstrap-server", "localhost:9092",

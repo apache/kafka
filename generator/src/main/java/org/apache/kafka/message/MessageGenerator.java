@@ -186,7 +186,7 @@ public final class MessageGenerator {
     }
 
     private static List<TypeClassGenerator> createTypeClassGenerators(String packageName,
-                                                                      List<String> types) {
+        List<String> types) {
         if (types == null) return List.of();
         List<TypeClassGenerator> generators = new ArrayList<>();
         for (String type : types) {
@@ -214,7 +214,7 @@ public final class MessageGenerator {
     }
 
     private static List<MessageClassGenerator> createMessageClassGenerators(String packageName,
-                                                                            List<String> types) {
+        List<String> types) {
         if (types == null) return List.of();
         List<MessageClassGenerator> generators = new ArrayList<>();
         for (String type : types) {
@@ -233,10 +233,10 @@ public final class MessageGenerator {
     }
 
     public static void processDirectories(String packageName,
-                                          String outputDir,
-                                          String inputDir,
-                                          List<String> typeClassGeneratorTypes,
-                                          List<String> messageClassGeneratorTypes) throws Exception {
+        String outputDir,
+        String inputDir,
+        List<String> typeClassGeneratorTypes,
+        List<String> messageClassGeneratorTypes) throws Exception {
         Files.createDirectories(Paths.get(outputDir));
         int numProcessed = 0;
 
@@ -278,9 +278,9 @@ public final class MessageGenerator {
      * @return output file names.
      */
     static Set<String> generateAndWriteMessageClasses(MessageSpec spec,
-                                                      String packageName,
-                                                      String outputDir,
-                                                      List<String> messageClassGeneratorTypes) throws Exception {
+        String packageName,
+        String outputDir,
+        List<String> messageClassGeneratorTypes) throws Exception {
         var outputFileNames = new HashSet<String>();
         // Only generate `Data` classes for apis that have valid version(s)
         if (spec.hasValidVersion()) {

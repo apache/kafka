@@ -92,7 +92,7 @@ public class ProspectiveStateTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testSingleNodeQuorum(boolean withDirectoryId) {
         ProspectiveState state = newProspectiveState(voterSetWithLocal(IntStream.empty(), withDirectoryId));
         assertTrue(state.epochElection().isVoteGranted());
@@ -101,7 +101,7 @@ public class ProspectiveStateTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testTwoNodeQuorumVoteRejected(boolean withDirectoryId) {
         ReplicaKey otherNode = replicaKey(1, withDirectoryId);
         ProspectiveState state = newProspectiveState(
@@ -116,7 +116,7 @@ public class ProspectiveStateTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testTwoNodeQuorumVoteGranted(boolean withDirectoryId) {
         ReplicaKey otherNode = replicaKey(1, withDirectoryId);
         ProspectiveState state = newProspectiveState(
@@ -132,7 +132,7 @@ public class ProspectiveStateTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testThreeNodeQuorumVoteGranted(boolean withDirectoryId) {
         ReplicaKey node1 = replicaKey(1, withDirectoryId);
         ReplicaKey node2 = replicaKey(2, withDirectoryId);
@@ -153,7 +153,7 @@ public class ProspectiveStateTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testThreeNodeQuorumVoteRejected(boolean withDirectoryId) {
         ReplicaKey node1 = replicaKey(1, withDirectoryId);
         ReplicaKey node2 = replicaKey(2, withDirectoryId);
@@ -174,7 +174,7 @@ public class ProspectiveStateTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testCanChangePreVote(boolean withDirectoryId) {
         int voter1 = 1;
         int voter2 = 2;
@@ -194,7 +194,7 @@ public class ProspectiveStateTest {
 
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testCannotGrantOrRejectNonVoters(boolean withDirectoryId) {
         int nonVoterId = 1;
         ProspectiveState state = newProspectiveState(voterSetWithLocal(IntStream.empty(), withDirectoryId));
@@ -203,7 +203,7 @@ public class ProspectiveStateTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testConsecutiveGrant(boolean withDirectoryId) {
         int otherNodeId = 1;
         ProspectiveState state = newProspectiveState(
@@ -225,7 +225,7 @@ public class ProspectiveStateTest {
     }
 
     @ParameterizedTest
-    @CsvSource({ "true,true", "true,false", "false,true", "false,false" })
+    @CsvSource({"true,true", "true,false", "false,true", "false,false"})
     public void testGrantVote(boolean isLogUpToDate, boolean withDirectoryId) {
         ReplicaKey node0 = replicaKey(0, withDirectoryId);
         ReplicaKey node1 = replicaKey(1, withDirectoryId);
@@ -245,7 +245,7 @@ public class ProspectiveStateTest {
     }
 
     @ParameterizedTest
-    @CsvSource({ "true,true", "true,false", "false,true", "false,false" })
+    @CsvSource({"true,true", "true,false", "false,true", "false,false"})
     public void testGrantVoteWithVotedKey(boolean isLogUpToDate, boolean withDirectoryId) {
         ReplicaKey node0 = replicaKey(0, withDirectoryId);
         ReplicaKey node1 = replicaKey(1, withDirectoryId);
@@ -267,7 +267,7 @@ public class ProspectiveStateTest {
     }
 
     @ParameterizedTest
-    @CsvSource({ "true,true", "true,false", "false,true", "false,false" })
+    @CsvSource({"true,true", "true,false", "false,true", "false,false"})
     public void testGrantVoteWithLeader(boolean isLogUpToDate, boolean withDirectoryId) {
         ReplicaKey node0 = replicaKey(0, withDirectoryId);
         ReplicaKey node1 = replicaKey(1, withDirectoryId);

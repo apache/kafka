@@ -240,7 +240,8 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
             private boolean hasNext = true;
 
             @Override
-            public void close() {}
+            public void close() {
+            }
 
             @Override
             public boolean hasNext() {
@@ -318,9 +319,9 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         private final byte wrapperMagic;
 
         private DeepRecordsIterator(AbstractLegacyRecordBatch wrapperEntry,
-                                    boolean ensureMatchingMagic,
-                                    int maxMessageSize,
-                                    BufferSupplier bufferSupplier) {
+            boolean ensureMatchingMagic,
+            int maxMessageSize,
+            BufferSupplier bufferSupplier) {
             LegacyRecord wrapperRecord = wrapperEntry.outerRecord();
             this.wrapperMagic = wrapperRecord.magic();
             if (wrapperMagic != RecordBatch.MAGIC_VALUE_V0 && wrapperMagic != RecordBatch.MAGIC_VALUE_V1)
@@ -332,7 +333,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
             ByteBuffer wrapperValue = wrapperRecord.value();
             if (wrapperValue == null)
                 throw new InvalidRecordException("Found invalid compressed record set with null value (magic = " +
-                        wrapperMagic + ")");
+                    wrapperMagic + ")");
 
             InputStream stream = Compression.of(compressionType).build().wrapForInput(wrapperValue, wrapperRecord.magic(), bufferSupplier);
             LogInputStream<AbstractLegacyRecordBatch> logStream = new DataLogInputStream(stream, maxMessageSize);
@@ -355,13 +356,13 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
                     if (ensureMatchingMagic && magic != wrapperMagic)
                         throw new InvalidRecordException("Compressed message magic " + magic +
-                                " does not match wrapper magic " + wrapperMagic);
+                            " does not match wrapper magic " + wrapperMagic);
 
                     if (magic == RecordBatch.MAGIC_VALUE_V1) {
                         LegacyRecord recordWithTimestamp = new LegacyRecord(
-                                record.buffer(),
-                                timestampFromWrapper,
-                                wrapperRecord.timestampType());
+                            record.buffer(),
+                            timestampFromWrapper,
+                            wrapperRecord.timestampType());
                         innerEntry = new BasicLegacyRecordBatch(innerEntry.lastOffset(), recordWithTimestamp);
                     }
 
@@ -379,8 +380,8 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
                         long lastInnerOffset = innerEntries.getLast().offset();
                         if (lastOffsetFromWrapper < lastInnerOffset)
                             throw new InvalidRecordException("Found invalid wrapper offset in compressed v1 message set, " +
-                                    "wrapper offset '" + lastOffsetFromWrapper + "' is less than the last inner message " +
-                                    "offset '" + lastInnerOffset + "' and it is not zero.");
+                                "wrapper offset '" + lastOffsetFromWrapper + "' is less than the last inner message " +
+                                "offset '" + lastInnerOffset + "' and it is not zero.");
                         this.absoluteBaseOffset = lastOffsetFromWrapper - lastInnerOffset;
                     }
                 } else {
@@ -413,7 +414,8 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         }
 
         @Override
-        public void close() {}
+        public void close() {
+        }
     }
 
     private static class BasicLegacyRecordBatch extends AbstractLegacyRecordBatch {
@@ -544,10 +546,10 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     static class LegacyFileChannelRecordBatch extends FileLogInputStream.FileChannelRecordBatch {
 
         LegacyFileChannelRecordBatch(long offset,
-                                     byte magic,
-                                     FileRecords fileRecords,
-                                     int position,
-                                     int batchSize) {
+            byte magic,
+            FileRecords fileRecords,
+            int position,
+            int batchSize) {
             super(offset, magic, fileRecords, position, batchSize);
         }
 

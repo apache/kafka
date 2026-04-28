@@ -87,7 +87,7 @@ class MirrorCheckpointLegacyMetrics implements AutoCloseable {
 
     GroupMetrics group(TopicPartition topicPartition, String group) {
         return groupMetrics.computeIfAbsent(String.join("-", topicPartition.toString(), group),
-            x -> new GroupMetrics(topicPartition, group));
+                x -> new GroupMetrics(topicPartition, group));
     }
 
     void addReporter(MetricsReporter reporter) {
@@ -99,7 +99,7 @@ class MirrorCheckpointLegacyMetrics implements AutoCloseable {
 
         GroupMetrics(TopicPartition topicPartition, String group) {
             Map<String, String> tags = groupTags(source, target, group, topicPartition);
- 
+
             checkpointLatencySensor = metrics.sensor("checkpoint-latency");
             checkpointLatencySensor.add(metrics.metricInstance(CHECKPOINT_LATENCY, tags), new Value());
             checkpointLatencySensor.add(metrics.metricInstance(CHECKPOINT_LATENCY_MAX, tags), new Max());

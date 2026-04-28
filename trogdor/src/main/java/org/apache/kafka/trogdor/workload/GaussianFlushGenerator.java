@@ -63,7 +63,7 @@ public class GaussianFlushGenerator implements FlushGenerator {
 
     @JsonCreator
     public GaussianFlushGenerator(@JsonProperty("messagesPerFlushAverage") int messagesPerFlushAverage,
-                                  @JsonProperty("messagesPerFlushDeviation") double messagesPerFlushDeviation) {
+        @JsonProperty("messagesPerFlushDeviation") double messagesPerFlushDeviation) {
         this.messagesPerFlushAverage = messagesPerFlushAverage;
         this.messagesPerFlushDeviation = messagesPerFlushDeviation;
         calculateFlushSize();

@@ -66,9 +66,9 @@ public class SecurityManagerCompatibilityTest {
     @Test
     public void testDefaultStrategyDoPrivilegedThrow() {
         assertThrows(RuntimeException.class, () ->
-                SecurityManagerCompatibility.get().doPrivileged(() -> {
-                    throw new RuntimeException();
-                })
+            SecurityManagerCompatibility.get().doPrivileged(() -> {
+                throw new RuntimeException();
+            })
         );
     }
 

@@ -79,6 +79,7 @@ public class ClientQuotaManager {
             return "user " + sanitizedUser;
         }
     }
+
     public record ClientIdEntity(String clientId) implements ClientQuotaEntity.ConfigEntity {
 
         @Override
@@ -119,10 +120,12 @@ public class ClientQuotaManager {
         public ClientQuotaEntity.ConfigEntityType entityType() {
             return ClientQuotaEntity.ConfigEntityType.DEFAULT_CLIENT_ID;
         }
+
         @Override
         public String name() {
             return DEFAULT_NAME;
         }
+
         @Override
         public String toString() {
             return "default client-id";
@@ -130,11 +133,11 @@ public class ClientQuotaManager {
     };
 
     private static final KafkaQuotaEntity DEFAULT_CLIENT_ID_QUOTA_ENTITY =
-            new KafkaQuotaEntity(null, DEFAULT_USER_CLIENT_ID);
+        new KafkaQuotaEntity(null, DEFAULT_USER_CLIENT_ID);
     private static final KafkaQuotaEntity DEFAULT_USER_QUOTA_ENTITY =
-            new KafkaQuotaEntity(DEFAULT_USER_ENTITY, null);
+        new KafkaQuotaEntity(DEFAULT_USER_ENTITY, null);
     private static final KafkaQuotaEntity DEFAULT_USER_CLIENT_ID_QUOTA_ENTITY =
-            new KafkaQuotaEntity(DEFAULT_USER_ENTITY, DEFAULT_USER_CLIENT_ID);
+        new KafkaQuotaEntity(DEFAULT_USER_ENTITY, DEFAULT_USER_CLIENT_ID);
 
     public record KafkaQuotaEntity(ClientQuotaEntity.ConfigEntity userEntity,
                                    ClientQuotaEntity.ConfigEntity clientIdEntity) implements ClientQuotaEntity {
@@ -239,14 +242,14 @@ public class ClientQuotaManager {
         this.sensorAccessor = new SensorAccess(lock, metrics);
         this.clientQuotaType = QuotaType.toClientQuotaType(quotaType);
         this.quotaTypesEnabled = clientQuotaCallbackPlugin.isPresent() ?
-                CUSTOM_QUOTAS : NO_QUOTAS;
+            CUSTOM_QUOTAS : NO_QUOTAS;
         this.delayQueueSensor = metrics.sensor(quotaType + "-delayQueue");
         this.delayQueueSensor.add(metrics.metricName("queue-size", quotaType.toString(),
-                "Tracks the size of the delay queue"), new CumulativeSum());
+            "Tracks the size of the delay queue"), new CumulativeSum());
         this.throttledChannelReaper = new ThrottledChannelReaper(delayQueue, threadNamePrefix);
         this.quotaCallback = clientQuotaCallbackPlugin
-                .map(Plugin::get)
-                .orElse(new DefaultQuotaCallback());
+            .map(Plugin::get)
+            .orElse(new DefaultQuotaCallback());
 
         start(); // Extract thread start to separate method to avoid SC_START_IN_CTOR warning
     }
@@ -262,6 +265,7 @@ public class ClientQuotaManager {
     protected Metrics metrics() {
         return metrics;
     }
+
     protected Time time() {
         return time;
     }
@@ -339,7 +343,7 @@ public class ClientQuotaManager {
             var throttleTimeMs = (int) throttleTime(e, timeMs);
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Quota violated for sensor ({}). Delay time: ({})",
-                        clientSensors.quotaSensor().name(), throttleTimeMs);
+                    clientSensors.quotaSensor().name(), throttleTimeMs);
             }
             return throttleTimeMs;
         }
@@ -390,10 +394,10 @@ public class ClientQuotaManager {
      * @param throttleCallback Callback for channel throttling
      */
     public void throttle(
-            String clientId,
-            Session session,
-            ThrottleCallback throttleCallback,
-            int throttleTimeMs
+        String clientId,
+        Session session,
+        ThrottleCallback throttleCallback,
+        int throttleTimeMs
     ) {
         if (throttleTimeMs > 0) {
             var clientSensors = getOrCreateQuotaSensors(session, clientId);
@@ -403,7 +407,7 @@ public class ClientQuotaManager {
             delayQueueSensor.record();
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Channel throttled for sensor ({}). Delay time: ({})",
-                        clientSensors.quotaSensor().name(), throttleTimeMs);
+                    clientSensors.quotaSensor().name(), throttleTimeMs);
             }
         }
     }
@@ -445,20 +449,20 @@ public class ClientQuotaManager {
      */
     public ClientSensors getOrCreateQuotaSensors(Session session, String clientId) {
         var metricTags = quotaCallback instanceof DefaultQuotaCallback defaultCallback
-                ? defaultCallback.quotaMetricTags(session.sanitizedUser, clientId)
-                : quotaCallback.quotaMetricTags(clientQuotaType, session.principal, clientId);
+            ? defaultCallback.quotaMetricTags(session.sanitizedUser, clientId)
+            : quotaCallback.quotaMetricTags(clientQuotaType, session.principal, clientId);
         var sensors = new ClientSensors(
-                metricTags,
-                sensorAccessor.getOrCreate(
-                        getQuotaSensorName(metricTags),
-                        INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS,
-                        sensor -> registerQuotaMetrics(metricTags, sensor)  // quotaLimit() called here only for new sensors
-                ),
-                sensorAccessor.getOrCreate(
-                        getThrottleTimeSensorName(metricTags),
-                        INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS,
-                        sensor -> sensor.add(throttleMetricName(metricTags), new Avg())
-                )
+            metricTags,
+            sensorAccessor.getOrCreate(
+                getQuotaSensorName(metricTags),
+                INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS,
+                sensor -> registerQuotaMetrics(metricTags, sensor)  // quotaLimit() called here only for new sensors
+            ),
+            sensorAccessor.getOrCreate(
+                getThrottleTimeSensorName(metricTags),
+                INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS,
+                sensor -> sensor.add(throttleMetricName(metricTags), new Avg())
+            )
         );
 
         if (quotaCallback.quotaResetRequired(clientQuotaType)) {
@@ -470,9 +474,9 @@ public class ClientQuotaManager {
 
     protected void registerQuotaMetrics(Map<String, String> metricTags, Sensor sensor) {
         sensor.add(
-                clientQuotaMetricName(metricTags),
-                new Rate(),
-                getQuotaMetricConfig(metricTags)
+            clientQuotaMetricName(metricTags),
+            new Rate(),
+            getQuotaMetricConfig(metricTags)
         );
     }
 
@@ -494,16 +498,16 @@ public class ClientQuotaManager {
 
     private MetricConfig getQuotaMetricConfig(double quotaLimit) {
         return new MetricConfig()
-                .timeWindow(config.quotaWindowSizeSeconds(), TimeUnit.SECONDS)
-                .samples(config.numQuotaSamples())
-                .quota(new Quota(quotaLimit, true));
+            .timeWindow(config.quotaWindowSizeSeconds(), TimeUnit.SECONDS)
+            .samples(config.numQuotaSamples())
+            .quota(new Quota(quotaLimit, true));
     }
 
     protected Sensor getOrCreateSensor(String sensorName, long expirationTimeSeconds, Consumer<Sensor> registerMetrics) {
         return sensorAccessor.getOrCreate(
-                sensorName,
-                expirationTimeSeconds,
-                registerMetrics);
+            sensorName,
+            expirationTimeSeconds,
+            registerMetrics);
     }
 
     /**
@@ -516,9 +520,9 @@ public class ClientQuotaManager {
      * @param quota        custom quota to apply or None if quota override is being removed
      */
     public void updateQuota(
-            Optional<ClientQuotaEntity.ConfigEntity> userEntity,
-            Optional<ClientQuotaEntity.ConfigEntity> clientEntity,
-            Optional<Quota> quota
+        Optional<ClientQuotaEntity.ConfigEntity> userEntity,
+        Optional<ClientQuotaEntity.ConfigEntity> clientEntity,
+        Optional<Quota> quota
     ) {
         /*
          * Acquire the write lock to apply changes in the quota objects.
@@ -543,7 +547,7 @@ public class ClientQuotaManager {
             // Determine which entities need metric config updates
             Optional<KafkaQuotaEntity> updatedEntity;
             if (userEntity.filter(entity -> entity == DEFAULT_USER_ENTITY).isPresent() ||
-                    clientEntity.filter(entity -> entity == DEFAULT_USER_CLIENT_ID).isPresent()) {
+                clientEntity.filter(entity -> entity == DEFAULT_USER_CLIENT_ID).isPresent()) {
                 // More than one entity may need updating, so updateQuotaMetricConfigs will go through all metrics
                 updatedEntity = Optional.empty();
             } else {
@@ -591,11 +595,11 @@ public class ClientQuotaManager {
 
         if (shouldAdd && !isActive) {
             activeQuotaEntities.compute(activeQuotaType, (key, currentValue) ->
-                    (currentValue == null || currentValue == 0) ? 1 : currentValue + 1);
+                (currentValue == null || currentValue == 0) ? 1 : currentValue + 1);
             quotaTypesEnabled |= activeQuotaType;
         } else if (!shouldAdd && isActive) {
             activeQuotaEntities.compute(activeQuotaType, (key, currentValue) ->
-                    (currentValue == null || currentValue <= 1) ? 0 : currentValue - 1);
+                (currentValue == null || currentValue <= 1) ? 0 : currentValue - 1);
             if (activeQuotaEntities.getOrDefault(activeQuotaType, 0) == 0) {
                 quotaTypesEnabled &= ~activeQuotaType;
             }
@@ -603,18 +607,18 @@ public class ClientQuotaManager {
 
         // Log the changes
         var quotaTypeNames = Map.of(
-                USER_CLIENT_ID_QUOTA_ENABLED, "UserClientIdQuota",
-                CLIENT_ID_QUOTA_ENABLED, "ClientIdQuota",
-                USER_QUOTA_ENABLED, "UserQuota"
+            USER_CLIENT_ID_QUOTA_ENABLED, "UserClientIdQuota",
+            CLIENT_ID_QUOTA_ENABLED, "ClientIdQuota",
+            USER_QUOTA_ENABLED, "UserQuota"
         );
 
         var activeEntities = quotaTypeNames.entrySet().stream()
-                .filter(entry -> activeQuotaEntities.getOrDefault(entry.getKey(), 0) > 0)
-                .map(Map.Entry::getValue)
-                .collect(java.util.stream.Collectors.joining(", "));
+            .filter(entry -> activeQuotaEntities.getOrDefault(entry.getKey(), 0) > 0)
+            .map(Map.Entry::getValue)
+            .collect(java.util.stream.Collectors.joining(", "));
 
         LOG.info("Quota types enabled has been changed to {} with active quota entities: [{}]",
-                quotaTypesEnabled, activeEntities);
+            quotaTypesEnabled, activeEntities);
     }
 
 
@@ -638,15 +642,15 @@ public class ClientQuotaManager {
         // Otherwise, update just the single matching one.
         var singleUpdate = switch (quotaTypesEnabled) {
             case NO_QUOTAS,
-                 CLIENT_ID_QUOTA_ENABLED,
-                 USER_QUOTA_ENABLED,
-                 USER_CLIENT_ID_QUOTA_ENABLED -> updatedQuotaEntity.isPresent();
+                CLIENT_ID_QUOTA_ENABLED,
+                USER_QUOTA_ENABLED,
+                USER_CLIENT_ID_QUOTA_ENABLED -> updatedQuotaEntity.isPresent();
             default -> false;
         };
 
         if (singleUpdate) {
             var quotaEntity = updatedQuotaEntity.orElseThrow(
-                    () -> new IllegalStateException("Quota entity not specified"));
+                () -> new IllegalStateException("Quota entity not specified"));
             var user = quotaEntity.sanitizedUser();
             var clientId = quotaEntity.clientId();
             var metricTags = Map.of(USER_TAG, user, CLIENT_ID_TAG, clientId);
@@ -657,19 +661,19 @@ public class ClientQuotaManager {
             if (metric != null) {
                 var newQuota = quotaLimit(metricTags);
                 LOG.info("Sensor for {} already exists. Changing quota to {} in MetricConfig",
-                        quotaEntity, newQuota);
+                    quotaEntity, newQuota);
                 metric.config(getQuotaMetricConfig(newQuota));
             }
         } else {
             var quotaMetricName = clientQuotaMetricName(Map.of());
             allMetrics.forEach((metricName, metric) -> {
                 if (metricName.name().equals(quotaMetricName.name()) &&
-                        metricName.group().equals(quotaMetricName.group())) {
+                    metricName.group().equals(quotaMetricName.group())) {
                     var metricTags = metricName.tags();
                     var newQuota = quotaLimit(metricTags);
                     if (Double.compare(newQuota, metric.config().quota().bound()) != 0) {
                         LOG.info("Sensor for quota-id {} already exists. Setting quota to {} in MetricConfig",
-                                metricTags, newQuota);
+                            metricTags, newQuota);
                         metric.config(getQuotaMetricConfig(newQuota));
                     }
                 }
@@ -683,15 +687,15 @@ public class ClientQuotaManager {
      */
     protected MetricName clientQuotaMetricName(Map<String, String> quotaMetricTags) {
         return metrics.metricName("byte-rate", quotaType.toString(),
-                "Tracking byte-rate per user/client-id",
-                quotaMetricTags);
+            "Tracking byte-rate per user/client-id",
+            quotaMetricTags);
     }
 
     private MetricName throttleMetricName(Map<String, String> quotaMetricTags) {
         return metrics.metricName("throttle-time",
-                quotaType.toString(),
-                "Tracking average throttle-time per user/client-id",
-                quotaMetricTags);
+            quotaType.toString(),
+            "Tracking average throttle-time per user/client-id",
+            quotaMetricTags);
     }
 
     public void initiateShutdown() {
@@ -699,10 +703,12 @@ public class ClientQuotaManager {
         // improve shutdown time by waking up any ShutdownThread(s) blocked on poll by sending a no-op
         delayQueue.add(new ThrottledChannel(time, 0, new ThrottleCallback() {
             @Override
-            public void startThrottling() {}
+            public void startThrottling() {
+            }
 
             @Override
-            public void endThrottling() {}
+            public void endThrottling() {
+            }
         }));
     }
 
@@ -887,6 +893,7 @@ public class ClientQuotaManager {
         }
 
         @Override
-        public void close() {}
+        public void close() {
+        }
     }
 }

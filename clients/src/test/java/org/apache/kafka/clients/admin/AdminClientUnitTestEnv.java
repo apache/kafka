@@ -72,9 +72,9 @@ public class AdminClientUnitTestEnv implements AutoCloseable {
         AdminClientConfig adminClientConfig = new AdminClientConfig(config);
 
         AdminMetadataManager metadataManager = new AdminMetadataManager(new LogContext(),
-                adminClientConfig.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
-                adminClientConfig.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG),
-                config.containsKey(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG));
+            adminClientConfig.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
+            adminClientConfig.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG),
+            config.containsKey(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG));
         this.mockClient = new MockClient(time, new MockClient.MockMetadataUpdater() {
             @Override
             public List<Node> fetchNodes() {
@@ -128,7 +128,7 @@ public class AdminClientUnitTestEnv implements AutoCloseable {
         if (overrides.length % 2 != 0) {
             throw new IllegalStateException();
         }
-        for (int i = 0; i < overrides.length; i += 2) {
+        for (int i = 0;i < overrides.length;i += 2) {
             map.put(overrides[i], overrides[i + 1]);
         }
         return map;

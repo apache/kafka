@@ -40,34 +40,34 @@ public class ShareFetchMetricsManager extends AbstractConsumerMetricsManager {
     private ShareFetchMetricsManager(MetricsLedger metrics, ShareFetchMetricsRegistry metricsRegistry) {
         super(metrics);
         this.bytesFetched = new SensorBuilder(metrics, "bytes-fetched")
-                .withAvg(metricsRegistry.fetchSizeAvg)
-                .withMax(metricsRegistry.fetchSizeMax)
-                .withMeter(metricsRegistry.bytesFetchedRate, metricsRegistry.bytesFetchedTotal)
-                .build();
+            .withAvg(metricsRegistry.fetchSizeAvg)
+            .withMax(metricsRegistry.fetchSizeMax)
+            .withMeter(metricsRegistry.bytesFetchedRate, metricsRegistry.bytesFetchedTotal)
+            .build();
         this.recordsFetched = new SensorBuilder(metrics, "records-fetched")
-                .withAvg(metricsRegistry.recordsPerRequestAvg)
-                .withMax(metricsRegistry.recordsPerRequestMax)
-                .withMeter(metricsRegistry.recordsFetchedRate, metricsRegistry.recordsFetchedTotal)
-                .build();
+            .withAvg(metricsRegistry.recordsPerRequestAvg)
+            .withMax(metricsRegistry.recordsPerRequestMax)
+            .withMeter(metricsRegistry.recordsFetchedRate, metricsRegistry.recordsFetchedTotal)
+            .build();
 
         this.sentAcknowledgements = new SensorBuilder(metrics, "sent-acknowledgements")
-                .withMeter(metricsRegistry.acknowledgementSendRate, metricsRegistry.acknowledgementSendTotal)
-                .build();
+            .withMeter(metricsRegistry.acknowledgementSendRate, metricsRegistry.acknowledgementSendTotal)
+            .build();
 
         this.failedAcknowledgements = new SensorBuilder(metrics, "failed-acknowledgements")
-                .withMeter(metricsRegistry.acknowledgementErrorRate, metricsRegistry.acknowledgementErrorTotal)
-                .build();
+            .withMeter(metricsRegistry.acknowledgementErrorRate, metricsRegistry.acknowledgementErrorTotal)
+            .build();
 
         this.fetchLatency = new SensorBuilder(metrics, "fetch-latency")
-                .withAvg(metricsRegistry.fetchLatencyAvg)
-                .withMax(metricsRegistry.fetchLatencyMax)
-                .withMeter(new WindowedCount(), metricsRegistry.fetchRequestRate, metricsRegistry.fetchRequestTotal)
-                .build();
+            .withAvg(metricsRegistry.fetchLatencyAvg)
+            .withMax(metricsRegistry.fetchLatencyMax)
+            .withMeter(new WindowedCount(), metricsRegistry.fetchRequestRate, metricsRegistry.fetchRequestTotal)
+            .build();
 
         this.throttleTime = new SensorBuilder(metrics, "fetch-throttle-time")
-                .withAvg(metricsRegistry.fetchThrottleTimeAvg)
-                .withMax(metricsRegistry.fetchThrottleTimeMax)
-                .build();
+            .withAvg(metricsRegistry.fetchThrottleTimeAvg)
+            .withMax(metricsRegistry.fetchThrottleTimeMax)
+            .build();
     }
 
     public Sensor throttleTimeSensor() {

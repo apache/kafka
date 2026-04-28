@@ -42,14 +42,14 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
     private final String processorName;
 
     public ProcessorParameters(final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier,
-                               final String processorName) {
+        final String processorName) {
         this.processorSupplier = processorSupplier;
         fixedKeyProcessorSupplier = null;
         this.processorName = processorName;
     }
 
     public ProcessorParameters(final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier,
-                               final String processorName) {
+        final String processorName) {
         this.processorSupplier = null;
         fixedKeyProcessorSupplier = processorSupplier;
         this.processorName = processorName;

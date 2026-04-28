@@ -52,10 +52,10 @@ public class RemoteLogSegmentMetadataTransform implements RemoteLogMetadataTrans
 
     private List<RemoteLogSegmentMetadataRecord.SegmentLeaderEpochEntry> createSegmentLeaderEpochsEntry(RemoteLogSegmentMetadata data) {
         return data.segmentLeaderEpochs().entrySet().stream()
-                   .map(entry -> new RemoteLogSegmentMetadataRecord.SegmentLeaderEpochEntry()
-                           .setLeaderEpoch(entry.getKey())
-                           .setOffset(entry.getValue()))
-                   .toList();
+                .map(entry -> new RemoteLogSegmentMetadataRecord.SegmentLeaderEpochEntry()
+                        .setLeaderEpoch(entry.getKey())
+                        .setOffset(entry.getValue()))
+                .toList();
     }
 
     private RemoteLogSegmentMetadataRecord.RemoteLogSegmentIdEntry createRemoteLogSegmentIdEntry(RemoteLogSegmentMetadata data) {
@@ -81,14 +81,14 @@ public class RemoteLogSegmentMetadataTransform implements RemoteLogMetadataTrans
         Optional<CustomMetadata> customMetadata = Optional.ofNullable(record.customMetadata()).map(CustomMetadata::new);
         RemoteLogSegmentMetadata remoteLogSegmentMetadata =
                 new RemoteLogSegmentMetadata(remoteLogSegmentId, record.startOffset(), record.endOffset(),
-                                             record.maxTimestampMs(), record.brokerId(),
-                                             record.eventTimestampMs(), record.segmentSizeInBytes(),
-                                             segmentLeaderEpochs, record.txnIndexEmpty());
+                        record.maxTimestampMs(), record.brokerId(),
+                        record.eventTimestampMs(), record.segmentSizeInBytes(),
+                        segmentLeaderEpochs, record.txnIndexEmpty());
         RemoteLogSegmentMetadataUpdate rlsmUpdate
                 = new RemoteLogSegmentMetadataUpdate(remoteLogSegmentId, record.eventTimestampMs(),
-                                                     customMetadata,
-                                                     RemoteLogSegmentState.forId(record.remoteLogSegmentState()),
-                                                     record.brokerId());
+                customMetadata,
+                RemoteLogSegmentState.forId(record.remoteLogSegmentState()),
+                record.brokerId());
 
         return remoteLogSegmentMetadata.createWithUpdates(rlsmUpdate);
     }
@@ -96,7 +96,7 @@ public class RemoteLogSegmentMetadataTransform implements RemoteLogMetadataTrans
     private RemoteLogSegmentId buildRemoteLogSegmentId(RemoteLogSegmentMetadataRecord.RemoteLogSegmentIdEntry entry) {
         TopicIdPartition topicIdPartition =
                 new TopicIdPartition(entry.topicIdPartition().id(),
-                                     new TopicPartition(entry.topicIdPartition().name(), entry.topicIdPartition().partition()));
+                        new TopicPartition(entry.topicIdPartition().name(), entry.topicIdPartition().partition()));
 
         return new RemoteLogSegmentId(topicIdPartition, entry.id());
     }

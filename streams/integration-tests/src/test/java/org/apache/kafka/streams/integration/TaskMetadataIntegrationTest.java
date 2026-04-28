@@ -90,7 +90,7 @@ public class TaskMetadataIntegrationTest {
         inputTopic = "input" + testId;
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic);
 
-        builder  = new StreamsBuilder();
+        builder = new StreamsBuilder();
 
         process = new AtomicBoolean(true);
         commit = new AtomicBoolean(true);
@@ -98,16 +98,16 @@ public class TaskMetadataIntegrationTest {
         final KStream<String, String> stream = builder.stream(inputTopic);
         stream.process(PauseProcessor::new);
 
-        properties  = mkObjectProperties(
-                mkMap(
-                        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-                        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
-                        mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-                        mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2),
-                        mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
-                        mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
-                        mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1L)
-                )
+        properties = mkObjectProperties(
+            mkMap(
+                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+                mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
+                mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+                mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2),
+                mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
+                mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
+                mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1L)
+            )
         );
     }
 
@@ -174,14 +174,14 @@ public class TaskMetadataIntegrationTest {
 
     private void produceMessages(final long timestamp, final String streamOneInput, final String msg) {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-                streamOneInput,
-                Collections.singletonList(new KeyValue<>("1", msg)),
-                TestUtils.producerConfig(
-                        CLUSTER.bootstrapServers(),
-                        StringSerializer.class,
-                        StringSerializer.class,
-                        new Properties()),
-                timestamp);
+            streamOneInput,
+            Collections.singletonList(new KeyValue<>("1", msg)),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                StringSerializer.class,
+                StringSerializer.class,
+                new Properties()),
+            timestamp);
     }
 
     private class PauseProcessor extends ContextualProcessor<String, String, Void, Void> {

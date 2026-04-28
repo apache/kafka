@@ -196,9 +196,9 @@ public class ClientTelemetryUtils {
         // Broker is providing the compression types in order of preference. Grab the
         // first one that's supported.
         return acceptedCompressionTypes.stream()
-                .filter(t -> !unsupportedCompressionTypes.contains(t))
-                .findFirst()
-                .orElse(CompressionType.NONE);
+            .filter(t -> !unsupportedCompressionTypes.contains(t))
+            .findFirst()
+            .orElse(CompressionType.NONE);
     }
 
     public static ByteBuffer compress(MetricsData metrics, CompressionType compressionType) throws IOException {
@@ -215,7 +215,7 @@ public class ClientTelemetryUtils {
     public static ByteBuffer decompress(ByteBuffer metrics, CompressionType compressionType) {
         Compression compression = Compression.of(compressionType).build();
         try (InputStream in = compression.wrapForInput(metrics, RecordBatch.CURRENT_MAGIC_VALUE, BufferSupplier.create());
-            ByteBufferOutputStream out = new ByteBufferOutputStream(512)) {
+             ByteBufferOutputStream out = new ByteBufferOutputStream(512)) {
             byte[] bytes = new byte[metrics.limit() * 2];
             int nRead;
             while ((nRead = in.read(bytes, 0, bytes.length)) != -1) {

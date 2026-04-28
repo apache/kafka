@@ -55,8 +55,8 @@ class SourceTaskOffsetCommitter {
 
     // visible for testing
     SourceTaskOffsetCommitter(WorkerConfig config,
-                              ScheduledExecutorService commitExecutorService,
-                              ConcurrentMap<ConnectorTaskId, ScheduledFuture<?>> committers) {
+            ScheduledExecutorService commitExecutorService,
+            ConcurrentMap<ConnectorTaskId, ScheduledFuture<?>> committers) {
         this.config = config;
         this.commitExecutorService = commitExecutorService;
         this.committers = committers;
@@ -64,7 +64,7 @@ class SourceTaskOffsetCommitter {
 
     public SourceTaskOffsetCommitter(WorkerConfig config) {
         this(config, Executors.newSingleThreadScheduledExecutor(ThreadUtils.createThreadFactory(
-                SourceTaskOffsetCommitter.class.getSimpleName() + "-%d", false)),
+                        SourceTaskOffsetCommitter.class.getSimpleName() + "-%d", false)),
                 new ConcurrentHashMap<>());
     }
 

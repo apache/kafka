@@ -69,7 +69,7 @@ public class TransformationDoc {
             b.append("</h5>\n");
             b.append(docInfo.overview + "\n");
             b.append("<p/>\n");
-            b.append(docInfo.configDef.toHtml(6, key -> docInfo.transformationName + "_"  + key) + "\n");
+            b.append(docInfo.configDef.toHtml(6, key -> docInfo.transformationName + "_" + key) + "\n");
             b.append("</div>\n");
         }
         return b.toString();

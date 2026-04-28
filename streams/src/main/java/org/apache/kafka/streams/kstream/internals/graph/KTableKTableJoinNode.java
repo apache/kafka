@@ -37,15 +37,15 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
     private final String[] joinOtherStoreNames;
 
     KTableKTableJoinNode(final String nodeName,
-                         final ProcessorParameters<K, Change<V1>, ?, ?> joinThisProcessorParameters,
-                         final ProcessorParameters<K, Change<V2>, ?, ?> joinOtherProcessorParameters,
-                         final ProcessorParameters<K, Change<VR>, ?, ?> joinMergeProcessorParameters,
-                         final String thisJoinSide,
-                         final String otherJoinSide,
-                         final Serde<K> keySerde,
-                         final Serde<VR> valueSerde,
-                         final String[] joinThisStoreNames,
-                         final String[] joinOtherStoreNames) {
+        final ProcessorParameters<K, Change<V1>, ?, ?> joinThisProcessorParameters,
+        final ProcessorParameters<K, Change<V2>, ?, ?> joinOtherProcessorParameters,
+        final ProcessorParameters<K, Change<VR>, ?, ?> joinMergeProcessorParameters,
+        final String thisJoinSide,
+        final String otherJoinSide,
+        final Serde<K> keySerde,
+        final Serde<VR> valueSerde,
+        final String[] joinThisStoreNames,
+        final String[] joinOtherStoreNames) {
 
         super(nodeName,
             null,
@@ -98,8 +98,8 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
 
     @SuppressWarnings("unchecked")
     private void enableVersionedSemantics(final ProcessorParameters<K, ?, ?, ?> processorParameters,
-                                          final boolean useVersionedSemantics,
-                                          final String parentNodeName) {
+        final boolean useVersionedSemantics,
+        final String parentNodeName) {
         final ProcessorSupplier<K, ?, ?, ?> processorSupplier = processorParameters.processorSupplier();
         if (!(processorSupplier instanceof KTableKTableAbstractJoin)) {
             throw new IllegalStateException("Unexpected processor type for table-table join: " + processorSupplier.getClass().getName());
@@ -147,7 +147,7 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         private String[] joinThisStoreNames;
         private String[] joinOtherStoreNames;
         private ProcessorParameters<K, Change<VR>, ?, ?>
-                joinMergeProcessorParameters;
+            joinMergeProcessorParameters;
 
         private KTableKTableJoinNodeBuilder() {
         }

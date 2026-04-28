@@ -77,25 +77,25 @@ public class MultiThreadedEventProcessorTest {
         private final long createdTimeMs;
 
         FutureEvent(
-            TopicPartition key,
-            Supplier<T> supplier
+                TopicPartition key,
+                Supplier<T> supplier
         ) {
             this(key, supplier, false, 0L);
         }
 
         FutureEvent(
-            TopicPartition key,
-            Supplier<T> supplier,
-            boolean block
+                TopicPartition key,
+                Supplier<T> supplier,
+                boolean block
         ) {
             this(key, supplier, block, 0L);
         }
 
         FutureEvent(
-            TopicPartition key,
-            Supplier<T> supplier,
-            boolean block,
-            long createdTimeMs
+                TopicPartition key,
+                Supplier<T> supplier,
+                boolean block,
+                long createdTimeMs
         ) {
             this.key = key;
             this.future = new CompletableFuture<>();
@@ -158,11 +158,11 @@ public class MultiThreadedEventProcessorTest {
     @Test
     public void testCreateAndClose() throws Exception {
         CoordinatorEventProcessor eventProcessor = new MultiThreadedEventProcessor(
-            new LogContext(),
-            "event-processor-",
-            2,
-            Time.SYSTEM,
-            mock(CoordinatorRuntimeMetrics.class)
+                new LogContext(),
+                "event-processor-",
+                2,
+                Time.SYSTEM,
+                mock(CoordinatorRuntimeMetrics.class)
         );
         eventProcessor.close();
     }
@@ -170,29 +170,29 @@ public class MultiThreadedEventProcessorTest {
     @Test
     public void testEventsAreProcessed() throws Exception {
         try (CoordinatorEventProcessor eventProcessor = new MultiThreadedEventProcessor(
-            new LogContext(),
-            "event-processor-",
-            2,
-            Time.SYSTEM,
-            mock(CoordinatorRuntimeMetrics.class)
-        )) {
+                     new LogContext(),
+                     "event-processor-",
+                     2,
+                     Time.SYSTEM,
+                     mock(CoordinatorRuntimeMetrics.class)
+             )) {
             AtomicInteger numEventsExecuted = new AtomicInteger(0);
 
             List<FutureEvent<Integer>> events = Arrays.asList(
-                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(new TopicPartition("foo", 2), numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(new TopicPartition("foo", 2), numEventsExecuted::incrementAndGet)
+                    new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
+                    new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet),
+                    new FutureEvent<>(new TopicPartition("foo", 2), numEventsExecuted::incrementAndGet),
+                    new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
+                    new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet),
+                    new FutureEvent<>(new TopicPartition("foo", 2), numEventsExecuted::incrementAndGet)
             );
 
             events.forEach(eventProcessor::enqueueLast);
 
             CompletableFuture.allOf(events
-                .stream()
-                .map(FutureEvent::future)
-                .toArray(CompletableFuture[]::new)
+                    .stream()
+                    .map(FutureEvent::future)
+                    .toArray(CompletableFuture[]::new)
             ).get(10, TimeUnit.SECONDS);
 
             events.forEach(event -> {
@@ -207,21 +207,21 @@ public class MultiThreadedEventProcessorTest {
     @Test
     public void testProcessingGuarantees() throws Exception {
         try (CoordinatorEventProcessor eventProcessor = new MultiThreadedEventProcessor(
-            new LogContext(),
-            "event-processor-",
-            2,
-            Time.SYSTEM,
-            mock(CoordinatorRuntimeMetrics.class)
-        )) {
+                     new LogContext(),
+                     "event-processor-",
+                     2,
+                     Time.SYSTEM,
+                     mock(CoordinatorRuntimeMetrics.class)
+             )) {
             AtomicInteger numEventsExecuted = new AtomicInteger(0);
 
             List<FutureEvent<Integer>> events = Arrays.asList(
-                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet, true), // Event 0
-                new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet, true), // Event 1
-                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet, true), // Event 2
-                new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet, true), // Event 3
-                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet, true), // Event 4
-                new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet, true)  // Event 5
+                    new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet, true), // Event 0
+                    new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet, true), // Event 1
+                    new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet, true), // Event 2
+                    new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet, true), // Event 3
+                    new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet, true), // Event 4
+                    new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet, true)  // Event 5
             );
 
             events.forEach(eventProcessor::enqueueLast);
@@ -292,44 +292,44 @@ public class MultiThreadedEventProcessorTest {
     @Test
     public void testEventsAreRejectedWhenClosed() throws Exception {
         CoordinatorEventProcessor eventProcessor = new MultiThreadedEventProcessor(
-            new LogContext(),
-            "event-processor-",
-            2,
-            Time.SYSTEM,
-            mock(CoordinatorRuntimeMetrics.class)
+                new LogContext(),
+                "event-processor-",
+                2,
+                Time.SYSTEM,
+                mock(CoordinatorRuntimeMetrics.class)
         );
 
         eventProcessor.close();
 
         assertThrows(RejectedExecutionException.class,
-            () -> eventProcessor.enqueueLast(new FutureEvent<>(new TopicPartition("foo", 0), () -> 0)));
+                () -> eventProcessor.enqueueLast(new FutureEvent<>(new TopicPartition("foo", 0), () -> 0)));
     }
 
     @Test
     public void testEventsAreDrainedWhenClosed() throws Exception {
         try (MultiThreadedEventProcessor eventProcessor = new MultiThreadedEventProcessor(
-            new LogContext(),
-            "event-processor-",
-            1, // Use a single thread to block event in the processor.
-            Time.SYSTEM,
-            mock(CoordinatorRuntimeMetrics.class)
-        )) {
+                     new LogContext(),
+                     "event-processor-",
+                     1, // Use a single thread to block event in the processor.
+                     Time.SYSTEM,
+                     mock(CoordinatorRuntimeMetrics.class)
+             )) {
             AtomicInteger numEventsExecuted = new AtomicInteger(0);
 
             // Special event which blocks until the latch is released.
             FutureEvent<Integer> blockingEvent = new FutureEvent<>(
-                new TopicPartition("foo", 0),
-                numEventsExecuted::incrementAndGet,
-                true
+                    new TopicPartition("foo", 0),
+                    numEventsExecuted::incrementAndGet,
+                    true
             );
 
             List<FutureEvent<Integer>> events = Arrays.asList(
-                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet)
+                    new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
+                    new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
+                    new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
+                    new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
+                    new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
+                    new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet)
             );
 
             // Enqueue the blocking event.
@@ -337,7 +337,7 @@ public class MultiThreadedEventProcessorTest {
 
             // Ensure that the blocking event is executed.
             waitForCondition(() -> numEventsExecuted.get() > 0,
-                "Blocking event not executed.");
+                    "Blocking event not executed.");
 
             // Enqueue the other events.
             events.forEach(eventProcessor::enqueueLast);
@@ -350,7 +350,7 @@ public class MultiThreadedEventProcessorTest {
 
             // Enqueuing a new event is rejected.
             assertThrows(RejectedExecutionException.class,
-                () -> eventProcessor.enqueueLast(blockingEvent));
+                    () -> eventProcessor.enqueueLast(blockingEvent));
 
             // Release the blocking event to unblock the thread.
             blockingEvent.release();
@@ -363,8 +363,8 @@ public class MultiThreadedEventProcessorTest {
             // The other events should be failed.
             events.forEach(event -> {
                 Throwable t = assertThrows(
-                    ExecutionException.class,
-                    () -> event.future.get(DEFAULT_MAX_WAIT_MS, TimeUnit.SECONDS)
+                        ExecutionException.class,
+                        () -> event.future.get(DEFAULT_MAX_WAIT_MS, TimeUnit.SECONDS)
                 );
                 assertEquals(RejectedExecutionException.class, t.getCause().getClass());
             });
@@ -382,37 +382,37 @@ public class MultiThreadedEventProcessorTest {
 
         // Special event which blocks until the latch is released.
         FutureEvent<Integer> blockingEvent = new FutureEvent<>(
-            new TopicPartition("foo", 0), () -> {
-                mockTime.sleep(4000L);
-                return numEventsExecuted.incrementAndGet();
-            },
-            true,
-            mockTime.milliseconds()
+                new TopicPartition("foo", 0), () -> {
+                    mockTime.sleep(4000L);
+                    return numEventsExecuted.incrementAndGet();
+                },
+                true,
+                mockTime.milliseconds()
         );
 
         try (MultiThreadedEventProcessor eventProcessor = new MultiThreadedEventProcessor(
-            new LogContext(),
-            "event-processor-",
-            1, // Use a single thread to block event in the processor.
-            mockTime,
-            mockRuntimeMetrics,
-            new DelayEventAccumulator(mockTime, 500L)
-        )) {
+                     new LogContext(),
+                     "event-processor-",
+                     1, // Use a single thread to block event in the processor.
+                     mockTime,
+                     mockRuntimeMetrics,
+                     new DelayEventAccumulator(mockTime, 500L)
+             )) {
             // Enqueue the blocking event.
             eventProcessor.enqueueLast(blockingEvent);
 
             // Ensure that the blocking event is executed.
             waitForCondition(() -> numEventsExecuted.get() > 0,
-                "Blocking event not executed.");
+                    "Blocking event not executed.");
 
             // Enqueue the other event.
             FutureEvent<Integer> otherEvent = new FutureEvent<>(
-                new TopicPartition("foo", 0), () -> {
-                mockTime.sleep(5000L);
-                return numEventsExecuted.incrementAndGet();
-            },
-                false,
-                mockTime.milliseconds()
+                    new TopicPartition("foo", 0), () -> {
+                        mockTime.sleep(5000L);
+                        return numEventsExecuted.incrementAndGet();
+                    },
+                    false,
+                    mockTime.milliseconds()
             );
 
             eventProcessor.enqueueLast(otherEvent);
@@ -463,13 +463,13 @@ public class MultiThreadedEventProcessorTest {
         Time time = new MockTime();
 
         try (CoordinatorEventProcessor eventProcessor = new MultiThreadedEventProcessor(
-            new LogContext(),
-            "event-processor-",
-            1,
-            time,
-            mockRuntimeMetrics,
-            new DelayEventAccumulator(time, 100L)
-        )) {
+                     new LogContext(),
+                     "event-processor-",
+                     1,
+                     time,
+                     mockRuntimeMetrics,
+                     new DelayEventAccumulator(time, 100L)
+             )) {
             List<Double> recordedIdleTimesMs = new ArrayList<>();
             AtomicInteger numEventsExecuted = new AtomicInteger(0);
             ArgumentCaptor<Double> idleTimeCaptured = ArgumentCaptor.forClass(Double.class);
@@ -483,23 +483,23 @@ public class MultiThreadedEventProcessorTest {
             }).when(mockRuntimeMetrics).recordThreadIdleTime(idleTimeCaptured.capture());
 
             List<FutureEvent<Integer>> events = Arrays.asList(
-                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(new TopicPartition("foo", 2), numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(new TopicPartition("foo", 2), numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(new TopicPartition("foo", 2), numEventsExecuted::incrementAndGet),
-                new FutureEvent<>(new TopicPartition("foo", 2), numEventsExecuted::incrementAndGet)
+                    new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
+                    new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet),
+                    new FutureEvent<>(new TopicPartition("foo", 2), numEventsExecuted::incrementAndGet),
+                    new FutureEvent<>(new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet),
+                    new FutureEvent<>(new TopicPartition("foo", 1), numEventsExecuted::incrementAndGet),
+                    new FutureEvent<>(new TopicPartition("foo", 2), numEventsExecuted::incrementAndGet),
+                    new FutureEvent<>(new TopicPartition("foo", 2), numEventsExecuted::incrementAndGet),
+                    new FutureEvent<>(new TopicPartition("foo", 2), numEventsExecuted::incrementAndGet)
             );
 
             long startMs = time.milliseconds();
             events.forEach(eventProcessor::enqueueLast);
 
             CompletableFuture.allOf(events
-                .stream()
-                .map(FutureEvent::future)
-                .toArray(CompletableFuture[]::new)
+                    .stream()
+                    .map(FutureEvent::future)
+                    .toArray(CompletableFuture[]::new)
             ).get(10, TimeUnit.SECONDS);
             events.forEach(event -> {
                 assertTrue(event.future.isDone());

@@ -140,7 +140,7 @@ public class LeaderState<T> implements EpochState {
         this.epoch = epoch;
         this.epochStartOffset = epochStartOffset;
 
-        for (VoterSet.VoterNode voterNode: voterSetAtEpochStart.voterNodes()) {
+        for (VoterSet.VoterNode voterNode : voterSetAtEpochStart.voterNodes()) {
             boolean hasAcknowledgedLeader = voterNode.isVoter(localVoterNode.voterKey());
             this.voterStates.put(
                 voterNode.voterKey().id(),
@@ -155,7 +155,7 @@ public class LeaderState<T> implements EpochState {
         this.checkQuorumTimer = time.timer(checkQuorumTimeoutMs);
         this.beginQuorumEpochTimeoutMs = fetchTimeoutMs / 2;
         this.beginQuorumEpochTimer = time.timer(0);
-        this.voterSetAtEpochStart =  voterSetAtEpochStart;
+        this.voterSetAtEpochStart = voterSetAtEpochStart;
         this.offsetOfVotersAtEpochStart = offsetOfVotersAtEpochStart;
         this.kraftVersionAtEpochStart = kraftVersionAtEpochStart;
 
@@ -205,7 +205,7 @@ public class LeaderState<T> implements EpochState {
             .stream()
             .filter(
                 state -> state.replicaKey.id() != localVoterNode.voterKey().id() &&
-                currentTimeMs - state.lastFetchTimestamp >= beginQuorumEpochTimeoutMs
+                    currentTimeMs - state.lastFetchTimestamp >= beginQuorumEpochTimeoutMs
             )
             .map(ReplicaState::replicaKey)
             .collect(Collectors.toUnmodifiableSet());
@@ -230,7 +230,7 @@ public class LeaderState<T> implements EpochState {
         if (remainingMs == 0) {
             log.info(
                 "Did not receive fetch request from the majority of the voters within {}ms. " +
-                "Current fetched voters are {}, and voters are {}",
+                    "Current fetched voters are {}, and voters are {}",
                 checkQuorumTimeoutMs,
                 fetchedVoters,
                 voterStates.values()
@@ -401,12 +401,12 @@ public class LeaderState<T> implements EpochState {
 
         accumulator.appendControlMessages((baseOffset, epoch, compression, buffer) -> {
             try (MemoryRecordsBuilder builder = createControlRecordsBuilder(
-                    baseOffset,
-                    epoch,
-                    compression,
-                    buffer,
-                    currentTimeMs
-                )
+                     baseOffset,
+                     epoch,
+                     compression,
+                     buffer,
+                     currentTimeMs
+                 )
             ) {
                 builder.appendLeaderChangeMessage(currentTimeMs, leaderChangeMessage);
 
@@ -415,7 +415,7 @@ public class LeaderState<T> implements EpochState {
                         () -> new IllegalStateException(
                             String.format(
                                 "The %s is %s but there is no voter set in the log or " +
-                                "checkpoint %s",
+                                    "checkpoint %s",
                                 KRaftVersion.FEATURE_NAME,
                                 kraftVersionAtEpochStart,
                                 voterSetAtEpochStart
@@ -491,8 +491,8 @@ public class LeaderState<T> implements EpochState {
         return Optional.ofNullable(observerStates.get(replicaKey))
             .map(state ->
                 state.lastCaughtUpTimestamp > 0 &&
-                state.lastFetchTimestamp > 0 &&
-                state.lastFetchTimestamp > currentTimeMs - anHourInMs
+                    state.lastFetchTimestamp > 0 &&
+                    state.lastFetchTimestamp > currentTimeMs - anHourInMs
             )
             .orElse(false);
     }
@@ -629,12 +629,12 @@ public class LeaderState<T> implements EpochState {
             // All of the validations succeeded; create control records for the upgrade
             accumulator.appendControlMessages((baseOffset, batchEpoch, compression, buffer) -> {
                 try (MemoryRecordsBuilder builder = createControlRecordsBuilder(
-                        baseOffset,
-                        batchEpoch,
-                        compression,
-                        buffer,
-                        currentTimeMs
-                    )
+                         baseOffset,
+                         batchEpoch,
+                         compression,
+                         buffer,
+                         currentTimeMs
+                     )
                 ) {
                     log.info("Appended kraft.version {} to the batch accumulator", newVersion);
                     builder.appendKRaftVersionMessage(
@@ -749,7 +749,7 @@ public class LeaderState<T> implements EpochState {
                     LogOffsetMetadata currentHighWatermarkMetadata = highWatermark.get();
                     if (highWatermarkUpdateOffset > currentHighWatermarkMetadata.offset()
                         || (highWatermarkUpdateOffset == currentHighWatermarkMetadata.offset() &&
-                            !highWatermarkUpdateMetadata.metadata().equals(currentHighWatermarkMetadata.metadata()))) {
+                        !highWatermarkUpdateMetadata.metadata().equals(currentHighWatermarkMetadata.metadata()))) {
                         Optional<LogOffsetMetadata> oldHighWatermark = highWatermark;
                         highWatermark = highWatermarkUpdateOpt;
                         logHighWatermarkUpdate(
@@ -761,9 +761,9 @@ public class LeaderState<T> implements EpochState {
                         return true;
                     } else if (highWatermarkUpdateOffset < currentHighWatermarkMetadata.offset()) {
                         log.info("The latest computed high watermark {} is smaller than the current " +
-                                "value {}, which should only happen when voter set membership changes. If the voter " +
-                                "set has not changed this suggests that one of the voters has lost committed data. " +
-                                "Full voter replication state: {}", highWatermarkUpdateOffset,
+                            "value {}, which should only happen when voter set membership changes. If the voter " +
+                            "set has not changed this suggests that one of the voters has lost committed data. " +
+                            "Full voter replication state: {}", highWatermarkUpdateOffset,
                             currentHighWatermarkMetadata.offset(), voterStates.values());
                         return false;
                     } else {
@@ -935,7 +935,7 @@ public class LeaderState<T> implements EpochState {
     private void clearInactiveObservers(final long currentTimeMs) {
         observerStates.entrySet().removeIf(integerReplicaStateEntry ->
             currentTimeMs - integerReplicaStateEntry.getValue().lastFetchTimestamp >= OBSERVER_SESSION_TIMEOUT_MS &&
-            !integerReplicaStateEntry.getKey().equals(localVoterNode.voterKey())
+                !integerReplicaStateEntry.getKey().equals(localVoterNode.voterKey())
         );
         kafkaRaftMetrics.updateNumObservers(observerStates.size());
     }
@@ -1104,7 +1104,7 @@ public class LeaderState<T> implements EpochState {
         public String toString() {
             return String.format(
                 "ReplicaState(replicaKey=%s, endOffset=%s, lastFetchTimestamp=%s, " +
-                "lastCaughtUpTimestamp=%s, hasAcknowledgedLeader=%s)",
+                    "lastCaughtUpTimestamp=%s, hasAcknowledgedLeader=%s)",
                 replicaKey,
                 endOffset,
                 lastFetchTimestamp,

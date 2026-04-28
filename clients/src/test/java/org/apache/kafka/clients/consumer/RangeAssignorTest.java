@@ -84,7 +84,7 @@ public class RangeAssignorTest {
         Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
 
         Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic,
-                Collections.singletonMap(consumer1, subscription(Collections.emptyList(), 0)));
+            Collections.singletonMap(consumer1, subscription(Collections.emptyList(), 0)));
 
         assertEquals(Collections.singleton(consumer1), assignment.keySet());
         assertTrue(assignment.get(consumer1).isEmpty());
@@ -96,7 +96,7 @@ public class RangeAssignorTest {
         initializeRacks(hasConsumerRack ? RackConfig.BROKER_AND_CONSUMER_RACK : RackConfig.NO_CONSUMER_RACK);
         Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
         Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic,
-                Collections.singletonMap(consumer1, subscription(topics(topic1), 0)));
+            Collections.singletonMap(consumer1, subscription(topics(topic1), 0)));
         assertEquals(Collections.singleton(consumer1), assignment.keySet());
         assertTrue(assignment.get(consumer1).isEmpty());
     }
@@ -109,7 +109,7 @@ public class RangeAssignorTest {
         partitionsPerTopic.put(topic1, partitionInfos(topic1, 3));
 
         Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic,
-                Collections.singletonMap(consumer1, subscription(topics(topic1), 0)));
+            Collections.singletonMap(consumer1, subscription(topics(topic1), 0)));
 
         assertEquals(Collections.singleton(consumer1), assignment.keySet());
         assertAssignment(partitions(tp(topic1, 0), tp(topic1, 1), tp(topic1, 2)), assignment.get(consumer1));
@@ -126,7 +126,7 @@ public class RangeAssignorTest {
         partitionsPerTopic.put(otherTopic, partitionInfos(otherTopic, 3));
 
         Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic,
-                Collections.singletonMap(consumer1, subscription(topics(topic1), 0)));
+            Collections.singletonMap(consumer1, subscription(topics(topic1), 0)));
         assertEquals(Collections.singleton(consumer1), assignment.keySet());
         assertAssignment(partitions(tp(topic1, 0), tp(topic1, 1), tp(topic1, 2)), assignment.get(consumer1));
     }
@@ -138,7 +138,7 @@ public class RangeAssignorTest {
         Map<String, List<PartitionInfo>> partitionsPerTopic = setupPartitionsPerTopicWithTwoTopics(1, 2);
 
         Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic,
-                Collections.singletonMap(consumer1, subscription(topics(topic1, topic2), 0)));
+            Collections.singletonMap(consumer1, subscription(topics(topic1, topic2), 0)));
 
         assertEquals(Collections.singleton(consumer1), assignment.keySet());
         assertAssignment(partitions(tp(topic1, 0), tp(topic2, 0), tp(topic2, 1)), assignment.get(consumer1));
@@ -314,11 +314,11 @@ public class RangeAssignorTest {
         }
         Map<String, List<TopicPartition>> expectedInstanceAssignment = new HashMap<>();
         expectedInstanceAssignment.put(instance1,
-                                       partitions(tp(topic1, 0), tp(topic1, 1), tp(topic2, 0), tp(topic2, 1)));
+            partitions(tp(topic1, 0), tp(topic1, 1), tp(topic2, 0), tp(topic2, 1)));
         expectedInstanceAssignment.put(instance2,
-                                       partitions(tp(topic1, 2), tp(topic1, 3), tp(topic2, 2), tp(topic2, 3)));
+            partitions(tp(topic1, 2), tp(topic1, 3), tp(topic2, 2), tp(topic2, 3)));
         expectedInstanceAssignment.put(instance3,
-                                       partitions(tp(topic1, 4), tp(topic2, 4)));
+            partitions(tp(topic1, 4), tp(topic2, 4)));
 
         Map<String, List<TopicPartition>> staticAssignment =
             checkStaticAssignment(assignor, partitionsPerTopic, consumers);
@@ -345,7 +345,7 @@ public class RangeAssignorTest {
         int replicationFactor = 2;
         int numBrokerRacks = 3;
         partitionsPerTopic.put(topic1, AbstractPartitionAssignorTest.partitionInfos(topic1, 5, replicationFactor, numBrokerRacks, 0));
-        partitionsPerTopic.put(topic2,  AbstractPartitionAssignorTest.partitionInfos(topic2, 5, replicationFactor, numBrokerRacks, 0));
+        partitionsPerTopic.put(topic2, AbstractPartitionAssignorTest.partitionInfos(topic2, 5, replicationFactor, numBrokerRacks, 0));
         List<MemberInfo> staticMemberInfos = new ArrayList<>();
         staticMemberInfos.add(new MemberInfo(consumer1, Optional.of(instance1), Optional.of(ALL_RACKS[0])));
         staticMemberInfos.add(new MemberInfo(consumer2, Optional.of(instance2), Optional.of(ALL_RACKS[1])));
@@ -360,14 +360,14 @@ public class RangeAssignorTest {
         }
         Map<String, List<TopicPartition>> expectedInstanceAssignment = new HashMap<>();
         expectedInstanceAssignment.put(instance1,
-                partitions(tp(topic1, 0), tp(topic1, 2), tp(topic2, 0), tp(topic2, 2)));
+            partitions(tp(topic1, 0), tp(topic1, 2), tp(topic2, 0), tp(topic2, 2)));
         expectedInstanceAssignment.put(instance2,
-                partitions(tp(topic1, 1), tp(topic1, 3), tp(topic2, 1), tp(topic2, 3)));
+            partitions(tp(topic1, 1), tp(topic1, 3), tp(topic2, 1), tp(topic2, 3)));
         expectedInstanceAssignment.put(instance3,
-                partitions(tp(topic1, 4), tp(topic2, 4)));
+            partitions(tp(topic1, 4), tp(topic2, 4)));
 
         Map<String, List<TopicPartition>> staticAssignment =
-                checkStaticAssignment(assignor, partitionsPerTopic, consumers);
+            checkStaticAssignment(assignor, partitionsPerTopic, consumers);
         assertEquals(expectedInstanceAssignment, staticAssignment);
 
         // Now switch the member.id fields for each member info, the assignment should
@@ -380,7 +380,7 @@ public class RangeAssignorTest {
         consumers.remove(consumer2);
 
         Map<String, List<TopicPartition>> newStaticAssignment =
-                checkStaticAssignment(assignor, partitionsPerTopic, consumers);
+            checkStaticAssignment(assignor, partitionsPerTopic, consumers);
         assertEquals(staticAssignment, newStaticAssignment);
     }
 
@@ -392,17 +392,17 @@ public class RangeAssignorTest {
 
         // Verify combinations where rack-aware logic is not used.
         verifyNonRackAwareAssignment(topics, consumerTopics,
-                asList("t1-0, t1-1, t2-0, t2-1, t2-2, t3-0", "t1-2, t1-3, t2-3, t2-4, t3-1", "t1-4, t1-5, t2-5, t2-6"));
+            asList("t1-0, t1-1, t2-0, t2-1, t2-2, t3-0", "t1-2, t1-3, t2-3, t2-4, t3-1", "t1-4, t1-5, t2-5, t2-6"));
 
         // Verify best-effort rack-aware assignment for lower replication factor where racks have a subset of partitions.
         verifyRackAssignment(assignor, topics, 1, racks(3), racks(3), consumerTopics,
-                asList("t1-0, t1-3, t2-0, t2-3, t2-6", "t1-1, t1-4, t2-1, t2-4, t3-0", "t1-2, t1-5, t2-2, t2-5, t3-1"), 0);
+            asList("t1-0, t1-3, t2-0, t2-3, t2-6", "t1-1, t1-4, t2-1, t2-4, t3-0", "t1-2, t1-5, t2-2, t2-5, t3-1"), 0);
         verifyRackAssignment(assignor, topics, 2, racks(3), racks(3), consumerTopics,
-                asList("t1-0, t1-2, t2-0, t2-2, t2-3, t3-1", "t1-1, t1-3, t2-1, t2-4, t3-0", "t1-4, t1-5, t2-5, t2-6"), 1);
+            asList("t1-0, t1-2, t2-0, t2-2, t2-3, t3-1", "t1-1, t1-3, t2-1, t2-4, t3-0", "t1-4, t1-5, t2-5, t2-6"), 1);
 
         // One consumer on a rack with no partitions
         verifyRackAssignment(assignor, topics, 3, racks(2), racks(3), consumerTopics,
-                asList("t1-0, t1-1, t2-0, t2-1, t2-2, t3-0", "t1-2, t1-3, t2-3, t2-4, t3-1", "t1-4, t1-5, t2-5, t2-6"), 4);
+            asList("t1-0, t1-1, t2-0, t2-1, t2-2, t3-0", "t1-2, t1-3, t2-3, t2-4, t3-1", "t1-4, t1-5, t2-5, t2-6"), 4);
     }
 
     @Test
@@ -413,17 +413,17 @@ public class RangeAssignorTest {
 
         // Verify combinations where rack-aware logic is not used.
         verifyNonRackAwareAssignment(topics, consumerTopics,
-                asList("t1-0, t1-1, t2-0, t2-1, t2-2, t2-3, t3-0", "t1-2, t1-3, t2-4, t2-5, t2-6, t3-1", "t1-4, t1-5"));
+            asList("t1-0, t1-1, t2-0, t2-1, t2-2, t2-3, t3-0", "t1-2, t1-3, t2-4, t2-5, t2-6, t3-1", "t1-4, t1-5"));
 
         // Verify best-effort rack-aware assignment for lower replication factor where racks have a subset of partitions.
         verifyRackAssignment(assignor, topics, 1, racks(3), racks(3), consumerTopics,
-                asList("t1-0, t1-3, t2-0, t2-2, t2-3, t2-6", "t1-1, t1-4, t2-1, t2-4, t2-5, t3-0", "t1-2, t1-5, t3-1"), 2);
+            asList("t1-0, t1-3, t2-0, t2-2, t2-3, t2-6", "t1-1, t1-4, t2-1, t2-4, t2-5, t3-0", "t1-2, t1-5, t3-1"), 2);
         verifyRackAssignment(assignor, topics, 2, racks(3), racks(3), consumerTopics,
-                asList("t1-0, t1-2, t2-0, t2-2, t2-3, t2-5, t3-1", "t1-1, t1-3, t2-1, t2-4, t2-6, t3-0", "t1-4, t1-5"), 0);
+            asList("t1-0, t1-2, t2-0, t2-2, t2-3, t2-5, t3-1", "t1-1, t1-3, t2-1, t2-4, t2-6, t3-0", "t1-4, t1-5"), 0);
 
         // One consumer on a rack with no partitions
         verifyRackAssignment(assignor, topics, 3, racks(2), racks(3), consumerTopics,
-                asList("t1-0, t1-1, t2-0, t2-1, t2-2, t2-3, t3-0", "t1-2, t1-3, t2-4, t2-5, t2-6, t3-1", "t1-4, t1-5"), 2);
+            asList("t1-0, t1-1, t2-0, t2-1, t2-2, t2-3, t3-0", "t1-2, t1-3, t2-4, t2-5, t2-6, t3-1", "t1-4, t1-5"), 2);
     }
 
     @Test
@@ -432,9 +432,9 @@ public class RangeAssignorTest {
         List<String> allTopics = asList("t1", "t2", "t3");
         List<List<String>> consumerTopics = asList(allTopics, allTopics, allTopics);
         List<String> nonRackAwareAssignment = asList(
-                "t1-0, t1-1, t2-0, t2-1, t3-0, t3-1",
-                "t1-2, t1-3, t2-2, t2-3, t3-2, t3-3",
-                "t1-4, t2-4, t3-4"
+            "t1-0, t1-1, t2-0, t2-1, t3-0, t3-1",
+            "t1-2, t1-3, t2-2, t2-3, t3-2, t3-3",
+            "t1-4, t2-4, t3-4"
         );
 
         // Verify combinations where rack-aware logic is not used.
@@ -454,17 +454,17 @@ public class RangeAssignorTest {
 
         // Verify combinations where rack-aware logic is not used.
         verifyNonRackAwareAssignment(topics, consumerTopics,
-                asList("t1-0, t1-1, t2-0, t2-1, t2-2, t3-0, t3-1", "t1-2, t1-3, t2-3, t2-4, t3-2, t3-3", "t1-4, t3-4"));
+            asList("t1-0, t1-1, t2-0, t2-1, t2-2, t3-0, t3-1", "t1-2, t1-3, t2-3, t2-4, t3-2, t3-3", "t1-4, t3-4"));
 
         // Verify that co-partitioning is prioritized over rack-alignment for topics with equal subscriptions
         verifyRackAssignment(assignor, topics, 1, racks(3), racks(3), consumerTopics,
-                asList("t1-0, t1-1, t2-0, t2-1, t2-4, t3-0, t3-1", "t1-2, t1-3, t2-2, t2-3, t3-2, t3-3", "t1-4, t3-4"), 9);
+            asList("t1-0, t1-1, t2-0, t2-1, t2-4, t3-0, t3-1", "t1-2, t1-3, t2-2, t2-3, t3-2, t3-3", "t1-4, t3-4"), 9);
         verifyRackAssignment(assignor, topics, 2, racks(3), racks(3), consumerTopics,
-                asList("t1-2, t2-0, t2-1, t2-3, t3-2", "t1-0, t1-3, t2-2, t2-4, t3-0, t3-3", "t1-1, t1-4, t3-1, t3-4"), 0);
+            asList("t1-2, t2-0, t2-1, t2-3, t3-2", "t1-0, t1-3, t2-2, t2-4, t3-0, t3-3", "t1-1, t1-4, t3-1, t3-4"), 0);
 
         // One consumer on a rack with no partitions
         verifyRackAssignment(assignor, topics, 3, racks(2), racks(3), consumerTopics,
-                asList("t1-0, t1-1, t2-0, t2-1, t2-2, t3-0, t3-1", "t1-2, t1-3, t2-3, t2-4, t3-2, t3-3", "t1-4, t3-4"), 2);
+            asList("t1-0, t1-1, t2-0, t2-1, t2-2, t3-0, t3-1", "t1-2, t1-3, t2-3, t2-4, t3-2, t3-3", "t1-4, t3-4"), 2);
     }
 
     @Test
@@ -473,56 +473,56 @@ public class RangeAssignorTest {
         List<List<String>> consumerTopics = asList(asList("t1", "t2"), asList("t1", "t2"), asList("t3", "t4"), asList("t3", "t4"));
         List<String> consumerRacks = asList(ALL_RACKS[0], ALL_RACKS[1], ALL_RACKS[1], ALL_RACKS[0]);
         List<String> nonRackAwareAssignment = asList(
-                "t1-0, t1-1, t1-2, t2-0, t2-1, t2-2",
-                "t1-3, t1-4, t1-5, t2-3, t2-4, t2-5",
-                "t3-0, t4-0",
-                "t3-1, t4-1"
+            "t1-0, t1-1, t1-2, t2-0, t2-1, t2-2",
+            "t1-3, t1-4, t1-5, t2-3, t2-4, t2-5",
+            "t3-0, t4-0",
+            "t3-1, t4-1"
         );
 
         verifyRackAssignment(assignor, topics, 3, racks(2), consumerRacks, consumerTopics, nonRackAwareAssignment, -1);
         verifyRackAssignment(assignor, topics, 3, racks(2), consumerRacks, consumerTopics, nonRackAwareAssignment, -1);
         verifyRackAssignment(assignor, topics, 2, racks(2), consumerRacks, consumerTopics, nonRackAwareAssignment, 0);
         verifyRackAssignment(assignor, topics, 1, racks(2), consumerRacks, consumerTopics,
-                asList("t1-0, t1-2, t1-4, t2-0, t2-2, t2-4", "t1-1, t1-3, t1-5, t2-1, t2-3, t2-5", "t3-1, t4-1", "t3-0, t4-0"), 0);
+            asList("t1-0, t1-2, t1-4, t2-0, t2-2, t2-4", "t1-1, t1-3, t1-5, t2-1, t2-3, t2-5", "t3-1, t4-1", "t3-0, t4-0"), 0);
 
         List<String> allTopics = asList("t1", "t2", "t3", "t4");
         consumerTopics = asList(allTopics, allTopics, allTopics, allTopics);
         nonRackAwareAssignment = asList(
-                "t1-0, t1-1, t2-0, t2-1, t3-0, t4-0",
-                "t1-2, t1-3, t2-2, t2-3, t3-1, t4-1",
-                "t1-4, t2-4",
-                "t1-5, t2-5"
+            "t1-0, t1-1, t2-0, t2-1, t3-0, t4-0",
+            "t1-2, t1-3, t2-2, t2-3, t3-1, t4-1",
+            "t1-4, t2-4",
+            "t1-5, t2-5"
         );
         verifyRackAssignment(assignor, topics, 3, racks(2), consumerRacks, consumerTopics, nonRackAwareAssignment, -1);
         verifyRackAssignment(assignor, topics, 3, racks(2), consumerRacks, consumerTopics, nonRackAwareAssignment, -1);
         verifyRackAssignment(assignor, topics, 2, racks(2), consumerRacks, consumerTopics, nonRackAwareAssignment, 0);
         verifyRackAssignment(assignor, topics, 1, racks(2), consumerRacks, consumerTopics,
-                asList("t1-0, t1-2, t2-0, t2-2, t3-0, t4-0", "t1-1, t1-3, t2-1, t2-3, t3-1, t4-1", "t1-5, t2-5", "t1-4, t2-4"), 0);
+            asList("t1-0, t1-2, t2-0, t2-2, t3-0, t4-0", "t1-1, t1-3, t2-1, t2-3, t3-1, t4-1", "t1-5, t2-5", "t1-4, t2-4"), 0);
         verifyRackAssignment(assignor, topics, 1, racks(3), consumerRacks, consumerTopics,
-                asList("t1-0, t1-3, t2-0, t2-3, t3-0, t4-0", "t1-1, t1-4, t2-1, t2-4, t3-1, t4-1", "t1-2, t2-2", "t1-5, t2-5"), 6);
+            asList("t1-0, t1-3, t2-0, t2-3, t3-0, t4-0", "t1-1, t1-4, t2-1, t2-4, t3-1, t4-1", "t1-2, t2-2", "t1-5, t2-5"), 6);
     }
 
     @Test
     public void testCoPartitionedAssignmentWithSameSubscription() {
         Map<String, Integer> topics = Map.of("t1", 6, "t2", 6,
-                "t3", 2, "t4", 2,
-                "t5", 4, "t6", 4);
+            "t3", 2, "t4", 2,
+            "t5", 4, "t6", 4);
         List<String> topicList = asList("t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9");
         List<List<String>> consumerTopics = asList(topicList, topicList, topicList);
         List<String> consumerRacks = asList(ALL_RACKS[0], ALL_RACKS[1], ALL_RACKS[2]);
         List<String> nonRackAwareAssignment = asList(
-                "t1-0, t1-1, t2-0, t2-1, t3-0, t4-0, t5-0, t5-1, t6-0, t6-1",
-                "t1-2, t1-3, t2-2, t2-3, t3-1, t4-1, t5-2, t6-2",
-                "t1-4, t1-5, t2-4, t2-5, t5-3, t6-3"
+            "t1-0, t1-1, t2-0, t2-1, t3-0, t4-0, t5-0, t5-1, t6-0, t6-1",
+            "t1-2, t1-3, t2-2, t2-3, t3-1, t4-1, t5-2, t6-2",
+            "t1-4, t1-5, t2-4, t2-5, t5-3, t6-3"
         );
 
         verifyRackAssignment(assignor, topics, 3, nullRacks(3), consumerRacks, consumerTopics, nonRackAwareAssignment, -1);
         AbstractPartitionAssignorTest.preferRackAwareLogic(assignor, true);
         verifyRackAssignment(assignor, topics, 3, racks(3), consumerRacks, consumerTopics, nonRackAwareAssignment, 0);
         List<String> rackAwareAssignment = asList(
-                "t1-0, t1-2, t2-0, t2-2, t3-0, t4-0, t5-1, t6-1",
-                "t1-1, t1-3, t2-1, t2-3, t3-1, t4-1, t5-2, t6-2",
-                "t1-4, t1-5, t2-4, t2-5, t5-0, t5-3, t6-0, t6-3"
+            "t1-0, t1-2, t2-0, t2-2, t3-0, t4-0, t5-1, t6-1",
+            "t1-1, t1-3, t2-1, t2-3, t3-1, t4-1, t5-2, t6-2",
+            "t1-4, t1-5, t2-4, t2-5, t5-0, t5-3, t6-0, t6-3"
         );
         verifyRackAssignment(assignor, topics, 2, racks(3), consumerRacks, consumerTopics, rackAwareAssignment, 0);
     }
@@ -541,8 +541,8 @@ public class RangeAssignorTest {
     }
 
     private static Map<String, List<TopicPartition>> checkStaticAssignment(AbstractPartitionAssignor assignor,
-                                                                           Map<String, List<PartitionInfo>> partitionsPerTopic,
-                                                                           Map<String, Subscription> consumers) {
+        Map<String, List<PartitionInfo>> partitionsPerTopic,
+        Map<String, Subscription> consumers) {
         Map<String, List<TopicPartition>> assignmentByMemberId = assignor.assignPartitions(partitionsPerTopic, consumers);
         Map<String, List<TopicPartition>> assignmentByInstanceId = new HashMap<>();
         for (Map.Entry<String, Subscription> entry : consumers.entrySet()) {

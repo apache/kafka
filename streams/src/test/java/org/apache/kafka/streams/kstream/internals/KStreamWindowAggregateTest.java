@@ -146,7 +146,7 @@ public class KStreamWindowAggregateTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
+                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
             inputTopic1.pipeInput("A", "1", 0L);
             inputTopic1.pipeInput("B", "2", 1L);
             inputTopic1.pipeInput("C", "3", 2L);
@@ -255,9 +255,9 @@ public class KStreamWindowAggregateTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
+                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
             final TestInputTopic<String, String> inputTopic2 =
-                    driver.createInputTopic(topic2, new StringSerializer(), new StringSerializer());
+                driver.createInputTopic(topic2, new StringSerializer(), new StringSerializer());
 
             if (emitFinal) {
                 processEmitFinalJoin(inputTopic1, inputTopic2, supplier);
@@ -268,8 +268,8 @@ public class KStreamWindowAggregateTest {
     }
 
     private void processEmitFinalJoin(final TestInputTopic<String, String> inputTopic1,
-                                      final TestInputTopic<String, String> inputTopic2,
-                                      final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier) {
+        final TestInputTopic<String, String> inputTopic2,
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier) {
         inputTopic1.pipeInput("A", "1", 0L);
         inputTopic1.pipeInput("B", "2", 1L);
         inputTopic1.pipeInput("C", "3", 2L);
@@ -297,10 +297,10 @@ public class KStreamWindowAggregateTest {
         inputTopic1.pipeInput("A", "1", 20L);
 
         processors.get(0).checkAndClearProcessResult(
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+1+1", 10),
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)), "0+2+2", 13),
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(5, 15)), "0+3", 14),
-                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(5, 15)), "0+4", 12)
+            new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+1+1", 10),
+            new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)), "0+2+2", 13),
+            new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(5, 15)), "0+3", 14),
+            new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(5, 15)), "0+4", 12)
         );
 
         processors.get(1).checkAndClearProcessResult();
@@ -316,17 +316,17 @@ public class KStreamWindowAggregateTest {
 
         if (withCache) {
             processors.get(1).checkAndClearProcessResult(
-                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)), "0+a", 0),
-                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)), "0+b", 1),
-                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)), "0+c", 2)
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)), "0+a", 0),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)), "0+b", 1),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)), "0+c", 2)
             );
             processors.get(2).checkAndClearProcessResult(
-                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)),
-                            "0+1+1%0+a", 9),
-                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)),
-                            "0+2%0+b", 1),
-                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)), "0+3%0+c",
-                            2));
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)),
+                    "0+1+1%0+a", 9),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)),
+                    "0+2%0+b", 1),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)), "0+3%0+c",
+                    2));
         } else {
             processors.get(0).checkAndClearProcessResult();
             processors.get(2).checkAndClearProcessResult();
@@ -341,18 +341,18 @@ public class KStreamWindowAggregateTest {
         processors.get(0).checkAndClearProcessResult();
         if (withCache) {
             processors.get(1).checkAndClearProcessResult(
-                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+a", 5),
-                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)), "0+b", 6),
-                    new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(5, 15)), "0+d+d", 10)
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+a", 5),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)), "0+b", 6),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(5, 15)), "0+d+d", 10)
             );
         } else {
             processors.get(1).checkAndClearProcessResult(
-                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)), "0+a", 0),
-                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)), "0+b", 1),
-                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)), "0+c", 2),
-                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+a", 5),
-                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)), "0+b", 6),
-                    new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(5, 15)), "0+d+d", 10)
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)), "0+a", 0),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)), "0+b", 1),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)), "0+c", 2),
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+a", 5),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)), "0+b", 6),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(5, 15)), "0+d+d", 10)
             );
 
         }
@@ -367,8 +367,8 @@ public class KStreamWindowAggregateTest {
     }
 
     private void processEmitUpdateJoin(final TestInputTopic<String, String> inputTopic1,
-                                      final TestInputTopic<String, String> inputTopic2,
-                                      final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier) {
+        final TestInputTopic<String, String> inputTopic2,
+        final MockApiProcessorSupplier<Windowed<String>, String, Void, Void> supplier) {
         inputTopic1.pipeInput("A", "1", 0L);
         inputTopic1.pipeInput("B", "2", 1L);
         inputTopic1.pipeInput("C", "3", 2L);
@@ -526,10 +526,10 @@ public class KStreamWindowAggregateTest {
             .to("output");
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamWindowAggregate.class);
-            final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
             final TestInputTopic<String, String> inputTopic =
-                    driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
+                driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput("k", "100", 100L);
             inputTopic.pipeInput("k", "0", 0L);
             inputTopic.pipeInput("k", "1", 1L);
@@ -559,7 +559,7 @@ public class KStreamWindowAggregateTest {
             ));
 
             final TestOutputTopic<String, String> outputTopic =
-                    driver.createOutputTopic("output", new StringDeserializer(), new StringDeserializer());
+                driver.createOutputTopic("output", new StringDeserializer(), new StringDeserializer());
 
             if (emitFinal) {
                 // Window close time is 15 when timestamp is 105
@@ -612,7 +612,7 @@ public class KStreamWindowAggregateTest {
              final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
             final TestInputTopic<String, String> inputTopic =
-                    driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
+                driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
             inputTopic.pipeInput("k", "100", 200L);
             inputTopic.pipeInput("k", "0", 100L);
             inputTopic.pipeInput("k", "1", 101L);
@@ -1056,9 +1056,9 @@ public class KStreamWindowAggregateTest {
     }
 
     private void assertLatenessMetrics(final TopologyTestDriver driver,
-                                       final Matcher<Object> dropTotal,
-                                       final Matcher<Object> maxLateness,
-                                       final Matcher<Object> avgLateness) {
+        final Matcher<Object> dropTotal,
+        final Matcher<Object> maxLateness,
+        final Matcher<Object> avgLateness) {
 
         final MetricName dropTotalMetric;
         final MetricName dropRateMetric;
@@ -1110,7 +1110,7 @@ public class KStreamWindowAggregateTest {
     }
 
     private void assertEmittedMetrics(final TopologyTestDriver driver,
-                                      final Matcher<Object> emittedTotal) {
+        final Matcher<Object> emittedTotal) {
 
         final MetricName emittedTotalMetric;
         final MetricName emittedRateMetric;

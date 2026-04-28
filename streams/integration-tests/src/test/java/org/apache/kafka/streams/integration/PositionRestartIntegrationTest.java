@@ -116,16 +116,16 @@ public class PositionRestartIntegrationTest {
 
     public enum StoresToTest {
         IN_MEMORY_KV {
-            @Override
-            public StoreSupplier<?> supplier() {
-                return Stores.inMemoryKeyValueStore(STORE_NAME);
-            }
+        @Override
+        public StoreSupplier<?> supplier() {
+            return Stores.inMemoryKeyValueStore(STORE_NAME);
+        }
 
-            @Override
-            public boolean keyValue() {
-                return true;
-            }
-        },
+        @Override
+        public boolean keyValue() {
+            return true;
+        }
+    },
         IN_MEMORY_LRU {
             @Override
             public StoreSupplier<?> supplier() {
@@ -168,7 +168,7 @@ public class PositionRestartIntegrationTest {
             @Override
             public StoreSupplier<?> supplier() {
                 return Stores.inMemoryWindowStore(STORE_NAME, Duration.ofDays(1), WINDOW_SIZE,
-                                                  false
+                    false
                 );
             }
 
@@ -181,7 +181,7 @@ public class PositionRestartIntegrationTest {
             @Override
             public StoreSupplier<?> supplier() {
                 return Stores.persistentWindowStore(STORE_NAME, Duration.ofDays(1), WINDOW_SIZE,
-                                                    false
+                    false
                 );
             }
 
@@ -199,7 +199,7 @@ public class PositionRestartIntegrationTest {
             @Override
             public StoreSupplier<?> supplier() {
                 return Stores.persistentTimestampedWindowStore(STORE_NAME, Duration.ofDays(1),
-                                                               WINDOW_SIZE, false
+                    WINDOW_SIZE, false
                 );
             }
 
@@ -321,9 +321,9 @@ public class PositionRestartIntegrationTest {
     }
 
     public static StreamsBuilder getStreamBuilder(final boolean cache,
-                                           final boolean log,
-                                           final StoresToTest storeToTest,
-                                           final String kind) {
+        final boolean log,
+        final StoresToTest storeToTest,
+        final String kind) {
         final StoreSupplier<?> supplier = storeToTest.supplier();
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -403,9 +403,9 @@ public class PositionRestartIntegrationTest {
     }
 
     private static void setUpSessionDSLTopology(final SessionBytesStoreSupplier supplier,
-                                         final StreamsBuilder builder,
-                                         final boolean cache,
-                                         final boolean log) {
+        final StreamsBuilder builder,
+        final boolean cache,
+        final boolean log) {
         final Materialized<Integer, Integer, SessionStore<Bytes, byte[]>> materialized =
             Materialized.as(supplier);
 
@@ -434,9 +434,9 @@ public class PositionRestartIntegrationTest {
     }
 
     private static void setUpWindowDSLTopology(final WindowBytesStoreSupplier supplier,
-                                        final StreamsBuilder builder,
-                                        final boolean cache,
-                                        final boolean log) {
+        final StreamsBuilder builder,
+        final boolean cache,
+        final boolean log) {
         final Materialized<Integer, Integer, WindowStore<Bytes, byte[]>> materialized =
             Materialized.as(supplier);
 
@@ -464,9 +464,9 @@ public class PositionRestartIntegrationTest {
     }
 
     private static void setUpKeyValueDSLTopology(final KeyValueBytesStoreSupplier supplier,
-                                          final StreamsBuilder builder,
-                                          final boolean cache,
-                                          final boolean log) {
+        final StreamsBuilder builder,
+        final boolean cache,
+        final boolean log) {
         final Materialized<Integer, Integer, KeyValueStore<Bytes, byte[]>> materialized =
             Materialized.as(supplier);
 
@@ -490,10 +490,10 @@ public class PositionRestartIntegrationTest {
     }
 
     private static void setUpKeyValuePAPITopology(final KeyValueBytesStoreSupplier supplier,
-                                           final StreamsBuilder builder,
-                                           final boolean cache,
-                                           final boolean log,
-                                           final StoresToTest storeToTest) {
+        final StreamsBuilder builder,
+        final boolean cache,
+        final boolean log,
+        final StoresToTest storeToTest) {
         final StoreBuilder<?> keyValueStoreStoreBuilder;
         final ProcessorSupplier<Integer, Integer, Void, Void> processorSupplier;
         if (storeToTest.timestamped()) {
@@ -549,10 +549,10 @@ public class PositionRestartIntegrationTest {
     }
 
     private static void setUpWindowPAPITopology(final WindowBytesStoreSupplier supplier,
-                                         final StreamsBuilder builder,
-                                         final boolean cache,
-                                         final boolean log,
-                                         final StoresToTest storeToTest) {
+        final StreamsBuilder builder,
+        final boolean cache,
+        final boolean log,
+        final StoresToTest storeToTest) {
         final StoreBuilder<?> windowStoreStoreBuilder;
         final ProcessorSupplier<Integer, Integer, Void, Void> processorSupplier;
         if (storeToTest.timestamped()) {
@@ -609,9 +609,9 @@ public class PositionRestartIntegrationTest {
     }
 
     private static void setUpSessionPAPITopology(final SessionBytesStoreSupplier supplier,
-                                          final StreamsBuilder builder,
-                                          final boolean cache,
-                                          final boolean log) {
+        final StreamsBuilder builder,
+        final boolean cache,
+        final boolean log) {
         final StoreBuilder<?> sessionStoreStoreBuilder;
         final ProcessorSupplier<Integer, Integer, Void, Void> processorSupplier;
         sessionStoreStoreBuilder = Stores.sessionStoreBuilder(
@@ -647,9 +647,9 @@ public class PositionRestartIntegrationTest {
     }
 
     private static Properties streamsConfiguration(final boolean cache,
-                                            final boolean log,
-                                            final String supplier,
-                                            final String kind) {
+        final boolean log,
+        final String supplier,
+        final String kind) {
         final String safeTestName =
             PositionRestartIntegrationTest.class.getName() + "-" + cache + "-" + log + "-"
                 + supplier + "-" + kind;

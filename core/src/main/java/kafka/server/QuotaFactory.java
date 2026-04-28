@@ -103,8 +103,8 @@ public class QuotaFactory {
     }
 
     private static Optional<Plugin<ClientQuotaCallback>> createClientQuotaCallback(
-        KafkaConfig cfg, 
-        Metrics metrics, 
+        KafkaConfig cfg,
+        Metrics metrics,
         String role
     ) {
         ClientQuotaCallback clientQuotaCallback = cfg.getConfiguredInstance(

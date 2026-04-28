@@ -31,7 +31,7 @@ public class PushTelemetryResponseTest {
     @Test
     public void testErrorCountsReturnsNoneWhenNoErrors() {
         PushTelemetryResponseData data = new PushTelemetryResponseData()
-                .setErrorCode(Errors.NONE.code());
+            .setErrorCode(Errors.NONE.code());
         PushTelemetryResponse response = new PushTelemetryResponse(data);
         assertEquals(Collections.singletonMap(Errors.NONE, 1), response.errorCounts());
     }
@@ -39,7 +39,7 @@ public class PushTelemetryResponseTest {
     @Test
     public void testErrorCountsReturnsOneError() {
         PushTelemetryResponseData data = new PushTelemetryResponseData()
-               .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
+            .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
         data.setErrorCode(Errors.INVALID_CONFIG.code());
 
         PushTelemetryResponse response = new PushTelemetryResponse(data);

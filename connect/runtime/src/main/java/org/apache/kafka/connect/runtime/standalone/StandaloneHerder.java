@@ -80,7 +80,7 @@ public final class StandaloneHerder extends AbstractHerder {
     ClusterConfigState configState;
 
     public StandaloneHerder(Worker worker, String kafkaClusterId,
-                            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
         this(worker,
                 worker.workerId(),
                 kafkaClusterId,
@@ -93,12 +93,12 @@ public final class StandaloneHerder extends AbstractHerder {
 
     // visible for testing
     StandaloneHerder(Worker worker,
-                     String workerId,
-                     String kafkaClusterId,
-                     StatusBackingStore statusBackingStore,
-                     MemoryConfigBackingStore configBackingStore,
-                     ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
-                     Time time) {
+            String workerId,
+            String kafkaClusterId,
+            StatusBackingStore statusBackingStore,
+            MemoryConfigBackingStore configBackingStore,
+            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+            Time time) {
         super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy, time);
         this.configState = ClusterConfigState.EMPTY;
         this.requestExecutorService = Executors.newSingleThreadScheduledExecutor();
@@ -194,15 +194,15 @@ public final class StandaloneHerder extends AbstractHerder {
 
     @Override
     public synchronized void putConnectorConfig(String connName,
-                                                final Map<String, String> config,
-                                                boolean allowReplace,
-                                                final Callback<Created<ConnectorInfo>> callback) {
+            final Map<String, String> config,
+            boolean allowReplace,
+            final Callback<Created<ConnectorInfo>> callback) {
         putConnectorConfig(connName, config, null, allowReplace, callback);
     }
 
     @Override
     public void putConnectorConfig(final String connName, final Map<String, String> config, final TargetState targetState,
-                                   final boolean allowReplace, final Callback<Created<ConnectorInfo>> callback) {
+            final boolean allowReplace, final Callback<Created<ConnectorInfo>> callback) {
         try {
             validateConnectorConfig(config, (error, configInfos) -> {
                 if (error != null) {
@@ -211,7 +211,7 @@ public final class StandaloneHerder extends AbstractHerder {
                 }
 
                 requestExecutorService.submit(
-                    () -> putConnectorConfig(connName, config, targetState, allowReplace, callback, configInfos)
+                        () -> putConnectorConfig(connName, config, targetState, allowReplace, callback, configInfos)
                 );
             });
         } catch (Throwable t) {
@@ -220,11 +220,11 @@ public final class StandaloneHerder extends AbstractHerder {
     }
 
     private synchronized void putConnectorConfig(String connName,
-                                                 final Map<String, String> config,
-                                                 TargetState targetState,
-                                                 boolean allowReplace,
-                                                 final Callback<Created<ConnectorInfo>> callback,
-                                                 ConfigInfos configInfos) {
+            final Map<String, String> config,
+            TargetState targetState,
+            boolean allowReplace,
+            final Callback<Created<ConnectorInfo>> callback,
+            ConfigInfos configInfos) {
         try {
             if (maybeAddConfigErrors(configInfos, callback)) {
                 return;
@@ -363,7 +363,7 @@ public final class StandaloneHerder extends AbstractHerder {
     @Override
     public synchronized HerderRequest restartConnector(long delayMs, final String connName, final Callback<Void> cb) {
         ScheduledFuture<?> future = requestExecutorService.schedule(
-            () -> restartConnector(connName, cb), delayMs, TimeUnit.MILLISECONDS);
+                () -> restartConnector(connName, cb), delayMs, TimeUnit.MILLISECONDS);
 
         return new StandaloneHerderRequest(requestSeqNum.incrementAndGet(), future);
     }
@@ -470,8 +470,8 @@ public final class StandaloneHerder extends AbstractHerder {
         Map<String, String> config = configState.connectorConfig(connName);
 
         ConnectorConfig connConfig = worker.isSinkConnector(connName) ?
-            new SinkConnectorConfig(plugins(), config) :
-            new SourceConnectorConfig(plugins(), config, worker.isTopicCreationEnabled());
+                new SinkConnectorConfig(plugins(), config) :
+                new SourceConnectorConfig(plugins(), config, worker.isTopicCreationEnabled());
 
         return worker.connectorTaskConfigs(connName, connConfig);
     }
@@ -507,7 +507,7 @@ public final class StandaloneHerder extends AbstractHerder {
                     configState.targetState(taskId.connector())
             );
             default ->
-                    throw new ConnectException("Failed to start task " + taskId + " since it is not a recognizable type (source or sink)");
+                throw new ConnectException("Failed to start task " + taskId + " since it is not a recognizable type (source or sink)");
         };
     }
 

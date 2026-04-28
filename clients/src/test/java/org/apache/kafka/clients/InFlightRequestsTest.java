@@ -121,7 +121,7 @@ public class InFlightRequestsTest {
 
         RequestHeader requestHeader = new RequestHeader(ApiKeys.METADATA, (short) 0, "clientId", correlationId);
         NetworkClient.InFlightRequest ifr = new NetworkClient.InFlightRequest(requestHeader, requestTimeoutMs, 0,
-                destination, null, false, false, null, null, sendTimeMs);
+            destination, null, false, false, null, null, sendTimeMs);
         inFlightRequests.add(ifr);
         return correlationId;
     }

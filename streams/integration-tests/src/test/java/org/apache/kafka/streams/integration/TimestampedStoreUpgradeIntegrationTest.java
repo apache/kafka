@@ -174,7 +174,6 @@ public class TimestampedStoreUpgradeIntegrationTest {
         kafkaStreams = null;
 
 
-
         final StreamsBuilder streamsBuilderForNewStore = new StreamsBuilder();
 
         streamsBuilderForNewStore.addStateStore(
@@ -280,7 +279,6 @@ public class TimestampedStoreUpgradeIntegrationTest {
         kafkaStreams = null;
 
 
-
         final StreamsBuilder streamsBuilderForNewStore = new StreamsBuilder();
 
         streamsBuilderForNewStore.addStateStore(
@@ -335,8 +333,8 @@ public class TimestampedStoreUpgradeIntegrationTest {
     }
 
     private <K, V> void processKeyValueAndVerifyPlainCount(final K key,
-                                                           final List<KeyValue<Integer, Object>> expectedStoreContent)
-            throws Exception {
+        final List<KeyValue<Integer, Object>> expectedStoreContent)
+        throws Exception {
 
         IntegrationTestUtils.produceKeyValuesSynchronously(
             inputStream,
@@ -373,8 +371,8 @@ public class TimestampedStoreUpgradeIntegrationTest {
     }
 
     private <K> void verifyCountWithTimestamp(final K key,
-                                              final long value,
-                                              final long timestamp) throws Exception {
+        final long value,
+        final long timestamp) throws Exception {
         TestUtils.waitForCondition(
             () -> {
                 try {
@@ -398,7 +396,7 @@ public class TimestampedStoreUpgradeIntegrationTest {
     }
 
     private <K> void verifyCountWithSurrogateTimestamp(final K key,
-                                                       final long value) throws Exception {
+        final long value) throws Exception {
         TestUtils.waitForCondition(
             () -> {
                 try {
@@ -421,9 +419,9 @@ public class TimestampedStoreUpgradeIntegrationTest {
     }
 
     private <K, V> void processKeyValueAndVerifyCount(final K key,
-                                                      final long timestamp,
-                                                      final List<KeyValue<Integer, Object>> expectedStoreContent)
-            throws Exception {
+        final long timestamp,
+        final List<KeyValue<Integer, Object>> expectedStoreContent)
+        throws Exception {
 
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             inputStream,
@@ -460,8 +458,8 @@ public class TimestampedStoreUpgradeIntegrationTest {
     }
 
     private <K, V> void processKeyValueAndVerifyCountWithTimestamp(final K key,
-                                                                   final long timestamp,
-                                                                   final List<KeyValue<Integer, Object>> expectedStoreContent)
+        final long timestamp,
+        final List<KeyValue<Integer, Object>> expectedStoreContent)
         throws Exception {
 
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
@@ -509,8 +507,8 @@ public class TimestampedStoreUpgradeIntegrationTest {
                         Duration.ofMillis(1000L),
                         Duration.ofMillis(1000L),
                         false),
-                Serdes.Integer(),
-                Serdes.Long()))
+                    Serdes.Integer(),
+                    Serdes.Long()))
             .<Integer, Integer>stream(inputStream)
             .process(WindowedProcessor::new, STORE_NAME);
 
@@ -523,8 +521,8 @@ public class TimestampedStoreUpgradeIntegrationTest {
                         Duration.ofMillis(1000L),
                         Duration.ofMillis(1000L),
                         false),
-            Serdes.Integer(),
-            Serdes.Long()))
+                    Serdes.Integer(),
+                    Serdes.Long()))
             .<Integer, Integer>stream(inputStream)
             .process(TimestampedWindowedProcessor::new, STORE_NAME);
 
@@ -573,10 +571,10 @@ public class TimestampedStoreUpgradeIntegrationTest {
     }
 
     private void shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(final StreamsBuilder streamsBuilderForOldStore,
-                                                                           final StreamsBuilder streamsBuilderForNewStore,
-                                                                           final boolean persistentStore) throws Exception {
+        final StreamsBuilder streamsBuilderForNewStore,
+        final boolean persistentStore) throws Exception {
         final Properties props = props();
-        kafkaStreams =  new KafkaStreams(streamsBuilderForOldStore.build(), props);
+        kafkaStreams = new KafkaStreams(streamsBuilderForOldStore.build(), props);
         kafkaStreams.start();
 
         processWindowedKeyValueAndVerifyPlainCount(1, singletonList(
@@ -767,7 +765,6 @@ public class TimestampedStoreUpgradeIntegrationTest {
         kafkaStreams = null;
 
 
-
         final StreamsBuilder streamsBuilderForNewStore = new StreamsBuilder();
 
         streamsBuilderForNewStore.addStateStore(
@@ -831,8 +828,8 @@ public class TimestampedStoreUpgradeIntegrationTest {
     }
 
     private <K, V> void processWindowedKeyValueAndVerifyPlainCount(final K key,
-                                                                   final List<KeyValue<Windowed<Integer>, Object>> expectedStoreContent)
-            throws Exception {
+        final List<KeyValue<Windowed<Integer>, Object>> expectedStoreContent)
+        throws Exception {
 
         IntegrationTestUtils.produceKeyValuesSynchronously(
             inputStream,
@@ -869,7 +866,7 @@ public class TimestampedStoreUpgradeIntegrationTest {
     }
 
     private <K> void verifyWindowedCountWithSurrogateTimestamp(final Windowed<K> key,
-                                                               final long value) throws Exception {
+        final long value) throws Exception {
         TestUtils.waitForCondition(
             () -> {
                 try {
@@ -892,8 +889,8 @@ public class TimestampedStoreUpgradeIntegrationTest {
     }
 
     private <K> void verifyWindowedCountWithTimestamp(final Windowed<K> key,
-                                                      final long value,
-                                                      final long timestamp) throws Exception {
+        final long value,
+        final long timestamp) throws Exception {
         TestUtils.waitForCondition(
             () -> {
                 try {
@@ -916,9 +913,9 @@ public class TimestampedStoreUpgradeIntegrationTest {
     }
 
     private <K, V> void processKeyValueAndVerifyWindowedCountWithTimestamp(final K key,
-                                                                           final long timestamp,
-                                                                           final List<KeyValue<Windowed<Integer>, Object>> expectedStoreContent)
-            throws Exception {
+        final long timestamp,
+        final List<KeyValue<Windowed<Integer>, Object>> expectedStoreContent)
+        throws Exception {
 
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             inputStream,

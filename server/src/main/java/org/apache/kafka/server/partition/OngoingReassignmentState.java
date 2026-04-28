@@ -19,9 +19,9 @@ package org.apache.kafka.server.partition;
 import java.util.List;
 
 public record OngoingReassignmentState(
-        List<Integer> addingReplicas,
-        List<Integer> removingReplicas,
-        List<Integer> replicas
+    List<Integer> addingReplicas,
+    List<Integer> removingReplicas,
+    List<Integer> replicas
 ) implements AssignmentState {
 
     public OngoingReassignmentState {

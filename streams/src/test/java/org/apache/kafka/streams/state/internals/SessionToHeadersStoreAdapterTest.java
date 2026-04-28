@@ -223,7 +223,8 @@ public class SessionToHeadersStoreAdapterTest {
         when(innerStore.query(any(Query.class), any(PositionBound.class), any(QueryConfig.class)))
             .thenReturn(expectedResult);
 
-        final Query<Void> query = new Query<Void>() { };
+        final Query<Void> query = new Query<Void>() {
+        };
         final QueryResult<Void> result = adapter.query(query, PositionBound.unbounded(), new QueryConfig(false));
         assertTrue(result.isFailure());
         assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, result.getFailureReason());
@@ -237,7 +238,8 @@ public class SessionToHeadersStoreAdapterTest {
         when(innerStore.query(any(Query.class), any(PositionBound.class), any(QueryConfig.class)))
             .thenReturn(expectedResult);
 
-        final Query<Void> query = new Query<Void>() { };
+        final Query<Void> query = new Query<Void>() {
+        };
         final QueryResult<Void> result = adapter.query(query, PositionBound.unbounded(), new QueryConfig(true));
         assertTrue(result.getExecutionInfo().stream()
             .anyMatch(info -> info.contains("SessionToHeadersStoreAdapter")));

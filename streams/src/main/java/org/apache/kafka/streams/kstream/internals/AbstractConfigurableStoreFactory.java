@@ -31,7 +31,7 @@ public abstract class AbstractConfigurableStoreFactory implements StoreFactory {
     private DslStoreFormat dslStoreFormatOverwrite;
 
     public AbstractConfigurableStoreFactory(final DslStoreSuppliers initialStoreSuppliers,
-                                            final DslStoreFormat defaultDslStoreFormat) {
+        final DslStoreFormat defaultDslStoreFormat) {
         this.dslStoreSuppliers = initialStoreSuppliers;
         this.defaultDslStoreFormat = defaultDslStoreFormat;
     }

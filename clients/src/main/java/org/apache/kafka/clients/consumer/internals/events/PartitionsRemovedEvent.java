@@ -34,7 +34,7 @@ public class PartitionsRemovedEvent extends CompletableBackgroundEvent<Void> {
     private final SortedSet<TopicPartition> partitions;
 
     public PartitionsRemovedEvent(final ConsumerRebalanceListenerMethodName methodName,
-                                   final SortedSet<TopicPartition> partitions) {
+        final SortedSet<TopicPartition> partitions) {
         super(Type.PARTITIONS_REMOVED, Long.MAX_VALUE);
         this.methodName = Objects.requireNonNull(methodName);
         this.partitions = Collections.unmodifiableSortedSet(partitions);
@@ -51,7 +51,7 @@ public class PartitionsRemovedEvent extends CompletableBackgroundEvent<Void> {
     @Override
     protected String toStringBase() {
         return super.toStringBase() +
-                ", methodName=" + methodName +
-                ", partitions=" + partitions;
+            ", methodName=" + methodName +
+            ", partitions=" + partitions;
     }
 }

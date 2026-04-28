@@ -99,17 +99,17 @@ public class DescribeTopicsResult {
         KafkaFuture<Void> future = KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
         return future.
             thenApply(v -> {
-                Map<T, TopicDescription> descriptions = new HashMap<>(futures.size());
-                for (Map.Entry<T, KafkaFuture<TopicDescription>> entry : futures.entrySet()) {
-                    try {
-                        descriptions.put(entry.getKey(), entry.getValue().get());
-                    } catch (InterruptedException | ExecutionException e) {
-                        // This should be unreachable, because allOf ensured that all the futures
-                        // completed successfully.
-                        throw new RuntimeException(e);
-                    }
+            Map<T, TopicDescription> descriptions = new HashMap<>(futures.size());
+            for (Map.Entry<T, KafkaFuture<TopicDescription>> entry : futures.entrySet()) {
+                try {
+                    descriptions.put(entry.getKey(), entry.getValue().get());
+                } catch (InterruptedException | ExecutionException e) {
+                    // This should be unreachable, because allOf ensured that all the futures
+                    // completed successfully.
+                    throw new RuntimeException(e);
                 }
-                return descriptions;
-            });
+            }
+            return descriptions;
+        });
     }
 }

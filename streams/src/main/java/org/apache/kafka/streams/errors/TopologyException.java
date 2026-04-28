@@ -29,7 +29,7 @@ public class TopologyException extends StreamsException {
     }
 
     public TopologyException(final String message,
-                             final Throwable throwable) {
+        final Throwable throwable) {
         super("Invalid topology" + (message == null ? "" : ": " + message), throwable);
     }
 

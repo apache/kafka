@@ -151,7 +151,7 @@ public class AdjustStreamThreadCountTest {
                 final String value = "value-" + i;
                 producer.send(new ProducerRecord<>(inputTopic, key, value));
             }
-        } 
+        }
     }
 
     private void startStreamsAndWaitForRunning(final KafkaStreams kafkaStreams) throws InterruptedException {
@@ -197,7 +197,7 @@ public class AdjustStreamThreadCountTest {
             startStreamsAndWaitForRunning(kafkaStreams);
 
             final int oldThreadCount = kafkaStreams.metadataForLocalThreads().size();
-            assertThat(kafkaStreams.metadataForLocalThreads().stream().map(t -> t.threadName().split("-StreamThread-")[1]).sorted().toArray(), equalTo(new String[] {"1", "2"}));
+            assertThat(kafkaStreams.metadataForLocalThreads().stream().map(t -> t.threadName().split("-StreamThread-")[1]).sorted().toArray(), equalTo(new String[]{"1", "2"}));
 
             stateTransitionHistory.clear();
             final Optional<String> name = kafkaStreams.addStreamThread();
@@ -215,7 +215,7 @@ public class AdjustStreamThreadCountTest {
                     .stream()
                     .map(t -> t.threadName().split("-StreamThread-")[1])
                     .sorted().toArray(),
-                equalTo(new String[] {"1", "2", "3"})
+                equalTo(new String[]{"1", "2", "3"})
             );
 
             waitForTransitionFromRebalancingToRunning();
@@ -290,7 +290,7 @@ public class AdjustStreamThreadCountTest {
                     DEFAULT_DURATION.toMillis(),
                     "Kafka Streams did not stabilize at the expected thread count and RUNNING state."
                 );
-                
+
                 threadMetadata = kafkaStreams.metadataForLocalThreads();
                 assertThat(threadMetadata.size(), equalTo(oldThreadCount));
             } catch (final AssertionError e) {
@@ -365,7 +365,7 @@ public class AdjustStreamThreadCountTest {
                     .map(t -> t.threadName().split("-StreamThread-")[1])
                     .sorted()
                     .toArray(),
-                equalTo(new String[] {"1", "2"})
+                equalTo(new String[]{"1", "2"})
             );
 
             final Optional<String> name = kafkaStreams.addStreamThread();
@@ -387,7 +387,7 @@ public class AdjustStreamThreadCountTest {
                     .map(t -> t.threadName().split("-StreamThread-")[1])
                     .sorted()
                     .toArray(),
-                equalTo(new String[] {"1", "2", "3"})
+                equalTo(new String[]{"1", "2", "3"})
             );
             waitForTransitionFromRebalancingToRunning();
 
@@ -418,7 +418,7 @@ public class AdjustStreamThreadCountTest {
                     .map(t -> t.threadName().split("-StreamThread-")[1])
                     .sorted()
                     .toArray(),
-                equalTo(new String[] {"1", "2", "3"})
+                equalTo(new String[]{"1", "2", "3"})
             );
 
             assertThat("the new thread should have received the old threads name", name2.equals(removedThread));
@@ -494,7 +494,7 @@ public class AdjustStreamThreadCountTest {
 
         final AtomicBoolean injectError = new AtomicBoolean(false);
 
-        final StreamsBuilder builder  = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> stream = builder.stream(inputTopic);
         stream.process(() -> new Processor<String, String, String, String>() {
             ProcessorContext<String, String> context;

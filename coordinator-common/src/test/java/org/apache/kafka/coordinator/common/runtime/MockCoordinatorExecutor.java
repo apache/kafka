@@ -31,9 +31,9 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
         public final TaskOperation<T, R> operation;
 
         ExecutorTask(
-            String key,
-            TaskRunnable<R> task,
-            TaskOperation<T, R> operation
+                String key,
+                TaskRunnable<R> task,
+                TaskOperation<T, R> operation
         ) {
             this.key = Objects.requireNonNull(key);
             this.task = Objects.requireNonNull(task);
@@ -51,8 +51,8 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
 
     public record ExecutorResult<T>(String key, CoordinatorResult<Void, T> result) {
         public ExecutorResult(
-            String key,
-            CoordinatorResult<Void, T> result
+                String key,
+                CoordinatorResult<Void, T> result
         ) {
             this.key = Objects.requireNonNull(key);
             this.result = Objects.requireNonNull(result);
@@ -61,9 +61,9 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
         @Override
         public String toString() {
             return "ExecutorResult(" +
-                "key='" + key + '\'' +
-                ", result=" + result +
-                ')';
+                    "key='" + key + '\'' +
+                    ", result=" + result +
+                    ')';
         }
     }
 
@@ -72,9 +72,9 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
 
     @Override
     public <R> boolean schedule(
-        String key,
-        TaskRunnable<R> task,
-        TaskOperation<T, R> operation
+            String key,
+            TaskRunnable<R> task,
+            TaskOperation<T, R> operation
     ) {
         if (tasks.putIfAbsent(key, task) != null) return false;
         return queue.add(new ExecutorTask<>(key, task, operation));

@@ -987,7 +987,7 @@ public class StreamsGroup implements Group {
                             partitionsOrNull.remove(partitionId);
                         } else {
                             log.debug("[GroupId {}] Cannot remove the process ID {} from task {}_{} because the partition is " +
-                                    "still owned at a different process ID {}", groupId, expectedProcessId, subtopologyId, partitionId, prevValue);
+                                "still owned at a different process ID {}", groupId, expectedProcessId, subtopologyId, partitionId, prevValue);
                         }
                     });
                     if (partitionsOrNull.isEmpty()) {
@@ -997,7 +997,7 @@ public class StreamsGroup implements Group {
                     }
                 } else {
                     log.debug("[GroupId {}] Cannot remove the process ID {} from {} because it does not have any processId",
-                            groupId, expectedProcessId, subtopologyId);
+                        groupId, expectedProcessId, subtopologyId);
                     return partitionsOrNull;
                 }
             });
@@ -1022,7 +1022,7 @@ public class StreamsGroup implements Group {
                     assignedPartitions.forEach(partitionId -> {
                         if (!partitionsOrNull.containsKey(partitionId) || !partitionsOrNull.get(partitionId).remove(processIdToRemove)) {
                             log.debug("[GroupId {}] Cannot remove the process ID {} from task {}_{} because the task is " +
-                                    "not owned by this process ID", groupId, processIdToRemove, subtopologyId, partitionId);
+                                "not owned by this process ID", groupId, processIdToRemove, subtopologyId, partitionId);
                         }
                     });
                     if (partitionsOrNull.isEmpty()) {
@@ -1032,7 +1032,7 @@ public class StreamsGroup implements Group {
                     }
                 } else {
                     log.debug("[GroupId {}] Cannot remove the process ID {} from {} because it does not have any process ID",
-                            groupId, processIdToRemove, subtopologyId);
+                        groupId, processIdToRemove, subtopologyId);
                     return partitionsOrNull;
                 }
             });
@@ -1261,7 +1261,7 @@ public class StreamsGroup implements Group {
         // Retrieve topology once for all partitions - not per partition!
         final StreamsTopology streamsTopology = topology.get().orElseThrow(() ->
             new StaleMemberEpochException("Topology is not available for offset commit validation."));
-        
+
         final TasksTupleWithEpochs assignedTasks = member.assignedTasks();
         final TasksTupleWithEpochs tasksPendingRevocation = member.tasksPendingRevocation();
 

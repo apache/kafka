@@ -64,8 +64,8 @@ public class ConnectDistributed extends AbstractConnectCli<DistributedHerder, Di
 
     @Override
     protected DistributedHerder createHerder(DistributedConfig config, String workerId, Plugins plugins,
-                                  ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
-                                  RestServer restServer, RestClient restClient) {
+            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+            RestServer restServer, RestClient restClient) {
 
         String kafkaClusterId = config.kafkaClusterId();
         String clientIdBase = ConnectUtils.clientIdBase(config);

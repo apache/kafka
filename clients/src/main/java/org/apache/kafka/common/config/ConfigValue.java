@@ -82,10 +82,10 @@ public class ConfigValue {
         if (o == null || getClass() != o.getClass()) return false;
         ConfigValue that = (ConfigValue) o;
         return Objects.equals(name, that.name) &&
-               Objects.equals(value, that.value) &&
-               Objects.equals(recommendedValues, that.recommendedValues) &&
-               Objects.equals(errorMessages, that.errorMessages) &&
-               Objects.equals(visible, that.visible);
+            Objects.equals(value, that.value) &&
+            Objects.equals(recommendedValues, that.recommendedValues) &&
+            Objects.equals(errorMessages, that.errorMessages) &&
+            Objects.equals(visible, that.visible);
     }
 
     @Override
@@ -96,11 +96,11 @@ public class ConfigValue {
     @Override
     public String toString() {
         return "[" +
-                name + "," +
-                value + "," +
-                recommendedValues + "," +
-                errorMessages + "," +
-                visible +
-                "]";
+            name + "," +
+            value + "," +
+            recommendedValues + "," +
+            errorMessages + "," +
+            visible +
+            "]";
     }
 }

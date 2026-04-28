@@ -60,7 +60,7 @@ public class ProtocolRoundTripConsistencyTest {
             .set("my_nullable_bytes", null)
             .set("my_records", MemoryRecords.EMPTY)
             .set("my_nullable_records", null)
-            .set("my_int_array", new Object[] {})
+            .set("my_int_array", new Object[]{})
             .set("my_nullable_int_array", null);
         nonFlexibleStruct.set("my_common_struct", nonFlexibleStruct.instance("my_common_struct")
             .set("foo", 123)
@@ -82,7 +82,7 @@ public class ProtocolRoundTripConsistencyTest {
             .set("my_compact_nullable_bytes", null)
             .set("my_compact_records", MemoryRecords.EMPTY)
             .set("my_compact_nullable_records", null)
-            .set("my_int_array", new Object[] {})
+            .set("my_int_array", new Object[]{})
             .set("my_nullable_int_array", null)
             .set("_tagged_fields", new TreeMap<Integer, Field>());
         flexibleStruct.set("my_common_struct", flexibleStruct.instance("my_common_struct")
@@ -113,7 +113,7 @@ public class ProtocolRoundTripConsistencyTest {
         nonFlexibleStruct.set("my_nullable_string", "nullable string")
             .set("my_nullable_bytes", ByteBuffer.wrap("nullable bytes".getBytes()))
             .set("my_nullable_records", MemoryRecords.EMPTY)
-            .set("my_nullable_int_array", new Object[] {1, 2, 3});
+            .set("my_nullable_int_array", new Object[]{1, 2, 3});
 
         checkSchemaAndMessageRoundTripConsistency((short) 0, messageData, nonFlexibleStruct);
     }
@@ -141,7 +141,7 @@ public class ProtocolRoundTripConsistencyTest {
         flexibleStruct.set("my_compact_nullable_string", "compact nullable string")
             .set("my_compact_nullable_bytes", ByteBuffer.wrap("compact nullable bytes".getBytes()))
             .set("my_compact_nullable_records", MemoryRecords.EMPTY)
-            .set("my_nullable_int_array", new Object[] {1, 2, 3});
+            .set("my_nullable_int_array", new Object[]{1, 2, 3});
 
         checkSchemaAndMessageRoundTripConsistency((short) 1, messageData, flexibleStruct);
     }

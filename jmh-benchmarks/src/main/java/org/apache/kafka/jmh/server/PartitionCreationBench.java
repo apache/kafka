@@ -122,38 +122,38 @@ public class PartitionCreationBench {
 
         ConfigRepository configRepository = new MockConfigRepository();
         this.logManager = new LogManagerBuilder().
-            setLogDirs(files).
-            setInitialOfflineDirs(List.of()).
-            setConfigRepository(configRepository).
-            setInitialDefaultConfig(createLogConfig()).
-            setCleanerConfig(cleanerConfig).
-            setRecoveryThreadsPerDataDir(1).
-            setFlushCheckMs(1000L).
-            setFlushRecoveryOffsetCheckpointMs(10000L).
-            setFlushStartOffsetCheckpointMs(10000L).
-            setRetentionCheckMs(1000L).
-            setProducerStateManagerConfig(60000, false).
-            setScheduler(scheduler).
-            setBrokerTopicStats(brokerTopicStats).
-            setLogDirFailureChannel(failureChannel).
-            setTime(Time.SYSTEM).
-            build();
+                setLogDirs(files).
+                setInitialOfflineDirs(List.of()).
+                setConfigRepository(configRepository).
+                setInitialDefaultConfig(createLogConfig()).
+                setCleanerConfig(cleanerConfig).
+                setRecoveryThreadsPerDataDir(1).
+                setFlushCheckMs(1000L).
+                setFlushRecoveryOffsetCheckpointMs(10000L).
+                setFlushStartOffsetCheckpointMs(10000L).
+                setRetentionCheckMs(1000L).
+                setProducerStateManagerConfig(60000, false).
+                setScheduler(scheduler).
+                setBrokerTopicStats(brokerTopicStats).
+                setLogDirFailureChannel(failureChannel).
+                setTime(Time.SYSTEM).
+                build();
         scheduler.startup();
         this.quotaManagers = QuotaFactory.instantiate(this.brokerProperties, this.metrics, this.time, "", "");
         this.alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
 
         this.replicaManager = new ReplicaManagerBuilder().
-            setConfig(brokerProperties).
-            setMetrics(metrics).
-            setTime(time).
-            setScheduler(scheduler).
-            setLogManager(logManager).
-            setQuotaManagers(quotaManagers).
-            setBrokerTopicStats(brokerTopicStats).
-            setMetadataCache(new KRaftMetadataCache(this.brokerProperties.brokerId(), () -> KRAFT_VERSION_1)).
-            setLogDirFailureChannel(failureChannel).
-            setAlterPartitionManager(alterPartitionManager).
-            build();
+                setConfig(brokerProperties).
+                setMetrics(metrics).
+                setTime(time).
+                setScheduler(scheduler).
+                setLogManager(logManager).
+                setQuotaManagers(quotaManagers).
+                setBrokerTopicStats(brokerTopicStats).
+                setMetadataCache(new KRaftMetadataCache(this.brokerProperties.brokerId(), () -> KRAFT_VERSION_1)).
+                setLogDirFailureChannel(failureChannel).
+                setAlterPartitionManager(alterPartitionManager).
+                build();
         replicaManager.startup();
         replicaManager.checkpointHighWatermarks();
     }

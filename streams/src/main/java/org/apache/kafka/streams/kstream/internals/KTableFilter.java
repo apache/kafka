@@ -43,10 +43,10 @@ public class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn,
     private final StoreFactory storeFactory;
 
     KTableFilter(final KTableImpl<KIn, ?, VIn> parent,
-                 final Predicate<? super KIn, ? super VIn> predicate,
-                 final boolean filterNot,
-                 final String queryableName,
-                 final StoreFactory storeFactory) {
+        final Predicate<? super KIn, ? super VIn> predicate,
+        final boolean filterNot,
+        final String queryableName,
+        final StoreFactory storeFactory) {
         this.parent = parent;
         this.predicate = predicate;
         this.filterNot = filterNot;

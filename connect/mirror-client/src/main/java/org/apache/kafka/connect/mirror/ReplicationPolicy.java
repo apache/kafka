@@ -40,7 +40,7 @@ public interface ReplicationPolicy {
      * <p>
      * Returns null if the given topic is not a remote topic.
      */
-    String upstreamTopic(String topic); 
+    String upstreamTopic(String topic);
 
     /**
      * Returns the name of the original topic, which may have been replicated multiple hops.
@@ -87,7 +87,7 @@ public interface ReplicationPolicy {
      * Returns true if the topic is a checkpoints topic.
      */
     default boolean isCheckpointsTopic(String topic) {
-        return  topic.endsWith(".checkpoints.internal");
+        return topic.endsWith(".checkpoints.internal");
     }
 
     /**
@@ -95,7 +95,7 @@ public interface ReplicationPolicy {
      * This is used to make sure the topic doesn't need to be replicated.
      */
     default boolean isMM2InternalTopic(String topic) {
-        return  topic.startsWith("mm2") && topic.endsWith(".internal") || isCheckpointsTopic(topic);
+        return topic.startsWith("mm2") && topic.endsWith(".internal") || isCheckpointsTopic(topic);
     }
 
     /**

@@ -182,8 +182,8 @@ public class KafkaPostDiscoveryFilterTest {
     @Test
     public void testNoCatalogRunNewTest() {
         KafkaPostDiscoveryFilter filter = new KafkaPostDiscoveryFilter(
-                CatalogTestFilter.create(null),
-                true, false
+            CatalogTestFilter.create(null),
+            true, false
         );
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar1", "flaky")).excluded());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar2", "flaky")).excluded());
@@ -195,8 +195,8 @@ public class KafkaPostDiscoveryFilterTest {
     @Test
     public void testNoCatalogRunMainTests() {
         KafkaPostDiscoveryFilter filter = new KafkaPostDiscoveryFilter(
-                CatalogTestFilter.create(null),
-                false, false
+            CatalogTestFilter.create(null),
+            false, false
         );
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar1", "flaky")).excluded());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar2", "flaky")).excluded());

@@ -82,10 +82,10 @@ public class ClientMetricsManagerTest {
     @AfterAll
     public static void ensureNoThreadLeak() throws InterruptedException {
         TestUtils.waitForCondition(
-                () -> Thread.getAllStackTraces().keySet().stream()
-                    .map(Thread::getName)
-                    .noneMatch(t -> t.contains(ClientMetricsManager.CLIENT_METRICS_REAPER_THREAD_NAME) || t.contains(SystemTimer.SYSTEM_TIMER_THREAD_PREFIX)),
-                "Thread leak detected"
+            () -> Thread.getAllStackTraces().keySet().stream()
+                .map(Thread::getName)
+                .noneMatch(t -> t.contains(ClientMetricsManager.CLIENT_METRICS_REAPER_THREAD_NAME) || t.contains(SystemTimer.SYSTEM_TIMER_THREAD_PREFIX)),
+            "Thread leak detected"
         );
 
     }
@@ -356,27 +356,27 @@ public class ClientMetricsManagerTest {
         // last request information but request should succeed as subscription id should match
         // the one with new client instance.
         try (
-                Metrics kafkaMetrics = new Metrics();
-                ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientTelemetryExporterPlugin, 100, time, kafkaMetrics)
+            Metrics kafkaMetrics = new Metrics();
+            ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientTelemetryExporterPlugin, 100, time, kafkaMetrics)
         ) {
 
             PushTelemetryRequest pushRequest = new Builder(
-                    new PushTelemetryRequestData()
-                            .setClientInstanceId(response.data().clientInstanceId())
-                            .setSubscriptionId(response.data().subscriptionId())
-                            .setCompressionType(CompressionType.NONE.id)
-                            .setMetrics(ByteBuffer.wrap("test-data".getBytes(StandardCharsets.UTF_8))), true).build();
+                new PushTelemetryRequestData()
+                    .setClientInstanceId(response.data().clientInstanceId())
+                    .setSubscriptionId(response.data().subscriptionId())
+                    .setCompressionType(CompressionType.NONE.id)
+                    .setMetrics(ByteBuffer.wrap("test-data".getBytes(StandardCharsets.UTF_8))), true).build();
 
             PushTelemetryResponse pushResponse = newClientMetricsManager.processPushTelemetryRequest(
-                    pushRequest, ClientMetricsTestUtils.requestContext());
+                pushRequest, ClientMetricsTestUtils.requestContext());
 
             assertEquals(Errors.NONE, pushResponse.error());
 
             request = new GetTelemetrySubscriptionsRequest.Builder(
-                    new GetTelemetrySubscriptionsRequestData().setClientInstanceId(clientInstanceId), true).build();
+                new GetTelemetrySubscriptionsRequestData().setClientInstanceId(clientInstanceId), true).build();
 
             response = newClientMetricsManager.processGetTelemetrySubscriptionRequest(
-                    request, ClientMetricsTestUtils.requestContext());
+                request, ClientMetricsTestUtils.requestContext());
 
             assertEquals(Errors.THROTTLING_QUOTA_EXCEEDED, response.error());
             // Should register 1 throttle metric.
@@ -596,18 +596,18 @@ public class ClientMetricsManagerTest {
         // client instance information but request should succeed as subscription id should match
         // the one with new client instance.
         try (
-                Metrics kafkaMetrics = new Metrics();
-                ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientTelemetryExporterPlugin, 100, time, kafkaMetrics)
+            Metrics kafkaMetrics = new Metrics();
+            ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientTelemetryExporterPlugin, 100, time, kafkaMetrics)
         ) {
 
             PushTelemetryRequest request = new PushTelemetryRequest.Builder(
-                    new PushTelemetryRequestData()
-                            .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
-                            .setSubscriptionId(subscriptionsResponse.data().subscriptionId())
-                            .setMetrics(ByteBuffer.wrap("test-data".getBytes(StandardCharsets.UTF_8))), true).build();
+                new PushTelemetryRequestData()
+                    .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
+                    .setSubscriptionId(subscriptionsResponse.data().subscriptionId())
+                    .setMetrics(ByteBuffer.wrap("test-data".getBytes(StandardCharsets.UTF_8))), true).build();
 
             PushTelemetryResponse response = newClientMetricsManager.processPushTelemetryRequest(
-                    request, ClientMetricsTestUtils.requestContext());
+                request, ClientMetricsTestUtils.requestContext());
 
             assertEquals(Errors.NONE, response.error());
             // Validate metrics should have instance count metric, kafka metrics count and 4 sensors with 10 metrics
@@ -888,15 +888,15 @@ public class ClientMetricsManagerTest {
     @Test
     public void testPushTelemetryMetricsTooLarge() throws Exception {
         try (
-                Metrics kafkaMetrics = new Metrics();
-                ClientMetricsManager clientMetricsManager = new ClientMetricsManager(clientTelemetryExporterPlugin, 1, time, kafkaMetrics)
+            Metrics kafkaMetrics = new Metrics();
+            ClientMetricsManager clientMetricsManager = new ClientMetricsManager(clientTelemetryExporterPlugin, 1, time, kafkaMetrics)
         ) {
 
             GetTelemetrySubscriptionsRequest subscriptionsRequest = new GetTelemetrySubscriptionsRequest.Builder(
-                    new GetTelemetrySubscriptionsRequestData(), true).build();
+                new GetTelemetrySubscriptionsRequestData(), true).build();
 
             GetTelemetrySubscriptionsResponse subscriptionsResponse = clientMetricsManager.processGetTelemetrySubscriptionRequest(
-                    subscriptionsRequest, ClientMetricsTestUtils.requestContext());
+                subscriptionsRequest, ClientMetricsTestUtils.requestContext());
 
             ClientMetricsInstance instance = clientMetricsManager.clientInstance(subscriptionsResponse.data().clientInstanceId());
             assertNotNull(instance);
@@ -905,14 +905,14 @@ public class ClientMetricsManagerTest {
             assertEquals(2, metrics.length);
 
             PushTelemetryRequest request = new PushTelemetryRequest.Builder(
-                    new PushTelemetryRequestData()
-                            .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
-                            .setSubscriptionId(subscriptionsResponse.data().subscriptionId())
-                            .setMetrics(ByteBuffer.wrap(metrics)), true).build();
+                new PushTelemetryRequestData()
+                    .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
+                    .setSubscriptionId(subscriptionsResponse.data().subscriptionId())
+                    .setMetrics(ByteBuffer.wrap(metrics)), true).build();
 
             // Set the max bytes 1 to force the error.
             PushTelemetryResponse response = clientMetricsManager.processPushTelemetryRequest(
-                    request, ClientMetricsTestUtils.requestContext());
+                request, ClientMetricsTestUtils.requestContext());
 
             // Should not report any error though no metrics will be exported.
             assertEquals(Errors.TELEMETRY_TOO_LARGE, response.error());
@@ -943,14 +943,14 @@ public class ClientMetricsManagerTest {
         List<PushTelemetryResponse> responses = Collections.synchronizedList(new ArrayList<>());
 
         try (
-                Metrics kafkaMetrics = new Metrics();
-                ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientTelemetryExporterPlugin, 100, time, kafkaMetrics)
+            Metrics kafkaMetrics = new Metrics();
+            ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientTelemetryExporterPlugin, 100, time, kafkaMetrics)
         ) {
 
             Thread thread = new Thread(() -> {
                 try {
                     PushTelemetryResponse response = newClientMetricsManager.processPushTelemetryRequest(
-                            request, ClientMetricsTestUtils.requestContext());
+                        request, ClientMetricsTestUtils.requestContext());
                     responses.add(response);
                 } catch (UnknownHostException e) {
                     LOG.error("Error processing request", e);
@@ -962,7 +962,7 @@ public class ClientMetricsManagerTest {
             Thread thread1 = new Thread(() -> {
                 try {
                     PushTelemetryResponse response = newClientMetricsManager.processPushTelemetryRequest(
-                            request, ClientMetricsTestUtils.requestContext());
+                        request, ClientMetricsTestUtils.requestContext());
                     responses.add(response);
                 } catch (UnknownHostException e) {
                     LOG.error("Error processing request", e);
@@ -1082,31 +1082,31 @@ public class ClientMetricsManagerTest {
         Mockito.doThrow(new RuntimeException("test exception")).when(receiverPlugin).exportMetrics(Mockito.any(), Mockito.any(), Mockito.anyInt());
 
         try (
-                Metrics kafkaMetrics = new Metrics();
-                ClientMetricsManager clientMetricsManager = new ClientMetricsManager(receiverPlugin, 100, time, 100, kafkaMetrics)
+            Metrics kafkaMetrics = new Metrics();
+            ClientMetricsManager clientMetricsManager = new ClientMetricsManager(receiverPlugin, 100, time, 100, kafkaMetrics)
         ) {
 
             clientMetricsManager.updateSubscription("sub-1", ClientMetricsTestUtils.defaultTestProperties());
             assertEquals(1, clientMetricsManager.subscriptions().size());
 
             GetTelemetrySubscriptionsRequest subscriptionsRequest = new GetTelemetrySubscriptionsRequest.Builder(
-                    new GetTelemetrySubscriptionsRequestData(), true).build();
+                new GetTelemetrySubscriptionsRequestData(), true).build();
 
             GetTelemetrySubscriptionsResponse subscriptionsResponse = clientMetricsManager.processGetTelemetrySubscriptionRequest(
-                    subscriptionsRequest, ClientMetricsTestUtils.requestContext());
+                subscriptionsRequest, ClientMetricsTestUtils.requestContext());
 
             ClientMetricsInstance instance = clientMetricsManager.clientInstance(subscriptionsResponse.data().clientInstanceId());
             assertNotNull(instance);
 
             PushTelemetryRequest request = new Builder(
-                    new PushTelemetryRequestData()
-                            .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
-                            .setSubscriptionId(subscriptionsResponse.data().subscriptionId())
-                            .setCompressionType(CompressionType.NONE.id)
-                            .setMetrics(ByteBuffer.wrap("test-data".getBytes(StandardCharsets.UTF_8))), true).build();
+                new PushTelemetryRequestData()
+                    .setClientInstanceId(subscriptionsResponse.data().clientInstanceId())
+                    .setSubscriptionId(subscriptionsResponse.data().subscriptionId())
+                    .setCompressionType(CompressionType.NONE.id)
+                    .setMetrics(ByteBuffer.wrap("test-data".getBytes(StandardCharsets.UTF_8))), true).build();
 
             PushTelemetryResponse response = clientMetricsManager.processPushTelemetryRequest(
-                    request, ClientMetricsTestUtils.requestContext());
+                request, ClientMetricsTestUtils.requestContext());
 
             assertEquals(Errors.INVALID_RECORD, response.error());
             assertFalse(instance.terminating());

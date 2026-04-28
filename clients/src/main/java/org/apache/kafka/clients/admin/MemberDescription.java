@@ -136,9 +136,9 @@ public class MemberDescription {
      */
     @Deprecated(since = "4.0", forRemoval = true)
     public MemberDescription(String memberId,
-                             String clientId,
-                             String host,
-                             MemberAssignment assignment) {
+        String clientId,
+        String host,
+        MemberAssignment assignment) {
         this(memberId, Optional.empty(), clientId, host, assignment);
     }
 

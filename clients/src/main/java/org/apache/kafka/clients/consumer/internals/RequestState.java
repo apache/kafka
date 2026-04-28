@@ -35,32 +35,32 @@ class RequestState {
     private boolean requestInFlight = false;
 
     public RequestState(final LogContext logContext,
-                        final String owner,
-                        final long retryBackoffMs,
-                        final long retryBackoffMaxMs) {
+        final String owner,
+        final long retryBackoffMs,
+        final long retryBackoffMaxMs) {
         this.log = logContext.logger(RequestState.class);
         this.owner = owner;
         this.exponentialBackoff = new ExponentialBackoff(
-                retryBackoffMs,
-                RETRY_BACKOFF_EXP_BASE,
-                retryBackoffMaxMs,
-                RETRY_BACKOFF_JITTER);
+            retryBackoffMs,
+            RETRY_BACKOFF_EXP_BASE,
+            retryBackoffMaxMs,
+            RETRY_BACKOFF_JITTER);
     }
 
     // Visible for testing
     RequestState(final LogContext logContext,
-                 final String owner,
-                 final long retryBackoffMs,
-                 final int retryBackoffExpBase,
-                 final long retryBackoffMaxMs,
-                 final double jitter) {
+        final String owner,
+        final long retryBackoffMs,
+        final int retryBackoffExpBase,
+        final long retryBackoffMaxMs,
+        final double jitter) {
         this.log = logContext.logger(RequestState.class);
         this.owner = owner;
         this.exponentialBackoff = new ExponentialBackoff(
-                retryBackoffMs,
-                retryBackoffExpBase,
-                retryBackoffMaxMs,
-                jitter);
+            retryBackoffMs,
+            retryBackoffExpBase,
+            retryBackoffMaxMs,
+            jitter);
     }
 
     /**
@@ -148,12 +148,12 @@ class RequestState {
      */
     protected String toStringBase() {
         return "owner='" + owner + '\'' +
-                ", exponentialBackoff=" + exponentialBackoff +
-                ", lastSentMs=" + lastSentMs +
-                ", lastReceivedMs=" + lastReceivedMs +
-                ", numAttempts=" + numAttempts +
-                ", backoffMs=" + backoffMs +
-                ", requestInFlight=" + requestInFlight;
+            ", exponentialBackoff=" + exponentialBackoff +
+            ", lastSentMs=" + lastSentMs +
+            ", lastReceivedMs=" + lastReceivedMs +
+            ", numAttempts=" + numAttempts +
+            ", backoffMs=" + backoffMs +
+            ", requestInFlight=" + requestInFlight;
     }
 
     @Override

@@ -34,14 +34,14 @@ public class ChangeLoggingTimestampedKeyValueBytesStore extends ChangeLoggingKey
 
     @Override
     public void put(final Bytes key,
-                    final byte[] valueAndTimestamp) {
+        final byte[] valueAndTimestamp) {
         wrapped().put(key, valueAndTimestamp);
         log(key, rawValue(valueAndTimestamp), valueAndTimestamp == null ? internalContext.recordContext().timestamp() : timestamp(valueAndTimestamp), new RecordHeaders());
     }
 
     @Override
     public byte[] putIfAbsent(final Bytes key,
-                              final byte[] valueAndTimestamp) {
+        final byte[] valueAndTimestamp) {
         final byte[] previous = wrapped().putIfAbsent(key, valueAndTimestamp);
         if (previous == null) {
             // then it was absent

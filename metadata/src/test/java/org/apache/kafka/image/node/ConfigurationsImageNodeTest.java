@@ -48,7 +48,7 @@ public class ConfigurationsImageNodeTest {
                 new ConfigResource(TOPIC, ":colons:"),
                 new ConfigResource(TOPIC, "__internal"))) {
             resourceMap.put(resource, new ConfigurationImage(resource,
-                    Map.of("foo", "bar")));
+                Map.of("foo", "bar")));
         }
         ConfigurationsImage image = new ConfigurationsImage(resourceMap);
         NODE = new ConfigurationsImageNode(image);

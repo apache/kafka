@@ -48,10 +48,10 @@ public class ShareFetchCollector<K, V> {
     private final Deserializers<K, V> deserializers;
 
     public ShareFetchCollector(final LogContext logContext,
-                               final ShareConsumerMetadata metadata,
-                               final SubscriptionState subscriptions,
-                               final ShareFetchConfig shareFetchConfig,
-                               final Deserializers<K, V> deserializers) {
+        final ShareConsumerMetadata metadata,
+        final SubscriptionState subscriptions,
+        final ShareFetchConfig shareFetchConfig,
+        final Deserializers<K, V> deserializers) {
         this.log = logContext.logger(ShareFetchCollector.class);
         this.metadata = metadata;
         this.subscriptions = subscriptions;
@@ -100,9 +100,9 @@ public class ShareFetchCollector<K, V> {
                     final TopicIdPartition tp = nextInLineFetch.partition;
 
                     ShareInFlightBatch<K, V> batch = nextInLineFetch.fetchRecords(
-                            deserializers,
-                            recordsRemaining,
-                            shareFetchConfig.checkCrcs);
+                        deserializers,
+                        recordsRemaining,
+                        shareFetchConfig.checkCrcs);
 
                     if (batch.isEmpty()) {
                         nextInLineFetch.drain();
@@ -143,8 +143,8 @@ public class ShareFetchCollector<K, V> {
 
     private ShareCompletedFetch handleInitializeSuccess(final ShareCompletedFetch completedFetch) {
         log.trace("Preparing to read {} bytes of data for partition {}",
-                ShareFetchResponse.recordsSize(completedFetch.partitionData),
-                completedFetch.partition.topicPartition());
+            ShareFetchResponse.recordsSize(completedFetch.partitionData),
+            completedFetch.partition.topicPartition());
 
         completedFetch.setInitialized();
         return completedFetch;
@@ -154,10 +154,10 @@ public class ShareFetchCollector<K, V> {
         final TopicIdPartition tp = completedFetch.partition;
 
         if (error == Errors.NOT_LEADER_OR_FOLLOWER ||
-                error == Errors.REPLICA_NOT_AVAILABLE ||
-                error == Errors.KAFKA_STORAGE_ERROR ||
-                error == Errors.FENCED_LEADER_EPOCH ||
-                error == Errors.OFFSET_NOT_AVAILABLE) {
+            error == Errors.REPLICA_NOT_AVAILABLE ||
+            error == Errors.KAFKA_STORAGE_ERROR ||
+            error == Errors.FENCED_LEADER_EPOCH ||
+            error == Errors.OFFSET_NOT_AVAILABLE) {
             log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
             requestMetadataUpdate(metadata, subscriptions, tp.topicPartition());
         } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
@@ -177,13 +177,13 @@ public class ShareFetchCollector<K, V> {
             log.debug("Received unknown leader epoch error in fetch for partition {}.", tp);
         } else if (error == Errors.UNKNOWN_SERVER_ERROR) {
             log.warn("Unknown server error while fetching topic-partition {}.",
-                    tp.topicPartition());
+                tp.topicPartition());
         } else if (error == Errors.CORRUPT_MESSAGE) {
             throw new KafkaException("Encountered corrupt message when fetching topic-partition "
-                    + tp.topicPartition());
+                + tp.topicPartition());
         } else {
             throw new IllegalStateException("Unexpected error code " + error.code()
-                    + " while fetching from topic-partition " + tp.topicPartition());
+                + " while fetching from topic-partition " + tp.topicPartition());
         }
     }
 }

@@ -64,14 +64,14 @@ public final class ScramDelta {
     public void replay(UserScramCredentialRecord record) {
         ScramMechanism mechanism = ScramMechanism.fromType(record.mechanism());
         Map<String, Optional<ScramCredentialData>> userChanges =
-                changes.computeIfAbsent(mechanism, __ -> new HashMap<>());
+            changes.computeIfAbsent(mechanism, __ -> new HashMap<>());
         userChanges.put(record.name(), Optional.of(ScramCredentialData.fromRecord(record)));
     }
 
     public void replay(RemoveUserScramCredentialRecord record) {
         ScramMechanism mechanism = ScramMechanism.fromType(record.mechanism());
         Map<String, Optional<ScramCredentialData>> userChanges =
-                changes.computeIfAbsent(mechanism, __ -> new HashMap<>());
+            changes.computeIfAbsent(mechanism, __ -> new HashMap<>());
         userChanges.put(record.name(), Optional.empty());
     }
 
@@ -86,7 +86,7 @@ public final class ScramDelta {
         }
         for (Entry<ScramMechanism, Map<String, Optional<ScramCredentialData>>> mechanismChangeEntry : changes.entrySet()) {
             Map<String, ScramCredentialData> userMap =
-                    newMechanisms.computeIfAbsent(mechanismChangeEntry.getKey(), __ -> new HashMap<>());
+                newMechanisms.computeIfAbsent(mechanismChangeEntry.getKey(), __ -> new HashMap<>());
             for (Entry<String, Optional<ScramCredentialData>> userNameEntry : mechanismChangeEntry.getValue().entrySet()) {
                 if (userNameEntry.getValue().isPresent()) {
                     userMap.put(userNameEntry.getKey(), userNameEntry.getValue().get());

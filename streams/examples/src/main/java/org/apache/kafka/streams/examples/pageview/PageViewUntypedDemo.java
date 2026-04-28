@@ -124,8 +124,8 @@ public class PageViewUntypedDemo {
             .leftJoin(userRegions, (view, region) -> {
                 final ObjectNode jNode = JsonNodeFactory.instance.objectNode();
                 return (JsonNode) jNode.put("user", view.get("user").textValue())
-                        .put("page", view.get("page").textValue())
-                        .put("region", region == null ? "UNKNOWN" : region);
+                    .put("page", view.get("page").textValue())
+                    .put("region", region == null ? "UNKNOWN" : region);
 
             })
             .map((user, viewRegion) -> new KeyValue<>(viewRegion.get("region").textValue(), viewRegion))
@@ -136,7 +136,7 @@ public class PageViewUntypedDemo {
             .map((key, value) -> {
                 final ObjectNode keyNode = JsonNodeFactory.instance.objectNode();
                 keyNode.put("window-start", key.window().start())
-                        .put("region", key.key());
+                    .put("region", key.key());
 
                 final ObjectNode valueNode = JsonNodeFactory.instance.objectNode();
                 valueNode.put("count", value);

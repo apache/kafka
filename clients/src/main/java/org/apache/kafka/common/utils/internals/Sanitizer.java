@@ -45,7 +45,7 @@ public class Sanitizer {
     public static String sanitize(String name) {
         String encoded = URLEncoder.encode(name, StandardCharsets.UTF_8);
         StringBuilder builder = new StringBuilder();
-        for (int i = 0; i < encoded.length(); i++) {
+        for (int i = 0;i < encoded.length();i++) {
             char c = encoded.charAt(i);
             if (c == '*') {         // Metric ObjectName treats * as pattern
                 builder.append("%2A");

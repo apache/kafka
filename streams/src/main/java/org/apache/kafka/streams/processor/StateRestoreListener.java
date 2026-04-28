@@ -59,9 +59,9 @@ public interface StateRestoreListener {
      * @param endingOffset   the exclusive ending offset of the entire restoration process for this TopicPartition
      */
     void onRestoreStart(final TopicPartition topicPartition,
-                        final String storeName,
-                        final long startingOffset,
-                        final long endingOffset);
+        final String storeName,
+        final long startingOffset,
+        final long endingOffset);
 
     /**
      * Method called after restoring a batch of records.  In this case the maximum size of the batch is whatever
@@ -79,9 +79,9 @@ public interface StateRestoreListener {
      * @param numRestored the total number of records restored in this batch for this TopicPartition
      */
     void onBatchRestored(final TopicPartition topicPartition,
-                         final String storeName,
-                         final long batchEndOffset,
-                         final long numRestored);
+        final String storeName,
+        final long batchEndOffset,
+        final long numRestored);
 
     /**
      * Method called when restoring the {@link StateStore} is complete.
@@ -91,8 +91,8 @@ public interface StateRestoreListener {
      * @param totalRestored the total number of records restored for this TopicPartition
      */
     void onRestoreEnd(final TopicPartition topicPartition,
-                      final String storeName,
-                      final long totalRestored);
+        final String storeName,
+        final long totalRestored);
 
     /**
      * Method called when restoring the {@link StateStore} is suspended due to the task being migrated out of the host.
@@ -104,7 +104,7 @@ public interface StateRestoreListener {
      * @param totalRestored the total number of records restored for this TopicPartition before being paused
      */
     default void onRestoreSuspended(final TopicPartition topicPartition,
-                                    final String storeName,
-                                    final long totalRestored) {
+        final String storeName,
+        final long totalRestored) {
     }
 }

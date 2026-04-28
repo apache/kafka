@@ -342,7 +342,7 @@ public final class FileRawSnapshotTest {
     }
 
     private static UnalignedMemoryRecords buildRecords(ByteBuffer... buffers) {
-        MemoryRecords records =  MemoryRecords.withRecords(
+        MemoryRecords records = MemoryRecords.withRecords(
             Compression.NONE,
             Arrays.stream(buffers).map(SimpleRecord::new).toArray(SimpleRecord[]::new)
         );

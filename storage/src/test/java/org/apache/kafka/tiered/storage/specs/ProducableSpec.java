@@ -28,8 +28,8 @@ public final class ProducableSpec {
     private long earliestLocalLogOffset;
 
     public ProducableSpec(List<ProducerRecord<String, String>> records,
-                          int batchSize,
-                          long earliestLocalLogOffset) {
+            int batchSize,
+            long earliestLocalLogOffset) {
         this.records = records;
         this.batchSize = batchSize;
         this.earliestLocalLogOffset = earliestLocalLogOffset;

@@ -65,7 +65,7 @@ public class CachedSharePartition implements ImplicitLinkedHashCollection.Elemen
 
     public CachedSharePartition(TopicIdPartition topicIdPartition, boolean requiresUpdateInResponse) {
         this(topicIdPartition.topic(), topicIdPartition.topicId(), topicIdPartition.partition(),
-                Optional.empty(), requiresUpdateInResponse);
+            Optional.empty(), requiresUpdateInResponse);
     }
 
     public Uuid topicId() {
@@ -112,11 +112,11 @@ public class CachedSharePartition implements ImplicitLinkedHashCollection.Elemen
     }
 
     public String toString() {
-        return  "CachedSharePartition(topic=" + topic +
-                ", topicId=" + topicId +
-                ", partition=" + partition +
-                ", leaderEpoch=" + leaderEpoch +
-                ")";
+        return "CachedSharePartition(topic=" + topic +
+            ", topicId=" + topicId +
+            ", partition=" + partition +
+            ", leaderEpoch=" + leaderEpoch +
+            ")";
     }
 
     @Override

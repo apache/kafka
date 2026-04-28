@@ -61,9 +61,9 @@ public class PartitionReassignment {
     @Override
     public String toString() {
         return "PartitionReassignment(" +
-                "replicas=" + replicas +
-                ", addingReplicas=" + addingReplicas +
-                ", removingReplicas=" + removingReplicas +
-                ')';
+            "replicas=" + replicas +
+            ", addingReplicas=" + addingReplicas +
+            ", removingReplicas=" + removingReplicas +
+            ')';
     }
 }

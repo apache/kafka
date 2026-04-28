@@ -108,7 +108,7 @@ public class ValuesTest {
         // This byte sequence gets parsed as CharacterIterator.DONE and can cause issues if
         // comparisons to that character are done to check if the end of a string has been reached.
         // For more information, see https://issues.apache.org/jira/browse/KAFKA-10574
-        byte[] bytes = new byte[] {-17, -65,  -65};
+        byte[] bytes = new byte[]{-17, -65, -65};
         String str = new String(bytes, StandardCharsets.UTF_8);
         SchemaAndValue schemaAndValue = Values.parseString(str);
         assertEquals(Type.STRING, schemaAndValue.schema().type());
@@ -345,7 +345,7 @@ public class ValuesTest {
 
     @Test
     public void shouldConvertSimpleString() {
-        assertRoundTrip(Schema.STRING_SCHEMA,  "simple");
+        assertRoundTrip(Schema.STRING_SCHEMA, "simple");
     }
 
     @Test
@@ -754,7 +754,7 @@ public class ValuesTest {
     @Test
     public void shouldFailToParseStringOfMapWithIntValuesWithBlankEntry() {
         assertThrows(DataException.class,
-            () -> Values.convertToMap(Schema.STRING_SCHEMA, " { \"foo\" :  1234567890 ,, \"bar\" : 0,  \"baz\" : -987654321 }  "));
+                () -> Values.convertToMap(Schema.STRING_SCHEMA, " { \"foo\" :  1234567890 ,, \"bar\" : 0,  \"baz\" : -987654321 }  "));
     }
 
     /**
@@ -763,7 +763,7 @@ public class ValuesTest {
     @Test
     public void shouldFailToParseStringOfMalformedMap() {
         assertThrows(DataException.class,
-            () -> Values.convertToMap(Schema.STRING_SCHEMA, " { \"foo\" :  1234567890 , \"a\", \"bar\" : 0,  \"baz\" : -987654321 }  "));
+                () -> Values.convertToMap(Schema.STRING_SCHEMA, " { \"foo\" :  1234567890 , \"a\", \"bar\" : 0,  \"baz\" : -987654321 }  "));
     }
 
     /**
@@ -780,7 +780,7 @@ public class ValuesTest {
     @Test
     public void shouldFailToParseStringOfMapWithIntValuesWithBlankEntries() {
         assertThrows(DataException.class,
-            () -> Values.convertToMap(Schema.STRING_SCHEMA, " { \"foo\" :  \"1234567890\" ,, \"bar\" : \"0\",  \"baz\" : \"boz\" }  "));
+                () -> Values.convertToMap(Schema.STRING_SCHEMA, " { \"foo\" :  \"1234567890\" ,, \"bar\" : \"0\",  \"baz\" : \"boz\" }  "));
     }
 
     @Test
@@ -1047,14 +1047,14 @@ public class ValuesTest {
     public void shouldParseBigIntegerAsDecimalWithZeroScale() {
         BigInteger value = BigInteger.valueOf(Long.MAX_VALUE).add(new BigInteger("1"));
         SchemaAndValue schemaAndValue = Values.parseString(
-            String.valueOf(value)
+                String.valueOf(value)
         );
         assertEquals(Decimal.schema(0), schemaAndValue.schema());
         assertInstanceOf(BigDecimal.class, schemaAndValue.value());
         assertEquals(value, ((BigDecimal) schemaAndValue.value()).unscaledValue());
         value = BigInteger.valueOf(Long.MIN_VALUE).subtract(new BigInteger("1"));
         schemaAndValue = Values.parseString(
-            String.valueOf(value)
+                String.valueOf(value)
         );
         assertEquals(Decimal.schema(0), schemaAndValue.schema());
         assertInstanceOf(BigDecimal.class, schemaAndValue.value());
@@ -1065,14 +1065,14 @@ public class ValuesTest {
     public void shouldParseByteAsInt8() {
         Byte value = Byte.MAX_VALUE;
         SchemaAndValue schemaAndValue = Values.parseString(
-            String.valueOf(value)
+                String.valueOf(value)
         );
         assertEquals(Schema.INT8_SCHEMA, schemaAndValue.schema());
         assertInstanceOf(Byte.class, schemaAndValue.value());
         assertEquals(value.byteValue(), ((Byte) schemaAndValue.value()).byteValue());
         value = Byte.MIN_VALUE;
         schemaAndValue = Values.parseString(
-            String.valueOf(value)
+                String.valueOf(value)
         );
         assertEquals(Schema.INT8_SCHEMA, schemaAndValue.schema());
         assertInstanceOf(Byte.class, schemaAndValue.value());
@@ -1083,14 +1083,14 @@ public class ValuesTest {
     public void shouldParseShortAsInt16() {
         Short value = Short.MAX_VALUE;
         SchemaAndValue schemaAndValue = Values.parseString(
-            String.valueOf(value)
+                String.valueOf(value)
         );
         assertEquals(Schema.INT16_SCHEMA, schemaAndValue.schema());
         assertInstanceOf(Short.class, schemaAndValue.value());
         assertEquals(value.shortValue(), ((Short) schemaAndValue.value()).shortValue());
         value = Short.MIN_VALUE;
         schemaAndValue = Values.parseString(
-            String.valueOf(value)
+                String.valueOf(value)
         );
         assertEquals(Schema.INT16_SCHEMA, schemaAndValue.schema());
         assertInstanceOf(Short.class, schemaAndValue.value());
@@ -1101,14 +1101,14 @@ public class ValuesTest {
     public void shouldParseIntegerAsInt32() {
         Integer value = Integer.MAX_VALUE;
         SchemaAndValue schemaAndValue = Values.parseString(
-            String.valueOf(value)
+                String.valueOf(value)
         );
         assertEquals(Schema.INT32_SCHEMA, schemaAndValue.schema());
         assertInstanceOf(Integer.class, schemaAndValue.value());
         assertEquals(value.intValue(), ((Integer) schemaAndValue.value()).intValue());
         value = Integer.MIN_VALUE;
         schemaAndValue = Values.parseString(
-            String.valueOf(value)
+                String.valueOf(value)
         );
         assertEquals(Schema.INT32_SCHEMA, schemaAndValue.schema());
         assertInstanceOf(Integer.class, schemaAndValue.value());
@@ -1119,14 +1119,14 @@ public class ValuesTest {
     public void shouldParseLongAsInt64() {
         Long value = Long.MAX_VALUE;
         SchemaAndValue schemaAndValue = Values.parseString(
-            String.valueOf(value)
+                String.valueOf(value)
         );
         assertEquals(Schema.INT64_SCHEMA, schemaAndValue.schema());
         assertInstanceOf(Long.class, schemaAndValue.value());
         assertEquals(value.longValue(), ((Long) schemaAndValue.value()).longValue());
         value = Long.MIN_VALUE;
         schemaAndValue = Values.parseString(
-            String.valueOf(value)
+                String.valueOf(value)
         );
         assertEquals(Schema.INT64_SCHEMA, schemaAndValue.schema());
         assertInstanceOf(Long.class, schemaAndValue.value());
@@ -1137,14 +1137,14 @@ public class ValuesTest {
     public void shouldParseFloatAsFloat32() {
         Float value = Float.MAX_VALUE;
         SchemaAndValue schemaAndValue = Values.parseString(
-            String.valueOf(value)
+                String.valueOf(value)
         );
         assertEquals(Schema.FLOAT32_SCHEMA, schemaAndValue.schema());
         assertInstanceOf(Float.class, schemaAndValue.value());
         assertEquals(value, (Float) schemaAndValue.value(), 0);
         value = -Float.MAX_VALUE;
         schemaAndValue = Values.parseString(
-            String.valueOf(value)
+                String.valueOf(value)
         );
         assertEquals(Schema.FLOAT32_SCHEMA, schemaAndValue.schema());
         assertInstanceOf(Float.class, schemaAndValue.value());
@@ -1155,14 +1155,14 @@ public class ValuesTest {
     public void shouldParseDoubleAsFloat64() {
         Double value = Double.MAX_VALUE;
         SchemaAndValue schemaAndValue = Values.parseString(
-            String.valueOf(value)
+                String.valueOf(value)
         );
         assertEquals(Schema.FLOAT64_SCHEMA, schemaAndValue.schema());
         assertInstanceOf(Double.class, schemaAndValue.value());
         assertEquals(value, (Double) schemaAndValue.value(), 0);
         value = -Double.MAX_VALUE;
         schemaAndValue = Values.parseString(
-            String.valueOf(value)
+                String.valueOf(value)
         );
         assertEquals(Schema.FLOAT64_SCHEMA, schemaAndValue.schema());
         assertInstanceOf(Double.class, schemaAndValue.value());

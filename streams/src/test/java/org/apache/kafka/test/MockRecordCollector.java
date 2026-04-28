@@ -41,15 +41,15 @@ public class MockRecordCollector implements RecordCollector {
 
     @Override
     public <K, V> void send(final String topic,
-                            final K key,
-                            final V value,
-                            final Headers headers,
-                            final Integer partition,
-                            final Long timestamp,
-                            final Serializer<K> keySerializer,
-                            final Serializer<V> valueSerializer,
-                            final String processorNodeId,
-                            final InternalProcessorContext<Void, Void> context) {
+        final K key,
+        final V value,
+        final Headers headers,
+        final Integer partition,
+        final Long timestamp,
+        final Serializer<K> keySerializer,
+        final Serializer<V> valueSerializer,
+        final String processorNodeId,
+        final InternalProcessorContext<Void, Void> context) {
         collected.add(new ProducerRecord<>(
             topic,
             partition,
@@ -62,15 +62,15 @@ public class MockRecordCollector implements RecordCollector {
 
     @Override
     public <K, V> void send(final String topic,
-                            final K key,
-                            final V value,
-                            final Headers headers,
-                            final Long timestamp,
-                            final Serializer<K> keySerializer,
-                            final Serializer<V> valueSerializer,
-                            final String processorNodeId,
-                            final InternalProcessorContext<Void, Void> context,
-                            final StreamPartitioner<? super K, ? super V> partitioner) {
+        final K key,
+        final V value,
+        final Headers headers,
+        final Long timestamp,
+        final Serializer<K> keySerializer,
+        final Serializer<V> valueSerializer,
+        final String processorNodeId,
+        final InternalProcessorContext<Void, Void> context,
+        final StreamPartitioner<? super K, ? super V> partitioner) {
         collected.add(new ProducerRecord<>(
             topic,
             0, // partition id
@@ -83,23 +83,24 @@ public class MockRecordCollector implements RecordCollector {
 
     @Override
     public <K, V> void send(final K key,
-                            final V value,
-                            final String processorNodeId,
-                            final InternalProcessorContext<?, ?> context,
-                            final ProducerRecord<byte[], byte[]> serializedRecord) {
+        final V value,
+        final String processorNodeId,
+        final InternalProcessorContext<?, ?> context,
+        final ProducerRecord<byte[], byte[]> serializedRecord) {
         // Building a new ProducerRecord for key & value type conversion
         collected.add(new ProducerRecord<>(
-                serializedRecord.topic(),
-                serializedRecord.partition(),
-                serializedRecord.timestamp(),
-                key,
-                value,
-                serializedRecord.headers())
+            serializedRecord.topic(),
+            serializedRecord.partition(),
+            serializedRecord.timestamp(),
+            key,
+            value,
+            serializedRecord.headers())
         );
     }
 
     @Override
-    public void initialize() {}
+    public void initialize() {
+    }
 
     @Override
     public void flush() {
@@ -107,10 +108,12 @@ public class MockRecordCollector implements RecordCollector {
     }
 
     @Override
-    public void closeClean() {}
+    public void closeClean() {
+    }
 
     @Override
-    public void closeDirty() {}
+    public void closeDirty() {
+    }
 
     @Override
     public Map<TopicPartition, Long> offsets() {

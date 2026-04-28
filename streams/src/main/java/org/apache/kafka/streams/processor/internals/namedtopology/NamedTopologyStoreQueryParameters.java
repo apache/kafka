@@ -27,17 +27,17 @@ public class NamedTopologyStoreQueryParameters<T> extends StoreQueryParameters<T
     final String topologyName;
 
     private NamedTopologyStoreQueryParameters(final String topologyName,
-                                              final String storeName,
-                                              final QueryableStoreType<T>  queryableStoreType,
-                                              final Integer partition,
-                                              final boolean staleStores) {
+        final String storeName,
+        final QueryableStoreType<T> queryableStoreType,
+        final Integer partition,
+        final boolean staleStores) {
         super(storeName, queryableStoreType, partition, staleStores);
         this.topologyName = topologyName;
     }
 
     public static <T> NamedTopologyStoreQueryParameters<T> fromNamedTopologyAndStoreNameAndType(final String topologyName,
-                                                                                                final String storeName,
-                                                                                                final QueryableStoreType<T> queryableStoreType) {
+        final String storeName,
+        final QueryableStoreType<T> queryableStoreType) {
         return new NamedTopologyStoreQueryParameters<>(topologyName, storeName, queryableStoreType, null, false);
     }
 

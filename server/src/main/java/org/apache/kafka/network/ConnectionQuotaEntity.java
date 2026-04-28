@@ -34,23 +34,23 @@ public class ConnectionQuotaEntity {
 
     public static ConnectionQuotaEntity listenerQuotaEntity(String listenerName) {
         return new ConnectionQuotaEntity(CONNECTION_RATE_SENSOR_NAME + "-" + listenerName,
-                CONNECTION_RATE_METRIC_NAME,
-                Long.MAX_VALUE,
-                Map.of("listener", listenerName));
+            CONNECTION_RATE_METRIC_NAME,
+            Long.MAX_VALUE,
+            Map.of("listener", listenerName));
     }
 
     public static ConnectionQuotaEntity brokerQuotaEntity() {
         return new ConnectionQuotaEntity(CONNECTION_RATE_SENSOR_NAME,
-                "broker-" + ConnectionQuotaEntity.CONNECTION_RATE_METRIC_NAME,
-                Long.MAX_VALUE,
-                Map.of());
+            "broker-" + ConnectionQuotaEntity.CONNECTION_RATE_METRIC_NAME,
+            Long.MAX_VALUE,
+            Map.of());
     }
 
     public static ConnectionQuotaEntity ipQuotaEntity(InetAddress ip) {
         return new ConnectionQuotaEntity(CONNECTION_RATE_SENSOR_NAME + "-" + ip.getHostAddress(),
-                CONNECTION_RATE_METRIC_NAME,
-                TimeUnit.HOURS.toSeconds(1),
-                Map.of(IP_METRIC_TAG, ip.getHostAddress()));
+            CONNECTION_RATE_METRIC_NAME,
+            TimeUnit.HOURS.toSeconds(1),
+            Map.of(IP_METRIC_TAG, ip.getHostAddress()));
     }
 
     private final String sensorName;

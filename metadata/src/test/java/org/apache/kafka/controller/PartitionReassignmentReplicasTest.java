@@ -136,10 +136,10 @@ public class PartitionReassignmentReplicasTest {
             new PartitionRegistration.Builder().
                 setReplicas(new int[]{0, 1, 3, 2}).
                 setDirectories(new Uuid[]{
-                    Uuid.fromString("HEKOeWDdQOqr2cmHrnjqjA"),
-                    Uuid.fromString("I8kmmcM5TjOwNFnGvJLCjA"),
-                    Uuid.fromString("x8osEoRkQdupZNYpU5c3Lw"),
-                    Uuid.fromString("OT6qgtRqTiuiX8EikvAVow")}).
+                Uuid.fromString("HEKOeWDdQOqr2cmHrnjqjA"),
+                Uuid.fromString("I8kmmcM5TjOwNFnGvJLCjA"),
+                Uuid.fromString("x8osEoRkQdupZNYpU5c3Lw"),
+                Uuid.fromString("OT6qgtRqTiuiX8EikvAVow")}).
                 setIsr(new int[]{0, 1, 3, 2}).
                 setRemovingReplicas(new int[]{2}).
                 setAddingReplicas(new int[]{3}).
@@ -152,11 +152,11 @@ public class PartitionReassignmentReplicasTest {
             new PartitionRegistration.Builder().
                 setReplicas(new int[]{0, 1, 3, 2}).
                 setDirectories(new Uuid[]{
-                    Uuid.fromString("QrbOddSYQg6JgFu7hLvOTg"),
-                    Uuid.fromString("S585FNNoSmiSH6ZYCrNqCg"),
-                    Uuid.fromString("wjT5ieLARfKYMWIzTFwcag"),
-                    Uuid.fromString("qzX9qWPVTWuLbiEQL0cgeg")
-                }).
+                Uuid.fromString("QrbOddSYQg6JgFu7hLvOTg"),
+                Uuid.fromString("S585FNNoSmiSH6ZYCrNqCg"),
+                Uuid.fromString("wjT5ieLARfKYMWIzTFwcag"),
+                Uuid.fromString("qzX9qWPVTWuLbiEQL0cgeg")
+            }).
                 setIsr(new int[]{0, 1, 3, 2}).
                 setRemovingReplicas(new int[]{2}).
                 setLeader(0).
@@ -168,11 +168,11 @@ public class PartitionReassignmentReplicasTest {
             new PartitionRegistration.Builder().
                 setReplicas(new int[]{0, 1, 3, 2}).
                 setDirectories(new Uuid[]{
-                    Uuid.fromString("QIyJnfdUSz6laFLCgj3AjA"),
-                    Uuid.fromString("1QIvvBx2QVqNw2dsnYXUZg"),
-                    Uuid.fromString("yPvPnGrxR0q8KC2Q5k0FIg"),
-                    Uuid.fromString("a0lnxzleTcWVf1IyalE9cA")
-                }).
+                Uuid.fromString("QIyJnfdUSz6laFLCgj3AjA"),
+                Uuid.fromString("1QIvvBx2QVqNw2dsnYXUZg"),
+                Uuid.fromString("yPvPnGrxR0q8KC2Q5k0FIg"),
+                Uuid.fromString("a0lnxzleTcWVf1IyalE9cA")
+            }).
                 setIsr(new int[]{0, 1, 3, 2}).
                 setAddingReplicas(new int[]{3}).
                 setLeader(0).
@@ -184,10 +184,10 @@ public class PartitionReassignmentReplicasTest {
             new PartitionRegistration.Builder().
                 setReplicas(new int[]{0, 1, 2}).
                 setDirectories(new Uuid[]{
-                    Uuid.fromString("I4qCCBe9TYGOB0xvmvTI7w"),
-                    Uuid.fromString("JvzGem0nTxiNPM5jIzNzlA"),
-                    Uuid.fromString("EfWjZ2EsSKSvEn9PkG7lWQ")
-                }).
+                Uuid.fromString("I4qCCBe9TYGOB0xvmvTI7w"),
+                Uuid.fromString("JvzGem0nTxiNPM5jIzNzlA"),
+                Uuid.fromString("EfWjZ2EsSKSvEn9PkG7lWQ")
+            }).
                 setIsr(new int[]{0, 1, 2}).
                 setLeader(0).
                 setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
@@ -201,12 +201,12 @@ public class PartitionReassignmentReplicasTest {
     @Test
     public void testCanCompleteReassignmentIfIsrDoesNotHaveAnExistingTargetReplica() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-                partitionAssignment(List.of(0, 1, 2)), partitionAssignment(List.of(0, 1, 3)));
+            partitionAssignment(List.of(0, 1, 2)), partitionAssignment(List.of(0, 1, 3)));
         assertTrue(replicas.isReassignmentInProgress());
 
         // Replica 1 is not in sync
         Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
-                replicas.maybeCompleteReassignment(List.of(0, 2, 3));
+            replicas.maybeCompleteReassignment(List.of(0, 2, 3));
         assertTrue(reassignmentOptional.isPresent());
         PartitionReassignmentReplicas.CompletedReassignment completedReassignment = reassignmentOptional.get();
         assertEquals(List.of(0, 3), completedReassignment.isr());
@@ -218,12 +218,12 @@ public class PartitionReassignmentReplicasTest {
     @Test
     public void testCanCompleteReassignmentIfIsrDoesNotHaveBothExistingTargetReplica() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-                partitionAssignment(List.of(0, 1, 2)), partitionAssignment(List.of(0, 1, 3)));
+            partitionAssignment(List.of(0, 1, 2)), partitionAssignment(List.of(0, 1, 3)));
         assertTrue(replicas.isReassignmentInProgress());
 
         // Replica 0 and 1 are not in sync
         Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
-                replicas.maybeCompleteReassignment(List.of(2, 3));
+            replicas.maybeCompleteReassignment(List.of(2, 3));
         assertTrue(reassignmentOptional.isPresent());
         PartitionReassignmentReplicas.CompletedReassignment completedReassignment = reassignmentOptional.get();
         assertEquals(List.of(3), completedReassignment.isr());
@@ -234,12 +234,12 @@ public class PartitionReassignmentReplicasTest {
     @Test
     public void testDoesNotCompleteReassignmentIfIsrDoesNotHaveAnAddingTargetReplica() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-                partitionAssignment(List.of(0, 1, 2)), partitionAssignment(List.of(0, 1, 3)));
+            partitionAssignment(List.of(0, 1, 2)), partitionAssignment(List.of(0, 1, 3)));
         assertTrue(replicas.isReassignmentInProgress());
 
         // Replica 3 is not in sync
         Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
-                replicas.maybeCompleteReassignment(List.of(0, 1, 2));
+            replicas.maybeCompleteReassignment(List.of(0, 1, 2));
         assertFalse(reassignmentOptional.isPresent());
     }
 
@@ -248,12 +248,12 @@ public class PartitionReassignmentReplicasTest {
     @Test
     public void testCanCompleteReassignmentWhenReplicationFactorIncreasesAndMissingAnExistingTargetReplicaFromIsr() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-                partitionAssignment(List.of(0, 1, 2, 3)), partitionAssignment(List.of(1, 2, 3, 4, 5)));
+            partitionAssignment(List.of(0, 1, 2, 3)), partitionAssignment(List.of(1, 2, 3, 4, 5)));
         assertTrue(replicas.isReassignmentInProgress());
 
         // Replica 3 is not in sync
         Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
-                replicas.maybeCompleteReassignment(List.of(0, 1, 2, 4, 5));
+            replicas.maybeCompleteReassignment(List.of(0, 1, 2, 4, 5));
         assertTrue(reassignmentOptional.isPresent());
         PartitionReassignmentReplicas.CompletedReassignment completedReassignment = reassignmentOptional.get();
         assertEquals(List.of(1, 2, 4, 5), completedReassignment.isr());
@@ -265,12 +265,12 @@ public class PartitionReassignmentReplicasTest {
     @Test
     public void testDoesNotCompleteReassignmentWhenReplicationFactorIncreasesAndMissingAnAddingReplicaFromIsr() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-                partitionAssignment(List.of(0, 1, 2, 3)), partitionAssignment(List.of(1, 2, 3, 4, 5)));
+            partitionAssignment(List.of(0, 1, 2, 3)), partitionAssignment(List.of(1, 2, 3, 4, 5)));
         assertTrue(replicas.isReassignmentInProgress());
 
         // Replica 4 is not in sync
         Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
-                replicas.maybeCompleteReassignment(List.of(0, 1, 2, 3, 5));
+            replicas.maybeCompleteReassignment(List.of(0, 1, 2, 3, 5));
         assertFalse(reassignmentOptional.isPresent());
     }
 
@@ -279,12 +279,12 @@ public class PartitionReassignmentReplicasTest {
     @Test
     public void testDoesNotCompleteReassignmentWhenReplicationFactorDecreasesAndMissingAnExistingTargetReplicaFromIsr() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-                partitionAssignment(List.of(0, 1, 2, 3, 4)), partitionAssignment(List.of(2, 3, 4, 5)));
+            partitionAssignment(List.of(0, 1, 2, 3, 4)), partitionAssignment(List.of(2, 3, 4, 5)));
         assertTrue(replicas.isReassignmentInProgress());
 
         // Replica 4 is not in sync
         Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
-                replicas.maybeCompleteReassignment(List.of(0, 1, 2, 3, 5));
+            replicas.maybeCompleteReassignment(List.of(0, 1, 2, 3, 5));
         assertFalse(reassignmentOptional.isPresent());
     }
 
@@ -293,12 +293,12 @@ public class PartitionReassignmentReplicasTest {
     @Test
     public void testDoesNotCompleteReassignmentWhenReplicationFactorDecreasesAndMissingAnAddingReplicasFromISR() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-                partitionAssignment(List.of(0, 1, 2, 3, 4)), partitionAssignment(List.of(2, 3, 4, 5)));
+            partitionAssignment(List.of(0, 1, 2, 3, 4)), partitionAssignment(List.of(2, 3, 4, 5)));
         assertTrue(replicas.isReassignmentInProgress());
 
         // Replica 5 is not in sync
         Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
-                replicas.maybeCompleteReassignment(List.of(0, 1, 2, 3, 4));
+            replicas.maybeCompleteReassignment(List.of(0, 1, 2, 3, 4));
         assertFalse(reassignmentOptional.isPresent());
     }
 

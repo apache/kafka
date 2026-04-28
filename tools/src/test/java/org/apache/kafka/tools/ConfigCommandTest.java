@@ -400,9 +400,9 @@ public class ConfigCommandTest {
     public void testParseConfigsToBeAddedForAddConfigFile() throws IOException {
         String fileContents =
             "a=b\n" +
-            "c = d\n" +
-            "json = {\"key\": \"val\"}\n" +
-            "nested = [[1, 2], [3, 4]]";
+                "c = d\n" +
+                "json = {\"key\": \"val\"}\n" +
+                "nested = [[1, 2], [3, 4]]";
 
         File file = TestUtils.tempFile(fileContents);
 
@@ -574,7 +574,7 @@ public class ConfigCommandTest {
     }
 
     public void verifyAlterQuotas(List<String> alterOpts, ClientQuotaEntity expectedAlterEntity,
-                                  Map<String, Double> expectedProps, Set<ClientQuotaAlteration.Op> expectedAlterOps) throws Exception {
+        Map<String, Double> expectedProps, Set<ClientQuotaAlteration.Op> expectedAlterOps) throws Exception {
         ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(List.of("--bootstrap-server", "localhost:9092",
             "--alter"), alterOpts));
 
@@ -1034,7 +1034,7 @@ public class ConfigCommandTest {
     }
 
     private void verifyAlterBrokerLoggerConfig(Node node, String resourceName, String entityName,
-                                               List<ConfigEntry> describeConfigEntries) throws Exception {
+        List<ConfigEntry> describeConfigEntries) throws Exception {
         String[] optsList = toArray("--bootstrap-server", "localhost:9092",
             "--entity-type", ConfigCommand.BROKER_LOGGER_CONFIG_TYPE,
             "--alter",
@@ -1164,7 +1164,7 @@ public class ConfigCommandTest {
             "--alter",
             "--delete-config", "interval.ms",
             "--add-config", "metrics=org.apache.kafka.consumer.," +
-                "match=[client_software_name=kafka.python,client_software_version=1\\.2\\..*]"), resourceOpts);
+            "match=[client_software_name=kafka.python,client_software_version=1\\.2\\..*]"), resourceOpts);
         ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray(optsList));
 
         KafkaFutureImpl<Void> alterFuture = new KafkaFutureImpl<>();

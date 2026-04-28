@@ -33,7 +33,7 @@ public class MockCoordinatorShardBuilder implements CoordinatorShardBuilder<Mock
 
     @Override
     public CoordinatorShardBuilder<MockCoordinatorShard, String> withSnapshotRegistry(
-        SnapshotRegistry snapshotRegistry
+            SnapshotRegistry snapshotRegistry
     ) {
         this.snapshotRegistry = snapshotRegistry;
         return this;
@@ -41,21 +41,21 @@ public class MockCoordinatorShardBuilder implements CoordinatorShardBuilder<Mock
 
     @Override
     public CoordinatorShardBuilder<MockCoordinatorShard, String> withLogContext(
-        LogContext logContext
+            LogContext logContext
     ) {
         return this;
     }
 
     @Override
     public CoordinatorShardBuilder<MockCoordinatorShard, String> withTime(
-        Time time
+            Time time
     ) {
         return this;
     }
 
     @Override
     public CoordinatorShardBuilder<MockCoordinatorShard, String> withExecutor(
-        CoordinatorExecutor<String> executor
+            CoordinatorExecutor<String> executor
     ) {
         this.executor = executor;
         return this;
@@ -63,7 +63,7 @@ public class MockCoordinatorShardBuilder implements CoordinatorShardBuilder<Mock
 
     @Override
     public CoordinatorShardBuilder<MockCoordinatorShard, String> withTimer(
-        CoordinatorTimer<String> timer
+            CoordinatorTimer<String> timer
     ) {
         this.timer = timer;
         return this;
@@ -76,7 +76,7 @@ public class MockCoordinatorShardBuilder implements CoordinatorShardBuilder<Mock
 
     @Override
     public CoordinatorShardBuilder<MockCoordinatorShard, String> withTopicPartition(
-        TopicPartition topicPartition
+            TopicPartition topicPartition
     ) {
         return this;
     }
@@ -84,9 +84,9 @@ public class MockCoordinatorShardBuilder implements CoordinatorShardBuilder<Mock
     @Override
     public MockCoordinatorShard build() {
         return new MockCoordinatorShard(
-            Objects.requireNonNull(this.snapshotRegistry),
-            Objects.requireNonNull(this.timer),
-            Objects.requireNonNull(this.executor)
+                Objects.requireNonNull(this.snapshotRegistry),
+                Objects.requireNonNull(this.timer),
+                Objects.requireNonNull(this.executor)
         );
     }
 }

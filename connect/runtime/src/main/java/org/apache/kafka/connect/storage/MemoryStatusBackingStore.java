@@ -118,8 +118,8 @@ public class MemoryStatusBackingStore implements StatusBackingStore {
     public Collection<TopicStatus> getAllTopics(String connector) {
         ConcurrentMap<String, TopicStatus> activeTopics = topics.get(Objects.requireNonNull(connector));
         return activeTopics != null
-               ? Set.copyOf(activeTopics.values())
-               : Set.of();
+                ? Set.copyOf(activeTopics.values())
+                : Set.of();
     }
 
     @Override

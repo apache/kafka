@@ -56,8 +56,8 @@ public class Lz4Compression implements Compression {
     public InputStream wrapForInput(ByteBuffer inputBuffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
         try {
             return new ChunkedBytesStream(
-                    new Lz4BlockInputStream(inputBuffer, decompressionBufferSupplier, messageVersion == RecordBatch.MAGIC_VALUE_V0),
-                    decompressionBufferSupplier, decompressionOutputSize(), true);
+                new Lz4BlockInputStream(inputBuffer, decompressionBufferSupplier, messageVersion == RecordBatch.MAGIC_VALUE_V0),
+                decompressionBufferSupplier, decompressionOutputSize(), true);
         } catch (Throwable e) {
             throw new KafkaException(e);
         }

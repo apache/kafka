@@ -81,9 +81,9 @@ public class RecordTestUtils {
     }
 
     public static <T extends ApiMessage> Optional<T> recordAtIndexAs(
-            Class<T> recordClazz,
-            List<ApiMessageAndVersion> recordsAndVersions,
-            int recordIndex
+        Class<T> recordClazz,
+        List<ApiMessageAndVersion> recordsAndVersions,
+        int recordIndex
     ) {
         if (recordIndex > recordsAndVersions.size() - 1) {
             return Optional.empty();
@@ -239,7 +239,7 @@ public class RecordTestUtils {
         MockRandom random = new MockRandom(index);
         return new ApiMessageAndVersion(
             new TopicRecord().setName("test" + index).
-            setTopicId(new Uuid(random.nextLong(), random.nextLong())), (short) 0);
+                setTopicId(new Uuid(random.nextLong(), random.nextLong())), (short) 0);
     }
 
     public static RegisterControllerRecord createTestControllerRegistration(
@@ -251,26 +251,26 @@ public class RecordTestUtils {
             setIncarnationId(new Uuid(3465346L, id)).
             setZkMigrationReady(zkMigrationReady).
             setEndPoints(new RegisterControllerRecord.ControllerEndpointCollection(
-                List.of(
-                    new RegisterControllerRecord.ControllerEndpoint().
-                        setName("CONTROLLER").
-                        setHost("localhost").
-                        setPort(8000 + id).
-                        setSecurityProtocol(SecurityProtocol.PLAINTEXT.id),
-                    new RegisterControllerRecord.ControllerEndpoint().
-                        setName("CONTROLLER_SSL").
-                        setHost("localhost").
-                        setPort(9000 + id).
-                        setSecurityProtocol(SecurityProtocol.SSL.id)
-                )
-            )).
+            List.of(
+                new RegisterControllerRecord.ControllerEndpoint().
+                    setName("CONTROLLER").
+                    setHost("localhost").
+                    setPort(8000 + id).
+                    setSecurityProtocol(SecurityProtocol.PLAINTEXT.id),
+                new RegisterControllerRecord.ControllerEndpoint().
+                    setName("CONTROLLER_SSL").
+                    setHost("localhost").
+                    setPort(9000 + id).
+                    setSecurityProtocol(SecurityProtocol.SSL.id)
+            )
+        )).
             setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
-                List.of(
-                    new RegisterControllerRecord.ControllerFeature().
-                        setName(MetadataVersion.FEATURE_NAME).
-                        setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
-                        setMaxSupportedVersion(MetadataVersion.IBP_3_6_IV1.featureLevel())
-                )
-            ));
+            List.of(
+                new RegisterControllerRecord.ControllerFeature().
+                    setName(MetadataVersion.FEATURE_NAME).
+                    setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
+                    setMaxSupportedVersion(MetadataVersion.IBP_3_6_IV1.featureLevel())
+            )
+        ));
     }
 }

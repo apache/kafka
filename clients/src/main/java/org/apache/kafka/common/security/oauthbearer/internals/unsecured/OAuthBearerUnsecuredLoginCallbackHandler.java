@@ -145,8 +145,8 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
             throw new IllegalArgumentException(String.format("Unexpected SASL mechanism: %s", saslMechanism));
         if (Objects.requireNonNull(jaasConfigEntries).size() != 1 || jaasConfigEntries.get(0) == null)
             throw new IllegalArgumentException(
-                    String.format("Must supply exactly 1 non-null JAAS mechanism configuration (size was %d)",
-                            jaasConfigEntries.size()));
+                String.format("Must supply exactly 1 non-null JAAS mechanism configuration (size was %d)",
+                    jaasConfigEntries.size()));
         this.moduleOptions = Collections.unmodifiableMap((Map<String, String>) jaasConfigEntries.get(0).getOptions());
         configured = true;
     }
@@ -198,18 +198,18 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
         String claimsJson;
         try {
             claimsJson = String.format("{%s,%s%s}", expClaimText(Long.parseLong(lifetimeSecondsValueToUse)),
-                    claimOrHeaderJsonText("iat", time.milliseconds() / 1000.0),
-                    commaPrependedStringNumberAndListClaimsJsonText());
+                claimOrHeaderJsonText("iat", time.milliseconds() / 1000.0),
+                commaPrependedStringNumberAndListClaimsJsonText());
         } catch (NumberFormatException e) {
             throw new OAuthBearerConfigException(e.getMessage());
         }
         try {
             Encoder urlEncoderNoPadding = Base64.getUrlEncoder().withoutPadding();
             OAuthBearerUnsecuredJws jws = new OAuthBearerUnsecuredJws(
-                    String.format("%s.%s.",
-                            urlEncoderNoPadding.encodeToString(headerJson.getBytes(StandardCharsets.UTF_8)),
-                            urlEncoderNoPadding.encodeToString(claimsJson.getBytes(StandardCharsets.UTF_8))),
-                    principalClaimName, scopeClaimName);
+                String.format("%s.%s.",
+                    urlEncoderNoPadding.encodeToString(headerJson.getBytes(StandardCharsets.UTF_8)),
+                    urlEncoderNoPadding.encodeToString(claimsJson.getBytes(StandardCharsets.UTF_8))),
+                principalClaimName, scopeClaimName);
             log.info("Retrieved token with principal {}", jws.principalName());
             callback.token(jws);
         } catch (OAuthBearerIllegalTokenException e) {
@@ -247,17 +247,17 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
         for (String key : moduleOptions.keySet()) {
             if (key.startsWith(STRING_CLAIM_PREFIX) && key.length() > STRING_CLAIM_PREFIX.length())
                 sb.append(',').append(claimOrHeaderJsonText(
-                        confirmNotReservedClaimName(key.substring(STRING_CLAIM_PREFIX.length())), optionValue(key)));
+                    confirmNotReservedClaimName(key.substring(STRING_CLAIM_PREFIX.length())), optionValue(key)));
             else if (key.startsWith(NUMBER_CLAIM_PREFIX) && key.length() > NUMBER_CLAIM_PREFIX.length())
                 sb.append(',')
-                        .append(claimOrHeaderJsonText(
-                                confirmNotReservedClaimName(key.substring(NUMBER_CLAIM_PREFIX.length())),
-                                Double.valueOf(optionValue(key))));
+                    .append(claimOrHeaderJsonText(
+                        confirmNotReservedClaimName(key.substring(NUMBER_CLAIM_PREFIX.length())),
+                        Double.valueOf(optionValue(key))));
             else if (key.startsWith(LIST_CLAIM_PREFIX) && key.length() > LIST_CLAIM_PREFIX.length())
                 sb.append(',')
-                        .append(claimOrHeaderJsonArrayText(
-                                confirmNotReservedClaimName(key.substring(LIST_CLAIM_PREFIX.length())),
-                                listJsonText(optionValue(key))));
+                    .append(claimOrHeaderJsonArrayText(
+                        confirmNotReservedClaimName(key.substring(LIST_CLAIM_PREFIX.length())),
+                        listJsonText(optionValue(key))));
         }
         return sb.toString();
     }
@@ -296,7 +296,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
             sb.append('"').append(escape(element)).append('"');
         }
         if (listText.startsWith(unescapedDelimiterChar) || listText.endsWith(unescapedDelimiterChar)
-                || listText.contains(unescapedDelimiterChar + unescapedDelimiterChar))
+            || listText.contains(unescapedDelimiterChar + unescapedDelimiterChar))
             sb.append(",\"\"");
         return sb.append(']').toString();
     }

@@ -49,23 +49,23 @@ public class SessionStoreMaterializer<K, V> extends MaterializedStoreFactory<K, 
         retentionPeriod = retentionPeriod();
         if ((sessionWindows.inactivityGap() + sessionWindows.gracePeriodMs()) > retentionPeriod) {
             throw new IllegalArgumentException("The retention period of the session store "
-                    + materialized.storeName()
-                    + " must be no smaller than the session inactivity gap plus the"
-                    + " grace period."
-                    + " Got gap=[" + sessionWindows.inactivityGap() + "],"
-                    + " grace=[" + sessionWindows.gracePeriodMs() + "],"
-                    + " retention=[" + retentionPeriod + "]");
+                + materialized.storeName()
+                + " must be no smaller than the session inactivity gap plus the"
+                + " grace period."
+                + " Got gap=[" + sessionWindows.inactivityGap() + "],"
+                + " grace=[" + sessionWindows.gracePeriodMs() + "],"
+                + " retention=[" + retentionPeriod + "]");
         }
     }
 
     @Override
-    public  StoreBuilder<?> builder() {
+    public StoreBuilder<?> builder() {
         final SessionBytesStoreSupplier supplier = materialized.storeSupplier() == null
             ? dslStoreSuppliers().sessionStore(new DslSessionParams(
-                materialized.storeName(),
-                Duration.ofMillis(retentionPeriod),
-                emitStrategy,
-                dslStoreFormat()))
+            materialized.storeName(),
+            Duration.ofMillis(retentionPeriod),
+            emitStrategy,
+            dslStoreFormat()))
             : (SessionBytesStoreSupplier) materialized.storeSupplier();
 
         final StoreBuilder<?> builder;
@@ -102,14 +102,14 @@ public class SessionStoreMaterializer<K, V> extends MaterializedStoreFactory<K, 
     @Override
     public final long retentionPeriod() {
         return materialized.retention() != null
-                ? materialized.retention().toMillis()
-                : sessionWindows.inactivityGap() + sessionWindows.gracePeriodMs();
+            ? materialized.retention().toMillis()
+            : sessionWindows.inactivityGap() + sessionWindows.gracePeriodMs();
     }
 
     @Override
     public long historyRetention() {
         throw new IllegalStateException(
-                "historyRetention is not supported when not a versioned store");
+            "historyRetention is not supported when not a versioned store");
     }
 
     @Override

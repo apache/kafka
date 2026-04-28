@@ -60,7 +60,7 @@ public class Schema extends DocumentedType {
         this.fields = new BoundField[fs.length];
         this.fieldsByName = new HashMap<>();
         this.tolerateMissingFieldsWithDefaults = tolerateMissingFieldsWithDefaults;
-        for (int i = 0; i < this.fields.length; i++) {
+        for (int i = 0;i < this.fields.length;i++) {
             Field def = fs[i];
             if (fieldsByName.containsKey(def.name))
                 throw new SchemaException("Schema contains a duplicate field: " + def.name);
@@ -84,7 +84,7 @@ public class Schema extends DocumentedType {
                 field.def.type.write(buffer, value);
             } catch (Exception e) {
                 throw new SchemaException("Error writing field '" + field.def.name + "': " +
-                                          (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
+                    (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
             }
         }
     }
@@ -102,7 +102,7 @@ public class Schema extends DocumentedType {
             return cachedStruct;
         }
         Object[] objects = new Object[fields.length];
-        for (int i = 0; i < fields.length; i++) {
+        for (int i = 0;i < fields.length;i++) {
             try {
                 if (tolerateMissingFieldsWithDefaults) {
                     if (buffer.hasRemaining()) {
@@ -111,14 +111,14 @@ public class Schema extends DocumentedType {
                         objects[i] = fields[i].def.defaultValue;
                     } else {
                         throw new SchemaException("Missing value for field '" + fields[i].def.name +
-                                "' which has no default value.");
+                            "' which has no default value.");
                     }
                 } else {
                     objects[i] = fields[i].def.type.read(buffer);
                 }
             } catch (Exception e) {
                 throw new SchemaException("Error reading field '" + fields[i].def.name + "': " +
-                                          (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
+                    (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
             }
         }
         return new Struct(this, objects);
@@ -136,7 +136,7 @@ public class Schema extends DocumentedType {
                 size += field.def.type.sizeOf(r.get(field));
             } catch (Exception e) {
                 throw new SchemaException("Error computing size for field '" + field.def.name + "': " +
-                        (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
+                    (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
             }
         }
         return size;
@@ -197,7 +197,7 @@ public class Schema extends DocumentedType {
     public String toString() {
         StringBuilder b = new StringBuilder();
         b.append('{');
-        for (int i = 0; i < this.fields.length; i++) {
+        for (int i = 0;i < this.fields.length;i++) {
             b.append(this.fields[i].toString());
             if (i < this.fields.length - 1)
                 b.append(',');
@@ -231,8 +231,8 @@ public class Schema extends DocumentedType {
     @Override
     public String documentation() {
         return "A struct is named by a string with a capitalized first letter and consists of one or more fields. " +
-            "It represents a composite object encoded as the serialization of each field in the order they are defined." + 
-            "In protocol documentation a struct containing multiple fields is enclosed by " + 
+            "It represents a composite object encoded as the serialization of each field in the order they are defined." +
+            "In protocol documentation a struct containing multiple fields is enclosed by " +
             leftBracket() + " and " + rightBracket() + ".";
     }
 
@@ -259,7 +259,10 @@ public class Schema extends DocumentedType {
      * Override one or more of the visit methods with the desired logic.
      */
     public abstract static class Visitor {
-        public void visit(Schema schema) {}
-        public void visit(Type field) {}
+        public void visit(Schema schema) {
+        }
+
+        public void visit(Type field) {
+        }
     }
 }

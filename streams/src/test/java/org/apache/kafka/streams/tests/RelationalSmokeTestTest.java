@@ -40,34 +40,34 @@ public class RelationalSmokeTestTest extends SmokeTestUtil {
     public void verifySmokeTestLogic() {
         try (final TopologyTestDriver driver =
                  new TopologyTestDriver(RelationalSmokeTest.App.getTopology(),
-                                        RelationalSmokeTest.App.getConfig(
-                                            "nothing:0",
-                                            "test",
-                                            "test",
-                                            StreamsConfig.AT_LEAST_ONCE,
-                                            "classic",
-                                            TestUtils.tempDirectory().getAbsolutePath()
-                                        ))) {
+                     RelationalSmokeTest.App.getConfig(
+                         "nothing:0",
+                         "test",
+                         "test",
+                         StreamsConfig.AT_LEAST_ONCE,
+                         "classic",
+                         TestUtils.tempDirectory().getAbsolutePath()
+                     ))) {
 
             final TestInputTopic<Integer, RelationalSmokeTest.Article> articles =
                 driver.createInputTopic(RelationalSmokeTest.ARTICLE_SOURCE,
-                                        new IntegerSerializer(),
-                                        new RelationalSmokeTest.Article.ArticleSerializer());
+                    new IntegerSerializer(),
+                    new RelationalSmokeTest.Article.ArticleSerializer());
 
             final TestInputTopic<Integer, RelationalSmokeTest.Comment> comments =
                 driver.createInputTopic(RelationalSmokeTest.COMMENT_SOURCE,
-                                        new IntegerSerializer(),
-                                        new RelationalSmokeTest.Comment.CommentSerializer());
+                    new IntegerSerializer(),
+                    new RelationalSmokeTest.Comment.CommentSerializer());
 
             final TestOutputTopic<Integer, RelationalSmokeTest.AugmentedArticle> augmentedArticles =
                 driver.createOutputTopic(RelationalSmokeTest.ARTICLE_RESULT_SINK,
-                                         new IntegerDeserializer(),
-                                         new RelationalSmokeTest.AugmentedArticle.AugmentedArticleDeserializer());
+                    new IntegerDeserializer(),
+                    new RelationalSmokeTest.AugmentedArticle.AugmentedArticleDeserializer());
 
             final TestOutputTopic<Integer, RelationalSmokeTest.AugmentedComment> augmentedComments =
                 driver.createOutputTopic(RelationalSmokeTest.COMMENT_RESULT_SINK,
-                                         new IntegerDeserializer(),
-                                         new RelationalSmokeTest.AugmentedComment.AugmentedCommentDeserializer());
+                    new IntegerDeserializer(),
+                    new RelationalSmokeTest.AugmentedComment.AugmentedCommentDeserializer());
 
             final RelationalSmokeTest.DataSet dataSet =
                 RelationalSmokeTest.DataSet.generate(10, 30);
@@ -85,7 +85,7 @@ public class RelationalSmokeTestTest extends SmokeTestUtil {
                 comments.pipeInput(comment.getKey(), comment, comment.getTimestamp());
                 commentMap.put(comment.getKey(), comment);
                 commentCounts.put(comment.getArticleId(),
-                                  commentCounts.getOrDefault(comment.getArticleId(), 0L) + 1);
+                    commentCounts.getOrDefault(comment.getArticleId(), 0L) + 1);
             }
 
             final Map<Integer, RelationalSmokeTest.AugmentedArticle> augmentedArticleResults =
@@ -99,10 +99,10 @@ public class RelationalSmokeTestTest extends SmokeTestUtil {
 
             assertThat(
                 RelationalSmokeTest.App.verifySync(true,
-                                                   articleMap,
-                                                   commentMap,
-                                                   augmentedArticleResults,
-                                                   augmentedCommentResults),
+                    articleMap,
+                    commentMap,
+                    augmentedArticleResults,
+                    augmentedCommentResults),
                 is(true));
         }
     }

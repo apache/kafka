@@ -58,15 +58,15 @@ public class FeaturesImageTest {
         DELTA1_RECORDS = new ArrayList<>();
         // change feature level
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
-            setName("foo").setFeatureLevel((short) 3),
+                setName("foo").setFeatureLevel((short) 3),
             (short) 0));
         // remove feature
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
-            setName("bar").setFeatureLevel((short) 0),
+                setName("bar").setFeatureLevel((short) 0),
             (short) 0));
         // add feature
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
-            setName("baz").setFeatureLevel((short) 8),
+                setName("baz").setFeatureLevel((short) 8),
             (short) 0));
 
         DELTA1 = new FeaturesDelta(IMAGE1);
@@ -80,14 +80,14 @@ public class FeaturesImageTest {
         DELTA2_RECORDS = new ArrayList<>();
         // remove all features
         DELTA2_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
-            setName("foo").setFeatureLevel((short) 0),
+                setName("foo").setFeatureLevel((short) 0),
             (short) 0));
         DELTA2_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
-            setName("baz").setFeatureLevel((short) 0),
+                setName("baz").setFeatureLevel((short) 0),
             (short) 0));
         // add feature back with different feature level
         DELTA2_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
-            setName("bar").setFeatureLevel((short) 1),
+                setName("bar").setFeatureLevel((short) 1),
             (short) 0));
 
         DELTA2 = new FeaturesDelta(IMAGE2);

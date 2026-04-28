@@ -138,130 +138,130 @@ public class HeaderFromTest {
 
         for (Boolean testKeyTransform : List.of(true, false)) {
             result.add(
-                Arguments.of(
-                    "basic copy",
-                    testKeyTransform,
-                    new RecordBuilder()
-                        .withField("field1", STRING_SCHEMA, "field1-value")
-                        .withField("field2", STRING_SCHEMA, "field2-value")
-                        .addHeader("header1", STRING_SCHEMA, "existing-value"),
-                    List.of("field1"), List.of("inserted1"), HeaderFrom.Operation.COPY, true,
-                    new RecordBuilder()
-                        .withField("field1", STRING_SCHEMA, "field1-value")
-                        .withField("field2", STRING_SCHEMA, "field2-value")
-                        .addHeader("header1", STRING_SCHEMA, "existing-value")
-                        .addHeader("inserted1", STRING_SCHEMA, "field1-value")
-                ));
+                    Arguments.of(
+                            "basic copy",
+                            testKeyTransform,
+                            new RecordBuilder()
+                                    .withField("field1", STRING_SCHEMA, "field1-value")
+                                    .withField("field2", STRING_SCHEMA, "field2-value")
+                                    .addHeader("header1", STRING_SCHEMA, "existing-value"),
+                            List.of("field1"), List.of("inserted1"), HeaderFrom.Operation.COPY, true,
+                            new RecordBuilder()
+                                    .withField("field1", STRING_SCHEMA, "field1-value")
+                                    .withField("field2", STRING_SCHEMA, "field2-value")
+                                    .addHeader("header1", STRING_SCHEMA, "existing-value")
+                                    .addHeader("inserted1", STRING_SCHEMA, "field1-value")
+                    ));
             result.add(
-                Arguments.of(
-                    "basic move",
-                    testKeyTransform,
-                    new RecordBuilder()
-                        .withField("field1", STRING_SCHEMA, "field1-value")
-                        .withField("field2", STRING_SCHEMA, "field2-value")
-                        .addHeader("header1", STRING_SCHEMA, "existing-value"),
-                    List.of("field1"), List.of("inserted1"), HeaderFrom.Operation.MOVE, true,
-                    new RecordBuilder()
-                        // field1 got moved
-                        .withField("field2", STRING_SCHEMA, "field2-value")
-                        .addHeader("header1", STRING_SCHEMA, "existing-value")
-                        .addHeader("inserted1", STRING_SCHEMA, "field1-value")
-                ));
+                    Arguments.of(
+                            "basic move",
+                            testKeyTransform,
+                            new RecordBuilder()
+                                    .withField("field1", STRING_SCHEMA, "field1-value")
+                                    .withField("field2", STRING_SCHEMA, "field2-value")
+                                    .addHeader("header1", STRING_SCHEMA, "existing-value"),
+                            List.of("field1"), List.of("inserted1"), HeaderFrom.Operation.MOVE, true,
+                            new RecordBuilder()
+                                    // field1 got moved
+                                    .withField("field2", STRING_SCHEMA, "field2-value")
+                                    .addHeader("header1", STRING_SCHEMA, "existing-value")
+                                    .addHeader("inserted1", STRING_SCHEMA, "field1-value")
+                    ));
             result.add(
-                Arguments.of(
-                    "copy with preexisting header",
-                    testKeyTransform,
-                    new RecordBuilder()
-                        .withField("field1", STRING_SCHEMA, "field1-value")
-                        .withField("field2", STRING_SCHEMA, "field2-value")
-                        .addHeader("inserted1", STRING_SCHEMA, "existing-value"),
-                    List.of("field1"), List.of("inserted1"), HeaderFrom.Operation.COPY, true,
-                    new RecordBuilder()
-                        .withField("field1", STRING_SCHEMA, "field1-value")
-                        .withField("field2", STRING_SCHEMA, "field2-value")
-                        .addHeader("inserted1", STRING_SCHEMA, "existing-value")
-                        .addHeader("inserted1", STRING_SCHEMA, "field1-value")
-                ));
+                    Arguments.of(
+                            "copy with preexisting header",
+                            testKeyTransform,
+                            new RecordBuilder()
+                                    .withField("field1", STRING_SCHEMA, "field1-value")
+                                    .withField("field2", STRING_SCHEMA, "field2-value")
+                                    .addHeader("inserted1", STRING_SCHEMA, "existing-value"),
+                            List.of("field1"), List.of("inserted1"), HeaderFrom.Operation.COPY, true,
+                            new RecordBuilder()
+                                    .withField("field1", STRING_SCHEMA, "field1-value")
+                                    .withField("field2", STRING_SCHEMA, "field2-value")
+                                    .addHeader("inserted1", STRING_SCHEMA, "existing-value")
+                                    .addHeader("inserted1", STRING_SCHEMA, "field1-value")
+                    ));
             result.add(
-                Arguments.of(
-                    "move with preexisting header",
-                    testKeyTransform,
-                    new RecordBuilder()
-                        .withField("field1", STRING_SCHEMA, "field1-value")
-                        .withField("field2", STRING_SCHEMA, "field2-value")
-                        .addHeader("inserted1", STRING_SCHEMA, "existing-value"),
-                    List.of("field1"), List.of("inserted1"), HeaderFrom.Operation.MOVE, true,
-                    new RecordBuilder()
-                        // field1 got moved
-                        .withField("field2", STRING_SCHEMA, "field2-value")
-                        .addHeader("inserted1", STRING_SCHEMA, "existing-value")
-                        .addHeader("inserted1", STRING_SCHEMA, "field1-value")
-                ));
+                    Arguments.of(
+                            "move with preexisting header",
+                            testKeyTransform,
+                            new RecordBuilder()
+                                    .withField("field1", STRING_SCHEMA, "field1-value")
+                                    .withField("field2", STRING_SCHEMA, "field2-value")
+                                    .addHeader("inserted1", STRING_SCHEMA, "existing-value"),
+                            List.of("field1"), List.of("inserted1"), HeaderFrom.Operation.MOVE, true,
+                            new RecordBuilder()
+                                    // field1 got moved
+                                    .withField("field2", STRING_SCHEMA, "field2-value")
+                                    .addHeader("inserted1", STRING_SCHEMA, "existing-value")
+                                    .addHeader("inserted1", STRING_SCHEMA, "field1-value")
+                    ));
             Schema schema = new SchemaBuilder(Schema.Type.STRUCT).field("foo", STRING_SCHEMA).build();
             Struct struct = new Struct(schema).put("foo", "foo-value");
             result.add(
-                Arguments.of(
-                    "copy with struct value",
-                    testKeyTransform,
-                    new RecordBuilder()
-                        .withField("field1", schema, struct)
-                        .withField("field2", STRING_SCHEMA, "field2-value")
-                        .addHeader("header1", STRING_SCHEMA, "existing-value"),
-                    List.of("field1"), List.of("inserted1"), HeaderFrom.Operation.COPY, true,
-                    new RecordBuilder()
-                        .withField("field1", schema, struct)
-                        .withField("field2", STRING_SCHEMA, "field2-value")
-                        .addHeader("header1", STRING_SCHEMA, "existing-value")
-                        .addHeader("inserted1", schema, struct)
-                ));
+                    Arguments.of(
+                            "copy with struct value",
+                            testKeyTransform,
+                            new RecordBuilder()
+                                    .withField("field1", schema, struct)
+                                    .withField("field2", STRING_SCHEMA, "field2-value")
+                                    .addHeader("header1", STRING_SCHEMA, "existing-value"),
+                            List.of("field1"), List.of("inserted1"), HeaderFrom.Operation.COPY, true,
+                            new RecordBuilder()
+                                    .withField("field1", schema, struct)
+                                    .withField("field2", STRING_SCHEMA, "field2-value")
+                                    .addHeader("header1", STRING_SCHEMA, "existing-value")
+                                    .addHeader("inserted1", schema, struct)
+                    ));
             result.add(
-                Arguments.of(
-                    "move with struct value",
-                    testKeyTransform,
-                    new RecordBuilder()
-                        .withField("field1", schema, struct)
-                        .withField("field2", STRING_SCHEMA, "field2-value")
-                        .addHeader("header1", STRING_SCHEMA, "existing-value"),
-                    List.of("field1"), List.of("inserted1"), HeaderFrom.Operation.MOVE, true,
-                    new RecordBuilder()
-                        // field1 got moved
-                        .withField("field2", STRING_SCHEMA, "field2-value")
-                        .addHeader("header1", STRING_SCHEMA, "existing-value")
-                        .addHeader("inserted1", schema, struct)
-                ));
+                    Arguments.of(
+                            "move with struct value",
+                            testKeyTransform,
+                            new RecordBuilder()
+                                    .withField("field1", schema, struct)
+                                    .withField("field2", STRING_SCHEMA, "field2-value")
+                                    .addHeader("header1", STRING_SCHEMA, "existing-value"),
+                            List.of("field1"), List.of("inserted1"), HeaderFrom.Operation.MOVE, true,
+                            new RecordBuilder()
+                                    // field1 got moved
+                                    .withField("field2", STRING_SCHEMA, "field2-value")
+                                    .addHeader("header1", STRING_SCHEMA, "existing-value")
+                                    .addHeader("inserted1", schema, struct)
+                    ));
             result.add(
-                Arguments.of(
-                    "two headers from same field",
-                    testKeyTransform,
-                    new RecordBuilder()
-                        .withField("field1", STRING_SCHEMA, "field1-value")
-                        .withField("field2", STRING_SCHEMA, "field2-value")
-                        .addHeader("header1", STRING_SCHEMA, "existing-value"),
-                    // two headers from the same field
-                    List.of("field1", "field1"), List.of("inserted1", "inserted2"), HeaderFrom.Operation.MOVE, true,
-                    new RecordBuilder()
-                        // field1 got moved
-                        .withField("field2", STRING_SCHEMA, "field2-value")
-                        .addHeader("header1", STRING_SCHEMA, "existing-value")
-                        .addHeader("inserted1", STRING_SCHEMA, "field1-value")
-                        .addHeader("inserted2", STRING_SCHEMA, "field1-value")
-                ));
+                    Arguments.of(
+                            "two headers from same field",
+                            testKeyTransform,
+                            new RecordBuilder()
+                                    .withField("field1", STRING_SCHEMA, "field1-value")
+                                    .withField("field2", STRING_SCHEMA, "field2-value")
+                                    .addHeader("header1", STRING_SCHEMA, "existing-value"),
+                            // two headers from the same field
+                            List.of("field1", "field1"), List.of("inserted1", "inserted2"), HeaderFrom.Operation.MOVE, true,
+                            new RecordBuilder()
+                                    // field1 got moved
+                                    .withField("field2", STRING_SCHEMA, "field2-value")
+                                    .addHeader("header1", STRING_SCHEMA, "existing-value")
+                                    .addHeader("inserted1", STRING_SCHEMA, "field1-value")
+                                    .addHeader("inserted2", STRING_SCHEMA, "field1-value")
+                    ));
             result.add(
-                Arguments.of(
-                    "two fields to same header",
-                    testKeyTransform,
-                    new RecordBuilder()
-                        .withField("field1", STRING_SCHEMA, "field1-value")
-                        .withField("field2", STRING_SCHEMA, "field2-value")
-                        .addHeader("header1", STRING_SCHEMA, "existing-value"),
-                    // two headers from the same field
-                    List.of("field1", "field2"), List.of("inserted1", "inserted1"), HeaderFrom.Operation.MOVE, true,
-                    new RecordBuilder()
-                        // field1 and field2 got moved
-                        .addHeader("header1", STRING_SCHEMA, "existing-value")
-                        .addHeader("inserted1", STRING_SCHEMA, "field1-value")
-                        .addHeader("inserted1", STRING_SCHEMA, "field2-value")
-                ));
+                    Arguments.of(
+                            "two fields to same header",
+                            testKeyTransform,
+                            new RecordBuilder()
+                                    .withField("field1", STRING_SCHEMA, "field1-value")
+                                    .withField("field2", STRING_SCHEMA, "field2-value")
+                                    .addHeader("header1", STRING_SCHEMA, "existing-value"),
+                            // two headers from the same field
+                            List.of("field1", "field2"), List.of("inserted1", "inserted1"), HeaderFrom.Operation.MOVE, true,
+                            new RecordBuilder()
+                                    // field1 and field2 got moved
+                                    .addHeader("header1", STRING_SCHEMA, "existing-value")
+                                    .addHeader("inserted1", STRING_SCHEMA, "field1-value")
+                                    .addHeader("inserted1", STRING_SCHEMA, "field2-value")
+                    ));
             result.add(
                     Arguments.of(
                             "Copy null field without default",
@@ -308,10 +308,10 @@ public class HeaderFromTest {
     @ParameterizedTest
     @MethodSource("data")
     public void schemaless(String description,
-                           boolean keyTransform,
-                           RecordBuilder originalBuilder,
-                           List<String> transformFields, List<String> headers1, HeaderFrom.Operation operation, boolean replaceNullWithDefault,
-                           RecordBuilder expectedBuilder) {
+            boolean keyTransform,
+            RecordBuilder originalBuilder,
+            List<String> transformFields, List<String> headers1, HeaderFrom.Operation operation, boolean replaceNullWithDefault,
+            RecordBuilder expectedBuilder) {
         HeaderFrom<SourceRecord> xform = keyTransform ? new HeaderFrom.Key<>() : new HeaderFrom.Value<>();
 
         xform.configure(config(headers1, transformFields, operation, replaceNullWithDefault));
@@ -327,10 +327,10 @@ public class HeaderFromTest {
     @ParameterizedTest
     @MethodSource("data")
     public void withSchema(String description,
-                           boolean keyTransform,
-                           RecordBuilder originalBuilder,
-                           List<String> transformFields, List<String> headers1, HeaderFrom.Operation operation, boolean replaceNullWithDefault,
-                           RecordBuilder expectedBuilder) {
+            boolean keyTransform,
+            RecordBuilder originalBuilder,
+            List<String> transformFields, List<String> headers1, HeaderFrom.Operation operation, boolean replaceNullWithDefault,
+            RecordBuilder expectedBuilder) {
         HeaderFrom<SourceRecord> xform = keyTransform ? new HeaderFrom.Key<>() : new HeaderFrom.Value<>();
         xform.configure(config(headers1, transformFields, operation, replaceNullWithDefault));
         ConnectHeaders headers = new ConnectHeaders();

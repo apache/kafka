@@ -32,12 +32,13 @@ public final class UpdateTopicConfigAction implements TieredStorageTestAction {
     private final List<String> configsToBeDeleted;
 
     public UpdateTopicConfigAction(String topic,
-                                   Map<String, String> configsToBeAdded,
-                                   List<String> configsToBeDeleted) {
+            Map<String, String> configsToBeAdded,
+            List<String> configsToBeDeleted) {
         this.topic = topic;
         this.configsToBeAdded = configsToBeAdded;
         this.configsToBeDeleted = configsToBeDeleted;
     }
+
     @Override
     public void doExecute(TieredStorageTestContext context)
             throws ExecutionException, InterruptedException, TimeoutException {
@@ -47,6 +48,6 @@ public final class UpdateTopicConfigAction implements TieredStorageTestAction {
     @Override
     public void describe(PrintStream output) {
         output.printf("update topic config: %s, configs-to-be-added: %s, configs-to-be-deleted: %s%n",
-                      topic, configsToBeAdded, configsToBeDeleted);
+                topic, configsToBeAdded, configsToBeDeleted);
     }
 }

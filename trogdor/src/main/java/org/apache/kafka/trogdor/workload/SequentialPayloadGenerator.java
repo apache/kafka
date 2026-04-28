@@ -35,7 +35,7 @@ public class SequentialPayloadGenerator implements PayloadGenerator {
 
     @JsonCreator
     public SequentialPayloadGenerator(@JsonProperty("size") int size,
-                                      @JsonProperty("offset") long startOffset) {
+        @JsonProperty("offset") long startOffset) {
         this.size = size;
         this.startOffset = startOffset;
         this.buf = ByteBuffer.allocate(8);

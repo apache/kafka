@@ -76,7 +76,8 @@ public class MockProcessorContextTest {
             }
 
             @Override
-            public void close() { }
+            public void close() {
+            }
         };
 
         final MockProcessorContext context = new MockProcessorContext();
@@ -112,7 +113,8 @@ public class MockProcessorContextTest {
             }
 
             @Override
-            public void close() { }
+            public void close() {
+            }
         };
 
         final MockProcessorContext context = new MockProcessorContext();
@@ -156,7 +158,8 @@ public class MockProcessorContextTest {
             }
 
             @Override
-            public void close() { }
+            public void close() {
+            }
         };
 
         final MockProcessorContext context = new MockProcessorContext();
@@ -225,7 +228,8 @@ public class MockProcessorContextTest {
             }
 
             @Override
-            public void close() { }
+            public void close() {
+            }
         };
 
         final MockProcessorContext context = new MockProcessorContext();
@@ -266,7 +270,8 @@ public class MockProcessorContextTest {
             }
 
             @Override
-            public void close() { }
+            public void close() {
+            }
         };
 
         final StoreBuilder<KeyValueStore<String, Long>> storeBuilder = Stores.keyValueStoreBuilder(
@@ -337,7 +342,8 @@ public class MockProcessorContextTest {
             }
 
             @Override
-            public void close() { }
+            public void close() {
+            }
         };
 
         final MockProcessorContext context = new MockProcessorContext(config);
@@ -426,7 +432,8 @@ public class MockProcessorContextTest {
             }
 
             @Override
-            public void close() { }
+            public void close() {
+            }
         };
 
         final MockProcessorContext context = new MockProcessorContext();
@@ -450,10 +457,10 @@ public class MockProcessorContextTest {
             @Override
             public void init(final ProcessorContext context) {
                 context.schedule(
-                        Instant.ofEpochMilli(1000),
-                        Duration.ofSeconds(1L),
-                        PunctuationType.WALL_CLOCK_TIME,
-                        timestamp -> context.commit()
+                    Instant.ofEpochMilli(1000),
+                    Duration.ofSeconds(1L),
+                    PunctuationType.WALL_CLOCK_TIME,
+                    timestamp -> context.commit()
                 );
             }
 
@@ -463,7 +470,8 @@ public class MockProcessorContextTest {
             }
 
             @Override
-            public void close() { }
+            public void close() {
+            }
         };
 
         final MockProcessorContext context = new MockProcessorContext();

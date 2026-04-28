@@ -67,7 +67,7 @@ public interface CogroupedKStream<K, VOut> {
      * @return a {@code CogroupedKStream}
      */
     <V> CogroupedKStream<K, VOut> cogroup(final KGroupedStream<K, V> groupedStream,
-                                          final Aggregator<? super K, ? super V, VOut> aggregator);
+        final Aggregator<? super K, ? super V, VOut> aggregator);
 
     /**
      * Aggregate the values of records in these streams by the grouped key.
@@ -174,7 +174,7 @@ public interface CogroupedKStream<K, VOut> {
      * represent the latest (rolling) aggregate for each key
      */
     KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
-                              final Named named);
+        final Named named);
 
     /**
      * Aggregate the values of records in these streams by the grouped key.
@@ -228,7 +228,7 @@ public interface CogroupedKStream<K, VOut> {
      * represent the latest (rolling) aggregate for each key
      */
     KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
-                              final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
+        final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Aggregate the values of records in these streams by the grouped key.
@@ -285,8 +285,8 @@ public interface CogroupedKStream<K, VOut> {
      * represent the latest (rolling) aggregate for each key
      */
     KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
-                              final Named named,
-                              final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
+        final Named named,
+        final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Create a new {@link TimeWindowedCogroupedKStream} instance that can be used to perform windowed

@@ -54,13 +54,13 @@ public class UnregisterBrokerRequest extends AbstractRequest {
     public UnregisterBrokerResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
         return new UnregisterBrokerResponse(new UnregisterBrokerResponseData()
-                .setThrottleTimeMs(throttleTimeMs)
-                .setErrorCode(error.code())
-                .setErrorMessage(e.getMessage()));
+            .setThrottleTimeMs(throttleTimeMs)
+            .setErrorCode(error.code())
+            .setErrorMessage(e.getMessage()));
     }
 
     public static UnregisterBrokerRequest parse(Readable readable, short version) {
         return new UnregisterBrokerRequest(new UnregisterBrokerRequestData(readable, version),
-                version);
+            version);
     }
 }

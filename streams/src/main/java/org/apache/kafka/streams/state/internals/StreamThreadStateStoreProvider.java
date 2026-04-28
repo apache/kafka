@@ -59,7 +59,7 @@ public class StreamThreadStateStoreProvider {
 
         if (storeQueryParams.staleStoresEnabled() ? state.isAlive() : state == StreamThread.State.RUNNING) {
             final Collection<Task> tasks = storeQueryParams.staleStoresEnabled() ?
-                    streamThread.readyOnlyAllTasks() : streamThread.readOnlyActiveTasks();
+                streamThread.readyOnlyAllTasks() : streamThread.readOnlyActiveTasks();
 
             if (storeQueryParams.partition() != null) {
                 for (final Task task : tasks) {
@@ -87,24 +87,24 @@ public class StreamThreadStateStoreProvider {
             }
         } else {
             throw new InvalidStateStoreException("Cannot get state store " + storeName + " because the stream thread is " +
-                                                    state + ", not RUNNING" +
-                                                    (storeQueryParams.staleStoresEnabled() ? " or REBALANCING" : ""));
+                state + ", not RUNNING" +
+                (storeQueryParams.staleStoresEnabled() ? " or REBALANCING" : ""));
         }
     }
 
     @SuppressWarnings("unchecked")
     private static <T> T validateAndCastStores(final StateStore store,
-                                               final QueryableStoreType<T> queryableStoreType,
-                                               final String storeName,
-                                               final TaskId taskId) {
+        final QueryableStoreType<T> queryableStoreType,
+        final String storeName,
+        final TaskId taskId) {
         if (store == null) {
             throw new NullPointerException("Expected store not to be null at this point.");
         } else if (queryableStoreType.accepts(store)) {
             if (!store.isOpen()) {
                 throw new InvalidStateStoreException(
-                        "Cannot get state store " + storeName + " for task " + taskId +
-                            " because the store is not open. " +
-                            "The state store may have migrated to another instance.");
+                    "Cannot get state store " + storeName + " for task " + taskId +
+                        " because the store is not open. " +
+                        "The state store may have migrated to another instance.");
             }
             if (store instanceof TimestampedKeyValueStoreWithHeaders) {
                 if (queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {

@@ -35,7 +35,7 @@ import com.fasterxml.jackson.databind.JsonNode;
     @JsonSubTypes.Type(value = WorkerRunning.class, name = "RUNNING"),
     @JsonSubTypes.Type(value = WorkerStopping.class, name = "STOPPING"),
     @JsonSubTypes.Type(value = WorkerDone.class, name = "DONE")
-    })
+})
 public abstract class WorkerState extends Message {
     private final String taskId;
     private final TaskSpec spec;

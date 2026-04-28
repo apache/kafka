@@ -133,7 +133,7 @@ public class StreamsBuilder {
      * @return a {@link KStream} for the specified topic
      */
     public synchronized <K, V> KStream<K, V> stream(final String topic,
-                                                    final Consumed<K, V> consumed) {
+        final Consumed<K, V> consumed) {
         return stream(Collections.singleton(topic), consumed);
     }
 
@@ -171,7 +171,7 @@ public class StreamsBuilder {
      * @return a {@link KStream} for the specified topics
      */
     public synchronized <K, V> KStream<K, V> stream(final Collection<String> topics,
-                                                    final Consumed<K, V> consumed) {
+        final Consumed<K, V> consumed) {
         Objects.requireNonNull(topics, "topics can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         return internalStreamsBuilder.stream(topics, new ConsumedInternal<>(consumed));
@@ -218,7 +218,7 @@ public class StreamsBuilder {
      * @return a {@link KStream} for topics matching the regex pattern.
      */
     public synchronized <K, V> KStream<K, V> stream(final Pattern topicPattern,
-                                                    final Consumed<K, V> consumed) {
+        final Consumed<K, V> consumed) {
         Objects.requireNonNull(topicPattern, "topicPattern can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         return internalStreamsBuilder.stream(topicPattern, new ConsumedInternal<>(consumed));
@@ -263,8 +263,8 @@ public class StreamsBuilder {
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final String topic,
-                                                  final Consumed<K, V> consumed,
-                                                  final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+        final Consumed<K, V> consumed,
+        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
@@ -319,7 +319,7 @@ public class StreamsBuilder {
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final String topic,
-                                                  final Consumed<K, V> consumed) {
+        final Consumed<K, V> consumed) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(consumed);
@@ -352,7 +352,7 @@ public class StreamsBuilder {
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final String topic,
-                                                  final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
 
@@ -360,7 +360,7 @@ public class StreamsBuilder {
             new MaterializedInternal<>(materialized, internalStreamsBuilder, topic + "-");
 
         final ConsumedInternal<K, V> consumedInternal =
-                new ConsumedInternal<>(Consumed.with(materializedInternal.keySerde(), materializedInternal.valueSerde()));
+            new ConsumedInternal<>(Consumed.with(materializedInternal.keySerde(), materializedInternal.valueSerde()));
 
         return internalStreamsBuilder.table(topic, consumedInternal, materializedInternal);
     }
@@ -384,7 +384,7 @@ public class StreamsBuilder {
      * @return a {@link GlobalKTable} for the specified topic
      */
     public synchronized <K, V> GlobalKTable<K, V> globalTable(final String topic,
-                                                              final Consumed<K, V> consumed) {
+        final Consumed<K, V> consumed) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(consumed);
@@ -457,8 +457,8 @@ public class StreamsBuilder {
      * @return a {@link GlobalKTable} for the specified topic
      */
     public synchronized <K, V> GlobalKTable<K, V> globalTable(final String topic,
-                                                              final Consumed<K, V> consumed,
-                                                              final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+        final Consumed<K, V> consumed,
+        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
@@ -501,16 +501,16 @@ public class StreamsBuilder {
      * @return a {@link GlobalKTable} for the specified topic
      */
     public synchronized <K, V> GlobalKTable<K, V> globalTable(final String topic,
-                                                              final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(materialized, internalStreamsBuilder, topic + "-");
 
         return internalStreamsBuilder.globalTable(topic,
-                                                  new ConsumedInternal<>(Consumed.with(materializedInternal.keySerde(),
-                                                                                       materializedInternal.valueSerde())),
-                                                  materializedInternal);
+            new ConsumedInternal<>(Consumed.with(materializedInternal.keySerde(),
+                materializedInternal.valueSerde())),
+            materializedInternal);
     }
 
 
@@ -559,9 +559,9 @@ public class StreamsBuilder {
      * @throws TopologyException if the processor of state is already registered
      */
     public synchronized <KIn, VIn> StreamsBuilder addGlobalStore(final StoreBuilder<?> storeBuilder,
-                                                                 final String topic,
-                                                                 final Consumed<KIn, VIn> consumed,
-                                                                 final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
+        final String topic,
+        final Consumed<KIn, VIn> consumed,
+        final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         internalStreamsBuilder.addGlobalStore(

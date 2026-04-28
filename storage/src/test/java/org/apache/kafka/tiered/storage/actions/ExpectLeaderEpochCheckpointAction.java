@@ -37,9 +37,9 @@ public final class ExpectLeaderEpochCheckpointAction implements TieredStorageTes
     private final Long startOffset;
 
     public ExpectLeaderEpochCheckpointAction(Integer brokerId,
-                                             TopicPartition partition,
-                                             Integer beginEpoch,
-                                             Long startOffset) {
+            TopicPartition partition,
+            Integer beginEpoch,
+            Long startOffset) {
         this.brokerId = brokerId;
         this.partition = partition;
         this.beginEpoch = beginEpoch;

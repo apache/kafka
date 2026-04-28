@@ -134,15 +134,15 @@ public class RecordQueueTest {
         final String topic = "topic";
         final Metric recordsConsumed = context.metrics().metrics().get(
             new MetricName("records-consumed-total",
-                           TOPIC_LEVEL_GROUP,
-                           "The total number of records consumed from this topic",
-                           streamsMetrics.topicLevelTagMap(threadId, taskId, processorNodeId, topic))
+                TOPIC_LEVEL_GROUP,
+                "The total number of records consumed from this topic",
+                streamsMetrics.topicLevelTagMap(threadId, taskId, processorNodeId, topic))
         );
         final Metric bytesConsumed = context.metrics().metrics().get(
             new MetricName("bytes-consumed-total",
-                           TOPIC_LEVEL_GROUP,
-                           "The total number of bytes consumed from this topic",
-                           streamsMetrics.topicLevelTagMap(threadId, taskId, processorNodeId, topic))
+                TOPIC_LEVEL_GROUP,
+                "The total number of bytes consumed from this topic",
+                streamsMetrics.topicLevelTagMap(threadId, taskId, processorNodeId, topic))
         );
 
         double totalBytes = 0D;

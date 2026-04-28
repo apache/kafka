@@ -156,18 +156,18 @@ public class RequestHeader implements AbstractRequestResponse {
             throw e;
         } catch (Throwable ex) {
             throw new InvalidRequestException("Error parsing request header. Our best guess of the apiKeyId is: " +
-                    apiKeyId, ex);
+                apiKeyId, ex);
         }
     }
 
     @Override
     public String toString() {
         return "RequestHeader(apiKey=" + apiKey() +
-                ", apiVersion=" + apiVersion() +
-                ", clientId=" + clientId() +
-                ", correlationId=" + correlationId() +
-                ", headerVersion=" + headerVersion +
-                ")";
+            ", apiVersion=" + apiVersion() +
+            ", clientId=" + clientId() +
+            ", correlationId=" + correlationId() +
+            ", headerVersion=" + headerVersion +
+            ")";
     }
 
     @Override

@@ -113,7 +113,7 @@ public final class FindCommandHandler implements Commands.Handler {
                 MetadataNode child = node.child(name);
                 if (child == null) {
                     throw new RuntimeException("Expected " + name + " to be a valid child of " +
-                            path + ", but it was not.");
+                        path + ", but it was not.");
                 }
                 find(writer, nextPath, child);
             }

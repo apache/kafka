@@ -286,7 +286,7 @@ public class NamedTopologyIntegrationTest {
 
         final String countTopicPrefix = TOPIC_PREFIX + "-" + countTopologyName;
         final String fkjTopicPrefix = TOPIC_PREFIX + "-" + fkjTopologyName;
-        final  Set<String> internalTopics = CLUSTER
+        final Set<String> internalTopics = CLUSTER
             .getAllTopicsInCluster().stream()
             .filter(t -> t.contains(TOPIC_PREFIX))
             .filter(t -> t.endsWith("-repartition") || t.endsWith("-changelog") || t.endsWith("-topic"))
@@ -424,7 +424,7 @@ public class NamedTopologyIntegrationTest {
             CLUSTER.deleteTopics(SINGLE_PARTITION_INPUT_STREAM, SINGLE_PARTITION_OUTPUT_STREAM);
         }
     }
-    
+
     @Test
     public void shouldAddNamedTopologyToRunningApplicationWithEmptyInitialTopology() throws Exception {
         topology1Builder.stream(INPUT_STREAM_1).groupBy((k, v) -> k).count(IN_MEMORY_STORE).toStream().to(OUTPUT_STREAM_1);
@@ -574,7 +574,7 @@ public class NamedTopologyIntegrationTest {
             CLUSTER.deleteTopics(DELAYED_INPUT_STREAM_1);
         }
     }
-    
+
     @Test
     public void shouldAllowPatternSubscriptionWithMultipleNamedTopologies() throws Exception {
         topology1Builder.stream(Pattern.compile(INPUT_STREAM_1)).groupBy((k, v) -> k).count().toStream().to(OUTPUT_STREAM_1);
@@ -686,8 +686,8 @@ public class NamedTopologyIntegrationTest {
      * asserts that {@code left} and {@code right} differ only by {@link StreamsMetadata#hostInfo()}
      */
     private void verifyMetadataForTopology(final String topologyName,
-                                           final Collection<StreamsMetadata> left,
-                                           final Collection<StreamsMetadata> right) {
+        final Collection<StreamsMetadata> left,
+        final Collection<StreamsMetadata> right) {
         assertThat(left.size(), equalTo(right.size()));
         final Iterator<StreamsMetadata> leftIter = left.iterator();
         final Iterator<StreamsMetadata> rightIter = right.iterator();
@@ -713,13 +713,13 @@ public class NamedTopologyIntegrationTest {
         // first check that all partitions in the metadata correspond to the given named topology
         assertThat(
             streams1SourceTopicsForTopology.containsAll(metadata.topicPartitions().stream()
-                                                            .map(TopicPartition::topic)
-                                                            .collect(Collectors.toList())),
+                .map(TopicPartition::topic)
+                .collect(Collectors.toList())),
             is(true));
         assertThat(
             streams2SourceTopicsForTopology.containsAll(metadata.topicPartitions().stream()
-                                                            .map(TopicPartition::topic)
-                                                            .collect(Collectors.toList())),
+                .map(TopicPartition::topic)
+                .collect(Collectors.toList())),
             is(true));
 
         // then verify that only this topology's one store appears if the host has partitions assigned

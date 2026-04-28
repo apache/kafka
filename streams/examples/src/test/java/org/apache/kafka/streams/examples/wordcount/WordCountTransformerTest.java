@@ -84,9 +84,9 @@ public class WordCountTransformerTest {
         // finally, we can verify the output.
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> capturedForwards = context.forwarded();
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> expected = asList(
-                new MockProcessorContext.CapturedForward<>(new Record<>("alpha", "2", 0L)),
-                new MockProcessorContext.CapturedForward<>(new Record<>("beta", "1", 0L)),
-                new MockProcessorContext.CapturedForward<>(new Record<>("gamma", "1", 0L))
+            new MockProcessorContext.CapturedForward<>(new Record<>("alpha", "2", 0L)),
+            new MockProcessorContext.CapturedForward<>(new Record<>("beta", "1", 0L)),
+            new MockProcessorContext.CapturedForward<>(new Record<>("gamma", "1", 0L))
         );
         assertThat(capturedForwards, is(expected));
     }

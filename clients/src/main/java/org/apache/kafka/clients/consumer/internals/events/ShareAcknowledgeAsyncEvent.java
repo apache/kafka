@@ -27,7 +27,7 @@ public class ShareAcknowledgeAsyncEvent extends ApplicationEvent {
     private final long deadlineMs;
 
     public ShareAcknowledgeAsyncEvent(final Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap,
-                                      final long deadlineMs) {
+        final long deadlineMs) {
         super(Type.SHARE_ACKNOWLEDGE_ASYNC);
         this.acknowledgementsMap = acknowledgementsMap;
         this.deadlineMs = deadlineMs;

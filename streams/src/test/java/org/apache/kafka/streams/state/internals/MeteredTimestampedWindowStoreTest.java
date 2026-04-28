@@ -106,27 +106,27 @@ public class MeteredTimestampedWindowStoreTest {
 
     public void setUpWithoutContextName() {
         final StreamsMetricsImpl streamsMetrics =
-                new StreamsMetricsImpl(metrics, "test", new MockTime());
+            new StreamsMetricsImpl(metrics, "test", new MockTime());
 
         context = new InternalMockProcessorContext<>(
-                TestUtils.tempDirectory(),
-                Serdes.String(),
-                Serdes.Long(),
-                streamsMetrics,
-                new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
-                MockRecordCollector::new,
-                new ThreadCache(new LogContext("testCache "), 0, streamsMetrics),
-                Time.SYSTEM,
-                taskId
+            TestUtils.tempDirectory(),
+            Serdes.String(),
+            Serdes.Long(),
+            streamsMetrics,
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
+            MockRecordCollector::new,
+            new ThreadCache(new LogContext("testCache "), 0, streamsMetrics),
+            Time.SYSTEM,
+            taskId
         );
 
         store = new MeteredTimestampedWindowStore<>(
-                innerStoreMock,
-                WINDOW_SIZE_MS, // any size
-                STORE_TYPE,
-                new MockTime(),
-                Serdes.String(),
-                new ValueAndTimestampSerde<>(new SerdeThatDoesntHandleNull())
+            innerStoreMock,
+            WINDOW_SIZE_MS, // any size
+            STORE_TYPE,
+            new MockTime(),
+            Serdes.String(),
+            new ValueAndTimestampSerde<>(new SerdeThatDoesntHandleNull())
         );
     }
 

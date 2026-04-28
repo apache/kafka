@@ -73,14 +73,19 @@ public class DelayedOperationTest {
     public void testLockInTryCompleteElseWatch() {
         DelayedOperation op = new DelayedOperation(100000L) {
             @Override
-            public void onExpiration() {}
+            public void onExpiration() {
+            }
+
             @Override
-            public void onComplete() {}
+            public void onComplete() {
+            }
+
             @Override
             public boolean tryComplete() {
                 assertTrue(((ReentrantLock) lock).isHeldByCurrentThread());
                 return false;
             }
+
             @Override
             public boolean safeTryComplete() {
                 fail("tryCompleteElseWatch should not use safeTryComplete");
@@ -93,10 +98,12 @@ public class DelayedOperationTest {
     private DelayedOperation op(boolean shouldComplete) {
         return new DelayedOperation(100000L) {
             @Override
-            public void onExpiration() {}
+            public void onExpiration() {
+            }
 
             @Override
-            public void onComplete() {}
+            public void onComplete() {
+            }
 
             @Override
             public boolean tryComplete() {
@@ -259,7 +266,8 @@ public class DelayedOperationTest {
         }
 
         @Override
-        public void onExpiration() { }
+        public void onExpiration() {
+        }
 
         @Override
         public void onComplete() {

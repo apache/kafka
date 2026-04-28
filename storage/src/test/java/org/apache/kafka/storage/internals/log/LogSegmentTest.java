@@ -109,8 +109,8 @@ public class LogSegmentTest {
             simpleRecords.add(new SimpleRecord(offset * 10, s.getBytes()));
         }
         return MemoryRecords.withRecords(
-            RecordBatch.MAGIC_VALUE_V1, offset,
-            Compression.NONE, TimestampType.CREATE_TIME, simpleRecords.toArray(new SimpleRecord[0]));
+                RecordBatch.MAGIC_VALUE_V1, offset,
+                Compression.NONE, TimestampType.CREATE_TIME, simpleRecords.toArray(new SimpleRecord[0]));
     }
 
     private MemoryRecords v2Records(long offset, String... records) {
@@ -143,13 +143,13 @@ public class LogSegmentTest {
      */
     @ParameterizedTest
     @CsvSource({
-        "0, -2147483648",
-        "0, 2147483648",
-        "1, 0",
-        "100, 10",
-        "2147483648, 0",
-        "-2147483648, 0",
-        "2147483648, 4294967296"
+            "0, -2147483648",
+            "0, 2147483648",
+            "1, 0",
+            "100, 10",
+            "2147483648, 0",
+            "-2147483648, 0",
+            "2147483648, 4294967296"
     })
     public void testAppendForLogSegmentOffsetOverflowException(long baseOffset, long largestOffset) throws IOException {
         try (LogSegment seg = createSegment(baseOffset, 10, Time.SYSTEM)) {
@@ -307,7 +307,7 @@ public class LogSegmentTest {
             assertFalse(reopened.offsetIndex().isFull());
 
             RollParams rollParams = new RollParams(maxSegmentMs, Integer.MAX_VALUE, RecordBatch.NO_TIMESTAMP,
-                100L, 1024, time.milliseconds());
+                    100L, 1024, time.milliseconds());
             assertFalse(reopened.shouldRoll(rollParams));
 
             // the segment should not be rolled even if maxSegmentMs has been exceeded
@@ -318,7 +318,7 @@ public class LogSegmentTest {
 
             // but we should still roll the segment if we cannot fit the next offset
             rollParams = new RollParams(maxSegmentMs, Integer.MAX_VALUE, RecordBatch.NO_TIMESTAMP,
-                (long) Integer.MAX_VALUE + 200L, 1024, time.milliseconds());
+                    (long) Integer.MAX_VALUE + 200L, 1024, time.milliseconds());
             assertTrue(reopened.shouldRoll(rollParams));
         }
     }
@@ -353,11 +353,11 @@ public class LogSegmentTest {
         try (LogSegment seg = createSegment(40, time)) {
 
             seg.append(41,
-                MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 40, Compression.NONE, TimestampType.CREATE_TIME,
-                    List.of(
-                        new SimpleRecord("hello".getBytes()),
-                        new SimpleRecord("there".getBytes())
-                    ).toArray(new SimpleRecord[0])));
+                    MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 40, Compression.NONE, TimestampType.CREATE_TIME,
+                            List.of(
+                                    new SimpleRecord("hello".getBytes()),
+                                    new SimpleRecord("there".getBytes())
+                            ).toArray(new SimpleRecord[0])));
 
             // If the segment is empty after truncation, the create time should be reset
             time.sleep(500);
@@ -475,26 +475,26 @@ public class LogSegmentTest {
 
             // append transactional records from pid1
             segment.append(101L,
-                MemoryRecords.withTransactionalRecords(100L, Compression.NONE,
-                    pid1, producerEpoch, sequence, partitionLeaderEpoch, new SimpleRecord("a".getBytes()), new SimpleRecord("b".getBytes())));
+                    MemoryRecords.withTransactionalRecords(100L, Compression.NONE,
+                            pid1, producerEpoch, sequence, partitionLeaderEpoch, new SimpleRecord("a".getBytes()), new SimpleRecord("b".getBytes())));
 
             // append transactional records from pid2
             segment.append(103L,
-                MemoryRecords.withTransactionalRecords(102L, Compression.NONE,
-                    pid2, producerEpoch, sequence, partitionLeaderEpoch, new SimpleRecord("a".getBytes()), new SimpleRecord("b".getBytes())));
+                    MemoryRecords.withTransactionalRecords(102L, Compression.NONE,
+                            pid2, producerEpoch, sequence, partitionLeaderEpoch, new SimpleRecord("a".getBytes()), new SimpleRecord("b".getBytes())));
 
             // append non-transactional records
             segment.append(105L,
-                MemoryRecords.withRecords(104L, Compression.NONE,
-                    partitionLeaderEpoch, new SimpleRecord("a".getBytes()), new SimpleRecord("b".getBytes())));
+                    MemoryRecords.withRecords(104L, Compression.NONE,
+                            partitionLeaderEpoch, new SimpleRecord("a".getBytes()), new SimpleRecord("b".getBytes())));
 
             // abort the transaction from pid2
             segment.append(106L,
-                endTxnRecords(ControlRecordType.ABORT, pid2, producerEpoch, 106L));
+                    endTxnRecords(ControlRecordType.ABORT, pid2, producerEpoch, 106L));
 
             // commit the transaction from pid1
             segment.append(107L,
-                endTxnRecords(ControlRecordType.COMMIT, pid1, producerEpoch, 107L));
+                    endTxnRecords(ControlRecordType.COMMIT, pid1, producerEpoch, 107L));
 
             ProducerStateManager stateManager = newProducerStateManager();
             segment.recover(stateManager, mock(LeaderEpochFileCache.class));
@@ -512,7 +512,7 @@ public class LogSegmentTest {
             stateManager = newProducerStateManager();
 
             ProducerStateEntry stateEntry = new ProducerStateEntry(pid2, producerEpoch, 0,
-                RecordBatch.NO_TIMESTAMP, OptionalLong.of(75L));
+                    RecordBatch.NO_TIMESTAMP, OptionalLong.of(75L));
             stateEntry.addBatch(producerEpoch, 10, 10L, 5, RecordBatch.NO_TIMESTAMP);
 
             stateManager.loadProducerEntry(stateEntry);
@@ -540,39 +540,39 @@ public class LogSegmentTest {
 
             LeaderEpochFileCache cache = new LeaderEpochFileCache(topicPartition, checkpoint, new MockScheduler(new MockTime()));
             seg.append(105L, MemoryRecords.withRecords(104L, Compression.NONE, 0,
-                new SimpleRecord("a".getBytes()), new SimpleRecord("b".getBytes())));
+                    new SimpleRecord("a".getBytes()), new SimpleRecord("b".getBytes())));
 
             seg.append(107L, MemoryRecords.withRecords(106L, Compression.NONE, 1,
-                new SimpleRecord("a".getBytes()), new SimpleRecord("b".getBytes())));
+                    new SimpleRecord("a".getBytes()), new SimpleRecord("b".getBytes())));
 
             seg.append(109L, MemoryRecords.withRecords(108L, Compression.NONE, 1,
-                new SimpleRecord("a".getBytes()), new SimpleRecord("b".getBytes())));
+                    new SimpleRecord("a".getBytes()), new SimpleRecord("b".getBytes())));
 
             seg.append(111L, MemoryRecords.withRecords(110L, Compression.NONE, 2,
-                new SimpleRecord("a".getBytes()), new SimpleRecord("b".getBytes())));
+                    new SimpleRecord("a".getBytes()), new SimpleRecord("b".getBytes())));
 
             seg.recover(newProducerStateManager(), cache);
             assertEquals(List.of(
-                new EpochEntry(0, 104L),
-                new EpochEntry(1, 106L),
-                new EpochEntry(2, 110L)), cache.epochEntries());
+                    new EpochEntry(0, 104L),
+                    new EpochEntry(1, 106L),
+                    new EpochEntry(2, 110L)), cache.epochEntries());
         }
     }
 
     private MemoryRecords endTxnRecords(
-        ControlRecordType controlRecordType,
-        long producerId,
-        short producerEpoch,
-        long offset) {
+            ControlRecordType controlRecordType,
+            long producerId,
+            short producerEpoch,
+            long offset) {
 
         EndTransactionMarker marker = new EndTransactionMarker(controlRecordType, 0);
         return MemoryRecords.withEndTransactionMarker(
-            offset,
-            RecordBatch.NO_TIMESTAMP,
-            0,
-            producerId,
-            producerEpoch,
-            marker
+                offset,
+                RecordBatch.NO_TIMESTAMP,
+                0,
+                producerId,
+                producerEpoch,
+                marker
         );
     }
 
@@ -641,7 +641,7 @@ public class LogSegmentTest {
         configMap.put(TopicConfig.SEGMENT_JITTER_MS_CONFIG, 0);
         LogConfig logConfig = new LogConfig(configMap);
         try (LogSegment seg = LogSegment.open(tempDir, 40, logConfig, Time.SYSTEM, false,
-            512 * 1024 * 1024, true, "")) {
+                     512 * 1024 * 1024, true, "")) {
             segments.add(seg);
             MemoryRecords ms = v1Records(50, "hello", "there");
             seg.append(51, ms);
@@ -681,7 +681,7 @@ public class LogSegmentTest {
             assertEquals(oldSize, seg.log().file().length());
 
             LogSegment segReopen = LogSegment.open(tempDir, 40, logConfig, Time.SYSTEM,
-                true, 512 * 1024 * 1024, true, "");
+                    true, 512 * 1024 * 1024, true, "");
             segments.add(segReopen);
 
             FetchDataInfo readAgain = segReopen.read(55, 200);
@@ -697,7 +697,7 @@ public class LogSegmentTest {
 
     private MemoryRecords recordsForTruncateEven(long offset, String record) {
         return MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, offset, Compression.NONE,
-            TimestampType.CREATE_TIME, new SimpleRecord(offset * 1000, record.getBytes()));
+                TimestampType.CREATE_TIME, new SimpleRecord(offset * 1000, record.getBytes()));
     }
 
     @Test
@@ -724,7 +724,7 @@ public class LogSegmentTest {
 
     private MemoryRecords v2RecordWithSize(long offset, int size) {
         return MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, offset, Compression.NONE, TimestampType.CREATE_TIME,
-            new SimpleRecord(new byte[size]));
+                new SimpleRecord(new byte[size]));
     }
 
     @Test
@@ -761,7 +761,7 @@ public class LogSegmentTest {
             assertEquals(Long.MAX_VALUE, segment.getFirstBatchTimestamp());
 
             segment.append(1,
-                MemoryRecords.withRecords(1, Compression.NONE, new SimpleRecord(1000L, "one".getBytes())));
+                    MemoryRecords.withRecords(1, Compression.NONE, new SimpleRecord(1000L, "one".getBytes())));
             assertEquals(1000L, segment.getFirstBatchTimestamp());
         }
     }
@@ -793,8 +793,8 @@ public class LogSegmentTest {
 
         try (LogSegment segment = new LogSegment(log, lazyOffsetIndex, lazyTimeIndex, transactionIndex, 0, 10, 100, Time.SYSTEM)) {
             assertDoesNotThrow(
-                () -> segment.deleteIfExists(),
-                "Should not throw exception when transactionIndex.deleteIfExists() returns false");
+                    () -> segment.deleteIfExists(),
+                    "Should not throw exception when transactionIndex.deleteIfExists() returns false");
         }
     }
 
@@ -907,11 +907,11 @@ public class LogSegmentTest {
 
     private ProducerStateManager newProducerStateManager() throws IOException {
         return new ProducerStateManager(
-            topicPartition,
-            logDir,
-            (int) (Duration.ofMinutes(5).toMillis()),
-            new ProducerStateManagerConfig(86400000, false),
-            new MockTime()
+                topicPartition,
+                logDir,
+                (int) (Duration.ofMinutes(5).toMillis()),
+                new ProducerStateManagerConfig(86400000, false),
+                new MockTime()
         );
     }
 

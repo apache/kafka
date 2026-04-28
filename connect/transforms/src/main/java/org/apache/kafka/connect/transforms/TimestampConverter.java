@@ -133,6 +133,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
     }
 
     private static final Map<String, TimestampTranslator> TRANSLATORS = new HashMap<>();
+
     static {
         TRANSLATORS.put(TYPE_STRING, new TimestampTranslator() {
             @Override

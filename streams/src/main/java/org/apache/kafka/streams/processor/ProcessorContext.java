@@ -101,7 +101,7 @@ public interface ProcessorContext {
      * @throws StreamsException if the store's change log does not contain the partition
      */
     void register(final StateStore store,
-                  final StateRestoreCallback stateRestoreCallback);
+        final StateRestoreCallback stateRestoreCallback);
 
     /**
      * Get the state store given the store name.
@@ -155,8 +155,8 @@ public interface ProcessorContext {
      * @throws IllegalArgumentException if the interval is not representable in milliseconds
      */
     Cancellable schedule(final Duration interval,
-                         final PunctuationType type,
-                         final Punctuator callback);
+        final PunctuationType type,
+        final Punctuator callback);
 
     /**
      * Schedule a periodic operation for processors. A processor may call this method during a
@@ -194,9 +194,9 @@ public interface ProcessorContext {
      * @throws IllegalArgumentException if the interval is not representable in milliseconds
      */
     Cancellable schedule(final Instant startTime,
-                         final Duration interval,
-                         final PunctuationType type,
-                         final Punctuator callback);
+        final Duration interval,
+        final PunctuationType type,
+        final Punctuator callback);
 
     /**
      * Forward a key/value pair to all downstream processors.

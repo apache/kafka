@@ -165,7 +165,7 @@ public class KafkaYammerMetrics implements Reconfigurable {
         } else {
             StringBuilder tagsString = new StringBuilder();
 
-            for (Iterator<Map.Entry<String, String>> iterator = nonEmptyTags.entrySet().iterator(); iterator.hasNext();) {
+            for (Iterator<Map.Entry<String, String>> iterator = nonEmptyTags.entrySet().iterator(); iterator.hasNext(); ) {
                 // convert dot to _ since reporters like Graphite typically use dot to represent hierarchy
                 Map.Entry<String, String> tagEntry = iterator.next();
                 String convertedValue = tagEntry.getValue().replaceAll("\\.", "_");

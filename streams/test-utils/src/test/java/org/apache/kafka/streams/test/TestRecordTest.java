@@ -41,11 +41,11 @@ public class TestRecordTest {
     private final String key = "testKey";
     private final int value = 1;
     private final Headers headers = new RecordHeaders(
-            new Header[]{
-                new RecordHeader("foo", "value".getBytes()),
-                new RecordHeader("bar", null),
-                new RecordHeader("\"A\\u00ea\\u00f1\\u00fcC\"", "value".getBytes())
-            });
+        new Header[]{
+            new RecordHeader("foo", "value".getBytes()),
+            new RecordHeader("bar", null),
+            new RecordHeader("\"A\\u00ea\\u00f1\\u00fcC\"", "value".getBytes())
+        });
     private final Instant recordTime = Instant.parse("2019-06-01T10:00:00Z");
     private final long recordMs = recordTime.toEpochMilli();
 
@@ -68,19 +68,19 @@ public class TestRecordTest {
         final TestRecord<String, Integer> testRecord = new TestRecord<>(key, value, headers, recordTime);
 
         assertThat(testRecord, allOf(
-                hasProperty("key", equalTo(key)),
-                hasProperty("value", equalTo(value)),
-                hasProperty("headers", equalTo(headers))));
+            hasProperty("key", equalTo(key)),
+            hasProperty("value", equalTo(value)),
+            hasProperty("headers", equalTo(headers))));
 
         assertThat(testRecord, allOf(
-                hasProperty("key", equalTo(key)),
-                hasProperty("value", equalTo(value)),
-                hasProperty("headers", equalTo(headers)),
-                hasProperty("recordTime", equalTo(recordTime))));
+            hasProperty("key", equalTo(key)),
+            hasProperty("value", equalTo(value)),
+            hasProperty("headers", equalTo(headers)),
+            hasProperty("recordTime", equalTo(recordTime))));
 
         assertThat(testRecord, allOf(
-                hasProperty("key", equalTo(key)),
-                hasProperty("value", equalTo(value))));
+            hasProperty("key", equalTo(key)),
+            hasProperty("value", equalTo(value))));
     }
 
 
@@ -99,9 +99,9 @@ public class TestRecordTest {
         assertEquals(testRecord.hashCode(), equalRecordMs.hashCode());
 
         final Headers headers2 = new RecordHeaders(
-                new Header[]{
-                    new RecordHeader("foo", "value".getBytes()),
-                    new RecordHeader("bar", null),
+            new Header[]{
+                new RecordHeader("foo", "value".getBytes()),
+                new RecordHeader("bar", null),
                 });
         final TestRecord<String, Integer> headerMismatch = new TestRecord<>(key, value, headers2, recordTime);
         assertNotEquals(testRecord, headerMismatch);
@@ -138,16 +138,16 @@ public class TestRecordTest {
     @Test
     public void testInvalidRecords() {
         assertThrows(IllegalArgumentException.class,
-            () -> new TestRecord<>(key, value, headers,  -1L));
+            () -> new TestRecord<>(key, value, headers, -1L));
     }
 
     @Test
     public void testToString() {
         final TestRecord<String, Integer> testRecord = new TestRecord<>(key, value, headers, recordTime);
         assertThat(testRecord.toString(), equalTo("TestRecord[key=testKey, value=1, "
-                + "headers=RecordHeaders(headers = [RecordHeader(key = foo, value = [118, 97, 108, 117, 101]), "
-                + "RecordHeader(key = bar, value = null), RecordHeader(key = \"A\\u00ea\\u00f1\\u00fcC\", value = [118, 97, 108, 117, 101])], isReadOnly = false), "
-                + "recordTime=2019-06-01T10:00:00Z]"));
+            + "headers=RecordHeaders(headers = [RecordHeader(key = foo, value = [118, 97, 108, 117, 101]), "
+            + "RecordHeader(key = bar, value = null), RecordHeader(key = \"A\\u00ea\\u00f1\\u00fcC\", value = [118, 97, 108, 117, 101])], isReadOnly = false), "
+            + "recordTime=2019-06-01T10:00:00Z]"));
     }
 
     @Test

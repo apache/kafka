@@ -59,8 +59,8 @@ public class DescribeLogDirsRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         return new DescribeLogDirsResponse(new DescribeLogDirsResponseData()
-                .setThrottleTimeMs(throttleTimeMs)
-                .setErrorCode(Errors.forException(e).code()));
+            .setThrottleTimeMs(throttleTimeMs)
+            .setErrorCode(Errors.forException(e).code()));
     }
 
     public boolean isAllTopicPartitions() {

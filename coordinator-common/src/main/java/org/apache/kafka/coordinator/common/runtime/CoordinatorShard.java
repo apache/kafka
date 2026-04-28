@@ -30,7 +30,8 @@ public interface CoordinatorShard<U> {
      *
      * @param newImage  The metadata image.
      */
-    default void onLoaded(CoordinatorMetadataImage newImage) {}
+    default void onLoaded(CoordinatorMetadataImage newImage) {
+    }
 
     /**
      * A new metadata image is available. This is only called after {@link CoordinatorShard#onLoaded(CoordinatorMetadataImage)}
@@ -39,13 +40,15 @@ public interface CoordinatorShard<U> {
      * @param delta    The delta image.
      * @param newImage The new metadata image.
      */
-    default void onMetadataUpdate(CoordinatorMetadataDelta delta, CoordinatorMetadataImage newImage) {}
+    default void onMetadataUpdate(CoordinatorMetadataDelta delta, CoordinatorMetadataImage newImage) {
+    }
 
     /**
      * The coordinator has been unloaded. This is used to apply
      * any post unloading operations.
      */
-    default void onUnloaded() {}
+    default void onUnloaded() {
+    }
 
     /**
      * Replay a record to update the state machine.
@@ -56,10 +59,10 @@ public interface CoordinatorShard<U> {
      * @param record        The record to replay.
      */
     void replay(
-        long offset,
-        long producerId,
-        short producerEpoch,
-        U record
+            long offset,
+            long producerId,
+            short producerEpoch,
+            U record
     ) throws RuntimeException;
 
     /**
@@ -71,8 +74,9 @@ public interface CoordinatorShard<U> {
      * @throws RuntimeException if the transaction can not be completed.
      */
     default void replayEndTransactionMarker(
-        long producerId,
-        short producerEpoch,
-        TransactionResult result
-    ) throws RuntimeException {}
+            long producerId,
+            short producerEpoch,
+            TransactionResult result
+    ) throws RuntimeException {
+    }
 }

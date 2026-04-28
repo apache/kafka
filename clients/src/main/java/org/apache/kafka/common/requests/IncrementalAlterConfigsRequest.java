@@ -40,19 +40,19 @@ public class IncrementalAlterConfigsRequest extends AbstractRequest {
         }
 
         public Builder(final Collection<ConfigResource> resources,
-                       final Map<ConfigResource, Collection<AlterConfigOp>> configs,
-                       final boolean validateOnly) {
+            final Map<ConfigResource, Collection<AlterConfigOp>> configs,
+            final boolean validateOnly) {
             super(ApiKeys.INCREMENTAL_ALTER_CONFIGS);
             this.data = new IncrementalAlterConfigsRequestData()
-                            .setValidateOnly(validateOnly);
+                .setValidateOnly(validateOnly);
             for (ConfigResource resource : resources) {
                 IncrementalAlterConfigsRequestData.AlterableConfigCollection alterableConfigSet =
                     new IncrementalAlterConfigsRequestData.AlterableConfigCollection();
                 for (AlterConfigOp configEntry : configs.get(resource))
                     alterableConfigSet.add(new IncrementalAlterConfigsRequestData.AlterableConfig()
-                                               .setName(configEntry.configEntry().name())
-                                               .setValue(configEntry.configEntry().value())
-                                               .setConfigOperation(configEntry.opType().id()));
+                        .setName(configEntry.configEntry().name())
+                        .setValue(configEntry.configEntry().value())
+                        .setConfigOperation(configEntry.opType().id()));
                 IncrementalAlterConfigsRequestData.AlterConfigsResource alterConfigsResource = new IncrementalAlterConfigsRequestData.AlterConfigsResource();
                 alterConfigsResource.setResourceType(resource.type().id())
                     .setResourceName(resource.name()).setConfigs(alterableConfigSet);
@@ -61,7 +61,7 @@ public class IncrementalAlterConfigsRequest extends AbstractRequest {
         }
 
         public Builder(final Map<ConfigResource, Collection<AlterConfigOp>> configs,
-                       final boolean validateOnly) {
+            final boolean validateOnly) {
             this(configs.keySet(), configs, validateOnly);
         }
 
@@ -99,10 +99,10 @@ public class IncrementalAlterConfigsRequest extends AbstractRequest {
         ApiError apiError = ApiError.fromThrowable(e);
         for (AlterConfigsResource resource : data.resources()) {
             response.responses().add(new AlterConfigsResourceResponse()
-                    .setResourceName(resource.resourceName())
-                    .setResourceType(resource.resourceType())
-                    .setErrorCode(apiError.error().code())
-                    .setErrorMessage(apiError.message()));
+                .setResourceName(resource.resourceName())
+                .setResourceType(resource.resourceType())
+                .setErrorCode(apiError.error().code())
+                .setErrorMessage(apiError.message()));
         }
         return new IncrementalAlterConfigsResponse(response);
     }

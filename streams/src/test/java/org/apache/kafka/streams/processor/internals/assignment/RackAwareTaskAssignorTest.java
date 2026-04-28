@@ -129,10 +129,10 @@ public class RackAwareTaskAssignorTest {
     private int nonOverlapCost;
 
     private final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
-            time,
-            streamsConfig,
-            mockClientSupplier.restoreConsumer,
-            false
+        time,
+        streamsConfig,
+        mockClientSupplier.restoreConsumer,
+        false
     );
 
     static Stream<Arguments> paramStoreType() {

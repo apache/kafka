@@ -67,8 +67,8 @@ public class PartitionAssignment {
     @Override
     public String toString() {
         return "PartitionAssignment" +
-                "(replicas=" + replicas +
-                ", directories=" + directories +
-                ")";
+            "(replicas=" + replicas +
+            ", directories=" + directories +
+            ")";
     }
 }

@@ -40,8 +40,8 @@ public final class DeleteTopicAction implements TieredStorageTestAction {
     private final Boolean shouldDelete;
 
     public DeleteTopicAction(String topic,
-                             List<RemoteDeleteSegmentSpec> deleteSegmentSpecs,
-                             Boolean shouldDelete) {
+            List<RemoteDeleteSegmentSpec> deleteSegmentSpecs,
+            Boolean shouldDelete) {
         this.topic = topic;
         this.deleteSegmentSpecs = deleteSegmentSpecs;
         this.shouldDelete = shouldDelete;

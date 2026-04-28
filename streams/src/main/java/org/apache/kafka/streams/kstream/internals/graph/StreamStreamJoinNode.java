@@ -31,24 +31,24 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
     private boolean isSelfJoin;
 
     private StreamStreamJoinNode(final String nodeName,
-                                 final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VR> valueJoiner,
-                                 final ProcessorParameters<K, V1, ?, ?> joinThisProcessorParameters,
-                                 final ProcessorParameters<K, V2, ?, ?> joinOtherProcessParameters,
-                                 final ProcessorParameters<K, VR, ?, ?> joinMergeProcessorParameters,
-                                 final ProcessorParameters<K, V1, ?, ?> selfJoinProcessorParameters,
-                                 final String thisWindowedStreamProcessorName,
-                                 final String otherWindowedStreamProcessorName) {
+        final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VR> valueJoiner,
+        final ProcessorParameters<K, V1, ?, ?> joinThisProcessorParameters,
+        final ProcessorParameters<K, V2, ?, ?> joinOtherProcessParameters,
+        final ProcessorParameters<K, VR, ?, ?> joinMergeProcessorParameters,
+        final ProcessorParameters<K, V1, ?, ?> selfJoinProcessorParameters,
+        final String thisWindowedStreamProcessorName,
+        final String otherWindowedStreamProcessorName) {
 
         super(nodeName,
-              valueJoiner,
-              joinThisProcessorParameters,
-              joinOtherProcessParameters,
-              joinMergeProcessorParameters,
-              null,
-              null);
+            valueJoiner,
+            joinThisProcessorParameters,
+            joinOtherProcessParameters,
+            joinMergeProcessorParameters,
+            null,
+            null);
 
         this.thisWindowedStreamProcessorName = thisWindowedStreamProcessorName;
-        this.otherWindowedStreamProcessorName =  otherWindowedStreamProcessorName;
+        this.otherWindowedStreamProcessorName = otherWindowedStreamProcessorName;
         this.selfJoinProcessorParameters = selfJoinProcessorParameters;
     }
 
@@ -57,7 +57,7 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         return "StreamStreamJoinNode{" +
             "thisWindowedStreamProcessorName=" + thisWindowedStreamProcessorName +
             ", otherWindowedStreamProcessorName=" + otherWindowedStreamProcessorName +
-               "} " + super.toString();
+            "} " + super.toString();
     }
 
     @SuppressWarnings("unchecked")
@@ -155,13 +155,13 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         public StreamStreamJoinNode<K, V1, V2, VR> build() {
 
             return new StreamStreamJoinNode<>(nodeName,
-                                              valueJoiner,
-                                              joinThisProcessorParameters,
-                                              joinOtherProcessorParameters,
-                                              joinMergeProcessorParameters,
-                                              selfJoinProcessorParameters,
-                                              thisWindowedStreamProcessorName,
-                                              otherWindowedStreamProcessorName);
+                valueJoiner,
+                joinThisProcessorParameters,
+                joinOtherProcessorParameters,
+                joinMergeProcessorParameters,
+                selfJoinProcessorParameters,
+                thisWindowedStreamProcessorName,
+                otherWindowedStreamProcessorName);
 
 
         }

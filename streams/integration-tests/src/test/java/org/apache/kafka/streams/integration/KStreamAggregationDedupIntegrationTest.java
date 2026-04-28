@@ -131,9 +131,9 @@ public class KStreamAggregationDedupIntegrationTest {
     public void shouldReduce(final boolean withHeaders, final TestInfo testInfo) throws Exception {
         produceMessages(System.currentTimeMillis());
         groupedStream
-                .reduce(reducer, Materialized.as("reduce-by-key"))
-                .toStream()
-                .to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
+            .reduce(reducer, Materialized.as("reduce-by-key"))
+            .toStream()
+            .to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 
         StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
 
@@ -143,15 +143,15 @@ public class KStreamAggregationDedupIntegrationTest {
         produceMessages(timestamp);
 
         validateReceivedMessages(
-                new StringDeserializer(),
-                new StringDeserializer(),
-                Arrays.asList(
-                    new KeyValueTimestamp<>("A", "A:A", timestamp),
-                    new KeyValueTimestamp<>("B", "B:B", timestamp),
-                    new KeyValueTimestamp<>("C", "C:C", timestamp),
-                    new KeyValueTimestamp<>("D", "D:D", timestamp),
-                    new KeyValueTimestamp<>("E", "E:E", timestamp)),
-                testInfo);
+            new StringDeserializer(),
+            new StringDeserializer(),
+            Arrays.asList(
+                new KeyValueTimestamp<>("A", "A:A", timestamp),
+                new KeyValueTimestamp<>("B", "B:B", timestamp),
+                new KeyValueTimestamp<>("C", "C:C", timestamp),
+                new KeyValueTimestamp<>("D", "D:D", timestamp),
+                new KeyValueTimestamp<>("E", "E:E", timestamp)),
+            testInfo);
     }
 
     @ParameterizedTest
@@ -177,21 +177,21 @@ public class KStreamAggregationDedupIntegrationTest {
         final long secondBatchWindow = secondBatchTimestamp / 500 * 500;
 
         validateReceivedMessages(
-                new StringDeserializer(),
-                new StringDeserializer(),
-                Arrays.asList(
-                    new KeyValueTimestamp<>("A@" + firstBatchWindow, "A", firstBatchTimestamp),
-                    new KeyValueTimestamp<>("A@" + secondBatchWindow, "A:A", secondBatchTimestamp),
-                    new KeyValueTimestamp<>("B@" + firstBatchWindow, "B", firstBatchTimestamp),
-                    new KeyValueTimestamp<>("B@" + secondBatchWindow, "B:B", secondBatchTimestamp),
-                    new KeyValueTimestamp<>("C@" + firstBatchWindow, "C", firstBatchTimestamp),
-                    new KeyValueTimestamp<>("C@" + secondBatchWindow, "C:C", secondBatchTimestamp),
-                    new KeyValueTimestamp<>("D@" + firstBatchWindow, "D", firstBatchTimestamp),
-                    new KeyValueTimestamp<>("D@" + secondBatchWindow, "D:D", secondBatchTimestamp),
-                    new KeyValueTimestamp<>("E@" + firstBatchWindow, "E", firstBatchTimestamp),
-                    new KeyValueTimestamp<>("E@" + secondBatchWindow, "E:E", secondBatchTimestamp)
-                ),
-                testInfo
+            new StringDeserializer(),
+            new StringDeserializer(),
+            Arrays.asList(
+                new KeyValueTimestamp<>("A@" + firstBatchWindow, "A", firstBatchTimestamp),
+                new KeyValueTimestamp<>("A@" + secondBatchWindow, "A:A", secondBatchTimestamp),
+                new KeyValueTimestamp<>("B@" + firstBatchWindow, "B", firstBatchTimestamp),
+                new KeyValueTimestamp<>("B@" + secondBatchWindow, "B:B", secondBatchTimestamp),
+                new KeyValueTimestamp<>("C@" + firstBatchWindow, "C", firstBatchTimestamp),
+                new KeyValueTimestamp<>("C@" + secondBatchWindow, "C:C", secondBatchTimestamp),
+                new KeyValueTimestamp<>("D@" + firstBatchWindow, "D", firstBatchTimestamp),
+                new KeyValueTimestamp<>("D@" + secondBatchWindow, "D:D", secondBatchTimestamp),
+                new KeyValueTimestamp<>("E@" + firstBatchWindow, "E", firstBatchTimestamp),
+                new KeyValueTimestamp<>("E@" + secondBatchWindow, "E:E", secondBatchTimestamp)
+            ),
+            testInfo
         );
     }
 
@@ -215,16 +215,16 @@ public class KStreamAggregationDedupIntegrationTest {
         final long window = timestamp / 500 * 500;
 
         validateReceivedMessages(
-                new StringDeserializer(),
-                new LongDeserializer(),
-                Arrays.asList(
-                    new KeyValueTimestamp<>("1@" + window, 2L, timestamp),
-                    new KeyValueTimestamp<>("2@" + window, 2L, timestamp),
-                    new KeyValueTimestamp<>("3@" + window, 2L, timestamp),
-                    new KeyValueTimestamp<>("4@" + window, 2L, timestamp),
-                    new KeyValueTimestamp<>("5@" + window, 2L, timestamp)
-                ),
-                testInfo
+            new StringDeserializer(),
+            new LongDeserializer(),
+            Arrays.asList(
+                new KeyValueTimestamp<>("1@" + window, 2L, timestamp),
+                new KeyValueTimestamp<>("2@" + window, 2L, timestamp),
+                new KeyValueTimestamp<>("3@" + window, 2L, timestamp),
+                new KeyValueTimestamp<>("4@" + window, 2L, timestamp),
+                new KeyValueTimestamp<>("5@" + window, 2L, timestamp)
+            ),
+            testInfo
         );
     }
 
@@ -261,10 +261,10 @@ public class KStreamAggregationDedupIntegrationTest {
 
 
     private <K, V> void validateReceivedMessages(final Deserializer<K> keyDeserializer,
-                                                 final Deserializer<V> valueDeserializer,
-                                                 final List<KeyValueTimestamp<K, V>> expectedRecords,
-                                                 final TestInfo testInfo)
-            throws Exception {
+        final Deserializer<V> valueDeserializer,
+        final List<KeyValueTimestamp<K, V>> expectedRecords,
+        final TestInfo testInfo)
+        throws Exception {
 
         final String safeTestName = safeUniqueTestName(testInfo);
         final Properties consumerProperties = new Properties();

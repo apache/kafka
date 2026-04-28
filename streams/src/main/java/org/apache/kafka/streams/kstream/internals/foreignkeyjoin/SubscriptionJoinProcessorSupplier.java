@@ -98,9 +98,9 @@ public class SubscriptionJoinProcessorSupplier<KLeft, KRight, VRight>
                         context().forward(
                             record.withKey(record.key().primaryKey())
                                 .withValue(new SubscriptionResponseWrapper<>(
-                                        value.hash(),
-                                        valueToSend,
-                                        value.primaryPartition()
+                                    value.hash(),
+                                    valueToSend,
+                                    value.primaryPartition()
                                 ))
                                 .withTimestamp(resultTimestamp)
                         );
@@ -109,12 +109,12 @@ public class SubscriptionJoinProcessorSupplier<KLeft, KRight, VRight>
                         if (foreignValueAndTime != null) {
                             context().forward(
                                 record.withKey(record.key().primaryKey())
-                                   .withValue(new SubscriptionResponseWrapper<>(
-                                       value.hash(),
-                                       foreignValueAndTime.value(),
-                                       value.primaryPartition()
-                                   ))
-                                   .withTimestamp(resultTimestamp)
+                                    .withValue(new SubscriptionResponseWrapper<>(
+                                        value.hash(),
+                                        foreignValueAndTime.value(),
+                                        value.primaryPartition()
+                                    ))
+                                    .withTimestamp(resultTimestamp)
                             );
                         }
                         break;

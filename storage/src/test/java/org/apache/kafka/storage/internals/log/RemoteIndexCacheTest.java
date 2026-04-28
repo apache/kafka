@@ -698,7 +698,8 @@ public class RemoteIndexCacheTest {
                 .toList();
     }
 
-    record EvictionResult(List<RemoteLogSegmentMetadata> evictedSegmentMetadata, List<RemoteIndexCache.Entry> evictedEntries) { }
+    record EvictionResult(List<RemoteLogSegmentMetadata> evictedSegmentMetadata, List<RemoteIndexCache.Entry> evictedEntries) {
+    }
 
     private EvictionResult verifyEntryIsEvicted(List<RemoteLogSegmentMetadata> metadataToVerify, List<RemoteIndexCache.Entry> entriesToVerify, int numOfMarkAsDeleted) throws InterruptedException {
         TestUtils.waitForCondition(() -> entriesToVerify.stream().filter(RemoteIndexCache.Entry::isMarkedForCleanup).count() == numOfMarkAsDeleted,
@@ -859,8 +860,8 @@ public class RemoteIndexCacheTest {
     }
 
     private void executeConcurrentRemoveRead(Runnable removeCache,
-                                             Runnable readCache,
-                                             CountDownLatch latchForTestWait) throws InterruptedException, ExecutionException {
+            Runnable readCache,
+            CountDownLatch latchForTestWait) throws InterruptedException, ExecutionException {
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
             Future<?> removeCacheFuture = executor.submit(removeCache);
@@ -972,9 +973,9 @@ public class RemoteIndexCacheTest {
     }
 
     private void renameRemoteCacheIndexFileFromDisk(Path tmpOffsetIdxFile,
-                                                    Path tmpTxnIdxFile,
-                                                    Path tmpTimeIdxFile,
-                                                    String tempSuffix) throws IOException {
+            Path tmpTxnIdxFile,
+            Path tmpTimeIdxFile,
+            String tempSuffix) throws IOException {
         for (Path path : new Path[]{tmpOffsetIdxFile, tmpTxnIdxFile, tmpTimeIdxFile}) {
             Utils.atomicMoveWithFallback(path,
                     path.resolveSibling(path.getFileName().toString().replace(tempSuffix, "")));
@@ -1137,7 +1138,7 @@ public class RemoteIndexCacheTest {
     }
 
     private RemoteIndexCache.Entry generateSpyCacheEntry(RemoteLogSegmentId remoteLogSegmentId,
-                                                         File dir) throws IOException {
+            File dir) throws IOException {
         RemoteLogSegmentMetadata rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset,
                 lastOffset, time.milliseconds(), brokerId, time.milliseconds(),
                 segmentSize, Collections.singletonMap(0, 0L));
@@ -1298,7 +1299,7 @@ public class RemoteIndexCacheTest {
             return Files.walk(cache.cacheDir().toPath())
                     .filter(Files::isRegularFile)
                     .filter(path -> path.getFileName().toString().endsWith(suffix))
-            .findAny();
+                    .findAny();
         } catch (IOException exc) {
             return Optional.empty();
         }

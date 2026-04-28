@@ -260,15 +260,15 @@ public class ConsumerConfigTest {
 
     private void testUnsupportedConfigsWithConsumerGroupProtocol(String configName, Object value) {
         final Map<String, Object> configs = Map.of(
-                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass,
-                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass,
-                ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name(),
-                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092",
-                configName, value
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass,
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass,
+            ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name(),
+            ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092",
+            configName, value
         );
         ConfigException exception = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
         assertEquals(configName + " cannot be set when " +
-                ConsumerConfig.GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CONSUMER.name(), exception.getMessage());
+            ConsumerConfig.GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CONSUMER.name(), exception.getMessage());
     }
 
     /**

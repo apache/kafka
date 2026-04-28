@@ -144,13 +144,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     private boolean sendOldValues = false;
 
     public KTableImpl(final String name,
-                      final Serde<K> keySerde,
-                      final Serde<V> valueSerde,
-                      final Set<String> subTopologySourceNodes,
-                      final String queryableStoreName,
-                      final org.apache.kafka.streams.processor.api.ProcessorSupplier<?, ?, ?, ?> newProcessorSupplier,
-                      final GraphNode graphNode,
-                      final InternalStreamsBuilder builder) {
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde,
+        final Set<String> subTopologySourceNodes,
+        final String queryableStoreName,
+        final org.apache.kafka.streams.processor.api.ProcessorSupplier<?, ?, ?, ?> newProcessorSupplier,
+        final GraphNode graphNode,
+        final InternalStreamsBuilder builder) {
         super(name, keySerde, valueSerde, subTopologySourceNodes, graphNode, builder);
         this.processorSupplier = newProcessorSupplier;
         this.queryableStoreName = queryableStoreName;
@@ -163,9 +163,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @SuppressWarnings("resource")
     private KTable<K, V> doFilter(final Predicate<? super K, ? super V> predicate,
-                                  final Named named,
-                                  final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal,
-                                  final boolean filterNot) {
+        final Named named,
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal,
+        final boolean filterNot) {
         final Serde<K> keySerde;
         final Serde<V> valueSerde;
         final String queryableStoreName;
@@ -230,8 +230,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
-                               final Named named,
-                               final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+        final Named named,
+        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(predicate, "predicate can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
@@ -241,7 +241,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
-                               final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         return filter(predicate, NamedInternal.empty(), materialized);
     }
 
@@ -253,21 +253,21 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate,
-                                  final Named named) {
+        final Named named) {
         Objects.requireNonNull(predicate, "predicate can't be null");
         return doFilter(predicate, named, null, true);
     }
 
     @Override
     public KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate,
-                                  final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         return filterNot(predicate, NamedInternal.empty(), materialized);
     }
 
     @Override
     public KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate,
-                                  final Named named,
-                                  final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+        final Named named,
+        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(predicate, "predicate can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
@@ -277,8 +277,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @SuppressWarnings("resource")
     private <VR> KTable<K, VR> doMapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper,
-                                           final Named named,
-                                           final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal) {
+        final Named named,
+        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal) {
         final Serde<K> keySerde;
         final Serde<VR> valueSerde;
         final String queryableStoreName;
@@ -342,7 +342,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper,
-                                        final Named named) {
+        final Named named) {
         Objects.requireNonNull(mapper, "mapper can't be null");
         return doMapValues(withKey(mapper), named, null);
     }
@@ -355,21 +355,21 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <VR> KTable<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper,
-                                        final Named named) {
+        final Named named) {
         Objects.requireNonNull(mapper, "mapper can't be null");
         return doMapValues(mapper, named, null);
     }
 
     @Override
     public <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper,
-                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         return mapValues(mapper, NamedInternal.empty(), materialized);
     }
 
     @Override
     public <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper,
-                                        final Named named,
-                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final Named named,
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(mapper, "mapper can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
 
@@ -380,14 +380,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <VR> KTable<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper,
-                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         return mapValues(mapper, NamedInternal.empty(), materialized);
     }
 
     @Override
     public <VR> KTable<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper,
-                                        final Named named,
-                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final Named named,
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(mapper, "mapper can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
 
@@ -398,30 +398,30 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
-                                              final String... stateStoreNames) {
+        final String... stateStoreNames) {
         return doTransformValues(transformerSupplier, null, NamedInternal.empty(), stateStoreNames);
     }
 
     @Override
     public <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
-                                              final Named named,
-                                              final String... stateStoreNames) {
+        final Named named,
+        final String... stateStoreNames) {
         Objects.requireNonNull(named, "processorName can't be null");
         return doTransformValues(transformerSupplier, null, new NamedInternal(named), stateStoreNames);
     }
 
     @Override
     public <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
-                                              final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
-                                              final String... stateStoreNames) {
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
+        final String... stateStoreNames) {
         return transformValues(transformerSupplier, materialized, NamedInternal.empty(), stateStoreNames);
     }
 
     @Override
     public <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
-                                              final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
-                                              final Named named,
-                                              final String... stateStoreNames) {
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
+        final Named named,
+        final String... stateStoreNames) {
         Objects.requireNonNull(materialized, "materialized can't be null");
         Objects.requireNonNull(named, "named can't be null");
         final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
@@ -431,9 +431,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @SuppressWarnings("resource")
     private <VR> KTable<K, VR> doTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
-                                                 final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal,
-                                                 final NamedInternal namedInternal,
-                                                 final String... stateStoreNames) {
+        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal,
+        final NamedInternal namedInternal,
+        final String... stateStoreNames) {
         Objects.requireNonNull(stateStoreNames, "stateStoreNames");
         final Serde<K> keySerde;
         final Serde<VR> valueSerde;
@@ -530,7 +530,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <K1> KStream<K1, V> toStream(final KeyValueMapper<? super K, ? super V, ? extends K1> mapper,
-                                        final Named named) {
+        final Named named) {
         return toStream(named).selectKey(mapper);
     }
 
@@ -582,9 +582,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         }
 
         final ProcessorSupplier<K, Change<V>, K, Change<V>> suppressionSupplier = new KTableSuppressProcessorSupplier<>(
-                suppressedInternal,
-                storeBuilder,
-                this
+            suppressedInternal,
+            storeBuilder,
+            this
         );
 
         final ProcessorGraphNode<K, Change<V>> node = new TableSuppressNode<>(
@@ -613,7 +613,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         if (suppress instanceof FinalResultsSuppressionBuilder) {
             final long grace = findAndVerifyWindowGrace(graphNode);
             LOG.info("Using grace period of [{}] as the suppress duration for node [{}].",
-                     Duration.ofMillis(grace), name);
+                Duration.ofMillis(grace), name);
 
             final FinalResultsSuppressionBuilder<?> builder = (FinalResultsSuppressionBuilder<?>) suppress;
 
@@ -630,29 +630,29 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <V1, R> KTable<K, R> join(final KTable<K, V1> other,
-                                     final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
+        final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
         return doJoin(other, joiner, NamedInternal.empty(), null, false, false);
     }
 
     @Override
     public <V1, R> KTable<K, R> join(final KTable<K, V1> other,
-                                     final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
-                                     final Named named) {
+        final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
+        final Named named) {
         return doJoin(other, joiner, named, null, false, false);
     }
 
     @Override
     public <VO, VR> KTable<K, VR> join(final KTable<K, VO> other,
-                                       final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                       final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         return join(other, joiner, NamedInternal.empty(), materialized);
     }
 
     @Override
     public <VO, VR> KTable<K, VR> join(final KTable<K, VO> other,
-                                       final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                       final Named named,
-                                       final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+        final Named named,
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(materialized, builder, MERGE_NAME);
@@ -662,29 +662,29 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <V1, R> KTable<K, R> outerJoin(final KTable<K, V1> other,
-                                          final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
+        final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
         return outerJoin(other, joiner, NamedInternal.empty());
     }
 
     @Override
     public <V1, R> KTable<K, R> outerJoin(final KTable<K, V1> other,
-                                          final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
-                                          final Named named) {
+        final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
+        final Named named) {
         return doJoin(other, joiner, named, null, true, true);
     }
 
     @Override
     public <VO, VR> KTable<K, VR> outerJoin(final KTable<K, VO> other,
-                                            final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                            final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         return outerJoin(other, joiner, NamedInternal.empty(), materialized);
     }
 
     @Override
     public <VO, VR> KTable<K, VR> outerJoin(final KTable<K, VO> other,
-                                            final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                            final Named named,
-                                            final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+        final Named named,
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(materialized, builder, MERGE_NAME);
@@ -694,29 +694,29 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <V1, R> KTable<K, R> leftJoin(final KTable<K, V1> other,
-                                         final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
+        final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
         return leftJoin(other, joiner, NamedInternal.empty());
     }
 
     @Override
     public <V1, R> KTable<K, R> leftJoin(final KTable<K, V1> other,
-                                         final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
-                                         final Named named) {
+        final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
+        final Named named) {
         return doJoin(other, joiner, named, null, true, false);
     }
 
     @Override
     public <VO, VR> KTable<K, VR> leftJoin(final KTable<K, VO> other,
-                                           final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                           final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         return leftJoin(other, joiner, NamedInternal.empty(), materialized);
     }
 
     @Override
     public <VO, VR> KTable<K, VR> leftJoin(final KTable<K, VO> other,
-                                           final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                           final Named named,
-                                           final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+        final Named named,
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(materialized, builder, MERGE_NAME);
@@ -726,11 +726,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @SuppressWarnings({"unchecked", "resource"})
     private <VO, VR> KTable<K, VR> doJoin(final KTable<K, VO> other,
-                                          final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                          final Named joinName,
-                                          final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal,
-                                          final boolean leftOuter,
-                                          final boolean rightOuter) {
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+        final Named joinName,
+        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal,
+        final boolean leftOuter,
+        final boolean rightOuter) {
         Objects.requireNonNull(other, "other can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(joinName, "joinName can't be null");
@@ -786,12 +786,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final ProcessorParameters<K, Change<V>, ?, ?> joinThisProcessorParameters = new ProcessorParameters<>(joinThis, joinThisName);
         final ProcessorParameters<K, Change<VO>, ?, ?> joinOtherProcessorParameters = new ProcessorParameters<>(joinOther, joinOtherName);
         final ProcessorParameters<K, Change<VR>, ?, ?> joinMergeProcessorParameters = new ProcessorParameters<>(
-                KTableKTableJoinMerger.of(
-                        (KTableProcessorSupplier<K, V, K, VR>) joinThisProcessorParameters.processorSupplier(),
-                        (KTableProcessorSupplier<K, VO, K, VR>) joinOtherProcessorParameters.processorSupplier(),
-                        queryableStoreName,
-                        storeFactory),
-                joinMergeName);
+            KTableKTableJoinMerger.of(
+                (KTableProcessorSupplier<K, V, K, VR>) joinThisProcessorParameters.processorSupplier(),
+                (KTableProcessorSupplier<K, VO, K, VR>) joinOtherProcessorParameters.processorSupplier(),
+                queryableStoreName,
+                storeFactory),
+            joinMergeName);
 
         final KTableKTableJoinNode<K, V, VO, VR> kTableKTableJoinNode =
             KTableKTableJoinNode.<K, V, VO, VR>kTableKTableJoinNodeBuilder()
@@ -834,7 +834,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <K1, V1> KGroupedTable<K1, V1> groupBy(final KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends K1, ? extends V1>> selector,
-                                                  final Grouped<K1, V1> grouped) {
+        final Grouped<K1, V1> grouped) {
         Objects.requireNonNull(selector, "selector can't be null");
         Objects.requireNonNull(grouped, "grouped can't be null");
         final GroupedInternal<K1, V1> groupedInternal = new GroupedInternal<>(grouped);
@@ -909,8 +909,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
-                                           final Function<? super V, ? extends KO> foreignKeyExtractor,
-                                           final ValueJoiner<? super V, ? super VO, ? extends VR> joiner) {
+        final Function<? super V, ? extends KO> foreignKeyExtractor,
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner) {
         final ForeignKeyExtractor<? super K, ? super V, ? extends KO> adaptedExtractor
             = ForeignKeyExtractor.fromFunction(foreignKeyExtractor);
 
@@ -926,8 +926,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
-                                           final BiFunction<? super K, ? super V, ? extends KO> foreignKeyExtractor,
-                                           final ValueJoiner<? super V, ? super VO, ? extends VR> joiner) {
+        final BiFunction<? super K, ? super V, ? extends KO> foreignKeyExtractor,
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner) {
         final ForeignKeyExtractor<? super K, ? super V, ? extends KO> adaptedExtractor
             = ForeignKeyExtractor.fromBiFunction(foreignKeyExtractor);
 
@@ -943,9 +943,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
-                                           final Function<? super V, ? extends KO> foreignKeyExtractor,
-                                           final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                           final TableJoined<K, KO> tableJoined) {
+        final Function<? super V, ? extends KO> foreignKeyExtractor,
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+        final TableJoined<K, KO> tableJoined) {
         final ForeignKeyExtractor<? super K, ? super V, ? extends KO> adaptedExtractor
             = ForeignKeyExtractor.fromFunction(foreignKeyExtractor);
 
@@ -961,9 +961,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
-                                           final BiFunction<? super K, ? super V, ? extends KO> foreignKeyExtractor,
-                                           final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                           final TableJoined<K, KO> tableJoined) {
+        final BiFunction<? super K, ? super V, ? extends KO> foreignKeyExtractor,
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+        final TableJoined<K, KO> tableJoined) {
         final ForeignKeyExtractor<? super K, ? super V, ? extends KO> adaptedExtractor
             = ForeignKeyExtractor.fromBiFunction(foreignKeyExtractor);
 
@@ -979,9 +979,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
-                                           final Function<? super V, ? extends KO> foreignKeyExtractor,
-                                           final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                           final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final Function<? super V, ? extends KO> foreignKeyExtractor,
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         final ForeignKeyExtractor<? super K, ? super V, ? extends KO> adaptedExtractor
             = ForeignKeyExtractor.fromFunction(foreignKeyExtractor);
 
@@ -997,9 +997,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
-                                           final BiFunction<? super K, ? super V, ? extends KO> foreignKeyExtractor,
-                                           final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                           final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final BiFunction<? super K, ? super V, ? extends KO> foreignKeyExtractor,
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         final ForeignKeyExtractor<? super K, ? super V, ? extends KO> adaptedExtractor
             = ForeignKeyExtractor.fromBiFunction(foreignKeyExtractor);
 
@@ -1015,10 +1015,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
-                                           final Function<? super V, ? extends KO> foreignKeyExtractor,
-                                           final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                           final TableJoined<K, KO> tableJoined,
-                                           final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final Function<? super V, ? extends KO> foreignKeyExtractor,
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+        final TableJoined<K, KO> tableJoined,
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         final ForeignKeyExtractor<? super K, ? super V, ? extends KO> adaptedExtractor
 
             = ForeignKeyExtractor.fromFunction(foreignKeyExtractor);
@@ -1034,10 +1034,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
-                                           final BiFunction<? super K, ? super V, ? extends KO> foreignKeyExtractor,
-                                           final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                           final TableJoined<K, KO> tableJoined,
-                                           final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final BiFunction<? super K, ? super V, ? extends KO> foreignKeyExtractor,
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+        final TableJoined<K, KO> tableJoined,
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         final ForeignKeyExtractor<? super K, ? super V, ? extends KO> adaptedExtractor
             = ForeignKeyExtractor.fromBiFunction(foreignKeyExtractor);
 
@@ -1053,8 +1053,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
-                                               final Function<? super V, ? extends KO> foreignKeyExtractor,
-                                               final ValueJoiner<? super V, ? super VO, ? extends VR> joiner) {
+        final Function<? super V, ? extends KO> foreignKeyExtractor,
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner) {
         final ForeignKeyExtractor<? super K, ? super V, ? extends KO> adaptedExtractor
             = ForeignKeyExtractor.fromFunction(foreignKeyExtractor);
 
@@ -1070,8 +1070,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
-                                               final BiFunction<? super K, ? super V, ? extends KO> foreignKeyExtractor,
-                                               final ValueJoiner<? super V, ? super VO, ? extends VR> joiner) {
+        final BiFunction<? super K, ? super V, ? extends KO> foreignKeyExtractor,
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner) {
         final ForeignKeyExtractor<? super K, ? super V, ? extends KO> adaptedExtractor
             = ForeignKeyExtractor.fromBiFunction(foreignKeyExtractor);
 
@@ -1087,9 +1087,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
-                                               final Function<? super V, ? extends KO> foreignKeyExtractor,
-                                               final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                               final TableJoined<K, KO> tableJoined) {
+        final Function<? super V, ? extends KO> foreignKeyExtractor,
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+        final TableJoined<K, KO> tableJoined) {
         final ForeignKeyExtractor<? super K, ? super V, ? extends KO> adaptedExtractor
             = ForeignKeyExtractor.fromFunction(foreignKeyExtractor);
 
@@ -1105,9 +1105,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
-                                               final BiFunction<? super K, ? super V, ? extends KO> foreignKeyExtractor,
-                                               final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                               final TableJoined<K, KO> tableJoined) {
+        final BiFunction<? super K, ? super V, ? extends KO> foreignKeyExtractor,
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+        final TableJoined<K, KO> tableJoined) {
         final ForeignKeyExtractor<? super K, ? super V, ? extends KO> adaptedExtractor
             = ForeignKeyExtractor.fromBiFunction(foreignKeyExtractor);
 
@@ -1123,10 +1123,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
-                                               final Function<? super V, ? extends KO> foreignKeyExtractor,
-                                               final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                               final TableJoined<K, KO> tableJoined,
-                                               final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final Function<? super V, ? extends KO> foreignKeyExtractor,
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+        final TableJoined<K, KO> tableJoined,
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         final ForeignKeyExtractor<? super K, ? super V, ? extends KO> adaptedExtractor
             = ForeignKeyExtractor.fromFunction(foreignKeyExtractor);
 
@@ -1141,10 +1141,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
-                                               final BiFunction<? super K, ? super V, ? extends KO> foreignKeyExtractor,
-                                               final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                               final TableJoined<K, KO> tableJoined,
-                                               final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final BiFunction<? super K, ? super V, ? extends KO> foreignKeyExtractor,
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+        final TableJoined<K, KO> tableJoined,
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         final ForeignKeyExtractor<? super K, ? super V, ? extends KO> adaptedExtractor
             = ForeignKeyExtractor.fromBiFunction(foreignKeyExtractor);
 
@@ -1159,9 +1159,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
-                                               final Function<? super V, ? extends KO> foreignKeyExtractor,
-                                               final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                               final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final Function<? super V, ? extends KO> foreignKeyExtractor,
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         final ForeignKeyExtractor<? super K, ? super V, ? extends KO> adaptedExtractor
             = ForeignKeyExtractor.fromFunction(foreignKeyExtractor);
 
@@ -1177,9 +1177,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <VR, KO, VO> KTable<K, VR> leftJoin(final KTable<KO, VO> other,
-                                               final BiFunction<? super K, ? super V, ? extends KO> foreignKeyExtractor,
-                                               final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                               final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        final BiFunction<? super K, ? super V, ? extends KO> foreignKeyExtractor,
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         final ForeignKeyExtractor<? super K, ? super V, ? extends KO> adaptedExtractor
             = ForeignKeyExtractor.fromBiFunction(foreignKeyExtractor);
 
@@ -1205,11 +1205,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @SuppressWarnings("resource")
     private <VR, KO, VO> KTable<K, VR> doJoinOnForeignKey(final KTable<KO, VO> foreignKeyTable,
-                                                          final ForeignKeyExtractor<? super K, ? super V, ? extends KO> foreignKeyExtractor,
-                                                          final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                                          final TableJoined<K, KO> tableJoined,
-                                                          final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
-                                                          final boolean leftJoin) {
+        final ForeignKeyExtractor<? super K, ? super V, ? extends KO> foreignKeyExtractor,
+        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+        final TableJoined<K, KO> tableJoined,
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
+        final boolean leftJoin) {
         Objects.requireNonNull(foreignKeyTable, "foreignKeyTable can't be null");
         Objects.requireNonNull(foreignKeyExtractor, "foreignKeyExtractor can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
@@ -1277,9 +1277,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         builder.addGraphNode(graphNode, subscriptionSendNode);
 
         final StreamPartitioner<KO, SubscriptionWrapper<K>> subscriptionSinkPartitioner =
-                tableJoinedInternal.otherPartitioner() == null
-                        ? null
-                        : (topic, key, val, numPartitions) -> getPartition.apply(tableJoinedInternal.otherPartitioner().partitions(topic, key, null, numPartitions));
+            tableJoinedInternal.otherPartitioner() == null
+                ? null
+                : (topic, key, val, numPartitions) -> getPartition.apply(tableJoinedInternal.otherPartitioner().partitions(topic, key, null, numPartitions));
 
         final StreamSinkNode<KO, SubscriptionWrapper<K>> subscriptionSink = new StreamSinkNode<>(
             renamed.suffixWithOrElseGet("-subscription-registration-sink", builder, SINK_NAME),
@@ -1346,15 +1346,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         builder.internalTopologyBuilder.addInternalTopic(finalRepartitionTopicName, InternalTopicProperties.empty());
 
         final StreamPartitioner<K, SubscriptionResponseWrapper<VO>> defaultForeignResponseSinkPartitioner =
-                (topic, key, subscriptionResponseWrapper, numPartitions) -> {
-                    final Integer partition = subscriptionResponseWrapper.primaryPartition();
-                    return partition == null ? Optional.empty() : Optional.of(Collections.singleton(partition));
-                };
+            (topic, key, subscriptionResponseWrapper, numPartitions) -> {
+                final Integer partition = subscriptionResponseWrapper.primaryPartition();
+                return partition == null ? Optional.empty() : Optional.of(Collections.singleton(partition));
+            };
 
         final StreamPartitioner<K, SubscriptionResponseWrapper<VO>> foreignResponseSinkPartitioner =
-                tableJoinedInternal.partitioner() == null
-                        ? defaultForeignResponseSinkPartitioner
-                        : (topic, key, val, numPartitions) -> getPartition.apply(tableJoinedInternal.partitioner().partitions(topic, key, null, numPartitions));
+            tableJoinedInternal.partitioner() == null
+                ? defaultForeignResponseSinkPartitioner
+                : (topic, key, val, numPartitions) -> getPartition.apply(tableJoinedInternal.partitioner().partitions(topic, key, null, numPartitions));
 
         final StreamSinkNode<K, SubscriptionResponseWrapper<VO>> foreignResponseSink =
             new StreamSinkNode<>(
@@ -1433,7 +1433,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     }
 
     private static void maybeSetOutputVersioned(final GraphNode tableNode,
-                                                final MaterializedInternal<?, ?, KeyValueStore<Bytes, byte[]>> materializedInternal) {
+        final MaterializedInternal<?, ?, KeyValueStore<Bytes, byte[]>> materializedInternal) {
         if (materializedInternal != null) {
             tableNode.setOutputVersioned(materializedInternal.storeSupplier() instanceof VersionedBytesStoreSupplier);
         }

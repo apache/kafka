@@ -40,8 +40,8 @@ public class FinalizedVersionRange {
             throw new IllegalArgumentException(
                 String.format(
                     "Expected minVersionLevel >= 0, maxVersionLevel >= 0 and" +
-                    " maxVersionLevel >= minVersionLevel, but received" +
-                    " minVersionLevel: %d, maxVersionLevel: %d", minVersionLevel, maxVersionLevel));
+                        " maxVersionLevel >= minVersionLevel, but received" +
+                        " minVersionLevel: %d, maxVersionLevel: %d", minVersionLevel, maxVersionLevel));
         }
         this.minVersionLevel = minVersionLevel;
         this.maxVersionLevel = maxVersionLevel;

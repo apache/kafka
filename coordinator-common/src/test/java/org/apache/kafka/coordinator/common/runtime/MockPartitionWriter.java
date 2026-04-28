@@ -69,10 +69,10 @@ public class MockPartitionWriter extends InMemoryPartitionWriter {
 
     @Override
     public long append(
-        TopicPartition tp,
-        VerificationGuard verificationGuard,
-        MemoryRecords batch,
-        short transactionVersion
+            TopicPartition tp,
+            VerificationGuard verificationGuard,
+            MemoryRecords batch,
+            short transactionVersion
     ) {
         if (batch.sizeInBytes() > config(tp).maxMessageSize())
             throw new RecordTooLargeException("Batch is larger than the max message size");
@@ -105,10 +105,10 @@ public class MockPartitionWriter extends InMemoryPartitionWriter {
 
         @Override
         public long append(
-            TopicPartition tp,
-            VerificationGuard verificationGuard,
-            MemoryRecords batch,
-            short transactionVersion
+                TopicPartition tp,
+                VerificationGuard verificationGuard,
+                MemoryRecords batch,
+                short transactionVersion
         ) {
             // Track epochs for transactional data batches
             if (batch.firstBatch().isTransactional() && !batch.firstBatch().isControlBatch()) {
@@ -126,15 +126,15 @@ public class MockPartitionWriter extends InMemoryPartitionWriter {
                 if (currentEpoch != null) {
                     // TV2: markerEpoch must be > currentEpoch (strict validation)
                     // TV1/TV0: markerEpoch must be >= currentEpoch
-                    boolean invalidEpoch = (transactionVersion >= 2) 
-                        ? (markerEpoch <= currentEpoch) 
-                        : (markerEpoch < currentEpoch);
+                    boolean invalidEpoch = (transactionVersion >= 2)
+                            ? (markerEpoch <= currentEpoch)
+                            : (markerEpoch < currentEpoch);
 
                     if (invalidEpoch) {
                         String comparison = (transactionVersion >= 2) ? "<=" : "<";
                         String message = String.format(
-                            "Epoch of producer %d at offset %d in %s is %d, which is %s the last seen epoch %d (TV%d)",
-                            producerId, 0L, tp, markerEpoch, comparison, currentEpoch, transactionVersion
+                                "Epoch of producer %d at offset %d in %s is %d, which is %s the last seen epoch %d (TV%d)",
+                                producerId, 0L, tp, markerEpoch, comparison, currentEpoch, transactionVersion
                         );
                         throw new InvalidProducerEpochException(message);
                     }

@@ -175,7 +175,7 @@ public class DeleteStreamsGroupTest {
             Map<String, Throwable> result = service.deleteGroups();
 
             assertTrue(output.contains("Group '" + appId + "' could not be deleted due to:")
-                    && output.contains("Streams group '" + appId + "' is not EMPTY."),
+                && output.contains("Streams group '" + appId + "' is not EMPTY."),
                 "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting streams group. Output was: (" + output + ")");
 
             assertNotNull(result.get(appId),
@@ -253,13 +253,13 @@ public class DeleteStreamsGroupTest {
         String output = ToolsTestUtils.grabConsoleOutput(() -> result.putAll(service.deleteGroups()));
 
         assertTrue(output.contains("Group '" + appId1 + "' could not be deleted due to:")
-                && output.contains("Streams group '" + appId1 + "' is not EMPTY."),
+            && output.contains("Streams group '" + appId1 + "' is not EMPTY."),
             "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting streams group. Output was: (" + output + ")");
         assertTrue(output.contains("Group '" + appId3 + "' could not be deleted due to:")
-                && output.contains("Streams group '" + appId3 + "' is not EMPTY."),
+            && output.contains("Streams group '" + appId3 + "' is not EMPTY."),
             "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting streams group. Output was: (" + output + ")");
         assertTrue(output.contains("Group '" + appId2 + "' could not be deleted due to:")
-                && output.contains("Streams group '" + appId2 + "' is not EMPTY."),
+            && output.contains("Streams group '" + appId2 + "' is not EMPTY."),
             "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting streams group. Output was: (" + output + ")");
 
 
@@ -315,10 +315,10 @@ public class DeleteStreamsGroupTest {
         output = ToolsTestUtils.grabConsoleOutput(() -> allGrpsRes.putAll(service.deleteGroups()));
 
         assertTrue(output.contains("Deletion of requested streams groups ('" + appId2 + "', '" + appId3 + "') was successful.") |
-                output.contains("Deletion of requested streams groups ('" + appId3 + "', '" + appId2 + "') was successful."),
+            output.contains("Deletion of requested streams groups ('" + appId3 + "', '" + appId2 + "') was successful."),
             "The streams groups deletion did not work as expected");
         assertFalse(output.contains("Deletion of associated internal topics of the streams groups ('" + appId2 + "', '" + appId3 + "') was successful.") |
-                output.contains("Deletion of associated internal topics of the streams groups ('" + appId3 + "', '" + appId2 + "') was successful."),
+            output.contains("Deletion of associated internal topics of the streams groups ('" + appId3 + "', '" + appId2 + "') was successful."),
             "The internal topics could not be deleted as expected");
 
         assertEquals(2, allGrpsRes.size());
@@ -377,10 +377,10 @@ public class DeleteStreamsGroupTest {
         output = ToolsTestUtils.grabConsoleOutput(() -> allGrpsRes.putAll(service.deleteGroups()));
 
         assertTrue(output.contains("Deletion of requested streams groups ('" + appId2 + "', '" + appId3 + "') was successful.") |
-                output.contains("Deletion of requested streams groups ('" + appId3 + "', '" + appId2 + "') was successful."),
+            output.contains("Deletion of requested streams groups ('" + appId3 + "', '" + appId2 + "') was successful."),
             "The streams groups deletion did not work as expected");
         assertTrue(output.contains("Deletion of associated internal topics of the streams groups ('" + appId2 + "', '" + appId3 + "') was successful.") |
-                output.contains("Deletion of associated internal topics of the streams groups ('" + appId3 + "', '" + appId2 + "') was successful."),
+            output.contains("Deletion of associated internal topics of the streams groups ('" + appId3 + "', '" + appId2 + "') was successful."),
             "The internal topics could not be deleted as expected");
 
         assertEquals(2, allGrpsRes.size());
@@ -505,7 +505,7 @@ public class DeleteStreamsGroupTest {
             "The group did not become stable as expected."
         );
         TestUtils.waitForCondition(() -> recordCount.get() == RECORD_TOTAL,
-                () -> "Expected " + RECORD_TOTAL + " records processed but only got " + recordCount.get());
+            () -> "Expected " + RECORD_TOTAL + " records processed but only got " + recordCount.get());
 
         return streams;
     }
@@ -513,7 +513,7 @@ public class DeleteStreamsGroupTest {
     private void stopKSApp(String appId, KafkaStreams streams, StreamsGroupCommand.StreamsGroupService service) throws InterruptedException {
         if (streams != null) {
             CloseOptions closeOptions = CloseOptions.timeout(Duration.ofSeconds(30))
-                    .withGroupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
+                .withGroupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
             streams.close(closeOptions);
             streams.cleanUp();
 

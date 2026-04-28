@@ -107,13 +107,13 @@ public class RequestMetrics {
         requestBytesHist = metricsGroup.newHistogram(REQUEST_BYTES, true, tags);
         // time for message conversions (only relevant to fetch and produce requests)
         messageConversionsTimeHist = isFetchOrProduce(name)
-                ? Optional.of(metricsGroup.newHistogram(MESSAGE_CONVERSIONS_TIME_MS, true, tags))
-                : Optional.empty();
+            ? Optional.of(metricsGroup.newHistogram(MESSAGE_CONVERSIONS_TIME_MS, true, tags))
+            : Optional.empty();
         // Temporary memory allocated for processing request (only populated for fetch and produce requests)
         // This shows the memory allocated for compression/conversions excluding the actual request size
         tempMemoryBytesHist = isFetchOrProduce(name)
-                ? Optional.of(metricsGroup.newHistogram(TEMPORARY_MEMORY_BYTES, true, tags))
-                : Optional.empty();
+            ? Optional.of(metricsGroup.newHistogram(TEMPORARY_MEMORY_BYTES, true, tags))
+            : Optional.empty();
         for (Errors error : Errors.values()) {
             errorMeters.put(error, new ErrorMeter(name, error));
         }

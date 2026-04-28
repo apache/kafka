@@ -37,9 +37,9 @@ public class MockShareConsumerTest {
         consumer.subscribe(Set.of("test"));
         assertEquals(0, consumer.poll(Duration.ZERO).count());
         ConsumerRecord<String, String> rec1 = new ConsumerRecord<>("test", 0, 0, 0L, TimestampType.CREATE_TIME,
-                0, 0, "key1", "value1", new RecordHeaders(), Optional.empty());
+            0, 0, "key1", "value1", new RecordHeaders(), Optional.empty());
         ConsumerRecord<String, String> rec2 = new ConsumerRecord<>("test", 0, 1, 0L, TimestampType.CREATE_TIME,
-                0, 0, "key2", "value2", new RecordHeaders(), Optional.empty());
+            0, 0, "key2", "value2", new RecordHeaders(), Optional.empty());
         consumer.addRecord(rec1);
         consumer.addRecord(rec2);
         ConsumerRecords<String, String> recs = consumer.poll(Duration.ofMillis(1));

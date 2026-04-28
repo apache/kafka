@@ -38,7 +38,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 @JsonSubTypes(value = {
     @JsonSubTypes.Type(value = ConstantFlushGenerator.class, name = "constant"),
     @JsonSubTypes.Type(value = GaussianFlushGenerator.class, name = "gaussian")
-    })
+})
 public interface FlushGenerator {
     <K, V> void increment(KafkaProducer<K, V> producer);
 }

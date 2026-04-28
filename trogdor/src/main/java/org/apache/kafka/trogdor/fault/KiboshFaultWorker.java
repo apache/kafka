@@ -47,7 +47,7 @@ public class KiboshFaultWorker implements TaskWorker {
 
     @Override
     public void start(Platform platform, WorkerStatusTracker status,
-                      KafkaFutureImpl<String> errorFuture) throws Exception {
+        KafkaFutureImpl<String> errorFuture) throws Exception {
         log.info("Activating {} {}: {}.", spec.getClass().getSimpleName(), id, spec);
         this.status = status;
         this.status.update(new TextNode("Adding fault " + id));

@@ -67,7 +67,7 @@ public class TimestampedKeyAndJoinSideDeserializer<K> implements WrappingNullabl
         final long timestamp = timestampDeserializer.deserialize(topic, headers, rawTimestamp(data));
 
         return isLeft ? TimestampedKeyAndJoinSide.makeLeft(key, timestamp) :
-                TimestampedKeyAndJoinSide.makeRight(key, timestamp);
+            TimestampedKeyAndJoinSide.makeRight(key, timestamp);
     }
 
     private byte[] rawTimestamp(final byte[] data) {

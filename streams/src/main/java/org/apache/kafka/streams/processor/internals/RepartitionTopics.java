@@ -55,10 +55,10 @@ public class RepartitionTopics {
     private final Map<Subtopology, Set<String>> missingInputTopicsBySubtopology = new HashMap<>();
 
     public RepartitionTopics(final TopologyMetadata topologyMetadata,
-                             final InternalTopicManager internalTopicManager,
-                             final CopartitionedTopicsEnforcer copartitionedTopicsEnforcer,
-                             final Cluster clusterMetadata,
-                             final String logPrefix) {
+        final InternalTopicManager internalTopicManager,
+        final CopartitionedTopicsEnforcer copartitionedTopicsEnforcer,
+        final Cluster clusterMetadata,
+        final String logPrefix) {
         this.topologyMetadata = topologyMetadata;
         this.internalTopicManager = internalTopicManager;
         this.clusterMetadata = clusterMetadata;
@@ -75,7 +75,7 @@ public class RepartitionTopics {
                 log.info("Skipping the repartition topic validation since there are no repartition topics.");
             } else {
                 log.info("Skipping the repartition topic validation since all topologies containing repartition"
-                             + "topics are missing external user source topics and cannot be processed.");
+                    + "topics are missing external user source topics and cannot be processed.");
             }
         } else {
             // ensure the co-partitioning topics within the group have the same number of partitions,
@@ -112,9 +112,9 @@ public class RepartitionTopics {
 
     public Set<String> missingSourceTopics() {
         return missingInputTopicsBySubtopology.entrySet().stream()
-                .map(entry -> entry.getValue())
-                .flatMap(missingTopicSet -> missingTopicSet.stream())
-                .collect(Collectors.toSet());
+            .map(entry -> entry.getValue())
+            .flatMap(missingTopicSet -> missingTopicSet.stream())
+            .collect(Collectors.toSet());
     }
 
     public Queue<StreamsException> missingSourceTopicExceptions() {
@@ -186,15 +186,15 @@ public class RepartitionTopics {
     }
 
     private void ensureCopartitioning(final Collection<Set<String>> copartitionGroups,
-                                      final Map<String, InternalTopicConfig> repartitionTopicMetadata,
-                                      final Cluster clusterMetadata) {
+        final Map<String, InternalTopicConfig> repartitionTopicMetadata,
+        final Cluster clusterMetadata) {
         for (final Set<String> copartitionGroup : copartitionGroups) {
             copartitionedTopicsEnforcer.enforce(copartitionGroup, repartitionTopicMetadata, clusterMetadata);
         }
     }
 
     private Set<String> computeMissingExternalSourceTopics(final TopicsInfo topicsInfo,
-                                                           final Cluster clusterMetadata) {
+        final Cluster clusterMetadata) {
         final Set<String> missingExternalSourceTopics = new HashSet<>(topicsInfo.sourceTopics);
         missingExternalSourceTopics.removeAll(topicsInfo.repartitionSourceTopics.keySet());
         missingExternalSourceTopics.removeAll(clusterMetadata.topics());
@@ -205,8 +205,8 @@ public class RepartitionTopics {
      * Computes the number of partitions and sets it for each repartition topic in repartitionTopicMetadata
      */
     private void setRepartitionSourceTopicPartitionCount(final Map<String, InternalTopicConfig> repartitionTopicMetadata,
-                                                         final Collection<TopicsInfo> topicGroups,
-                                                         final Cluster clusterMetadata) {
+        final Collection<TopicsInfo> topicGroups,
+        final Cluster clusterMetadata) {
         boolean partitionCountNeeded;
         do {
             partitionCountNeeded = false;
@@ -248,9 +248,9 @@ public class RepartitionTopics {
     }
 
     private Integer computePartitionCount(final Map<String, InternalTopicConfig> repartitionTopicMetadata,
-                                          final Collection<TopicsInfo> topicGroups,
-                                          final Cluster clusterMetadata,
-                                          final String repartitionSourceTopic) {
+        final Collection<TopicsInfo> topicGroups,
+        final Cluster clusterMetadata,
+        final String repartitionSourceTopic) {
         Integer partitionCount = null;
         // try set the number of partitions for this repartition topic if it is not set yet
         for (final TopicsInfo topicsInfo : topicGroups) {

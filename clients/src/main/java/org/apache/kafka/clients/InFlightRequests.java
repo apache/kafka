@@ -96,7 +96,7 @@ final class InFlightRequests {
     public boolean canSendMore(String node) {
         Deque<NetworkClient.InFlightRequest> queue = requests.get(node);
         return queue == null || queue.isEmpty() ||
-               (queue.peekFirst().send.completed() && queue.size() < this.maxInFlightRequestsPerConnection);
+            (queue.peekFirst().send.completed() && queue.size() < this.maxInFlightRequestsPerConnection);
     }
 
     /**
@@ -181,6 +181,6 @@ final class InFlightRequests {
 
     void incrementThrottleTime(String nodeId, long throttleTimeMs) {
         requests.getOrDefault(nodeId, new ArrayDeque<>()).
-                forEach(request -> request.incrementThrottleTime(throttleTimeMs));
+            forEach(request -> request.incrementThrottleTime(throttleTimeMs));
     }
 }

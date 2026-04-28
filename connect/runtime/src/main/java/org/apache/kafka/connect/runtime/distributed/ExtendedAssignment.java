@@ -73,9 +73,9 @@ public class ExtendedAssignment extends ConnectProtocol.Assignment {
      * @param delay the scheduled delay after which the worker should rejoin the group
      */
     public ExtendedAssignment(short version, short error, String leader, String leaderUrl, long configOffset,
-                             Collection<String> connectorIds, Collection<ConnectorTaskId> taskIds,
-                             Collection<String> revokedConnectorIds, Collection<ConnectorTaskId> revokedTaskIds,
-                             int delay) {
+            Collection<String> connectorIds, Collection<ConnectorTaskId> taskIds,
+            Collection<String> revokedConnectorIds, Collection<ConnectorTaskId> revokedTaskIds,
+            int delay) {
         super(error, leader, leaderUrl, configOffset, connectorIds, taskIds);
         this.version = version;
         this.revokedConnectorIds = Objects.requireNonNull(revokedConnectorIds,
@@ -212,30 +212,30 @@ public class ExtendedAssignment extends ConnectProtocol.Assignment {
      */
     public static ExtendedAssignment fromStruct(short version, Struct struct) {
         return struct == null
-               ? null
-               : new ExtendedAssignment(
-                       version,
-                       struct.getShort(ERROR_KEY_NAME),
-                       struct.getString(LEADER_KEY_NAME),
-                       struct.getString(LEADER_URL_KEY_NAME),
-                       struct.getLong(CONFIG_OFFSET_KEY_NAME),
-                       extractConnectors(struct, ASSIGNMENT_KEY_NAME),
-                       extractTasks(struct, ASSIGNMENT_KEY_NAME),
-                       extractConnectors(struct, REVOKED_KEY_NAME),
-                       extractTasks(struct, REVOKED_KEY_NAME),
-                       struct.getInt(SCHEDULED_DELAY_KEY_NAME));
+                ? null
+                : new ExtendedAssignment(
+                version,
+                struct.getShort(ERROR_KEY_NAME),
+                struct.getString(LEADER_KEY_NAME),
+                struct.getString(LEADER_URL_KEY_NAME),
+                struct.getLong(CONFIG_OFFSET_KEY_NAME),
+                extractConnectors(struct, ASSIGNMENT_KEY_NAME),
+                extractTasks(struct, ASSIGNMENT_KEY_NAME),
+                extractConnectors(struct, REVOKED_KEY_NAME),
+                extractTasks(struct, REVOKED_KEY_NAME),
+                struct.getInt(SCHEDULED_DELAY_KEY_NAME));
     }
 
     private static Collection<Struct> taskAssignments(Map<String, Collection<Integer>> assignments) {
         return assignments == null
-               ? null
-               : assignments.entrySet().stream()
-                       .map(connectorEntry -> {
-                           Struct taskAssignment = new Struct(CONNECTOR_ASSIGNMENT_V1);
-                           taskAssignment.set(CONNECTOR_KEY_NAME, connectorEntry.getKey());
-                           taskAssignment.set(TASKS_KEY_NAME, connectorEntry.getValue().toArray());
-                           return taskAssignment;
-                       }).collect(Collectors.toList());
+                ? null
+                : assignments.entrySet().stream()
+                .map(connectorEntry -> {
+                    Struct taskAssignment = new Struct(CONNECTOR_ASSIGNMENT_V1);
+                    taskAssignment.set(CONNECTOR_KEY_NAME, connectorEntry.getKey());
+                    taskAssignment.set(TASKS_KEY_NAME, connectorEntry.getValue().toArray());
+                    return taskAssignment;
+                }).collect(Collectors.toList());
     }
 
     private static Collection<String> extractConnectors(Struct struct, String key) {

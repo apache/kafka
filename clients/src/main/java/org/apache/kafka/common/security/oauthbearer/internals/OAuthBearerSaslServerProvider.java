@@ -28,7 +28,7 @@ public final class OAuthBearerSaslServerProvider extends Provider {
     private OAuthBearerSaslServerProvider() {
         super("SASL/OAUTHBEARER Server Provider", "1.0", "SASL/OAUTHBEARER Server Provider for Kafka");
         put("SaslServerFactory." + OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
-                OAuthBearerSaslServerFactory.class.getName());
+            OAuthBearerSaslServerFactory.class.getName());
     }
 
     public static void initialize() {

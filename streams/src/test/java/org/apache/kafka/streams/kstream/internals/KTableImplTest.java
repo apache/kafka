@@ -251,7 +251,8 @@ public class KTableImplTest {
         final ValueTransformerWithKeySupplier<String, String, String> valueTransformerWithKeySupplier =
             () -> new ValueTransformerWithKey<>() {
                 @Override
-                public void init(final ProcessorContext context) {}
+                public void init(final ProcessorContext context) {
+                }
 
                 @Override
                 public String transform(final String key, final String value) {
@@ -259,7 +260,8 @@ public class KTableImplTest {
                 }
 
                 @Override
-                public void close() {}
+                public void close() {
+                }
             };
 
         assertEquals(
@@ -427,8 +429,8 @@ public class KTableImplTest {
     }
 
     private void assertTopologyContainsProcessor(final Topology topology, final String processorName) {
-        for (final Subtopology subtopology: topology.describe().subtopologies()) {
-            for (final TopologyDescription.Node node: subtopology.nodes()) {
+        for (final Subtopology subtopology : topology.describe().subtopologies()) {
+            for (final TopologyDescription.Node node : subtopology.nodes()) {
                 if (node.name().equals(processorName)) {
                     return;
                 }
@@ -447,12 +449,12 @@ public class KTableImplTest {
         final String storeName1 = "storeName1";
 
         final var table1 = builder.table(
-                topic1,
-                consumed,
-                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(storeName1)
-                    .withKeySerde(Serdes.String())
-                    .withValueSerde(Serdes.String())
-            );
+            topic1,
+            consumed,
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(storeName1)
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.String())
+        );
 
         table1.groupBy(MockMapper.noOpKeyValueMapper())
             .aggregate(

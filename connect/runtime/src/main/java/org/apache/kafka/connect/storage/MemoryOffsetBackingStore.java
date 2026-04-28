@@ -75,7 +75,7 @@ public abstract class MemoryOffsetBackingStore implements OffsetBackingStore {
 
     @Override
     public Future<Void> set(final Map<ByteBuffer, ByteBuffer> values,
-                            final Callback<Void> callback) {
+            final Callback<Void> callback) {
         return executor.submit(() -> {
             data.putAll(values);
             save();

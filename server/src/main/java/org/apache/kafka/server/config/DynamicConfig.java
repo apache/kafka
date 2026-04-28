@@ -33,6 +33,7 @@ public class DynamicConfig {
     public static class Broker {
 
         private static final ConfigDef BROKER_CONFIGS;
+
         static {
             ConfigDef configs = QuotaConfig.brokerQuotaConfigs();
             // Filter and define all dynamic configurations

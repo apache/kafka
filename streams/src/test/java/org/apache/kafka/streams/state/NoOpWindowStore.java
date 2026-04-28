@@ -58,7 +58,8 @@ public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
     }
 
     @Override
-    public void init(final StateStoreContext stateStoreContext, final StateStore root) {}
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+    }
 
     @Override
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {
@@ -96,25 +97,25 @@ public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
     }
 
     @Override
-    public WindowStoreIterator backwardFetch(final  Object key,
-                                             final Instant timeFrom,
-                                             final Instant timeTo) throws IllegalArgumentException {
+    public WindowStoreIterator backwardFetch(final Object key,
+        final Instant timeFrom,
+        final Instant timeTo) throws IllegalArgumentException {
         return EMPTY_WINDOW_STORE_ITERATOR;
     }
 
     @Override
     public KeyValueIterator fetch(final Object keyFrom,
-                                  final Object keyTo,
-                                  final Instant timeFrom,
-                                  final Instant timeTo) throws IllegalArgumentException {
+        final Object keyTo,
+        final Instant timeFrom,
+        final Instant timeTo) throws IllegalArgumentException {
         return EMPTY_WINDOW_STORE_ITERATOR;
     }
 
     @Override
     public KeyValueIterator backwardFetch(final Object from,
-                                          final Object keyTo,
-                                          final Instant timeFrom,
-                                          final Instant timeTo) throws IllegalArgumentException {
+        final Object keyTo,
+        final Instant timeFrom,
+        final Instant timeTo) throws IllegalArgumentException {
         return EMPTY_WINDOW_STORE_ITERATOR;
     }
 
@@ -135,7 +136,7 @@ public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
 
     @Override
     public KeyValueIterator backwardFetchAll(final Instant timeFrom,
-                                             final Instant timeTo) throws IllegalArgumentException {
+        final Instant timeTo) throws IllegalArgumentException {
         return EMPTY_WINDOW_STORE_ITERATOR;
     }
 }

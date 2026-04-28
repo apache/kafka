@@ -59,19 +59,19 @@ public class KTableMapValuesTest {
 
 
     private void doTestKTable(final StreamsBuilder builder,
-                              final String topic1,
-                              final MockApiProcessorSupplier<String, Integer, Void, Void> supplier) {
+        final String topic1,
+        final MockApiProcessorSupplier<String, Integer, Void, Void> supplier) {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             inputTopic1.pipeInput("A", "1", 5L);
             inputTopic1.pipeInput("B", "2", 25L);
             inputTopic1.pipeInput("C", "3", 20L);
             inputTopic1.pipeInput("D", "4", 10L);
             assertEquals(asList(new KeyValueTimestamp<>("A", 1, 5),
-                    new KeyValueTimestamp<>("B", 2, 25),
-                    new KeyValueTimestamp<>("C", 3, 20),
-                    new KeyValueTimestamp<>("D", 4, 10)), supplier.theCapturedProcessor().processed());
+                new KeyValueTimestamp<>("B", 2, 25),
+                new KeyValueTimestamp<>("C", 3, 20),
+                new KeyValueTimestamp<>("D", 4, 10)), supplier.theCapturedProcessor().processed());
         }
     }
 
@@ -112,9 +112,9 @@ public class KTableMapValuesTest {
     }
 
     private void doTestValueGetter(final StreamsBuilder builder,
-                                   final String topic1,
-                                   final KTableImpl<String, String, Integer> table2,
-                                   final KTableImpl<String, String, Integer> table3) {
+        final String topic1,
+        final KTableImpl<String, String, Integer> table2,
+        final KTableImpl<String, String, Integer> table3) {
 
         final Topology topology = builder.build();
 
@@ -127,7 +127,7 @@ public class KTableMapValuesTest {
 
         try (final TopologyTestDriverWrapper driver = new TopologyTestDriverWrapper(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
             final KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
 
@@ -227,7 +227,7 @@ public class KTableMapValuesTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
             final TestInputTopic<String, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockApiProcessor<String, Integer, Void, Void> proc = supplier.theCapturedProcessor();
 
             assertFalse(table1.sendingOldValueEnabled());
@@ -237,13 +237,13 @@ public class KTableMapValuesTest {
             inputTopic1.pipeInput("B", "01", 10L);
             inputTopic1.pipeInput("C", "01", 15L);
             proc.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(1, null), 5),
-                    new KeyValueTimestamp<>("B", new Change<>(1, null), 10),
-                    new KeyValueTimestamp<>("C", new Change<>(1, null), 15));
+                new KeyValueTimestamp<>("B", new Change<>(1, null), 10),
+                new KeyValueTimestamp<>("C", new Change<>(1, null), 15));
 
             inputTopic1.pipeInput("A", "02", 10L);
             inputTopic1.pipeInput("B", "02", 8L);
             proc.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(2, null), 10),
-                    new KeyValueTimestamp<>("B", new Change<>(2, null), 8));
+                new KeyValueTimestamp<>("B", new Change<>(2, null), 8));
 
             inputTopic1.pipeInput("A", "03", 20L);
             proc.checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(3, null), 20));

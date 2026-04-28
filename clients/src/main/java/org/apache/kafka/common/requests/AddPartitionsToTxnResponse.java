@@ -77,7 +77,7 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
         for (AddPartitionsToTxnResult result : this.data.resultsByTransaction()) {
             errorsMap.put(result.transactionalId(), errorsForTransaction(result.topicResults()));
         }
-        
+
         return errorsMap;
     }
 
@@ -89,12 +89,12 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
             String topicName = topicPartition.topic();
 
             AddPartitionsToTxnPartitionResult partitionResult =
-                    new AddPartitionsToTxnPartitionResult()
-                        .setPartitionErrorCode(entry.getValue().code())
-                        .setPartitionIndex(topicPartition.partition());
+                new AddPartitionsToTxnPartitionResult()
+                    .setPartitionErrorCode(entry.getValue().code())
+                    .setPartitionIndex(topicPartition.partition());
 
             AddPartitionsToTxnPartitionResultCollection partitionResultCollection = resultMap.getOrDefault(
-                    topicName, new AddPartitionsToTxnPartitionResultCollection()
+                topicName, new AddPartitionsToTxnPartitionResultCollection()
             );
 
             partitionResultCollection.add(partitionResult);
@@ -137,8 +137,8 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
         if (this.data.resultsByTopicV3AndBelow().isEmpty()) {
             allErrors.add(Errors.forCode(data.errorCode()));
         }
-        
-        errors().forEach((txnId, errors) -> 
+
+        errors().forEach((txnId, errors) ->
             allErrors.addAll(errors.values())
         );
         return errorCounts(allErrors);

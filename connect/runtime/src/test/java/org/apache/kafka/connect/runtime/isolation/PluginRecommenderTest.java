@@ -38,12 +38,12 @@ public class PluginRecommenderTest {
 
     private Set<String> allVersionsOf(String classOrAlias) {
         Set<String> versions = DEFAULT_ISOLATED_ARTIFACTS.values().stream()
-            .flatMap(List::stream)
-            .filter(b -> b.plugin().className().equals(classOrAlias))
-            .map(VersionedPluginBuilder.BuildInfo::version)
-            .collect(Collectors.toSet());
+                .flatMap(List::stream)
+                .filter(b -> b.plugin().className().equals(classOrAlias))
+                .map(VersionedPluginBuilder.BuildInfo::version)
+                .collect(Collectors.toSet());
         Arrays.stream(VersionedPluginBuilder.VersionedTestPlugin.values()).filter(p -> p.className().equals(classOrAlias))
-            .forEach(r -> versions.add(DEFAULT_COMBINED_ARTIFACT_VERSIONS.get(r)));
+                .forEach(r -> versions.add(DEFAULT_COMBINED_ARTIFACT_VERSIONS.get(r)));
         return versions;
     }
 
@@ -55,7 +55,7 @@ public class PluginRecommenderTest {
             VersionedPluginBuilder.VersionedTestPlugin.SOURCE_CONNECTOR.className())
         ) {
             Set<String> versions = recommender.connectorPluginVersionRecommender().validValues(
-                ConnectorConfig.CONNECTOR_CLASS_CONFIG, Map.of(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connectorClass)
+                    ConnectorConfig.CONNECTOR_CLASS_CONFIG, Map.of(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connectorClass)
             ).stream().map(Object::toString).collect(Collectors.toSet());
             Set<String> allVersions = allVersionsOf(connectorClass);
             Assertions.assertEquals(allVersions.size(), versions.size());
@@ -98,8 +98,8 @@ public class PluginRecommenderTest {
         PluginsRecommenders recommender = new PluginsRecommenders(MULTI_VERSION_PLUGINS);
         Class transformationClass = MULTI_VERSION_PLUGINS.pluginClass(VersionedPluginBuilder.VersionedTestPlugin.TRANSFORMATION.className());
         Set<String> versions = recommender.transformationPluginRecommender("transforms.t1.type")
-            .validValues("transforms.t1.type", Map.of("transforms.t1.type", transformationClass))
-            .stream().map(Object::toString).collect(Collectors.toSet());
+                .validValues("transforms.t1.type", Map.of("transforms.t1.type", transformationClass))
+                .stream().map(Object::toString).collect(Collectors.toSet());
         Set<String> allVersions = allVersionsOf(VersionedPluginBuilder.VersionedTestPlugin.TRANSFORMATION.className());
         Assertions.assertEquals(allVersions.size(), versions.size());
         allVersions.forEach(v -> Assertions.assertTrue(versions.contains(v), "Missing version " + v + " for transformation"));
@@ -111,8 +111,8 @@ public class PluginRecommenderTest {
         PluginsRecommenders recommender = new PluginsRecommenders(MULTI_VERSION_PLUGINS);
         Class predicateClass = MULTI_VERSION_PLUGINS.pluginClass(VersionedPluginBuilder.VersionedTestPlugin.PREDICATE.className());
         Set<String> versions = recommender.predicatePluginRecommender("predicates.p1.type")
-            .validValues("predicates.p1.type", Map.of("predicates.p1.type", predicateClass))
-            .stream().map(Object::toString).collect(Collectors.toSet());
+                .validValues("predicates.p1.type", Map.of("predicates.p1.type", predicateClass))
+                .stream().map(Object::toString).collect(Collectors.toSet());
         Set<String> allVersions = allVersionsOf(VersionedPluginBuilder.VersionedTestPlugin.PREDICATE.className());
         Assertions.assertEquals(allVersions.size(), versions.size());
         allVersions.forEach(v -> Assertions.assertTrue(versions.contains(v), "Missing version " + v + " for predicate"));
@@ -123,7 +123,7 @@ public class PluginRecommenderTest {
     public void testConverterPluginRecommender() {
         PluginsRecommenders recommender = new PluginsRecommenders(MULTI_VERSION_PLUGINS);
         Set<String> converters = recommender.converterPluginRecommender().validValues(null, null)
-            .stream().map(c -> ((Class) c).getName()).collect(Collectors.toSet());
+                .stream().map(c -> ((Class) c).getName()).collect(Collectors.toSet());
         Assertions.assertTrue(converters.contains(VersionedPluginBuilder.VersionedTestPlugin.CONVERTER.className()));
         // some sanity checks to ensure that other plugin types are not included
         Assertions.assertFalse(converters.contains(VersionedPluginBuilder.VersionedTestPlugin.SINK_CONNECTOR.className()));
@@ -138,7 +138,7 @@ public class PluginRecommenderTest {
     public void testHeaderConverterPluginRecommender() {
         PluginsRecommenders recommender = new PluginsRecommenders(MULTI_VERSION_PLUGINS);
         Set<String> headerConverters = recommender.headerConverterPluginRecommender().validValues(null, null)
-            .stream().map(c -> ((Class) c).getName()).collect(Collectors.toSet());
+                .stream().map(c -> ((Class) c).getName()).collect(Collectors.toSet());
         Assertions.assertTrue(headerConverters.contains(VersionedPluginBuilder.VersionedTestPlugin.HEADER_CONVERTER.className()));
         // some sanity checks to ensure that other plugin types are not included
         Assertions.assertFalse(headerConverters.contains(VersionedPluginBuilder.VersionedTestPlugin.SINK_CONNECTOR.className()));

@@ -70,13 +70,13 @@ public class PlainToHeadersStoreAdapter implements KeyValueStore<Bytes, byte[]> 
 
     @Override
     public void put(final Bytes key,
-                    final byte[] valueWithTimestampAndHeaders) {
+        final byte[] valueWithTimestampAndHeaders) {
         store.put(key, rawPlainValue(valueWithTimestampAndHeaders));
     }
 
     @Override
     public byte[] putIfAbsent(final Bytes key,
-                              final byte[] valueWithTimestampAndHeaders) {
+        final byte[] valueWithTimestampAndHeaders) {
         return convertFromPlainToHeaderFormat(store.putIfAbsent(
             key,
             rawPlainValue(valueWithTimestampAndHeaders)));
@@ -138,8 +138,8 @@ public class PlainToHeadersStoreAdapter implements KeyValueStore<Bytes, byte[]> 
 
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
+        final PositionBound positionBound,
+        final QueryConfig config) {
         final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
         final QueryResult<R> result;
 
@@ -158,11 +158,11 @@ public class PlainToHeadersStoreAdapter implements KeyValueStore<Bytes, byte[]> 
             // Handle RangeQuery: wrap iterator to convert values
             final RangeQuery<Bytes, byte[]> rangeQuery = (RangeQuery<Bytes, byte[]>) query;
             final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult =
-                    store.query(rangeQuery, positionBound, config);
+                store.query(rangeQuery, positionBound, config);
 
             if (rawResult.isSuccess()) {
                 final KeyValueIterator<Bytes, byte[]> convertedIterator =
-                        new PlainToHeadersIteratorAdapter<>(rawResult.getResult());
+                    new PlainToHeadersIteratorAdapter<>(rawResult.getResult());
                 result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, convertedIterator);
             } else {
                 result = (QueryResult<R>) rawResult;
@@ -193,13 +193,13 @@ public class PlainToHeadersStoreAdapter implements KeyValueStore<Bytes, byte[]> 
 
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
-                                                 final Bytes to) {
+        final Bytes to) {
         return new PlainToHeadersIteratorAdapter<>(store.range(from, to));
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
-                                                        final Bytes to) {
+        final Bytes to) {
         return new PlainToHeadersIteratorAdapter<>(store.reverseRange(from, to));
     }
 
@@ -215,7 +215,7 @@ public class PlainToHeadersStoreAdapter implements KeyValueStore<Bytes, byte[]> 
 
     @Override
     public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
-                                                                                    final PS prefixKeySerializer) {
+        final PS prefixKeySerializer) {
         return new PlainToHeadersIteratorAdapter<>(store.prefixScan(prefix, prefixKeySerializer));
     }
 

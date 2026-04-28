@@ -159,35 +159,35 @@ public class SchedulerTest {
         LogDirFailureChannel logDirFailureChannel = new LogDirFailureChannel(10);
         LogSegments segments = new LogSegments(topicPartition);
         LeaderEpochFileCache leaderEpochCache = UnifiedLog.createLeaderEpochCache(logDir, topicPartition,
-                logDirFailureChannel, Optional.empty(), mockTime.scheduler);
+            logDirFailureChannel, Optional.empty(), mockTime.scheduler);
         ProducerStateManagerConfig producerStateManagerConfig = new ProducerStateManagerConfig(maxProducerIdExpirationMs, false);
         ProducerStateManager producerStateManager = new ProducerStateManager(topicPartition, logDir,
-                maxTransactionTimeoutMs, producerStateManagerConfig, mockTime);
+            maxTransactionTimeoutMs, producerStateManagerConfig, mockTime);
         LoadedLogOffsets offsets = new LogLoader(
-                logDir,
-                topicPartition,
-                logConfig,
-                scheduler,
-                mockTime,
-                logDirFailureChannel,
-                true,
-                segments,
-                0L,
-                0L,
-                leaderEpochCache,
-                producerStateManager,
-                new ConcurrentHashMap<>(), false).load();
+            logDir,
+            topicPartition,
+            logConfig,
+            scheduler,
+            mockTime,
+            logDirFailureChannel,
+            true,
+            segments,
+            0L,
+            0L,
+            leaderEpochCache,
+            producerStateManager,
+            new ConcurrentHashMap<>(), false).load();
         LocalLog localLog = new LocalLog(logDir, logConfig, segments, offsets.recoveryPoint(),
-                offsets.nextOffsetMetadata(), scheduler, mockTime, topicPartition, logDirFailureChannel);
+            offsets.nextOffsetMetadata(), scheduler, mockTime, topicPartition, logDirFailureChannel);
         UnifiedLog log = new UnifiedLog(offsets.logStartOffset(),
-                localLog,
-                brokerTopicStats,
-                producerIdExpirationCheckIntervalMs,
-                leaderEpochCache,
-                producerStateManager,
-                Optional.empty(),
-                false,
-                LogOffsetsListener.NO_OP_OFFSETS_LISTENER);
+            localLog,
+            brokerTopicStats,
+            producerIdExpirationCheckIntervalMs,
+            leaderEpochCache,
+            producerStateManager,
+            Optional.empty(),
+            false,
+            LogOffsetsListener.NO_OP_OFFSETS_LISTENER);
         assertTrue(scheduler.taskRunning(log.producerExpireCheck()));
         log.close();
         assertFalse(scheduler.taskRunning(log.producerExpireCheck()));

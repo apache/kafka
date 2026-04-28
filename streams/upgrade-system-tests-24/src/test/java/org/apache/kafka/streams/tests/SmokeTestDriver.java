@@ -77,6 +77,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         "fk"
     };
     private static final String[] TOPICS = new String[NUMERIC_VALUE_TOPICS.length + STRING_VALUE_TOPICS.length];
+
     static {
         System.arraycopy(NUMERIC_VALUE_TOPICS, 0, TOPICS, 0, NUMERIC_VALUE_TOPICS.length);
         System.arraycopy(STRING_VALUE_TOPICS, 0, TOPICS, NUMERIC_VALUE_TOPICS.length, STRING_VALUE_TOPICS.length);
@@ -114,8 +115,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     static void generatePerpetually(final String kafka,
-                                    final int numKeys,
-                                    final int maxRecordsPerKey) {
+        final int numKeys,
+        final int maxRecordsPerKey) {
         final Properties producerProps = generatorProperties(kafka);
 
         int numRecordsProduced = 0;
@@ -159,9 +160,9 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     public static Map<String, Set<Integer>> generate(final String kafka,
-                                                     final int numKeys,
-                                                     final int maxRecordsPerKey,
-                                                     final Duration timeToSpend) {
+        final int numKeys,
+        final int maxRecordsPerKey,
+        final Duration timeToSpend) {
         final Properties producerProps = generatorProperties(kafka);
 
         int numRecordsProduced = 0;
@@ -287,7 +288,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         private final List<ProducerRecord<byte[], byte[]>> needRetry;
 
         TestCallback(final ProducerRecord<byte[], byte[]> originalRecord,
-                     final List<ProducerRecord<byte[], byte[]>> needRetry) {
+            final List<ProducerRecord<byte[], byte[]>> needRetry) {
             this.originalRecord = originalRecord;
             this.needRetry = needRetry;
         }
@@ -350,8 +351,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     public static VerificationResult verify(final String kafka,
-                                            final Map<String, Set<Integer>> inputs,
-                                            final int maxRecordsPerKey) {
+        final Map<String, Set<Integer>> inputs,
+        final int maxRecordsPerKey) {
         final Properties props = new Properties();
         props.put(ConsumerConfig.CLIENT_ID_CONFIG, "verifier");
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
@@ -368,7 +369,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         int recordsProcessed = 0;
         final Map<String, AtomicInteger> processed =
             Stream.of(NUMERIC_VALUE_TOPICS)
-                  .collect(Collectors.toMap(t -> t, t -> new AtomicInteger(0)));
+                .collect(Collectors.toMap(t -> t, t -> new AtomicInteger(0)));
 
         final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events = new HashMap<>();
 
@@ -405,8 +406,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
                     }
 
                     events.computeIfAbsent(topic, t -> new HashMap<>())
-                          .computeIfAbsent(key, k -> new LinkedList<>())
-                          .add(record);
+                        .computeIfAbsent(key, k -> new LinkedList<>())
+                        .add(record);
                 }
 
                 System.out.println(processed);
@@ -431,13 +432,13 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
         final Map<String, Set<Number>> received =
             events.get("echo")
-                  .entrySet()
-                  .stream()
-                  .map(entry -> mkEntry(
-                      entry.getKey(),
-                      entry.getValue().stream().map(ConsumerRecord::value).collect(Collectors.toSet()))
-                  )
-                  .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                .entrySet()
+                .stream()
+                .map(entry -> mkEntry(
+                        entry.getKey(),
+                        entry.getValue().stream().map(ConsumerRecord::value).collect(Collectors.toSet()))
+                )
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
         success = inputs.equals(received);
 
@@ -482,8 +483,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     private static VerificationResult verifyAll(final Map<String, Set<Integer>> inputs,
-                                                final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events,
-                                                final boolean printResults) {
+        final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events,
+        final boolean printResults) {
         final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         boolean pass;
         try (final PrintStream resultStream = new PrintStream(byteArrayOutputStream)) {
@@ -505,11 +506,11 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     private static boolean verify(final PrintStream resultStream,
-                                  final String topic,
-                                  final Map<String, Set<Integer>> inputData,
-                                  final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events,
-                                  final Function<String, Number> keyToExpectation,
-                                  final boolean printResults) {
+        final String topic,
+        final Map<String, Set<Integer>> inputData,
+        final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events,
+        final Function<String, Number> keyToExpectation,
+        final boolean printResults) {
         final Map<String, LinkedList<ConsumerRecord<String, Number>>> observedInputEvents = events.get("data");
         final Map<String, LinkedList<ConsumerRecord<String, Number>>> outputEvents = events.getOrDefault(topic, emptyMap());
         if (outputEvents.isEmpty()) {
@@ -520,7 +521,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
             if (outputEvents.size() != inputData.size()) {
                 resultStream.printf("fail: resultCount=%d expectedCount=%s%n\tresult=%s%n\texpected=%s%n",
-                                    outputEvents.size(), inputData.size(), outputEvents.keySet(), inputData.keySet());
+                    outputEvents.size(), inputData.size(), outputEvents.keySet(), inputData.keySet());
                 return false;
             }
             for (final Map.Entry<String, LinkedList<ConsumerRecord<String, Number>>> entry : outputEvents.entrySet()) {
@@ -532,7 +533,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
                     if (printResults) {
                         resultStream.printf("\t inputEvents=%n%s%n\t" +
-                                "echoEvents=%n%s%n\tmaxEvents=%n%s%n\tminEvents=%n%s%n\tdifEvents=%n%s%n\tcntEvents=%n%s%n\ttaggEvents=%n%s%n",
+                            "echoEvents=%n%s%n\tmaxEvents=%n%s%n\tminEvents=%n%s%n\tdifEvents=%n%s%n\tcntEvents=%n%s%n\ttaggEvents=%n%s%n",
                             indent("\t\t", observedInputEvents.get(key)),
                             indent("\t\t", events.getOrDefault("echo", emptyMap()).getOrDefault(key, new LinkedList<>())),
                             indent("\t\t", events.getOrDefault("max", emptyMap()).getOrDefault(key, new LinkedList<>())),
@@ -554,9 +555,9 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
 
     private static boolean verifySuppressed(final PrintStream resultStream,
-                                            @SuppressWarnings("SameParameterValue") final String topic,
-                                            final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events,
-                                            final boolean printResults) {
+        @SuppressWarnings("SameParameterValue") final String topic,
+        final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events,
+        final boolean printResults) {
         resultStream.println("verifying suppressed " + topic);
         final Map<String, LinkedList<ConsumerRecord<String, Number>>> topicEvents = events.getOrDefault(topic, emptyMap());
         for (final Map.Entry<String, LinkedList<ConsumerRecord<String, Number>>> entry : topicEvents.entrySet()) {
@@ -565,8 +566,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 final String key = entry.getKey();
                 final String unwindowedKey = key.substring(1, key.length() - 1).replaceAll("@.*", "");
                 resultStream.printf("fail: key=%s%n\tnon-unique result:%n%s%n",
-                                    key,
-                                    indent("\t\t", entry.getValue()));
+                    key,
+                    indent("\t\t", entry.getValue()));
 
                 if (printResults)
                     resultStream.printf("\tresultEvents:%n%s%n\tinputEvents:%n%s%n",
@@ -580,7 +581,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     private static String indent(@SuppressWarnings("SameParameterValue") final String prefix,
-                                 final Iterable<ConsumerRecord<String, Number>> list) {
+        final Iterable<ConsumerRecord<String, Number>> list) {
         final StringBuilder stringBuilder = new StringBuilder();
         for (final ConsumerRecord<String, Number> record : list) {
             stringBuilder.append(prefix).append(record).append('\n');
@@ -602,9 +603,9 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
 
     private static boolean verifyTAgg(final PrintStream resultStream,
-                                      final Map<String, Set<Integer>> allData,
-                                      final Map<String, LinkedList<ConsumerRecord<String, Number>>> taggEvents,
-                                      final boolean printResults) {
+        final Map<String, Set<Integer>> allData,
+        final Map<String, LinkedList<ConsumerRecord<String, Number>>> taggEvents,
+        final boolean printResults) {
         if (taggEvents == null) {
             resultStream.println("tagg is missing");
             return false;

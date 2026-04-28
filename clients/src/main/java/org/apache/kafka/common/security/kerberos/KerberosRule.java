@@ -62,14 +62,14 @@ class KerberosRule {
     }
 
     KerberosRule(String defaultRealm, int numOfComponents, String format, String match, String fromPattern,
-                 String toPattern, boolean repeat, boolean toLowerCase, boolean toUpperCase) {
+        String toPattern, boolean repeat, boolean toLowerCase, boolean toUpperCase) {
         this.defaultRealm = defaultRealm;
         isDefault = false;
         this.numOfComponents = numOfComponents;
         this.format = format;
         this.match = match == null ? null : Pattern.compile(match);
         this.fromPattern =
-                fromPattern == null ? null : Pattern.compile(fromPattern);
+            fromPattern == null ? null : Pattern.compile(fromPattern);
         this.toPattern = toPattern;
         this.repeat = repeat;
         this.toLowerCase = toLowerCase;
@@ -122,7 +122,7 @@ class KerberosRule {
      * @throws BadFormatString
      */
     static String replaceParameters(String format,
-                                    String[] params) throws BadFormatString {
+        String[] params) throws BadFormatString {
         Matcher match = PARAMETER_PATTERN.matcher(format);
         int start = 0;
         StringBuilder result = new StringBuilder();
@@ -134,13 +134,13 @@ class KerberosRule {
                     int num = Integer.parseInt(paramNum);
                     if (num < 0 || num >= params.length) {
                         throw new BadFormatString("index " + num + " from " + format +
-                                " is outside of the valid range 0 to " +
-                                (params.length - 1));
+                            " is outside of the valid range 0 to " +
+                            (params.length - 1));
                     }
                     result.append(params[num]);
                 } catch (NumberFormatException nfe) {
                     throw new BadFormatString("bad format in username mapping in " +
-                            paramNum, nfe);
+                        paramNum, nfe);
                 }
 
             }
@@ -159,7 +159,7 @@ class KerberosRule {
      * @return
      */
     static String replaceSubstitution(String base, Pattern from, String to,
-                                      boolean repeat) {
+        boolean repeat) {
         Matcher match = from.matcher(base);
         if (repeat) {
             return match.replaceAll(to);
@@ -188,7 +188,7 @@ class KerberosRule {
                 if (fromPattern == null) {
                     result = base;
                 } else {
-                    result = replaceSubstitution(base, fromPattern, toPattern,  repeat);
+                    result = replaceSubstitution(base, fromPattern, toPattern, repeat);
                 }
             }
         }

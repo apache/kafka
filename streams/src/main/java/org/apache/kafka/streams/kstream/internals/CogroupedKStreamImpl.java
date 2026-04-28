@@ -48,9 +48,9 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
     private final CogroupedStreamAggregateBuilder<K, VOut> aggregateBuilder;
 
     CogroupedKStreamImpl(final String name,
-                         final Set<String> subTopologySourceNodes,
-                         final GraphNode graphNode,
-                         final InternalStreamsBuilder builder) {
+        final Set<String> subTopologySourceNodes,
+        final GraphNode graphNode,
+        final InternalStreamsBuilder builder) {
         super(name, null, null, subTopologySourceNodes, graphNode, builder);
         groupPatterns = new LinkedHashMap<>();
         aggregateBuilder = new CogroupedStreamAggregateBuilder<>(builder);
@@ -59,17 +59,17 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
     @SuppressWarnings("unchecked")
     @Override
     public <VIn> CogroupedKStream<K, VOut> cogroup(final KGroupedStream<K, VIn> groupedStream,
-                                                   final Aggregator<? super K, ? super VIn, VOut> aggregator) {
+        final Aggregator<? super K, ? super VIn, VOut> aggregator) {
         Objects.requireNonNull(groupedStream, "groupedStream can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         groupPatterns.put((KGroupedStreamImpl<K, ?>) groupedStream,
-                          (Aggregator<? super K, ? super Object, VOut>) aggregator);
+            (Aggregator<? super K, ? super Object, VOut>) aggregator);
         return this;
     }
 
     @Override
     public KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
-                                     final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized) {
+        final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized) {
         return aggregate(initializer, NamedInternal.empty(), materialized);
     }
 
@@ -80,8 +80,8 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
 
     @Override
     public KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
-                                     final Named named,
-                                     final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized) {
+        final Named named,
+        final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(named, "named can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
@@ -135,8 +135,8 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
     }
 
     private KTable<K, VOut> doAggregate(final Initializer<VOut> initializer,
-                                        final NamedInternal named,
-                                        final MaterializedInternal<K, VOut, KeyValueStore<Bytes, byte[]>> materializedInternal) {
+        final NamedInternal named,
+        final MaterializedInternal<K, VOut, KeyValueStore<Bytes, byte[]>> materializedInternal) {
         return aggregateBuilder.build(
             groupPatterns,
             initializer,

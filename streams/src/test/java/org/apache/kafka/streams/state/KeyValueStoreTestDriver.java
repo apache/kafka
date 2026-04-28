@@ -180,9 +180,9 @@ public class KeyValueStoreTestDriver<K, V> {
      * @return the test driver; never null
      */
     public static <K, V> KeyValueStoreTestDriver<K, V> create(final Serializer<K> keySerializer,
-                                                              final Deserializer<K> keyDeserializer,
-                                                              final Serializer<V> valueSerializer,
-                                                              final Deserializer<V> valueDeserializer) {
+        final Deserializer<K> keyDeserializer,
+        final Serializer<V> valueSerializer,
+        final Deserializer<V> valueDeserializer) {
         final StateSerdes<K, V> serdes = new StateSerdes<>(
             "unexpected",
             Serdes.serdeFrom(keySerializer, keyDeserializer),
@@ -227,15 +227,15 @@ public class KeyValueStoreTestDriver<K, V> {
         ) {
             @Override
             public <K1, V1> void send(final String topic,
-                                      final K1 key,
-                                      final V1 value,
-                                      final Headers headers,
-                                      final Integer partition,
-                                      final Long timestamp,
-                                      final Serializer<K1> keySerializer,
-                                      final Serializer<V1> valueSerializer,
-                                      final String processorNodeId,
-                                      final InternalProcessorContext<Void, Void> context) {
+                final K1 key,
+                final V1 value,
+                final Headers headers,
+                final Integer partition,
+                final Long timestamp,
+                final Serializer<K1> keySerializer,
+                final Serializer<V1> valueSerializer,
+                final String processorNodeId,
+                final InternalProcessorContext<Void, Void> context) {
                 // for byte arrays we need to wrap it for comparison
 
                 final byte[] keyBytes = keySerializer.serialize(topic, headers, key);
@@ -249,15 +249,15 @@ public class KeyValueStoreTestDriver<K, V> {
 
             @Override
             public <K1, V1> void send(final String topic,
-                                      final K1 key,
-                                      final V1 value,
-                                      final Headers headers,
-                                      final Long timestamp,
-                                      final Serializer<K1> keySerializer,
-                                      final Serializer<V1> valueSerializer,
-                                      final String processorNodeId,
-                                      final InternalProcessorContext<Void, Void> context,
-                                      final StreamPartitioner<? super K1, ? super V1> partitioner) {
+                final K1 key,
+                final V1 value,
+                final Headers headers,
+                final Long timestamp,
+                final Serializer<K1> keySerializer,
+                final Serializer<V1> valueSerializer,
+                final String processorNodeId,
+                final InternalProcessorContext<Void, Void> context,
+                final StreamPartitioner<? super K1, ? super V1> partitioner) {
                 throw new UnsupportedOperationException();
             }
         };

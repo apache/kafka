@@ -115,9 +115,9 @@ public class ShareGroupAutoOffsetResetStrategy {
     @Override
     public String toString() {
         return "ShareGroupAutoOffsetResetStrategy{" +
-                "type=" + type +
-                ", delegate=" + delegate +
-                '}';
+            "type=" + type +
+            ", delegate=" + delegate +
+            '}';
     }
 
     /**
@@ -142,7 +142,7 @@ public class ShareGroupAutoOffsetResetStrategy {
                 fromString(offsetStrategy);
             } catch (Exception e) {
                 throw new ConfigException(name, value, "Invalid value `" + offsetStrategy + "` for configuration " +
-                        name + ". The value must be either 'earliest', 'latest' or of the format 'by_duration:<PnDTnHnMn.nS>'.");
+                    name + ". The value must be either 'earliest', 'latest' or of the format 'by_duration:<PnDTnHnMn.nS>'.");
             }
         }
 

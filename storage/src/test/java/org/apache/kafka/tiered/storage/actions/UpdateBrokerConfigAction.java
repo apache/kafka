@@ -32,8 +32,8 @@ public final class UpdateBrokerConfigAction implements TieredStorageTestAction {
     private final List<String> configsToBeDeleted;
 
     public UpdateBrokerConfigAction(int brokerId,
-                                    Map<String, String> configsToBeAdded,
-                                    List<String> configsToBeDeleted) {
+            Map<String, String> configsToBeAdded,
+            List<String> configsToBeDeleted) {
         this.brokerId = brokerId;
         this.configsToBeAdded = configsToBeAdded;
         this.configsToBeDeleted = configsToBeDeleted;
@@ -48,6 +48,6 @@ public final class UpdateBrokerConfigAction implements TieredStorageTestAction {
     @Override
     public void describe(PrintStream output) {
         output.printf("Update broker config: %d, configs-to-be-added: %s, configs-to-be-deleted: %s%n",
-                      brokerId, configsToBeAdded, configsToBeDeleted);
+                brokerId, configsToBeAdded, configsToBeDeleted);
     }
 }

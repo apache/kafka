@@ -183,8 +183,8 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a boolean value in a byte. " +
-                    "Values 0 and 1 are used to represent false and true respectively. " +
-                    "When reading a boolean value, any non-zero value is considered true.";
+                "Values 0 and 1 are used to represent false and true respectively. " +
+                "When reading a boolean value, any non-zero value is considered true.";
         }
     };
 
@@ -255,7 +255,7 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents an integer between -2<sup>15</sup> and 2<sup>15</sup>-1 inclusive. " +
-                    "The values are encoded using two bytes in network byte order (big-endian).";
+                "The values are encoded using two bytes in network byte order (big-endian).";
         }
     };
 
@@ -293,7 +293,7 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents an integer between 0 and 65535 inclusive. " +
-                    "The values are encoded using two bytes in network byte order (big-endian).";
+                "The values are encoded using two bytes in network byte order (big-endian).";
         }
     };
 
@@ -329,7 +329,7 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents an integer between -2<sup>31</sup> and 2<sup>31</sup>-1 inclusive. " +
-                    "The values are encoded using four bytes in network byte order (big-endian).";
+                "The values are encoded using four bytes in network byte order (big-endian).";
         }
     };
 
@@ -365,7 +365,7 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents an integer between 0 and 2<sup>32</sup>-1 inclusive. " +
-                    "The values are encoded using four bytes in network byte order (big-endian).";
+                "The values are encoded using four bytes in network byte order (big-endian).";
         }
     };
 
@@ -401,7 +401,7 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents an integer between -2<sup>63</sup> and 2<sup>63</sup>-1 inclusive. " +
-                    "The values are encoded using eight bytes in network byte order (big-endian).";
+                "The values are encoded using eight bytes in network byte order (big-endian).";
         }
     };
 
@@ -439,7 +439,7 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a type 4 immutable universally unique identifier (Uuid). " +
-                    "The values are encoded using sixteen bytes in network byte order (big-endian).";
+                "The values are encoded using sixteen bytes in network byte order (big-endian).";
         }
     };
 
@@ -475,7 +475,7 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a double-precision 64-bit format IEEE 754 value. " +
-                    "The values are encoded using eight bytes in network byte order (big-endian).";
+                "The values are encoded using eight bytes in network byte order (big-endian).";
         }
     };
 
@@ -518,8 +518,8 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a sequence of characters. First the length N is given as an " + INT16 +
-                    ". Then N bytes follow which are the UTF-8 encoding of the character sequence. " +
-                    "Length must not be negative.";
+                ". Then N bytes follow which are the UTF-8 encoding of the character sequence. " +
+                "Length must not be negative.";
         }
     };
 
@@ -563,7 +563,7 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a sequence of characters. First the length N + 1 is given as an UNSIGNED_VARINT " +
-                    ". Then N bytes follow which are the UTF-8 encoding of the character sequence.";
+                ". Then N bytes follow which are the UTF-8 encoding of the character sequence.";
         }
     };
 
@@ -619,8 +619,8 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a sequence of characters or null. For non-null strings, first the length N is given as an " + INT16 +
-                    ". Then N bytes follow which are the UTF-8 encoding of the character sequence. " +
-                    "A null value is encoded with length of -1 and there are no following bytes.";
+                ". Then N bytes follow which are the UTF-8 encoding of the character sequence. " +
+                "A null value is encoded with length of -1 and there are no following bytes.";
         }
     };
 
@@ -675,8 +675,8 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a sequence of characters. First the length N + 1 is given as an UNSIGNED_VARINT " +
-                    ". Then N bytes follow which are the UTF-8 encoding of the character sequence. " +
-                    "A null string is represented with a length of 0.";
+                ". Then N bytes follow which are the UTF-8 encoding of the character sequence. " +
+                "A null string is represented with a length of 0.";
         }
     };
 
@@ -721,7 +721,7 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a raw sequence of bytes. First the length N is given as an " + INT32 +
-                    ". Then N bytes follow.";
+                ". Then N bytes follow.";
         }
     };
 
@@ -767,7 +767,7 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a raw sequence of bytes. First the length N+1 is given as an UNSIGNED_VARINT." +
-                    " Then N bytes follow.";
+                " Then N bytes follow.";
         }
     };
 
@@ -822,7 +822,7 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a raw sequence of bytes or null. For non-null values, first the length N is given as an " + INT32 +
-                    ". Then N bytes follow. A null value is encoded with length of -1 and there are no following bytes.";
+                ". Then N bytes follow. A null value is encoded with length of -1 and there are no following bytes.";
         }
     };
 
@@ -877,7 +877,7 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a raw sequence of bytes. First the length N+1 is given as an UNSIGNED_VARINT." +
-                    " Then N bytes follow. A null object is represented with a length of 0.";
+                " Then N bytes follow. A null object is represented with a length of 0.";
         }
     };
 
@@ -921,8 +921,8 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a sequence of Kafka records as " + BYTES + ". " +
-                    "For a detailed description of records see " +
-                    "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
+                "For a detailed description of records see " +
+                "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
         }
     };
 
@@ -1115,8 +1115,8 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents an integer between -2<sup>31</sup> and 2<sup>31</sup>-1 inclusive. " +
-                    "Encoding follows the variable-length zig-zag encoding from " +
-                    " <a href=\"https://code.google.com/apis/protocolbuffers/docs/encoding.html\"> Google Protocol Buffers</a>.";
+                "Encoding follows the variable-length zig-zag encoding from " +
+                " <a href=\"https://code.google.com/apis/protocolbuffers/docs/encoding.html\"> Google Protocol Buffers</a>.";
         }
     };
 
@@ -1150,8 +1150,8 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents an integer between -2<sup>63</sup> and 2<sup>63</sup>-1 inclusive. " +
-                    "Encoding follows the variable-length zig-zag encoding from " +
-                    " <a href=\"https://code.google.com/apis/protocolbuffers/docs/encoding.html\"> Google Protocol Buffers</a>.";
+                "Encoding follows the variable-length zig-zag encoding from " +
+                " <a href=\"https://code.google.com/apis/protocolbuffers/docs/encoding.html\"> Google Protocol Buffers</a>.";
         }
     };
 

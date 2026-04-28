@@ -45,7 +45,7 @@ public class DynamicProducerStateManagerConfig implements BrokerReconfigurable {
         TransactionLogConfig transactionLogConfig = new TransactionLogConfig(newConfig);
         if (transactionLogConfig.producerIdExpirationMs() < 0)
             throw new ConfigException(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_CONFIG + "cannot be less than 0, current value is " +
-                                      producerStateManagerConfig.producerIdExpirationMs() + ", and new value is " + transactionLogConfig.producerIdExpirationMs());
+                producerStateManagerConfig.producerIdExpirationMs() + ", and new value is " + transactionLogConfig.producerIdExpirationMs());
     }
 
     @Override

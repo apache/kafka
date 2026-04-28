@@ -85,7 +85,7 @@ public class ShareConsumerPerformanceTest {
         };
 
         String err = ToolsTestUtils.captureStandardErr(() ->
-                new ShareConsumerPerformance.ShareConsumerPerfOptions(args));
+            new ShareConsumerPerformance.ShareConsumerPerfOptions(args));
         assertTrue(err.contains("Missing required argument \"[bootstrap-server]\""));
     }
 
@@ -97,7 +97,7 @@ public class ShareConsumerPerformanceTest {
         };
 
         String err = ToolsTestUtils.captureStandardErr(() ->
-                new ShareConsumerPerformance.ShareConsumerPerfOptions(args));
+            new ShareConsumerPerformance.ShareConsumerPerfOptions(args));
         assertTrue(err.contains("Exactly one of the following arguments is required:"));
     }
 
@@ -110,7 +110,7 @@ public class ShareConsumerPerformanceTest {
         };
 
         ShareConsumerPerformance.ShareConsumerPerfOptions config =
-                new ShareConsumerPerformance.ShareConsumerPerfOptions(args);
+            new ShareConsumerPerformance.ShareConsumerPerfOptions(args);
         assertEquals(10, config.numRecords());
     }
 
@@ -124,7 +124,7 @@ public class ShareConsumerPerformanceTest {
         };
 
         String err = ToolsTestUtils.captureStandardErr(() ->
-                new ShareConsumerPerformance.ShareConsumerPerfOptions(args));
+            new ShareConsumerPerformance.ShareConsumerPerfOptions(args));
         assertTrue(err.contains("Exactly one of the following arguments is required"));
     }
 
@@ -207,7 +207,7 @@ public class ShareConsumerPerformanceTest {
         };
 
         ShareConsumerPerformance.ShareConsumerPerfOptions config =
-                new ShareConsumerPerformance.ShareConsumerPerfOptions(args);
+            new ShareConsumerPerformance.ShareConsumerPerfOptions(args);
 
         assertEquals("share-consumer-1", config.props().getProperty(ConsumerConfig.CLIENT_ID_CONFIG));
     }
@@ -223,9 +223,9 @@ public class ShareConsumerPerformanceTest {
         };
 
         String err = ToolsTestUtils.captureStandardErr(() ->
-                new ShareConsumerPerformance.ShareConsumerPerfOptions(args));
+            new ShareConsumerPerformance.ShareConsumerPerfOptions(args));
         assertTrue(err.contains(String.format("Option \"%s\" can't be used with option \"%s\"",
-                "[consumer.config]", "[command-config]")));
+            "[consumer.config]", "[command-config]")));
     }
 
     @Test

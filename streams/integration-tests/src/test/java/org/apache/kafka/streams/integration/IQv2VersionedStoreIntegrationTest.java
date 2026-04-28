@@ -99,23 +99,23 @@ public class IQv2VersionedStoreIntegrationTest {
     public static void beforeAll() throws Exception {
         CLUSTER.start();
     }
-    
+
     @BeforeEach
     public void beforeEach() throws Exception {
         // Delete and recreate the topic to ensure clean state for each test
         CLUSTER.deleteTopic(INPUT_TOPIC_NAME);
         CLUSTER.createTopic(INPUT_TOPIC_NAME, 1, 1);
-        
+
         // Set up fresh test data
         final Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         try (final KafkaProducer<Integer, Integer> producer = new KafkaProducer<>(producerProps)) {
-            producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0,  RECORD_TIMESTAMPS[0], RECORD_KEY, RECORD_VALUES[0])).get();
-            producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0,  RECORD_TIMESTAMPS[1], RECORD_KEY, RECORD_VALUES[1])).get();
-            producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0,  RECORD_TIMESTAMPS[2], RECORD_KEY, RECORD_VALUES[2])).get();
-            producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0,  RECORD_TIMESTAMPS[3], RECORD_KEY, RECORD_VALUES[3])).get();
+            producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0, RECORD_TIMESTAMPS[0], RECORD_KEY, RECORD_VALUES[0])).get();
+            producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0, RECORD_TIMESTAMPS[1], RECORD_KEY, RECORD_VALUES[1])).get();
+            producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0, RECORD_TIMESTAMPS[2], RECORD_KEY, RECORD_VALUES[2])).get();
+            producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0, RECORD_TIMESTAMPS[3], RECORD_KEY, RECORD_VALUES[3])).get();
         }
         inputPosition = Position.emptyPosition().withComponent(INPUT_TOPIC_NAME, 0, 3);
     }
@@ -160,7 +160,7 @@ public class IQv2VersionedStoreIntegrationTest {
     public void verifyStore(final String groupProtocol, final String testName, final TestInfo testInfo) throws Exception {
         // Set up streams
         setup(groupProtocol, testInfo);
-        
+
         /* Test Versioned Key Queries */
         // retrieve the latest value
         shouldHandleVersionedKeyQuery(Optional.empty(), RECORD_VALUES[3], RECORD_TIMESTAMPS[3], Optional.empty());
@@ -180,15 +180,15 @@ public class IQv2VersionedStoreIntegrationTest {
         shouldHandleMultiVersionedKeyQuery(Optional.empty(), Optional.empty(), ResultOrder.ASCENDING, 0, LAST_INDEX);
         // retrieve existing values in query defined time range
         shouldHandleMultiVersionedKeyQuery(Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[1] + 5)), Optional.of(Instant.now()),
-                                           ResultOrder.ANY, 1, LAST_INDEX);
+            ResultOrder.ANY, 1, LAST_INDEX);
         // there is no record in the query specified time range
         shouldVerifyGetNullForMultiVersionedKeyQuery(RECORD_KEY,
-                                                     Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[0] - 100)), Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[0] - 50)),
-                                                     ResultOrder.ANY);
+            Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[0] - 100)), Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[0] - 50)),
+            ResultOrder.ANY);
         // there is no record in the query specified time range even retrieving results in ascending order
         shouldVerifyGetNullForMultiVersionedKeyQuery(RECORD_KEY,
-                                                     Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[0] - 100)), Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[0] - 50)),
-                                                     ResultOrder.ASCENDING);
+            Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[0] - 100)), Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[0] - 50)),
+            ResultOrder.ASCENDING);
         // there is no record with this key
         shouldVerifyGetNullForMultiVersionedKeyQuery(NON_EXISTING_KEY, Optional.empty(), Optional.empty(), ResultOrder.ANY);
         // there is no record with this key even retrieving results in ascending order
@@ -198,9 +198,9 @@ public class IQv2VersionedStoreIntegrationTest {
     }
 
     private void shouldHandleVersionedKeyQuery(final Optional<Instant> queryTimestamp,
-                                               final Integer expectedValue,
-                                               final Long expectedTimestamp,
-                                               final Optional<Long> expectedValidToTime) {
+        final Integer expectedValue,
+        final Long expectedTimestamp,
+        final Optional<Long> expectedValidToTime) {
 
         final VersionedKeyQuery<Integer, Integer> query = defineQuery(RECORD_KEY, queryTimestamp);
 
@@ -231,7 +231,7 @@ public class IQv2VersionedStoreIntegrationTest {
     }
 
     private void shouldHandleMultiVersionedKeyQuery(final Optional<Instant> fromTime, final Optional<Instant> toTime,
-                                                    final ResultOrder order, final int expectedArrayLowerBound, final int expectedArrayUpperBound) {
+        final ResultOrder order, final int expectedArrayLowerBound, final int expectedArrayUpperBound) {
 
         final MultiVersionedKeyQuery<Integer, Integer> query = defineQuery(RECORD_KEY, fromTime, toTime, order);
 

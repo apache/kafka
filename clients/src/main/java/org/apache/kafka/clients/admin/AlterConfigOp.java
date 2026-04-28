@@ -67,7 +67,7 @@ public class AlterConfigOp {
         SUBTRACT((byte) 3);
 
         private static final Map<Byte, OpType> OP_TYPES = Collections.unmodifiableMap(
-                Arrays.stream(values()).collect(Collectors.toMap(OpType::id, Function.identity()))
+            Arrays.stream(values()).collect(Collectors.toMap(OpType::id, Function.identity()))
         );
 
         private final byte id;
@@ -90,7 +90,7 @@ public class AlterConfigOp {
 
     public AlterConfigOp(ConfigEntry configEntry, OpType operationType) {
         this.configEntry = configEntry;
-        this.opType =  operationType;
+        this.opType = operationType;
     }
 
     public ConfigEntry configEntry() {
@@ -107,7 +107,7 @@ public class AlterConfigOp {
         if (o == null || getClass() != o.getClass()) return false;
         final AlterConfigOp that = (AlterConfigOp) o;
         return opType == that.opType &&
-                Objects.equals(configEntry, that.configEntry);
+            Objects.equals(configEntry, that.configEntry);
     }
 
     @Override
@@ -118,8 +118,8 @@ public class AlterConfigOp {
     @Override
     public String toString() {
         return "AlterConfigOp{" +
-                "opType=" + opType +
-                ", configEntry=" + configEntry +
-                '}';
+            "opType=" + opType +
+            ", configEntry=" + configEntry +
+            '}';
     }
 }

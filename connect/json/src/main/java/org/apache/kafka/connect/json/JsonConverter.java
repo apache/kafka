@@ -113,7 +113,7 @@ public class JsonConverter implements Converter, HeaderConverter {
                     if (entry.size() != 2)
                         throw new DataException("Found invalid map entry, expected length 2 but found :" + entry.size());
                     result.put(convertToConnect(keySchema, entry.get(0), config),
-                            convertToConnect(valueSchema, entry.get(1), config));
+                        convertToConnect(valueSchema, entry.get(1), config));
                 }
             }
             return result;
@@ -366,8 +366,8 @@ public class JsonConverter implements Converter, HeaderConverter {
 
         Schema schema = asConnectSchema(jsonValue.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         return new SchemaAndValue(
-                schema,
-                convertToConnect(schema, jsonValue.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME), config)
+            schema,
+            convertToConnect(schema, jsonValue.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME), config)
         );
     }
 
@@ -707,7 +707,7 @@ public class JsonConverter implements Converter, HeaderConverter {
                     return schema.defaultValue(); // any logical type conversions should already have been applied
                 if (schema.isOptional())
                     return null;
-                throw new DataException("Invalid null value for required " + schemaType +  " field");
+                throw new DataException("Invalid null value for required " + schemaType + " field");
             }
         } else {
             switch (jsonValue.getNodeType()) {
@@ -761,6 +761,7 @@ public class JsonConverter implements Converter, HeaderConverter {
 
     private interface LogicalTypeConverter {
         JsonNode toJson(Schema schema, Object value, JsonConverterConfig config);
+
         Object toConnect(Schema schema, JsonNode value);
     }
 }

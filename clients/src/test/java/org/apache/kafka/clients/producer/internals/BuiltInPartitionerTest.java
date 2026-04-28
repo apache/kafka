@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class BuiltInPartitionerTest {
-    private static final Node[] NODES = new Node[] {
+    private static final Node[] NODES = new Node[]{
         new Node(0, "localhost", 99, "rack0"),
         new Node(1, "localhost", 100, "rack1"),
         new Node(2, "localhost", 101, "rack0"),
@@ -46,11 +46,13 @@ public class BuiltInPartitionerTest {
         new Node(11, "localhost", 103, "rack2")
     };
     private static final Node[] NODES_WITHOUT_RACKS = new Node[NODES.length];
+
     static {
-        for (int i = 0; i < NODES.length; i++) {
+        for (int i = 0;i < NODES.length;i++) {
             NODES_WITHOUT_RACKS[i] = new Node(NODES[i].id(), NODES[i].host(), NODES[i].port());
         }
     }
+
     static final String TOPIC_A = "topicA";
     static final String TOPIC_B = "topicB";
     static final String TOPIC_C = "topicC";
@@ -90,7 +92,7 @@ public class BuiltInPartitionerTest {
 
         // Check that switching works even when there is one partition.
         BuiltInPartitioner builtInPartitionerB = new SequentialPartitioner(logContext, TOPIC_B, 1, rackAware, clientRackId);
-        for (int c = 10; c-- > 0; ) {
+        for (int c = 10;c-- > 0;) {
             partitionInfo = builtInPartitionerB.peekCurrentPartitionInfo(testCluster);
             assertEquals(0, partitionInfo.partition());
             builtInPartitionerB.updatePartitionInfo(partitionInfo, 1, testCluster);
@@ -213,7 +215,7 @@ public class BuiltInPartitionerTest {
 
         boolean foundAnotherPartA = false;
         assertNotEquals(1, partA);
-        for (int aPartitions = 0; aPartitions < 100; aPartitions++) {
+        for (int aPartitions = 0;aPartitions < 100;aPartitions++) {
             partitionInfo = builtInPartitionerA.peekCurrentPartitionInfo(testCluster);
             int anotherPartA = partitionInfo.partition();
             builtInPartitionerA.updatePartitionInfo(partitionInfo, 1, testCluster);
@@ -230,7 +232,7 @@ public class BuiltInPartitionerTest {
         builtInPartitionerB.updatePartitionInfo(partitionInfo, 1, testCluster);
 
         assertEquals(1, partB);
-        for (int bPartitions = 0; bPartitions < 100; bPartitions++) {
+        for (int bPartitions = 0;bPartitions < 100;bPartitions++) {
             partitionInfo = builtInPartitionerB.peekCurrentPartitionInfo(testCluster);
             assertEquals(1, partitionInfo.partition());
             builtInPartitionerB.updatePartitionInfo(partitionInfo, 1, testCluster);
@@ -265,7 +267,7 @@ public class BuiltInPartitionerTest {
         String[] partitionRacks = new String[queueSizes.length];
         int[] expectedFrequencies = new int[queueSizes.length];
         List<PartitionInfo> allPartitions = new ArrayList<>();
-        for (int i = 0; i < partitionIds.length; i++) {
+        for (int i = 0;i < partitionIds.length;i++) {
             final Node leader = NODES[i % NODES.length];
             partitionIds[i] = i;
             if (brokerRacksArePresent) {
@@ -288,14 +290,14 @@ public class BuiltInPartitionerTest {
         int numberOfIterations = builtInPartitioner.loadStatsRangeEnd() * numberOfCycles;
         int[] frequencies = new int[queueSizes.length];
 
-        for (int i = 0; i < numberOfIterations; i++) {
+        for (int i = 0;i < numberOfIterations;i++) {
             BuiltInPartitioner.StickyPartitionInfo partitionInfo = builtInPartitioner.peekCurrentPartitionInfo(testCluster);
             ++frequencies[partitionInfo.partition()];
             builtInPartitioner.updatePartitionInfo(partitionInfo, 1, testCluster);
         }
 
         // Verify that frequencies are reciprocal of queue sizes.
-        for (int i = 0; i < frequencies.length; i++) {
+        for (int i = 0;i < frequencies.length;i++) {
             assertEquals(expectedFrequencies[i] * numberOfCycles, frequencies[i],
                 "Partition " + i + " was chosen " + frequencies[i] + " times");
         }
@@ -312,7 +314,7 @@ public class BuiltInPartitionerTest {
         String[] partitionRacks = new String[queueSizes.length];
         int[] expectedFrequencies = new int[queueSizes.length];
         List<PartitionInfo> allPartitions = new ArrayList<>();
-        for (int i = 0; i < partitionIds.length; i++) {
+        for (int i = 0;i < partitionIds.length;i++) {
             final Node leader = NODES[i % NODES.length];
             partitionIds[i] = i;
             partitionRacks[i] = leader.rack();
@@ -337,23 +339,23 @@ public class BuiltInPartitionerTest {
         int[] frequencies = new int[queueSizes.length];
 
         BuiltInPartitioner.StickyPartitionInfo partitionInfo = null;
-        for (int i = 0; i < numberOfIterations; i++) {
+        for (int i = 0;i < numberOfIterations;i++) {
             partitionInfo = builtInPartitioner.peekCurrentPartitionInfo(testCluster);
             ++frequencies[partitionInfo.partition()];
             builtInPartitioner.updatePartitionInfo(partitionInfo, 1, testCluster);
         }
 
         // Verify that frequencies are reciprocal of queue sizes.
-        for (int i = 0; i < frequencies.length; i++) {
+        for (int i = 0;i < frequencies.length;i++) {
             assertEquals(expectedFrequencies[i] * numberOfCycles, frequencies[i],
                 "Partition " + i + " was chosen " + frequencies[i] + " times");
         }
 
         // Simulate one partition in "our" rack going offline.
         // The partitioner must select the remaining one.
-        queueSizes = new int[] {1, 2, 3};
-        partitionIds = new int[] {0, 1, 3};
-        partitionRacks = new String[] {NODES[0].rack(), NODES[1].rack(), NODES[3].rack()};
+        queueSizes = new int[]{1, 2, 3};
+        partitionIds = new int[]{0, 1, 3};
+        partitionRacks = new String[]{NODES[0].rack(), NODES[1].rack(), NODES[3].rack()};
         builtInPartitioner.updatePartitionLoadStats(queueSizes, partitionIds, partitionRacks, queueSizes.length);
 
         List<PartitionInfo> onePartitionOffline = asList(
@@ -365,7 +367,7 @@ public class BuiltInPartitionerTest {
         testCluster = new Cluster("clusterId", asList(NODES), onePartitionOffline,
             Collections.emptySet(), Collections.emptySet());
         partitionInfo = builtInPartitioner.peekCurrentPartitionInfo(testCluster);
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0;i < 4;i++) {
             builtInPartitioner.updatePartitionInfo(partitionInfo, 1, testCluster);
             partitionInfo = builtInPartitioner.peekCurrentPartitionInfo(testCluster);
             assertEquals(0, partitionInfo.partition());
@@ -373,9 +375,9 @@ public class BuiltInPartitionerTest {
 
         // Simulate all partitions in "our" rack going offline.
         // The partitioner must start selecting from "non-local" partitions.
-        queueSizes = new int[] {1, 2};
-        partitionIds = new int[] {1, 3};
-        partitionRacks = new String[] {NODES[1].rack(), NODES[3].rack()};
+        queueSizes = new int[]{1, 2};
+        partitionIds = new int[]{1, 3};
+        partitionRacks = new String[]{NODES[1].rack(), NODES[3].rack()};
         builtInPartitioner.updatePartitionLoadStats(queueSizes, partitionIds, partitionRacks, queueSizes.length);
 
         List<PartitionInfo> twoPartitionsOffline = asList(

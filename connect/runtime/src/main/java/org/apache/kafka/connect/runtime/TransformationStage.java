@@ -48,23 +48,23 @@ public class TransformationStage<R extends ConnectRecord<R>> implements AutoClos
 
 
     TransformationStage(
-        Plugin<Transformation<R>> transformationPlugin,
-        String transformAlias,
-        String transformVersion,
-        Function<ClassLoader, LoaderSwap> pluginLoaderSwapper
+            Plugin<Transformation<R>> transformationPlugin,
+            String transformAlias,
+            String transformVersion,
+            Function<ClassLoader, LoaderSwap> pluginLoaderSwapper
     ) {
         this(null, null, null, false, transformationPlugin, transformAlias, transformVersion, pluginLoaderSwapper);
     }
 
     TransformationStage(
-        Plugin<Predicate<R>> predicatePlugin,
-        String predicateAlias,
-        String predicateVersion,
-        boolean negate,
-        Plugin<Transformation<R>> transformationPlugin,
-        String transformAlias,
-        String transformVersion,
-        Function<ClassLoader, LoaderSwap> pluginLoaderSwapper
+            Plugin<Predicate<R>> predicatePlugin,
+            String predicateAlias,
+            String predicateVersion,
+            boolean negate,
+            Plugin<Transformation<R>> transformationPlugin,
+            String transformAlias,
+            String transformVersion,
+            Function<ClassLoader, LoaderSwap> pluginLoaderSwapper
     ) {
         this.predicatePlugin = predicatePlugin;
         this.negate = negate;
@@ -130,13 +130,13 @@ public class TransformationStage<R extends ConnectRecord<R>> implements AutoClos
 
     public StageInfo transformationStageInfo() {
         AliasedPluginInfo transformInfo = new AliasedPluginInfo(
-            transformAlias,
-            transformationPlugin.get().getClass().getName(),
-            transformVersion
+                transformAlias,
+                transformationPlugin.get().getClass().getName(),
+                transformVersion
         );
         AliasedPluginInfo predicateInfo = predicatePlugin != null ? new AliasedPluginInfo(
-            predicateAlias,
-            predicatePlugin.get().getClass().getName(), predicateVersion
+                predicateAlias,
+                predicatePlugin.get().getClass().getName(), predicateVersion
         ) : null;
         return new StageInfo(transformInfo, predicateInfo);
     }

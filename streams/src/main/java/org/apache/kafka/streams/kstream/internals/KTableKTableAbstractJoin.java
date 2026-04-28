@@ -34,8 +34,8 @@ public abstract class KTableKTableAbstractJoin<K, V1, V2, VOut> implements
     boolean sendOldValues = false;
 
     KTableKTableAbstractJoin(final KTableImpl<K, ?, V1> table1,
-                             final KTableImpl<K, ?, V2> table2,
-                             final ValueJoiner<? super V1, ? super V2, ? extends VOut> joiner) {
+        final KTableImpl<K, ?, V2> table2,
+        final ValueJoiner<? super V1, ? super V2, ? extends VOut> joiner) {
         this.table1 = table1;
         this.table2 = table2;
         this.valueGetterSupplier1 = table1.valueGetterSupplier();

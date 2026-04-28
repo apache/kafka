@@ -54,7 +54,7 @@ public class KafkaMetricsGroupTest {
         assertEquals("TestMetrics", metricName.getType());
         assertEquals("TaggedMetric", metricName.getName());
         assertEquals("kafka.metrics:type=TestMetrics,name=TaggedMetric,foo=bar,bar=baz,baz=raz.taz",
-                metricName.getMBeanName());
+            metricName.getMBeanName());
         assertEquals("bar.baz.baz.raz_taz.foo.bar", metricName.getScope());
     }
 
@@ -72,7 +72,7 @@ public class KafkaMetricsGroupTest {
         assertEquals("TestMetrics", metricName.getType());
         assertEquals("TaggedMetric", metricName.getName());
         assertEquals("kafka.metrics:type=TestMetrics,name=TaggedMetric,foo=bar,baz=raz.taz",
-                metricName.getMBeanName());
+            metricName.getMBeanName());
         assertEquals("baz.raz_taz.foo.bar", metricName.getScope());
     }
 }

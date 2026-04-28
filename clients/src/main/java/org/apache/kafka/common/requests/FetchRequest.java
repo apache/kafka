@@ -164,16 +164,16 @@ public class FetchRequest extends AbstractRequest {
 
         public static Builder forConsumer(short maxVersion, int maxWait, int minBytes, Map<TopicPartition, PartitionData> fetchData) {
             return new Builder(ApiKeys.FETCH.oldestVersion(), maxVersion,
-                CONSUMER_REPLICA_ID,  -1, maxWait, minBytes, fetchData);
+                CONSUMER_REPLICA_ID, -1, maxWait, minBytes, fetchData);
         }
 
         public static Builder forReplica(short allowedVersion, int replicaId, long replicaEpoch, int maxWait, int minBytes,
-                                         Map<TopicPartition, PartitionData> fetchData) {
+            Map<TopicPartition, PartitionData> fetchData) {
             return new Builder(allowedVersion, allowedVersion, replicaId, replicaEpoch, maxWait, minBytes, fetchData);
         }
 
         public Builder(short minVersion, short maxVersion, int replicaId, long replicaEpoch, int maxWait, int minBytes,
-                       Map<TopicPartition, PartitionData> fetchData) {
+            Map<TopicPartition, PartitionData> fetchData) {
             super(ApiKeys.FETCH, minVersion, maxVersion);
             this.replicaId = replicaId;
             this.replicaEpoch = replicaEpoch;
@@ -234,8 +234,8 @@ public class FetchRequest extends AbstractRequest {
                 FetchRequestData.ForgottenTopic forgottenTopic = forgottenTopicMap.get(topicIdPartition.topic());
                 if (forgottenTopic == null) {
                     forgottenTopic = new ForgottenTopic()
-                            .setTopic(topicIdPartition.topic())
-                            .setTopicId(topicIdPartition.topicId());
+                        .setTopic(topicIdPartition.topic())
+                        .setTopicId(topicIdPartition.topicId());
                     forgottenTopicMap.put(topicIdPartition.topic(), forgottenTopic);
                 }
                 forgottenTopic.partitions().add(topicIdPartition.partition());
@@ -284,9 +284,9 @@ public class FetchRequest extends AbstractRequest {
 
                 if (fetchTopic == null || !topicPartition.topic().equals(fetchTopic.topic())) {
                     fetchTopic = new FetchRequestData.FetchTopic()
-                       .setTopic(topicPartition.topic())
-                       .setTopicId(partitionData.topicId)
-                       .setPartitions(new ArrayList<>());
+                        .setTopic(topicPartition.topic())
+                        .setTopicId(partitionData.topicId)
+                        .setPartitions(new ArrayList<>());
                     fetchRequestData.topics().add(fetchTopic);
                 }
 
@@ -313,17 +313,17 @@ public class FetchRequest extends AbstractRequest {
         @Override
         public String toString() {
             return "(type=FetchRequest" +
-                    ", replicaId=" + replicaId +
-                    ", maxWait=" + maxWait +
-                    ", minBytes=" + minBytes +
-                    ", maxBytes=" + maxBytes +
-                    ", fetchData=" + toFetch +
-                    ", isolationLevel=" + isolationLevel +
-                    ", removed=" + removed.stream().map(TopicIdPartition::toString).collect(Collectors.joining(", ")) +
-                    ", replaced=" + replaced.stream().map(TopicIdPartition::toString).collect(Collectors.joining(", ")) +
-                    ", metadata=" + metadata +
-                    ", rackId=" + rackId +
-                    ")";
+                ", replicaId=" + replicaId +
+                ", maxWait=" + maxWait +
+                ", minBytes=" + minBytes +
+                ", maxBytes=" + maxBytes +
+                ", fetchData=" + toFetch +
+                ", isolationLevel=" + isolationLevel +
+                ", removed=" + removed.stream().map(TopicIdPartition::toString).collect(Collectors.joining(", ")) +
+                ", replaced=" + replaced.stream().map(TopicIdPartition::toString).collect(Collectors.joining(", ")) +
+                ", metadata=" + metadata +
+                ", rackId=" + rackId +
+                ")";
         }
     }
 
@@ -352,18 +352,18 @@ public class FetchRequest extends AbstractRequest {
         if (version() < 13) {
             data.topics().forEach(topic -> {
                 List<FetchResponseData.PartitionData> partitionResponses = topic.partitions().stream().map(partition ->
-                        FetchResponse.partitionResponse(partition.partition(), error)).collect(Collectors.toList());
+                    FetchResponse.partitionResponse(partition.partition(), error)).collect(Collectors.toList());
                 topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
-                        .setTopic(topic.topic())
-                        .setTopicId(topic.topicId())
-                        .setPartitions(partitionResponses));
+                    .setTopic(topic.topic())
+                    .setTopicId(topic.topicId())
+                    .setPartitions(partitionResponses));
             });
         }
         return FetchResponse.of(new FetchResponseData()
-                .setThrottleTimeMs(throttleTimeMs)
-                .setErrorCode(error.code())
-                .setSessionId(data.sessionId())
-                .setResponses(topicResponseList));
+            .setThrottleTimeMs(throttleTimeMs)
+            .setErrorCode(error.code())
+            .setSessionId(data.sessionId())
+            .setResponses(topicResponseList));
     }
 
     public int replicaId() {
@@ -466,9 +466,12 @@ public class FetchRequest extends AbstractRequest {
 
     public static String describeReplicaId(int replicaId) {
         switch (replicaId) {
-            case ORDINARY_CONSUMER_ID: return "consumer";
-            case DEBUGGING_CONSUMER_ID: return "debug consumer";
-            case FUTURE_LOCAL_REPLICA_ID: return "future local replica";
+            case ORDINARY_CONSUMER_ID:
+                return "consumer";
+            case DEBUGGING_CONSUMER_ID:
+                return "debug consumer";
+            case FUTURE_LOCAL_REPLICA_ID:
+                return "future local replica";
             default: {
                 if (isValidBrokerId(replicaId))
                     return "replica [" + replicaId + "]";

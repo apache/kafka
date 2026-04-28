@@ -116,10 +116,10 @@ public class OAuthBearerUnsecuredValidatorCallbackHandler implements Authenticat
             throw new IllegalArgumentException(String.format("Unexpected SASL mechanism: %s", saslMechanism));
         if (Objects.requireNonNull(jaasConfigEntries).size() != 1 || jaasConfigEntries.get(0) == null)
             throw new IllegalArgumentException(
-                    String.format("Must supply exactly 1 non-null JAAS mechanism configuration (size was %d)",
-                            jaasConfigEntries.size()));
+                String.format("Must supply exactly 1 non-null JAAS mechanism configuration (size was %d)",
+                    jaasConfigEntries.size()));
         this.moduleOptions = Collections
-                .unmodifiableMap((Map<String, String>) jaasConfigEntries.get(0).getOptions());
+            .unmodifiableMap((Map<String, String>) jaasConfigEntries.get(0).getOptions());
         configured = true;
     }
 
@@ -136,7 +136,7 @@ public class OAuthBearerUnsecuredValidatorCallbackHandler implements Authenticat
                     OAuthBearerValidationResult failureReason = e.reason();
                     String failureScope = failureReason.failureScope();
                     validationCallback.error(failureScope != null ? "insufficient_scope" : "invalid_token",
-                            failureScope, failureReason.failureOpenIdConfig());
+                        failureScope, failureReason.failureOpenIdConfig());
                 }
             } else if (callback instanceof OAuthBearerExtensionsValidatorCallback) {
                 OAuthBearerExtensionsValidatorCallback extensionsCallback = (OAuthBearerExtensionsValidatorCallback) callback;
@@ -160,19 +160,19 @@ public class OAuthBearerUnsecuredValidatorCallbackHandler implements Authenticat
         List<String> requiredScope = requiredScope();
         int allowableClockSkewMs = allowableClockSkewMs();
         OAuthBearerUnsecuredJws unsecuredJwt = new OAuthBearerUnsecuredJws(tokenValue, principalClaimName,
-                scopeClaimName);
+            scopeClaimName);
         long now = time.milliseconds();
         OAuthBearerValidationUtils
-                .validateClaimForExistenceAndType(unsecuredJwt, true, principalClaimName, String.class)
-                .throwExceptionIfFailed();
+            .validateClaimForExistenceAndType(unsecuredJwt, true, principalClaimName, String.class)
+            .throwExceptionIfFailed();
         OAuthBearerValidationUtils.validateIssuedAt(unsecuredJwt, false, now, allowableClockSkewMs)
-                .throwExceptionIfFailed();
+            .throwExceptionIfFailed();
         OAuthBearerValidationUtils.validateExpirationTime(unsecuredJwt, now, allowableClockSkewMs)
-                .throwExceptionIfFailed();
+            .throwExceptionIfFailed();
         OAuthBearerValidationUtils.validateTimeConsistency(unsecuredJwt).throwExceptionIfFailed();
         OAuthBearerValidationUtils.validateScope(unsecuredJwt, requiredScope).throwExceptionIfFailed();
         log.info("Successfully validated token with principal {}: {}", unsecuredJwt.principalName(),
-                unsecuredJwt.claims());
+            unsecuredJwt.claims());
         callback.token(unsecuredJwt);
     }
 
@@ -201,7 +201,7 @@ public class OAuthBearerUnsecuredValidatorCallbackHandler implements Authenticat
         }
         if (allowableClockSkewMs < 0) {
             throw new OAuthBearerConfigException(
-                    String.format("Allowable clock skew millis must not be negative: %s", allowableClockSkewMsValue));
+                String.format("Allowable clock skew millis must not be negative: %s", allowableClockSkewMsValue));
         }
         return allowableClockSkewMs;
     }

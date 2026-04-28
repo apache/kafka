@@ -327,7 +327,7 @@ public class PlaintextConsumerSubscriptionTest {
                 new TopicPartition(topic1, 1)
             );
             awaitAssignment(consumer, assignment);
-            
+
             consumer.unsubscribe();
             assertEquals(0, consumer.assignment().size());
             // Subscribe to a different pattern to match topic2 (that did not match before)
@@ -385,7 +385,7 @@ public class PlaintextConsumerSubscriptionTest {
 
             var topic2 = "topic2"; // does not match first pattern
             cluster.createTopic(topic2, 2, (short) BROKER_COUNT);
-            
+
             assertEquals(0, consumer.assignment().size());
             var pattern = new SubscriptionPattern("topic1.*");
             consumer.subscribe(pattern);
@@ -418,8 +418,8 @@ public class PlaintextConsumerSubscriptionTest {
 
         Map<String, Object> config = Map.of(GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
         try (
-                Producer<byte[], byte[]> producer = cluster.producer();
-                Consumer<byte[], byte[]> consumer = cluster.consumer(config)
+            Producer<byte[], byte[]> producer = cluster.producer();
+            Consumer<byte[], byte[]> consumer = cluster.consumer(config)
         ) {
             assertEquals(0, consumer.assignment().size());
 
@@ -427,10 +427,10 @@ public class PlaintextConsumerSubscriptionTest {
             var pattern = new SubscriptionPattern("topic.*");
             consumer.subscribe(pattern);
             var assignment = Set.of(
-                    new TopicPartition(topic, 0),
-                    new TopicPartition(topic, 1),
-                    new TopicPartition(topic1, 0),
-                    new TopicPartition(topic1, 1));
+                new TopicPartition(topic, 0),
+                new TopicPartition(topic, 1),
+                new TopicPartition(topic1, 0),
+                new TopicPartition(topic1, 1));
             awaitAssignment(consumer, assignment);
             var totalRecords = 10;
             var startingTimestamp = System.currentTimeMillis();
@@ -444,8 +444,8 @@ public class PlaintextConsumerSubscriptionTest {
             var unassignedPartition = new TopicPartition(topic2, 0);
             var offsets = consumer.endOffsets(List.of(unassignedPartition, tp));
             var expectedOffsets = Map.of(
-                    unassignedPartition, 0L,
-                    tp, (long) totalRecords);
+                unassignedPartition, 0L,
+                tp, (long) totalRecords);
             assertEquals(expectedOffsets, offsets);
 
             // Fetch records again with the regex subscription. This will require metadata for topic IDs again.
@@ -504,7 +504,7 @@ public class PlaintextConsumerSubscriptionTest {
             awaitAssignment(consumer, patternAssignment);
         }
     }
-    
+
 
     @ClusterTest
     public void testRe2JPatternSubscriptionInvalidRegex() throws InterruptedException {

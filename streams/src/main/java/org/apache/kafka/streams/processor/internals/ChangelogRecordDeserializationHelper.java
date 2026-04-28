@@ -39,18 +39,18 @@ public class ChangelogRecordDeserializationHelper {
     public static final String CHANGELOG_VERSION_HEADER_KEY = "v";
     public static final String CHANGELOG_POSITION_HEADER_KEY = "c";
     public static final RecordHeader CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY = new RecordHeader(
-            CHANGELOG_VERSION_HEADER_KEY, V_0_CHANGELOG_VERSION_HEADER_VALUE);
+        CHANGELOG_VERSION_HEADER_KEY, V_0_CHANGELOG_VERSION_HEADER_VALUE);
 
     public static void applyChecksAndUpdatePosition(
-            final ConsumerRecord<byte[], byte[]> record,
-            final boolean consistencyEnabled,
-            final Position position
+        final ConsumerRecord<byte[], byte[]> record,
+        final boolean consistencyEnabled,
+        final Position position
     ) {
         if (!consistencyEnabled) {
             return;
         }
         final Header versionHeader = record.headers().lastHeader(
-                ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_KEY);
+            ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_KEY);
         if (versionHeader == null) {
             return;
         } else {
@@ -59,13 +59,13 @@ public class ChangelogRecordDeserializationHelper {
                     final Header vectorHeader = record.headers().lastHeader(CHANGELOG_POSITION_HEADER_KEY);
                     if (vectorHeader == null) {
                         throw new StreamsException("This should not happen. Consistency is enabled but the changelog "
-                                + "contains records without consistency information.");
+                            + "contains records without consistency information.");
                     }
                     position.merge(PositionSerde.deserialize(ByteBuffer.wrap(vectorHeader.value())));
                     break;
                 default:
                     log.warn("Changelog records have been encoded using a larger version than this server understands." +
-                            "Please upgrade your server.");
+                        "Please upgrade your server.");
             }
         }
     }

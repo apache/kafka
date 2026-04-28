@@ -58,7 +58,8 @@ public final class MetadataShell {
 
     public static class Builder {
         private String snapshotPath = null;
-        private FaultHandler faultHandler = new LoggingFaultHandler("shell", () -> { });
+        private FaultHandler faultHandler = new LoggingFaultHandler("shell", () -> {
+        });
 
         public Builder setSnapshotPath(String snapshotPath) {
             this.snapshotPath = snapshotPath;
@@ -152,11 +153,11 @@ public final class MetadataShell {
         SupportedConfigChecker supportedConfigChecker = new DefaultSupportedConfigChecker();
 
         this.loader = new MetadataLoader.Builder().
-                setFaultHandler(faultHandler).
-                setNodeId(-1).
-                setHighWaterMarkAccessor(() -> snapshotFileReader.highWaterMark()).
-                setSupportedConfigChecker(supportedConfigChecker).
-                build();
+            setFaultHandler(faultHandler).
+            setNodeId(-1).
+            setHighWaterMarkAccessor(() -> snapshotFileReader.highWaterMark()).
+            setSupportedConfigChecker(supportedConfigChecker).
+            build();
         snapshotFileReader = new SnapshotFileReader(snapshotPath, loader);
         snapshotFileReader.startup();
     }
@@ -177,7 +178,7 @@ public final class MetadataShell {
             waitUntilCaughtUp();
             Commands commands = new Commands(false);
             try (PrintWriter writer = new PrintWriter(new BufferedWriter(
-                    new OutputStreamWriter(System.out, StandardCharsets.UTF_8)))) {
+                     new OutputStreamWriter(System.out, StandardCharsets.UTF_8)))) {
                 Commands.Handler handler = commands.parseCommand(args);
                 handler.run(Optional.empty(), writer, state);
                 writer.flush();

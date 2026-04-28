@@ -109,7 +109,7 @@ public class ConsumerInterceptorsTest {
 
     @Test
     public void testOnConsumeChain() {
-        List<ConsumerInterceptor<Integer, Integer>>  interceptorList = new ArrayList<>();
+        List<ConsumerInterceptor<Integer, Integer>> interceptorList = new ArrayList<>();
         // we are testing two different interceptors by configuring the same interceptor differently, which is not
         // how it would be done in KafkaConsumer, but ok for testing interceptor callbacks
         FilterConsumerInterceptor<Integer, Integer> interceptor1 = new FilterConsumerInterceptor<>(filterPartition1);

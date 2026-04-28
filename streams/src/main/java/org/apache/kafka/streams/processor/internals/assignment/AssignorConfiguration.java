@@ -120,7 +120,7 @@ public final class AssignorConfiguration {
             } catch (final NumberFormatException nfe) {
                 throw new ConfigException(
                     String.format("%s Invalid port supplied in %s for config %s: %s",
-                                  logPrefix, configuredUserEndpoint, StreamsConfig.APPLICATION_SERVER_CONFIG, nfe)
+                        logPrefix, configuredUserEndpoint, StreamsConfig.APPLICATION_SERVER_CONFIG, nfe)
                 );
             }
             return configuredUserEndpoint;
@@ -175,7 +175,8 @@ public final class AssignorConfiguration {
     public AssignmentListener assignmentListener() {
         final Object o = internalConfigs.get(InternalConfig.ASSIGNMENT_LISTENER);
         if (o == null) {
-            return stable -> { };
+            return stable -> {
+            };
         }
 
         if (!(o instanceof AssignmentListener)) {

@@ -88,19 +88,19 @@ public class PushTelemetryRequestTest {
     private MetricsData getMetricsData() {
         List<Metric> metricsList = new ArrayList<>();
         metricsList.add(SinglePointMetric.sum(
-                new MetricKey("metricName"), 1.0, true, Instant.now(), null, Collections.emptySet())
+            new MetricKey("metricName"), 1.0, true, Instant.now(), null, Collections.emptySet())
             .builder().build());
         metricsList.add(SinglePointMetric.sum(
-                new MetricKey("metricName1"), 100.0, false, Instant.now(),  Instant.now(), Collections.emptySet())
+            new MetricKey("metricName1"), 100.0, false, Instant.now(), Instant.now(), Collections.emptySet())
             .builder().build());
         metricsList.add(SinglePointMetric.deltaSum(
-                new MetricKey("metricName2"), 1.0, true, Instant.now(), Instant.now(), Collections.emptySet())
+            new MetricKey("metricName2"), 1.0, true, Instant.now(), Instant.now(), Collections.emptySet())
             .builder().build());
         metricsList.add(SinglePointMetric.gauge(
-                new MetricKey("metricName3"), 1.0, Instant.now(), Collections.emptySet())
+            new MetricKey("metricName3"), 1.0, Instant.now(), Collections.emptySet())
             .builder().build());
         metricsList.add(SinglePointMetric.gauge(
-                new MetricKey("metricName4"), Long.valueOf(100), Instant.now(), Collections.emptySet())
+            new MetricKey("metricName4"), Long.valueOf(100), Instant.now(), Collections.emptySet())
             .builder().build());
 
         MetricsData.Builder builder = MetricsData.newBuilder();

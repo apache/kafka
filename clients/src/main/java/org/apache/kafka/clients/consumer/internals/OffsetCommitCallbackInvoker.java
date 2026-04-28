@@ -51,8 +51,8 @@ public class OffsetCommitCallbackInvoker {
     }
 
     public void enqueueUserCallbackInvocation(final OffsetCommitCallback callback,
-                                              final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                              final Exception exception) {
+        final Map<TopicPartition, OffsetAndMetadata> offsets,
+        final Exception exception) {
         callbackQueue.add(new OffsetCommitCallbackTask(callback, offsets, exception));
     }
 
@@ -71,8 +71,8 @@ public class OffsetCommitCallbackInvoker {
         public final OffsetCommitCallback callback;
 
         public OffsetCommitCallbackTask(final OffsetCommitCallback callback,
-                                        final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                        final Exception exception) {
+            final Map<TopicPartition, OffsetAndMetadata> offsets,
+            final Exception exception) {
             this.offsets = offsets;
             this.exception = exception;
             this.callback = callback;

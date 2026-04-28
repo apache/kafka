@@ -40,9 +40,9 @@ public class CombinedKeySchema<KRight, KLeft> {
     private Deserializer<KRight> foreignKeyDeserializer;
 
     public CombinedKeySchema(final Supplier<String> foreignKeySerdeTopicSupplier,
-                             final Serde<KRight> foreignKeySerde,
-                             final Supplier<String> primaryKeySerdeTopicSupplier,
-                             final Serde<KLeft> primaryKeySerde) {
+        final Serde<KRight> foreignKeySerde,
+        final Supplier<String> primaryKeySerdeTopicSupplier,
+        final Serde<KLeft> primaryKeySerde) {
         undecoratedPrimaryKeySerdeTopicSupplier = primaryKeySerdeTopicSupplier;
         undecoratedForeignKeySerdeTopicSupplier = foreignKeySerdeTopicSupplier;
         primaryKeySerializer = primaryKeySerde == null ? null : primaryKeySerde.serializer();
@@ -66,16 +66,16 @@ public class CombinedKeySchema<KRight, KLeft> {
         //key is being created.
         //{Integer.BYTES foreignKeyLength}{foreignKeySerialized}{Optional-primaryKeySerialized}
         final byte[] foreignKeySerializedData = foreignKeySerializer.serialize(
-                foreignKeySerdeTopic,
-                headers,
-                foreignKey
+            foreignKeySerdeTopic,
+            headers,
+            foreignKey
         );
 
         //? bytes
         final byte[] primaryKeySerializedData = primaryKeySerializer.serialize(
-                primaryKeySerdeTopic,
-                headers,
-                primaryKey
+            primaryKeySerdeTopic,
+            headers,
+            primaryKey
         );
 
         final ByteBuffer buf = ByteBuffer.allocate(Integer.BYTES + foreignKeySerializedData.length + primaryKeySerializedData.length);

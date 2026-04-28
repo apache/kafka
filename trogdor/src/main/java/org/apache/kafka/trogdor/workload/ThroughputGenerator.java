@@ -37,7 +37,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 @JsonSubTypes(value = {
     @JsonSubTypes.Type(value = ConstantThroughputGenerator.class, name = "constant"),
     @JsonSubTypes.Type(value = GaussianThroughputGenerator.class, name = "gaussian")
-    })
+})
 public interface ThroughputGenerator {
     void throttle() throws InterruptedException;
 }

@@ -208,7 +208,8 @@ public class WindowStoreFacadeTest {
 
     @Test
     public void shouldReturnQueryResult() {
-        final Query<Object> query = new Query<>() { };
+        final Query<Object> query = new Query<>() {
+        };
         final QueryConfig queryConfig = new QueryConfig(true);
         final QueryResult<Integer> queryResult = QueryResult.forResult(42);
         when(mockedWindowTimestampStore.<Integer>query(any(), any(), any())).thenReturn(queryResult);

@@ -63,7 +63,7 @@ public final class ValidOffsetAndEpoch {
         if (obj == null || getClass() != obj.getClass()) return false;
         ValidOffsetAndEpoch that = (ValidOffsetAndEpoch) obj;
         return kind == that.kind &&
-                offsetAndEpoch.equals(that.offsetAndEpoch);
+            offsetAndEpoch.equals(that.offsetAndEpoch);
     }
 
     @Override

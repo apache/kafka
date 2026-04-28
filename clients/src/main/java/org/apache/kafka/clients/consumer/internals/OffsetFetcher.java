@@ -74,14 +74,14 @@ public class OffsetFetcher {
     private final OffsetFetcherUtils offsetFetcherUtils;
 
     public OffsetFetcher(LogContext logContext,
-                         ConsumerNetworkClient client,
-                         ConsumerMetadata metadata,
-                         SubscriptionState subscriptions,
-                         Time time,
-                         long retryBackoffMs,
-                         int requestTimeoutMs,
-                         IsolationLevel isolationLevel,
-                         ApiVersions apiVersions) {
+        ConsumerNetworkClient client,
+        ConsumerMetadata metadata,
+        SubscriptionState subscriptions,
+        Time time,
+        long retryBackoffMs,
+        int requestTimeoutMs,
+        IsolationLevel isolationLevel,
+        ApiVersions apiVersions) {
         this.log = logContext.logger(getClass());
         this.time = time;
         this.client = client;
@@ -92,7 +92,7 @@ public class OffsetFetcher {
         this.apiVersions = apiVersions;
         this.offsetsForLeaderEpochClient = new OffsetsForLeaderEpochClient(client, logContext);
         this.offsetFetcherUtils = new OffsetFetcherUtils(logContext, metadata, subscriptions,
-                time, retryBackoffMs, apiVersions);
+            time, retryBackoffMs, apiVersions);
     }
 
     /**
@@ -103,7 +103,7 @@ public class OffsetFetcher {
      */
     public void resetPositionsIfNeeded() {
         Map<TopicPartition, AutoOffsetResetStrategy> partitionAutoOffsetResetStrategyMap =
-                offsetFetcherUtils.getOffsetResetStrategyForPartitions();
+            offsetFetcherUtils.getOffsetResetStrategyForPartitions();
 
         if (partitionAutoOffsetResetStrategyMap.isEmpty())
             return;
@@ -116,18 +116,18 @@ public class OffsetFetcher {
      */
     public void validatePositionsIfNeeded() {
         Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate =
-                offsetFetcherUtils.refreshAndGetPartitionsToValidate();
+            offsetFetcherUtils.refreshAndGetPartitionsToValidate();
 
         validatePositionsAsync(partitionsToValidate);
     }
 
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch,
-                                                                   Timer timer) {
+        Timer timer) {
         metadata.addTransientTopics(topicsForPartitions(timestampsToSearch.keySet()));
 
         try {
             Map<TopicPartition, ListOffsetData> fetchedOffsets = fetchOffsetsByTimes(timestampsToSearch,
-                    timer, true, false).fetchedOffsets;
+                timer, true, false).fetchedOffsets;
 
             return buildOffsetsForTimesResult(timestampsToSearch, fetchedOffsets);
         } finally {
@@ -136,9 +136,9 @@ public class OffsetFetcher {
     }
 
     private ListOffsetResult fetchOffsetsByTimes(Map<TopicPartition, Long> timestampsToSearch,
-                                                 Timer timer,
-                                                 boolean requireTimestamps,
-                                                 boolean updatePartitionEndOffsetsFlag) {
+        Timer timer,
+        boolean requireTimestamps,
+        boolean updatePartitionEndOffsetsFlag) {
         ListOffsetResult result = new ListOffsetResult();
         if (timestampsToSearch.isEmpty())
             return result;
@@ -210,7 +210,7 @@ public class OffsetFetcher {
         // since we would not try to poll the network client synchronously
         if (lag == null) {
             if (subscriptions.partitionEndOffset(topicPartition, isolationLevel) == null &&
-                    offsetFetcherUtils.maybeSetPartitionEndOffsetRequest(topicPartition)) {
+                offsetFetcherUtils.maybeSetPartitionEndOffsetRequest(topicPartition)) {
                 beginningOrEndOffset(
                     Set.of(topicPartition),
                     ListOffsetsRequest.LATEST_TIMESTAMP,
@@ -226,19 +226,19 @@ public class OffsetFetcher {
     }
 
     private Map<TopicPartition, Long> beginningOrEndOffset(Collection<TopicPartition> partitions,
-                                                           long timestamp,
-                                                           Timer timer,
-                                                           boolean updatePartitionEndOffsetsFlag) {
+        long timestamp,
+        Timer timer,
+        boolean updatePartitionEndOffsetsFlag) {
         metadata.addTransientTopics(topicsForPartitions(partitions));
         try {
             Map<TopicPartition, Long> timestampsToSearch = partitions.stream()
-                    .distinct()
-                    .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
+                .distinct()
+                .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
 
             ListOffsetResult result = fetchOffsetsByTimes(timestampsToSearch, timer, false, updatePartitionEndOffsetsFlag);
 
             return result.fetchedOffsets.entrySet().stream()
-                    .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset));
+                .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset));
         } finally {
             metadata.clearTransientTopics();
         }
@@ -246,10 +246,10 @@ public class OffsetFetcher {
 
     private void resetPositionsAsync(Map<TopicPartition, AutoOffsetResetStrategy> partitionAutoOffsetResetStrategyMap) {
         Map<TopicPartition, Long> partitionResetTimestamps = partitionAutoOffsetResetStrategyMap.entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().timestamp().get()));
+            .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().timestamp().get()));
         Set<TopicPartition> partitionsToRetry = new HashSet<>();
         Map<Node, Map<TopicPartition, ListOffsetsPartition>> timestampsToSearchByNode =
-                groupListOffsetRequests(partitionResetTimestamps, partitionsToRetry);
+            groupListOffsetRequests(partitionResetTimestamps, partitionsToRetry);
         if (!partitionsToRetry.isEmpty()) {
             metadata.requestUpdate(false);
         }
@@ -299,8 +299,8 @@ public class OffsetFetcher {
 
             if (!hasUsableOffsetForLeaderEpochVersion(nodeApiVersions)) {
                 log.debug("Skipping validation of fetch offsets for partitions {} since the broker does not " +
-                                "support the required protocol version (introduced in Kafka 2.3)",
-                        fetchPositions.keySet());
+                    "support the required protocol version (introduced in Kafka 2.3)",
+                    fetchPositions.keySet());
                 for (TopicPartition partition : fetchPositions.keySet()) {
                     subscriptions.completeValidation(partition);
                 }
@@ -310,13 +310,13 @@ public class OffsetFetcher {
             subscriptions.setNextAllowedRetry(fetchPositions.keySet(), nextResetTimeMs);
 
             RequestFuture<OffsetForEpochResult> future =
-                    offsetsForLeaderEpochClient.sendAsyncRequest(node, fetchPositions);
+                offsetsForLeaderEpochClient.sendAsyncRequest(node, fetchPositions);
 
             future.addListener(new RequestFutureListener<>() {
                 @Override
                 public void onSuccess(OffsetForEpochResult offsetsResult) {
                     offsetFetcherUtils.onSuccessfulResponseForValidatingPositions(fetchPositions,
-                            offsetsResult);
+                        offsetsResult);
                 }
 
                 @Override
@@ -336,10 +336,10 @@ public class OffsetFetcher {
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
     private RequestFuture<ListOffsetResult> sendListOffsetsRequests(final Map<TopicPartition, Long> timestampsToSearch,
-                                                                    final boolean requireTimestamps) {
+        final boolean requireTimestamps) {
         final Set<TopicPartition> partitionsToRetry = new HashSet<>();
         Map<Node, Map<TopicPartition, ListOffsetsPartition>> timestampsToSearchByNode =
-                groupListOffsetRequests(timestampsToSearch, partitionsToRetry);
+            groupListOffsetRequests(timestampsToSearch, partitionsToRetry);
         if (timestampsToSearchByNode.isEmpty())
             return RequestFuture.failure(new StaleMetadataException());
 
@@ -385,8 +385,8 @@ public class OffsetFetcher {
      *                           that need metadata update or re-connect to the leader.
      */
     private Map<Node, Map<TopicPartition, ListOffsetsPartition>> groupListOffsetRequests(
-            Map<TopicPartition, Long> timestampsToSearch,
-            Set<TopicPartition> partitionsToRetry) {
+        Map<TopicPartition, Long> timestampsToSearch,
+        Set<TopicPartition> partitionsToRetry) {
         final Map<TopicPartition, ListOffsetsPartition> partitionDataMap = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
             TopicPartition tp = entry.getKey();
@@ -406,14 +406,14 @@ public class OffsetFetcher {
                     // try again. No need to request a metadata update since the disconnect will have
                     // done so already.
                     log.debug("Leader {} for partition {} is unavailable for fetching offset until reconnect backoff expires",
-                            leader, tp);
+                        leader, tp);
                     partitionsToRetry.add(tp);
                 } else {
                     int currentLeaderEpoch = leaderAndEpoch.epoch.orElse(ListOffsetsResponse.UNKNOWN_EPOCH);
                     partitionDataMap.put(tp, new ListOffsetsPartition()
-                            .setPartitionIndex(tp.partition())
-                            .setTimestamp(offset)
-                            .setCurrentLeaderEpoch(currentLeaderEpoch));
+                        .setPartitionIndex(tp.partition())
+                        .setTimestamp(offset)
+                        .setCurrentLeaderEpoch(currentLeaderEpoch));
                 }
             }
         }
@@ -429,23 +429,23 @@ public class OffsetFetcher {
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
     private RequestFuture<ListOffsetResult> sendListOffsetRequest(final Node node,
-                                                                  final Map<TopicPartition, ListOffsetsPartition> timestampsToSearch,
-                                                                  boolean requireTimestamp) {
+        final Map<TopicPartition, ListOffsetsPartition> timestampsToSearch,
+        boolean requireTimestamp) {
         ListOffsetsRequest.Builder builder = ListOffsetsRequest.Builder
-                .forConsumer(requireTimestamp, isolationLevel)
-                .setTargetTimes(ListOffsetsRequest.toListOffsetsTopics(timestampsToSearch))
-                .setTimeoutMs(requestTimeoutMs);
+            .forConsumer(requireTimestamp, isolationLevel)
+            .setTargetTimes(ListOffsetsRequest.toListOffsetsTopics(timestampsToSearch))
+            .setTimeoutMs(requestTimeoutMs);
 
         log.debug("Sending ListOffsetRequest {} to broker {}", builder, node);
         return client.send(node, builder)
-                .compose(new RequestFutureAdapter<>() {
-                    @Override
-                    public void onSuccess(ClientResponse response, RequestFuture<ListOffsetResult> future) {
-                        ListOffsetsResponse lor = (ListOffsetsResponse) response.responseBody();
-                        log.trace("Received ListOffsetResponse {} from broker {}", lor, node);
-                        handleListOffsetResponse(lor, future);
-                    }
-                });
+            .compose(new RequestFutureAdapter<>() {
+                @Override
+                public void onSuccess(ClientResponse response, RequestFuture<ListOffsetResult> future) {
+                    ListOffsetsResponse lor = (ListOffsetsResponse) response.responseBody();
+                    log.trace("Received ListOffsetResponse {} from broker {}", lor, node);
+                    handleListOffsetResponse(lor, future);
+                }
+            });
     }
 
     /**
@@ -460,7 +460,7 @@ public class OffsetFetcher {
      *                            return a null timestamp (-1 is returned instead when necessary).
      */
     private void handleListOffsetResponse(ListOffsetsResponse listOffsetsResponse,
-                                          RequestFuture<ListOffsetResult> future) {
+        RequestFuture<ListOffsetResult> future) {
         try {
             ListOffsetResult result = offsetFetcherUtils.handleListOffsetResponse(listOffsetsResponse);
             future.complete(result);

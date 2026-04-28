@@ -104,22 +104,22 @@ public class ApplicationEventProcessorTest {
 
     private void setupProcessor(boolean withGroupId) {
         RequestManagers requestManagers = new RequestManagers(
-                new LogContext(),
-                offsetsRequestManager,
-                mock(TopicMetadataRequestManager.class),
-                fetchRequestManager,
-                withGroupId ? Optional.of(mock(CoordinatorRequestManager.class)) : Optional.empty(),
-                withGroupId ? Optional.of(commitRequestManager) : Optional.empty(),
-                withGroupId ? Optional.of(heartbeatRequestManager) : Optional.empty(),
-                withGroupId ? Optional.of(membershipManager) : Optional.empty(),
-                Optional.empty(),
-                Optional.empty()
+            new LogContext(),
+            offsetsRequestManager,
+            mock(TopicMetadataRequestManager.class),
+            fetchRequestManager,
+            withGroupId ? Optional.of(mock(CoordinatorRequestManager.class)) : Optional.empty(),
+            withGroupId ? Optional.of(commitRequestManager) : Optional.empty(),
+            withGroupId ? Optional.of(heartbeatRequestManager) : Optional.empty(),
+            withGroupId ? Optional.of(membershipManager) : Optional.empty(),
+            Optional.empty(),
+            Optional.empty()
         );
         processor = new ApplicationEventProcessor(
-                new LogContext(),
-                requestManagers,
-                metadata,
-                subscriptionState
+            new LogContext(),
+            requestManagers,
+            metadata,
+            subscriptionState
         );
     }
 
@@ -195,11 +195,11 @@ public class ApplicationEventProcessorTest {
 
     private static Stream<Arguments> applicationEvents() {
         return Stream.of(
-                Arguments.of(new AsyncPollEvent(calculateDeadlineMs(12345, 100), 100)),
-                Arguments.of(new CreateFetchRequestsEvent(calculateDeadlineMs(12345, 100))),
-                Arguments.of(new CheckAndUpdatePositionsEvent(500)),
-                Arguments.of(new TopicMetadataEvent("topic", Long.MAX_VALUE)),
-                Arguments.of(new AssignmentChangeEvent(12345, 12345, Collections.emptyList())));
+            Arguments.of(new AsyncPollEvent(calculateDeadlineMs(12345, 100), 100)),
+            Arguments.of(new CreateFetchRequestsEvent(calculateDeadlineMs(12345, 100))),
+            Arguments.of(new CheckAndUpdatePositionsEvent(500)),
+            Arguments.of(new TopicMetadataEvent("topic", Long.MAX_VALUE)),
+            Arguments.of(new AssignmentChangeEvent(12345, 12345, Collections.emptyList())));
     }
 
     @ParameterizedTest
@@ -260,7 +260,7 @@ public class ApplicationEventProcessorTest {
         TopicPartition tp = new TopicPartition("topic", 0);
         Optional<Integer> offsetEpoch = Optional.of(1);
         SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
-                0, offsetEpoch, Metadata.LeaderAndEpoch.noLeaderOrEpoch());
+            0, offsetEpoch, Metadata.LeaderAndEpoch.noLeaderOrEpoch());
         SeekUnvalidatedEvent event = new SeekUnvalidatedEvent(12345, tp, 0, offsetEpoch);
 
         setupProcessor(false);

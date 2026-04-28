@@ -83,7 +83,7 @@ public interface ClusterInstance {
 
     default Map<Integer, KafkaBroker> aliveBrokers() {
         return brokers().entrySet().stream().filter(entry -> !entry.getValue().isShutdown())
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     Map<Integer, ControllerServer> controllers();
@@ -269,7 +269,7 @@ public interface ClusterInstance {
         TestUtils.waitForCondition(
             () -> brokers.stream().allMatch(
                 broker -> broker.metadataCache().numPartitions(topic).isEmpty()),
-                60000L, topic + " metadata not propagated after 60000 ms");
+            60000L, topic + " metadata not propagated after 60000 ms");
 
         ensureConsistentMetadata(brokers, controllers().values());
 
@@ -277,12 +277,12 @@ public interface ClusterInstance {
 
         // Ensure that the topic-partition has been deleted from all brokers' replica managers
         TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
-                broker.replicaManager().onlinePartition(topicPartition).isEmpty()
+            broker.replicaManager().onlinePartition(topicPartition).isEmpty()
         ), "Replica manager's should have deleted all of this topic's partitions");
 
         // Ensure that logs from all replicas are deleted
         TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
-                broker.logManager().getLog(topicPartition, false).isEmpty()
+            broker.logManager().getLog(topicPartition, false).isEmpty()
         ), "Replica logs not deleted after delete topic is complete");
 
         // Ensure that the topic is removed from all cleaner offsets
@@ -301,16 +301,16 @@ public interface ClusterInstance {
 
         // Ensure that the topic directories are soft-deleted
         TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
-                broker.config().logDirs().stream().allMatch(logDir ->
-                    !new File(logDir, topicPartition.topic() + "-" + topicPartition.partition()).exists())
+            broker.config().logDirs().stream().allMatch(logDir ->
+                !new File(logDir, topicPartition.topic() + "-" + topicPartition.partition()).exists())
         ), "Failed to soft-delete the data to a delete directory");
 
         // Ensure that the topic directories are hard-deleted
         TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
-                broker.config().logDirs().stream().allMatch(logDir ->
-                    Arrays.stream(Objects.requireNonNull(new File(logDir).list())).noneMatch(partitionDirectoryName ->
-                        partitionDirectoryName.startsWith(topicPartition.topic() + "-" + topicPartition.partition()) &&
-                            partitionDirectoryName.endsWith(UnifiedLog.DELETE_DIR_SUFFIX)))
+            broker.config().logDirs().stream().allMatch(logDir ->
+                Arrays.stream(Objects.requireNonNull(new File(logDir).list())).noneMatch(partitionDirectoryName ->
+                    partitionDirectoryName.startsWith(topicPartition.topic() + "-" + topicPartition.partition()) &&
+                        partitionDirectoryName.endsWith(UnifiedLog.DELETE_DIR_SUFFIX)))
         ), "Failed to hard-delete the delete directory");
     }
 
@@ -357,16 +357,16 @@ public interface ClusterInstance {
         Collection<KafkaBroker> brokers = aliveBrokers().values();
         TestUtils.waitForCondition(
             () -> brokers.stream().allMatch(broker -> broker.metadataCache().numPartitions(topic).filter(p -> p == partitions).isPresent()),
-                60000L, topic + " metadata not propagated after 60000 ms");
+            60000L, topic + " metadata not propagated after 60000 ms");
 
         ensureConsistentMetadata(brokers, controllers().values());
     }
 
-    default void ensureConsistentMetadata() throws InterruptedException  {
+    default void ensureConsistentMetadata() throws InterruptedException {
         ensureConsistentMetadata(aliveBrokers().values(), controllers().values());
     }
 
-    default void ensureConsistentMetadata(Collection<KafkaBroker> brokers, Collection<ControllerServer> controllers) throws InterruptedException  {
+    default void ensureConsistentMetadata(Collection<KafkaBroker> brokers, Collection<ControllerServer> controllers) throws InterruptedException {
         for (ControllerServer controller : controllers) {
             long controllerOffset = controller.raftManager().raftLog().endOffset().offset() - 1;
             TestUtils.waitForCondition(
@@ -378,11 +378,11 @@ public interface ClusterInstance {
     default List<Authorizer> authorizers() {
         List<Authorizer> authorizers = new ArrayList<>();
         authorizers.addAll(brokers().values().stream()
-                .filter(server -> server.authorizerPlugin().isDefined())
-                .map(server -> server.authorizerPlugin().get().get()).toList());
+            .filter(server -> server.authorizerPlugin().isDefined())
+            .map(server -> server.authorizerPlugin().get().get()).toList());
         authorizers.addAll(controllers().values().stream()
-                .filter(server -> server.authorizerPlugin().isDefined())
-                .map(server -> server.authorizerPlugin().get().get()).toList());
+            .filter(server -> server.authorizerPlugin().isDefined())
+            .map(server -> server.authorizerPlugin().get().get()).toList());
         return authorizers;
     }
 
@@ -407,10 +407,10 @@ public interface ClusterInstance {
             TopicDescription description = admin.describeTopics(List.of(topic)).topicNameValues().get(topic).get();
 
             return description.partitions().stream()
-                    .filter(tp -> tp.partition() == topicPartition.partition())
-                    .mapToInt(tp -> tp.leader().id())
-                    .findFirst()
-                    .orElseThrow(() -> new RuntimeException("Leader not found for tp " + topicPartition));
+                .filter(tp -> tp.partition() == topicPartition.partition())
+                .mapToInt(tp -> tp.leader().id())
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Leader not found for tp " + topicPartition));
         }
     }
 
@@ -427,15 +427,15 @@ public interface ClusterInstance {
         while (System.currentTimeMillis() < startTime + timeoutMs) {
             try {
                 TopicDescription topicDescription = admin.describeTopics(List.of(topic))
-                        .allTopicNames().get().get(topic);
+                    .allTopicNames().get().get(topic);
 
                 Optional<Integer> leader = topicDescription.partitions().stream()
-                        .filter(partitionInfo -> partitionInfo.partition() == partitionNumber)
-                        .findFirst()
-                        .map(partitionInfo -> {
-                            int leaderId = partitionInfo.leader().id();
-                            return leaderId == Node.noNode().id() ? null : leaderId;
-                        });
+                    .filter(partitionInfo -> partitionInfo.partition() == partitionNumber)
+                    .findFirst()
+                    .map(partitionInfo -> {
+                        int leaderId = partitionInfo.leader().id();
+                        return leaderId == Node.noNode().id() ? null : leaderId;
+                    });
 
                 if (leader.isPresent()) {
                     return leader.get();
@@ -443,7 +443,7 @@ public interface ClusterInstance {
             } catch (ExecutionException e) {
                 Throwable cause = e.getCause();
                 if (cause instanceof UnknownTopicOrPartitionException ||
-                        cause instanceof LeaderNotAvailableException) {
+                    cause instanceof LeaderNotAvailableException) {
                     continue;
                 } else {
                     throw e;
@@ -454,6 +454,6 @@ public interface ClusterInstance {
         }
 
         throw new AssertionError("Timing out after " + timeoutMs +
-                " ms since a leader was not elected for partition " + topicPartition);
+            " ms since a leader was not elected for partition " + topicPartition);
     }
 }

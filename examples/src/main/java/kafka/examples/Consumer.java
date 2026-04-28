@@ -56,13 +56,13 @@ public class Consumer extends Thread implements ConsumerRebalanceListener {
     private int remainingRecords;
 
     public Consumer(String threadName,
-                    String bootstrapServers,
-                    String topic,
-                    String groupId,
-                    Optional<String> instanceId,
-                    boolean readCommitted,
-                    int numRecords,
-                    CountDownLatch latch) {
+            String bootstrapServers,
+            String topic,
+            String groupId,
+            Optional<String> instanceId,
+            boolean readCommitted,
+            int numRecords,
+            CountDownLatch latch) {
         super(threadName);
         this.bootstrapServers = bootstrapServers;
         this.topic = topic;
@@ -94,7 +94,7 @@ public class Consumer extends Thread implements ConsumerRebalanceListener {
                     }
                     remainingRecords -= records.count();
                 } catch (AuthorizationException | UnsupportedVersionException
-                         | RecordDeserializationException e) {
+                        | RecordDeserializationException e) {
                     // we can't recover from these exceptions
                     Utils.printErr(e.getMessage());
                     shutdown();

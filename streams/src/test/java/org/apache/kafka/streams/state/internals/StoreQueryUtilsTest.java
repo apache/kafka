@@ -54,7 +54,7 @@ public class StoreQueryUtilsTest {
         assertThat(
             queryResult.getFailureMessage(),
             is("The store is not initialized yet, so it is not yet up to the bound"
-                   + " PositionBound{position=Position{position={topic={0=1}}}}")
+                + " PositionBound{position=Position{position={topic={0=1}}}}")
         );
     }
 
@@ -80,8 +80,8 @@ public class StoreQueryUtilsTest {
         assertThat(
             queryResult.getFailureMessage(),
             is("For store partition 0, the current position Position{position={topic={0=0}}}"
-                   + " is not yet up to the bound"
-                   + " PositionBound{position=Position{position={topic={0=1}}}}")
+                + " is not yet up to the bound"
+                + " PositionBound{position=Position{position={topic={0=1}}}}")
         );
     }
 }

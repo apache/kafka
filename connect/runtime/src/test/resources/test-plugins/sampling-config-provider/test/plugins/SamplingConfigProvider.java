@@ -40,81 +40,81 @@ import org.apache.kafka.connect.storage.HeaderConverter;
  */
 public final class SamplingConfigProvider implements SamplingTestPlugin, ConfigProvider {
 
-  private static final ClassLoader STATIC_CLASS_LOADER;
-  private static List<SamplingTestPlugin> instances;
-  private final ClassLoader classloader;
-  private Map<String, SamplingTestPlugin> samples;
+    private static final ClassLoader STATIC_CLASS_LOADER;
+    private static List<SamplingTestPlugin> instances;
+    private final ClassLoader classloader;
+    private Map<String, SamplingTestPlugin> samples;
 
-  static {
-    STATIC_CLASS_LOADER = Thread.currentThread().getContextClassLoader();
-    instances = Collections.synchronizedList(new ArrayList<>());
-  }
+    static {
+        STATIC_CLASS_LOADER = Thread.currentThread().getContextClassLoader();
+        instances = Collections.synchronizedList(new ArrayList<>());
+    }
 
-  {
-    samples = new HashMap<>();
-    classloader = Thread.currentThread().getContextClassLoader();
-  }
+    {
+        samples = new HashMap<>();
+        classloader = Thread.currentThread().getContextClassLoader();
+    }
 
-  @Override
-  public ConfigData get(String path) {
-    logMethodCall(samples);
-    return null;
-  }
+    @Override
+    public ConfigData get(String path) {
+        logMethodCall(samples);
+        return null;
+    }
 
-  @Override
-  public ConfigData get(String path, Set<String> keys) {
-    logMethodCall(samples);
-    return null;
-  }
+    @Override
+    public ConfigData get(String path, Set<String> keys) {
+        logMethodCall(samples);
+        return null;
+    }
 
-  public SamplingConfigProvider() {
-    logMethodCall(samples);
-    instances.add(this);
-  }
+    public SamplingConfigProvider() {
+        logMethodCall(samples);
+        instances.add(this);
+    }
 
-  @Override
-  public void subscribe(String path, Set<String> keys, ConfigChangeCallback callback) {
-    logMethodCall(samples);
-  }
+    @Override
+    public void subscribe(String path, Set<String> keys, ConfigChangeCallback callback) {
+        logMethodCall(samples);
+    }
 
-  @Override
-  public void unsubscribe(String path, Set<String> keys, ConfigChangeCallback callback) {
-    logMethodCall(samples);
-  }
+    @Override
+    public void unsubscribe(String path, Set<String> keys, ConfigChangeCallback callback) {
+        logMethodCall(samples);
+    }
 
-  @Override
-  public void unsubscribeAll() {
-    logMethodCall(samples);
-  }
+    @Override
+    public void unsubscribeAll() {
+        logMethodCall(samples);
+    }
 
-  @Override
-  public void configure(final Map<String, ?> configs) {
-    logMethodCall(samples);
-  }
+    @Override
+    public void configure(final Map<String, ?> configs) {
+        logMethodCall(samples);
+    }
 
-  @Override
-  public void close() {
-    logMethodCall(samples);
-  }
+    @Override
+    public void close() {
+        logMethodCall(samples);
+    }
 
-  @Override
-  public ClassLoader staticClassloader() {
-    return STATIC_CLASS_LOADER;
-  }
+    @Override
+    public ClassLoader staticClassloader() {
+        return STATIC_CLASS_LOADER;
+    }
 
-  @Override
-  public ClassLoader classloader() {
-    return classloader;
-  }
+    @Override
+    public ClassLoader classloader() {
+        return classloader;
+    }
 
-  @Override
-  public Map<String, SamplingTestPlugin> otherSamples() {
-    return samples;
-  }
+    @Override
+    public Map<String, SamplingTestPlugin> otherSamples() {
+        return samples;
+    }
 
 
-  @Override
-  public List<SamplingTestPlugin> allInstances() {
-    return instances;
-  }
+    @Override
+    public List<SamplingTestPlugin> allInstances() {
+        return instances;
+    }
 }

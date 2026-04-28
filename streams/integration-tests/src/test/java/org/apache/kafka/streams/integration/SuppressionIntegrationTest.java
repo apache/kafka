@@ -232,9 +232,9 @@ public class SuppressionIntegrationTest {
         try (final Consumer<Object, Object> consumer = new KafkaConsumer<>(properties)) {
             final List<TopicPartition> partitions =
                 consumer.partitionsFor(topic)
-                        .stream()
-                        .map(pi -> new TopicPartition(pi.topic(), pi.partition()))
-                        .collect(Collectors.toList());
+                    .stream()
+                    .map(pi -> new TopicPartition(pi.topic(), pi.partition()))
+                    .collect(Collectors.toList());
             consumer.assign(partitions);
             consumer.seekToBeginning(partitions);
             final long start = System.currentTimeMillis();

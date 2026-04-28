@@ -57,9 +57,9 @@ class OffsetSyncWriter implements AutoCloseable {
 
     // Visible for testing
     public OffsetSyncWriter(KafkaProducer<byte[], byte[]> producer,
-                            String offsetSyncsTopic,
-                            Semaphore outstandingOffsetSyncs,
-                            long maxOffsetLag) {
+            String offsetSyncsTopic,
+            Semaphore outstandingOffsetSyncs,
+            long maxOffsetLag) {
         this.offsetProducer = producer;
         this.offsetSyncsTopic = offsetSyncsTopic;
         this.outstandingOffsetSyncs = outstandingOffsetSyncs;

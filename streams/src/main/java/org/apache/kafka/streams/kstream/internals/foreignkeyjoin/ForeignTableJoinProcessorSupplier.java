@@ -52,7 +52,7 @@ public class ForeignTableJoinProcessorSupplier<KLeft, KRight, VRight>
     private boolean useVersionedSemantics = false;
 
     public ForeignTableJoinProcessorSupplier(final StoreFactory subscriptionStoreFactory,
-                                             final CombinedKeySchema<KRight, KLeft> keySchema) {
+        final CombinedKeySchema<KRight, KLeft> keySchema) {
         this.subscriptionStoreFactory = subscriptionStoreFactory;
         this.keySchema = keySchema;
     }

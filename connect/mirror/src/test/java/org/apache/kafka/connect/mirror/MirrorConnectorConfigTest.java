@@ -101,7 +101,7 @@ public class MirrorConnectorConfigTest {
         expectedProducerProps.put("acks", "1");
         expectedProducerProps.put("client.id", "source1->target2|ConnectorName|test");
         assertEquals(expectedProducerProps, connectorProducerProps,
-                MirrorConnectorConfig.PRODUCER_CLIENT_PREFIX  + " source product config not matching");
+                MirrorConnectorConfig.PRODUCER_CLIENT_PREFIX + " source product config not matching");
     }
 
     @Test

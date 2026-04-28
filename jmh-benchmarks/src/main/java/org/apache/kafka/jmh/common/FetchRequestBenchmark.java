@@ -83,16 +83,16 @@ public class FetchRequestBenchmark {
             topicNames.put(id, topic);
             for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
                 FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(
-                    id, 0, 0, 4096, Optional.empty());
+                        id, 0, 0, 4096, Optional.empty());
                 fetchData.put(new TopicPartition(topic, partitionId), partitionData);
             }
         }
 
         this.header = new RequestHeader(ApiKeys.FETCH, ApiKeys.FETCH.latestVersion(), "jmh-benchmark", 100);
         this.consumerRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion(), 0, 0, fetchData)
-            .build(ApiKeys.FETCH.latestVersion());
+                .build(ApiKeys.FETCH.latestVersion());
         this.replicaRequest = FetchRequest.Builder.forReplica(ApiKeys.FETCH.latestVersion(), 1, 1, 0, 0, fetchData)
-            .build(ApiKeys.FETCH.latestVersion());
+                .build(ApiKeys.FETCH.latestVersion());
         this.serializedRequest = this.consumerRequest.serialize();
 
     }
@@ -105,14 +105,14 @@ public class FetchRequestBenchmark {
     @Benchmark
     public int testFetchRequestForConsumer() {
         FetchRequest fetchRequest = FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion(), 0, 0, fetchData)
-            .build(ApiKeys.FETCH.latestVersion());
+                .build(ApiKeys.FETCH.latestVersion());
         return fetchRequest.fetchData(topicNames).size();
     }
 
     @Benchmark
     public int testFetchRequestForReplica() {
         FetchRequest fetchRequest = FetchRequest.Builder.forReplica(
-            ApiKeys.FETCH.latestVersion(), 1, 1, 0, 0, fetchData)
+                ApiKeys.FETCH.latestVersion(), 1, 1, 0, 0, fetchData)
                 .build(ApiKeys.FETCH.latestVersion());
         return fetchRequest.fetchData(topicNames).size();
     }

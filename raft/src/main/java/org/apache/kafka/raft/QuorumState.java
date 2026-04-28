@@ -155,7 +155,7 @@ public class QuorumState {
         } else if (election.epoch() < logEndOffsetAndEpoch.epoch()) {
             log.warn(
                 "Epoch from quorum store file ({}) is {}, which is smaller than last written " +
-                "epoch {} in the log",
+                    "epoch {} in the log",
                 store.path(),
                 election.epoch(),
                 logEndOffsetAndEpoch.epoch()
@@ -189,7 +189,7 @@ public class QuorumState {
             );
         } else if (
             localId.isPresent() &&
-            election.isVotedCandidate(ReplicaKey.of(localId.getAsInt(), localDirectoryId))
+                election.isVotedCandidate(ReplicaKey.of(localId.getAsInt(), localDirectoryId))
         ) {
             initialState = new CandidateState(
                 time,
@@ -213,8 +213,8 @@ public class QuorumState {
                 // the leader.
                 log.info(
                     "The leader in election state {} is not a member of the latest voter set {}; " +
-                    "transitioning to unattached instead of follower because the leader's " +
-                    "endpoints are not known",
+                        "transitioning to unattached instead of follower because the leader's " +
+                        "endpoints are not known",
                     election,
                     voters
                 );
@@ -434,7 +434,7 @@ public class QuorumState {
             throw new IllegalStateException(
                 String.format(
                     "Cannot add voted key (%s) to current state (%s) in epoch %d since it matches the local " +
-                    "broker.id",
+                        "broker.id",
                     candidateKey,
                     state,
                     epoch
@@ -486,7 +486,7 @@ public class QuorumState {
             throw new IllegalStateException(
                 String.format(
                     "Cannot add voted key (%s) to current state (%s) in epoch %d since it matches the local " +
-                    "broker.id",
+                        "broker.id",
                     candidateKey,
                     state,
                     epoch
@@ -607,7 +607,7 @@ public class QuorumState {
             throw new IllegalStateException(
                 String.format(
                     "Cannot transition to Prospective since the local id (%s) and directory id (%s) " +
-                    "is not one of the voters %s",
+                        "is not one of the voters %s",
                     localId,
                     localDirectoryId,
                     partitionState.lastVoterSet()
@@ -658,7 +658,7 @@ public class QuorumState {
             throw new IllegalStateException(
                 String.format(
                     "Cannot transition to Candidate since the local id (%s) and directory id (%s) " +
-                    "is not one of the voters %s",
+                        "is not one of the voters %s",
                     localId,
                     localDirectoryId,
                     partitionState.lastVoterSet()
@@ -682,7 +682,7 @@ public class QuorumState {
             throw new IllegalStateException(
                 String.format(
                     "Cannot transition to Leader since the local id (%s) and directory id (%s) " +
-                    "is not one of the voters %s",
+                        "is not one of the voters %s",
                     localId,
                     localDirectoryId,
                     partitionState.lastVoterSet()

@@ -112,7 +112,7 @@ public abstract class RoundTripWorkerBase implements TaskWorker {
 
     @Override
     public void start(Platform platform, WorkerStatusTracker status,
-                      KafkaFutureImpl<String> doneFuture) throws Exception {
+        KafkaFutureImpl<String> doneFuture) throws Exception {
         if (!running.compareAndSet(false, true)) {
             throw new IllegalStateException("RoundTripWorker is already running.");
         }
@@ -277,8 +277,8 @@ public abstract class RoundTripWorkerBase implements TaskWorker {
                 lock.lock();
                 try {
                     log.info("{}: ProducerRunnable is exiting.  messagesSent={}; uniqueMessagesSent={}; " +
-                                    "ackedSends={}/{}.", id, messagesSent, uniqueMessagesSent,
-                            spec.maxMessages() - unackedSends, spec.maxMessages());
+                        "ackedSends={}/{}.", id, messagesSent, uniqueMessagesSent,
+                        spec.maxMessages() - unackedSends, spec.maxMessages());
                 } finally {
                     lock.unlock();
                 }
@@ -314,7 +314,7 @@ public abstract class RoundTripWorkerBase implements TaskWorker {
             synchronized (this) {
                 numToReceive = pending.size();
                 for (Iterator<Long> iter = pending.iterator();
-                        iter.hasNext() && (list.size() < LOG_NUM_MESSAGES); ) {
+                     iter.hasNext() && (list.size() < LOG_NUM_MESSAGES); ) {
                     Long i = iter.next();
                     list.add(i);
                 }
@@ -351,7 +351,7 @@ public abstract class RoundTripWorkerBase implements TaskWorker {
                                     lock.lock();
                                     try {
                                         log.info("{}: Consumer received the full count of {} unique messages.  " +
-                                                "Waiting for all {} sends to be acked...", id, spec.maxMessages(), unackedSends);
+                                            "Waiting for all {} sends to be acked...", id, spec.maxMessages(), unackedSends);
                                         while (unackedSends > 0)
                                             unackedSendsAreZero.await();
                                     } finally {
@@ -410,7 +410,7 @@ public abstract class RoundTripWorkerBase implements TaskWorker {
 
         @JsonCreator
         public StatusData(@JsonProperty("totalUniqueSent") long totalUniqueSent,
-                          @JsonProperty("totalReceived") long totalReceived) {
+            @JsonProperty("totalReceived") long totalReceived) {
             this.totalUniqueSent = totalUniqueSent;
             this.totalReceived = totalReceived;
         }

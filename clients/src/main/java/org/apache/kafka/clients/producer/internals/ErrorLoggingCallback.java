@@ -31,6 +31,7 @@ public class ErrorLoggingCallback implements Callback {
     private final int valueLength;
     private final boolean logAsString;
     private byte[] value;
+
     public ErrorLoggingCallback(String topic, byte[] key, byte[] value, boolean logAsString) {
         this.topic = topic;
         this.key = key;
@@ -46,11 +47,11 @@ public class ErrorLoggingCallback implements Callback {
     public void onCompletion(RecordMetadata metadata, Exception e) {
         if (e != null) {
             String keyString = (key == null) ? "null" :
-                    logAsString ? new String(key, StandardCharsets.UTF_8) : key.length + " bytes";
+                logAsString ? new String(key, StandardCharsets.UTF_8) : key.length + " bytes";
             String valueString = (valueLength == -1) ? "null" :
-                    logAsString ? new String(value, StandardCharsets.UTF_8) : valueLength + " bytes";
+                logAsString ? new String(value, StandardCharsets.UTF_8) : valueLength + " bytes";
             log.error("Error when sending message to topic {} with key: {}, value: {} with error:",
-                    topic, keyString, valueString, e);
+                topic, keyString, valueString, e);
         }
     }
 }

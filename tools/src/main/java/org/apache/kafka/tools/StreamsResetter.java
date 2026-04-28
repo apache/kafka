@@ -97,26 +97,26 @@ public class StreamsResetter {
     private static final int EXIT_CODE_ERROR = 1;
 
     private static final String USAGE = "This tool helps to quickly reset an application in order to reprocess "
-            + "its data from scratch.\n"
-            + "* This tool resets offsets of input topics to the earliest available offset (by default), or to a specific defined position"
-            + "* This tool deletes the internal topics that were created by Kafka Streams (topics starting with "
-            + "\"<application.id>-\").\n"
-            + "The tool finds these internal topics automatically. If the topics flagged automatically for deletion by "
-            + "the dry-run are unsuitable, you can specify a subset with the \"--internal-topics\" option.\n"
-            + "* This tool will not delete output topics (if you want to delete them, you need to do it yourself "
-            + "with the bin/kafka-topics.sh command).\n"
-            + "* This tool will not clean up the local state on the stream application instances (the persisted "
-            + "stores used to cache aggregation results).\n"
-            + "You need to call KafkaStreams#cleanUp() in your application or manually delete them from the "
-            + "directory specified by \"state.dir\" configuration (${java.io.tmpdir}/kafka-streams/<application.id> by default).\n"
-            + "* When long session timeout has been configured, active members could take longer to get expired on the "
-            + "broker thus blocking the reset job to complete. Use the \"--force\" option could remove those left-over "
-            + "members immediately. Make sure to stop all stream applications when this option is specified "
-            + "to avoid unexpected disruptions.\n\n"
-            + "*** Important! You will get wrong output if you don't clean up the local stores after running the "
-            + "reset tool!\n\n"
-            + "*** Warning! This tool makes irreversible changes to your application. It is strongly recommended that "
-            + "you run this once with \"--dry-run\" to preview your changes before making them.\n\n";
+        + "its data from scratch.\n"
+        + "* This tool resets offsets of input topics to the earliest available offset (by default), or to a specific defined position"
+        + "* This tool deletes the internal topics that were created by Kafka Streams (topics starting with "
+        + "\"<application.id>-\").\n"
+        + "The tool finds these internal topics automatically. If the topics flagged automatically for deletion by "
+        + "the dry-run are unsuitable, you can specify a subset with the \"--internal-topics\" option.\n"
+        + "* This tool will not delete output topics (if you want to delete them, you need to do it yourself "
+        + "with the bin/kafka-topics.sh command).\n"
+        + "* This tool will not clean up the local state on the stream application instances (the persisted "
+        + "stores used to cache aggregation results).\n"
+        + "You need to call KafkaStreams#cleanUp() in your application or manually delete them from the "
+        + "directory specified by \"state.dir\" configuration (${java.io.tmpdir}/kafka-streams/<application.id> by default).\n"
+        + "* When long session timeout has been configured, active members could take longer to get expired on the "
+        + "broker thus blocking the reset job to complete. Use the \"--force\" option could remove those left-over "
+        + "members immediately. Make sure to stop all stream applications when this option is specified "
+        + "to avoid unexpected disruptions.\n\n"
+        + "*** Important! You will get wrong output if you don't clean up the local stores after running the "
+        + "reset tool!\n\n"
+        + "*** Warning! This tool makes irreversible changes to your application. It is strongly recommended that "
+        + "you run this once with \"--dry-run\" to preview your changes before making them.\n\n";
 
     private static final int MAX_REMOVE_MEMBERS_FROM_CONSUMER_GROUP_RETRIES = 3;
 
@@ -183,26 +183,26 @@ public class StreamsResetter {
 
     // visible for testing
     void maybeDeleteActiveConsumers(final String groupId,
-                                    final Admin adminClient,
-                                    final boolean force)
+        final Admin adminClient,
+        final boolean force)
         throws ExecutionException, InterruptedException {
         int retries = 0;
         while (true) {
             final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(
-                    Set.of(groupId),
-                    new DescribeConsumerGroupsOptions().timeoutMs(10 * 1000));
+                Set.of(groupId),
+                new DescribeConsumerGroupsOptions().timeoutMs(10 * 1000));
             try {
                 final List<MemberDescription> members =
-                        new ArrayList<>(describeResult.describedGroups().get(groupId).get().members());
+                    new ArrayList<>(describeResult.describedGroups().get(groupId).get().members());
                 if (!members.isEmpty()) {
                     if (force) {
                         System.out.println("Force deleting all active members in the group: " + groupId);
                         adminClient.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions()).all().get();
                     } else {
                         throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
-                                + "and has following members: " + members + ". "
-                                + "Make sure to stop all running application instances before running the reset tool."
-                                + " You can use option '--force' to remove active members from the group.");
+                            + "and has following members: " + members + ". "
+                            + "Make sure to stop all running application instances before running the reset tool."
+                            + " You can use option '--force' to remove active members from the group.");
                     }
                 }
                 break;
@@ -223,7 +223,7 @@ public class StreamsResetter {
     }
 
     private int maybeResetInputAndSeekToEndIntermediateTopicOffsets(final Map<Object, Object> consumerConfig,
-                                                                    final StreamsResetterOptions options)
+        final StreamsResetterOptions options)
         throws IOException, ParseException {
         final List<String> inputTopics = options.inputTopicsOption();
         final List<String> intermediateTopics = options.intermediateTopicsOption();
@@ -292,9 +292,9 @@ public class StreamsResetter {
                  new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
 
             final Collection<TopicPartition> partitions = topicsToSubscribe.stream().map(client::partitionsFor)
-                    .flatMap(Collection::stream)
-                    .map(info -> new TopicPartition(info.topic(), info.partition()))
-                    .collect(Collectors.toList());
+                .flatMap(Collection::stream)
+                .map(info -> new TopicPartition(info.topic(), info.partition()))
+                .collect(Collectors.toList());
             client.assign(partitions);
 
             final Set<TopicPartition> inputTopicPartitions = new HashSet<>();
@@ -331,8 +331,8 @@ public class StreamsResetter {
 
     // visible for testing
     public void maybeSeekToEnd(final String groupId,
-                               final Consumer<byte[], byte[]> client,
-                               final Set<TopicPartition> intermediateTopicPartitions) {
+        final Consumer<byte[], byte[]> client,
+        final Set<TopicPartition> intermediateTopicPartitions) {
         if (!intermediateTopicPartitions.isEmpty()) {
             System.out.println("Following intermediate topics offsets will be reset to end (for consumer group " + groupId + ")");
             for (final TopicPartition topicPartition : intermediateTopicPartitions) {
@@ -345,8 +345,8 @@ public class StreamsResetter {
     }
 
     private void maybeReset(final Consumer<byte[], byte[]> client,
-                            final Set<TopicPartition> inputTopicPartitions,
-                            final StreamsResetterOptions options)
+        final Set<TopicPartition> inputTopicPartitions,
+        final StreamsResetterOptions options)
         throws IOException, ParseException {
         if (!inputTopicPartitions.isEmpty()) {
             System.out.println("Following input topics offsets will be reset to (for consumer group " + options.applicationId() + ")");
@@ -382,8 +382,8 @@ public class StreamsResetter {
 
     // visible for testing
     public void resetOffsetsFromResetPlan(final Consumer<byte[], byte[]> client,
-                                          final Set<TopicPartition> inputTopicPartitions,
-                                          final Map<TopicPartition, Long> topicPartitionsAndOffset) {
+        final Set<TopicPartition> inputTopicPartitions,
+        final Map<TopicPartition, Long> topicPartitionsAndOffset) {
         final Map<TopicPartition, Long> endOffsets = client.endOffsets(inputTopicPartitions);
         final Map<TopicPartition, Long> beginningOffsets = client.beginningOffsets(inputTopicPartitions);
 
@@ -402,15 +402,15 @@ public class StreamsResetter {
     }
 
     private void resetByDuration(final Consumer<byte[], byte[]> client,
-                                 final Set<TopicPartition> inputTopicPartitions,
-                                 final Duration duration) {
+        final Set<TopicPartition> inputTopicPartitions,
+        final Duration duration) {
         resetToDatetime(client, inputTopicPartitions, Instant.now().minus(duration).toEpochMilli());
     }
 
     // visible for testing
     public void resetToDatetime(final Consumer<byte[], byte[]> client,
-                                final Set<TopicPartition> inputTopicPartitions,
-                                final Long timestamp) {
+        final Set<TopicPartition> inputTopicPartitions,
+        final Long timestamp) {
         final Map<TopicPartition, Long> topicPartitionsAndTimes = new HashMap<>(inputTopicPartitions.size());
         for (final TopicPartition topicPartition : inputTopicPartitions) {
             topicPartitionsAndTimes.put(topicPartition, timestamp);
@@ -420,22 +420,22 @@ public class StreamsResetter {
 
         for (final TopicPartition topicPartition : inputTopicPartitions) {
             final Optional<Long> partitionOffset = Optional.ofNullable(topicPartitionsAndOffset.get(topicPartition))
-                    .map(OffsetAndTimestamp::offset)
-                    .filter(offset -> offset != ListOffsetsResponse.UNKNOWN_OFFSET);
+                .map(OffsetAndTimestamp::offset)
+                .filter(offset -> offset != ListOffsetsResponse.UNKNOWN_OFFSET);
             if (partitionOffset.isPresent()) {
                 client.seek(topicPartition, partitionOffset.get());
             } else {
                 client.seekToEnd(List.of(topicPartition));
                 System.out.println("Partition " + topicPartition.partition() + " from topic " + topicPartition.topic() +
-                        " is empty, without a committed record. Falling back to latest known offset.");
+                    " is empty, without a committed record. Falling back to latest known offset.");
             }
         }
     }
 
     // visible for testing
     public void shiftOffsetsBy(final Consumer<byte[], byte[]> client,
-                               final Set<TopicPartition> inputTopicPartitions,
-                               final long shiftBy) {
+        final Set<TopicPartition> inputTopicPartitions,
+        final long shiftBy) {
         final Map<TopicPartition, Long> endOffsets = client.endOffsets(inputTopicPartitions);
         final Map<TopicPartition, Long> beginningOffsets = client.beginningOffsets(inputTopicPartitions);
 
@@ -456,8 +456,8 @@ public class StreamsResetter {
 
     // visible for testing
     public void resetOffsetsTo(final Consumer<byte[], byte[]> client,
-                               final Set<TopicPartition> inputTopicPartitions,
-                               final Long offset) {
+        final Set<TopicPartition> inputTopicPartitions,
+        final Long offset) {
         final Map<TopicPartition, Long> endOffsets = client.endOffsets(inputTopicPartitions);
         final Map<TopicPartition, Long> beginningOffsets = client.beginningOffsets(inputTopicPartitions);
 
@@ -498,8 +498,8 @@ public class StreamsResetter {
     }
 
     private Map<TopicPartition, Long> checkOffsetRange(final Map<TopicPartition, Long> inputTopicPartitionsAndOffset,
-                                                       final Map<TopicPartition, Long> beginningOffsets,
-                                                       final Map<TopicPartition, Long> endOffsets) {
+        final Map<TopicPartition, Long> beginningOffsets,
+        final Map<TopicPartition, Long> endOffsets) {
         final Map<TopicPartition, Long> validatedTopicPartitionsOffsets = new HashMap<>();
         for (final Map.Entry<TopicPartition, Long> topicPartitionAndOffset : inputTopicPartitionsAndOffset.entrySet()) {
             final long endOffset = endOffsets.get(topicPartitionAndOffset.getKey());
@@ -522,18 +522,18 @@ public class StreamsResetter {
 
     private int maybeDeleteInternalTopics(final Admin adminClient, final StreamsResetterOptions options) {
         final List<String> inferredInternalTopics = allTopics.stream()
-                .filter(options::isInferredInternalTopic)
-                .collect(Collectors.toList());
+            .filter(options::isInferredInternalTopic)
+            .collect(Collectors.toList());
         final List<String> specifiedInternalTopics = options.internalTopics();
         final List<String> topicsToDelete;
 
         if (!specifiedInternalTopics.isEmpty()) {
             if (!new HashSet<>(inferredInternalTopics).containsAll(specifiedInternalTopics)) {
                 throw new IllegalArgumentException("Invalid topic specified in the "
-                        + "--internal-topics option. "
-                        + "Ensure that the topics specified are all internal topics. "
-                        + "Do a dry run without the --internal-topics option to see the "
-                        + "list of all internal topics that can be deleted.");
+                    + "--internal-topics option. "
+                    + "Ensure that the topics specified are all internal topics. "
+                    + "Do a dry run without the --internal-topics option to see the "
+                    + "list of all internal topics that can be deleted.");
             }
 
             topicsToDelete = specifiedInternalTopics;
@@ -574,10 +574,10 @@ public class StreamsResetter {
     // visible for testing
     public static boolean matchesInternalTopicFormat(final String topicName) {
         return topicName.endsWith("-changelog") || topicName.endsWith("-repartition")
-               || topicName.endsWith("-subscription-registration-topic")
-               || topicName.endsWith("-subscription-response-topic")
-               || topicName.matches(".+-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-\\d+-topic")
-               || topicName.matches(".+-KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-\\d+-topic");
+            || topicName.endsWith("-subscription-registration-topic")
+            || topicName.endsWith("-subscription-response-topic")
+            || topicName.matches(".+-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-\\d+-topic")
+            || topicName.matches(".+-KTABLE-FK-JOIN-SUBSCRIPTION-RESPONSE-\\d+-topic");
     }
 
     private static class StreamsResetterOptions extends CommandDefaultOptions {
@@ -611,20 +611,20 @@ public class StreamsResetter {
                 .ofType(String.class)
                 .describedAs("server to connect to");
             inputTopicsOption = parser.accepts("input-topics", "Comma-separated list of user input topics. For these topics, the tool by default will reset the offset to the earliest available offset. "
-                    + "Reset to other offset position by appending other reset offset option, ex: --input-topics foo --shift-by 5")
+                + "Reset to other offset position by appending other reset offset option, ex: --input-topics foo --shift-by 5")
                 .withRequiredArg()
                 .ofType(String.class)
                 .withValuesSeparatedBy(',')
                 .describedAs("list");
             intermediateTopicsOption = parser.accepts("intermediate-topics", "[deprecated] Comma-separated list of intermediate user topics (topics that are input and output topics). "
-                    + "For these topics, the tool will skip to the end.")
+                + "For these topics, the tool will skip to the end.")
                 .withRequiredArg()
                 .ofType(String.class)
                 .withValuesSeparatedBy(',')
                 .describedAs("list");
             internalTopicsOption = parser.accepts("internal-topics", "Comma-separated list of "
-                    + "internal topics to delete. Must be a subset of the internal topics marked for deletion by the "
-                    + "default behaviour (do a dry-run without this option to view these topics).")
+                + "internal topics to delete. Must be a subset of the internal topics marked for deletion by the "
+                + "default behaviour (do a dry-run without this option to view these topics).")
                 .withRequiredArg()
                 .ofType(String.class)
                 .withValuesSeparatedBy(',')
@@ -648,7 +648,7 @@ public class StreamsResetter {
                 .describedAs("number-of-offsets")
                 .ofType(Long.class);
             configOption = parser.accepts("config-file", "(DEPRECATED) Property file containing configs to be passed to admin clients and embedded consumer. "
-                    + "This option will be removed in a future version. Use --command-config instead.")
+                + "This option will be removed in a future version. Use --command-config instead.")
                 .withRequiredArg()
                 .ofType(String.class)
                 .describedAs("file name");

@@ -32,6 +32,6 @@ import org.apache.kafka.streams.processor.StateStore;
  * @param <K>   type of the record keys
  * @param <AGG> type of the aggregated values
  */
-public interface SessionStoreWithHeaders<K, AGG> extends StateStore, SessionStore<K, AggregationWithHeaders<AGG>>  {
+public interface SessionStoreWithHeaders<K, AGG> extends StateStore, SessionStore<K, AggregationWithHeaders<AGG>> {
 
 }

@@ -21,12 +21,19 @@ import java.security.DigestException;
 
 public interface OffsetMap {
     int slots();
+
     void put(ByteBuffer key, long offset) throws DigestException;
+
     long get(ByteBuffer key) throws DigestException;
+
     void updateLatestOffset(long offset);
+
     void clear();
+
     int size();
+
     long latestOffset();
+
     default double utilization() {
         return size() / (double) slots();
     }

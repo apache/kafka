@@ -56,46 +56,46 @@ public class ShareFetchMetricsRegistry {
         String groupName = metricGrpPrefix + "-fetch-manager-metrics";
 
         this.fetchSizeAvg = new MetricNameTemplate("fetch-size-avg", groupName,
-                "The average number of bytes fetched per request", tags);
+            "The average number of bytes fetched per request", tags);
 
         this.fetchSizeMax = new MetricNameTemplate("fetch-size-max", groupName,
-                "The maximum number of bytes fetched per request", tags);
+            "The maximum number of bytes fetched per request", tags);
         this.bytesFetchedRate = new MetricNameTemplate("bytes-consumed-rate", groupName,
-                "The average number of bytes consumed per second", tags);
+            "The average number of bytes consumed per second", tags);
         this.bytesFetchedTotal = new MetricNameTemplate("bytes-consumed-total", groupName,
-                "The total number of bytes consumed", tags);
+            "The total number of bytes consumed", tags);
 
         this.recordsPerRequestAvg = new MetricNameTemplate("records-per-request-avg", groupName,
-                "The average number of records in each request", tags);
+            "The average number of records in each request", tags);
         this.recordsPerRequestMax = new MetricNameTemplate("records-per-request-max", groupName,
-                "The maximum number of records in a request.", tags);
+            "The maximum number of records in a request.", tags);
         this.recordsFetchedRate = new MetricNameTemplate("records-consumed-rate", groupName,
-                "The average number of records consumed per second", tags);
+            "The average number of records consumed per second", tags);
         this.recordsFetchedTotal = new MetricNameTemplate("records-consumed-total", groupName,
-                "The total number of records consumed", tags);
+            "The total number of records consumed", tags);
 
         this.acknowledgementSendRate = new MetricNameTemplate("acknowledgements-send-rate", groupName,
-                "The average number of record acknowledgements sent per second.", tags);
+            "The average number of record acknowledgements sent per second.", tags);
         this.acknowledgementSendTotal = new MetricNameTemplate("acknowledgements-send-total", groupName,
-                "The total number of record acknowledgements sent.", tags);
+            "The total number of record acknowledgements sent.", tags);
         this.acknowledgementErrorRate = new MetricNameTemplate("acknowledgements-error-rate", groupName,
-                "The average number of record acknowledgements that resulted in errors per second.", tags);
+            "The average number of record acknowledgements that resulted in errors per second.", tags);
         this.acknowledgementErrorTotal = new MetricNameTemplate("acknowledgements-error-total", groupName,
-                "The total number of record acknowledgements that resulted in errors.", tags);
+            "The total number of record acknowledgements that resulted in errors.", tags);
 
         this.fetchLatencyAvg = new MetricNameTemplate("fetch-latency-avg", groupName,
-                "The average time taken for a fetch request.", tags);
+            "The average time taken for a fetch request.", tags);
         this.fetchLatencyMax = new MetricNameTemplate("fetch-latency-max", groupName,
-                "The max time taken for any fetch request.", tags);
+            "The max time taken for any fetch request.", tags);
         this.fetchRequestRate = new MetricNameTemplate("fetch-rate", groupName,
-                "The number of fetch requests per second.", tags);
+            "The number of fetch requests per second.", tags);
         this.fetchRequestTotal = new MetricNameTemplate("fetch-total", groupName,
-                "The total number of fetch requests.", tags);
+            "The total number of fetch requests.", tags);
 
 
         this.fetchThrottleTimeAvg = new MetricNameTemplate("fetch-throttle-time-avg", groupName,
-                "The average throttle time in ms", tags);
+            "The average throttle time in ms", tags);
         this.fetchThrottleTimeMax = new MetricNameTemplate("fetch-throttle-time-max", groupName,
-                "The maximum throttle time in ms", tags);
+            "The maximum throttle time in ms", tags);
     }
 }

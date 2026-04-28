@@ -35,8 +35,8 @@ public class ConsumerRebalanceListenerCallbackCompletedEvent extends Application
     private final Optional<KafkaException> error;
 
     public ConsumerRebalanceListenerCallbackCompletedEvent(final ConsumerRebalanceListenerMethodName methodName,
-                                                           final CompletableFuture<Void> future,
-                                                           final Optional<KafkaException> error) {
+        final CompletableFuture<Void> future,
+        final Optional<KafkaException> error) {
         super(Type.CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED);
         this.methodName = Objects.requireNonNull(methodName);
         this.future = Objects.requireNonNull(future);
@@ -58,8 +58,8 @@ public class ConsumerRebalanceListenerCallbackCompletedEvent extends Application
     @Override
     protected String toStringBase() {
         return super.toStringBase() +
-                ", methodName=" + methodName +
-                ", future=" + future +
-                ", error=" + error;
+            ", methodName=" + methodName +
+            ", future=" + future +
+            ", error=" + error;
     }
 }

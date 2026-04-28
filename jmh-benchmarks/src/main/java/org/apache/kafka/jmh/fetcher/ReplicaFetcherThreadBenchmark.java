@@ -121,43 +121,43 @@ public class ReplicaFetcherThreadBenchmark {
     public void setup() throws IOException {
         scheduler.startup();
         Properties configs = BenchmarkConfigUtils.createDummyBrokerConfig();
-        KafkaConfig config =  KafkaConfig.fromProps(configs);
+        KafkaConfig config = KafkaConfig.fromProps(configs);
         LogConfig logConfig = createLogConfig();
 
         BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
         LogDirFailureChannel logDirFailureChannel = new LogDirFailureChannel(config.logDirs().size());
         List<File> logDirs = config.logDirs().stream().map(File::new).toList();
         logManager = new LogManagerBuilder().
-            setLogDirs(logDirs).
-            setInitialOfflineDirs(List.of()).
-            setConfigRepository(new MockConfigRepository()).
-            setInitialDefaultConfig(logConfig).
-            setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false)).
-            setRecoveryThreadsPerDataDir(1).
-            setFlushCheckMs(1000L).
-            setFlushRecoveryOffsetCheckpointMs(10000L).
-            setFlushStartOffsetCheckpointMs(10000L).
-            setRetentionCheckMs(1000L).
-            setProducerStateManagerConfig(60000, false).
-            setScheduler(scheduler).
-            setBrokerTopicStats(brokerTopicStats).
-            setLogDirFailureChannel(logDirFailureChannel).
-            setTime(Time.SYSTEM).
-            build();
+                setLogDirs(logDirs).
+                setInitialOfflineDirs(List.of()).
+                setConfigRepository(new MockConfigRepository()).
+                setInitialDefaultConfig(logConfig).
+                setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false)).
+                setRecoveryThreadsPerDataDir(1).
+                setFlushCheckMs(1000L).
+                setFlushRecoveryOffsetCheckpointMs(10000L).
+                setFlushStartOffsetCheckpointMs(10000L).
+                setRetentionCheckMs(1000L).
+                setProducerStateManagerConfig(60000, false).
+                setScheduler(scheduler).
+                setBrokerTopicStats(brokerTopicStats).
+                setLogDirFailureChannel(logDirFailureChannel).
+                setTime(Time.SYSTEM).
+                build();
 
         AlterPartitionManager alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
         replicaManager = new ReplicaManagerBuilder().
-            setConfig(config).
-            setMetrics(metrics).
-            setTime(new MockTime()).
-            setScheduler(scheduler).
-            setLogManager(logManager).
-            setQuotaManagers(Mockito.mock(QuotaFactory.QuotaManagers.class)).
-            setBrokerTopicStats(brokerTopicStats).
-            setMetadataCache(new KRaftMetadataCache(config.nodeId(), () -> KRAFT_VERSION_1)).
-            setLogDirFailureChannel(new LogDirFailureChannel(logDirs.size())).
-            setAlterPartitionManager(alterPartitionManager).
-            build();
+                setConfig(config).
+                setMetrics(metrics).
+                setTime(new MockTime()).
+                setScheduler(scheduler).
+                setLogManager(logManager).
+                setQuotaManagers(Mockito.mock(QuotaFactory.QuotaManagers.class)).
+                setBrokerTopicStats(brokerTopicStats).
+                setMetadataCache(new KRaftMetadataCache(config.nodeId(), () -> KRAFT_VERSION_1)).
+                setLogDirFailureChannel(new LogDirFailureChannel(logDirs.size())).
+                setAlterPartitionManager(alterPartitionManager).
+                build();
 
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> initialFetched = new LinkedHashMap<>();
         scala.collection.mutable.Map<TopicPartition, InitialFetchState> initialFetchStates = new scala.collection.mutable.HashMap<>();
@@ -166,14 +166,14 @@ public class ReplicaFetcherThreadBenchmark {
 
             int[] replicas = {0, 1, 2};
             PartitionRegistration partitionRegistration = new PartitionRegistration.Builder()
-                .setLeader(0)
-                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
-                .setLeaderEpoch(0)
-                .setIsr(replicas)
-                .setPartitionEpoch(1)
-                .setReplicas(replicas)
-                .setDirectories(DirectoryId.unassignedArray(replicas.length))
-                .build();
+                    .setLeader(0)
+                    .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
+                    .setLeaderEpoch(0)
+                    .setIsr(replicas)
+                    .setPartitionEpoch(1)
+                    .setReplicas(replicas)
+                    .setDirectories(DirectoryId.unassignedArray(replicas.length))
+                    .build();
 
             OffsetCheckpoints checkpoints = (logDir, topicPartition) -> Optional.of(0L);
             Partition partition = replicaManager.createPartition(tp);
@@ -332,10 +332,10 @@ public class ReplicaFetcherThreadBenchmark {
 
         @Override
         public Option<LogAppendInfo> processPartitionData(
-            TopicPartition topicPartition,
-            long fetchOffset,
-            int partitionLeaderEpoch,
-            FetchResponseData.PartitionData partitionData
+                TopicPartition topicPartition,
+                long fetchOffset,
+                int partitionLeaderEpoch,
+                FetchResponseData.PartitionData partitionData
         ) {
             return Option.empty();
         }

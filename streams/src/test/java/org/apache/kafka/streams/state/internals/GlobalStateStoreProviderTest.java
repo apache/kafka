@@ -68,7 +68,7 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class GlobalStateStoreProviderTest {
     private final Map<String, StateStore> stores = new HashMap<>();
-    private static final Map<String, Object> CONFIGS =  mkMap(mkEntry(StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE, "appId"));
+    private static final Map<String, Object> CONFIGS = mkMap(mkEntry(StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE, "appId"));
 
     @BeforeEach
     public void before() {
@@ -228,7 +228,7 @@ public class GlobalStateStoreProviderTest {
     public void shouldReturnWindowStore() {
         final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
         final List<ReadOnlyWindowStore<String, String>> stores =
-                provider.stores("w-store", QueryableStoreTypes.windowStore());
+            provider.stores("w-store", QueryableStoreTypes.windowStore());
         assertEquals(1, stores.size());
         for (final ReadOnlyWindowStore<String, String> store : stores) {
             assertThat(store, instanceOf(ReadOnlyWindowStore.class));
@@ -254,7 +254,7 @@ public class GlobalStateStoreProviderTest {
     public void shouldNotReturnWindowStoreAsTimestampedWindowStore() {
         final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
         final List<ReadOnlyWindowStore<String, ValueAndTimestamp<String>>> stores =
-                provider.stores("w-store", QueryableStoreTypes.timestampedWindowStore());
+            provider.stores("w-store", QueryableStoreTypes.timestampedWindowStore());
         assertEquals(0, stores.size());
     }
 
@@ -275,7 +275,7 @@ public class GlobalStateStoreProviderTest {
     public void shouldReturnSessionStore() {
         final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
         final List<ReadOnlySessionStore<String, String>> stores =
-                provider.stores("s-store", QueryableStoreTypes.sessionStore());
+            provider.stores("s-store", QueryableStoreTypes.sessionStore());
         assertEquals(1, stores.size());
         for (final ReadOnlySessionStore<String, String> store : stores) {
             assertThat(store, instanceOf(ReadOnlySessionStore.class));

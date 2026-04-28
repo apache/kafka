@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 import java.util.Set;
 
 public record ResultWithPartitions<R>(
-        R result,
-        Set<TopicPartition> partitionsWithError
-) { }
+    R result,
+    Set<TopicPartition> partitionsWithError
+) {
+}

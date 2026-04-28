@@ -70,15 +70,15 @@ public class RemoteLogMetadataSerdeTest {
         segLeaderEpochs.put(1, 20L);
         segLeaderEpochs.put(2, 80L);
         RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(TP0, Uuid.randomUuid());
-        return new RemoteLogSegmentMetadata(remoteLogSegmentId, 0L, 100L, -1L, 1, 
-                time.milliseconds(), 1024, Optional.of(new CustomMetadata(new byte[] {0, 1, 2, 3})),
+        return new RemoteLogSegmentMetadata(remoteLogSegmentId, 0L, 100L, -1L, 1,
+                time.milliseconds(), 1024, Optional.of(new CustomMetadata(new byte[]{0, 1, 2, 3})),
                 COPY_SEGMENT_STARTED, segLeaderEpochs);
     }
 
     private RemoteLogSegmentMetadataUpdate createRemoteLogSegmentMetadataUpdate() {
         RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(TP0, Uuid.randomUuid());
         return new RemoteLogSegmentMetadataUpdate(remoteLogSegmentId, time.milliseconds(),
-                Optional.of(new CustomMetadata(new byte[] {0, 1, 2, 3})), COPY_SEGMENT_FINISHED, 2);
+                Optional.of(new CustomMetadata(new byte[]{0, 1, 2, 3})), COPY_SEGMENT_FINISHED, 2);
     }
 
     private RemotePartitionDeleteMetadata createRemotePartitionDeleteMetadata() {
@@ -102,7 +102,7 @@ public class RemoteLogMetadataSerdeTest {
     public void testInvalidRemoteStorageMetadata() {
         // Serializing receives an exception as it does not have the expected RemoteLogMetadata registered in serdes.
         assertThrows(IllegalArgumentException.class,
-            () -> new RemoteLogMetadataSerde().serialize(new InvalidRemoteLogMetadata(1, time.milliseconds())));
+                () -> new RemoteLogMetadataSerde().serialize(new InvalidRemoteLogMetadata(1, time.milliseconds())));
     }
 
     private static class InvalidRemoteLogMetadata extends RemoteLogMetadata {

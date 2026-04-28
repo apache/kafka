@@ -72,20 +72,20 @@ public class TopicsImageZonalOutageBenchmark {
         topicsDelta = new TopicsDelta(builtupTopicsImage);
         Set<Uuid> perturbedTopics = new HashSet<>();
         builtupTopicsImage.topicsById().forEach((topicId, topicImage) ->
-            topicImage.partitions().forEach((partitionNumber, partitionRegistration) -> {
-                List<Integer> newIsr = Arrays.stream(partitionRegistration.isr).boxed().filter(n -> n != 0).toList();
-                if (newIsr.size() < replicationFactor) {
-                    perturbedTopics.add(topicId);
-                    topicsDelta.replay(new PartitionRecord().
-                        setPartitionId(partitionNumber).
-                        setTopicId(topicId).
-                        setReplicas(Arrays.stream(partitionRegistration.replicas).boxed().toList()).
-                        setIsr(newIsr).
-                        setRemovingReplicas(List.of()).
-                        setAddingReplicas(List.of()).
-                        setLeader(newIsr.get(0)));
-                }
-            })
+                topicImage.partitions().forEach((partitionNumber, partitionRegistration) -> {
+                    List<Integer> newIsr = Arrays.stream(partitionRegistration.isr).boxed().filter(n -> n != 0).toList();
+                    if (newIsr.size() < replicationFactor) {
+                        perturbedTopics.add(topicId);
+                        topicsDelta.replay(new PartitionRecord().
+                                setPartitionId(partitionNumber).
+                                setTopicId(topicId).
+                                setReplicas(Arrays.stream(partitionRegistration.replicas).boxed().toList()).
+                                setIsr(newIsr).
+                                setRemovingReplicas(List.of()).
+                                setAddingReplicas(List.of()).
+                                setLeader(newIsr.get(0)));
+                    }
+                })
         );
         int numBrokers = TopicsImageSnapshotLoadBenchmark.getNumBrokers(totalTopicCount, partitionsPerTopic, replicationFactor, numReplicasPerBroker);
         System.out.print("(Perturbing 1 of " + numBrokers + " brokers, or " + perturbedTopics.size() + " topics within metadata having " + totalTopicCount + " total topics) ");

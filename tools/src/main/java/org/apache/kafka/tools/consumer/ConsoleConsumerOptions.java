@@ -72,130 +72,130 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
     public ConsoleConsumerOptions(String[] args) throws IOException {
         super(args);
         topicOpt = parser.accepts("topic", "The topic to consume from.")
-                .withRequiredArg()
-                .describedAs("topic")
-                .ofType(String.class);
+            .withRequiredArg()
+            .describedAs("topic")
+            .ofType(String.class);
         includeOpt = parser.accepts("include",
-                        "Regular expression specifying list of topics to include for consumption.")
-                .withRequiredArg()
-                .describedAs("Java regex (String)")
-                .ofType(String.class);
+            "Regular expression specifying list of topics to include for consumption.")
+            .withRequiredArg()
+            .describedAs("Java regex (String)")
+            .ofType(String.class);
         partitionIdOpt = parser.accepts("partition",
-                        "The partition to consume from. Consumption starts from the end of the partition unless '--offset' is specified.")
-                .withRequiredArg()
-                .describedAs("partition")
-                .ofType(Integer.class);
+            "The partition to consume from. Consumption starts from the end of the partition unless '--offset' is specified.")
+            .withRequiredArg()
+            .describedAs("partition")
+            .ofType(Integer.class);
         offsetOpt = parser.accepts("offset", "The offset to consume from (a non-negative number), or 'earliest' which means from beginning, or 'latest' which means from end")
-                .withRequiredArg()
-                .describedAs("consume offset")
-                .ofType(String.class)
-                .defaultsTo("latest");
+            .withRequiredArg()
+            .describedAs("consume offset")
+            .ofType(String.class)
+            .defaultsTo("latest");
         @Deprecated(since = "4.2", forRemoval = true)
         OptionSpec<String> consumerPropertyOpt = parser.accepts("consumer-property", "(DEPRECATED) Consumer config properties in the form key=value. " +
-                        "This option will be removed in a future version. Use --command-property instead.")
-                .withRequiredArg()
-                .describedAs("consumer_prop")
-                .ofType(String.class);
+            "This option will be removed in a future version. Use --command-property instead.")
+            .withRequiredArg()
+            .describedAs("consumer_prop")
+            .ofType(String.class);
         OptionSpec<String> commandPropertyOpt = parser.accepts("command-property", "Consumer config properties in the form key=value.")
-                .withRequiredArg()
-                .describedAs("consumer_prop")
-                .ofType(String.class);
-        @Deprecated(since = "4.2", forRemoval = true) 
+            .withRequiredArg()
+            .describedAs("consumer_prop")
+            .ofType(String.class);
+        @Deprecated(since = "4.2", forRemoval = true)
         OptionSpec<String> consumerConfigOpt = parser.accepts("consumer.config", "(DEPRECATED) Consumer config properties file. Note that " + commandPropertyOpt + " takes precedence over this config. " +
-                        "This option will be removed in a future version. Use --command-config instead.")
-                .withRequiredArg()
-                .describedAs("config file")
-                .ofType(String.class);
+            "This option will be removed in a future version. Use --command-config instead.")
+            .withRequiredArg()
+            .describedAs("config file")
+            .ofType(String.class);
         OptionSpec<String> commandConfigOpt = parser.accepts("command-config", "Consumer config properties file. Note that " + commandPropertyOpt + " takes precedence over this config.")
-                .withRequiredArg()
-                .describedAs("config file")
-                .ofType(String.class);
+            .withRequiredArg()
+            .describedAs("config file")
+            .ofType(String.class);
         messageFormatterOpt = parser.accepts("formatter", "The name of a class to use for formatting kafka messages for display.")
-                .withRequiredArg()
-                .describedAs("class")
-                .ofType(String.class)
-                .defaultsTo(DefaultMessageFormatter.class.getName());
+            .withRequiredArg()
+            .describedAs("class")
+            .ofType(String.class)
+            .defaultsTo(DefaultMessageFormatter.class.getName());
         messageFormatterArgOptDeprecated = parser.accepts("property",
-                        "(DEPRECATED) The properties to initialize the message formatter. Default properties include: \n" +
-                            " print.timestamp=true|false\n" +
-                            " print.key=true|false\n" +
-                            " print.offset=true|false\n" +
-                            " print.epoch=true|false\n" +
-                            " print.partition=true|false\n" +
-                            " print.headers=true|false\n" +
-                            " print.value=true|false\n" +
-                            " key.separator=<key.separator>\n" +
-                            " line.separator=<line.separator>\n" +
-                            " headers.separator=<headers.separator>\n" +
-                            " null.literal=<null.literal>\n" +
-                            " key.deserializer=<key.deserializer>\n" +
-                            " value.deserializer=<value.deserializer>\n" +
-                            " header.deserializer=<header.deserializer>\n" +
-                            "\nUsers can also pass in customized properties for their formatter; more specifically, users can pass in properties keyed with 'key.deserializer.', 'value.deserializer.' and 'headers.deserializer.' prefixes to configure their deserializers. " +
-                                "\nThis option will be removed in a future version. Use --formatter-property instead.")
-                .withRequiredArg()
-                .describedAs("prop")
-                .ofType(String.class);
+            "(DEPRECATED) The properties to initialize the message formatter. Default properties include: \n" +
+                " print.timestamp=true|false\n" +
+                " print.key=true|false\n" +
+                " print.offset=true|false\n" +
+                " print.epoch=true|false\n" +
+                " print.partition=true|false\n" +
+                " print.headers=true|false\n" +
+                " print.value=true|false\n" +
+                " key.separator=<key.separator>\n" +
+                " line.separator=<line.separator>\n" +
+                " headers.separator=<headers.separator>\n" +
+                " null.literal=<null.literal>\n" +
+                " key.deserializer=<key.deserializer>\n" +
+                " value.deserializer=<value.deserializer>\n" +
+                " header.deserializer=<header.deserializer>\n" +
+                "\nUsers can also pass in customized properties for their formatter; more specifically, users can pass in properties keyed with 'key.deserializer.', 'value.deserializer.' and 'headers.deserializer.' prefixes to configure their deserializers. " +
+                "\nThis option will be removed in a future version. Use --formatter-property instead.")
+            .withRequiredArg()
+            .describedAs("prop")
+            .ofType(String.class);
         messageFormatterArgOpt = parser.accepts("formatter-property",
-                        "The properties to initialize the message formatter. Default properties include: \n" +
-                            " print.timestamp=true|false\n" +
-                            " print.key=true|false\n" +
-                            " print.offset=true|false\n" +
-                            " print.epoch=true|false\n" +
-                            " print.partition=true|false\n" +
-                            " print.headers=true|false\n" +
-                            " print.value=true|false\n" +
-                            " key.separator=<key.separator>\n" +
-                            " line.separator=<line.separator>\n" +
-                            " headers.separator=<headers.separator>\n" +
-                            " null.literal=<null.literal>\n" +
-                            " key.deserializer=<key.deserializer>\n" +
-                            " value.deserializer=<value.deserializer>\n" +
-                            " header.deserializer=<header.deserializer>\n" +
-                            "\nUsers can also pass in customized properties for their formatter; more specifically, users can pass in properties keyed with 'key.deserializer.', 'value.deserializer.' and 'headers.deserializer.' prefixes to configure their deserializers.")
-                .withRequiredArg()
-                .describedAs("prop")
-                .ofType(String.class);
+            "The properties to initialize the message formatter. Default properties include: \n" +
+                " print.timestamp=true|false\n" +
+                " print.key=true|false\n" +
+                " print.offset=true|false\n" +
+                " print.epoch=true|false\n" +
+                " print.partition=true|false\n" +
+                " print.headers=true|false\n" +
+                " print.value=true|false\n" +
+                " key.separator=<key.separator>\n" +
+                " line.separator=<line.separator>\n" +
+                " headers.separator=<headers.separator>\n" +
+                " null.literal=<null.literal>\n" +
+                " key.deserializer=<key.deserializer>\n" +
+                " value.deserializer=<value.deserializer>\n" +
+                " header.deserializer=<header.deserializer>\n" +
+                "\nUsers can also pass in customized properties for their formatter; more specifically, users can pass in properties keyed with 'key.deserializer.', 'value.deserializer.' and 'headers.deserializer.' prefixes to configure their deserializers.")
+            .withRequiredArg()
+            .describedAs("prop")
+            .ofType(String.class);
         messageFormatterConfigOpt = parser.accepts("formatter-config", "Config properties file to initialize the message formatter. Note that " + messageFormatterArgOpt + " takes precedence over this config.")
-                .withRequiredArg()
-                .describedAs("config file")
-                .ofType(String.class);
+            .withRequiredArg()
+            .describedAs("config file")
+            .ofType(String.class);
         resetBeginningOpt = parser.accepts("from-beginning", "If the consumer does not already have an established offset to consume from, " +
-                "start with the earliest message present in the log rather than the latest message.");
+            "start with the earliest message present in the log rather than the latest message.");
         maxMessagesOpt = parser.accepts("max-messages", "The maximum number of messages to consume before exiting. If not set, consumption is continual.")
-                .withRequiredArg()
-                .describedAs("num_messages")
-                .ofType(Integer.class);
+            .withRequiredArg()
+            .describedAs("num_messages")
+            .ofType(Integer.class);
         timeoutMsOpt = parser.accepts("timeout-ms", "If specified, exit if no message is available for consumption for the specified interval.")
-                .withRequiredArg()
-                .describedAs("timeout_ms")
-                .ofType(Long.class);
+            .withRequiredArg()
+            .describedAs("timeout_ms")
+            .ofType(Long.class);
         skipMessageOnErrorOpt = parser.accepts("skip-message-on-error", "If there is an error when processing a message, " +
-                "skip it instead of halt.");
+            "skip it instead of halt.");
         bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: The server(s) to connect to.")
-                .withRequiredArg()
-                .describedAs("server to connect to")
-                .ofType(String.class);
+            .withRequiredArg()
+            .describedAs("server to connect to")
+            .ofType(String.class);
         keyDeserializerOpt = parser.accepts("key-deserializer", "The name of the class to use for deserializing keys.")
-                .withRequiredArg()
-                .describedAs("deserializer for keys")
-                .ofType(String.class);
+            .withRequiredArg()
+            .describedAs("deserializer for keys")
+            .ofType(String.class);
         valueDeserializerOpt = parser.accepts("value-deserializer", "The name of the class to use for deserializing values.")
-                .withRequiredArg()
-                .describedAs("deserializer for values")
-                .ofType(String.class);
+            .withRequiredArg()
+            .describedAs("deserializer for values")
+            .ofType(String.class);
         enableSystestEventsLoggingOpt = parser.accepts("enable-systest-events",
-                "Log lifecycle events of the consumer in addition to logging consumed messages. (This is specific for system tests.)");
+            "Log lifecycle events of the consumer in addition to logging consumed messages. (This is specific for system tests.)");
         isolationLevelOpt = parser.accepts("isolation-level",
-                        "Set to read_committed in order to filter out transactional messages which are not committed. Set to read_uncommitted " +
-                                "to read all messages.")
-                .withRequiredArg()
-                .ofType(String.class)
-                .defaultsTo("read_uncommitted");
+            "Set to read_committed in order to filter out transactional messages which are not committed. Set to read_uncommitted " +
+                "to read all messages.")
+            .withRequiredArg()
+            .ofType(String.class)
+            .defaultsTo("read_uncommitted");
         groupIdOpt = parser.accepts("group", "The consumer group id of the consumer.")
-                .withRequiredArg()
-                .describedAs("consumer group id")
-                .ofType(String.class);
+            .withRequiredArg()
+            .describedAs("consumer group id")
+            .ofType(String.class);
 
         try {
             options = parser.parse(args);
@@ -222,8 +222,8 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
             commandConfigOpt = consumerConfigOpt;
         }
         Properties consumerPropsFromFile = options.has(commandConfigOpt)
-                ? Utils.loadProps(options.valueOf(commandConfigOpt))
-                : new Properties();
+            ? Utils.loadProps(options.valueOf(commandConfigOpt))
+            : new Properties();
         Properties extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(commandPropertyOpt));
         Set<String> groupIdsProvided = checkConsumerGroup(consumerPropsFromFile, extraConsumerProps);
         consumerProps = buildConsumerProps(consumerPropsFromFile, extraConsumerProps, groupIdsProvided);
@@ -266,9 +266,9 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
         }
         if (groupIdsProvided.size() > 1) {
             CommandLineUtils.printUsageAndExit(parser, "The group ids provided in different places (directly using '--group', "
-                    + "via '--consumer-property', or via '--consumer.config') do not match. "
-                    + "Detected group ids: "
-                    + groupIdsProvided.stream().map(group -> "'" + group + "'").collect(Collectors.joining(", ")));
+                + "via '--consumer-property', or via '--consumer.config') do not match. "
+                + "Detected group ids: "
+                + groupIdsProvided.stream().map(group -> "'" + group + "'").collect(Collectors.joining(", ")));
         }
         if (!groupIdsProvided.isEmpty() && partitionArg().isPresent()) {
             CommandLineUtils.printUsageAndExit(parser, "Options group and partition cannot be specified together.");
@@ -319,7 +319,7 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
             if (fromBeginning() && !earliestConfigValue.equals(autoResetOption)) {
                 // conflicting options - latest und earliest, throw an error
                 System.err.println("Can't simultaneously specify --from-beginning and 'auto.offset.reset=" + autoResetOption + "', " +
-                        "please remove one option");
+                    "please remove one option");
                 Exit.exit(1);
             }
             // nothing to do, checking for valid parameter values happens later and the specified
@@ -359,7 +359,7 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
 
     private void invalidOffset(String offset) {
         CommandLineUtils.printUsageAndExit(parser, "The provided offset value '" + offset + "' is incorrect. Valid values are " +
-                "'earliest', 'latest', or a non-negative long.");
+            "'earliest', 'latest', or a non-negative long.");
     }
 
     private long parseTimeoutMs() {
@@ -439,14 +439,14 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
 
     Optional<String> includedTopicsArg() {
         return options.has(includeOpt)
-                ? Optional.of(options.valueOf(includeOpt))
-                : Optional.empty();
+            ? Optional.of(options.valueOf(includeOpt))
+            : Optional.empty();
     }
 
     Properties formatterArgs() throws IOException {
         Properties formatterArgs = options.has(messageFormatterConfigOpt)
-                ? Utils.loadProps(options.valueOf(messageFormatterConfigOpt))
-                : new Properties();
+            ? Utils.loadProps(options.valueOf(messageFormatterConfigOpt))
+            : new Properties();
         String keyDeserializer = options.valueOf(keyDeserializerOpt);
         if (keyDeserializer != null && !keyDeserializer.isEmpty()) {
             formatterArgs.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer);

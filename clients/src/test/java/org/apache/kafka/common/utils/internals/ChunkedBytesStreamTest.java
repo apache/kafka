@@ -94,7 +94,7 @@ public class ChunkedBytesStreamTest {
     @MethodSource("provideSourceBytebuffersForTest")
     public void testCorrectnessForMethodRead(ByteBuffer inputBuf) throws IOException {
         int[] inputArr = new int[inputBuf.capacity()];
-        for (int i = 0; i < inputArr.length; i++) {
+        for (int i = 0;i < inputArr.length;i++) {
             inputArr[i] = Byte.toUnsignedInt(inputBuf.get());
         }
         int[] got = new int[inputArr.length];

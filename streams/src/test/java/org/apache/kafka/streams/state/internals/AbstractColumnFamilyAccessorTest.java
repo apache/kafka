@@ -166,7 +166,7 @@ abstract class AbstractColumnFamilyAccessorTest {
     private byte[] toBytes(final String s) {
         return keySerializer.serialize("", s);
     }
-    
+
     private byte[] toBytes(final long l) {
         return offsetSerializer.serialize("", l);
     }

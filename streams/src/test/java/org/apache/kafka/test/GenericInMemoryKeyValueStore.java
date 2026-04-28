@@ -70,7 +70,7 @@ public class GenericInMemoryKeyValueStore<K extends Comparable, V>
 
     @Override
     public boolean setFlushListener(final CacheFlushListener<K, V> listener,
-                                    final boolean sendOldValues) {
+        final boolean sendOldValues) {
         return false;
     }
 

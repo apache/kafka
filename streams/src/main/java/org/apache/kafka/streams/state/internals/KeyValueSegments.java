@@ -28,9 +28,9 @@ class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
     private final RocksDBMetricsRecorder metricsRecorder;
 
     KeyValueSegments(final String name,
-                     final String metricsScope,
-                     final long retentionPeriod,
-                     final long segmentInterval) {
+        final String metricsScope,
+        final long retentionPeriod,
+        final long segmentInterval) {
         super(name, retentionPeriod, segmentInterval);
         metricsRecorder = new RocksDBMetricsRecorder(metricsScope, name);
     }

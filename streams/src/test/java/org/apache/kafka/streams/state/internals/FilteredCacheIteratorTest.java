@@ -53,13 +53,13 @@ public class FilteredCacheIteratorTest {
 
     private final KeyValueStore<Bytes, LRUCacheEntry> store = new GenericInMemoryKeyValueStore<>("my-store");
     private final KeyValue<Bytes, LRUCacheEntry> firstEntry = KeyValue.pair(Bytes.wrap("a".getBytes()),
-                                                                            new LRUCacheEntry("1".getBytes()));
+        new LRUCacheEntry("1".getBytes()));
     private final List<KeyValue<Bytes, LRUCacheEntry>> entries = asList(
-            firstEntry,
-            KeyValue.pair(Bytes.wrap("b".getBytes()),
-                          new LRUCacheEntry("2".getBytes())),
-            KeyValue.pair(Bytes.wrap("c".getBytes()),
-                          new LRUCacheEntry("3".getBytes())));
+        firstEntry,
+        KeyValue.pair(Bytes.wrap("b".getBytes()),
+            new LRUCacheEntry("2".getBytes())),
+        KeyValue.pair(Bytes.wrap("c".getBytes()),
+            new LRUCacheEntry("3".getBytes())));
 
     private FilteredCacheIterator allIterator;
     private FilteredCacheIterator firstEntryIterator;
@@ -70,12 +70,12 @@ public class FilteredCacheIteratorTest {
         final HasNextCondition allCondition = Iterator::hasNext;
         allIterator = new FilteredCacheIterator(
             new DelegatingPeekingKeyValueIterator<>("",
-                                                    store.all()), allCondition, IDENTITY_FUNCTION);
+                store.all()), allCondition, IDENTITY_FUNCTION);
 
         final HasNextCondition firstEntryCondition = iterator -> iterator.hasNext() && iterator.peekNextKey().equals(firstEntry.key);
         firstEntryIterator = new FilteredCacheIterator(
-                new DelegatingPeekingKeyValueIterator<>("",
-                                                        store.all()), firstEntryCondition, IDENTITY_FUNCTION);
+            new DelegatingPeekingKeyValueIterator<>("",
+                store.all()), firstEntryCondition, IDENTITY_FUNCTION);
 
     }
 

@@ -38,22 +38,22 @@ public class ReadShareGroupStateResult implements PersisterResult {
 
     public static ReadShareGroupStateResult from(ReadShareGroupStateResponseData data) {
         return new Builder()
-                .setTopicsData(data.results().stream()
-                        .map(topicData -> new TopicData<>(topicData.topicId(),
-                                topicData.partitions().stream()
-                                        .map(partitionResult -> PartitionFactory.newPartitionAllData(
-                                                partitionResult.partition(),
-                                                partitionResult.stateEpoch(),
-                                                partitionResult.startOffset(),
-                                                partitionResult.errorCode(),
-                                                partitionResult.errorMessage(),
-                                                partitionResult.stateBatches().stream()
-                                                        .map(PersisterStateBatch::from)
-                                                        .collect(Collectors.toList())
-                                        ))
-                                        .collect(Collectors.toList())))
-                        .collect(Collectors.toList()))
-                .build();
+            .setTopicsData(data.results().stream()
+                .map(topicData -> new TopicData<>(topicData.topicId(),
+                    topicData.partitions().stream()
+                        .map(partitionResult -> PartitionFactory.newPartitionAllData(
+                            partitionResult.partition(),
+                            partitionResult.stateEpoch(),
+                            partitionResult.startOffset(),
+                            partitionResult.errorCode(),
+                            partitionResult.errorMessage(),
+                            partitionResult.stateBatches().stream()
+                                .map(PersisterStateBatch::from)
+                                .collect(Collectors.toList())
+                        ))
+                        .collect(Collectors.toList())))
+                .collect(Collectors.toList()))
+            .build();
     }
 
     public static class Builder {

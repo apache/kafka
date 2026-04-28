@@ -24,5 +24,5 @@ import java.util.Optional;
  * Structure used for lower level reads using {@link kafka.cluster.Partition#fetchRecords()}.
  */
 public record LogReadInfo(FetchDataInfo fetchedData, Optional<FetchResponseData.EpochEndOffset> divergingEpoch,
-                          long highWatermark, long logStartOffset, long logEndOffset, long lastStableOffset) {
+long highWatermark, long logStartOffset, long logEndOffset, long lastStableOffset) {
 }

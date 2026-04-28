@@ -114,8 +114,8 @@ public class EmbeddedKafkaCluster {
     }
 
     public EmbeddedKafkaCluster(final int numBrokers,
-                                   final Properties brokerConfig,
-                                   final Map<String, String> clientConfigs) {
+            final Properties brokerConfig,
+            final Map<String, String> clientConfigs) {
         addDefaultBrokerPropsIfAbsent(brokerConfig, numBrokers);
         try {
             KafkaClusterTestKit.Builder clusterBuilder = new KafkaClusterTestKit.Builder(
@@ -474,7 +474,7 @@ public class EmbeddedKafkaCluster {
                     allowedDuration = maxDuration - (System.currentTimeMillis() - startMillis);
                     continue;
                 }
-                for (TopicPartition partition: rec.partitions()) {
+                for (TopicPartition partition : rec.partitions()) {
                     final List<ConsumerRecord<byte[], byte[]>> r = rec.records(partition);
                     records.computeIfAbsent(partition, t -> new ArrayList<>()).addAll(r);
                     final ConsumerRecord<byte[], byte[]> lastRecord = r.get(r.size() - 1);
@@ -498,8 +498,8 @@ public class EmbeddedKafkaCluster {
      * @return a {@link ConsumerRecords} collection containing the records for all partitions of the given topics
      */
     public ConsumerRecords<byte[], byte[]> consumeAll(
-        long maxDurationMs,
-        String... topics
+            long maxDurationMs,
+            String... topics
     ) throws TimeoutException, InterruptedException, ExecutionException {
         return consumeAll(maxDurationMs, null, null, topics);
     }
@@ -559,7 +559,7 @@ public class EmbeddedKafkaCluster {
                         // We haven't reached the end offset yet; need to keep polling
                         ConsumerRecords<byte[], byte[]> recordBatch = consumer.poll(Duration.ofMillis(remainingTimeMs));
                         recordBatch.partitions().forEach(tp -> records.get(tp)
-                                .addAll(recordBatch.records(tp))
+                                        .addAll(recordBatch.records(tp))
                         );
                         nextOffsets.putAll(recordBatch.nextOffsets());
                     }

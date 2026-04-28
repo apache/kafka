@@ -109,23 +109,23 @@ public class CheckpointBench {
         this.failureChannel = new LogDirFailureChannel(brokerProperties.logDirs().size());
         final List<File> files = brokerProperties.logDirs().stream().map(File::new).toList();
         this.logManager = new LogManagerBuilder().
-            setLogDirs(files).
-            setInitialOfflineDirs(List.of()).
-            setConfigRepository(new MockConfigRepository()).
-            setInitialDefaultConfig(new LogConfig(new Properties())).
-            setCleanerConfig(new CleanerConfig(1, 4 * 1024 * 1024L, 0.9d,
+                setLogDirs(files).
+                setInitialOfflineDirs(List.of()).
+                setConfigRepository(new MockConfigRepository()).
+                setInitialDefaultConfig(new LogConfig(new Properties())).
+                setCleanerConfig(new CleanerConfig(1, 4 * 1024 * 1024L, 0.9d,
                 1024 * 1024, 32 * 1024 * 1024, Double.MAX_VALUE, 15 * 1000, true)).
-            setRecoveryThreadsPerDataDir(1).
-            setFlushCheckMs(1000L).
-            setFlushRecoveryOffsetCheckpointMs(10000L).
-            setFlushStartOffsetCheckpointMs(10000L).
-            setRetentionCheckMs(1000L).
-            setProducerStateManagerConfig(60000, false).
-            setScheduler(scheduler).
-            setBrokerTopicStats(new BrokerTopicStats(false)).
-            setLogDirFailureChannel(failureChannel).
-            setTime(Time.SYSTEM).
-            build();
+                setRecoveryThreadsPerDataDir(1).
+                setFlushCheckMs(1000L).
+                setFlushRecoveryOffsetCheckpointMs(10000L).
+                setFlushStartOffsetCheckpointMs(10000L).
+                setRetentionCheckMs(1000L).
+                setProducerStateManagerConfig(60000, false).
+                setScheduler(scheduler).
+                setBrokerTopicStats(new BrokerTopicStats(false)).
+                setLogDirFailureChannel(failureChannel).
+                setTime(Time.SYSTEM).
+                build();
 
         scheduler.startup();
         final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
@@ -138,17 +138,17 @@ public class CheckpointBench {
 
         this.alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
         this.replicaManager = new ReplicaManagerBuilder().
-            setConfig(brokerProperties).
-            setMetrics(metrics).
-            setTime(time).
-            setScheduler(scheduler).
-            setLogManager(logManager).
-            setQuotaManagers(quotaManagers).
-            setBrokerTopicStats(brokerTopicStats).
-            setMetadataCache(metadataCache).
-            setLogDirFailureChannel(failureChannel).
-            setAlterPartitionManager(alterPartitionManager).
-            build();
+                setConfig(brokerProperties).
+                setMetrics(metrics).
+                setTime(time).
+                setScheduler(scheduler).
+                setLogManager(logManager).
+                setQuotaManagers(quotaManagers).
+                setBrokerTopicStats(brokerTopicStats).
+                setMetadataCache(metadataCache).
+                setLogDirFailureChannel(failureChannel).
+                setAlterPartitionManager(alterPartitionManager).
+                build();
         replicaManager.startup();
 
         List<TopicPartition> topicPartitions = new ArrayList<>();

@@ -54,12 +54,12 @@ public class KRaftCoordinatorMetadataDeltaTest {
         String changedTopicName = "changed-topic";
 
         MetadataImage image = new MetadataImageBuilder()
-            .addTopic(deletedTopicId, deletedTopicName, 1)
-            .addTopic(changedTopicId, changedTopicName, 1)
-            .build();
+                .addTopic(deletedTopicId, deletedTopicName, 1)
+                .addTopic(changedTopicId, changedTopicName, 1)
+                .build();
         MetadataDelta delta = new MetadataDelta.Builder()
-            .setImage(image)
-            .build();
+                .setImage(image)
+                .build();
         delta.replay(new TopicRecord().setTopicId(topicId).setName(topicName));
         delta.replay(new TopicRecord().setTopicId(topicId2).setName(topicName2));
         delta.replay(new RemoveTopicRecord().setTopicId(deletedTopicId));
@@ -110,8 +110,8 @@ public class KRaftCoordinatorMetadataDeltaTest {
         String topicName3 = "test-topic3";
 
         MetadataDelta delta = new MetadataDelta.Builder()
-            .setImage(MetadataImage.EMPTY)
-            .build();
+                .setImage(MetadataImage.EMPTY)
+                .build();
         delta.replay(new TopicRecord().setTopicId(topicId).setName(topicName));
         delta.replay(new TopicRecord().setTopicId(topicId2).setName(topicName2));
 
@@ -119,8 +119,8 @@ public class KRaftCoordinatorMetadataDeltaTest {
         KRaftCoordinatorMetadataDelta coordinatorDeltaCopy = new KRaftCoordinatorMetadataDelta(delta);
 
         MetadataDelta delta2 = new MetadataDelta.Builder()
-            .setImage(MetadataImage.EMPTY)
-            .build();
+                .setImage(MetadataImage.EMPTY)
+                .build();
         delta.replay(new TopicRecord().setTopicId(topicId3).setName(topicName3));
         KRaftCoordinatorMetadataDelta coordinatorDelta2 = new KRaftCoordinatorMetadataDelta(delta2);
 

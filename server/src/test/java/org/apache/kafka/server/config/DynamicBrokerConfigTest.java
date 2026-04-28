@@ -42,11 +42,11 @@ public class DynamicBrokerConfigTest {
         }
 
         assertEquals(List.of("listener.name.secure.ssl.keystore.type", "ssl.keystore.type"),
-                DynamicBrokerConfig.brokerConfigSynonyms("listener.name.secure.ssl.keystore.type", true));
+            DynamicBrokerConfig.brokerConfigSynonyms("listener.name.secure.ssl.keystore.type", true));
         assertEquals(List.of("listener.name.sasl_ssl.plain.sasl.jaas.config", "sasl.jaas.config"),
-                DynamicBrokerConfig.brokerConfigSynonyms("listener.name.sasl_ssl.plain.sasl.jaas.config", true));
+            DynamicBrokerConfig.brokerConfigSynonyms("listener.name.sasl_ssl.plain.sasl.jaas.config", true));
         assertEquals(List.of("some.config"),
-                DynamicBrokerConfig.brokerConfigSynonyms("some.config", true));
+            DynamicBrokerConfig.brokerConfigSynonyms("some.config", true));
 
         assertEquals(List.of("listener.name.NAME.CONFIG", "CONFIG"), DynamicBrokerConfig.brokerConfigSynonyms("listener.name.NAME.CONFIG", true));
         assertEquals(List.of("listener.name.NAME.CONFIG"), DynamicBrokerConfig.brokerConfigSynonyms("listener.name.NAME.CONFIG", false));

@@ -32,13 +32,13 @@ public final class TransactionStateManagerConfig {
     public static final String TRANSACTIONS_MAX_TIMEOUT_MS_CONFIG = "transaction.max.timeout.ms";
     public static final int TRANSACTIONS_MAX_TIMEOUT_MS_DEFAULT = (int) TimeUnit.MINUTES.toMillis(15);
     public static final String TRANSACTIONS_MAX_TIMEOUT_MS_DOC = "The maximum allowed timeout for transactions. " +
-            "If a client’s requested transaction time exceed this, then the broker will return an error in InitProducerIdRequest. " +
-            "This prevents a client from too large of a timeout, which can stall consumers reading from topics included in the transaction.";
+        "If a client’s requested transaction time exceed this, then the broker will return an error in InitProducerIdRequest. " +
+        "This prevents a client from too large of a timeout, which can stall consumers reading from topics included in the transaction.";
 
     public static final String TRANSACTIONAL_ID_EXPIRATION_MS_CONFIG = "transactional.id.expiration.ms";
     public static final int TRANSACTIONAL_ID_EXPIRATION_MS_DEFAULT = (int) TimeUnit.DAYS.toMillis(7);
     public static final String TRANSACTIONAL_ID_EXPIRATION_MS_DOC = "The time in ms that the transaction coordinator will wait without receiving any transaction status updates " +
-            "for the current transaction before expiring its transactional id. Transactional IDs will not expire while a the transaction is still ongoing.";
+        "for the current transaction before expiring its transactional id. Transactional IDs will not expire while a the transaction is still ongoing.";
 
     public static final String TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG = "transaction.abort.timed.out.transaction.cleanup.interval.ms";
     public static final int TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT = (int) TimeUnit.SECONDS.toMillis(10);
@@ -54,12 +54,12 @@ public final class TransactionStateManagerConfig {
 
     public static final String METRICS_GROUP = "transaction-coordinator-metrics";
     public static final String LOAD_TIME_SENSOR = "TransactionsPartitionLoadTime";
-    public static final ConfigDef CONFIG_DEF =  new ConfigDef()
-            .define(TRANSACTIONAL_ID_EXPIRATION_MS_CONFIG, INT, TRANSACTIONAL_ID_EXPIRATION_MS_DEFAULT, atLeast(1), HIGH, TRANSACTIONAL_ID_EXPIRATION_MS_DOC)
-            .define(TRANSACTIONS_MAX_TIMEOUT_MS_CONFIG, INT, TRANSACTIONS_MAX_TIMEOUT_MS_DEFAULT, atLeast(1), HIGH, TRANSACTIONS_MAX_TIMEOUT_MS_DOC)
-            .define(TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG, INT, TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT, atLeast(1), LOW, TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTIONS_INTERVAL_MS_DOC)
-            .define(TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_CONFIG, INT, TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_DEFAULT, atLeast(1), LOW, TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONS_INTERVAL_MS_DOC)
-            .define(TRANSACTIONS_2PC_ENABLED_CONFIG, BOOLEAN, TRANSACTIONS_2PC_ENABLED_DEFAULT, LOW, TRANSACTIONS_2PC_ENABLED_DOC);
+    public static final ConfigDef CONFIG_DEF = new ConfigDef()
+        .define(TRANSACTIONAL_ID_EXPIRATION_MS_CONFIG, INT, TRANSACTIONAL_ID_EXPIRATION_MS_DEFAULT, atLeast(1), HIGH, TRANSACTIONAL_ID_EXPIRATION_MS_DOC)
+        .define(TRANSACTIONS_MAX_TIMEOUT_MS_CONFIG, INT, TRANSACTIONS_MAX_TIMEOUT_MS_DEFAULT, atLeast(1), HIGH, TRANSACTIONS_MAX_TIMEOUT_MS_DOC)
+        .define(TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG, INT, TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT, atLeast(1), LOW, TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTIONS_INTERVAL_MS_DOC)
+        .define(TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_CONFIG, INT, TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_DEFAULT, atLeast(1), LOW, TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONS_INTERVAL_MS_DOC)
+        .define(TRANSACTIONS_2PC_ENABLED_CONFIG, BOOLEAN, TRANSACTIONS_2PC_ENABLED_DEFAULT, LOW, TRANSACTIONS_2PC_ENABLED_DOC);
 
     private final int transactionalIdExpirationMs;
     private final int transactionMaxTimeoutMs;

@@ -25,13 +25,14 @@ public final class TxnMetadata {
     public OptionalLong lastOffset;
 
     public TxnMetadata(long producerId,
-                       LogOffsetMetadata firstOffset,
-                       OptionalLong lastOffset) {
+            LogOffsetMetadata firstOffset,
+            OptionalLong lastOffset) {
         Objects.requireNonNull(firstOffset, "firstOffset must be non null");
         this.producerId = producerId;
         this.firstOffset = firstOffset;
         this.lastOffset = lastOffset;
     }
+
     public TxnMetadata(long producerId, long firstOffset) {
         this(producerId, new LogOffsetMetadata(firstOffset));
     }

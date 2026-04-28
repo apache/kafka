@@ -81,8 +81,8 @@ public class DefaultRecordBatchTest {
                 for (boolean isControlBatch : Arrays.asList(true, false)) {
                     ByteBuffer buffer = ByteBuffer.allocate(2048);
                     DefaultRecordBatch.writeEmptyHeader(buffer, RecordBatch.CURRENT_MAGIC_VALUE, producerId,
-                            producerEpoch, baseSequence, baseOffset, lastOffset, partitionLeaderEpoch, timestampType,
-                            timestamp, isTransactional, isControlBatch);
+                        producerEpoch, baseSequence, baseOffset, lastOffset, partitionLeaderEpoch, timestampType,
+                        timestamp, isTransactional, isControlBatch);
                     buffer.flip();
                     DefaultRecordBatch batch = new DefaultRecordBatch(buffer);
                     assertEquals(producerId, batch.producerId());
@@ -107,7 +107,7 @@ public class DefaultRecordBatchTest {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
 
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, Compression.NONE,
-                TimestampType.CREATE_TIME, 1234567L);
+            TimestampType.CREATE_TIME, 1234567L);
         builder.appendWithOffset(1234567, 1L, "a".getBytes(), "v".getBytes());
         builder.appendWithOffset(1234568, 2L, "b".getBytes(), "v".getBytes());
 
@@ -135,7 +135,7 @@ public class DefaultRecordBatchTest {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
 
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, Compression.NONE,
-                TimestampType.CREATE_TIME, 1234567L, RecordBatch.NO_TIMESTAMP, pid, epoch, baseSequence);
+            TimestampType.CREATE_TIME, 1234567L, RecordBatch.NO_TIMESTAMP, pid, epoch, baseSequence);
         builder.appendWithOffset(1234567, 1L, "a".getBytes(), "v".getBytes());
         builder.appendWithOffset(1234568, 2L, "b".getBytes(), "v".getBytes());
 
@@ -162,7 +162,7 @@ public class DefaultRecordBatchTest {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
 
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, Compression.NONE,
-                TimestampType.CREATE_TIME, 1234567L, RecordBatch.NO_TIMESTAMP, pid, epoch, baseSequence);
+            TimestampType.CREATE_TIME, 1234567L, RecordBatch.NO_TIMESTAMP, pid, epoch, baseSequence);
         builder.appendWithOffset(1234567, 1L, "a".getBytes(), "v".getBytes());
         builder.appendWithOffset(1234568, 2L, "b".getBytes(), "v".getBytes());
         builder.appendWithOffset(1234569, 3L, "c".getBytes(), "v".getBytes());
@@ -185,13 +185,13 @@ public class DefaultRecordBatchTest {
 
     @Test
     public void testSizeInBytes() {
-        Header[] headers = new Header[] {
+        Header[] headers = new Header[]{
             new RecordHeader("foo", "value".getBytes()),
             new RecordHeader("bar", null)
         };
 
         long timestamp = System.currentTimeMillis();
-        SimpleRecord[] records = new SimpleRecord[] {
+        SimpleRecord[] records = new SimpleRecord[]{
             new SimpleRecord(timestamp, "key".getBytes(), "value".getBytes()),
             new SimpleRecord(timestamp + 30000, null, "value".getBytes()),
             new SimpleRecord(timestamp + 60000, "key".getBytes(), null),
@@ -204,10 +204,10 @@ public class DefaultRecordBatchTest {
     @Test
     public void testInvalidRecordSize() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
-                Compression.NONE, TimestampType.CREATE_TIME,
-                new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
-                new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
-                new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
+            Compression.NONE, TimestampType.CREATE_TIME,
+            new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+            new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+            new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
 
         ByteBuffer buffer = records.buffer();
         buffer.putInt(DefaultRecordBatch.LENGTH_OFFSET, 10);
@@ -256,10 +256,10 @@ public class DefaultRecordBatchTest {
     @Test
     public void testInvalidCrc() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
-                Compression.NONE, TimestampType.CREATE_TIME,
-                new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
-                new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
-                new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
+            Compression.NONE, TimestampType.CREATE_TIME,
+            new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+            new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+            new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
 
         ByteBuffer buffer = records.buffer();
         buffer.putInt(DefaultRecordBatch.LAST_OFFSET_DELTA_OFFSET, 23);
@@ -271,13 +271,13 @@ public class DefaultRecordBatchTest {
 
     @Test
     public void testSetLastOffset() {
-        SimpleRecord[] simpleRecords = new SimpleRecord[] {
+        SimpleRecord[] simpleRecords = new SimpleRecord[]{
             new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
             new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
             new SimpleRecord(3L, "c".getBytes(), "3".getBytes())
         };
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
-                Compression.NONE, TimestampType.CREATE_TIME, simpleRecords);
+            Compression.NONE, TimestampType.CREATE_TIME, simpleRecords);
 
         long lastOffset = 500L;
         long firstOffset = lastOffset - simpleRecords.length + 1;
@@ -300,10 +300,10 @@ public class DefaultRecordBatchTest {
     @Test
     public void testSetPartitionLeaderEpoch() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
-                Compression.NONE, TimestampType.CREATE_TIME,
-                new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
-                new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
-                new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
+            Compression.NONE, TimestampType.CREATE_TIME,
+            new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+            new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+            new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
 
         int leaderEpoch = 500;
 
@@ -320,10 +320,10 @@ public class DefaultRecordBatchTest {
     @Test
     public void testSetLogAppendTime() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
-                Compression.NONE, TimestampType.CREATE_TIME,
-                new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
-                new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
-                new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
+            Compression.NONE, TimestampType.CREATE_TIME,
+            new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+            new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+            new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
 
         long logAppendTime = 15L;
 
@@ -345,10 +345,10 @@ public class DefaultRecordBatchTest {
     @Test
     public void testSetNoTimestampTypeNotAllowed() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
-                Compression.NONE, TimestampType.CREATE_TIME,
-                new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
-                new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
-                new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
+            Compression.NONE, TimestampType.CREATE_TIME,
+            new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+            new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+            new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
         DefaultRecordBatch batch = new DefaultRecordBatch(records.buffer());
         assertThrows(IllegalArgumentException.class, () -> batch.setMaxTimestamp(TimestampType.NO_TIMESTAMP_TYPE, RecordBatch.NO_TIMESTAMP));
     }
@@ -361,9 +361,9 @@ public class DefaultRecordBatchTest {
 
         ByteBuffer buffer = ByteBuffer.allocate(128);
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE,
-                Compression.NONE, TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, producerId,
-                producerEpoch, RecordBatch.NO_SEQUENCE, true, true, RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                buffer.remaining());
+            Compression.NONE, TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, producerId,
+            producerEpoch, RecordBatch.NO_SEQUENCE, true, true, RecordBatch.NO_PARTITION_LEADER_EPOCH,
+            buffer.remaining());
 
         EndTransactionMarker marker = new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch);
         builder.appendEndTxnMarker(System.currentTimeMillis(), marker);
@@ -387,10 +387,10 @@ public class DefaultRecordBatchTest {
     public void testStreamingIteratorConsistency(CompressionType compressionType) {
         Compression compression = Compression.of(compressionType).build();
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
-                compression, TimestampType.CREATE_TIME,
-                new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
-                new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
-                new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
+            compression, TimestampType.CREATE_TIME,
+            new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+            new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+            new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
         DefaultRecordBatch batch = new DefaultRecordBatch(records.buffer());
         try (CloseableIterator<Record> streamingIterator = batch.streamingIterator(BufferSupplier.create())) {
             TestUtils.checkEquals(streamingIterator, batch.iterator());
@@ -419,7 +419,7 @@ public class DefaultRecordBatchTest {
             new SimpleRecord(1000L, "abc".getBytes(), largeRecordValue),
             // one sample with headers, one of the header has null value
             new SimpleRecord(9999L, "abc".getBytes(), "0".getBytes(), headers)
-            );
+        );
 
         DefaultRecordBatch batch = new DefaultRecordBatch(records.buffer());
 
@@ -436,13 +436,13 @@ public class DefaultRecordBatchTest {
                 assertInstanceOf(DefaultRecordBatch.StreamRecordIterator.class, skipKeyValueIterator);
                 // assert correctness for compressed records
                 assertIterableEquals(Arrays.asList(
-                        new PartialDefaultRecord(9, (byte) 0, 0L, 1L, -1, 1, 1),
-                        new PartialDefaultRecord(8, (byte) 0, 1L, 2L, -1, 1, -1),
-                        new PartialDefaultRecord(8, (byte) 0, 2L, 3L, -1, -1, 1),
-                        new PartialDefaultRecord(7, (byte) 0, 3L, 4L, -1, -1, -1),
-                        new PartialDefaultRecord(15 + largeRecordValue.length, (byte) 0, 4L, 1000L, -1, 3, largeRecordValue.length),
-                        new PartialDefaultRecord(23, (byte) 0, 5L, 9999L, -1, 3, 1)
-                    ), Utils.toList(skipKeyValueIterator));
+                    new PartialDefaultRecord(9, (byte) 0, 0L, 1L, -1, 1, 1),
+                    new PartialDefaultRecord(8, (byte) 0, 1L, 2L, -1, 1, -1),
+                    new PartialDefaultRecord(8, (byte) 0, 2L, 3L, -1, -1, 1),
+                    new PartialDefaultRecord(7, (byte) 0, 3L, 4L, -1, -1, -1),
+                    new PartialDefaultRecord(15 + largeRecordValue.length, (byte) 0, 4L, 1000L, -1, 3, largeRecordValue.length),
+                    new PartialDefaultRecord(23, (byte) 0, 5L, 9999L, -1, 3, 1)
+                ), Utils.toList(skipKeyValueIterator));
             }
         }
     }
@@ -473,6 +473,7 @@ public class DefaultRecordBatchTest {
             verify(bufferSupplier, times(expectedNumBufferAllocations)).release(any(ByteBuffer.class));
         }
     }
+
     private static Stream<Arguments> testBufferReuseInSkipKeyValueIterator() {
         byte[] smallRecordValue = "1".getBytes();
         byte[] largeRecordValue = new byte[512 * 1024]; // 512KB
@@ -568,7 +569,7 @@ public class DefaultRecordBatchTest {
     }
 
     private static DefaultRecordBatch recordsWithInvalidRecordCount(Byte magicValue, long timestamp,
-                                              CompressionType codec, int invalidCount) {
+        CompressionType codec, int invalidCount) {
         ByteBuffer buf = ByteBuffer.allocate(512);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buf, magicValue, Compression.of(codec).build(), TimestampType.CREATE_TIME, 0L);
         builder.appendWithOffset(0, timestamp, null, "hello".getBytes());

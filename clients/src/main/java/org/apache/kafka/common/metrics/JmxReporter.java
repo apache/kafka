@@ -58,7 +58,7 @@ public class JmxReporter implements MetricsReporter {
 
 
     public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(INCLUDE_CONFIG,
-                                                                         EXCLUDE_CONFIG);
+        EXCLUDE_CONFIG);
 
     public static final String DEFAULT_INCLUDE = ".*";
     public static final String DEFAULT_EXCLUDE = "";
@@ -265,11 +265,11 @@ public class JmxReporter implements MetricsReporter {
                 String attribute = entry.getKey();
                 KafkaMetric metric = entry.getValue();
                 attrs[i] = new MBeanAttributeInfo(attribute,
-                                                  double.class.getName(),
-                                                  metric.metricName().description(),
-                                                  true,
-                                                  false,
-                                                  false);
+                    double.class.getName(),
+                    metric.metricName().description(),
+                    true,
+                    false,
+                    false);
                 i += 1;
             }
             return new MBeanInfo(this.getClass().getName(), "", attrs, null, null, null);
@@ -309,10 +309,10 @@ public class JmxReporter implements MetricsReporter {
             Pattern excludePattern = Pattern.compile(exclude);
 
             return s -> includePattern.matcher(s).matches()
-                        && !excludePattern.matcher(s).matches();
+                && !excludePattern.matcher(s).matches();
         } catch (PatternSyntaxException e) {
             throw new ConfigException("JMX filter for configuration" + METRICS_CONFIG_PREFIX
-                                      + ".(include/exclude) is not a valid regular expression");
+                + ".(include/exclude) is not a valid regular expression");
         }
     }
 

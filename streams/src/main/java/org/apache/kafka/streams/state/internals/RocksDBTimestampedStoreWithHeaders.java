@@ -58,19 +58,19 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
 
 
     public RocksDBTimestampedStoreWithHeaders(final String name,
-                                              final String metricsScope) {
+        final String metricsScope) {
         super(name, metricsScope);
     }
 
     RocksDBTimestampedStoreWithHeaders(final String name,
-                                       final String parentDir,
-                                       final RocksDBMetricsRecorder metricsRecorder) {
+        final String parentDir,
+        final RocksDBMetricsRecorder metricsRecorder) {
         super(name, parentDir, metricsRecorder);
     }
 
     @Override
     void openRocksDB(final DBOptions dbOptions,
-                     final ColumnFamilyOptions columnFamilyOptions) {
+        final ColumnFamilyOptions columnFamilyOptions) {
         // Check if we're upgrading from RocksDBTimestampedStore or from plain RocksDBStore
         final List<byte[]> existingCFs;
         try (final Options options = new Options(dbOptions, new ColumnFamilyOptions())) {
@@ -92,7 +92,7 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
     }
 
     private void openFromDefaultStore(final DBOptions dbOptions,
-                                      final ColumnFamilyOptions columnFamilyOptions) {
+        final ColumnFamilyOptions columnFamilyOptions) {
 
         final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
             dbOptions,
@@ -132,7 +132,7 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
     }
 
     private void openFromTimestampedStore(final DBOptions dbOptions,
-                                          final ColumnFamilyOptions columnFamilyOptions) {
+        final ColumnFamilyOptions columnFamilyOptions) {
         final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
             dbOptions,
             // we have to open the default CF to be able to open the legacy CF, but we won't use it
@@ -172,7 +172,7 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
                         headersCf,
                         HeadersBytesStore::convertToHeaderFormat,
                         this,
-                            open
+                        open
                     );
                 } else {
                     log.info("Opening store {} in regular headers-aware mode", name);
@@ -197,8 +197,8 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
     @SuppressWarnings("SynchronizeOnNonFinalField")
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
+        final PositionBound positionBound,
+        final QueryConfig config) {
         final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
         final QueryResult<R> result;
 

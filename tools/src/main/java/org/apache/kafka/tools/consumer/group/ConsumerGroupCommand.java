@@ -156,7 +156,7 @@ public class ConsumerGroupCommand {
         Set<GroupState> validStates = GroupState.groupStatesForType(GroupType.CONSUMER);
         if (!validStates.containsAll(parsedStates)) {
             throw new IllegalArgumentException("Invalid state list '" + input + "'. Valid states are: " +
-                    validStates.stream().map(GroupState::toString).collect(Collectors.joining(", ")));
+                validStates.stream().map(GroupState::toString).collect(Collectors.joining(", ")));
         }
         return parsedStates;
     }
@@ -410,7 +410,7 @@ public class ConsumerGroupCommand {
                         for (MemberAssignmentState memberAssignment : assignments.get()) {
                             maxGroupLen = Math.max(maxGroupLen, memberAssignment.group().length());
                             maxConsumerIdLen = Math.max(maxConsumerIdLen, memberAssignment.consumerId().length());
-                            maxGroupInstanceIdLen =  Math.max(maxGroupInstanceIdLen, memberAssignment.groupInstanceId().length());
+                            maxGroupInstanceIdLen = Math.max(maxGroupInstanceIdLen, memberAssignment.groupInstanceId().length());
                             maxHostLen = Math.max(maxHostLen, memberAssignment.host().length());
                             maxClientIdLen = Math.max(maxClientIdLen, memberAssignment.clientId().length());
                             includeGroupInstanceId = includeGroupInstanceId || !memberAssignment.groupInstanceId().isEmpty();
@@ -618,14 +618,14 @@ public class ConsumerGroupCommand {
 
             // prepare data for partitions without leaders
             List<PartitionAssignmentState> noneLeaderAssignments = topicPartitionsWithoutLeader.stream()
-                    .map(tp -> getDescribePartitionResult.apply(tp, Optional.empty())).toList();
+                .map(tp -> getDescribePartitionResult.apply(tp, Optional.empty())).toList();
 
             // concat the data and then sort them
             return Stream.concat(existLeaderAssignments.stream(), noneLeaderAssignments.stream())
-                    .sorted(Comparator.<PartitionAssignmentState, String>comparing(
-                            state -> state.topic().orElse(""), String::compareTo)
-                            .thenComparingInt(state -> state.partition().orElse(-1)))
-                    .collect(Collectors.toList());
+                .sorted(Comparator.<PartitionAssignmentState, String>comparing(
+                    state -> state.topic().orElse(""), String::compareTo)
+                    .thenComparingInt(state -> state.partition().orElse(-1)))
+                .collect(Collectors.toList());
         }
 
         Map<String, Map<TopicPartition, OffsetAndMetadata>> resetOffsets() {
@@ -858,13 +858,13 @@ public class ConsumerGroupCommand {
                     .forEach(e -> unassignedPartitions.put(e.getKey(), e.getValue()));
                 Collection<PartitionAssignmentState> rowsWithoutConsumer = !unassignedPartitions.isEmpty()
                     ? collectConsumerAssignment(
-                        groupId,
-                        Optional.of(consumerGroup.coordinator()),
-                        unassignedPartitions.keySet(),
-                        committedOffsets,
-                        Optional.of(MISSING_COLUMN_VALUE),
-                        Optional.of(MISSING_COLUMN_VALUE),
-                        Optional.of(MISSING_COLUMN_VALUE))
+                    groupId,
+                    Optional.of(consumerGroup.coordinator()),
+                    unassignedPartitions.keySet(),
+                    committedOffsets,
+                    Optional.of(MISSING_COLUMN_VALUE),
+                    Optional.of(MISSING_COLUMN_VALUE),
+                    Optional.of(MISSING_COLUMN_VALUE))
                     : List.of();
 
                 rowsWithConsumer.addAll(rowsWithoutConsumer);
@@ -898,7 +898,7 @@ public class ConsumerGroupCommand {
                         consumer.memberEpoch(),
                         consumerGroup.targetAssignmentEpoch(),
                         consumer.upgraded()
-                )).collect(Collectors.toList());
+                    )).collect(Collectors.toList());
                 res.put(groupId, new SimpleImmutableEntry<>(Optional.of(state), Optional.of(memberAssignmentStates)));
             });
             return res;

@@ -50,23 +50,23 @@ public class OAuthBearerUnsecuredValidatorCallbackHandlerTest {
     private static final String ISSUED_AT_CLAIM_TEXT = claimOrHeaderText("iat", MOCK_TIME.milliseconds() / 1000.0);
     private static final String SCOPE_CLAIM_TEXT = claimOrHeaderText("scope", "scope1");
     private static final Map<String, String> MODULE_OPTIONS_MAP_NO_SCOPE_REQUIRED = Map.of(
-            "unsecuredValidatorPrincipalClaimName", "principal",
-            "unsecuredValidatorAllowableClockSkewMs", "1");
+        "unsecuredValidatorPrincipalClaimName", "principal",
+        "unsecuredValidatorAllowableClockSkewMs", "1");
 
     private static final Map<String, String> MODULE_OPTIONS_MAP_REQUIRE_EXISTING_SCOPE = Map.of(
-            "unsecuredValidatorRequiredScope", "scope1");
+        "unsecuredValidatorRequiredScope", "scope1");
 
     private static final Map<String, String> MODULE_OPTIONS_MAP_REQUIRE_ADDITIONAL_SCOPE = Map.of(
-            "unsecuredValidatorRequiredScope", "scope1 scope2");
+        "unsecuredValidatorRequiredScope", "scope1 scope2");
 
 
     @Test
     public void validToken() {
-        for (final boolean includeOptionalIssuedAtClaim : new boolean[] {true, false}) {
+        for (final boolean includeOptionalIssuedAtClaim : new boolean[]{true, false}) {
             String claimsJson = "{" + PRINCIPAL_CLAIM_TEXT + comma(EXPIRATION_TIME_CLAIM_TEXT)
-                    + (includeOptionalIssuedAtClaim ? comma(ISSUED_AT_CLAIM_TEXT) : "") + "}";
+                + (includeOptionalIssuedAtClaim ? comma(ISSUED_AT_CLAIM_TEXT) : "") + "}";
             Object validationResult = validationResult(UNSECURED_JWT_HEADER_JSON, claimsJson,
-                    MODULE_OPTIONS_MAP_NO_SCOPE_REQUIRED);
+                MODULE_OPTIONS_MAP_NO_SCOPE_REQUIRED);
             assertInstanceOf(OAuthBearerValidatorCallback.class, validationResult);
             assertInstanceOf(OAuthBearerUnsecuredJws.class, ((OAuthBearerValidatorCallback) validationResult).token());
         }
@@ -74,9 +74,9 @@ public class OAuthBearerUnsecuredValidatorCallbackHandlerTest {
 
     @Test
     public void badOrMissingPrincipal() {
-        for (boolean exists : new boolean[] {true, false}) {
+        for (boolean exists : new boolean[]{true, false}) {
             String claimsJson = "{" + EXPIRATION_TIME_CLAIM_TEXT + (exists ? comma(BAD_PRINCIPAL_CLAIM_TEXT) : "")
-                    + "}";
+                + "}";
             confirmFailsValidation(UNSECURED_JWT_HEADER_JSON, claimsJson, MODULE_OPTIONS_MAP_NO_SCOPE_REQUIRED);
         }
     }
@@ -84,7 +84,7 @@ public class OAuthBearerUnsecuredValidatorCallbackHandlerTest {
     @Test
     public void tooEarlyExpirationTime() {
         String claimsJson = "{" + PRINCIPAL_CLAIM_TEXT + comma(ISSUED_AT_CLAIM_TEXT)
-                + comma(TOO_EARLY_EXPIRATION_TIME_CLAIM_TEXT) + "}";
+            + comma(TOO_EARLY_EXPIRATION_TIME_CLAIM_TEXT) + "}";
         confirmFailsValidation(UNSECURED_JWT_HEADER_JSON, claimsJson, MODULE_OPTIONS_MAP_NO_SCOPE_REQUIRED);
     }
 
@@ -92,7 +92,7 @@ public class OAuthBearerUnsecuredValidatorCallbackHandlerTest {
     public void includesRequiredScope() {
         String claimsJson = "{" + SUB_CLAIM_TEXT + comma(EXPIRATION_TIME_CLAIM_TEXT) + comma(SCOPE_CLAIM_TEXT) + "}";
         Object validationResult = validationResult(UNSECURED_JWT_HEADER_JSON, claimsJson,
-                MODULE_OPTIONS_MAP_REQUIRE_EXISTING_SCOPE);
+            MODULE_OPTIONS_MAP_REQUIRE_EXISTING_SCOPE);
         assertInstanceOf(OAuthBearerValidatorCallback.class, validationResult);
         assertInstanceOf(OAuthBearerUnsecuredJws.class, ((OAuthBearerValidatorCallback) validationResult).token());
     }
@@ -101,17 +101,17 @@ public class OAuthBearerUnsecuredValidatorCallbackHandlerTest {
     public void missingRequiredScope() {
         String claimsJson = "{" + SUB_CLAIM_TEXT + comma(EXPIRATION_TIME_CLAIM_TEXT) + comma(SCOPE_CLAIM_TEXT) + "}";
         confirmFailsValidation(UNSECURED_JWT_HEADER_JSON, claimsJson, MODULE_OPTIONS_MAP_REQUIRE_ADDITIONAL_SCOPE,
-                "[scope1, scope2]");
+            "[scope1, scope2]");
     }
 
     private static void confirmFailsValidation(String headerJson, String claimsJson,
-            Map<String, String> moduleOptionsMap) throws OAuthBearerConfigException, OAuthBearerIllegalTokenException {
+        Map<String, String> moduleOptionsMap) throws OAuthBearerConfigException, OAuthBearerIllegalTokenException {
         confirmFailsValidation(headerJson, claimsJson, moduleOptionsMap, null);
     }
 
     private static void confirmFailsValidation(String headerJson, String claimsJson,
-            Map<String, String> moduleOptionsMap, String optionalFailureScope) throws OAuthBearerConfigException,
-            OAuthBearerIllegalTokenException {
+        Map<String, String> moduleOptionsMap, String optionalFailureScope) throws OAuthBearerConfigException,
+        OAuthBearerIllegalTokenException {
         Object validationResultObj = validationResult(headerJson, claimsJson, moduleOptionsMap);
         assertInstanceOf(OAuthBearerValidatorCallback.class, validationResultObj);
         OAuthBearerValidatorCallback callback = (OAuthBearerValidatorCallback) validationResultObj;
@@ -130,10 +130,10 @@ public class OAuthBearerUnsecuredValidatorCallbackHandlerTest {
         Encoder urlEncoderNoPadding = Base64.getUrlEncoder().withoutPadding();
         try {
             String tokenValue = String.format("%s.%s.",
-                    urlEncoderNoPadding.encodeToString(headerJson.getBytes(StandardCharsets.UTF_8)),
-                    urlEncoderNoPadding.encodeToString(claimsJson.getBytes(StandardCharsets.UTF_8)));
+                urlEncoderNoPadding.encodeToString(headerJson.getBytes(StandardCharsets.UTF_8)),
+                urlEncoderNoPadding.encodeToString(claimsJson.getBytes(StandardCharsets.UTF_8)));
             OAuthBearerValidatorCallback callback = new OAuthBearerValidatorCallback(tokenValue);
-            createCallbackHandler(moduleOptionsMap).handle(new Callback[] {callback});
+            createCallbackHandler(moduleOptionsMap).handle(new Callback[]{callback});
             return callback;
         } catch (Exception e) {
             return e;
@@ -144,10 +144,10 @@ public class OAuthBearerUnsecuredValidatorCallbackHandlerTest {
     private static OAuthBearerUnsecuredValidatorCallbackHandler createCallbackHandler(Map<String, String> options) {
         TestJaasConfig config = new TestJaasConfig();
         config.createOrUpdateEntry("KafkaClient", "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule",
-                (Map) options);
+            (Map) options);
         OAuthBearerUnsecuredValidatorCallbackHandler callbackHandler = new OAuthBearerUnsecuredValidatorCallbackHandler();
         callbackHandler.configure(Collections.emptyMap(), OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
-                Collections.singletonList(config.getAppConfigurationEntry("KafkaClient")[0]));
+            Collections.singletonList(config.getAppConfigurationEntry("KafkaClient")[0]));
         return callbackHandler;
     }
 

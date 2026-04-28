@@ -28,9 +28,9 @@ class SessionSegmentsWithHeaders extends AbstractSegments<SessionSegmentWithHead
     private final RocksDBMetricsRecorder metricsRecorder;
 
     SessionSegmentsWithHeaders(final String name,
-                               final String metricsScope,
-                               final long retentionPeriod,
-                               final long segmentInterval) {
+        final String metricsScope,
+        final long retentionPeriod,
+        final long segmentInterval) {
         super(name, retentionPeriod, segmentInterval);
         metricsRecorder = new RocksDBMetricsRecorder(metricsScope, name);
     }
@@ -48,8 +48,8 @@ class SessionSegmentsWithHeaders extends AbstractSegments<SessionSegmentWithHead
 
     @Override
     public SessionSegmentWithHeaders getOrCreateSegmentIfLive(final long segmentId,
-                                                              final StateStoreContext context,
-                                                              final long streamTime) {
+        final StateStoreContext context,
+        final long streamTime) {
         final SessionSegmentWithHeaders segment = super.getOrCreateSegmentIfLive(segmentId, context, streamTime);
         cleanupExpiredSegments(streamTime);
         return segment;

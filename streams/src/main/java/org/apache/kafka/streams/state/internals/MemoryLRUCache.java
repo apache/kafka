@@ -51,7 +51,7 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
     protected final Map<Bytes, byte[]> map;
 
     private boolean restoring = false; // TODO: this is a sub-optimal solution to avoid logging during restoration.
-                                       // in the future we should augment the StateRestoreCallback with onComplete etc to better resolve this.
+    // in the future we should augment the StateRestoreCallback with onComplete etc to better resolve this.
     private volatile boolean open = true;
     protected StateStoreContext context;
 
@@ -210,7 +210,7 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
      */
     @Override
     public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
-                                                                                    final PS prefixKeySerializer) {
+        final PS prefixKeySerializer) {
         throw new UnsupportedOperationException("MemoryLRUCache does not support prefixScan() function.");
     }
 

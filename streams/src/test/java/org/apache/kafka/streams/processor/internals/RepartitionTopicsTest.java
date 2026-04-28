@@ -96,7 +96,7 @@ public class RepartitionTopicsTest {
         mkMap(mkEntry(REPARTITION_TOPIC_NAME1, REPARTITION_TOPIC_CONFIG1)),
         Collections.emptyMap()
     );
-    final  StreamsConfig config = new DummyStreamsConfig();
+    final StreamsConfig config = new DummyStreamsConfig();
 
     @Mock
     InternalTopologyBuilder internalTopologyBuilder;
@@ -376,8 +376,8 @@ public class RepartitionTopicsTest {
     }
 
     private void verifyRepartitionTopicPartitionInfo(final Map<TopicPartition, PartitionInfo> topicPartitionsInfo,
-                                                     final String topic,
-                                                     final int partition) {
+        final String topic,
+        final int partition) {
         final TopicPartition repartitionTopicPartition = new TopicPartition(topic, partition);
         assertThat(topicPartitionsInfo.containsKey(repartitionTopicPartition), is(true));
         final PartitionInfo repartitionTopicInfo = topicPartitionsInfo.get(repartitionTopicPartition);
@@ -404,8 +404,8 @@ public class RepartitionTopicsTest {
     }
 
     private void setupClusterWithMissingTopicsAndMissingPartitionCounts(final Set<String> missingTopics,
-                                                                        final Set<String> topicsWithMissingPartitionCounts,
-                                                                        final boolean mockPartitionCount) {
+        final Set<String> topicsWithMissingPartitionCounts,
+        final boolean mockPartitionCount) {
         final Set<String> topics = new HashSet<>(List.of(
             SOURCE_TOPIC_NAME1,
             SOURCE_TOPIC_NAME2,

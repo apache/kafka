@@ -66,9 +66,9 @@ public class CreatePartitionsRequest extends AbstractRequest {
         ApiError apiError = ApiError.fromThrowable(e);
         for (CreatePartitionsTopic topic : data.topics()) {
             response.results().add(new CreatePartitionsTopicResult()
-                    .setName(topic.name())
-                    .setErrorCode(apiError.error().code())
-                    .setErrorMessage(apiError.message())
+                .setName(topic.name())
+                .setErrorCode(apiError.error().code())
+                .setErrorMessage(apiError.message())
             );
         }
         return new CreatePartitionsResponse(response);

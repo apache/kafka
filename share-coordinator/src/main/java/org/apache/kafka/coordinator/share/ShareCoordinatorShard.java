@@ -235,7 +235,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     handleShareUpdate((ShareUpdateKey) key, (ShareUpdateValue) messageOrNull(value));
                     break;
                 default:
-                    // Noop
+                // Noop
             }
         } catch (UnsupportedVersionException ex) {
             // Ignore
@@ -732,8 +732,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         long startOffset
     ) {
         return new PersisterStateBatchCombiner(soFar, partitionData.stateBatches().stream()
-            .map(PersisterStateBatch::from)
-            .toList(),
+                .map(PersisterStateBatch::from)
+                .toList(),
             startOffset
         ).combineStateBatches();
     }

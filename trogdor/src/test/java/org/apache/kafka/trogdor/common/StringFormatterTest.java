@@ -50,8 +50,8 @@ public class StringFormatterTest {
     public void testPrettyPrintGrid() {
         assertEquals(String.format(
                 "ANIMAL  NUMBER INDEX %n" +
-                "lion    1      12345 %n" +
-                "manatee 50     1     %n"),
+                    "lion    1      12345 %n" +
+                    "manatee 50     1     %n"),
             StringFormatter.prettyPrintGrid(
                 List.of(List.of("ANIMAL", "NUMBER", "INDEX"),
                     List.of("lion", "1", "12345"),

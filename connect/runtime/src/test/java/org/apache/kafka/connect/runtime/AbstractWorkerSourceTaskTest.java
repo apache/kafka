@@ -253,7 +253,7 @@ public class AbstractWorkerSourceTaskTest {
 
         // Can just use the same record for key and value
         List<SourceRecord> records = List.of(
-            new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD)
+                new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD)
         );
 
         expectSendRecord(emptyHeaders());
@@ -345,8 +345,8 @@ public class AbstractWorkerSourceTaskTest {
         expectTopicCreation(TOPIC);
 
         workerTask.toSend = List.of(
-            new SourceRecord(PARTITION, OFFSET, TOPIC, null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD,
-                null, connectHeaders)
+                new SourceRecord(PARTITION, OFFSET, TOPIC, null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD,
+                        null, connectHeaders)
         );
         workerTask.sendRecords();
 
@@ -378,15 +378,15 @@ public class AbstractWorkerSourceTaskTest {
         String encodingB = "koi8_r";
 
         org.apache.kafka.connect.header.Headers headersA = new ConnectHeaders()
-            .addString("encoding", encodingA);
+                .addString("encoding", encodingA);
         org.apache.kafka.connect.header.Headers headersB = new ConnectHeaders()
-            .addString("encoding", encodingB);
+                .addString("encoding", encodingB);
 
         workerTask.toSend = List.of(
-            new SourceRecord(PARTITION, OFFSET, "topic", null, Schema.STRING_SCHEMA, "a",
-                Schema.STRING_SCHEMA, stringA, null, headersA),
-            new SourceRecord(PARTITION, OFFSET, "topic", null, Schema.STRING_SCHEMA, "b",
-                Schema.STRING_SCHEMA, stringB, null, headersB)
+                new SourceRecord(PARTITION, OFFSET, "topic", null, Schema.STRING_SCHEMA, "a",
+                        Schema.STRING_SCHEMA, stringA, null, headersA),
+                new SourceRecord(PARTITION, OFFSET, "topic", null, Schema.STRING_SCHEMA, "b",
+                        Schema.STRING_SCHEMA, stringB, null, headersB)
         );
         workerTask.sendRecords();
 
@@ -400,15 +400,15 @@ public class AbstractWorkerSourceTaskTest {
 
         assertEquals(ByteBuffer.wrap("a".getBytes()), ByteBuffer.wrap(sentRecordA.key()));
         assertEquals(
-            ByteBuffer.wrap(stringA.getBytes(encodingA)),
-            ByteBuffer.wrap(sentRecordA.value())
+                ByteBuffer.wrap(stringA.getBytes(encodingA)),
+                ByteBuffer.wrap(sentRecordA.value())
         );
         assertEquals(encodingA, new String(sentRecordA.headers().lastHeader("encoding").value()));
 
         assertEquals(ByteBuffer.wrap("b".getBytes()), ByteBuffer.wrap(sentRecordB.key()));
         assertEquals(
-            ByteBuffer.wrap(stringB.getBytes(encodingB)),
-            ByteBuffer.wrap(sentRecordB.value())
+                ByteBuffer.wrap(stringB.getBytes(encodingB)),
+                ByteBuffer.wrap(sentRecordB.value())
         );
         assertEquals(encodingB, new String(sentRecordB.headers().lastHeader("encoding").value()));
 
@@ -512,10 +512,10 @@ public class AbstractWorkerSourceTaskTest {
                 .thenThrow(new RetriableException(new TimeoutException("timeout")))
                 .thenReturn(Map.of());
         when(admin.createOrFindTopics(any(NewTopic.class))).thenAnswer(
-            (Answer<TopicAdmin.TopicCreationResponse>) invocation -> {
-                NewTopic newTopic = invocation.getArgument(0);
-                return createdTopic(newTopic.name());
-            });
+                (Answer<TopicAdmin.TopicCreationResponse>) invocation -> {
+                    NewTopic newTopic = invocation.getArgument(0);
+                    return createdTopic(newTopic.name());
+                });
 
         // Try to send 3, make first pass, second fail. Should save last record
         workerTask.toSend = List.of(record1, record2, record3);
@@ -532,9 +532,9 @@ public class AbstractWorkerSourceTaskTest {
         verify(admin, times(2)).createOrFindTopics(newTopicCaptor.capture());
 
         assertEquals(List.of(TOPIC, OTHER_TOPIC), newTopicCaptor.getAllValues()
-            .stream()
-            .map(NewTopic::name)
-            .toList());
+                .stream()
+                .map(NewTopic::name)
+                .toList());
     }
 
     @Test
@@ -559,13 +559,13 @@ public class AbstractWorkerSourceTaskTest {
         workerTask.toSend = List.of(record1, record2, record3);
         workerTask.sendRecords();
         assertEquals(List.of(record3), workerTask.toSend);
-        verifyTopicCreation(2,  TOPIC, OTHER_TOPIC); // Second call to createOrFindTopics will throw
+        verifyTopicCreation(2, TOPIC, OTHER_TOPIC); // Second call to createOrFindTopics will throw
 
         // Next they all succeed
         workerTask.sendRecords();
         assertNull(workerTask.toSend);
 
-        verifyTopicCreation(3,  TOPIC, OTHER_TOPIC, OTHER_TOPIC);
+        verifyTopicCreation(3, TOPIC, OTHER_TOPIC, OTHER_TOPIC);
     }
 
     @Test
@@ -577,7 +577,7 @@ public class AbstractWorkerSourceTaskTest {
 
         expectPreliminaryCalls(TOPIC);
         when(admin.describeTopics(TOPIC)).thenThrow(
-            new ConnectException(new TopicAuthorizationException("unauthorized"))
+                new ConnectException(new TopicAuthorizationException("unauthorized"))
         );
 
         workerTask.toSend = List.of(record1, record2);
@@ -594,7 +594,7 @@ public class AbstractWorkerSourceTaskTest {
         expectPreliminaryCalls(TOPIC);
         when(admin.describeTopics(TOPIC)).thenReturn(Map.of());
         when(admin.createOrFindTopics(any(NewTopic.class))).thenThrow(
-            new ConnectException(new TopicAuthorizationException("unauthorized"))
+                new ConnectException(new TopicAuthorizationException("unauthorized"))
         );
 
         workerTask.toSend = List.of(record1, record2);
@@ -853,6 +853,7 @@ public class AbstractWorkerSourceTaskTest {
     private void verifyTaskGetTopic() {
         verifyTaskGetTopic(1);
     }
+
     private void verifyTaskGetTopic(int times) {
         ArgumentCaptor<String> connectorCapture = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> topicCapture = ArgumentCaptor.forClass(String.class);
@@ -870,6 +871,7 @@ public class AbstractWorkerSourceTaskTest {
     private void verifyTopicCreation() {
         verifyTopicCreation(1, TOPIC);
     }
+
     private void verifyTopicCreation(int times, String... topics) {
         ArgumentCaptor<NewTopic> newTopicCapture = ArgumentCaptor.forClass(NewTopic.class);
 
@@ -954,15 +956,15 @@ public class AbstractWorkerSourceTaskTest {
     }
 
     private void createWorkerTask(Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter,
-                                  RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator, Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier,
-                                  TransformationChain<SourceRecord, SourceRecord> transformationChain) {
-        Plugin<Converter> keyConverterPlugin = metrics.wrap(keyConverter, taskId,  true);
-        Plugin<Converter> valueConverterPlugin = metrics.wrap(valueConverter, taskId,  false);
+            RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator, Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier,
+            TransformationChain<SourceRecord, SourceRecord> transformationChain) {
+        Plugin<Converter> keyConverterPlugin = metrics.wrap(keyConverter, taskId, true);
+        Plugin<Converter> valueConverterPlugin = metrics.wrap(valueConverter, taskId, false);
         Plugin<HeaderConverter> headerConverterPlugin = metrics.wrap(headerConverter, taskId);
         workerTask = new AbstractWorkerSourceTask(
                 taskId, sourceTask, statusListener, TargetState.STARTED, configState, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, transformationChain,
                 workerTransactionContext, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig), offsetReader, offsetWriter, offsetStore,
-                config, metrics, errorHandlingMetrics,  plugins.delegatingLoader(), Time.SYSTEM, retryWithToleranceOperator,
+                config, metrics, errorHandlingMetrics, plugins.delegatingLoader(), Time.SYSTEM, retryWithToleranceOperator,
                 statusBackingStore, Runnable::run, errorReportersSupplier, null, TestPlugins.noOpLoaderSwap()) {
             @Override
             protected void prepareToInitializeTask() {

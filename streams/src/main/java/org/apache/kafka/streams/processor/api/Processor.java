@@ -44,7 +44,8 @@ public interface Processor<KIn, VIn, KOut, VOut> {
      *
      * @param context the context; may not be null
      */
-    default void init(final ProcessorContext<KOut, VOut> context) {}
+    default void init(final ProcessorContext<KOut, VOut> context) {
+    }
 
     /**
      * Process the record. Note that record metadata is undefined in cases such as a forward call from a punctuator.
@@ -60,5 +61,6 @@ public interface Processor<KIn, VIn, KOut, VOut> {
      * <p>
      * Note: Do not close any streams managed resources, like {@link StateStore}s here, as they are managed by the library.
      */
-    default void close() {}
+    default void close() {
+    }
 }

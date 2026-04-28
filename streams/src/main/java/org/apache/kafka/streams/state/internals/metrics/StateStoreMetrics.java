@@ -35,7 +35,8 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateToSensor;
 
 public class StateStoreMetrics {
-    private StateStoreMetrics() {}
+    private StateStoreMetrics() {
+    }
 
     private static final String AVG_DESCRIPTION_PREFIX = "The average ";
     private static final String MAX_DESCRIPTION_PREFIX = "The maximum ";
@@ -100,7 +101,7 @@ public class StateStoreMetrics {
     private static final String PREFIX_SCAN = "prefix-scan";
     private static final String PREFIX_SCAN_DESCRIPTION = "calls to prefix-scan";
     private static final String PREFIX_SCAN_RATE_DESCRIPTION =
-            RATE_DESCRIPTION_PREFIX + PREFIX_SCAN_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
+        RATE_DESCRIPTION_PREFIX + PREFIX_SCAN_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
     private static final String PREFIX_SCAN_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION_PREFIX + PREFIX_SCAN_DESCRIPTION;
     private static final String PREFIX_SCAN_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION_PREFIX + PREFIX_SCAN_DESCRIPTION;
 
@@ -155,28 +156,28 @@ public class StateStoreMetrics {
 
     private static final String NUM_OPEN_ITERATORS = "num-open-iterators";
     private static final String NUM_OPEN_ITERATORS_DESCRIPTION =
-            "The current number of iterators on the store that have been created, but not yet closed";
+        "The current number of iterators on the store that have been created, but not yet closed";
 
     private static final String ITERATOR_DURATION = "iterator-duration";
     private static final String ITERATOR_DURATION_DESCRIPTION =
-            "time spent between creating an iterator and closing it, in nanoseconds";
+        "time spent between creating an iterator and closing it, in nanoseconds";
     private static final String ITERATOR_DURATION_AVG_DESCRIPTION =
-            AVG_DESCRIPTION_PREFIX + ITERATOR_DURATION_DESCRIPTION;
+        AVG_DESCRIPTION_PREFIX + ITERATOR_DURATION_DESCRIPTION;
     private static final String ITERATOR_DURATION_MAX_DESCRIPTION =
-            MAX_DESCRIPTION_PREFIX + ITERATOR_DURATION_DESCRIPTION;
+        MAX_DESCRIPTION_PREFIX + ITERATOR_DURATION_DESCRIPTION;
 
     private static final String NUM_KEYS = "num-keys";
     private static final String NUM_KEYS_DESCRIPTION =
-            "The current number of keys in the in-memory state store";
+        "The current number of keys in the in-memory state store";
 
     private static final String OLDEST_ITERATOR_OPEN_SINCE_MS = "oldest-iterator-open-since-ms";
     private static final String OLDEST_ITERATOR_OPEN_SINCE_MS_DESCRIPTION =
-            "The UNIX timestamp the oldest still open iterator was created, in milliseconds";
+        "The UNIX timestamp the oldest still open iterator was created, in milliseconds";
 
     public static Sensor putSensor(final String taskId,
-                                   final String storeType,
-                                   final String storeName,
-                                   final StreamsMetricsImpl streamsMetrics) {
+        final String storeType,
+        final String storeName,
+        final StreamsMetricsImpl streamsMetrics) {
         return throughputAndLatencySensor(
             taskId,
             storeType,
@@ -191,9 +192,9 @@ public class StateStoreMetrics {
     }
 
     public static Sensor putIfAbsentSensor(final String taskId,
-                                           final String storeType,
-                                           final String storeName,
-                                           final StreamsMetricsImpl streamsMetrics) {
+        final String storeType,
+        final String storeName,
+        final StreamsMetricsImpl streamsMetrics) {
         return throughputAndLatencySensor(
             taskId,
             storeType,
@@ -208,9 +209,9 @@ public class StateStoreMetrics {
     }
 
     public static Sensor putAllSensor(final String taskId,
-                                      final String storeType,
-                                      final String storeName,
-                                      final StreamsMetricsImpl streamsMetrics) {
+        final String storeType,
+        final String storeName,
+        final StreamsMetricsImpl streamsMetrics) {
         return throughputAndLatencySensor(
             taskId,
             storeType,
@@ -225,9 +226,9 @@ public class StateStoreMetrics {
     }
 
     public static Sensor getSensor(final String taskId,
-                                   final String storeType,
-                                   final String storeName,
-                                   final StreamsMetricsImpl streamsMetrics) {
+        final String storeType,
+        final String storeName,
+        final StreamsMetricsImpl streamsMetrics) {
         return throughputAndLatencySensor(
             taskId,
             storeType,
@@ -242,9 +243,9 @@ public class StateStoreMetrics {
     }
 
     public static Sensor fetchSensor(final String taskId,
-                                     final String storeType,
-                                     final String storeName,
-                                     final StreamsMetricsImpl streamsMetrics) {
+        final String storeType,
+        final String storeName,
+        final StreamsMetricsImpl streamsMetrics) {
         return throughputAndLatencySensor(
             taskId,
             storeType,
@@ -259,9 +260,9 @@ public class StateStoreMetrics {
     }
 
     public static Sensor allSensor(final String taskId,
-                                   final String storeType,
-                                   final String storeName,
-                                   final StreamsMetricsImpl streamsMetrics) {
+        final String storeType,
+        final String storeName,
+        final StreamsMetricsImpl streamsMetrics) {
         return throughputAndLatencySensor(
             taskId,
             storeType,
@@ -276,9 +277,9 @@ public class StateStoreMetrics {
     }
 
     public static Sensor rangeSensor(final String taskId,
-                                     final String storeType,
-                                     final String storeName,
-                                     final StreamsMetricsImpl streamsMetrics) {
+        final String storeType,
+        final String storeName,
+        final StreamsMetricsImpl streamsMetrics) {
         return throughputAndLatencySensor(
             taskId,
             storeType,
@@ -293,9 +294,9 @@ public class StateStoreMetrics {
     }
 
     public static Sensor prefixScanSensor(final String taskId,
-                                          final String storeType,
-                                          final String storeName,
-                                          final StreamsMetricsImpl streamsMetrics) {
+        final String storeType,
+        final String storeName,
+        final StreamsMetricsImpl streamsMetrics) {
         final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
         final Sensor sensor = streamsMetrics.storeLevelSensor(taskId, storeName, PREFIX_SCAN, RecordingLevel.DEBUG);
         addInvocationRateToSensor(
@@ -321,9 +322,9 @@ public class StateStoreMetrics {
      */
     @Deprecated
     public static Sensor flushSensor(final String taskId,
-                                     final String storeType,
-                                     final String storeName,
-                                     final StreamsMetricsImpl streamsMetrics) {
+        final String storeType,
+        final String storeName,
+        final StreamsMetricsImpl streamsMetrics) {
         return throughputAndLatencySensor(
             taskId,
             storeType,
@@ -338,9 +339,9 @@ public class StateStoreMetrics {
     }
 
     public static Sensor commitSensor(final String taskId,
-                                      final String storeType,
-                                      final String storeName,
-                                      final StreamsMetricsImpl streamsMetrics) {
+        final String storeType,
+        final String storeName,
+        final StreamsMetricsImpl streamsMetrics) {
         return throughputAndLatencySensor(
             taskId,
             storeType,
@@ -355,9 +356,9 @@ public class StateStoreMetrics {
     }
 
     public static Sensor deleteSensor(final String taskId,
-                                      final String storeType,
-                                      final String storeName,
-                                      final StreamsMetricsImpl streamsMetrics) {
+        final String storeType,
+        final String storeName,
+        final StreamsMetricsImpl streamsMetrics) {
         return throughputAndLatencySensor(
             taskId,
             storeType,
@@ -372,9 +373,9 @@ public class StateStoreMetrics {
     }
 
     public static Sensor removeSensor(final String taskId,
-                                      final String storeType,
-                                      final String storeName,
-                                      final StreamsMetricsImpl streamsMetrics) {
+        final String storeType,
+        final String storeName,
+        final StreamsMetricsImpl streamsMetrics) {
         return throughputAndLatencySensor(
             taskId,
             storeType,
@@ -389,9 +390,9 @@ public class StateStoreMetrics {
     }
 
     public static Sensor restoreSensor(final String taskId,
-                                       final String storeType,
-                                       final String storeName,
-                                       final StreamsMetricsImpl streamsMetrics) {
+        final String storeType,
+        final String storeName,
+        final StreamsMetricsImpl streamsMetrics) {
         return throughputAndLatencySensor(
             taskId, storeType,
             storeName,
@@ -405,9 +406,9 @@ public class StateStoreMetrics {
     }
 
     public static Sensor suppressionBufferCountSensor(final String taskId,
-                                                      final String storeType,
-                                                      final String storeName,
-                                                      final StreamsMetricsImpl streamsMetrics) {
+        final String storeType,
+        final String storeName,
+        final StreamsMetricsImpl streamsMetrics) {
         return sizeOrCountSensor(
             taskId,
             storeType,
@@ -421,9 +422,9 @@ public class StateStoreMetrics {
     }
 
     public static Sensor suppressionBufferSizeSensor(final String taskId,
-                                                     final String storeType,
-                                                     final String storeName,
-                                                     final StreamsMetricsImpl streamsMetrics) {
+        final String storeType,
+        final String storeName,
+        final StreamsMetricsImpl streamsMetrics) {
         return sizeOrCountSensor(
             taskId,
             storeType,
@@ -437,9 +438,9 @@ public class StateStoreMetrics {
     }
 
     public static Sensor e2ELatencySensor(final String taskId,
-                                          final String storeType,
-                                          final String storeName,
-                                          final StreamsMetricsImpl streamsMetrics) {
+        final String storeType,
+        final String storeName,
+        final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor = streamsMetrics.storeLevelSensor(taskId, storeName, RECORD_E2E_LATENCY, RecordingLevel.TRACE);
         final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
         addAvgAndMinAndMaxToSensor(
@@ -455,9 +456,9 @@ public class StateStoreMetrics {
     }
 
     public static Sensor iteratorDurationSensor(final String taskId,
-                                                final String storeType,
-                                                final String storeName,
-                                                final StreamsMetricsImpl streamsMetrics) {
+        final String storeType,
+        final String storeName,
+        final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor = streamsMetrics.storeLevelSensor(taskId, storeName, ITERATOR_DURATION, RecordingLevel.DEBUG);
         final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
         addAvgAndMaxToSensor(
@@ -472,46 +473,46 @@ public class StateStoreMetrics {
     }
 
     public static void addNumOpenIteratorsGauge(final String taskId,
-                                                final String storeType,
-                                                final String storeName,
-                                                final StreamsMetricsImpl streamsMetrics,
-                                                final Gauge<Long> numOpenIteratorsGauge) {
+        final String storeType,
+        final String storeName,
+        final StreamsMetricsImpl streamsMetrics,
+        final Gauge<Long> numOpenIteratorsGauge) {
         streamsMetrics.addStoreLevelMutableMetric(
-                taskId,
-                storeType,
-                storeName,
-                NUM_OPEN_ITERATORS,
-                NUM_OPEN_ITERATORS_DESCRIPTION,
-                RecordingLevel.INFO,
-                numOpenIteratorsGauge
+            taskId,
+            storeType,
+            storeName,
+            NUM_OPEN_ITERATORS,
+            NUM_OPEN_ITERATORS_DESCRIPTION,
+            RecordingLevel.INFO,
+            numOpenIteratorsGauge
         );
 
     }
 
     public static MetricName addOldestOpenIteratorGauge(final String taskId,
-                                                        final String storeType,
-                                                        final String storeName,
-                                                        final StreamsMetricsImpl streamsMetrics,
-                                                        final Gauge<Long> oldestOpenIteratorGauge) {
+        final String storeType,
+        final String storeName,
+        final StreamsMetricsImpl streamsMetrics,
+        final Gauge<Long> oldestOpenIteratorGauge) {
         return streamsMetrics.addStoreLevelMutableMetric(
-                taskId,
-                storeType,
-                storeName,
-                OLDEST_ITERATOR_OPEN_SINCE_MS,
-                OLDEST_ITERATOR_OPEN_SINCE_MS_DESCRIPTION,
-                RecordingLevel.DEBUG,
-                oldestOpenIteratorGauge
+            taskId,
+            storeType,
+            storeName,
+            OLDEST_ITERATOR_OPEN_SINCE_MS,
+            OLDEST_ITERATOR_OPEN_SINCE_MS_DESCRIPTION,
+            RecordingLevel.DEBUG,
+            oldestOpenIteratorGauge
         );
     }
 
     private static Sensor sizeOrCountSensor(final String taskId,
-                                            final String storeType,
-                                            final String storeName,
-                                            final String gaugeName,
-                                            final String descriptionOfAvg,
-                                            final String descriptionOfMax,
-                                            final RecordingLevel recordingLevel,
-                                            final StreamsMetricsImpl streamsMetrics) {
+        final String storeType,
+        final String storeName,
+        final String gaugeName,
+        final String descriptionOfAvg,
+        final String descriptionOfMax,
+        final RecordingLevel recordingLevel,
+        final StreamsMetricsImpl streamsMetrics) {
         // use the gauge name (either size or count) as the sensor suffix, and metric name prefix
         final Sensor sensor = streamsMetrics.storeLevelSensor(taskId, storeName, gaugeName, recordingLevel);
         final String group;
@@ -523,14 +524,14 @@ public class StateStoreMetrics {
     }
 
     private static Sensor throughputAndLatencySensor(final String taskId,
-                                                     final String storeType,
-                                                     final String storeName,
-                                                     final String operation,
-                                                     final String descriptionOfRate,
-                                                     final String descriptionOfAvg,
-                                                     final String descriptionOfMax,
-                                                     final RecordingLevel recordingLevel,
-                                                     final StreamsMetricsImpl streamsMetrics) {
+        final String storeType,
+        final String storeName,
+        final String operation,
+        final String descriptionOfRate,
+        final String descriptionOfAvg,
+        final String descriptionOfMax,
+        final RecordingLevel recordingLevel,
+        final StreamsMetricsImpl streamsMetrics) {
         // use operation as the sensor suffix and metric name prefix
         final Sensor sensor;
         final String latencyMetricName = operation + LATENCY_SUFFIX;
@@ -549,18 +550,18 @@ public class StateStoreMetrics {
     }
 
     public static void addNumKeysGauge(final String taskId,
-                                       final String storeType,
-                                       final String storeName,
-                                       final StreamsMetricsImpl streamsMetrics,
-                                       final Gauge<Long> numKeysGauge) {
+        final String storeType,
+        final String storeName,
+        final StreamsMetricsImpl streamsMetrics,
+        final Gauge<Long> numKeysGauge) {
         streamsMetrics.addStoreLevelMutableMetric(
-                taskId,
-                storeType,
-                storeName,
-                NUM_KEYS,
-                NUM_KEYS_DESCRIPTION,
-                RecordingLevel.INFO,
-                numKeysGauge
+            taskId,
+            storeType,
+            storeName,
+            NUM_KEYS,
+            NUM_KEYS_DESCRIPTION,
+            RecordingLevel.INFO,
+            numKeysGauge
         );
     }
 }

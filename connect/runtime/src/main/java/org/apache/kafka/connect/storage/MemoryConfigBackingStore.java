@@ -217,7 +217,7 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
     private static Map<ConnectorTaskId, Map<String, String>> taskConfigListAsMap(String connector, List<Map<String, String>> configs) {
         int index = 0;
         Map<ConnectorTaskId, Map<String, String>> result = new TreeMap<>();
-        for (Map<String, String> taskConfigMap: configs) {
+        for (Map<String, String> taskConfigMap : configs) {
             result.put(new ConnectorTaskId(connector, index++), taskConfigMap);
         }
         return result;

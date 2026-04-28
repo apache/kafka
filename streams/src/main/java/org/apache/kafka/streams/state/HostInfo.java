@@ -42,7 +42,7 @@ public class HostInfo {
     private final int port;
 
     public HostInfo(final String host,
-                    final int port) {
+        final int port) {
         this.host = host;
         this.port = port;
     }
@@ -105,8 +105,8 @@ public class HostInfo {
     @Override
     public String toString() {
         return "HostInfo{" +
-                "host=\'" + host + '\'' +
-                ", port=" + port +
-                '}';
+            "host=\'" + host + '\'' +
+            ", port=" + port +
+            '}';
     }
 }

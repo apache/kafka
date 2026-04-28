@@ -84,7 +84,7 @@ public class KerberosLogin extends AbstractLogin {
 
     @Override
     public void configure(Map<String, ?> configs, String contextName, Configuration configuration,
-                          AuthenticateCallbackHandler callbackHandler) {
+        AuthenticateCallbackHandler callbackHandler) {
         super.configure(configs, contextName, configuration, callbackHandler);
         this.ticketRenewWindowFactor = (Double) configs.get(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR);
         this.ticketRenewJitter = (Double) configs.get(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER);
@@ -311,7 +311,7 @@ public class KerberosLogin extends AbstractLogin {
         log.info("[Principal={}]: TGT valid starting at: {}", principal, tgt.getStartTime());
         log.info("[Principal={}]: TGT expires: {}", principal, tgt.getEndTime());
         long proposedRefresh = start + (long) ((expires - start) *
-                (ticketRenewWindowFactor + (ticketRenewJitter * RNG.nextDouble())));
+            (ticketRenewWindowFactor + (ticketRenewJitter * RNG.nextDouble())));
 
         if (proposedRefresh > expires)
             // proposedRefresh is too far in the future: it's after ticket expires: simply return now.
@@ -326,7 +326,7 @@ public class KerberosLogin extends AbstractLogin {
             KerberosPrincipal server = ticket.getServer();
             if (server.getName().equals("krbtgt/" + server.getRealm() + "@" + server.getRealm())) {
                 log.debug("Found TGT with client principal '{}' and server principal '{}'.", ticket.getClient().getName(),
-                        ticket.getServer().getName());
+                    ticket.getServer().getName());
                 return ticket;
             }
         }
@@ -337,7 +337,7 @@ public class KerberosLogin extends AbstractLogin {
         long now = currentElapsedTime();
         if (now - lastLogin < minTimeBeforeRelogin) {
             log.warn("[Principal={}]: Not attempting to re-login since the last re-login was attempted less than {} seconds before.",
-                    principal, minTimeBeforeRelogin / 1000);
+                principal, minTimeBeforeRelogin / 1000);
             return false;
         }
         return true;

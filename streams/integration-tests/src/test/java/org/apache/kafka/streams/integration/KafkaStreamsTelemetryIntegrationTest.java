@@ -108,7 +108,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     private Uuid globalStoreConsumerInstanceId;
     private Properties streamsApplicationProperties = new Properties();
     private Properties streamsSecondApplicationProperties = new Properties();
-    private  KeyValueIterator<String, String> globalStoreIterator;
+    private KeyValueIterator<String, String> globalStoreIterator;
 
     private static EmbeddedKafkaCluster cluster;
     private static final List<TestingMetricsInterceptor> INTERCEPTING_CONSUMERS = new ArrayList<>();
@@ -190,19 +190,19 @@ public class KafkaStreamsTelemetryIntegrationTest {
             assertNotNull(globalStoreConsumerInstanceId);
             LOG.info("Global consumer instance id {}", globalStoreConsumerInstanceId);
             TestUtils.waitForCondition(
-                    () -> !TelemetryPluginWithExporter.SUBSCRIBED_METRICS.getOrDefault(globalStoreConsumerInstanceId, Collections.emptyList()).isEmpty(),
-                    30_000,
-                    "Never received subscribed metrics"
+                () -> !TelemetryPluginWithExporter.SUBSCRIBED_METRICS.getOrDefault(globalStoreConsumerInstanceId, Collections.emptyList()).isEmpty(),
+                30_000,
+                "Never received subscribed metrics"
             );
 
             final List<String> expectedGlobalMetrics = streams.metrics().values().stream().map(Metric::metricName)
-                    .filter(metricName -> metricName.tags().containsKey("thread-id") &&
-                            metricName.tags().get("thread-id").endsWith("-GlobalStreamThread")).map(mn -> {
-                                final String name = mn.name().replace('-', '.');
-                                final String group = mn.group().replace("-metrics", "").replace('-', '.');
-                                return "org.apache.kafka." + group + "." + name;
-                            }).filter(name -> !name.equals("org.apache.kafka.stream.thread.state"))// telemetry reporter filters out string metrics
-                    .sorted().toList();
+                .filter(metricName -> metricName.tags().containsKey("thread-id") &&
+                    metricName.tags().get("thread-id").endsWith("-GlobalStreamThread")).map(mn -> {
+                final String name = mn.name().replace('-', '.');
+                final String group = mn.group().replace("-metrics", "").replace('-', '.');
+                return "org.apache.kafka." + group + "." + name;
+            }).filter(name -> !name.equals("org.apache.kafka.stream.thread.state"))// telemetry reporter filters out string metrics
+                .sorted().toList();
             final List<String> actualGlobalMetrics = new ArrayList<>(TelemetryPluginWithExporter.SUBSCRIBED_METRICS.get(globalStoreConsumerInstanceId));
             assertEquals(expectedGlobalMetrics, actualGlobalMetrics);
         }
@@ -212,7 +212,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @MethodSource("recordingLevelParameters")
     public void shouldPushMetricsToBroker(final String recordingLevel, final String groupProtocol) throws Exception {
         // End-to-end test validating metrics pushed to broker
-        streamsApplicationProperties  = props(groupProtocol);
+        streamsApplicationProperties = props(groupProtocol);
         streamsApplicationProperties.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, recordingLevel);
         final Topology topology = simpleTopology(false);
         subscribeForStreamsMetrics();
@@ -222,18 +222,18 @@ public class KafkaStreamsTelemetryIntegrationTest {
             final Uuid adminInstanceId = clientInstanceIds.adminInstanceId();
 
             final Uuid mainConsumerInstanceId = clientInstanceIds.consumerInstanceIds().entrySet().stream()
-                    .filter(entry -> !entry.getKey().endsWith("-restore-consumer")
-                            && !entry.getKey().endsWith("GlobalStreamThread-global-consumer"))
-                    .map(Map.Entry::getValue)
-                    .findFirst().orElseThrow();
+                .filter(entry -> !entry.getKey().endsWith("-restore-consumer")
+                    && !entry.getKey().endsWith("GlobalStreamThread-global-consumer"))
+                .map(Map.Entry::getValue)
+                .findFirst().orElseThrow();
             assertNotNull(adminInstanceId);
             assertNotNull(mainConsumerInstanceId);
             LOG.info("Main consumer instance id {}", mainConsumerInstanceId);
 
             final String expectedProcessId = streams.metrics().values().stream()
-                    .filter(metric -> metric.metricName().tags().containsKey("process-id"))
-                    .map(metric -> metric.metricName().tags().get("process-id"))
-                    .findFirst().orElseThrow();
+                .filter(metric -> metric.metricName().tags().containsKey("process-id"))
+                .map(metric -> metric.metricName().tags().get("process-id"))
+                .findFirst().orElseThrow();
 
             TestUtils.waitForCondition(
                 () -> !TelemetryPluginWithExporter.SUBSCRIBED_METRICS.getOrDefault(mainConsumerInstanceId, Collections.emptyList()).isEmpty(),
@@ -241,12 +241,12 @@ public class KafkaStreamsTelemetryIntegrationTest {
                 "Never received subscribed metrics"
             );
             final List<String> expectedMetrics = streams.metrics().values().stream().map(Metric::metricName)
-                    .filter(metricName -> metricName.tags().containsKey("thread-id")).map(mn -> {
-                        final String name = mn.name().replace('-', '.');
-                        final String group = mn.group().replace("-metrics", "").replace('-', '.');
-                        return "org.apache.kafka." + group + "." + name;
-                    }).filter(name -> !name.equals("org.apache.kafka.stream.thread.state"))// telemetry reporter filters out string metrics
-                    .sorted().toList();
+                .filter(metricName -> metricName.tags().containsKey("thread-id")).map(mn -> {
+                final String name = mn.name().replace('-', '.');
+                final String group = mn.group().replace("-metrics", "").replace('-', '.');
+                return "org.apache.kafka." + group + "." + name;
+            }).filter(name -> !name.equals("org.apache.kafka.stream.thread.state"))// telemetry reporter filters out string metrics
+                .sorted().toList();
             TestUtils.waitForCondition(
                 () -> TelemetryPluginWithExporter.SUBSCRIBED_METRICS.get(mainConsumerInstanceId).size() == expectedMetrics.size(),
                 30_000,
@@ -270,8 +270,8 @@ public class KafkaStreamsTelemetryIntegrationTest {
             assertEquals(expectedInstanceMetrics, actualInstanceMetrics);
 
             TestUtils.waitForCondition(() -> TelemetryPluginWithExporter.processId != null,
-                    30_000,
-                    "Never received the process id");
+                30_000,
+                "Never received the process id");
 
             assertEquals(expectedProcessId, TelemetryPluginWithExporter.processId);
         }
@@ -293,11 +293,10 @@ public class KafkaStreamsTelemetryIntegrationTest {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
             final List<MetricName> streamsThreadMetrics = streams.metrics().values().stream().map(Metric::metricName)
-                    .filter(metricName -> metricName.tags().containsKey("thread-id")).toList();
+                .filter(metricName -> metricName.tags().containsKey("thread-id")).toList();
 
             final List<MetricName> streamsClientMetrics = streams.metrics().values().stream().map(Metric::metricName)
-                    .filter(metricName -> metricName.group().equals("stream-metrics")).toList();
-
+                .filter(metricName -> metricName.group().equals("stream-metrics")).toList();
 
 
             final List<MetricName> consumerPassedStreamThreadMetricNames = INTERCEPTING_CONSUMERS.get(clientInstance).passedMetrics().stream().map(KafkaMetric::metricName).toList();
@@ -330,10 +329,10 @@ public class KafkaStreamsTelemetryIntegrationTest {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(streamsOne);
 
             final List<MetricName> streamsTaskMetricNames = streamsOne.metrics().values().stream().map(Metric::metricName)
-                    .filter(metricName -> metricName.tags().containsKey("task-id")).toList();
+                .filter(metricName -> metricName.tags().containsKey("task-id")).toList();
 
             final List<MetricName> consumerPassedStreamTaskMetricNames = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CLIENT).passedMetrics().stream().map(KafkaMetric::metricName)
-                    .filter(metricName -> metricName.tags().containsKey("task-id")).toList();
+                .filter(metricName -> metricName.tags().containsKey("task-id")).toList();
 
             /*
              With only one instance, Kafka Streams should register task metrics for all tasks 0_0, 0_1, 1_0, 1_1
@@ -364,24 +363,24 @@ public class KafkaStreamsTelemetryIntegrationTest {
                 );
 
                 final List<MetricName> streamsOneTaskMetrics = streamsOne.metrics().values().stream().map(Metric::metricName)
-                        .filter(metricName -> metricName.tags().containsKey("task-id")).toList();
+                    .filter(metricName -> metricName.tags().containsKey("task-id")).toList();
                 final List<MetricName> streamsOneStateMetrics = streamsOne.metrics().values().stream().map(Metric::metricName)
-                        .filter(metricName -> metricName.group().equals("stream-state-metrics")).toList();
+                    .filter(metricName -> metricName.group().equals("stream-state-metrics")).toList();
 
                 final List<MetricName> consumerOnePassedTaskMetrics = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CLIENT)
-                        .passedMetrics().stream().map(KafkaMetric::metricName).filter(metricName -> metricName.tags().containsKey("task-id")).toList();
+                    .passedMetrics().stream().map(KafkaMetric::metricName).filter(metricName -> metricName.tags().containsKey("task-id")).toList();
                 final List<MetricName> consumerOnePassedStateMetrics = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CLIENT)
-                        .passedMetrics().stream().map(KafkaMetric::metricName).filter(metricName -> metricName.group().equals("stream-state-metrics")).toList();
+                    .passedMetrics().stream().map(KafkaMetric::metricName).filter(metricName -> metricName.group().equals("stream-state-metrics")).toList();
 
                 final List<MetricName> streamsTwoTaskMetrics = streamsTwo.metrics().values().stream().map(Metric::metricName)
-                        .filter(metricName -> metricName.tags().containsKey("task-id")).toList();
+                    .filter(metricName -> metricName.tags().containsKey("task-id")).toList();
                 final List<MetricName> streamsTwoStateMetrics = streamsTwo.metrics().values().stream().map(Metric::metricName)
-                        .filter(metricName -> metricName.group().equals("stream-state-metrics")).toList();
+                    .filter(metricName -> metricName.group().equals("stream-state-metrics")).toList();
 
                 final List<MetricName> consumerTwoPassedTaskMetrics = INTERCEPTING_CONSUMERS.get(SECOND_INSTANCE_CLIENT)
-                        .passedMetrics().stream().map(KafkaMetric::metricName).filter(metricName -> metricName.tags().containsKey("task-id")).toList();
+                    .passedMetrics().stream().map(KafkaMetric::metricName).filter(metricName -> metricName.tags().containsKey("task-id")).toList();
                 final List<MetricName> consumerTwoPassedStateMetrics = INTERCEPTING_CONSUMERS.get(SECOND_INSTANCE_CLIENT)
-                        .passedMetrics().stream().map(KafkaMetric::metricName).filter(metricName -> metricName.group().equals("stream-state-metrics")).toList();
+                    .passedMetrics().stream().map(KafkaMetric::metricName).filter(metricName -> metricName.group().equals("stream-state-metrics")).toList();
                 /*
                  Confirm pre-existing KafkaStreams instance one only passes metrics for its tasks and has no metrics for previous tasks
                  */
@@ -416,16 +415,16 @@ public class KafkaStreamsTelemetryIntegrationTest {
     public void passedMetricsShouldNotLeakIntoClientMetrics(final String groupProtocol) throws Exception {
         // Streams metrics should not be visible in client metrics
         streamsApplicationProperties = props(groupProtocol);
-        final Topology topology =  complexTopology();
+        final Topology topology = complexTopology();
 
         try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
             final List<MetricName> streamsThreadMetrics = streams.metrics().values().stream().map(Metric::metricName)
-                    .filter(metricName -> metricName.tags().containsKey("thread-id")).toList();
+                .filter(metricName -> metricName.tags().containsKey("thread-id")).toList();
 
             final List<MetricName> streamsClientMetrics = streams.metrics().values().stream().map(Metric::metricName)
-                    .filter(metricName -> metricName.group().equals("stream-metrics")).toList();
+                .filter(metricName -> metricName.group().equals("stream-metrics")).toList();
 
             final Map<MetricName, ? extends Metric> embeddedConsumerMetrics = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CLIENT).metrics();
             final Map<MetricName, ? extends Metric> embeddedAdminMetrics = INTERCEPTING_ADMIN_CLIENTS.get(FIRST_INSTANCE_CLIENT).metrics();
@@ -447,9 +446,9 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
     private List<String> getTaskIdsAsStrings(final KafkaStreams streams) {
         return streams.metadataForLocalThreads().stream()
-                .flatMap(threadMeta -> threadMeta.activeTasks().stream()
-                        .map(taskMeta -> taskMeta.taskId().toString()))
-                .toList();
+            .flatMap(threadMeta -> threadMeta.activeTasks().stream()
+                .map(taskMeta -> taskMeta.taskId().toString()))
+            .toList();
     }
 
     private static Stream<Arguments> topologyComplexityAndRebalanceProtocol() {
@@ -484,10 +483,10 @@ public class KafkaStreamsTelemetryIntegrationTest {
     private Topology complexTopology() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(inputTopicTwoPartitions, Consumed.with(Serdes.String(), Serdes.String()))
-                .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
-                .groupBy((key, value) -> value)
-                .count()
-                .toStream().to(outputTopicTwoPartitions, Produced.with(Serdes.String(), Serdes.Long()));
+            .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
+            .groupBy((key, value) -> value)
+            .count()
+            .toStream().to(outputTopicTwoPartitions, Produced.with(Serdes.String(), Serdes.Long()));
         return builder.build();
     }
 
@@ -498,27 +497,27 @@ public class KafkaStreamsTelemetryIntegrationTest {
                 Stores.inMemoryKeyValueStore("iq-test-store"),
                 Serdes.String(),
                 Serdes.String()
-        ),
-                globalStoreTopic,
-                Consumed.with(Serdes.String(), Serdes.String()),
-                () -> new Processor<>() {
+            ),
+            globalStoreTopic,
+            Consumed.with(Serdes.String(), Serdes.String()),
+            () -> new Processor<>() {
 
-                    // The store iterator is intentionally not closed here as it needs
-                    // to be open during the test, so the Streams app will emit the
-                    // org.apache.kafka.stream.state.oldest.iterator.open.since.ms metric
-                    // that is expected. So the globalStoreIterator is a global variable
-                    // (pun not intended), so it can be closed in the tearDown method.
-                    @SuppressWarnings("unchecked")
-                    @Override
-                    public void init(final ProcessorContext<Void, Void> context) {
-                        globalStoreIterator = ((KeyValueStore<String, String>) context.getStateStore("iq-test-store")).all();
-                    }
+                // The store iterator is intentionally not closed here as it needs
+                // to be open during the test, so the Streams app will emit the
+                // org.apache.kafka.stream.state.oldest.iterator.open.since.ms metric
+                // that is expected. So the globalStoreIterator is a global variable
+                // (pun not intended), so it can be closed in the tearDown method.
+                @SuppressWarnings("unchecked")
+                @Override
+                public void init(final ProcessorContext<Void, Void> context) {
+                    globalStoreIterator = ((KeyValueStore<String, String>) context.getStateStore("iq-test-store")).all();
+                }
 
-                    @Override
-                    public void process(final Record<String, String> record) {
-                        // no-op
-                    }
-                });
+                @Override
+                public void process(final Record<String, String> record) {
+                    // no-op
+                }
+            });
     }
 
     private Topology simpleTopology(final boolean includeGlobalStore) {
@@ -527,8 +526,8 @@ public class KafkaStreamsTelemetryIntegrationTest {
             addGlobalStore(builder);
         }
         builder.stream(inputTopicOnePartition, Consumed.with(Serdes.String(), Serdes.String()))
-                .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
-                .to(outputTopicOnePartition, Produced.with(Serdes.String(), Serdes.String()));
+            .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
+            .to(outputTopicOnePartition, Produced.with(Serdes.String(), Serdes.String()));
         return builder.build();
     }
 
@@ -578,6 +577,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
     public interface TestingMetricsInterceptor {
         List<KafkaMetric> passedMetrics();
+
         Map<MetricName, ? extends Metric> metrics();
     }
 
@@ -678,26 +678,26 @@ public class KafkaStreamsTelemetryIntegrationTest {
                     final MetricsData data = MetricsData.parseFrom(payload.data());
 
                     final Optional<String> processIdOption = data.getResourceMetricsList()
-                            .stream()
-                            .flatMap(rm -> rm.getScopeMetricsList().stream())
-                            .flatMap(sm -> sm.getMetricsList().stream())
-                            .map(org.apache.kafka.shaded.io.opentelemetry.proto.metrics.v1.Metric::getGauge)
-                            .flatMap(gauge -> gauge.getDataPointsList().stream())
-                            .flatMap(numberDataPoint -> numberDataPoint.getAttributesList().stream())
-                            .filter(keyValue -> keyValue.getKey().equals("process_id"))
-                            .map(keyValue -> keyValue.getValue().getStringValue())
-                            .findFirst();
+                        .stream()
+                        .flatMap(rm -> rm.getScopeMetricsList().stream())
+                        .flatMap(sm -> sm.getMetricsList().stream())
+                        .map(org.apache.kafka.shaded.io.opentelemetry.proto.metrics.v1.Metric::getGauge)
+                        .flatMap(gauge -> gauge.getDataPointsList().stream())
+                        .flatMap(numberDataPoint -> numberDataPoint.getAttributesList().stream())
+                        .filter(keyValue -> keyValue.getKey().equals("process_id"))
+                        .map(keyValue -> keyValue.getValue().getStringValue())
+                        .findFirst();
 
                     processIdOption.ifPresent(pid -> processId = pid);
 
                     final Uuid clientId = payload.clientInstanceId();
                     final List<String> metricNames = data.getResourceMetricsList()
-                            .stream()
-                            .flatMap(rm -> rm.getScopeMetricsList().stream())
-                            .flatMap(sm -> sm.getMetricsList().stream())
-                            .map(org.apache.kafka.shaded.io.opentelemetry.proto.metrics.v1.Metric::getName)
-                            .sorted()
-                            .toList();
+                        .stream()
+                        .flatMap(rm -> rm.getScopeMetricsList().stream())
+                        .flatMap(sm -> sm.getMetricsList().stream())
+                        .map(org.apache.kafka.shaded.io.opentelemetry.proto.metrics.v1.Metric::getName)
+                        .sorted()
+                        .toList();
                     LOG.info("Found metrics {} for clientId={} with pushIntervalMs={}", metricNames, clientId, context.pushIntervalMs());
                     SUBSCRIBED_METRICS.put(clientId, metricNames);
                 } catch (final Exception e) {

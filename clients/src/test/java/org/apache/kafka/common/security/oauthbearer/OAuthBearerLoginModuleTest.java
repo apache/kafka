@@ -82,7 +82,7 @@ public class OAuthBearerLoginModuleTest {
 
         @Override
         public void configure(Map<String, ?> configs, String saslMechanism,
-                List<AppConfigurationEntry> jaasConfigEntries) {
+            List<AppConfigurationEntry> jaasConfigEntries) {
             // empty
         }
 
@@ -126,22 +126,22 @@ public class OAuthBearerLoginModuleTest {
         Set<Object> publicCredentials = subject.getPublicCredentials();
 
         // Create callback handler
-        OAuthBearerToken[] tokens = new OAuthBearerToken[] {mock(OAuthBearerToken.class),
+        OAuthBearerToken[] tokens = new OAuthBearerToken[]{mock(OAuthBearerToken.class),
             mock(OAuthBearerToken.class), mock(OAuthBearerToken.class)};
-        SaslExtensions[] extensions = new SaslExtensions[] {saslExtensions(),
+        SaslExtensions[] extensions = new SaslExtensions[]{saslExtensions(),
             saslExtensions(), saslExtensions()};
         TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, extensions);
 
         // Create login modules
         OAuthBearerLoginModule loginModule1 = new OAuthBearerLoginModule();
         loginModule1.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
-                Collections.emptyMap());
+            Collections.emptyMap());
         OAuthBearerLoginModule loginModule2 = new OAuthBearerLoginModule();
         loginModule2.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
-                Collections.emptyMap());
+            Collections.emptyMap());
         OAuthBearerLoginModule loginModule3 = new OAuthBearerLoginModule();
         loginModule3.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
-                Collections.emptyMap());
+            Collections.emptyMap());
 
         // Should start with nothing
         assertEquals(0, privateCredentials.size());
@@ -222,19 +222,19 @@ public class OAuthBearerLoginModuleTest {
         Set<Object> publicCredentials = subject.getPublicCredentials();
 
         // Create callback handler
-        OAuthBearerToken[] tokens = new OAuthBearerToken[] {mock(OAuthBearerToken.class),
+        OAuthBearerToken[] tokens = new OAuthBearerToken[]{mock(OAuthBearerToken.class),
             mock(OAuthBearerToken.class)};
-        SaslExtensions[] extensions = new SaslExtensions[] {saslExtensions(),
+        SaslExtensions[] extensions = new SaslExtensions[]{saslExtensions(),
             saslExtensions()};
         TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, extensions);
 
         // Create login modules
         OAuthBearerLoginModule loginModule1 = new OAuthBearerLoginModule();
         loginModule1.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
-                Collections.emptyMap());
+            Collections.emptyMap());
         OAuthBearerLoginModule loginModule2 = new OAuthBearerLoginModule();
         loginModule2.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
-                Collections.emptyMap());
+            Collections.emptyMap());
 
         // Should start with nothing
         assertEquals(0, privateCredentials.size());
@@ -282,16 +282,16 @@ public class OAuthBearerLoginModuleTest {
         Set<Object> publicCredentials = subject.getPublicCredentials();
 
         // Create callback handler
-        OAuthBearerToken[] tokens = new OAuthBearerToken[] {mock(OAuthBearerToken.class),
+        OAuthBearerToken[] tokens = new OAuthBearerToken[]{mock(OAuthBearerToken.class),
             mock(OAuthBearerToken.class)};
-        SaslExtensions[] extensions = new SaslExtensions[] {saslExtensions(),
+        SaslExtensions[] extensions = new SaslExtensions[]{saslExtensions(),
             saslExtensions()};
         TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, extensions);
 
         // Create login module
         OAuthBearerLoginModule loginModule = new OAuthBearerLoginModule();
         loginModule.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
-                Collections.emptyMap());
+            Collections.emptyMap());
 
         // Should start with nothing
         assertEquals(0, privateCredentials.size());
@@ -334,22 +334,22 @@ public class OAuthBearerLoginModuleTest {
         Set<Object> publicCredentials = subject.getPublicCredentials();
 
         // Create callback handler
-        OAuthBearerToken[] tokens = new OAuthBearerToken[] {mock(OAuthBearerToken.class),
+        OAuthBearerToken[] tokens = new OAuthBearerToken[]{mock(OAuthBearerToken.class),
             mock(OAuthBearerToken.class), mock(OAuthBearerToken.class)};
-        SaslExtensions[] extensions = new SaslExtensions[] {saslExtensions(), saslExtensions(),
+        SaslExtensions[] extensions = new SaslExtensions[]{saslExtensions(), saslExtensions(),
             saslExtensions()};
         TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, extensions);
 
         // Create login modules
         OAuthBearerLoginModule loginModule1 = new OAuthBearerLoginModule();
         loginModule1.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
-                Collections.emptyMap());
+            Collections.emptyMap());
         OAuthBearerLoginModule loginModule2 = new OAuthBearerLoginModule();
         loginModule2.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
-                Collections.emptyMap());
+            Collections.emptyMap());
         OAuthBearerLoginModule loginModule3 = new OAuthBearerLoginModule();
         loginModule3.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
-                Collections.emptyMap());
+            Collections.emptyMap());
 
         // Should start with nothing
         assertEquals(0, privateCredentials.size());
@@ -415,14 +415,14 @@ public class OAuthBearerLoginModuleTest {
         Subject subject = new Subject();
 
         // Create callback handler
-        OAuthBearerToken[] tokens = new OAuthBearerToken[] {mock(OAuthBearerToken.class),
-                mock(OAuthBearerToken.class), mock(OAuthBearerToken.class)};
-        TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, new SaslExtensions[] {RAISE_UNSUPPORTED_CB_EXCEPTION_FLAG});
+        OAuthBearerToken[] tokens = new OAuthBearerToken[]{mock(OAuthBearerToken.class),
+            mock(OAuthBearerToken.class), mock(OAuthBearerToken.class)};
+        TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, new SaslExtensions[]{RAISE_UNSUPPORTED_CB_EXCEPTION_FLAG});
 
         // Create login modules
         OAuthBearerLoginModule loginModule1 = new OAuthBearerLoginModule();
         loginModule1.initialize(subject, testTokenCallbackHandler, Collections.emptyMap(),
-                Collections.emptyMap());
+            Collections.emptyMap());
 
         loginModule1.login();
         // Should populate public credentials with SaslExtensions and not throw an exception

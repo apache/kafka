@@ -24,25 +24,25 @@ import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
  */
 public class ServiceLoadedClass implements SamplingTestPlugin {
 
-  private static final ClassLoader STATIC_CLASS_LOADER;
-  private final ClassLoader classloader;
+    private static final ClassLoader STATIC_CLASS_LOADER;
+    private final ClassLoader classloader;
 
-  static {
-    STATIC_CLASS_LOADER = Thread.currentThread().getContextClassLoader();
-  }
+    static {
+        STATIC_CLASS_LOADER = Thread.currentThread().getContextClassLoader();
+    }
 
-  {
-    classloader = Thread.currentThread().getContextClassLoader();
-  }
+    {
+        classloader = Thread.currentThread().getContextClassLoader();
+    }
 
-  @Override
-  public ClassLoader staticClassloader() {
-    return STATIC_CLASS_LOADER;
-  }
+    @Override
+    public ClassLoader staticClassloader() {
+        return STATIC_CLASS_LOADER;
+    }
 
-  @Override
-  public ClassLoader classloader() {
-    return classloader;
-  }
+    @Override
+    public ClassLoader classloader() {
+        return classloader;
+    }
 
 }

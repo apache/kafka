@@ -68,7 +68,7 @@ public class AclOperationTest {
         for (AclOperationTestInfo info : INFOS) {
             assertEquals(info.code, info.operation.code(), info.operation + " was supposed to have code == " + info.code);
             assertEquals(info.operation, AclOperation.fromCode((byte) info.code),
-                "AclOperation.fromCode(" + info.code + ") was supposed to be " +  info.operation);
+                "AclOperation.fromCode(" + info.code + ") was supposed to be " + info.operation);
         }
         assertEquals(AclOperation.UNKNOWN, AclOperation.fromCode((byte) 120));
     }
@@ -77,7 +77,7 @@ public class AclOperationTest {
     public void testName() throws Exception {
         for (AclOperationTestInfo info : INFOS) {
             assertEquals(info.operation, AclOperation.fromString(info.name),
-                "AclOperation.fromString(" + info.name + ") was supposed to be " +  info.operation);
+                "AclOperation.fromString(" + info.name + ") was supposed to be " + info.operation);
         }
         assertEquals(AclOperation.UNKNOWN, AclOperation.fromString("something"));
     }
@@ -85,7 +85,7 @@ public class AclOperationTest {
     @Test
     public void testExhaustive() {
         assertEquals(INFOS.length, AclOperation.values().length);
-        for (int i = 0; i < INFOS.length; i++) {
+        for (int i = 0;i < INFOS.length;i++) {
             assertEquals(INFOS[i].operation, AclOperation.values()[i]);
         }
     }

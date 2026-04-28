@@ -106,8 +106,8 @@ public class JoinWithIncompleteMetadataIntegrationTest {
         final KStream<Long, String> notExistStream = builder.stream(NON_EXISTENT_INPUT_TOPIC_LEFT);
 
         final KTable<Long, String> aggregatedTable = notExistStream.leftJoin(rightTable, valueJoiner)
-                .groupBy((key, value) -> key)
-                .reduce((value1, value2) -> value1 + value2);
+            .groupBy((key, value) -> key)
+            .reduce((value1, value2) -> value1 + value2);
 
         // Write the (continuously updating) results to the output topic.
         aggregatedTable.toStream().to(OUTPUT_TOPIC);

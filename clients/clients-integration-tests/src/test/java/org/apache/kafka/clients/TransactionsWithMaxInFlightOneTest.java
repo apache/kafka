@@ -82,9 +82,9 @@ public class TransactionsWithMaxInFlightOneTest {
         clusterInstance.createTopic(TOPIC2, 4, (short) 1);
 
         try (Producer<byte[], byte[]> producer = clusterInstance.producer(Map.of(
-            ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactional-producer",
-            ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 1
-        ))
+                 ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactional-producer",
+                 ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 1
+             ))
         ) {
             producer.initTransactions();
 
@@ -102,11 +102,11 @@ public class TransactionsWithMaxInFlightOneTest {
             for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
                 ArrayList<ConsumerRecord<byte[], byte[]>> consumerRecords = new ArrayList<>();
                 try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(
-                        ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name(),
-                        ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
-                        ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"
-                    )
-                )) {
+                         ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name(),
+                         ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
+                         ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"
+                     )
+                     )) {
                     consumer.subscribe(List.of(TOPIC1, TOPIC2));
                     TestUtils.waitForCondition(() -> {
                         ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));

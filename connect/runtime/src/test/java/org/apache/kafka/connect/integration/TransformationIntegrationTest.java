@@ -186,16 +186,16 @@ public class TransformationIntegrationTest {
 
     private void assertObservedRecords(Map<String, Long> observedRecords, Map<String, Long> expectedRecordCounts) throws InterruptedException {
         waitForCondition(() -> expectedRecordCounts.equals(observedRecords),
-            OBSERVED_RECORDS_DURATION_MS,
-            () -> "The observed records should be " + expectedRecordCounts + " but was " + observedRecords);
+                OBSERVED_RECORDS_DURATION_MS,
+                () -> "The observed records should be " + expectedRecordCounts + " but was " + observedRecords);
     }
 
     private Map<String, Long> observeRecords() {
         Map<String, Long> observedRecords = new HashMap<>();
         // record all the record we see
         connectorHandle.taskHandle(CONNECTOR_NAME + "-0",
-            record -> observedRecords.compute(record.topic(),
-                (key, value) -> value == null ? 1 : value + 1));
+                record -> observedRecords.compute(record.topic(),
+                        (key, value) -> value == null ? 1 : value + 1));
         return observedRecords;
     }
 

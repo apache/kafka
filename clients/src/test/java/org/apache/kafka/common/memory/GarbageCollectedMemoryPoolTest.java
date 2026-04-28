@@ -168,8 +168,8 @@ public class GarbageCollectedMemoryPoolTest {
         }
 
         assertTrue(success, "failed to allocate 30 buffers in " + timeoutSeconds + " seconds."
-                + " buffers allocated: " + buffersAllocated + " heap " + Utils.formatBytes(maxHeap)
-                + " pool " + Utils.formatBytes(maxPool) + " single allocation "
-                + Utils.formatBytes(maxSingleAllocation));
+            + " buffers allocated: " + buffersAllocated + " heap " + Utils.formatBytes(maxHeap)
+            + " pool " + Utils.formatBytes(maxPool) + " single allocation "
+            + Utils.formatBytes(maxSingleAllocation));
     }
 }

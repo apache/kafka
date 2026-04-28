@@ -81,7 +81,7 @@ public class DescribeGroupsResponse extends AbstractResponse {
             .setProtocolData(protocol)
             .setMembers(members)
             .setAuthorizedOperations(Utils.to32BitField(authorizedOperations));
-        return  groupMetadata;
+        return groupMetadata;
     }
 
     public static DescribedGroup groupMetadata(

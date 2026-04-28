@@ -28,8 +28,8 @@ public class ServerInfo {
 
     @JsonCreator
     private ServerInfo(@JsonProperty("version") String version,
-                       @JsonProperty("commit") String commit,
-                       @JsonProperty("kafka_cluster_id") String kafkaClusterId) {
+            @JsonProperty("commit") String commit,
+            @JsonProperty("kafka_cluster_id") String kafkaClusterId) {
         this.version = version;
         this.commit = commit;
         this.kafkaClusterId = kafkaClusterId;

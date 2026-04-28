@@ -102,10 +102,10 @@ public class PrefixedSessionKeySchemas {
 
         @Override
         public HasNextCondition hasNextCondition(final Bytes binaryKeyFrom,
-                                                 final Bytes binaryKeyTo,
-                                                 final long earliestWindowEndTime,
-                                                 final long latestWindowStartTime,
-                                                 final boolean forward) {
+            final Bytes binaryKeyTo,
+            final long earliestWindowEndTime,
+            final long latestWindowStartTime,
+            final boolean forward) {
             return iterator -> {
                 while (iterator.hasNext()) {
                     final Bytes bytes = iterator.peekNextKey();
@@ -138,9 +138,9 @@ public class PrefixedSessionKeySchemas {
 
         @Override
         public <S extends Segment> List<S> segmentsToSearch(final Segments<S> segments,
-                                                            final long earliestWindowEndTime,
-                                                            final long latestWindowStartTime,
-                                                            final boolean forward) {
+            final long earliestWindowEndTime,
+            final long latestWindowStartTime,
+            final boolean forward) {
             return segments.segments(earliestWindowEndTime, Long.MAX_VALUE, forward);
         }
 
@@ -153,9 +153,9 @@ public class PrefixedSessionKeySchemas {
         }
 
         private static <K> K extractKey(final byte[] binaryKey,
-                                        final Deserializer<K> deserializer,
-                                        final Headers headers,
-                                        final String topic) {
+            final Deserializer<K> deserializer,
+            final Headers headers,
+            final String topic) {
             return deserializer.deserialize(topic, headers, extractKeyBytes(binaryKey));
         }
 
@@ -179,18 +179,18 @@ public class PrefixedSessionKeySchemas {
         }
 
         public static <K> Windowed<K> from(final byte[] binaryKey,
-                                           final Deserializer<K> keyDeserializer,
-                                           final Headers headers,
-                                           final String topic) {
+            final Deserializer<K> keyDeserializer,
+            final Headers headers,
+            final String topic) {
             final K key = extractKey(binaryKey, keyDeserializer, headers, topic);
             final Window window = extractWindow(binaryKey);
             return new Windowed<>(key, window);
         }
 
         public static <K> byte[] toBinary(final Windowed<K> sessionKey,
-                                          final Serializer<K> serializer,
-                                          final Headers headers,
-                                          final String topic) {
+            final Serializer<K> serializer,
+            final Headers headers,
+            final String topic) {
             final byte[] bytes = serializer.serialize(topic, headers, sessionKey.key());
             return toBinary(Bytes.wrap(bytes), sessionKey.window().start(), sessionKey.window().end()).get();
         }
@@ -202,9 +202,9 @@ public class PrefixedSessionKeySchemas {
         // for time prefixed schema, like the session key schema we need to put time stamps first, then the key
         // and hence we need to override the write binary function with the write reordering
         public static void writeBinary(final ByteBuffer buf,
-                                       final Bytes key,
-                                       final long startTime,
-                                       final long endTime) {
+            final Bytes key,
+            final long startTime,
+            final long endTime) {
             buf.putLong(endTime);
             buf.putLong(startTime);
             if (key != null) {
@@ -213,8 +213,8 @@ public class PrefixedSessionKeySchemas {
         }
 
         public static Bytes toBinary(final Bytes key,
-                                     final long startTime,
-                                     final long endTime) {
+            final long startTime,
+            final long endTime) {
             final ByteBuffer buf = ByteBuffer.allocate(PREFIX_SIZE + SessionKeySchema.keyByteLength(key));
             buf.put(TIME_FIRST_PREFIX);
             writeBinary(buf, key, startTime, endTime);
@@ -269,10 +269,10 @@ public class PrefixedSessionKeySchemas {
 
         @Override
         public HasNextCondition hasNextCondition(final Bytes binaryKeyFrom,
-                                                 final Bytes binaryKeyTo,
-                                                 final long from,
-                                                 final long to,
-                                                 final boolean forward) {
+            final Bytes binaryKeyTo,
+            final long from,
+            final long to,
+            final boolean forward) {
             return iterator -> {
                 while (iterator.hasNext()) {
                     final Bytes bytes = iterator.peekNextKey();
@@ -300,9 +300,9 @@ public class PrefixedSessionKeySchemas {
 
         @Override
         public <S extends Segment> List<S> segmentsToSearch(final Segments<S> segments,
-                                                            final long from,
-                                                            final long to,
-                                                            final boolean forward) {
+            final long from,
+            final long to,
+            final boolean forward) {
             return segments.segments(from, Long.MAX_VALUE, forward);
         }
 
@@ -326,16 +326,16 @@ public class PrefixedSessionKeySchemas {
         }
 
         private static <K> K extractKey(final byte[] binaryKey,
-                                        final Deserializer<K> deserializer,
-                                        final Headers headers,
-                                        final String topic) {
+            final Deserializer<K> deserializer,
+            final Headers headers,
+            final String topic) {
             return deserializer.deserialize(topic, headers, extractKeyBytes(binaryKey));
         }
 
         public static <K> Windowed<K> from(final byte[] binaryKey,
-                                           final Deserializer<K> keyDeserializer,
-                                           final Headers headers,
-                                           final String topic) {
+            final Deserializer<K> keyDeserializer,
+            final Headers headers,
+            final String topic) {
             final K key = extractKey(binaryKey, keyDeserializer, headers, topic);
             final Window window = extractWindow(binaryKey);
             return new Windowed<>(key, window);
@@ -354,16 +354,16 @@ public class PrefixedSessionKeySchemas {
         }
 
         public static <K> byte[] toBinary(final Windowed<K> sessionKey,
-                                          final Serializer<K> serializer,
-                                          final Headers headers,
-                                          final String topic) {
+            final Serializer<K> serializer,
+            final Headers headers,
+            final String topic) {
             final byte[] bytes = serializer.serialize(topic, headers, sessionKey.key());
             return toBinary(Bytes.wrap(bytes), sessionKey.window().start(), sessionKey.window().end()).get();
         }
 
         public static Bytes toBinary(final Bytes key,
-                                     final long startTime,
-                                     final long endTime) {
+            final long startTime,
+            final long endTime) {
             final ByteBuffer buf = ByteBuffer.allocate(PREFIX_SIZE + SessionKeySchema.keyByteLength(key));
             buf.put(KEY_FIRST_PREFIX);
             SessionKeySchema.writeBinary(buf, key, startTime, endTime);

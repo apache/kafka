@@ -93,6 +93,6 @@ public class PushTelemetryRequest extends AbstractRequest {
 
     public static PushTelemetryRequest parse(Readable readable, short version) {
         return new PushTelemetryRequest(new PushTelemetryRequestData(
-                readable, version), version);
+            readable, version), version);
     }
 }

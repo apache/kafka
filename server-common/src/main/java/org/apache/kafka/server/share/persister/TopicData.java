@@ -60,8 +60,8 @@ public class TopicData<P extends PartitionInfoData> {
     @Override
     public String toString() {
         return "TopicData(" +
-                "topicId=" + topicId + "," +
-                "partitions=" + partitions +
-                ")";
+            "topicId=" + topicId + "," +
+            "partitions=" + partitions +
+            ")";
     }
 }

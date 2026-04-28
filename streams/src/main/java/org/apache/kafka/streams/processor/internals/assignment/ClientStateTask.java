@@ -26,7 +26,7 @@ class ClientStateTask {
     private Set<TaskId> taskIds;
 
     ClientStateTask(final Set<TaskId> taskIds,
-                    final Map<String, Set<TaskId>> consumerToTaskIds) {
+        final Map<String, Set<TaskId>> consumerToTaskIds) {
         this.taskIds = taskIds;
         this.consumerToTaskIds = consumerToTaskIds;
     }

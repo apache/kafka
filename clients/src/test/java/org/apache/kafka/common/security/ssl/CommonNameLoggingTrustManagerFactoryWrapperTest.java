@@ -107,19 +107,19 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
         signedWith[4] = chainWithInvalidEndCertificate[1].getPublicKey();
         expectValidEndCert[4] = false;
 
-        for (int i = 0; i < testCerts.length; i++) {
+        for (int i = 0;i < testCerts.length;i++) {
             X509Certificate cert = testCerts[i];
             final NeverExpiringX509Certificate wrappedCert = new NeverExpiringX509Certificate(
-                    cert);
+                cert);
             // All results must be identically for original as well as wrapped certificate
             // class
             assertEquals(cert.getCriticalExtensionOIDs(), wrappedCert.getCriticalExtensionOIDs());
             final String testOid = "2.5.29.14"; // Should not be in test certificate
             assertEquals(cert.getExtensionValue(testOid), wrappedCert.getExtensionValue(testOid));
             assertEquals(cert.getNonCriticalExtensionOIDs(),
-                    wrappedCert.getNonCriticalExtensionOIDs());
+                wrappedCert.getNonCriticalExtensionOIDs());
             assertEquals(cert.hasUnsupportedCriticalExtension(),
-                    wrappedCert.hasUnsupportedCriticalExtension());
+                wrappedCert.hasUnsupportedCriticalExtension());
             // We have just generated a valid test certificate, it should still be valid now
             assertEquals(cert.getBasicConstraints(), wrappedCert.getBasicConstraints());
             assertEquals(cert.getIssuerDN(), wrappedCert.getIssuerDN());
@@ -167,13 +167,13 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
             // Test with (days/2) before now.
             Date dateRecentPast = new Date(System.currentTimeMillis() - days * 12 * 60 * 60 * 1000);
             if (cert.getNotBefore().before(dateRecentPast)
-                    && cert.getNotAfter().after(dateRecentPast)) {
+                && cert.getNotAfter().after(dateRecentPast)) {
                 assertDoesNotThrow(() -> cert.checkValidity(dateRecentPast));
                 assertDoesNotThrow(() -> wrappedCert.checkValidity(dateRecentPast));
             } else {
                 // Cert not valid yet
                 assertThrows(CertificateException.class,
-                        () -> cert.checkValidity(dateRecentPast));
+                    () -> cert.checkValidity(dateRecentPast));
                 // The wrappend certificate class does not check dates at all
                 assertDoesNotThrow(() -> wrappedCert.checkValidity(dateRecentPast));
             }
@@ -227,7 +227,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
         // Algorithms must be equal
         assertEquals(origTmFactory.getAlgorithm(), testTmFactory.getAlgorithm());
         // Compare trust managers. Only for X509 there must be a difference
-        for (int i = 0; i < origTrustManagers.length; i++) {
+        for (int i = 0;i < origTrustManagers.length;i++) {
             TrustManager origTrustManager = origTrustManagers[i];
             TrustManager testTrustManager = wrappendTrustManagers[i];
             if (origTrustManager instanceof X509TrustManager) {
@@ -248,7 +248,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
         X509Certificate endCert = chainWithValidEndCertificate[0];
         X509Certificate intermediateCert = chainWithValidEndCertificate[1];
         X509Certificate caCert = chainWithValidEndCertificate[2];
-        X509Certificate[] chainWithoutCa = new X509Certificate[] {endCert, intermediateCert};
+        X509Certificate[] chainWithoutCa = new X509Certificate[]{endCert, intermediateCert};
         KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
         trustStore.load(null, null);
         trustStore.setCertificateEntry("CA", caCert);
@@ -285,7 +285,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
         X509Certificate endCert = chainWithValidEndCertificate[0];
         X509Certificate intermediateCert = chainWithValidEndCertificate[1];
         X509Certificate caCert = chainWithValidEndCertificate[2];
-        X509Certificate[] chainWitCa = new X509Certificate[] {endCert, intermediateCert, caCert};
+        X509Certificate[] chainWitCa = new X509Certificate[]{endCert, intermediateCert, caCert};
         KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
         trustStore.load(null, null);
         trustStore.setCertificateEntry("CA", caCert);
@@ -315,7 +315,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
         X509Certificate endCert = chainWithInvalidEndCertificate[0];
         X509Certificate intermediateCert = chainWithInvalidEndCertificate[1];
         X509Certificate caCert = chainWithInvalidEndCertificate[2];
-        X509Certificate[] chainWithoutCa = new X509Certificate[] {endCert, intermediateCert};
+        X509Certificate[] chainWithoutCa = new X509Certificate[]{endCert, intermediateCert};
         KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
         trustStore.load(null, null);
         trustStore.setCertificateEntry("CA", caCert);
@@ -331,25 +331,25 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
             // Check client certificate
             assertEquals(testTrustManager.getOriginalTrustManager(), origTrustManager);
             Exception origException = assertThrows(CertificateException.class,
-                    () -> origTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
+                () -> origTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
             Exception testException = assertThrows(CertificateException.class,
-                    () -> testTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
+                () -> testTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
             assertEquals(origException.getMessage(), testException.getMessage());
             assertEquals(nrOfInitialMessagges, appender.getMessages().size());
             // Check the client certificate again, expecting the exact same result
             assertEquals(testTrustManager.getOriginalTrustManager(), origTrustManager);
             origException = assertThrows(CertificateException.class,
-                    () -> origTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
+                () -> origTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
             testException = assertThrows(CertificateException.class,
-                    () -> testTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
+                () -> testTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
             assertEquals(origException.getMessage(), testException.getMessage());
             assertEquals(nrOfInitialMessagges, appender.getMessages().size());
 
             // Check server certificate
             origException = assertThrows(CertificateException.class,
-                    () -> origTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
+                () -> origTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
             testException = assertThrows(CertificateException.class,
-                    () -> testTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
+                () -> testTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
             assertEquals(origException.getMessage(), testException.getMessage());
             assertEquals(nrOfInitialMessagges, appender.getMessages().size());
             assertArrayEquals(origTrustManager.getAcceptedIssuers(), testTrustManager.getAcceptedIssuers());
@@ -361,7 +361,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
         X509Certificate endCert = chainWithExpiredEndCertificate[0];
         X509Certificate intermediateCert = chainWithExpiredEndCertificate[1];
         X509Certificate caCert = chainWithExpiredEndCertificate[2];
-        X509Certificate[] chainWithoutCa = new X509Certificate[] {endCert, intermediateCert};
+        X509Certificate[] chainWithoutCa = new X509Certificate[]{endCert, intermediateCert};
         KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
         trustStore.load(null, null);
         trustStore.setCertificateEntry("CA", caCert);
@@ -378,9 +378,9 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
             assertEquals(origTrustManager, testTrustManager.getOriginalTrustManager());
             // Call original method, then method of wrapped trust manager and compare result
             Exception origException = assertThrows(CertificateException.class,
-                    () -> origTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
+                () -> origTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
             Exception testException = assertThrows(CertificateException.class,
-                    () -> testTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
+                () -> testTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
             assertEquals(origException.getMessage(), testException.getMessage());
             // Check that there is exactly one new message
             List<String> logMessages = appender.getMessages();
@@ -389,9 +389,9 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
                 "\" expired on " + endCert.getNotAfter(), logMessages.get(logMessages.size() - 1));
             // Call original method, then method of wrapped trust manager and compare result
             origException = assertThrows(CertificateException.class,
-                    () -> testTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
+                () -> testTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
             testException = assertThrows(CertificateException.class,
-                    () -> testTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
+                () -> testTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
             assertEquals(origException.getMessage(), testException.getMessage());
             // Check that there are no new messages
             assertEquals(nrOfInitialMessagges + 1, appender.getMessages().size());
@@ -404,7 +404,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
         X509Certificate endCert = chainWithExpiredEndCertificate[0];
         X509Certificate intermediateCert = chainWithExpiredEndCertificate[1];
         X509Certificate caCert = chainWithExpiredEndCertificate[2];
-        X509Certificate[] chainWithoutCa = new X509Certificate[] {endCert, intermediateCert, caCert};
+        X509Certificate[] chainWithoutCa = new X509Certificate[]{endCert, intermediateCert, caCert};
         KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
         trustStore.load(null, null);
         trustStore.setCertificateEntry("CA", caCert);
@@ -421,9 +421,9 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
             assertEquals(origTrustManager, testTrustManager.getOriginalTrustManager());
             // Call original method, then method of wrapped trust manager and compare result
             Exception origException = assertThrows(CertificateException.class,
-                    () -> origTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
+                () -> origTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
             Exception testException = assertThrows(CertificateException.class,
-                    () -> testTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
+                () -> testTrustManager.checkClientTrusted(chainWithoutCa, "RSA"));
             assertEquals(origException.getMessage(), testException.getMessage());
             // Check that there is exactly one new message
             List<String> logMessages = appender.getMessages();
@@ -434,9 +434,9 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
 
             // Check validation of server certificates, then method of wrapped trust manager and compare result
             origException = assertThrows(CertificateException.class,
-                    () -> testTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
+                () -> testTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
             testException = assertThrows(CertificateException.class,
-                    () -> testTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
+                () -> testTrustManager.checkServerTrusted(chainWithoutCa, "RSA"));
             assertEquals(origException.getMessage(), testException.getMessage());
             // Check that there are no new messages
             assertEquals(nrOfInitialMessagges + 1, appender.getMessages().size());
@@ -451,8 +451,8 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
         X509Certificate endCertInvalid = chainWithValidAndInvalidEndCertificates[1];
         X509Certificate intermediateCert = chainWithValidAndInvalidEndCertificates[2];
         X509Certificate caCert = chainWithValidAndInvalidEndCertificates[3];
-        X509Certificate[] validChainWithoutCa = new X509Certificate[] {endCertValid, intermediateCert};
-        X509Certificate[] invalidChainWithoutCa = new X509Certificate[] {endCertInvalid, intermediateCert};
+        X509Certificate[] validChainWithoutCa = new X509Certificate[]{endCertValid, intermediateCert};
+        X509Certificate[] invalidChainWithoutCa = new X509Certificate[]{endCertInvalid, intermediateCert};
         // Setup certificate chain with valid end certificate
 
         KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
@@ -472,12 +472,12 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
             assertDoesNotThrow(() -> testTrustManager.checkClientTrusted(validChainWithoutCa, "RSA"));
             // Call with invalid certificate
             assertThrows(CertificateException.class,
-                    () -> testTrustManager.checkClientTrusted(invalidChainWithoutCa, "RSA"));
+                () -> testTrustManager.checkClientTrusted(invalidChainWithoutCa, "RSA"));
             // Call with valid certificate again
             assertDoesNotThrow(() -> testTrustManager.checkClientTrusted(validChainWithoutCa, "RSA"));
             // Call with invalid certificate
             assertThrows(CertificateException.class,
-                    () -> testTrustManager.checkClientTrusted(invalidChainWithoutCa, "RSA"));
+                () -> testTrustManager.checkClientTrusted(invalidChainWithoutCa, "RSA"));
             // Call with valid certificate again
             assertDoesNotThrow(() -> testTrustManager.checkClientTrusted(validChainWithoutCa, "RSA"));
         }
@@ -487,37 +487,37 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
     public void testSortChainAnWrapEndCertificate() {
         // Calling method with null or empty chain is expected to throw
         assertThrows(CertificateException.class,
-                () -> CommonNameLoggingTrustManager.sortChainAnWrapEndCertificate(null));
+            () -> CommonNameLoggingTrustManager.sortChainAnWrapEndCertificate(null));
         assertThrows(CertificateException.class,
-                () -> CommonNameLoggingTrustManager.sortChainAnWrapEndCertificate(new X509Certificate[0]));
+            () -> CommonNameLoggingTrustManager.sortChainAnWrapEndCertificate(new X509Certificate[0]));
 
         X509Certificate endCert = chainWithExpiredEndCertificate[0];
         X509Certificate intermediateCert = chainWithExpiredEndCertificate[1];
         X509Certificate caCert = chainWithExpiredEndCertificate[2];
 
         // Check that a chain with just one certificate works
-        X509Certificate[] chainWithEndCert = new X509Certificate[] {endCert};
+        X509Certificate[] chainWithEndCert = new X509Certificate[]{endCert};
         X509Certificate[] sortedChain = assertDoesNotThrow(
-                () -> CommonNameLoggingTrustManager.sortChainAnWrapEndCertificate(chainWithEndCert));
+            () -> CommonNameLoggingTrustManager.sortChainAnWrapEndCertificate(chainWithEndCert));
         assertEquals(endCert.getSubjectX500Principal(), sortedChain[0].getSubjectX500Principal());
         // Check that the order is unchanged for an already sorted certificate chain
         // (starting with end certificate)
-        X509Certificate[] chainWithoutCaInOrder = new X509Certificate[] {endCert, intermediateCert};
+        X509Certificate[] chainWithoutCaInOrder = new X509Certificate[]{endCert, intermediateCert};
         sortedChain = assertDoesNotThrow(
-                () -> CommonNameLoggingTrustManager.sortChainAnWrapEndCertificate(chainWithoutCaInOrder));
+            () -> CommonNameLoggingTrustManager.sortChainAnWrapEndCertificate(chainWithoutCaInOrder));
         assertEquals(endCert.getSubjectX500Principal(), sortedChain[0].getSubjectX500Principal());
         assertEquals(intermediateCert.getSubjectX500Principal(), sortedChain[1].getSubjectX500Principal());
         // Check that the order is changed for an unsorted certificate chain such that
         // it starts with end certificate
-        X509Certificate[] chainWithoutCaOutOfOrder = new X509Certificate[] {intermediateCert, endCert};
+        X509Certificate[] chainWithoutCaOutOfOrder = new X509Certificate[]{intermediateCert, endCert};
         sortedChain = assertDoesNotThrow(
-                () -> CommonNameLoggingTrustManager.sortChainAnWrapEndCertificate(chainWithoutCaOutOfOrder));
+            () -> CommonNameLoggingTrustManager.sortChainAnWrapEndCertificate(chainWithoutCaOutOfOrder));
         assertEquals(endCert.getSubjectX500Principal(), sortedChain[0].getSubjectX500Principal());
         assertEquals(intermediateCert.getSubjectX500Principal(), sortedChain[1].getSubjectX500Principal());
 
-        X509Certificate[] chainWithCaOutOfOrder = new X509Certificate[] {caCert, intermediateCert, endCert};
+        X509Certificate[] chainWithCaOutOfOrder = new X509Certificate[]{caCert, intermediateCert, endCert};
         sortedChain = assertDoesNotThrow(
-                () -> CommonNameLoggingTrustManager.sortChainAnWrapEndCertificate(chainWithCaOutOfOrder));
+            () -> CommonNameLoggingTrustManager.sortChainAnWrapEndCertificate(chainWithCaOutOfOrder));
         assertEquals(endCert.getSubjectX500Principal(), sortedChain[0].getSubjectX500Principal());
         assertEquals(intermediateCert.getSubjectX500Principal(), sortedChain[1].getSubjectX500Principal());
         assertEquals(caCert.getSubjectX500Principal(), sortedChain[2].getSubjectX500Principal());
@@ -525,21 +525,21 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
 
     @Test
     public void testSortChainWithMultipleEndCertificate() {
-        assertThrows(CertificateException.class, 
-                () -> CommonNameLoggingTrustManager.sortChainAnWrapEndCertificate(chainWithMultipleEndCertificates));
+        assertThrows(CertificateException.class,
+            () -> CommonNameLoggingTrustManager.sortChainAnWrapEndCertificate(chainWithMultipleEndCertificates));
     }
 
     @Test
     public void testCalcDigestForCertificateChain() {
-        ByteBuffer digestForValidChain = 
+        ByteBuffer digestForValidChain =
             assertDoesNotThrow(() -> CommonNameLoggingTrustManager.calcDigestForCertificateChain(chainWithValidEndCertificate));
-        ByteBuffer digestForValidChainAgain = 
+        ByteBuffer digestForValidChainAgain =
             assertDoesNotThrow(() -> CommonNameLoggingTrustManager.calcDigestForCertificateChain(chainWithValidEndCertificate));
         assertEquals(digestForValidChain, digestForValidChainAgain);
-        ByteBuffer digestForInvalidChain = 
+        ByteBuffer digestForInvalidChain =
             assertDoesNotThrow(() -> CommonNameLoggingTrustManager.calcDigestForCertificateChain(chainWithInvalidEndCertificate));
         assertNotEquals(digestForValidChain, digestForInvalidChain);
-        ByteBuffer digestForExpiredChain = 
+        ByteBuffer digestForExpiredChain =
             assertDoesNotThrow(() -> CommonNameLoggingTrustManager.calcDigestForCertificateChain(chainWithExpiredEndCertificate));
         assertNotEquals(digestForValidChain, digestForExpiredChain);
         assertNotEquals(digestForInvalidChain, digestForExpiredChain);
@@ -555,11 +555,11 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
      * @throws NoSuchAlgorithmException
      */
     private X509Certificate[] generateKeyChainIncludingCA(boolean expired, boolean multipleEndCert, boolean endCert0Valid, boolean endCert1Valid)
-            throws CertificateException, NoSuchAlgorithmException {
+        throws CertificateException, NoSuchAlgorithmException {
         // For testing, we might create another end certificate
         int nrOfCerts = multipleEndCert ? 4 : 3;
         KeyPair[] keyPairs = new KeyPair[nrOfCerts];
-        for (int i = 0; i < nrOfCerts; i++) {
+        for (int i = 0;i < nrOfCerts;i++) {
             keyPairs[i] = TestSslUtils.generateKeyPair("RSA");
         }
         X509Certificate[] certs = new X509Certificate[nrOfCerts];
@@ -569,25 +569,25 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
         // Generate root CA
         int caIndex = nrOfCerts - 1;
         certs[caIndex] = TestSslUtils.generateSignedCertificate("CN=CA", keyPairs[caIndex], 365,
-                365, null, null, "SHA512withRSA", true, false, false);
+            365, null, null, "SHA512withRSA", true, false, false);
         int intermediateCertIndex = caIndex - 1;
         certs[intermediateCertIndex] = TestSslUtils.generateSignedCertificate("CN=Intermediate CA",
-                keyPairs[intermediateCertIndex], 365, 365, certs[caIndex].getSubjectX500Principal().getName(), keyPairs[caIndex],
-                "SHA512withRSA", true, false, false);
-        for (int currIndex = intermediateCertIndex - 1; currIndex >= 0; currIndex--) {
+            keyPairs[intermediateCertIndex], 365, 365, certs[caIndex].getSubjectX500Principal().getName(), keyPairs[caIndex],
+            "SHA512withRSA", true, false, false);
+        for (int currIndex = intermediateCertIndex - 1;currIndex >= 0;currIndex--) {
             // When generating multiple end certificates, 
             boolean endCertValid = (currIndex == 0) ? endCert0Valid : endCert1Valid;
             if (endCertValid) {
                 // Generate a valid end certificate, i.e. one that is signed by our intermediate
                 // CA
                 certs[currIndex] = TestSslUtils.generateSignedCertificate("CN=kafka", keyPairs[currIndex],
-                        endCertDaysValidBeforeNow, endCertDaysValidAfterNow,
-                        certs[intermediateCertIndex].getSubjectX500Principal().getName(), keyPairs[intermediateCertIndex], "SHA512withRSA", false, true, true);
+                    endCertDaysValidBeforeNow, endCertDaysValidAfterNow,
+                    certs[intermediateCertIndex].getSubjectX500Principal().getName(), keyPairs[intermediateCertIndex], "SHA512withRSA", false, true, true);
             } else {
                 // Generate an invalid end certificate, by creating a self-signed one.
                 certs[currIndex] = TestSslUtils.generateSignedCertificate("C=GB, L=London, CN=kafka", keyPairs[currIndex],
-                        endCertDaysValidBeforeNow, endCertDaysValidAfterNow,
-                        null, null, "SHA512withRSA", false, true, true);
+                    endCertDaysValidBeforeNow, endCertDaysValidAfterNow,
+                    null, null, "SHA512withRSA", false, true, true);
             }
         }
         return certs;

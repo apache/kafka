@@ -191,7 +191,7 @@ public class ConnectorHandle {
         }
     }
 
-     /**
+    /**
      * Wait for this connector to meet the expected number of commits as defined by {@code
      * expectedCommits}.
      *

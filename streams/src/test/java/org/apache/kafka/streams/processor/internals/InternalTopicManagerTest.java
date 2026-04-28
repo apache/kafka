@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 package org.apache.kafka.streams.processor.internals;
+
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -218,7 +219,7 @@ public class InternalTopicManagerTest {
                 mkEntry(topic1, createTopicSuccessfulFuture)
             )))
             .thenAnswer(answer -> new MockCreateTopicsResult(mkMap(
-                    mkEntry(topic2, createTopicSuccessfulFuture)
+                mkEntry(topic2, createTopicSuccessfulFuture)
             )));
 
         topicManager.setup(mkMap(
@@ -231,7 +232,7 @@ public class InternalTopicManagerTest {
         final AdminClient admin = new MockAdminClient() {
             @Override
             public CreateTopicsResult createTopics(final Collection<NewTopic> newTopics,
-                                                   final CreateTopicsOptions options) {
+                final CreateTopicsOptions options) {
                 final CreatableTopic topicToBeCreated = new CreatableTopic();
                 topicToBeCreated.setAssignments(new CreatableReplicaAssignmentCollection());
                 topicToBeCreated.setNumPartitions((short) 1);
@@ -254,7 +255,8 @@ public class InternalTopicManagerTest {
                     final KafkaFutureImpl<TopicMetadataAndConfig> future = new KafkaFutureImpl<>();
                     future.completeExceptionally(expected);
 
-                    return new CreateTopicsResult(Collections.singletonMap(topic1, future)) { };
+                    return new CreateTopicsResult(Collections.singletonMap(topic1, future)) {
+                    };
                 }
             }
         };
@@ -313,11 +315,11 @@ public class InternalTopicManagerTest {
         assertThat(
             exception.getMessage(),
             is("Setup timeout: Could not create internal topics within " +
-                    (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 2 +
+                (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 2 +
                 " milliseconds. This can happen if the Kafka cluster is temporarily not available or a topic is marked" +
-                    " for deletion and the broker did not complete its deletion within the timeout." +
-                    " The last errors seen per topic are:" +
-                    " {" + topic1 + "=org.apache.kafka.common.errors.TopicExistsException: Topic test_topic exists already.}")
+                " for deletion and the broker did not complete its deletion within the timeout." +
+                " The last errors seen per topic are:" +
+                " {" + topic1 + "=org.apache.kafka.common.errors.TopicExistsException: Topic test_topic exists already.}")
         );
     }
 
@@ -326,7 +328,7 @@ public class InternalTopicManagerTest {
         mockAdminClient.timeoutNextRequest(1);
 
         final InternalTopicManager internalTopicManager =
-                new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
+            new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
         try {
             final Set<String> topic1set = Set.of(topic1);
             internalTopicManager.getTopicPartitionInfo(topic1set, null);
@@ -351,7 +353,7 @@ public class InternalTopicManagerTest {
         mockAdminClient.timeoutNextRequest(1);
 
         final InternalTopicManager internalTopicManager =
-                new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
+            new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
         try {
             final Set<String> topic1set = Set.of(topic1);
             final Set<String> topic2set = new HashSet<>(Collections.singletonList(topic2));
@@ -782,17 +784,17 @@ public class InternalTopicManagerTest {
         // let the first describe succeed on topic, and fail on topic2, and then let creation throws topics-existed;
         // it should retry with just topic2 and then let it succeed
         when(admin.describeTopics(Set.of(topic1, topic2)))
-                .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(
-                        mkEntry(topic1, topicDescriptionSuccessFuture),
-                        mkEntry(topic2, topicDescriptionFailFuture) // first call: missing
-                )));
+            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(
+                mkEntry(topic1, topicDescriptionSuccessFuture),
+                mkEntry(topic2, topicDescriptionFailFuture) // first call: missing
+            )));
 
         when(admin.createTopics(Collections.singleton(new NewTopic(topic2, Optional.of(1), Optional.of((short) 1))
             .configs(mkMap(mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT),
-                                 mkEntry(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime"))))))
+                mkEntry(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime"))))))
             .thenAnswer(answer -> new MockCreateTopicsResult(Collections.singletonMap(topic2, topicCreationFuture)));
         when(admin.describeTopics(Set.of(topic2)))
-                .thenAnswer(answer -> new MockDescribeTopicsResult(Collections.singletonMap(topic2, topicDescriptionSuccessFuture)));
+            .thenAnswer(answer -> new MockDescribeTopicsResult(Collections.singletonMap(topic2, topicDescriptionSuccessFuture)));
 
         final InternalTopicConfig topicConfig = new UnwindowedUnversionedChangelogTopicConfig(topic1, Collections.emptyMap());
         topicConfig.setNumberOfPartitions(1);
@@ -821,7 +823,8 @@ public class InternalTopicManagerTest {
             internalTopicConfig.setNumberOfPartitions(1);
             internalTopicManager.makeReady(Collections.singletonMap(topic1, internalTopicConfig));
             fail("Should have thrown StreamsException");
-        } catch (final StreamsException expected) { /* pass */ }
+        } catch (final StreamsException expected) { /* pass */
+        }
     }
 
     @Test
@@ -854,9 +857,9 @@ public class InternalTopicManagerTest {
         mockAdminClient.timeoutNextRequest(5);
 
         final InternalTopicManager topicManager = new InternalTopicManager(
-                new AutoAdvanceMockTime(time),
-                mockAdminClient,
-                new StreamsConfig(config)
+            new AutoAdvanceMockTime(time),
+            mockAdminClient,
+            new StreamsConfig(config)
         );
 
         final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic1, Collections.emptyMap());
@@ -866,9 +869,10 @@ public class InternalTopicManagerTest {
             fail("Should have thrown TimeoutException.");
         } catch (final TimeoutException expected) {
             assertThat(expected.getMessage(), is("MakeReady timeout: Could not create topics within 50 milliseconds. " +
-                    "This can happen if the Kafka cluster is temporarily not available."));
+                "This can happen if the Kafka cluster is temporarily not available."));
         }
     }
+
     @Test
     public void shouldLogWhenTopicNotFoundAndNotThrowException() {
         mockAdminClient.addTopic(
@@ -924,11 +928,11 @@ public class InternalTopicManagerTest {
             .thenAnswer(answer -> new MockDescribeTopicsResult(
                 Collections.singletonMap(topic1, topicDescriptionUnknownTopicFuture)));
         when(admin.createTopics(Collections.singleton(
-                new NewTopic(topic1, Optional.of(1), Optional.of((short) 1))
-            .configs(mkMap(mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE),
-                mkEntry(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime"),
-                mkEntry(TopicConfig.SEGMENT_BYTES_CONFIG, "52428800"),
-                mkEntry(TopicConfig.RETENTION_MS_CONFIG, "-1"))))))
+            new NewTopic(topic1, Optional.of(1), Optional.of((short) 1))
+                .configs(mkMap(mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE),
+                    mkEntry(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime"),
+                    mkEntry(TopicConfig.SEGMENT_BYTES_CONFIG, "52428800"),
+                    mkEntry(TopicConfig.RETENTION_MS_CONFIG, "-1"))))))
             .thenAnswer(answer -> new MockCreateTopicsResult(Collections.singletonMap(topic1, topicCreationFuture)));
 
         final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic1, Collections.emptyMap());
@@ -945,7 +949,7 @@ public class InternalTopicManagerTest {
             new StreamsConfig(config)
         );
         final TopicPartitionInfo partitionInfo = new TopicPartitionInfo(0, broker1,
-                Collections.singletonList(broker1), Collections.singletonList(broker1));
+            Collections.singletonList(broker1), Collections.singletonList(broker1));
 
         final KafkaFutureImpl<TopicDescription> topicDescriptionFailFuture = new KafkaFutureImpl<>();
         topicDescriptionFailFuture.completeExceptionally(new LeaderNotAvailableException("Leader Not Available!"));
@@ -1689,7 +1693,7 @@ public class InternalTopicManagerTest {
     }
 
     private void shouldThrowWhenConfigDescriptionsDoNotContainConfigDuringValidation(final InternalTopicConfig streamsSideTopicConfig,
-                                                                                     final Config brokerSideTopicConfig) {
+        final Config brokerSideTopicConfig) {
         final AdminClient admin = mock(AdminClient.class);
         final InternalTopicManager topicManager = new InternalTopicManager(
             time,
@@ -1778,8 +1782,8 @@ public class InternalTopicManagerTest {
     }
 
     private NewTopic newTopic(final String topicName,
-                              final InternalTopicConfig topicConfig,
-                              final StreamsConfig streamsConfig) {
+        final InternalTopicConfig topicConfig,
+        final StreamsConfig streamsConfig) {
         return new NewTopic(
             topicName,
             topicConfig.numberOfPartitions(),
@@ -1829,7 +1833,7 @@ public class InternalTopicManagerTest {
     }
 
     private InternalTopicConfig setupUnwindowedUnversionedChangelogTopicConfig(final String topicName,
-                                                                               final int partitionCount) {
+        final int partitionCount) {
         final InternalTopicConfig internalTopicConfig =
             new UnwindowedUnversionedChangelogTopicConfig(topicName, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(partitionCount);
@@ -1837,8 +1841,8 @@ public class InternalTopicManagerTest {
     }
 
     private InternalTopicConfig setupWindowedChangelogTopicConfig(final String topicName,
-                                                                  final int partitionCount,
-                                                                  final long retentionMs) {
+        final int partitionCount,
+        final long retentionMs) {
         final InternalTopicConfig internalTopicConfig = new WindowedChangelogTopicConfig(
             topicName,
             mkMap(mkEntry(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(retentionMs))),
@@ -1849,8 +1853,8 @@ public class InternalTopicManagerTest {
     }
 
     private InternalTopicConfig setupVersionedChangelogTopicConfig(final String topicName,
-                                                                   final int partitionCount,
-                                                                   final long compactionLagMs) {
+        final int partitionCount,
+        final long compactionLagMs) {
         final InternalTopicConfig internalTopicConfig = new VersionedChangelogTopicConfig(
             topicName,
             mkMap(mkEntry(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, String.valueOf(compactionLagMs))),
@@ -1861,7 +1865,7 @@ public class InternalTopicManagerTest {
     }
 
     private InternalTopicConfig setupRepartitionTopicConfig(final String topicName,
-                                                            final int partitionCount) {
+        final int partitionCount) {
         final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topicName, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(partitionCount);
         return internalTopicConfig;

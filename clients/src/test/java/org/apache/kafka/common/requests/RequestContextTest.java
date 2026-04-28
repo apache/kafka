@@ -53,7 +53,7 @@ public class RequestContextTest {
 
         RequestHeader header = new RequestHeader(ApiKeys.API_VERSIONS, Short.MAX_VALUE, "", correlationId);
         RequestContext context = new RequestContext(header, "0", InetAddress.getLocalHost(), KafkaPrincipal.ANONYMOUS,
-                new ListenerName("ssl"), SecurityProtocol.SASL_SSL, ClientInformation.EMPTY, false);
+            new ListenerName("ssl"), SecurityProtocol.SASL_SSL, ClientInformation.EMPTY, false);
         assertEquals(0, context.apiVersion());
 
         // Write some garbage to the request buffer. This should be ignored since we will treat
@@ -124,11 +124,11 @@ public class RequestContextTest {
 
         RequestHeader header = new RequestHeader(ApiKeys.PRODUCE, version, "console-producer", 3);
         RequestContext context = new RequestContext(header, "0", InetAddress.getLocalHost(),
-                KafkaPrincipal.ANONYMOUS, new ListenerName("ssl"), SecurityProtocol.SASL_SSL,
-                ClientInformation.EMPTY, true);
+            KafkaPrincipal.ANONYMOUS, new ListenerName("ssl"), SecurityProtocol.SASL_SSL,
+            ClientInformation.EMPTY, true);
 
         String msg = assertThrows(InvalidRequestException.class,
-                () -> context.parseRequest(corruptBuffer)).getCause().getMessage();
+            () -> context.parseRequest(corruptBuffer)).getCause().getMessage();
         assertEquals("Tried to allocate a collection of size 1073741823, but there are only 17 bytes remaining.", msg);
     }
 
@@ -141,24 +141,24 @@ public class RequestContextTest {
 
         RequestHeader header = new RequestHeader(ApiKeys.PRODUCE, version, "console-producer", 3);
         RequestContext context = new RequestContext(header, "0", InetAddress.getLocalHost(),
-                KafkaPrincipal.ANONYMOUS, new ListenerName("ssl"), SecurityProtocol.SASL_SSL,
-                ClientInformation.EMPTY, true);
+            KafkaPrincipal.ANONYMOUS, new ListenerName("ssl"), SecurityProtocol.SASL_SSL,
+            ClientInformation.EMPTY, true);
 
         String msg = assertThrows(InvalidRequestException.class,
-                () -> context.parseRequest(corruptBuffer)).getCause().getMessage();
+            () -> context.parseRequest(corruptBuffer)).getCause().getMessage();
         assertEquals(
-                "Tried to allocate a collection of size 2147483647, but there are only 8 bytes remaining.", msg);
+            "Tried to allocate a collection of size 2147483647, but there are only 8 bytes remaining.", msg);
     }
 
     private ByteBuffer produceRequest(short version) {
         ProduceRequestData data = new ProduceRequestData()
-                .setAcks((short) -1)
-                .setTimeoutMs(1);
+            .setAcks((short) -1)
+            .setTimeoutMs(1);
         data.topicData().add(
-                new ProduceRequestData.TopicProduceData()
-                        .setName("foo") // versions in this test < 13, topicId can't be used
-                        .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
-                                .setIndex(42))));
+            new ProduceRequestData.TopicProduceData()
+                .setName("foo") // versions in this test < 13, topicId can't be used
+                .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
+                    .setIndex(42))));
 
         return serialize(version, data);
     }
@@ -181,11 +181,11 @@ public class RequestContextTest {
 
         RequestHeader header = new RequestHeader(ApiKeys.SASL_AUTHENTICATE, version, "console-producer", 1);
         RequestContext context = new RequestContext(header, "0", InetAddress.getLocalHost(),
-                KafkaPrincipal.ANONYMOUS, new ListenerName("ssl"), SecurityProtocol.SASL_SSL,
-                ClientInformation.EMPTY, true);
+            KafkaPrincipal.ANONYMOUS, new ListenerName("ssl"), SecurityProtocol.SASL_SSL,
+            ClientInformation.EMPTY, true);
 
         String msg = assertThrows(InvalidRequestException.class,
-                () -> context.parseRequest(corruptBuffer)).getCause().getMessage();
+            () -> context.parseRequest(corruptBuffer)).getCause().getMessage();
         assertEquals("Error reading byte array of 2147483647 byte(s): only 0 byte(s) available", msg);
     }
 

@@ -241,11 +241,11 @@ class SubmittedRecords {
      *                              via {@link #hasPending()}
      */
     record CommittableOffsets(Map<Map<String, Object>, Map<String, Object>> offsets,
-                              int numCommittableMessages,
-                              int numUncommittableMessages,
-                              int numDeques,
-                              int largestDequeSize,
-                              Map<String, Object> largestDequePartition) {
+    int numCommittableMessages,
+    int numUncommittableMessages,
+    int numDeques,
+    int largestDequeSize,
+    Map<String, Object> largestDequePartition) {
 
         /**
          * An "empty" snapshot that contains no offsets to commit and whose metadata contains no committable or uncommitable messages.

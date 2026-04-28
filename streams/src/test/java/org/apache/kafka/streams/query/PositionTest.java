@@ -301,36 +301,36 @@ public class PositionTest {
 
                             // merge checks
                             assertTrue(
-                                    mergedOffsets.containsKey(partition),
-                                    "merge method failure. Missing partition " + partition + " for topic " + topic
+                                mergedOffsets.containsKey(partition),
+                                "merge method failure. Missing partition " + partition + " for topic " + topic
                             );
                             assertTrue(
-                                    mergedOffsets.get(partition) >= offsetValue,
-                                    "merge method failure. Offset for topic " +
-                                            topic +
-                                            " partition " +
-                                            partition +
-                                            " expected >= " +
-                                            offsetValue +
-                                            " but got " +
-                                            mergedOffsets.get(partition)
+                                mergedOffsets.get(partition) >= offsetValue,
+                                "merge method failure. Offset for topic " +
+                                    topic +
+                                    " partition " +
+                                    partition +
+                                    " expected >= " +
+                                    offsetValue +
+                                    " but got " +
+                                    mergedOffsets.get(partition)
                             );
 
                             // withComponent checks
                             assertTrue(
-                                    withComponentOffsets.containsKey(partition),
-                                    "withComponent method failure. Missing partition " + partition + " for topic " + topic
+                                withComponentOffsets.containsKey(partition),
+                                "withComponent method failure. Missing partition " + partition + " for topic " + topic
                             );
                             assertTrue(
-                                    withComponentOffsets.get(partition) >= offsetValue,
-                                    "withComponent method failure. Offset for topic " +
-                                            topic +
-                                            " partition " +
-                                            partition +
-                                            " expected >= " +
-                                            offsetValue +
-                                            " but got " +
-                                            withComponentOffsets.get(partition)
+                                withComponentOffsets.get(partition) >= offsetValue,
+                                "withComponent method failure. Offset for topic " +
+                                    topic +
+                                    " partition " +
+                                    partition +
+                                    " expected >= " +
+                                    offsetValue +
+                                    " but got " +
+                                    withComponentOffsets.get(partition)
                             );
                         }
                     }

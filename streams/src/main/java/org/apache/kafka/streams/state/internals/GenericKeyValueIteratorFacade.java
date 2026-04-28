@@ -34,7 +34,7 @@ class GenericKeyValueIteratorFacade<K, InV, OutV> implements KeyValueIterator<K,
     private final Function<InV, OutV> valueConverter;
 
     GenericKeyValueIteratorFacade(final KeyValueIterator<K, InV> innerIterator,
-                                  final Function<InV, OutV> valueConverter) {
+        final Function<InV, OutV> valueConverter) {
         this.innerIterator = innerIterator;
         this.valueConverter = valueConverter;
     }

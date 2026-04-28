@@ -42,7 +42,7 @@ public class EvolutionVerifierTest {
                     toMessage("{'apiKey':63, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
                         "'validVersions': '0-2', 'flexibleVersions': '0+', " +
                         "'fields': [{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}]}"))).
-                            getMessage());
+                getMessage());
     }
 
     @Test
@@ -56,7 +56,7 @@ public class EvolutionVerifierTest {
                     toMessage("{'apiKey':62, 'type': 'response', 'name': 'BrokerRegistrationRequest', " +
                         "'validVersions': '0-2', 'flexibleVersions': '0+', " +
                         "'fields': [{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}]}"))).
-                            getMessage());
+                getMessage());
     }
 
     @Test
@@ -70,7 +70,7 @@ public class EvolutionVerifierTest {
                     toMessage("{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
                         "'validVersions': '0-2', 'flexibleVersions': '1+', " +
                         "'fields': [{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}]}"))).
-                            getMessage());
+                getMessage());
     }
 
     @Test
@@ -84,7 +84,7 @@ public class EvolutionVerifierTest {
                     toMessage("{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
                         "'validVersions': '0-1', 'flexibleVersions': '0+', " +
                         "'fields': [{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}]}"))).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -120,8 +120,8 @@ public class EvolutionVerifierTest {
                         "{'name': 'ControllerId', 'type': 'int32', 'versions': '1+'}," +
                         "{'name': 'UserId', 'type': 'int32', 'versions': '2+'}" +
                         "]}")).
-                        verify()).
-                        getMessage());
+                    verify()).
+                getMessage());
     }
 
     @Test
@@ -152,16 +152,16 @@ public class EvolutionVerifierTest {
             assertThrows(EvolutionException.class,
                 () -> EvolutionVerifier.verifyVersionsMatchTopLevelMessage("message1",
                     MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
-                    "{",
-                    "  \"type\": \"request\",",
-                    "  \"name\": \"LeaderAndIsrRequest\",",
-                    "  \"validVersions\": \"0\",",
-                    "  \"flexibleVersions\": \"0+\",",
-                    "  \"fields\": [",
-                    "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\" },",
-                    "    { \"name\": \"field2\", \"type\": \"[]int64\", \"versions\": \"1+\" }",
-                    "  ]",
-                    "}")), MessageSpec.class))).getMessage());
+                        "{",
+                        "  \"type\": \"request\",",
+                        "  \"name\": \"LeaderAndIsrRequest\",",
+                        "  \"validVersions\": \"0\",",
+                        "  \"flexibleVersions\": \"0+\",",
+                        "  \"fields\": [",
+                        "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\" },",
+                        "    { \"name\": \"field2\", \"type\": \"[]int64\", \"versions\": \"1+\" }",
+                        "  ]",
+                        "}")), MessageSpec.class))).getMessage());
     }
 
     @Test
@@ -170,16 +170,16 @@ public class EvolutionVerifierTest {
             assertThrows(EvolutionException.class,
                 () -> EvolutionVerifier.verifyVersionsMatchTopLevelMessage("message1",
                     MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
-                    "{",
-                    "  \"type\": \"request\",",
-                    "  \"name\": \"LeaderAndIsrRequest\",",
-                    "  \"validVersions\": \"0\",",
-                    "  \"flexibleVersions\": \"0+\",",
-                    "  \"fields\": [",
-                    "    { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0+\", \"nullableVersions\": \"1+\"},",
-                    "    { \"name\": \"field2\", \"type\": \"[]int64\", \"versions\": \"0+\" }",
-                    "  ]",
-                    "}")), MessageSpec.class))).getMessage());
+                        "{",
+                        "  \"type\": \"request\",",
+                        "  \"name\": \"LeaderAndIsrRequest\",",
+                        "  \"validVersions\": \"0\",",
+                        "  \"flexibleVersions\": \"0+\",",
+                        "  \"fields\": [",
+                        "    { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0+\", \"nullableVersions\": \"1+\"},",
+                        "    { \"name\": \"field2\", \"type\": \"[]int64\", \"versions\": \"0+\" }",
+                        "  ]",
+                        "}")), MessageSpec.class))).getMessage());
     }
 
     @Test
@@ -188,15 +188,15 @@ public class EvolutionVerifierTest {
             assertThrows(EvolutionException.class,
                 () -> EvolutionVerifier.verifyVersionsMatchTopLevelMessage("message1",
                     MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
-                    "{",
-                    "  \"type\": \"request\",",
-                    "  \"name\": \"LeaderAndIsrRequest\",",
-                    "  \"validVersions\": \"0\",",
-                    "  \"flexibleVersions\": \"0+\",",
-                    "  \"fields\": [",
-                    "    { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0+\", \"taggedVersions\": \"1+\", \"tag\": 0},",
-                    "    { \"name\": \"field2\", \"type\": \"[]int64\", \"versions\": \"0+\" }",
-                    "  ]",
-                    "}")), MessageSpec.class))).getMessage());
+                        "{",
+                        "  \"type\": \"request\",",
+                        "  \"name\": \"LeaderAndIsrRequest\",",
+                        "  \"validVersions\": \"0\",",
+                        "  \"flexibleVersions\": \"0+\",",
+                        "  \"fields\": [",
+                        "    { \"name\": \"field1\", \"type\": \"string\", \"versions\": \"0+\", \"taggedVersions\": \"1+\", \"tag\": 0},",
+                        "    { \"name\": \"field2\", \"type\": \"[]int64\", \"versions\": \"0+\" }",
+                        "  ]",
+                        "}")), MessageSpec.class))).getMessage());
     }
 }

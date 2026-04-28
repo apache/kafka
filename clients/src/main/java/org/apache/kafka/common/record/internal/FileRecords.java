@@ -68,7 +68,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
         if (channel.size() > Integer.MAX_VALUE) {
             throw new KafkaException(
                 "The size of segment " + file + " (" + channel.size() +
-                ") is larger than the maximum allowed segment size of " + Integer.MAX_VALUE
+                    ") is larger than the maximum allowed segment size of " + Integer.MAX_VALUE
             );
         }
 
@@ -193,7 +193,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     public int append(MemoryRecords records) throws IOException {
         if (records.sizeInBytes() > Integer.MAX_VALUE - size.get())
             throw new IllegalArgumentException("Append of size " + records.sizeInBytes() +
-                    " bytes is too large for segment with current file position at " + size.get());
+                " bytes is too large for segment with current file position at " + size.get());
 
         int written = records.writeFullyTo(channel);
         size.getAndAdd(written);
@@ -279,7 +279,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
         int originalSize = sizeInBytes();
         if (targetSize > originalSize || targetSize < 0)
             throw new KafkaException("Attempt to truncate log segment " + file + " to " + targetSize + " bytes failed, " +
-                    " size of this log segment is " + originalSize + " bytes.");
+                " size of this log segment is " + originalSize + " bytes.");
         if (targetSize < (int) channel.size()) {
             channel.truncate(targetSize);
             size.set(targetSize);
@@ -293,8 +293,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
         int oldSize = sizeInBytes();
         if (newSize < oldSize)
             throw new KafkaException(String.format(
-                    "Size of FileRecords %s has been truncated during write: old size %d, new size %d",
-                    file.getAbsolutePath(), oldSize, newSize));
+                "Size of FileRecords %s has been truncated during write: old size %d, new size %d",
+                file.getAbsolutePath(), oldSize, newSize));
 
         long position = start + offset;
         int count = Math.min(length, oldSize - offset);
@@ -361,7 +361,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
                     long timestamp = record.timestamp();
                     if (timestamp >= targetTimestamp && record.offset() >= startingOffset)
                         return new TimestampAndOffset(timestamp, record.offset(),
-                                maybeLeaderEpoch(batch.partitionLeaderEpoch()));
+                            maybeLeaderEpoch(batch.partitionLeaderEpoch()));
                 }
             }
         }
@@ -387,12 +387,12 @@ public class FileRecords extends AbstractRecords implements Closeable {
             }
         }
         return new TimestampAndOffset(maxTimestamp, shallowOffsetOfMaxTimestamp,
-                maybeLeaderEpoch(leaderEpochOfMaxTimestamp));
+            maybeLeaderEpoch(leaderEpochOfMaxTimestamp));
     }
 
     private Optional<Integer> maybeLeaderEpoch(int leaderEpoch) {
         return leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ?
-                Optional.empty() : Optional.of(leaderEpoch);
+            Optional.empty() : Optional.of(leaderEpoch);
     }
 
     /**
@@ -409,10 +409,10 @@ public class FileRecords extends AbstractRecords implements Closeable {
     @Override
     public String toString() {
         return "FileRecords(size=" + sizeInBytes() +
-                ", file=" + file +
-                ", start=" + start +
-                ", end=" + end +
-                ")";
+            ", file=" + file +
+            ", start=" + start +
+            ", end=" + end +
+            ")";
     }
 
     /**
@@ -442,19 +442,19 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     public static FileRecords open(File file,
-                                   boolean mutable,
-                                   boolean fileAlreadyExists,
-                                   int initFileSize,
-                                   boolean preallocate) throws IOException {
+        boolean mutable,
+        boolean fileAlreadyExists,
+        int initFileSize,
+        boolean preallocate) throws IOException {
         FileChannel channel = openChannel(file, mutable, fileAlreadyExists, initFileSize, preallocate);
         int end = (!fileAlreadyExists && preallocate) ? 0 : Integer.MAX_VALUE;
         return new FileRecords(file, channel, end);
     }
 
     public static FileRecords open(File file,
-                                   boolean fileAlreadyExists,
-                                   int initFileSize,
-                                   boolean preallocate) throws IOException {
+        boolean fileAlreadyExists,
+        int initFileSize,
+        boolean preallocate) throws IOException {
         return open(file, true, fileAlreadyExists, initFileSize, preallocate);
     }
 
@@ -477,14 +477,14 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param preallocate Pre-allocate file or not, gotten from configuration.
      */
     private static FileChannel openChannel(File file,
-                                           boolean mutable,
-                                           boolean fileAlreadyExists,
-                                           int initFileSize,
-                                           boolean preallocate) throws IOException {
+        boolean mutable,
+        boolean fileAlreadyExists,
+        int initFileSize,
+        boolean preallocate) throws IOException {
         if (mutable) {
             if (fileAlreadyExists || !preallocate) {
                 return FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.READ,
-                        StandardOpenOption.WRITE);
+                    StandardOpenOption.WRITE);
             } else {
                 RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
                 randomAccessFile.setLength(initFileSize);
@@ -520,8 +520,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
             LogOffsetPosition that = (LogOffsetPosition) o;
 
             return offset == that.offset &&
-                    position == that.position &&
-                    size == that.size;
+                position == that.position &&
+                size == that.size;
 
         }
 
@@ -536,10 +536,10 @@ public class FileRecords extends AbstractRecords implements Closeable {
         @Override
         public String toString() {
             return "LogOffsetPosition(" +
-                    "offset=" + offset +
-                    ", position=" + position +
-                    ", size=" + size +
-                    ')';
+                "offset=" + offset +
+                ", position=" + position +
+                ", size=" + size +
+                ')';
         }
     }
 
@@ -560,8 +560,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
             if (o == null || getClass() != o.getClass()) return false;
             TimestampAndOffset that = (TimestampAndOffset) o;
             return timestamp == that.timestamp &&
-                    offset == that.offset &&
-                    Objects.equals(leaderEpoch, that.leaderEpoch);
+                offset == that.offset &&
+                Objects.equals(leaderEpoch, that.leaderEpoch);
         }
 
         @Override
@@ -572,10 +572,10 @@ public class FileRecords extends AbstractRecords implements Closeable {
         @Override
         public String toString() {
             return "TimestampAndOffset(" +
-                    "timestamp=" + timestamp +
-                    ", offset=" + offset +
-                    ", leaderEpoch=" + leaderEpoch +
-                    ')';
+                "timestamp=" + timestamp +
+                ", offset=" + offset +
+                ", leaderEpoch=" + leaderEpoch +
+                ')';
         }
     }
 }

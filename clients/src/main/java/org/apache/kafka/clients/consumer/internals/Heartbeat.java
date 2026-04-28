@@ -43,7 +43,7 @@ public final class Heartbeat {
     private volatile long heartbeatAttempts = 0L;
 
     public Heartbeat(GroupRebalanceConfig config,
-                     Time time) {
+        Time time) {
         if (config.heartbeatIntervalMs >= config.sessionTimeoutMs)
             throw new IllegalArgumentException("Heartbeat must be set lower than the session timeout");
         this.rebalanceConfig = config;
@@ -53,9 +53,9 @@ public final class Heartbeat {
         this.maxPollIntervalMs = config.rebalanceTimeoutMs;
         this.pollTimer = time.timer(maxPollIntervalMs);
         this.retryBackoff = new ExponentialBackoff(rebalanceConfig.retryBackoffMs,
-                CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,
-                rebalanceConfig.retryBackoffMaxMs,
-                CommonClientConfigs.RETRY_BACKOFF_JITTER);
+            CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,
+            rebalanceConfig.retryBackoffMaxMs,
+            CommonClientConfigs.RETRY_BACKOFF_JITTER);
 
         final LogContext logContext = new LogContext("[Heartbeat groupID=" + config.groupId + "] ");
         this.log = logContext.logger(getClass());
@@ -106,7 +106,7 @@ public final class Heartbeat {
         update(now);
         return heartbeatTimer.isExpired();
     }
-    
+
     long lastHeartbeatSend() {
         return this.lastHeartbeatSend;
     }

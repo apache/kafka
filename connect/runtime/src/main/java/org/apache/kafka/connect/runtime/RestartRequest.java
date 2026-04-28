@@ -31,8 +31,8 @@ import java.util.Objects;
  * @param includeTasks  true if tasks should be restarted, or false if only the connector should be restarted
  */
 public record RestartRequest(String connectorName,
-                             boolean onlyFailed,
-                             boolean includeTasks) implements Comparable<RestartRequest> {
+boolean onlyFailed,
+boolean includeTasks) implements Comparable<RestartRequest> {
 
     public RestartRequest {
         Objects.requireNonNull(connectorName, "Connector name may not be null");

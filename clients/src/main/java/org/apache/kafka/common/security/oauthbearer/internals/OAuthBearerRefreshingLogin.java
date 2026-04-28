@@ -82,7 +82,7 @@ public class OAuthBearerRefreshingLogin implements Login {
 
     @Override
     public void configure(Map<String, ?> configs, String contextName, Configuration configuration,
-            AuthenticateCallbackHandler loginCallbackHandler) {
+        AuthenticateCallbackHandler loginCallbackHandler) {
         /*
          * Specify this class as the one to synchronize on so that only one OAuth 2
          * Bearer Token is refreshed at a given time. Specify null if we don't mind
@@ -93,12 +93,12 @@ public class OAuthBearerRefreshingLogin implements Login {
          */
         Class<OAuthBearerRefreshingLogin> classToSynchronizeOnPriorToRefresh = OAuthBearerRefreshingLogin.class;
         expiringCredentialRefreshingLogin = new ExpiringCredentialRefreshingLogin(contextName, configuration,
-                new ExpiringCredentialRefreshConfig(configs, true), loginCallbackHandler,
-                classToSynchronizeOnPriorToRefresh) {
+            new ExpiringCredentialRefreshConfig(configs, true), loginCallbackHandler,
+            classToSynchronizeOnPriorToRefresh) {
             @Override
             public ExpiringCredential expiringCredential() {
                 Set<OAuthBearerToken> privateCredentialTokens = expiringCredentialRefreshingLogin.subject()
-                        .getPrivateCredentials(OAuthBearerToken.class);
+                    .getPrivateCredentials(OAuthBearerToken.class);
                 if (privateCredentialTokens.isEmpty())
                     return null;
                 final OAuthBearerToken token = privateCredentialTokens.iterator().next();

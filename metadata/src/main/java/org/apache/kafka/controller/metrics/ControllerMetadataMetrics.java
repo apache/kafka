@@ -141,9 +141,9 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
             }
         }));
         registry.ifPresent(r -> uncleanLeaderElectionMeter =
-                Optional.of(registry.get().newMeter(UNCLEAN_LEADER_ELECTIONS_PER_SEC, "elections", TimeUnit.SECONDS)));
+            Optional.of(registry.get().newMeter(UNCLEAN_LEADER_ELECTIONS_PER_SEC, "elections", TimeUnit.SECONDS)));
         registry.ifPresent(r -> electionFromEligibleLeaderReplicasMeter =
-                Optional.of(registry.get().newMeter(ELECTION_FROM_ELIGIBLE_LEADER_REPLICAS_PER_SEC, "elections", TimeUnit.SECONDS)));
+            Optional.of(registry.get().newMeter(ELECTION_FROM_ELIGIBLE_LEADER_REPLICAS_PER_SEC, "elections", TimeUnit.SECONDS)));
 
         registry.ifPresent(r -> r.newGauge(IGNORED_STATIC_VOTERS, new Gauge<Integer>() {
             @Override
@@ -236,7 +236,7 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
             BrokerRegistrationState.UNREGISTERED.state()
         );
     }
-    
+
     public void setGlobalTopicCount(int topicCount) {
         this.globalTopicCount.set(topicCount);
     }
@@ -292,7 +292,7 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
     public int metadataErrorCount() {
         return this.metadataErrorCount.get();
     }
-    
+
     public void updateUncleanLeaderElection(int count) {
         this.uncleanLeaderElectionMeter.ifPresent(m -> m.mark(count));
     }

@@ -65,12 +65,12 @@ public class FutureRecordMetadataTest {
 
     private FutureRecordMetadata futureRecordMetadata(ProduceRequestResult produceRequestResult) {
         return new FutureRecordMetadata(
-                produceRequestResult,
-                0,
-                RecordBatch.NO_TIMESTAMP,
-                0,
-                0,
-                time
+            produceRequestResult,
+            0,
+            RecordBatch.NO_TIMESTAMP,
+            0,
+            0,
+            time
         );
     }
 

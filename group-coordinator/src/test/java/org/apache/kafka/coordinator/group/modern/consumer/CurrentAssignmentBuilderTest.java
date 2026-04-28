@@ -1138,10 +1138,10 @@ public class CurrentAssignmentBuilderTest {
             .withHasSubscriptionChanged(true)
             .withResolvedRegularExpressions(Map.of(
                 "bar*", new ResolvedRegularExpression(
-                    Set.of("bar"),
-                    12345L,
-                    0L
-                )
+                Set.of("bar"),
+                12345L,
+                0L
+            )
             ))
             .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
             .withOwnedTopicPartitions(Arrays.asList(

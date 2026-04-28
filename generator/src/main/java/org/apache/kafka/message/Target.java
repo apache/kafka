@@ -27,7 +27,7 @@ public final class Target {
     private final Function<String, String> assignmentStatementGenerator;
 
     Target(FieldSpec field, String sourceVariable, String humanReadableName,
-           Function<String, String> assignmentStatementGenerator) {
+        Function<String, String> assignmentStatementGenerator) {
         this.field = field;
         this.sourceVariable = sourceVariable;
         this.humanReadableName = humanReadableName;
@@ -62,19 +62,19 @@ public final class Target {
         }
         FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
         FieldSpec elementField = new FieldSpec(field.name() + "Element",
-                field.versions().toString(),
-                List.of(),
-                arrayType.elementType().toString(),
-                false,
-                Versions.NONE.toString(),
-                "",
-                false,
-                EntityType.UNKNOWN,
-                "",
-                Versions.NONE.toString(),
-                field.flexibleVersionsString(),
-                null,
-                field.zeroCopy());
+            field.versions().toString(),
+            List.of(),
+            arrayType.elementType().toString(),
+            false,
+            Versions.NONE.toString(),
+            "",
+            false,
+            EntityType.UNKNOWN,
+            "",
+            Versions.NONE.toString(),
+            field.flexibleVersionsString(),
+            null,
+            field.zeroCopy());
         return new Target(elementField, "_element", humanReadableName + " element",
             assignmentStatementGenerator);
     }

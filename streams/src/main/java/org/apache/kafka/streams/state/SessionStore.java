@@ -47,15 +47,15 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
      * @param latestSessionEndTime latest session end time to search to, inclusive
      */
     default KeyValueIterator<Windowed<K>, AGG> findSessions(final long earliestSessionEndTime,
-                                                            final long latestSessionEndTime) {
+        final long latestSessionEndTime) {
         throw new UnsupportedOperationException(
-                "This API is not supported by this implementation of SessionStore.");
+            "This API is not supported by this implementation of SessionStore.");
     }
 
     @Override
     default KeyValueIterator<Windowed<K>, AGG> findSessions(final K key,
-                                                            final Instant earliestSessionEndTime,
-                                                            final Instant latestSessionStartTime) {
+        final Instant earliestSessionEndTime,
+        final Instant latestSessionStartTime) {
         return findSessions(
             key,
             ApiUtils.validateMillisecondInstant(earliestSessionEndTime,
@@ -66,8 +66,8 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
 
     @Override
     default KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K key,
-                                                                    final Instant earliestSessionEndTime,
-                                                                    final Instant latestSessionStartTime) {
+        final Instant earliestSessionEndTime,
+        final Instant latestSessionStartTime) {
         return backwardFindSessions(
             key,
             ApiUtils.validateMillisecondInstant(earliestSessionEndTime,
@@ -77,9 +77,9 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
     }
 
     default KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom,
-                                                            final K keyTo,
-                                                            final Instant earliestSessionEndTime,
-                                                            final Instant latestSessionStartTime) {
+        final K keyTo,
+        final Instant earliestSessionEndTime,
+        final Instant latestSessionStartTime) {
         return findSessions(
             keyFrom,
             keyTo,
@@ -90,9 +90,9 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
     }
 
     default KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K keyFrom,
-                                                                    final K keyTo,
-                                                                    final Instant earliestSessionEndTime,
-                                                                    final Instant latestSessionStartTime) {
+        final K keyTo,
+        final Instant earliestSessionEndTime,
+        final Instant latestSessionStartTime) {
         return backwardFindSessions(
             keyFrom,
             keyTo,
@@ -103,8 +103,8 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
     }
 
     default AGG fetchSession(final K key,
-                             final Instant sessionStartTime,
-                             final Instant sessionEndTime) {
+        final Instant sessionStartTime,
+        final Instant sessionEndTime) {
         return fetchSession(key,
             ApiUtils.validateMillisecondInstant(sessionStartTime,
                 prepareMillisCheckFailMsgPrefix(sessionStartTime, "sessionStartTime")),

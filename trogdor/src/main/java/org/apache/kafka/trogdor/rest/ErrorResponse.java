@@ -28,7 +28,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public record ErrorResponse(int code, String message) {
     @JsonCreator
     public ErrorResponse(@JsonProperty("code") int code,
-                         @JsonProperty("message") String message) {
+        @JsonProperty("message") String message) {
         this.code = code;
         this.message = message;
     }

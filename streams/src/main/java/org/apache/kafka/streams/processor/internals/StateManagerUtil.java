@@ -56,7 +56,8 @@ final class StateManagerUtil {
     static final String CHECKPOINT_FILE_NAME = ".checkpoint";
     static final long OFFSET_DELTA_THRESHOLD_FOR_CHECKPOINT = 10_000L;
 
-    private StateManagerUtil() {}
+    private StateManagerUtil() {
+    }
 
     static RecordConverter converterForStore(final StateStore store) {
         // First check if the top-level store implements HeadersBytesStore or TimestampedBytesStore
@@ -97,8 +98,8 @@ final class StateManagerUtil {
     }
 
     static boolean checkpointNeeded(final boolean enforceCheckpoint,
-                                    final Map<TopicPartition, Long> oldOffsetSnapshot,
-                                    final Map<TopicPartition, Long> newOffsetSnapshot) {
+        final Map<TopicPartition, Long> oldOffsetSnapshot,
+        final Map<TopicPartition, Long> newOffsetSnapshot) {
         // we should always have the old snapshot post completing the register state stores;
         // if it is null it means the registration is not done and hence we should not overwrite the checkpoint
         if (oldOffsetSnapshot == null) {
@@ -124,11 +125,11 @@ final class StateManagerUtil {
      * @throws StreamsException If the store's changelog does not contain the partition
      */
     static void registerStateStores(final Logger log,
-                                    final String logPrefix,
-                                    final ProcessorTopology topology,
-                                    final ProcessorStateManager stateMgr,
-                                    final StateDirectory stateDirectory,
-                                    final InternalProcessorContext<?, ?> processorContext) {
+        final String logPrefix,
+        final ProcessorTopology topology,
+        final ProcessorStateManager stateMgr,
+        final StateDirectory stateDirectory,
+        final InternalProcessorContext<?, ?> processorContext) {
         if (topology.stateStores().isEmpty()) {
             return;
         }
@@ -155,12 +156,12 @@ final class StateManagerUtil {
      * @throws ProcessorStateException if there is an error while closing the state manager
      */
     static void closeStateManager(final Logger log,
-                                  final String logPrefix,
-                                  final boolean closeClean,
-                                  final boolean eosEnabled,
-                                  final ProcessorStateManager stateMgr,
-                                  final StateDirectory stateDirectory,
-                                  final TaskType taskType) {
+        final String logPrefix,
+        final boolean closeClean,
+        final boolean eosEnabled,
+        final ProcessorStateManager stateMgr,
+        final StateDirectory stateDirectory,
+        final TaskType taskType) {
         // if EOS is enabled, wipe out the whole state store for unclean close since it is now invalid
         final boolean wipeStateStore = !closeClean && eosEnabled;
 

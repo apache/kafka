@@ -58,14 +58,14 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
      */
     @SuppressWarnings("deprecation")
     public static <S extends StateStore, K, V> StateStore maybeWrapStore(final S wrapped,
-                                                                         final boolean eosEnabled,
-                                                                         final Set<TopicPartition> changelogPartitions,
-                                                                         final StateDirectory stateDirectory,
-                                                                         final TaskId taskId,
-                                                                         final String logPrefix) {
+        final boolean eosEnabled,
+        final Set<TopicPartition> changelogPartitions,
+        final StateDirectory stateDirectory,
+        final TaskId taskId,
+        final String logPrefix) {
         return wrapped.persistent() && !wrapped.managesOffsets()
-                ? new LegacyCheckpointingStateStore<>(wrapped, eosEnabled, changelogPartitions, stateDirectory, taskId, logPrefix)
-                : wrapped;
+            ? new LegacyCheckpointingStateStore<>(wrapped, eosEnabled, changelogPartitions, stateDirectory, taskId, logPrefix)
+            : wrapped;
     }
 
     /**
@@ -73,8 +73,8 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
      */
     public static StateStore maybeUnwrapStore(final StateStore store) {
         return (store instanceof LegacyCheckpointingStateStore<?, ?, ?>)
-                ? ((LegacyCheckpointingStateStore<?, ?, ?>) store).wrapped()
-                : store;
+            ? ((LegacyCheckpointingStateStore<?, ?, ?>) store).wrapped()
+            : store;
     }
 
     /**
@@ -93,10 +93,10 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
      *                {@link OffsetCheckpoint#OFFSET_UNKNOWN}.
      */
     public static void maybeDowngradeOffsets(final String logPrefix,
-                                             final UpgradeFromValues upgradeFrom,
-                                             final StateDirectory stateDirectory,
-                                             final TaskId taskId,
-                                             final Map<TopicPartition, Long> offsets) {
+        final UpgradeFromValues upgradeFrom,
+        final StateDirectory stateDirectory,
+        final TaskId taskId,
+        final Map<TopicPartition, Long> offsets) {
         if (upgradeFrom == null || upgradeFrom.ordinal() > UpgradeFromValues.UPGRADE_FROM_42.ordinal()) {
             return;
         }
@@ -140,9 +140,9 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
      */
     @SuppressWarnings("deprecation")
     public static void migrateLegacyOffsets(final String logPrefix,
-                                            final StateDirectory stateDirectory,
-                                            final TaskId taskId,
-                                            final Map<TopicPartition, StateStore> stores) {
+        final StateDirectory stateDirectory,
+        final TaskId taskId,
+        final Map<TopicPartition, StateStore> stores) {
         // load legacy per-task checkpoint
         final File legacyCheckpointFile = checkpointFileFor(stateDirectory, taskId, null);
 
@@ -159,8 +159,8 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
                         final Long offset = changelogOffsetFromCheckpointedOffset(entry.getValue());
                         if (offset != null) {
                             storesToMigrate
-                                    .computeIfAbsent(store, k -> new HashMap<>())
-                                    .put(entry.getKey(), offset);
+                                .computeIfAbsent(store, k -> new HashMap<>())
+                                .put(entry.getKey(), offset);
                         }
                     }
                 }
@@ -170,9 +170,9 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
                     final StateStore store = entry.getKey();
                     if (!store.managesOffsets()) {
                         log.warn("{}Error migrating legacy checkpoint offsets: StateStore '{}' does not manage its own offsets. " +
-                                "The checkpointed offsets for this store will not be migrated, and will be lost. " +
-                                "This store will need to fully restore its state on application restart. " +
-                                "This is a bug in Kafka Streams, and should never be possible.", logPrefix, store.name());
+                            "The checkpointed offsets for this store will not be migrated, and will be lost. " +
+                            "This store will need to fully restore its state on application restart. " +
+                            "This is a bug in Kafka Streams, and should never be possible.", logPrefix, store.name());
                     }
 
                     // attempt to commit the offsets, even if the store doesn't manage them itself
@@ -192,11 +192,11 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
     }
 
     LegacyCheckpointingStateStore(final S wrapped,
-                                  final boolean eosEnabled,
-                                  final Set<TopicPartition> changelogPartitions,
-                                  final StateDirectory stateDirectory,
-                                  final TaskId taskId,
-                                  final String logPrefix) {
+        final boolean eosEnabled,
+        final Set<TopicPartition> changelogPartitions,
+        final StateDirectory stateDirectory,
+        final TaskId taskId,
+        final String logPrefix) {
         super(wrapped);
         this.eosEnabled = eosEnabled;
         this.changelogPartitions = changelogPartitions;
@@ -294,35 +294,35 @@ public class LegacyCheckpointingStateStore<S extends StateStore, K, V> extends W
                 checkpointedOffsets = new HashMap<>(offsets);
             } catch (final IOException e) {
                 log.warn("{}Failed to write offset checkpoint file to [{}]." +
-                                " This may occur if OS cleaned the state.dir in case when it located in ${java.io.tmpdir} directory." +
-                                " This may also occur due to running multiple instances on the same machine using the same state dir." +
-                                " Changing the location of state.dir may resolve the problem.",
-                        logPrefix, checkpointFile, e);
+                    " This may occur if OS cleaned the state.dir in case when it located in ${java.io.tmpdir} directory." +
+                    " This may also occur due to running multiple instances on the same machine using the same state dir." +
+                    " Changing the location of state.dir may resolve the problem.",
+                    logPrefix, checkpointFile, e);
             }
         }
     }
 
     static File checkpointFileFor(final StateDirectory stateDirectory,
-                                  final TaskId taskId,
-                                  final StateStore store) {
+        final TaskId taskId,
+        final StateStore store) {
         return taskId == null ?
-                // global store
-                (store == null ?
-                        // legacy, global file
-                        new File(stateDirectory.globalStateDir(), CHECKPOINT_FILE_NAME) :
-                        // per-store file
-                        new File(stateDirectory.globalStateDir(), CHECKPOINT_FILE_NAME + "_" + store.name())
-                ) :
-                (store == null ?
-                        // legacy, per-task file
-                        new File(stateDirectory.getOrCreateDirectoryForTask(taskId), CHECKPOINT_FILE_NAME) :
-                        // per-store file
-                        new File(stateDirectory.getOrCreateDirectoryForTask(taskId), CHECKPOINT_FILE_NAME + "_" + store.name())
-                );
+            // global store
+            (store == null ?
+                // legacy, global file
+                new File(stateDirectory.globalStateDir(), CHECKPOINT_FILE_NAME) :
+                // per-store file
+                new File(stateDirectory.globalStateDir(), CHECKPOINT_FILE_NAME + "_" + store.name())
+            ) :
+            (store == null ?
+                // legacy, per-task file
+                new File(stateDirectory.getOrCreateDirectoryForTask(taskId), CHECKPOINT_FILE_NAME) :
+                // per-store file
+                new File(stateDirectory.getOrCreateDirectoryForTask(taskId), CHECKPOINT_FILE_NAME + "_" + store.name())
+            );
     }
 
     static boolean checkpointNeeded(final Map<TopicPartition, Long> oldOffsetSnapshot,
-                                    final Map<TopicPartition, Long> newOffsetSnapshot) {
+        final Map<TopicPartition, Long> newOffsetSnapshot) {
         // we should always have the old snapshot post completing the register state stores;
         // if it is null it means the registration is not done and hence we should not overwrite the checkpoint
         if (oldOffsetSnapshot == null) {

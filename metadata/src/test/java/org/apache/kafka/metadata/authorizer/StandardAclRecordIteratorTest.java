@@ -40,16 +40,16 @@ public class StandardAclRecordIteratorTest {
             new StandardAclRecordIterator(TEST_ACLS.iterator(), 2);
         assertTrue(iterator.hasNext());
         assertEquals(List.of(
-            new ApiMessageAndVersion(TEST_ACLS.get(0).toRecord(), (short) 0),
-            new ApiMessageAndVersion(TEST_ACLS.get(1).toRecord(), (short) 0)),
+                new ApiMessageAndVersion(TEST_ACLS.get(0).toRecord(), (short) 0),
+                new ApiMessageAndVersion(TEST_ACLS.get(1).toRecord(), (short) 0)),
             iterator.next());
         assertEquals(List.of(
-            new ApiMessageAndVersion(TEST_ACLS.get(2).toRecord(), (short) 0),
-            new ApiMessageAndVersion(TEST_ACLS.get(3).toRecord(), (short) 0)),
+                new ApiMessageAndVersion(TEST_ACLS.get(2).toRecord(), (short) 0),
+                new ApiMessageAndVersion(TEST_ACLS.get(3).toRecord(), (short) 0)),
             iterator.next());
         assertTrue(iterator.hasNext());
         assertEquals(List.of(
-            new ApiMessageAndVersion(TEST_ACLS.get(4).toRecord(), (short) 0)),
+                new ApiMessageAndVersion(TEST_ACLS.get(4).toRecord(), (short) 0)),
             iterator.next());
         assertFalse(iterator.hasNext());
     }

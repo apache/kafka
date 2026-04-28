@@ -102,8 +102,8 @@ public class FeatureControlManager {
             if (quorumFeatures == null) {
                 Map<String, VersionRange> localSupportedFeatures = new HashMap<>();
                 localSupportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
-                        MetadataVersion.MINIMUM_VERSION.featureLevel(),
-                        MetadataVersion.latestProduction().featureLevel()));
+                    MetadataVersion.MINIMUM_VERSION.featureLevel(),
+                    MetadataVersion.latestProduction().featureLevel()));
                 quorumFeatures = new QuorumFeatures(0, localSupportedFeatures, List.of(0));
             }
             if (kraftVersionAccessor == null) {
@@ -183,7 +183,7 @@ public class FeatureControlManager {
         int currentClaimedEpoch
     ) {
         List<ApiMessageAndVersion> records =
-                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+            BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
 
         Map<String, Short> proposedUpdatedVersions = new HashMap<>(finalizedVersions);
         proposedUpdatedVersions.put(MetadataVersion.FEATURE_NAME, metadataVersionOrThrow().featureLevel());
@@ -224,7 +224,7 @@ public class FeatureControlManager {
             new IllegalStateException("Unknown metadata version for FeatureControlManager"));
     }
 
-    @SuppressWarnings({ "CyclomaticComplexity" })
+    @SuppressWarnings({"CyclomaticComplexity"})
     private ApiError updateFeature(
         String featureName,
         short newVersion,
@@ -262,7 +262,7 @@ public class FeatureControlManager {
             if (upgradeType.equals(FeatureUpdate.UpgradeType.UPGRADE)) {
                 return invalidUpdateVersion(featureName, newVersion,
                     "Can't downgrade the version of this feature without setting the " +
-                    "upgrade type to either safe or unsafe downgrade.");
+                        "upgrade type to either safe or unsafe downgrade.");
             }
         } else if (newVersion > currentVersion) {
             if (!upgradeType.equals(FeatureUpdate.UpgradeType.UPGRADE)) {
@@ -329,11 +329,11 @@ public class FeatureControlManager {
         numControllersChecked++;
         for (Iterator<Entry<Integer, Map<String, VersionRange>>> iter =
             clusterSupportDescriber.brokerSupported();
-                iter.hasNext(); ) {
+             iter.hasNext(); ) {
             Entry<Integer, Map<String, VersionRange>> entry = iter.next();
             reason = QuorumFeatures.reasonNotSupported(newVersion,
-                    "Broker " + entry.getKey(),
-                    entry.getValue().getOrDefault(featureName, QuorumFeatures.DISABLED));
+                "Broker " + entry.getKey(),
+                entry.getValue().getOrDefault(featureName, QuorumFeatures.DISABLED));
             if (reason.isPresent()) return reason;
             numBrokersChecked++;
         }
@@ -342,7 +342,7 @@ public class FeatureControlManager {
         foundControllers.add(quorumFeatures.nodeId());
         if (metadataVersionOrThrow().isControllerRegistrationSupported()) {
             for (Iterator<Entry<Integer, Map<String, VersionRange>>> iter =
-                 clusterSupportDescriber.controllerSupported();
+                clusterSupportDescriber.controllerSupported();
                  iter.hasNext(); ) {
                 Entry<Integer, Map<String, VersionRange>> entry = iter.next();
                 if (entry.getKey() == quorumFeatures.nodeId()) {
@@ -351,8 +351,8 @@ public class FeatureControlManager {
                     continue;
                 }
                 reason = QuorumFeatures.reasonNotSupported(newVersion,
-                        "Controller " + entry.getKey(),
-                        entry.getValue().getOrDefault(featureName, QuorumFeatures.DISABLED));
+                    "Controller " + entry.getKey(),
+                    entry.getValue().getOrDefault(featureName, QuorumFeatures.DISABLED));
                 if (reason.isPresent()) return reason;
                 foundControllers.add(entry.getKey());
                 numControllersChecked++;
@@ -368,8 +368,8 @@ public class FeatureControlManager {
                 "MetadataVersion.";
         }
         log.info("Verified that {} broker(s) and {} controller(s) supported changing {} to " +
-                "feature level {}.{}", numBrokersChecked, numControllersChecked, featureName,
-                newVersion, registrationSuffix);
+            "feature level {}.{}", numBrokersChecked, numControllersChecked, featureName,
+            newVersion, registrationSuffix);
         return Optional.empty();
     }
 
@@ -402,13 +402,13 @@ public class FeatureControlManager {
             if (!metadataChanged) {
                 log.warn("Downgrading metadata.version from {} to {}.", currentVersion, newVersion);
             } else if (allowUnsafeDowngrade) {
-                return unsupportedMetadataDowngrade(currentVersion, newVersion, 
-                        "Unsafe metadata downgrade is not supported in this version.");
+                return unsupportedMetadataDowngrade(currentVersion, newVersion,
+                    "Unsafe metadata downgrade is not supported in this version.");
             } else {
                 // The phrase "Retry using UNSAFE_DOWNGRADE if you want to force the downgrade to proceed." has been removed
                 // because unsafe metadata downgrades are not yet supported. We can add it back when implemented (KAFKA-13896).
                 return unsupportedMetadataDowngrade(currentVersion, newVersion,
-                        "Refusing to perform the requested downgrade because it might delete metadata information.");
+                    "Refusing to perform the requested downgrade because it might delete metadata information.");
             }
         } else {
             log.warn("Upgrading metadata.version from {} to {}.", currentVersion, newVersion);
@@ -429,8 +429,8 @@ public class FeatureControlManager {
     }
 
     private ApiError unsupportedMetadataDowngrade(MetadataVersion currentVersion, MetadataVersion targetVersion, String message) {
-        String errorMessage = String.format("Unsupported metadata.version downgrade from %s to %s. %s", 
-                currentVersion.featureLevel(), targetVersion.featureLevel(), message);
+        String errorMessage = String.format("Unsupported metadata.version downgrade from %s to %s. %s",
+            currentVersion.featureLevel(), targetVersion.featureLevel(), message);
         log.warn(errorMessage);
         return new ApiError(Errors.INVALID_UPDATE_VERSION, errorMessage);
     }
@@ -465,7 +465,7 @@ public class FeatureControlManager {
             } else {
                 finalizedVersions.put(record.name(), record.featureLevel());
                 log.info("Replayed a FeatureLevelRecord setting feature {} to {}",
-                        record.name(), record.featureLevel());
+                    record.name(), record.featureLevel());
             }
         }
     }

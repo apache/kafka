@@ -30,10 +30,10 @@ import java.util.Map;
  * @param movesOngoing  True if there are any ongoing moves that we know about.
  */
 public record VerifyAssignmentResult(
-    Map<TopicPartition, PartitionReassignmentState> partStates,
-    boolean partsOngoing,
-    Map<TopicPartitionReplica, LogDirMoveState> moveStates,
-    boolean movesOngoing
+Map<TopicPartition, PartitionReassignmentState> partStates,
+boolean partsOngoing,
+Map<TopicPartitionReplica, LogDirMoveState> moveStates,
+boolean movesOngoing
 ) {
     public VerifyAssignmentResult(Map<TopicPartition, PartitionReassignmentState> partStates) {
         this(partStates, false, Map.of(), false);

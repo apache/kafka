@@ -41,9 +41,9 @@ public class WorkerStopping extends WorkerState {
 
     @JsonCreator
     public WorkerStopping(@JsonProperty("taskId") String taskId,
-            @JsonProperty("spec") TaskSpec spec,
-            @JsonProperty("startedMs") long startedMs,
-            @JsonProperty("status") JsonNode status) {
+        @JsonProperty("spec") TaskSpec spec,
+        @JsonProperty("startedMs") long startedMs,
+        @JsonProperty("status") JsonNode status) {
         super(taskId, spec);
         this.startedMs = startedMs;
         this.status = status == null ? NullNode.instance : status;

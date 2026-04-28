@@ -45,7 +45,7 @@ public interface CoordinatorShardScheduler<U> {
      * @return A future that completes when the operation is done.
      */
     CompletableFuture<Void> scheduleWriteOperation(
-        String operationName,
-        WriteOperation<U> operation
+            String operationName,
+            WriteOperation<U> operation
     );
 }

@@ -95,10 +95,10 @@ public class FetchResponseBenchmark {
             topicNames.put(id, topic);
             for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
                 FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
-                                .setPartitionIndex(partitionId)
-                                .setLastStableOffset(0)
-                                .setLogStartOffset(0)
-                                .setRecords(records);
+                        .setPartitionIndex(partitionId)
+                        .setLastStableOffset(0)
+                        .setLogStartOffset(0)
+                        .setRecords(records);
                 responseData.put(new TopicIdPartition(id, new TopicPartition(topic, partitionId)), partitionData);
             }
         }

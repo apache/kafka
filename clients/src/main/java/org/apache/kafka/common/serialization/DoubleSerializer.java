@@ -23,7 +23,7 @@ public class DoubleSerializer implements Serializer<Double> {
             return null;
 
         long bits = Double.doubleToLongBits(data);
-        return new byte[] {
+        return new byte[]{
             (byte) (bits >>> 56),
             (byte) (bits >>> 48),
             (byte) (bits >>> 40),

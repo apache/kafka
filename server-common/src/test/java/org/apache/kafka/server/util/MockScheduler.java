@@ -126,7 +126,8 @@ public class MockScheduler implements Scheduler {
     }
 
     @Override
-    public void startup() {}
+    public void startup() {
+    }
 
     @Override
     public ScheduledFuture<?> schedule(String name, Runnable task, long delayMs, long periodMs) {
@@ -146,7 +147,8 @@ public class MockScheduler implements Scheduler {
     }
 
     @Override
-    public void resizeThreadPool(int newSize) {}
+    public void resizeThreadPool(int newSize) {
+    }
 
     /**
      * Check for any tasks that need to execute. Since this is a mock scheduler this check only occurs

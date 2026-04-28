@@ -168,7 +168,7 @@ public class ProducerPerformance {
     Stats steadyStateStats;
 
     static byte[] generateRandomPayload(Integer recordSize, List<byte[]> payloadByteList, byte[] payload,
-            SplittableRandom random, boolean payloadMonotonic, long recordValue) {
+        SplittableRandom random, boolean payloadMonotonic, long recordValue) {
         if (!payloadByteList.isEmpty()) {
             payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
         } else if (recordSize != null) {
@@ -208,7 +208,7 @@ public class ProducerPerformance {
         if (payloadFilePath != null) {
             Path path = Paths.get(payloadFilePath);
             System.out.println("Reading payloads from: " + path.toAbsolutePath());
-            if (Files.notExists(path) || Files.size(path) == 0)  {
+            if (Files.notExists(path) || Files.size(path) == 0) {
                 throw new IllegalArgumentException("File does not exist or empty file provided.");
             }
 
@@ -230,170 +230,170 @@ public class ProducerPerformance {
     /** Get the command-line argument parser. */
     static ArgumentParser argParser() {
         ArgumentParser parser = ArgumentParsers
-                .newArgumentParser("kafka-producer-perf-test")
-                .defaultHelp(true)
-                .description("This tool is used to verify the producer performance. To enable transactions, " +
-                        "you can specify a transactional id or set a transaction duration using --transaction-duration-ms. " +
-                        "There are three ways to specify the transactional id: set transactional.id=<id> via --command-property, " +
-                        "set transactional.id=<id> in the config file via --command-config, or use --transactional-id <id>.");
+            .newArgumentParser("kafka-producer-perf-test")
+            .defaultHelp(true)
+            .description("This tool is used to verify the producer performance. To enable transactions, " +
+                "you can specify a transactional id or set a transaction duration using --transaction-duration-ms. " +
+                "There are three ways to specify the transactional id: set transactional.id=<id> via --command-property, " +
+                "set transactional.id=<id> in the config file via --command-config, or use --transactional-id <id>.");
 
         parser.addArgument("--bootstrap-server")
-                .action(store())
-                .required(false)
-                .type(String.class)
-                .metavar("BOOTSTRAP-SERVER")
-                .dest("bootstrapServer")
-                .help("The server(s) to connect to. This config takes precedence over bootstrap.servers specified " +
-                        "via --command-property or --command-config.");
+            .action(store())
+            .required(false)
+            .type(String.class)
+            .metavar("BOOTSTRAP-SERVER")
+            .dest("bootstrapServer")
+            .help("The server(s) to connect to. This config takes precedence over bootstrap.servers specified " +
+                "via --command-property or --command-config.");
 
         MutuallyExclusiveGroup payloadOptions = parser
-                .addMutuallyExclusiveGroup()
-                .required(true)
-                .description("Note that you must provide exactly one of --record-size, --payload-file " +
-                        "or --payload-monotonic.");
+            .addMutuallyExclusiveGroup()
+            .required(true)
+            .description("Note that you must provide exactly one of --record-size, --payload-file " +
+                "or --payload-monotonic.");
 
         parser.addArgument("--topic")
-                .action(store())
-                .required(true)
-                .type(String.class)
-                .metavar("TOPIC")
-                .help("Produce records to this topic.");
+            .action(store())
+            .required(true)
+            .type(String.class)
+            .metavar("TOPIC")
+            .help("Produce records to this topic.");
 
         parser.addArgument("--num-records")
-                .action(store())
-                .required(true)
-                .type(Long.class)
-                .metavar("NUM-RECORDS")
-                .dest("numRecords")
-                .help("Number of records to produce.");
+            .action(store())
+            .required(true)
+            .type(Long.class)
+            .metavar("NUM-RECORDS")
+            .dest("numRecords")
+            .help("Number of records to produce.");
 
         payloadOptions.addArgument("--record-size")
-                .action(store())
-                .required(false)
-                .type(Integer.class)
-                .metavar("RECORD-SIZE")
-                .dest("recordSize")
-                .help("Record size in bytes. Note that you must provide exactly one of --record-size, --payload-file " +
-                        "or --payload-monotonic.");
+            .action(store())
+            .required(false)
+            .type(Integer.class)
+            .metavar("RECORD-SIZE")
+            .dest("recordSize")
+            .help("Record size in bytes. Note that you must provide exactly one of --record-size, --payload-file " +
+                "or --payload-monotonic.");
 
         payloadOptions.addArgument("--payload-file")
-                .action(store())
-                .required(false)
-                .type(String.class)
-                .metavar("PAYLOAD-FILE")
-                .dest("payloadFile")
-                .help("File to read the record payloads from. This works only for UTF-8 encoded text files. " +
-                        "Payloads will be read from this file and a payload will be randomly selected when sending records. " +
-                        "Note that you must provide exactly one of --record-size, --payload-file or --payload-monotonic.");
+            .action(store())
+            .required(false)
+            .type(String.class)
+            .metavar("PAYLOAD-FILE")
+            .dest("payloadFile")
+            .help("File to read the record payloads from. This works only for UTF-8 encoded text files. " +
+                "Payloads will be read from this file and a payload will be randomly selected when sending records. " +
+                "Note that you must provide exactly one of --record-size, --payload-file or --payload-monotonic.");
 
         payloadOptions.addArgument("--payload-monotonic")
-                .action(storeTrue())
-                .type(Boolean.class)
-                .metavar("PAYLOAD-MONOTONIC")
-                .dest("payloadMonotonic")
-                .help("Payload is a monotonically increasing integer. Note that you must provide exactly one of --record-size, " +
-                        "--payload-file or --payload-monotonic.");
+            .action(storeTrue())
+            .type(Boolean.class)
+            .metavar("PAYLOAD-MONOTONIC")
+            .dest("payloadMonotonic")
+            .help("Payload is a monotonically increasing integer. Note that you must provide exactly one of --record-size, " +
+                "--payload-file or --payload-monotonic.");
 
         parser.addArgument("--payload-delimiter")
-                .action(store())
-                .required(false)
-                .type(String.class)
-                .metavar("PAYLOAD-DELIMITER")
-                .dest("payloadDelimiter")
-                .setDefault("\\n")
-                .help("Provides the delimiter to be used when --payload-file is provided. Defaults to new line. " +
-                        "Note that this parameter will be ignored if --payload-file is not provided.");
+            .action(store())
+            .required(false)
+            .type(String.class)
+            .metavar("PAYLOAD-DELIMITER")
+            .dest("payloadDelimiter")
+            .setDefault("\\n")
+            .help("Provides the delimiter to be used when --payload-file is provided. Defaults to new line. " +
+                "Note that this parameter will be ignored if --payload-file is not provided.");
 
         parser.addArgument("--throughput")
-                .action(store())
-                .required(true)
-                .type(Double.class)
-                .metavar("THROUGHPUT")
-                .help("Throttle maximum record throughput to *approximately* THROUGHPUT records/sec. Set this to -1 to disable throttling.");
+            .action(store())
+            .required(true)
+            .type(Double.class)
+            .metavar("THROUGHPUT")
+            .help("Throttle maximum record throughput to *approximately* THROUGHPUT records/sec. Set this to -1 to disable throttling.");
 
         parser.addArgument("--producer-props")
-                .nargs("+")
-                .required(false)
-                .metavar("PROP-NAME=PROP-VALUE")
-                .type(String.class)
-                .dest("producerConfig")
-                .help("(DEPRECATED) Kafka producer related configuration properties like client.id. " +
-                        "These configs take precedence over those passed via --command-config or --producer.config. " +
-                        "This option will be removed in a future version. Use --command-property instead. Example: --command-property linger.ms=10 batch.size=32768");
+            .nargs("+")
+            .required(false)
+            .metavar("PROP-NAME=PROP-VALUE")
+            .type(String.class)
+            .dest("producerConfig")
+            .help("(DEPRECATED) Kafka producer related configuration properties like client.id. " +
+                "These configs take precedence over those passed via --command-config or --producer.config. " +
+                "This option will be removed in a future version. Use --command-property instead. Example: --command-property linger.ms=10 batch.size=32768");
 
         parser.addArgument("--command-property")
-                .nargs("+")
-                .required(false)
-                .metavar("PROP-NAME=PROP-VALUE")
-                .type(String.class)
-                .dest("commandProperties")
-                .help("Kafka producer related configuration properties like client.id. " +
-                        "These configs take precedence over those passed via --command-config or --producer.config. Example: --command-property linger.ms=10 batch.size=32768");
+            .nargs("+")
+            .required(false)
+            .metavar("PROP-NAME=PROP-VALUE")
+            .type(String.class)
+            .dest("commandProperties")
+            .help("Kafka producer related configuration properties like client.id. " +
+                "These configs take precedence over those passed via --command-config or --producer.config. Example: --command-property linger.ms=10 batch.size=32768");
 
         parser.addArgument("--producer.config")
-                .action(store())
-                .required(false)
-                .type(String.class)
-                .metavar("CONFIG-FILE")
-                .dest("producerConfigFile")
-                .help("(DEPRECATED) Producer config properties file. " +
-                        "This option will be removed in a future version. Use --command-config instead.");
+            .action(store())
+            .required(false)
+            .type(String.class)
+            .metavar("CONFIG-FILE")
+            .dest("producerConfigFile")
+            .help("(DEPRECATED) Producer config properties file. " +
+                "This option will be removed in a future version. Use --command-config instead.");
 
         parser.addArgument("--command-config")
-                .action(store())
-                .required(false)
-                .type(String.class)
-                .metavar("CONFIG-FILE")
-                .dest("commandConfigFile")
-                .help("Producer config properties file.");
+            .action(store())
+            .required(false)
+            .type(String.class)
+            .metavar("CONFIG-FILE")
+            .dest("commandConfigFile")
+            .help("Producer config properties file.");
 
         parser.addArgument("--print-metrics")
-                .action(storeTrue())
-                .type(Boolean.class)
-                .metavar("PRINT-METRICS")
-                .dest("printMetrics")
-                .help("Print out metrics at the end of the test.");
+            .action(storeTrue())
+            .type(Boolean.class)
+            .metavar("PRINT-METRICS")
+            .dest("printMetrics")
+            .help("Print out metrics at the end of the test.");
 
         parser.addArgument("--transactional-id")
-                .action(store())
-                .required(false)
-                .type(String.class)
-                .metavar("TRANSACTIONAL-ID")
-                .dest("transactionalId")
-                .help("The transactional id to use. This config takes precedence over the transactional.id " +
-                        "specified via --command-property or --command-config. Note that if the transactional id " +
-                        "is not specified while --transaction-duration-ms is provided, the default value for the " +
-                        "transactional id will be performance-producer- followed by a random uuid.");
+            .action(store())
+            .required(false)
+            .type(String.class)
+            .metavar("TRANSACTIONAL-ID")
+            .dest("transactionalId")
+            .help("The transactional id to use. This config takes precedence over the transactional.id " +
+                "specified via --command-property or --command-config. Note that if the transactional id " +
+                "is not specified while --transaction-duration-ms is provided, the default value for the " +
+                "transactional id will be performance-producer- followed by a random uuid.");
 
         parser.addArgument("--transaction-duration-ms")
-                .action(store())
-                .required(false)
-                .type(Long.class)
-                .metavar("TRANSACTION-DURATION")
-                .dest("transactionDurationMs")
-                .help("The maximum duration of each transaction. The commitTransaction will be called after this time has elapsed. " +
-                        "The value should be greater than 0. If the transactional id is specified via --command-property, " +
-                        "--command-config or --transactional-id but --transaction-duration-ms is not specified, " +
-                        "the default value will be 3000.");
+            .action(store())
+            .required(false)
+            .type(Long.class)
+            .metavar("TRANSACTION-DURATION")
+            .dest("transactionDurationMs")
+            .help("The maximum duration of each transaction. The commitTransaction will be called after this time has elapsed. " +
+                "The value should be greater than 0. If the transactional id is specified via --command-property, " +
+                "--command-config or --transactional-id but --transaction-duration-ms is not specified, " +
+                "the default value will be 3000.");
 
         parser.addArgument("--warmup-records")
-                .action(store())
-                .required(false)
-                .type(Long.class)
-                .metavar("WARMUP-RECORDS")
-                .dest("warmupRecords")
-                .setDefault(0L)
-                .help("The number of records to treat as warmup. These initial records will not be included in steady-state statistics. " +
-                        "An additional summary line will be printed describing the steady-state statistics.");
+            .action(store())
+            .required(false)
+            .type(Long.class)
+            .metavar("WARMUP-RECORDS")
+            .dest("warmupRecords")
+            .setDefault(0L)
+            .help("The number of records to treat as warmup. These initial records will not be included in steady-state statistics. " +
+                "An additional summary line will be printed describing the steady-state statistics.");
 
         parser.addArgument("--reporting-interval")
-                .action(store())
-                .required(false)
-                .type(Long.class)
-                .metavar("INTERVAL-MS")
-                .dest("reportingInterval")
-                .setDefault(5_000L)
-                .help("Interval in milliseconds at which to print progress info.");
+            .action(store())
+            .required(false)
+            .type(Long.class)
+            .metavar("INTERVAL-MS")
+            .dest("reportingInterval")
+            .setDefault(5_000L)
+            .help("Interval in milliseconds at which to print progress info.");
 
         return parser;
     }
@@ -487,11 +487,11 @@ public class ProducerPerformance {
             double recsPerSec = 1000.0 * windowCount / (double) elapsed;
             double mbPerSec = 1000.0 * this.windowBytes / (double) elapsed / (1024.0 * 1024.0);
             System.out.printf("%d records sent, %.1f records/sec (%.2f MB/sec), %.1f ms avg latency, %.1f ms max latency.%n",
-                              windowCount,
-                              recsPerSec,
-                              mbPerSec,
-                              windowTotalLatency / (double) windowCount,
-                              (double) windowMaxLatency);
+                windowCount,
+                recsPerSec,
+                mbPerSec,
+                windowTotalLatency / (double) windowCount,
+                (double) windowMaxLatency);
         }
 
         public void newWindow() {
@@ -508,16 +508,16 @@ public class ProducerPerformance {
             double mbPerSec = 1000.0 * this.bytes / (double) elapsed / (1024.0 * 1024.0);
             int[] percs = percentiles(this.latencies, index, 0.5, 0.95, 0.99, 0.999);
             System.out.printf("%d%s records sent, %f records/sec (%.2f MB/sec), %.2f ms avg latency, %.2f ms max latency, %d ms 50th, %d ms 95th, %d ms 99th, %d ms 99.9th.%n",
-                              count,
-                              this.isSteadyState ? " steady state" : "",
-                              recsPerSec,
-                              mbPerSec,
-                              totalLatency / (double) count,
-                              (double) maxLatency,
-                              percs[0],
-                              percs[1],
-                              percs[2],
-                              percs[3]);
+                count,
+                this.isSteadyState ? " steady state" : "",
+                recsPerSec,
+                mbPerSec,
+                totalLatency / (double) count,
+                (double) maxLatency,
+                percs[0],
+                percs[1],
+                percs[2],
+                percs[3]);
         }
 
         private static int[] percentiles(int[] latencies, int count, double... percentiles) {
@@ -626,7 +626,7 @@ public class ProducerPerformance {
 
             // since default value gets printed with the help text, we are escaping \n there and replacing it with correct value here.
             String payloadDelimiter = namespace.getString("payloadDelimiter").equals("\\n")
-                    ? "\n" : namespace.getString("payloadDelimiter");
+                ? "\n" : namespace.getString("payloadDelimiter");
             this.payloadByteList = readPayloadFile(payloadFilePath, payloadDelimiter);
             if (producerConfigs != null) {
                 System.out.println("Option --producer-props has been deprecated and will be removed in a future version. Use --command-property instead.");
@@ -642,12 +642,12 @@ public class ProducerPerformance {
             }
             // setup transaction related configs
             this.transactionsEnabled = transactionDurationMsArg != null
-                    || transactionIdArg != null
-                    || producerProps.containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
+                || transactionIdArg != null
+                || producerProps.containsKey(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
             if (transactionsEnabled) {
                 Optional<String> txIdInProps =
-                        Optional.ofNullable(producerProps.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG))
-                                .map(Object::toString);
+                    Optional.ofNullable(producerProps.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG))
+                        .map(Object::toString);
                 String transactionId = Optional.ofNullable(transactionIdArg).orElse(txIdInProps.orElse(DEFAULT_TRANSACTION_ID_PREFIX + Uuid.randomUuid().toString()));
                 producerProps.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionId);
 

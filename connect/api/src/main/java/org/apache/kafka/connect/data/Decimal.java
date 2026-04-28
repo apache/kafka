@@ -67,10 +67,10 @@ public class Decimal {
         int schemaScale = scale(schema);
         if (value.scale() != schemaScale)
             throw new DataException(String.format(
-                "Decimal value has mismatching scale for given Decimal schema. "
-                    + "Schema has scale %d, value has scale %d.",
-                schemaScale,
-                value.scale()
+                    "Decimal value has mismatching scale for given Decimal schema. "
+                            + "Schema has scale %d, value has scale %d.",
+                    schemaScale,
+                    value.scale()
             ));
         return value.unscaledValue().toByteArray();
     }

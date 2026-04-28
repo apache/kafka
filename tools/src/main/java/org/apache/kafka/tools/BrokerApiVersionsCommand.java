@@ -98,8 +98,8 @@ public class BrokerApiVersionsCommand {
 
     private static AdminClient createAdminClient(BrokerVersionCommandOptions opts) throws IOException {
         Properties props = opts.options.has(opts.commandConfigOpt) ?
-                Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)) :
-                new Properties();
+            Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)) :
+            new Properties();
         props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt));
         return AdminClient.create(props);
     }
@@ -114,13 +114,13 @@ public class BrokerApiVersionsCommand {
         BrokerVersionCommandOptions(String[] args) {
             super(args);
             commandConfigOpt = parser.accepts("command-config", COMMAND_CONFIG_DOC)
-                    .withRequiredArg()
-                    .describedAs("command config property file")
-                    .ofType(String.class);
+                .withRequiredArg()
+                .describedAs("command config property file")
+                .ofType(String.class);
             bootstrapServerOpt = parser.accepts("bootstrap-server", BOOTSTRAP_SERVER_DOC)
-                    .withRequiredArg()
-                    .describedAs("server(s) to use for bootstrapping")
-                    .ofType(String.class);
+                .withRequiredArg()
+                .describedAs("server(s) to use for bootstrapping")
+                .ofType(String.class);
             options = parser.parse(args);
             checkArgs();
         }
@@ -144,15 +144,15 @@ public class BrokerApiVersionsCommand {
 
         private static final AtomicInteger ADMIN_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
         private static final ConfigDef ADMIN_CONFIG_DEF = new ConfigDef()
-                .define(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.ValidList.anyNonDuplicateValues(false, false), ConfigDef.Importance.HIGH, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
-                .define(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG, ConfigDef.Type.STRING, ClientDnsLookup.USE_ALL_DNS_IPS.toString(), ConfigDef.ValidString.in(ClientDnsLookup.USE_ALL_DNS_IPS.toString(), ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()), ConfigDef.Importance.MEDIUM, CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
-                .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, ConfigDef.Type.STRING, CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL, ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(SecurityProtocol.class)), ConfigDef.Importance.MEDIUM, CommonClientConfigs.SECURITY_PROTOCOL_DOC)
-                .define(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, DEFAULT_REQUEST_TIMEOUT_MS, ConfigDef.Importance.MEDIUM, CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
-                .define(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, ConfigDef.Type.LONG, CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MS, ConfigDef.Importance.MEDIUM, CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC)
-                .define(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG, ConfigDef.Type.LONG, CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS, ConfigDef.Importance.MEDIUM, CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
-                .define(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG, ConfigDef.Type.LONG, DEFAULT_RETRY_BACKOFF_MS, ConfigDef.Importance.MEDIUM, CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
-                .withClientSslSupport()
-                .withClientSaslSupport();
+            .define(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, ConfigDef.ValidList.anyNonDuplicateValues(false, false), ConfigDef.Importance.HIGH, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
+            .define(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG, ConfigDef.Type.STRING, ClientDnsLookup.USE_ALL_DNS_IPS.toString(), ConfigDef.ValidString.in(ClientDnsLookup.USE_ALL_DNS_IPS.toString(), ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()), ConfigDef.Importance.MEDIUM, CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
+            .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, ConfigDef.Type.STRING, CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL, ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(SecurityProtocol.class)), ConfigDef.Importance.MEDIUM, CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+            .define(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG, ConfigDef.Type.INT, DEFAULT_REQUEST_TIMEOUT_MS, ConfigDef.Importance.MEDIUM, CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
+            .define(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, ConfigDef.Type.LONG, CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MS, ConfigDef.Importance.MEDIUM, CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC)
+            .define(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG, ConfigDef.Type.LONG, CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS, ConfigDef.Importance.MEDIUM, CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
+            .define(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG, ConfigDef.Type.LONG, DEFAULT_RETRY_BACKOFF_MS, ConfigDef.Importance.MEDIUM, CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
+            .withClientSslSupport()
+            .withClientSaslSupport();
 
         private final Time time;
         private final ConsumerNetworkClient client;
@@ -168,45 +168,45 @@ public class BrokerApiVersionsCommand {
             Time time = Time.SYSTEM;
             Metrics metrics = new Metrics(time);
             Metadata metadata = new Metadata(
-                    CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
-                    CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS,
-                    60 * 60 * 1000L, logContext,
-                    new ClusterResourceListeners());
+                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
+                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS,
+                60 * 60 * 1000L, logContext,
+                new ClusterResourceListeners());
             metadata.bootstrap(ClientUtils.parseAndValidateAddresses(
-                    config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
-                    config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)));
+                config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
+                config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)));
             Selector selector = new Selector(
-                    DEFAULT_CONNECTION_MAX_IDLE_MS,
-                    metrics,
-                    time,
-                    "admin",
-                    ClientUtils.createChannelBuilder(config, time, logContext),
-                    logContext);
+                DEFAULT_CONNECTION_MAX_IDLE_MS,
+                metrics,
+                time,
+                "admin",
+                ClientUtils.createChannelBuilder(config, time, logContext),
+                logContext);
             NetworkClient networkClient = new NetworkClient(
-                    selector,
-                    metadata,
-                    clientId,
-                    DEFAULT_MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
-                    DEFAULT_RECONNECT_BACKOFF_MS,
-                    DEFAULT_RECONNECT_BACKOFF_MAX,
-                    DEFAULT_SEND_BUFFER_BYTES,
-                    DEFAULT_RECEIVE_BUFFER_BYTES,
-                    config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
-                    config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
-                    config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
-                    time,
-                    true,
-                    new ApiVersions(),
-                    logContext,
-                    MetadataRecoveryStrategy.NONE);
+                selector,
+                metadata,
+                clientId,
+                DEFAULT_MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
+                DEFAULT_RECONNECT_BACKOFF_MS,
+                DEFAULT_RECONNECT_BACKOFF_MAX,
+                DEFAULT_SEND_BUFFER_BYTES,
+                DEFAULT_RECEIVE_BUFFER_BYTES,
+                config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
+                config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
+                config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
+                time,
+                true,
+                new ApiVersions(),
+                logContext,
+                MetadataRecoveryStrategy.NONE);
             ConsumerNetworkClient highLevelClient = new ConsumerNetworkClient(
-                    logContext,
-                    networkClient,
-                    metadata,
-                    time,
-                    config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG),
-                    config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
-                    Integer.MAX_VALUE);
+                logContext,
+                networkClient,
+                metadata,
+                time,
+                config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG),
+                config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
+                Integer.MAX_VALUE);
             return new AdminClient(time, highLevelClient, metadata.fetch().nodes());
         }
 
@@ -278,10 +278,10 @@ public class BrokerApiVersionsCommand {
 
         public Map<Node, KafkaFuture<NodeApiVersions>> listAllBrokerVersionInfo() {
             return findAllBrokers().stream()
-                    .collect(Collectors.toMap(
-                            broker -> broker,
-                            this::getNodeApiVersions
-                    ));
+                .collect(Collectors.toMap(
+                    broker -> broker,
+                    this::getNodeApiVersions
+                ));
         }
 
         @Override

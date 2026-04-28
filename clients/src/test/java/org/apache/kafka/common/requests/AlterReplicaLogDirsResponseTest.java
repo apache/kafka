@@ -34,22 +34,22 @@ public class AlterReplicaLogDirsResponseTest {
     @Test
     public void testErrorCounts() {
         AlterReplicaLogDirsResponseData data = new AlterReplicaLogDirsResponseData()
-                .setResults(asList(
-                        new AlterReplicaLogDirTopicResult()
-                                .setTopicName("t0")
-                                .setPartitions(asList(
-                                        new AlterReplicaLogDirPartitionResult()
-                                                .setPartitionIndex(0)
-                                                .setErrorCode(Errors.LOG_DIR_NOT_FOUND.code()),
-                                        new AlterReplicaLogDirPartitionResult()
-                                                .setPartitionIndex(1)
-                                                .setErrorCode(Errors.NONE.code()))),
-                        new AlterReplicaLogDirTopicResult()
-                                .setTopicName("t1")
-                                .setPartitions(Collections.singletonList(
-                                        new AlterReplicaLogDirPartitionResult()
-                                                .setPartitionIndex(0)
-                                                .setErrorCode(Errors.LOG_DIR_NOT_FOUND.code())))));
+            .setResults(asList(
+                new AlterReplicaLogDirTopicResult()
+                    .setTopicName("t0")
+                    .setPartitions(asList(
+                        new AlterReplicaLogDirPartitionResult()
+                            .setPartitionIndex(0)
+                            .setErrorCode(Errors.LOG_DIR_NOT_FOUND.code()),
+                        new AlterReplicaLogDirPartitionResult()
+                            .setPartitionIndex(1)
+                            .setErrorCode(Errors.NONE.code()))),
+                new AlterReplicaLogDirTopicResult()
+                    .setTopicName("t1")
+                    .setPartitions(Collections.singletonList(
+                        new AlterReplicaLogDirPartitionResult()
+                            .setPartitionIndex(0)
+                            .setErrorCode(Errors.LOG_DIR_NOT_FOUND.code())))));
         Map<Errors, Integer> counts = new AlterReplicaLogDirsResponse(data).errorCounts();
         assertEquals(2, counts.size());
         assertEquals(Integer.valueOf(2), counts.get(Errors.LOG_DIR_NOT_FOUND));

@@ -68,7 +68,7 @@ public class ControllerMetadataMetricsTest {
                     ));
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "KafkaController",
-                    Set.of());
+                Set.of());
         } finally {
             registry.shutdown();
         }
@@ -80,8 +80,8 @@ public class ControllerMetadataMetricsTest {
         try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
             @SuppressWarnings("unchecked")
             Gauge<Integer> metadataErrorCount = (Gauge<Integer>) registry
-                    .allMetrics()
-                    .get(metricName("KafkaController", "MetadataErrorCount"));
+                .allMetrics()
+                .get(metricName("KafkaController", "MetadataErrorCount"));
             assertEquals(0, metadataErrorCount.value());
             metrics.incrementMetadataErrorCount();
             assertEquals(1, metadataErrorCount.value());
@@ -130,7 +130,7 @@ public class ControllerMetadataMetricsTest {
         testIntGaugeMetric(
             m -> m.fencedBrokerCount(),
             registry -> ((Gauge<Integer>) registry.allMetrics().
-                    get(metricName("KafkaController", "FencedBrokerCount"))).value(),
+                get(metricName("KafkaController", "FencedBrokerCount"))).value(),
             (m, v) -> m.setFencedBrokerCount(v),
             (m, v) -> m.addToFencedBrokerCount(v)
         );
@@ -142,7 +142,7 @@ public class ControllerMetadataMetricsTest {
         testIntGaugeMetric(
             m -> m.activeBrokerCount(),
             registry -> ((Gauge<Integer>) registry.allMetrics().
-                    get(metricName("KafkaController", "ActiveBrokerCount"))).value(),
+                get(metricName("KafkaController", "ActiveBrokerCount"))).value(),
             (m, v) -> m.setActiveBrokerCount(v),
             (m, v) -> m.addToActiveBrokerCount(v)
         );
@@ -154,7 +154,7 @@ public class ControllerMetadataMetricsTest {
         testIntGaugeMetric(
             m -> m.controlledShutdownBrokerCount(),
             registry -> ((Gauge<Integer>) registry.allMetrics().
-                    get(metricName("KafkaController", "ControlledShutdownBrokerCount"))).value(),
+                get(metricName("KafkaController", "ControlledShutdownBrokerCount"))).value(),
             (m, v) -> m.setControlledShutdownBrokerCount(v),
             (m, v) -> m.addToControlledShutdownBrokerCount(v)
         );
@@ -201,7 +201,7 @@ public class ControllerMetadataMetricsTest {
         testIntGaugeMetric(
             m -> m.globalTopicCount(),
             registry -> ((Gauge<Integer>) registry.allMetrics().
-                    get(metricName("KafkaController", "GlobalTopicCount"))).value(),
+                get(metricName("KafkaController", "GlobalTopicCount"))).value(),
             (m, v) -> m.setGlobalTopicCount(v),
             (m, v) -> m.addToGlobalTopicCount(v)
         );
@@ -213,7 +213,7 @@ public class ControllerMetadataMetricsTest {
         testIntGaugeMetric(
             m -> m.globalPartitionCount(),
             registry -> ((Gauge<Integer>) registry.allMetrics().
-                    get(metricName("KafkaController", "GlobalPartitionCount"))).value(),
+                get(metricName("KafkaController", "GlobalPartitionCount"))).value(),
             (m, v) -> m.setGlobalPartitionCount(v),
             (m, v) -> m.addToGlobalPartitionCount(v)
         );
@@ -225,7 +225,7 @@ public class ControllerMetadataMetricsTest {
         testIntGaugeMetric(
             m -> m.offlinePartitionCount(),
             registry -> ((Gauge<Integer>) registry.allMetrics().
-                    get(metricName("KafkaController", "OfflinePartitionsCount"))).value(),
+                get(metricName("KafkaController", "OfflinePartitionsCount"))).value(),
             (m, v) -> m.setOfflinePartitionCount(v),
             (m, v) -> m.addToOfflinePartitionCount(v)
         );
@@ -237,7 +237,7 @@ public class ControllerMetadataMetricsTest {
         testIntGaugeMetric(
             m -> m.preferredReplicaImbalanceCount(),
             registry -> ((Gauge<Integer>) registry.allMetrics().
-                    get(metricName("KafkaController", "PreferredReplicaImbalanceCount"))).value(),
+                get(metricName("KafkaController", "PreferredReplicaImbalanceCount"))).value(),
             (m, v) -> m.setPreferredReplicaImbalanceCount(v),
             (m, v) -> m.addToPreferredReplicaImbalanceCount(v)
         );
@@ -249,8 +249,8 @@ public class ControllerMetadataMetricsTest {
         MetricsRegistry registry = new MetricsRegistry();
         try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
             Meter UncleanLeaderElectionsPerSec = (Meter) registry
-                    .allMetrics()
-                    .get(metricName("ControllerStats", "UncleanLeaderElectionsPerSec"));
+                .allMetrics()
+                .get(metricName("ControllerStats", "UncleanLeaderElectionsPerSec"));
             assertEquals(0, UncleanLeaderElectionsPerSec.count());
             metrics.updateUncleanLeaderElection(2);
             assertEquals(2, UncleanLeaderElectionsPerSec.count());

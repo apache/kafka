@@ -100,25 +100,25 @@ public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo,
-                                                           final long timeFrom, final long timeTo) {
+        final long timeFrom, final long timeTo) {
         return new PlainToHeadersIteratorAdapter<>(store.fetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo,
-                                                           final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
+        final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
         return new PlainToHeadersIteratorAdapter<>(store.fetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo,
-                                                                   final long timeFrom, final long timeTo) {
+        final long timeFrom, final long timeTo) {
         return new PlainToHeadersIteratorAdapter<>(store.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo,
-                                                                   final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
+        final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
         return new PlainToHeadersIteratorAdapter<>(store.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
@@ -156,8 +156,8 @@ public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte
     @SuppressWarnings("unchecked")
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
+        final PositionBound positionBound,
+        final QueryConfig config) {
         final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
         final QueryResult<R> result;
 
@@ -212,7 +212,7 @@ public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte
 
     @Override
     public void init(final StateStoreContext context,
-                     final StateStore root) {
+        final StateStore root) {
         store.init(context, root);
     }
 

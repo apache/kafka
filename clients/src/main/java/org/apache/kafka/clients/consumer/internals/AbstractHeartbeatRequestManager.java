@@ -102,12 +102,12 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
         "until the cluster is upgraded.";
 
     AbstractHeartbeatRequestManager(
-            final LogContext logContext,
-            final Time time,
-            final ConsumerConfig config,
-            final CoordinatorRequestManager coordinatorRequestManager,
-            final BackgroundEventHandler backgroundEventHandler,
-            final HeartbeatMetricsManager metricsManager) {
+        final LogContext logContext,
+        final Time time,
+        final ConsumerConfig config,
+        final CoordinatorRequestManager coordinatorRequestManager,
+        final BackgroundEventHandler backgroundEventHandler,
+        final HeartbeatMetricsManager metricsManager) {
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.logger = logContext.logger(getClass());
         this.backgroundEventHandler = backgroundEventHandler;
@@ -115,19 +115,19 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
         long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
         this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, 0, retryBackoffMs,
-                retryBackoffMaxMs, RETRY_BACKOFF_JITTER);
+            retryBackoffMaxMs, RETRY_BACKOFF_JITTER);
         this.pollTimer = time.timer(maxPollIntervalMs);
         this.metricsManager = metricsManager;
     }
 
     AbstractHeartbeatRequestManager(
-            final LogContext logContext,
-            final Timer timer,
-            final ConsumerConfig config,
-            final CoordinatorRequestManager coordinatorRequestManager,
-            final HeartbeatRequestState heartbeatRequestState,
-            final BackgroundEventHandler backgroundEventHandler,
-            final HeartbeatMetricsManager metricsManager) {
+        final LogContext logContext,
+        final Timer timer,
+        final ConsumerConfig config,
+        final CoordinatorRequestManager coordinatorRequestManager,
+        final HeartbeatRequestState heartbeatRequestState,
+        final BackgroundEventHandler backgroundEventHandler,
+        final HeartbeatMetricsManager metricsManager) {
         this.logger = logContext.logger(this.getClass());
         this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         this.coordinatorRequestManager = coordinatorRequestManager;
@@ -275,7 +275,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
 
     private void maybePropagateCoordinatorFatalErrorEvent() {
         coordinatorRequestManager.getAndClearFatalError()
-                .ifPresent(fatalError -> backgroundEventHandler.add(new ErrorEvent(fatalError)));
+            .ifPresent(fatalError -> backgroundEventHandler.add(new ErrorEvent(fatalError)));
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs, final boolean ignoreResponse) {
@@ -360,8 +360,8 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
             case NOT_COORDINATOR:
                 // the manager should retry immediately when the coordinator node becomes available again
                 message = String.format("%s failed because the group coordinator %s is incorrect. " +
-                                "Will attempt to find the coordinator again and retry",
-                        heartbeatRequestName(), coordinatorRequestManager.coordinator());
+                    "Will attempt to find the coordinator again and retry",
+                    heartbeatRequestName(), coordinatorRequestManager.coordinator());
                 logInfo(message, response, currentTimeMs);
                 coordinatorRequestManager.markCoordinatorUnknown(errorMessage, currentTimeMs);
                 // Skip backoff so that the next HB is sent as soon as the new coordinator is discovered
@@ -370,8 +370,8 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
 
             case COORDINATOR_NOT_AVAILABLE:
                 message = String.format("%s failed because the group coordinator %s is not available. " +
-                                "Will attempt to find the coordinator again and retry",
-                        heartbeatRequestName(), coordinatorRequestManager.coordinator());
+                    "Will attempt to find the coordinator again and retry",
+                    heartbeatRequestName(), coordinatorRequestManager.coordinator());
                 logInfo(message, response, currentTimeMs);
                 coordinatorRequestManager.markCoordinatorUnknown(errorMessage, currentTimeMs);
                 // Skip backoff so that the next HB is sent as soon as the new coordinator is discovered
@@ -381,21 +381,21 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // the manager will backoff and retry
                 message = String.format("%s failed because the group coordinator %s is still loading. Will retry",
-                        heartbeatRequestName(), coordinatorRequestManager.coordinator());
+                    heartbeatRequestName(), coordinatorRequestManager.coordinator());
                 logInfo(message, response, currentTimeMs);
                 break;
 
             case GROUP_AUTHORIZATION_FAILED:
                 GroupAuthorizationException exception =
-                        GroupAuthorizationException.forGroupId(membershipManager().groupId());
+                    GroupAuthorizationException.forGroupId(membershipManager().groupId());
                 logger.error("{} failed due to group authorization failure: {}",
-                        heartbeatRequestName(), exception.getMessage());
+                    heartbeatRequestName(), exception.getMessage());
                 handleFatalFailure(error.exception(exception.getMessage()));
                 break;
 
             case TOPIC_AUTHORIZATION_FAILED:
                 logger.error("{} failed for member {} with state {} due to {}: {}", heartbeatRequestName(),
-                        membershipManager().memberId, membershipManager().state, error, errorMessage);
+                    membershipManager().memberId, membershipManager().state, error, errorMessage);
                 // Propagate auth error received in HB so that it's returned on poll.
                 // Member should stay in its current state so it can recover if ever the missing ACLs are added.
                 backgroundEventHandler.add(new ErrorEvent(error.exception()));
@@ -410,7 +410,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
 
             case FENCED_MEMBER_EPOCH:
                 message = String.format("%s failed for member %s because epoch %s is fenced.",
-                        heartbeatRequestName(), membershipManager().memberId(), membershipManager().memberEpoch());
+                    heartbeatRequestName(), membershipManager().memberId(), membershipManager().memberEpoch());
                 logInfo(message, response, currentTimeMs);
                 membershipManager().transitionToFenced();
                 // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases its assignment
@@ -419,7 +419,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
 
             case UNKNOWN_MEMBER_ID:
                 message = String.format("%s failed because member %s is unknown.",
-                        heartbeatRequestName(), membershipManager().memberId());
+                    heartbeatRequestName(), membershipManager().memberId());
                 logInfo(message, response, currentTimeMs);
                 membershipManager().transitionToFenced();
                 // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases its assignment
@@ -439,7 +439,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
                 // from LEAVING to UNSUBSCRIBED in onHeartbeatRequestGenerated() before the request is sent.
                 if (membershipManager().state() == MemberState.UNSUBSCRIBED) {
                     logger.info("{} received GROUP_ID_NOT_FOUND for group {} while unsubscribed. ",
-                            heartbeatRequestName(), membershipManager().groupId());
+                        heartbeatRequestName(), membershipManager().groupId());
                     membershipManager().onHeartbeatRequestSkipped();
                 } else {
                     // Else, this is a fatal error, we should throw it and transition to fatal state.

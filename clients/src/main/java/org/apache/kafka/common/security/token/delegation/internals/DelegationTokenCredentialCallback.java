@@ -29,7 +29,7 @@ public class DelegationTokenCredentialCallback extends ScramCredentialCallback {
     public String tokenOwner() {
         return tokenOwner;
     }
-    
+
     public void tokenExpiryTimestamp(Long tokenExpiryTimestamp) {
         this.tokenExpiryTimestamp = tokenExpiryTimestamp;
     }

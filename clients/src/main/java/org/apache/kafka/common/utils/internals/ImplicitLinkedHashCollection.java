@@ -57,9 +57,13 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      */
     public interface Element {
         int prev();
+
         void setPrev(int prev);
+
         int next();
+
         void setNext(int next);
+
         default boolean elementKeysAreEqual(Object other) {
             return equals(other);
         }
@@ -151,7 +155,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
 
         ImplicitLinkedHashCollectionIterator(int index) {
             this.cur = indexToElement(head, elements, head.next());
-            for (int i = 0; i < index; ++i) {
+            for (int i = 0;i < index;++i) {
                 next();
             }
             this.lastReturned = null;
@@ -325,7 +329,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
             return INVALID_INDEX;
         }
         int slot = slot(elements, key);
-        for (int seen = 0; seen < elements.length; seen++) {
+        for (int seen = 0;seen < elements.length;seen++) {
             Element element = elements[slot];
             if (element == null) {
                 return INVALID_INDEX;
@@ -425,7 +429,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      */
     int addInternal(Element newElement, Element[] addElements) {
         int slot = slot(addElements, newElement);
-        for (int seen = 0; seen < addElements.length; seen++) {
+        for (int seen = 0;seen < addElements.length;seen++) {
             Element element = addElements[slot];
             if (element == null) {
                 addElements[slot] = newElement;
@@ -443,7 +447,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
         Element[] newElements = new Element[newCapacity];
         HeadElement newHead = new HeadElement();
         int oldSize = size;
-        for (Iterator<E> iter = iterator(); iter.hasNext(); ) {
+        for (Iterator<E> iter = iterator();iter.hasNext();) {
             Element element = iter.next();
             iter.remove();
             int newSlot = addInternal(element, newElements);
@@ -489,7 +493,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
 
         // Find the next empty slot
         int endSlot = slot;
-        for (int seen = 0; seen < elements.length; seen++) {
+        for (int seen = 0;seen < elements.length;seen++) {
             Element element = elements[endSlot];
             if (element == null) {
                 break;
@@ -511,7 +515,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
     private void reseat(int prevSlot) {
         Element element = elements[prevSlot];
         int newSlot = slot(elements, element);
-        for (int seen = 0; seen < elements.length; seen++) {
+        for (int seen = 0;seen < elements.length;seen++) {
             Element e = elements[newSlot];
             if ((e == null) || (e == element)) {
                 break;

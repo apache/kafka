@@ -622,20 +622,20 @@ public class OffsetMetadataManagerTest {
 
         // Verify that the request is rejected with the correct exception.
         assertThrows(expectedType, () -> context.commitOffset(
-            version,
-            new OffsetCommitRequestData()
-                .setGroupId("foo")
-                .setMemberId("member")
-                .setGenerationIdOrMemberEpoch(10)
-                .setTopics(List.of(
-                    new OffsetCommitRequestData.OffsetCommitRequestTopic()
-                        .setName("bar")
-                        .setPartitions(List.of(
-                            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                                .setPartitionIndex(0)
-                                .setCommittedOffset(100L)
-                        ))
-                ))
+                version,
+                new OffsetCommitRequestData()
+                    .setGroupId("foo")
+                    .setMemberId("member")
+                    .setGenerationIdOrMemberEpoch(10)
+                    .setTopics(List.of(
+                        new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                            .setName("bar")
+                            .setPartitions(List.of(
+                                new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                                    .setPartitionIndex(0)
+                                    .setCommittedOffset(100L)
+                            ))
+                    ))
             )
         );
     }
@@ -653,19 +653,19 @@ public class OffsetMetadataManagerTest {
 
         // Verify that the request is rejected with the correct exception.
         assertThrows(CoordinatorNotAvailableException.class, () -> context.commitOffset(
-            new OffsetCommitRequestData()
-                .setGroupId("foo")
-                .setMemberId("member")
-                .setGenerationIdOrMemberEpoch(10)
-                .setTopics(List.of(
-                    new OffsetCommitRequestData.OffsetCommitRequestTopic()
-                        .setName("bar")
-                        .setPartitions(List.of(
-                            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                                .setPartitionIndex(0)
-                                .setCommittedOffset(100L)
-                        ))
-                ))
+                new OffsetCommitRequestData()
+                    .setGroupId("foo")
+                    .setMemberId("member")
+                    .setGenerationIdOrMemberEpoch(10)
+                    .setTopics(List.of(
+                        new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                            .setName("bar")
+                            .setPartitions(List.of(
+                                new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                                    .setPartitionIndex(0)
+                                    .setCommittedOffset(100L)
+                            ))
+                    ))
             )
         );
     }
@@ -682,19 +682,19 @@ public class OffsetMetadataManagerTest {
 
         // Verify that the request is rejected with the correct exception.
         assertThrows(UnknownMemberIdException.class, () -> context.commitOffset(
-            new OffsetCommitRequestData()
-                .setGroupId("foo")
-                .setMemberId("member")
-                .setGenerationIdOrMemberEpoch(10)
-                .setTopics(List.of(
-                    new OffsetCommitRequestData.OffsetCommitRequestTopic()
-                        .setName("bar")
-                        .setPartitions(List.of(
-                            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                                .setPartitionIndex(0)
-                                .setCommittedOffset(100L)
-                        ))
-                ))
+                new OffsetCommitRequestData()
+                    .setGroupId("foo")
+                    .setMemberId("member")
+                    .setGenerationIdOrMemberEpoch(10)
+                    .setTopics(List.of(
+                        new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                            .setName("bar")
+                            .setPartitions(List.of(
+                                new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                                    .setPartitionIndex(0)
+                                    .setCommittedOffset(100L)
+                            ))
+                    ))
             )
         );
     }
@@ -719,19 +719,19 @@ public class OffsetMetadataManagerTest {
 
         // Verify that the request is rejected with the correct exception.
         assertThrows(IllegalGenerationException.class, () -> context.commitOffset(
-            new OffsetCommitRequestData()
-                .setGroupId("foo")
-                .setMemberId("member")
-                .setGenerationIdOrMemberEpoch(10)
-                .setTopics(List.of(
-                    new OffsetCommitRequestData.OffsetCommitRequestTopic()
-                        .setName("bar")
-                        .setPartitions(List.of(
-                            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                                .setPartitionIndex(0)
-                                .setCommittedOffset(100L)
-                        ))
-                ))
+                new OffsetCommitRequestData()
+                    .setGroupId("foo")
+                    .setMemberId("member")
+                    .setGenerationIdOrMemberEpoch(10)
+                    .setTopics(List.of(
+                        new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                            .setName("bar")
+                            .setPartitions(List.of(
+                                new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                                    .setPartitionIndex(0)
+                                    .setCommittedOffset(100L)
+                            ))
+                    ))
             )
         );
     }
@@ -751,20 +751,20 @@ public class OffsetMetadataManagerTest {
 
         // Verify that the request is rejected with the correct exception.
         assertThrows(UnknownMemberIdException.class, () -> context.commitOffset(
-            new OffsetCommitRequestData()
-                .setGroupId("foo")
-                .setMemberId("member")
-                .setGroupInstanceId("instanceid")
-                .setGenerationIdOrMemberEpoch(10)
-                .setTopics(List.of(
-                    new OffsetCommitRequestData.OffsetCommitRequestTopic()
-                        .setName("bar")
-                        .setPartitions(List.of(
-                            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                                .setPartitionIndex(0)
-                                .setCommittedOffset(100L)
-                        ))
-                ))
+                new OffsetCommitRequestData()
+                    .setGroupId("foo")
+                    .setMemberId("member")
+                    .setGroupInstanceId("instanceid")
+                    .setGenerationIdOrMemberEpoch(10)
+                    .setTopics(List.of(
+                        new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                            .setName("bar")
+                            .setPartitions(List.of(
+                                new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                                    .setPartitionIndex(0)
+                                    .setCommittedOffset(100L)
+                            ))
+                    ))
             )
         );
     }
@@ -784,20 +784,20 @@ public class OffsetMetadataManagerTest {
 
         // Verify that the request is rejected with the correct exception.
         assertThrows(UnknownMemberIdException.class, () -> context.commitOffset(
-            new OffsetCommitRequestData()
-                .setGroupId("foo")
-                .setMemberId("member")
-                .setGroupInstanceId("old-instance-id")
-                .setGenerationIdOrMemberEpoch(10)
-                .setTopics(List.of(
-                    new OffsetCommitRequestData.OffsetCommitRequestTopic()
-                        .setName("bar")
-                        .setPartitions(List.of(
-                            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                                .setPartitionIndex(0)
-                                .setCommittedOffset(100L)
-                        ))
-                ))
+                new OffsetCommitRequestData()
+                    .setGroupId("foo")
+                    .setMemberId("member")
+                    .setGroupInstanceId("old-instance-id")
+                    .setGenerationIdOrMemberEpoch(10)
+                    .setTopics(List.of(
+                        new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                            .setName("bar")
+                            .setPartitions(List.of(
+                                new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                                    .setPartitionIndex(0)
+                                    .setCommittedOffset(100L)
+                            ))
+                    ))
             )
         );
     }
@@ -822,19 +822,19 @@ public class OffsetMetadataManagerTest {
 
         // Verify that the request is rejected with the correct exception.
         assertThrows(RebalanceInProgressException.class, () -> context.commitOffset(
-            new OffsetCommitRequestData()
-                .setGroupId("foo")
-                .setMemberId("member")
-                .setGenerationIdOrMemberEpoch(1)
-                .setTopics(List.of(
-                    new OffsetCommitRequestData.OffsetCommitRequestTopic()
-                        .setName("bar")
-                        .setPartitions(List.of(
-                            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                                .setPartitionIndex(0)
-                                .setCommittedOffset(100L)
-                        ))
-                ))
+                new OffsetCommitRequestData()
+                    .setGroupId("foo")
+                    .setMemberId("member")
+                    .setGenerationIdOrMemberEpoch(1)
+                    .setTopics(List.of(
+                        new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                            .setName("bar")
+                            .setPartitions(List.of(
+                                new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                                    .setPartitionIndex(0)
+                                    .setCommittedOffset(100L)
+                            ))
+                    ))
             )
         );
     }
@@ -859,17 +859,17 @@ public class OffsetMetadataManagerTest {
 
         // Verify that the request is rejected with the correct exception.
         assertThrows(UnknownMemberIdException.class, () -> context.commitOffset(
-            new OffsetCommitRequestData()
-                .setGroupId("foo")
-                .setTopics(List.of(
-                    new OffsetCommitRequestData.OffsetCommitRequestTopic()
-                        .setName("bar")
-                        .setPartitions(List.of(
-                            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                                .setPartitionIndex(0)
-                                .setCommittedOffset(100L)
-                        ))
-                ))
+                new OffsetCommitRequestData()
+                    .setGroupId("foo")
+                    .setTopics(List.of(
+                        new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                            .setName("bar")
+                            .setPartitions(List.of(
+                                new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                                    .setPartitionIndex(0)
+                                    .setCommittedOffset(100L)
+                            ))
+                    ))
             )
         );
     }
@@ -1142,19 +1142,19 @@ public class OffsetMetadataManagerTest {
     private static void verifyOffsetCommitWithUnknownMemberId(OffsetMetadataManagerTestContext context) {
         // Verify that the request is rejected with the correct exception.
         assertThrows(UnknownMemberIdException.class, () -> context.commitOffset(
-            new OffsetCommitRequestData()
-                .setGroupId("foo")
-                .setMemberId("member")
-                .setGenerationIdOrMemberEpoch(10)
-                .setTopics(List.of(
-                    new OffsetCommitRequestData.OffsetCommitRequestTopic()
-                        .setName("bar")
-                        .setPartitions(List.of(
-                            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                                .setPartitionIndex(0)
-                                .setCommittedOffset(100L)
-                        ))
-                ))
+                new OffsetCommitRequestData()
+                    .setGroupId("foo")
+                    .setMemberId("member")
+                    .setGenerationIdOrMemberEpoch(10)
+                    .setTopics(List.of(
+                        new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                            .setName("bar")
+                            .setPartitions(List.of(
+                                new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                                    .setPartitionIndex(0)
+                                    .setCommittedOffset(100L)
+                            ))
+                    ))
             )
         );
     }
@@ -2801,7 +2801,7 @@ public class OffsetMetadataManagerTest {
 
         verifyFetchWithUnknownMemberId(context);
     }
-    
+
     @Test
     public void testStreamsGroupOffsetFetchWithUnknownMemberId() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
@@ -2839,7 +2839,7 @@ public class OffsetMetadataManagerTest {
 
         verifyOffsetFetchWithStaleMemberEpoch(context);
     }
-    
+
     @Test
     public void testStreamsGroupOffsetFetchWithStaleMemberEpoch() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
@@ -2871,8 +2871,8 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
         ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup("group", true);
         group.updateMember(new ConsumerGroupMember.Builder("member")
-                .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata())
-                .build()
+            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata())
+            .build()
         );
 
         List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = List.of(
@@ -2941,7 +2941,7 @@ public class OffsetMetadataManagerTest {
         );
         verifyOffsetDelete(context, group);
     }
-    
+
     @Test
     public void testStreamsGroupOffsetDelete() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
@@ -2971,7 +2971,7 @@ public class OffsetMetadataManagerTest {
         group.updateMember(member1);
         verifyOffsetDeleteWithErrors(context, group);
     }
-    
+
     @Test
     public void testStreamsGroupOffsetDeleteWithErrors() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
@@ -3011,7 +3011,7 @@ public class OffsetMetadataManagerTest {
         );
         verifyOffsetDeleteWithPendingTransactionalOffsets(context, group);
     }
-    
+
     @Test
     public void testStreamsGroupOffsetDeleteWithPendingTransactionalOffsets() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();

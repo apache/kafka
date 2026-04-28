@@ -141,18 +141,18 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     private final BackgroundEventHandler backgroundEventHandler;
 
     public ConsumerMembershipManager(String groupId,
-                                     Optional<String> groupInstanceId,
-                                     Optional<String> rackId,
-                                     int rebalanceTimeoutMs,
-                                     Optional<String> serverAssignor,
-                                     SubscriptionState subscriptions,
-                                     CommitRequestManager commitRequestManager,
-                                     ConsumerMetadata metadata,
-                                     LogContext logContext,
-                                     BackgroundEventHandler backgroundEventHandler,
-                                     Time time,
-                                     Metrics metrics,
-                                     boolean autoCommitEnabled) {
+        Optional<String> groupInstanceId,
+        Optional<String> rackId,
+        int rebalanceTimeoutMs,
+        Optional<String> serverAssignor,
+        SubscriptionState subscriptions,
+        CommitRequestManager commitRequestManager,
+        ConsumerMetadata metadata,
+        LogContext logContext,
+        BackgroundEventHandler backgroundEventHandler,
+        Time time,
+        Metrics metrics,
+        boolean autoCommitEnabled) {
         this(groupId,
             groupInstanceId,
             rackId,
@@ -170,18 +170,18 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
 
     // Visible for testing
     ConsumerMembershipManager(String groupId,
-                              Optional<String> groupInstanceId,
-                              Optional<String> rackId,
-                              int rebalanceTimeoutMs,
-                              Optional<String> serverAssignor,
-                              SubscriptionState subscriptions,
-                              CommitRequestManager commitRequestManager,
-                              ConsumerMetadata metadata,
-                              LogContext logContext,
-                              BackgroundEventHandler backgroundEventHandler,
-                              Time time,
-                              RebalanceMetricsManager metricsManager,
-                              boolean autoCommitEnabled) {
+        Optional<String> groupInstanceId,
+        Optional<String> rackId,
+        int rebalanceTimeoutMs,
+        Optional<String> serverAssignor,
+        SubscriptionState subscriptions,
+        CommitRequestManager commitRequestManager,
+        ConsumerMetadata metadata,
+        LogContext logContext,
+        BackgroundEventHandler backgroundEventHandler,
+        Time time,
+        RebalanceMetricsManager metricsManager,
+        boolean autoCommitEnabled) {
         super(groupId,
             subscriptions,
             metadata,
@@ -217,31 +217,31 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         ConsumerGroupHeartbeatResponseData responseData = response.data();
         if (responseData.errorCode() != Errors.NONE.code()) {
             String errorMessage = String.format(
-                    "Unexpected error in Heartbeat response. Expected no error, but received: %s",
-                    Errors.forCode(responseData.errorCode())
+                "Unexpected error in Heartbeat response. Expected no error, but received: %s",
+                Errors.forCode(responseData.errorCode())
             );
             throw new IllegalArgumentException(errorMessage);
         }
         MemberState state = state();
         if (state == MemberState.LEAVING) {
             log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} is " +
-                    "already leaving the group.", memberId, memberEpoch);
+                "already leaving the group.", memberId, memberEpoch);
             return;
         }
         if (state == MemberState.UNSUBSCRIBED && responseData.memberEpoch() < 0 && maybeCompleteLeaveInProgress()) {
             log.debug("Member {} with epoch {} received a successful response to the heartbeat " +
-                    "to leave the group and completed the leave operation. ", memberId, memberEpoch);
+                "to leave the group and completed the leave operation. ", memberId, memberEpoch);
             return;
         }
         if (isNotInGroup()) {
             log.debug("Ignoring heartbeat response received from broker. Member {} is in {} state" +
-                    " so it's not a member of the group. ", memberId, state);
+                " so it's not a member of the group. ", memberId, state);
             return;
         }
         if (responseData.memberEpoch() < 0) {
             log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} " +
-                    "is in {} state and the member epoch is invalid: {}. ", memberId, memberEpoch, state,
-                    responseData.memberEpoch());
+                "is in {} state and the member epoch is invalid: {}. ", memberId, memberEpoch, state,
+                responseData.memberEpoch());
             maybeCompleteLeaveInProgress();
             return;
         }
@@ -255,7 +255,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                 // New assignment received but member is in a state where it cannot take new
                 // assignments (ex. preparing to leave the group)
                 log.debug("Ignoring new assignment {} received from server because member is in {} state.",
-                        assignment, state);
+                    assignment, state);
                 return;
             }
 
@@ -326,7 +326,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         droppedPartitions.addAll(subscriptions.assignedPartitions());
 
         log.info("Member {} is triggering callbacks to release assignment {} and leave group",
-                memberId, droppedPartitions);
+            memberId, droppedPartitions);
 
         CompletableFuture<Void> callbackResult;
         if (droppedPartitions.isEmpty()) {
@@ -380,7 +380,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      */
     @Override
     protected CompletableFuture<Void> signalPartitionsAssigned(TopicIdPartitionSet assignedPartitions,
-                                                               SortedSet<TopicPartition> addedPartitions) {
+        SortedSet<TopicPartition> addedPartitions) {
         // Send an event to notify the app thread that the assignment changed with new partitions.
         // The app thread is expected to trigger the assignment update (within a call to poll),
         // and to run the onPartitionsAssigned callback if needed.
@@ -451,7 +451,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      * @return Future that will be chained within the rest of the reconciliation logic
      */
     private CompletableFuture<Void> enqueueConsumerRebalanceListenerCallback(ConsumerRebalanceListenerMethodName methodName,
-                                                                             Set<TopicPartition> partitions) {
+        Set<TopicPartition> partitions) {
         SortedSet<TopicPartition> sortedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         sortedPartitions.addAll(partitions);
 
@@ -470,11 +470,11 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      * @return Future that will be chained within the rest of the reconciliation logic
      */
     private CompletableFuture<Void> enqueuePartitionsAssignedEvent(Set<TopicPartition> fullAssignment,
-                                                                   SortedSet<TopicPartition> addedPartitions) {
+        SortedSet<TopicPartition> addedPartitions) {
         CompletableBackgroundEvent<Void> event = new PartitionsAssignedEvent(fullAssignment, addedPartitions);
         backgroundEventHandler.add(event);
         log.debug("The event to update the new assignment and trigger onPartitionsAssigned callback if needed " +
-                "has been enqueued successfully to be sent to the app thread.");
+            "has been enqueued successfully to be sent to the app thread.");
         return event.future();
     }
 
@@ -495,16 +495,16 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         if (error.isPresent()) {
             Exception e = error.get();
             log.warn(
-                    "The {} method completed with an error ({}); signaling to continue to the next phase of rebalance",
-                    methodName.fullyQualifiedMethodName(),
-                    e.getMessage()
+                "The {} method completed with an error ({}); signaling to continue to the next phase of rebalance",
+                methodName.fullyQualifiedMethodName(),
+                e.getMessage()
             );
 
             future.completeExceptionally(e);
         } else {
             log.debug(
-                    "The {} method completed successfully; signaling to continue to the next phase of rebalance",
-                    methodName.fullyQualifiedMethodName()
+                "The {} method completed successfully; signaling to continue to the next phase of rebalance",
+                methodName.fullyQualifiedMethodName()
             );
 
             future.complete(null);

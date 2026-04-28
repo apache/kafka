@@ -100,19 +100,19 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
         final ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions();
 
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
-                new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-                new ColumnFamilyDescriptor(sessionStoreHeaderColumnFamilyName, columnFamilyOptions),
-                new ColumnFamilyDescriptor(RocksDBStore.OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
+            new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
+            new ColumnFamilyDescriptor(sessionStoreHeaderColumnFamilyName, columnFamilyOptions),
+            new ColumnFamilyDescriptor(RocksDBStore.OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
 
         RocksDB db = null;
         ColumnFamilyHandle defaultColumnFamily = null, headersColumnFamily = null, offsetsColumnFamily = null;
         try {
             db = RocksDB.open(
-                    dbOptions,
-                    new File(new File(context.stateDir(), "rocksdb"), DB_NAME).getAbsolutePath(),
-                    columnFamilyDescriptors,
-                    columnFamilies);
+                dbOptions,
+                new File(new File(context.stateDir(), "rocksdb"), DB_NAME).getAbsolutePath(),
+                columnFamilyDescriptors,
+                columnFamilies);
 
             defaultColumnFamily = columnFamilies.get(0);
             headersColumnFamily = columnFamilies.get(1);
@@ -233,7 +233,7 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
         }
 
         try (final KeyValueIterator<Bytes, byte[]> it =
-                          rocksDBStore.range(new Bytes("key2".getBytes()), new Bytes("key5".getBytes()))) {
+                 rocksDBStore.range(new Bytes("key2".getBytes()), new Bytes("key5".getBytes()))) {
             {
                 final KeyValue<Bytes, byte[]> keyValue = it.next();
                 assertArrayEquals("key2".getBytes(), keyValue.key.get());
@@ -292,7 +292,7 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
         }
 
         try (final KeyValueIterator<Bytes, byte[]> it =
-                          rocksDBStore.reverseRange(new Bytes("key2".getBytes()), new Bytes("key5".getBytes()))) {
+                 rocksDBStore.reverseRange(new Bytes("key2".getBytes()), new Bytes("key5".getBytes()))) {
             {
                 final KeyValue<Bytes, byte[]> keyValue = it.next();
                 assertArrayEquals("key5".getBytes(), keyValue.key.get());
@@ -338,9 +338,9 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
         final ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions();
 
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
-                new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-                new ColumnFamilyDescriptor(sessionStoreHeaderColumnFamilyName, columnFamilyOptions),
-                new ColumnFamilyDescriptor(RocksDBStore.OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
+            new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
+            new ColumnFamilyDescriptor(sessionStoreHeaderColumnFamilyName, columnFamilyOptions),
+            new ColumnFamilyDescriptor(RocksDBStore.OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
 
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
         RocksDB db = null;
@@ -349,10 +349,10 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
         ColumnFamilyHandle offsetsColumnFamily = null;
         try {
             db = RocksDB.open(
-                    dbOptions,
-                    new File(new File(context.stateDir(), "rocksdb"), DB_NAME).getAbsolutePath(),
-                    columnFamilyDescriptors,
-                    columnFamilies);
+                dbOptions,
+                new File(new File(context.stateDir(), "rocksdb"), DB_NAME).getAbsolutePath(),
+                columnFamilyDescriptors,
+                columnFamilies);
 
             defaultColumnFamily = columnFamilies.get(0);
             headersColumnFamily = columnFamilies.get(1);
@@ -403,10 +403,10 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
     }
 
     private void closeColumnFamilies(
-            final RocksDB db,
-            final ColumnFamilyHandle offsetColumnFamily,
-            final ColumnFamilyHandle defaultColumnFamily,
-            final ColumnFamilyHandle headersColumnFamily) {
+        final RocksDB db,
+        final ColumnFamilyHandle offsetColumnFamily,
+        final ColumnFamilyHandle defaultColumnFamily,
+        final ColumnFamilyHandle headersColumnFamily) {
         // Order of closing must follow: ColumnFamilyHandle > RocksDB
         if (offsetColumnFamily != null) {
             offsetColumnFamily.close();
@@ -439,9 +439,9 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
         final ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions();
 
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
-                new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-                new ColumnFamilyDescriptor(sessionStoreHeaderColumnFamilyName, columnFamilyOptions),
-                new ColumnFamilyDescriptor(RocksDBStore.OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
+            new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
+            new ColumnFamilyDescriptor(sessionStoreHeaderColumnFamilyName, columnFamilyOptions),
+            new ColumnFamilyDescriptor(RocksDBStore.OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
 
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
         RocksDB db = null;
@@ -450,10 +450,10 @@ public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTes
         ColumnFamilyHandle offsetsCF = null;
         try {
             db = RocksDB.open(
-                    dbOptions,
-                    new File(new File(context.stateDir(), "rocksdb"), DB_NAME).getAbsolutePath(),
-                    columnFamilyDescriptors,
-                    columnFamilies);
+                dbOptions,
+                new File(new File(context.stateDir(), "rocksdb"), DB_NAME).getAbsolutePath(),
+                columnFamilyDescriptors,
+                columnFamilies);
 
             defaultCF = columnFamilies.get(0);
             headersCF = columnFamilies.get(1);

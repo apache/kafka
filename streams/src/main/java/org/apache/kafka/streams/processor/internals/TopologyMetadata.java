@@ -100,7 +100,7 @@ public class TopologyMetadata {
     }
 
     public TopologyMetadata(final InternalTopologyBuilder builder,
-                            final StreamsConfig config) {
+        final StreamsConfig config) {
         this.version = new TopologyVersion();
         this.processingMode = StreamsConfigUtils.processingMode(config);
         this.config = config;
@@ -117,7 +117,7 @@ public class TopologyMetadata {
     }
 
     public TopologyMetadata(final ConcurrentNavigableMap<String, InternalTopologyBuilder> builders,
-                            final StreamsConfig config) {
+        final StreamsConfig config) {
         this.version = new TopologyVersion();
         this.processingMode = StreamsConfigUtils.processingMode(config);
         this.config = config;
@@ -135,7 +135,7 @@ public class TopologyMetadata {
     public void setLog(final LogContext logContext) {
         log = logContext.logger(getClass());
     }
-    
+
     public ProcessingMode processingMode() {
         return processingMode;
     }
@@ -174,7 +174,7 @@ public class TopologyMetadata {
     }
 
     public void executeTopologyUpdatesAndBumpThreadVersion(final Consumer<Set<String>> handleTopologyAdditions,
-                                                           final Consumer<Set<String>> handleTopologyRemovals) {
+        final Consumer<Set<String>> handleTopologyRemovals) {
         try {
             version.topologyLock.lock();
             final long latestTopologyVersion = topologyVersion();
@@ -289,7 +289,7 @@ public class TopologyMetadata {
      * Removes the topology and registers a future that listens for all threads on the older version to see the update
      */
     public KafkaFuture<Void> unregisterTopology(final KafkaFutureImpl<Void> removeTopologyFuture,
-                                                final String topologyName) {
+        final String topologyName) {
         try {
             lock();
             log.info("Beginning removal of NamedTopology {}, old topology version is {}", topologyName, version.topologyVersion.get());
@@ -338,7 +338,7 @@ public class TopologyMetadata {
             inputTopics.retainAll(allInputTopicsCopy);
             inputPatterns.retainAll(allInputTopicsCopy);
             log.error("Tried to add the NamedTopology {} but it had overlap with other input topics {} or patterns {}",
-                      builder.topologyName(), inputTopics, inputPatterns);
+                builder.topologyName(), inputTopics, inputPatterns);
             throw new TopologyException("Named Topologies may not subscribe to the same input topics or patterns");
         }
 
@@ -364,14 +364,14 @@ public class TopologyMetadata {
             if (hasNoLocalTopology()) {
                 log.error("Detected a named topology with no input topics, a named topology may not be empty.");
                 throw new TopologyException("Topology has no stream threads and no global threads, " +
-                                                "must subscribe to at least one source topic or pattern.");
+                    "must subscribe to at least one source topic or pattern.");
             }
         } else {
             // If both the global and non-global topologies are empty, this indicates a bug in user code
             if (hasNoLocalTopology() && !hasGlobalTopology()) {
                 log.error("Topology with no input topics will create no stream threads and no global thread.");
                 throw new TopologyException("Topology has no stream threads and no global threads, " +
-                                                "must subscribe to at least one source topic or global table.");
+                    "must subscribe to at least one source topic or global table.");
             }
         }
 
@@ -435,8 +435,8 @@ public class TopologyMetadata {
         }
         log.warn("Unable to look up offset reset strategy for topic {} " +
             "as this topic does not appear in the sources of any of the current topologies: {}\n " +
-                "This may be due to natural race condition when removing a topology but it should not " +
-                "persist or appear frequently.",
+            "This may be due to natural race condition when removing a topology but it should not " +
+            "persist or appear frequently.",
             topic, namedTopologiesView()
         );
         // returning `null` for an Optional return type triggers spotbugs
@@ -576,7 +576,7 @@ public class TopologyMetadata {
     public Map<String, Map<Subtopology, TopicsInfo>> topologyToSubtopologyTopicsInfoMap() {
         final Map<String, Map<Subtopology, TopicsInfo>> topologyToSubtopologyTopicsInfoMap = new HashMap<>();
         applyToEachBuilder(b -> topologyToSubtopologyTopicsInfoMap.put(b.topologyName(), b.subtopologyToTopicsInfo()));
-        return  topologyToSubtopologyTopicsInfoMap;
+        return topologyToSubtopologyTopicsInfoMap;
     }
 
     public Map<String, List<String>> nodeToSourceTopics(final TaskId task) {
@@ -665,7 +665,7 @@ public class TopologyMetadata {
             }
             final Subtopology that = (Subtopology) o;
             return nodeGroupId == that.nodeGroupId &&
-                    Objects.equals(namedTopology, that.namedTopology);
+                Objects.equals(namedTopology, that.namedTopology);
         }
 
         @Override

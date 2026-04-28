@@ -97,27 +97,27 @@ public class CommandLineUtilsTest {
 
     private void setUpOptions() {
         stringOpt = parser.accepts("str")
-                .withRequiredArg()
-                .ofType(String.class)
-                .defaultsTo("default-string");
+            .withRequiredArg()
+            .ofType(String.class)
+            .defaultsTo("default-string");
         intOpt = parser.accepts("int")
-                .withRequiredArg()
-                .ofType(Integer.class)
-                .defaultsTo(100);
+            .withRequiredArg()
+            .ofType(Integer.class)
+            .defaultsTo(100);
         stringOptOptionalArg = parser.accepts("str-opt")
-                .withOptionalArg()
-                .ofType(String.class)
-                .defaultsTo("default-string-2");
+            .withOptionalArg()
+            .ofType(String.class)
+            .defaultsTo("default-string-2");
         intOptOptionalArg = parser.accepts("int-opt")
-                .withOptionalArg()
-                .ofType(Integer.class)
-                .defaultsTo(200);
+            .withOptionalArg()
+            .ofType(Integer.class)
+            .defaultsTo(200);
         stringOptOptionalArgNoDefault = parser.accepts("str-opt-nodef")
-                .withOptionalArg()
-                .ofType(String.class);
+            .withOptionalArg()
+            .ofType(String.class);
         intOptOptionalArgNoDefault = parser.accepts("int-opt-nodef")
-                .withOptionalArg()
-                .ofType(Integer.class);
+            .withOptionalArg()
+            .ofType(Integer.class);
     }
 
     @Test
@@ -132,12 +132,12 @@ public class CommandLineUtilsTest {
         props.put("iondkey", "500");
 
         OptionSet options = parser.parse(
-                "--str", "some-string",
-                "--int", "600",
-                "--str-opt", "some-string-2",
-                "--int-opt", "700",
-                "--str-opt-nodef", "some-string-3",
-                "--int-opt-nodef", "800"
+            "--str", "some-string",
+            "--int", "600",
+            "--str-opt", "some-string-2",
+            "--int-opt", "700",
+            "--str-opt-nodef", "some-string-3",
+            "--int-opt-nodef", "800"
         );
 
         CommandLineUtils.maybeMergeOptions(props, "skey", options, stringOpt);
@@ -165,10 +165,10 @@ public class CommandLineUtilsTest {
         props.put("iondkey", "400");
 
         OptionSet options = parser.parse(
-                "--str-opt",
-                "--int-opt",
-                "--str-opt-nodef",
-                "--int-opt-nodef"
+            "--str-opt",
+            "--int-opt",
+            "--str-opt-nodef",
+            "--int-opt-nodef"
         );
 
         CommandLineUtils.maybeMergeOptions(props, "sokey", options, stringOptOptionalArg);
@@ -285,7 +285,7 @@ public class CommandLineUtilsTest {
         OptionSet options = mock(OptionSet.class);
 
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () ->
-                CommandLineUtils.checkOneOfArgs(parser, options)
+            CommandLineUtils.checkOneOfArgs(parser, options)
         );
 
         assertEquals("At least one option must be provided", e.getMessage());
@@ -304,21 +304,21 @@ public class CommandLineUtilsTest {
         when(options.has(opt3)).thenReturn(false);
 
         assertDoesNotThrow(() ->
-                CommandLineUtils.checkOneOfArgs(parser, options, opt1, opt2, opt3)
+            CommandLineUtils.checkOneOfArgs(parser, options, opt1, opt2, opt3)
         );
 
         when(options.has(opt1)).thenReturn(false);
         when(options.has(opt2)).thenReturn(true);
 
         assertDoesNotThrow(() ->
-                CommandLineUtils.checkOneOfArgs(parser, options, opt1, opt2, opt3)
+            CommandLineUtils.checkOneOfArgs(parser, options, opt1, opt2, opt3)
         );
 
         when(options.has(opt2)).thenReturn(false);
         when(options.has(opt3)).thenReturn(true);
 
         assertDoesNotThrow(() ->
-                CommandLineUtils.checkOneOfArgs(parser, options, opt1, opt2, opt3)
+            CommandLineUtils.checkOneOfArgs(parser, options, opt1, opt2, opt3)
         );
     }
 
@@ -340,9 +340,9 @@ public class CommandLineUtilsTest {
 
         try {
             IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                    () -> CommandLineUtils.checkOneOfArgs(parser, options, opt1, opt2, opt3));
+                () -> CommandLineUtils.checkOneOfArgs(parser, options, opt1, opt2, opt3));
             assertEquals("Exactly one of the following arguments is required: " +
-                    "[first-option], [second-option], [third-option]", e.getMessage());
+                "[first-option], [second-option], [third-option]", e.getMessage());
         } finally {
             Exit.resetExitProcedure();
         }
@@ -366,9 +366,9 @@ public class CommandLineUtilsTest {
 
         try {
             IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                    () -> CommandLineUtils.checkOneOfArgs(parser, options, opt1, opt2, opt3));
+                () -> CommandLineUtils.checkOneOfArgs(parser, options, opt1, opt2, opt3));
             assertEquals("Exactly one of the following arguments is required: " +
-                    "[first-option], [second-option], [third-option]", e.getMessage());
+                "[first-option], [second-option], [third-option]", e.getMessage());
         } finally {
             Exit.resetExitProcedure();
         }

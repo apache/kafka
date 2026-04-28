@@ -95,9 +95,9 @@ public class ClientQuotaControlManager {
      * @return                  The result.
      */
     ControllerResult<Map<ClientQuotaEntity, ApiError>> alterClientQuotas(
-            Collection<ClientQuotaAlteration> quotaAlterations) {
+        Collection<ClientQuotaAlteration> quotaAlterations) {
         List<ApiMessageAndVersion> outputRecords =
-                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+            BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         Map<ClientQuotaEntity, ApiError> outputResults = new HashMap<>();
 
         quotaAlterations.forEach(quotaAlteration -> {
@@ -106,15 +106,15 @@ public class ClientQuotaControlManager {
             quotaAlteration.ops().forEach(op -> {
                 if (alterations.containsKey(op.key())) {
                     outputResults.put(quotaAlteration.entity(), ApiError.fromThrowable(
-                            new InvalidRequestException("Duplicate quota key " + op.key() +
-                                " not updating quota for this entity " + quotaAlteration.entity())));
+                        new InvalidRequestException("Duplicate quota key " + op.key() +
+                            " not updating quota for this entity " + quotaAlteration.entity())));
                 } else {
                     alterations.put(op.key(), op.value());
                 }
             });
             if (outputResults.containsKey(quotaAlteration.entity())) {
                 outputResults.put(quotaAlteration.entity(), ApiError.fromThrowable(
-                        new InvalidRequestException("Ignoring duplicate entity " + quotaAlteration.entity())));
+                    new InvalidRequestException("Ignoring duplicate entity " + quotaAlteration.entity())));
             } else {
                 alterClientQuotaEntity(quotaAlteration.entity(), alterations, outputRecords, outputResults);
             }
@@ -146,7 +146,7 @@ public class ClientQuotaControlManager {
         } else {
             quotas.put(record.key(), record.value());
             log.info("Replayed ClientQuotaRecord for {} setting {} to {}.",
-                    entity, record.key(), record.value());
+                entity, record.key(), record.value());
         }
     }
 
@@ -174,14 +174,14 @@ public class ClientQuotaControlManager {
 
         // Don't share objects between different records
         Supplier<List<EntityData>> recordEntitySupplier = () ->
-                validatedEntityMap.entrySet().stream().map(mapEntry -> new EntityData()
-                        .setEntityType(mapEntry.getKey())
-                        .setEntityName(mapEntry.getValue()))
-                        .collect(Collectors.toList());
+            validatedEntityMap.entrySet().stream().map(mapEntry -> new EntityData()
+                .setEntityType(mapEntry.getKey())
+                .setEntityName(mapEntry.getValue()))
+                .collect(Collectors.toList());
 
         List<ApiMessageAndVersion> newRecords = new ArrayList<>(newQuotaConfigs.size());
         Map<String, Double> currentQuotas = clientQuotaData.containsKey(entity) ?
-                clientQuotaData.get(entity) : Map.of();
+            clientQuotaData.get(entity) : Map.of();
         for (Map.Entry<String, Double> entry : newQuotaConfigs.entrySet()) {
             String key = entry.getKey();
             Double newValue = entry.getValue();
@@ -285,7 +285,7 @@ public class ClientQuotaControlManager {
                 yield getErrorForIntegralQuotaValue(value, key);
             }
             default -> new ApiError(Errors.UNKNOWN_SERVER_ERROR,
-                    "Unexpected config type " + configKey.type() + " should be Long or Double");
+                "Unexpected config type " + configKey.type() + " should be Long or Double");
         };
     }
 

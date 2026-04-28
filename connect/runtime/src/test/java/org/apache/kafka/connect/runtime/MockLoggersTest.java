@@ -211,11 +211,11 @@ public class MockLoggersTest {
         assertEquals(Level.DEBUG, z.getLevel());
 
         Map<String, LoggerLevel> expectedLevels = Map.of(
-            "a.b.c.p.X", new LoggerLevel(Level.DEBUG.toString(), INITIAL_TIME),
-            "a.b.c.p.Y", new LoggerLevel(Level.DEBUG.toString(), INITIAL_TIME),
-            "a.b.c.p.Z", new LoggerLevel(Level.DEBUG.toString(), INITIAL_TIME),
-            "a.b.c.s.W", new LoggerLevel(Level.DEBUG.toString(), INITIAL_TIME),
-            rootLoggerName, new LoggerLevel(Level.DEBUG.toString(), INITIAL_TIME)
+                "a.b.c.p.X", new LoggerLevel(Level.DEBUG.toString(), INITIAL_TIME),
+                "a.b.c.p.Y", new LoggerLevel(Level.DEBUG.toString(), INITIAL_TIME),
+                "a.b.c.p.Z", new LoggerLevel(Level.DEBUG.toString(), INITIAL_TIME),
+                "a.b.c.s.W", new LoggerLevel(Level.DEBUG.toString(), INITIAL_TIME),
+                rootLoggerName, new LoggerLevel(Level.DEBUG.toString(), INITIAL_TIME)
         );
 
         Map<String, LoggerLevel> actualLevels = loggers.allLevels();

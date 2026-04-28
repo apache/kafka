@@ -248,7 +248,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
         }
 
         log.debug("Ignoring the following groups which do not have any offsets for topics that are accepted by " +
-                        "the topic filter: {}", irrelevantGroups);
+                "the topic filter: {}", irrelevantGroups);
         return checkpointGroups;
     }
 

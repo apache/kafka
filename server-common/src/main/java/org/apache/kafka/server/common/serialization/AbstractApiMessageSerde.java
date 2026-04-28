@@ -87,7 +87,7 @@ public abstract class AbstractApiMessageSerde implements RecordSerde<ApiMessageA
                 "Note that upgrades from the preview release of KRaft in 2.8 to newer versions are not supported.");
         } else if (frameVersion != DEFAULT_FRAME_VERSION) {
             throw new MetadataParseException("Could not deserialize metadata record due to unknown frame version "
-                    + frameVersion + "(only frame version " + DEFAULT_FRAME_VERSION + " is supported)");
+                + frameVersion + "(only frame version " + DEFAULT_FRAME_VERSION + " is supported)");
         }
         short apiKey = unsignedIntToShort(input, "type");
         short version = unsignedIntToShort(input, "version");
@@ -105,7 +105,7 @@ public abstract class AbstractApiMessageSerde implements RecordSerde<ApiMessageA
         }
         if (input.remaining() > 0) {
             throw new MetadataParseException("Found " + input.remaining() +
-                    " byte(s) of garbage after " + apiKey);
+                " byte(s) of garbage after " + apiKey);
         }
         return new ApiMessageAndVersion(record, version);
     }

@@ -80,13 +80,13 @@ public class TopicsImageSnapshotLoadBenchmark {
                 ArrayList<Integer> replicas = getReplicas(totalTopicCount, partitionsPerTopic, replicationFactor, numReplicasPerBroker, currentLeader.get());
                 ArrayList<Integer> isr = new ArrayList<>(replicas);
                 buildupTopicsDelta.replay(new PartitionRecord().
-                    setPartitionId(partitionNumber).
-                    setTopicId(topicId).
-                    setReplicas(replicas).
-                    setIsr(isr).
-                    setRemovingReplicas(List.of()).
-                    setAddingReplicas(List.of()).
-                    setLeader(currentLeader.get()));
+                        setPartitionId(partitionNumber).
+                        setTopicId(topicId).
+                        setReplicas(replicas).
+                        setIsr(isr).
+                        setRemovingReplicas(List.of()).
+                        setAddingReplicas(List.of()).
+                        setLeader(currentLeader.get()));
                 currentLeader.set((1 + currentLeader.get()) % numBrokers);
             });
         });
@@ -97,7 +97,7 @@ public class TopicsImageSnapshotLoadBenchmark {
         ArrayList<Integer> replicas = new ArrayList<>();
         int numBrokers = getNumBrokers(totalTopicCount, partitionsPerTopic, replicationFactor, numReplicasPerBroker);
         IntStream.range(0, replicationFactor).forEach(replicaNumber ->
-            replicas.add((replicaNumber + currentLeader) % numBrokers));
+                replicas.add((replicaNumber + currentLeader) % numBrokers));
         return replicas;
     }
 

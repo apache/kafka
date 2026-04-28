@@ -45,7 +45,7 @@ public final class RecordMetadata {
      * Creates a new instance with the provided parameters.
      */
     public RecordMetadata(TopicPartition topicPartition, long baseOffset, int batchIndex, long timestamp,
-                          int serializedKeySize, int serializedValueSize) {
+        int serializedKeySize, int serializedValueSize) {
         // ignore the batchIndex if the base offset is -1, since this indicates the offset is unknown
         this.offset = baseOffset == -1 ? baseOffset : baseOffset + batchIndex;
         this.timestamp = timestamp;

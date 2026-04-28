@@ -39,10 +39,10 @@ public class SegmentIterator<S extends Segment> implements KeyValueIterator<Byte
     KeyValueIterator<Bytes, byte[]> currentIterator;
 
     SegmentIterator(final Iterator<S> segments,
-                    final HasNextCondition hasNextCondition,
-                    final Bytes from,
-                    final Bytes to,
-                    final boolean forward) {
+        final HasNextCondition hasNextCondition,
+        final Bytes from,
+        final Bytes to,
+        final boolean forward) {
         this.segments = segments;
         this.hasNextCondition = hasNextCondition;
         this.from = from;

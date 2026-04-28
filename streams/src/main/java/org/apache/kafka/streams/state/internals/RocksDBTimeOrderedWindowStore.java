@@ -116,9 +116,9 @@ public class RocksDBTimeOrderedWindowStore<S extends Segment>
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
-                                                           final Bytes keyTo,
-                                                           final long timeFrom,
-                                                           final long timeTo) {
+        final Bytes keyTo,
+        final long timeFrom,
+        final long timeTo) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().fetch(keyFrom, keyTo, timeFrom, timeTo);
         return new WindowStoreIteratorWrapper(bytesIterator,
             windowSize,
@@ -128,9 +128,9 @@ public class RocksDBTimeOrderedWindowStore<S extends Segment>
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom,
-                                                                   final Bytes keyTo,
-                                                                   final long timeFrom,
-                                                                   final long timeTo) {
+        final Bytes keyTo,
+        final long timeFrom,
+        final long timeTo) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().backwardFetch(keyFrom, keyTo, timeFrom, timeTo);
         return new WindowStoreIteratorWrapper(bytesIterator,
             windowSize,
@@ -180,8 +180,8 @@ public class RocksDBTimeOrderedWindowStore<S extends Segment>
 
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
+        final PositionBound positionBound,
+        final QueryConfig config) {
 
         return StoreQueryUtils.handleBasicQueries(
             query,

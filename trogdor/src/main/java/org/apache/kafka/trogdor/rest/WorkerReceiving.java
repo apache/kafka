@@ -31,7 +31,7 @@ import com.fasterxml.jackson.databind.node.TextNode;
 public final class WorkerReceiving extends WorkerState {
     @JsonCreator
     public WorkerReceiving(@JsonProperty("taskId") String taskId,
-            @JsonProperty("spec") TaskSpec spec) {
+        @JsonProperty("spec") TaskSpec spec) {
         super(taskId, spec);
     }
 

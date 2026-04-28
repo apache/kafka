@@ -58,9 +58,9 @@ public class TestOutputTopic<K, V> {
     private final Deserializer<V> valueDeserializer;
 
     TestOutputTopic(final TopologyTestDriver driver,
-                    final String topicName,
-                    final Deserializer<K> keyDeserializer,
-                    final Deserializer<V> valueDeserializer) {
+        final String topicName,
+        final Deserializer<K> keyDeserializer,
+        final Deserializer<V> valueDeserializer) {
         Objects.requireNonNull(driver, "TopologyTestDriver cannot be null");
         Objects.requireNonNull(topicName, "topicName cannot be null");
         Objects.requireNonNull(keyDeserializer, "keyDeserializer cannot be null");
@@ -192,10 +192,10 @@ public class TestOutputTopic<K, V> {
     @Override
     public String toString() {
         return new StringJoiner(", ", TestOutputTopic.class.getSimpleName() + "[", "]")
-                .add("topic='" + topic + "'")
-                .add("keyDeserializer=" + keyDeserializer.getClass().getSimpleName())
-                .add("valueDeserializer=" + valueDeserializer.getClass().getSimpleName())
-                .add("size=" + getQueueSize())
-                .toString();
+            .add("topic='" + topic + "'")
+            .add("keyDeserializer=" + keyDeserializer.getClass().getSimpleName())
+            .add("valueDeserializer=" + valueDeserializer.getClass().getSimpleName())
+            .add("size=" + getQueueSize())
+            .toString();
     }
 }

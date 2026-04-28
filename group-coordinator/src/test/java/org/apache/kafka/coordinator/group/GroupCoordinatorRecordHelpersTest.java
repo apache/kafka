@@ -604,7 +604,7 @@ public class GroupCoordinatorRecordHelpersTest {
                 Map.of()
             ));
     }
-      
+
     @Test
     public void testEmptyGroupMetadataRecord() {
         Time time = new MockTime();

@@ -92,18 +92,18 @@ public final class ShareConsumeBenchSpec extends TaskSpec {
 
     @JsonCreator
     public ShareConsumeBenchSpec(@JsonProperty("startMs") long startMs,
-                            @JsonProperty("durationMs") long durationMs,
-                            @JsonProperty("consumerNode") String consumerNode,
-                            @JsonProperty("bootstrapServers") String bootstrapServers,
-                            @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
-                            @JsonProperty("maxMessages") long maxMessages,
-                            @JsonProperty("shareGroup") String shareGroup,
-                            @JsonProperty("consumerConf") Map<String, String> consumerConf,
-                            @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
-                            @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
-                            @JsonProperty("threadsPerWorker") Integer threadsPerWorker,
-                            @JsonProperty("recordProcessor") Optional<RecordProcessor> recordProcessor,
-                            @JsonProperty("activeTopics") List<String> activeTopics) {
+        @JsonProperty("durationMs") long durationMs,
+        @JsonProperty("consumerNode") String consumerNode,
+        @JsonProperty("bootstrapServers") String bootstrapServers,
+        @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
+        @JsonProperty("maxMessages") long maxMessages,
+        @JsonProperty("shareGroup") String shareGroup,
+        @JsonProperty("consumerConf") Map<String, String> consumerConf,
+        @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
+        @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
+        @JsonProperty("threadsPerWorker") Integer threadsPerWorker,
+        @JsonProperty("recordProcessor") Optional<RecordProcessor> recordProcessor,
+        @JsonProperty("activeTopics") List<String> activeTopics) {
         super(startMs, durationMs);
         this.consumerNode = (consumerNode == null) ? "" : consumerNode;
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;

@@ -231,8 +231,8 @@ public class DefaultTaskExecutorTest {
 
         verify(taskManager, timeout(VERIFICATION_TIMEOUT)).assignNextTask(taskExecutor);
         TestUtils.waitForCondition(() -> taskExecutor.currentTask() != null,
-                VERIFICATION_TIMEOUT,
-                "Task reassign take too much time");
+            VERIFICATION_TIMEOUT,
+            "Task reassign take too much time");
 
         final KafkaFuture<StreamTask> future = taskExecutor.unassign();
 

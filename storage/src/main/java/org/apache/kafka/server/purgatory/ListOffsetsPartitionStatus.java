@@ -24,7 +24,7 @@ import org.apache.kafka.storage.internals.log.OffsetResultHolder.FileRecordsOrEr
 import java.util.Optional;
 
 public class ListOffsetsPartitionStatus {
-    
+
     private final Optional<AsyncOffsetReadFutureHolder<FileRecordsOrError>> futureHolderOpt;
     private final Optional<Long> lastFetchableOffset;
     private final Optional<ApiException> maybeOffsetsError;
@@ -33,47 +33,47 @@ public class ListOffsetsPartitionStatus {
     private volatile boolean completed = false;
 
     private ListOffsetsPartitionStatus(
-        Optional<AsyncOffsetReadFutureHolder<FileRecordsOrError>> futureHolderOpt,
-        Optional<Long> lastFetchableOffset,
-        Optional<ApiException> maybeOffsetsError,
-        Optional<ListOffsetsPartitionResponse> responseOpt
+            Optional<AsyncOffsetReadFutureHolder<FileRecordsOrError>> futureHolderOpt,
+            Optional<Long> lastFetchableOffset,
+            Optional<ApiException> maybeOffsetsError,
+            Optional<ListOffsetsPartitionResponse> responseOpt
     ) {
         this.futureHolderOpt = futureHolderOpt;
         this.lastFetchableOffset = lastFetchableOffset;
         this.maybeOffsetsError = maybeOffsetsError;
         this.responseOpt = responseOpt;
     }
-    
+
     public static Builder builder() {
         return new Builder();
     }
-    
+
     public static class Builder {
         private Optional<AsyncOffsetReadFutureHolder<FileRecordsOrError>> futureHolderOpt = Optional.empty();
         private Optional<Long> lastFetchableOffset = Optional.empty();
         private Optional<ApiException> maybeOffsetsError = Optional.empty();
         private volatile Optional<ListOffsetsPartitionResponse> responseOpt = Optional.empty();
-        
-        public Builder futureHolderOpt(Optional<AsyncOffsetReadFutureHolder<FileRecordsOrError>>  futureHolder) {
+
+        public Builder futureHolderOpt(Optional<AsyncOffsetReadFutureHolder<FileRecordsOrError>> futureHolder) {
             this.futureHolderOpt = futureHolder;
             return this;
         }
-        
+
         public Builder lastFetchableOffset(Optional<Long> lastFetchableOffset) {
             this.lastFetchableOffset = lastFetchableOffset;
             return this;
         }
-        
+
         public Builder maybeOffsetsError(Optional<ApiException> maybeOffsetsError) {
             this.maybeOffsetsError = maybeOffsetsError;
             return this;
         }
-        
+
         public Builder responseOpt(Optional<ListOffsetsPartitionResponse> responseOpt) {
             this.responseOpt = responseOpt;
             return this;
         }
-        
+
         public ListOffsetsPartitionStatus build() {
             return new ListOffsetsPartitionStatus(
                     futureHolderOpt,
@@ -82,7 +82,7 @@ public class ListOffsetsPartitionStatus {
                     responseOpt
             );
         }
-        
+
     }
 
     public Optional<AsyncOffsetReadFutureHolder<FileRecordsOrError>> futureHolderOpt() {
@@ -104,7 +104,7 @@ public class ListOffsetsPartitionStatus {
     public Optional<ListOffsetsPartitionResponse> responseOpt() {
         return responseOpt;
     }
-    
+
     public void completed(boolean completed) {
         this.completed = completed;
     }
@@ -116,7 +116,7 @@ public class ListOffsetsPartitionStatus {
     @Override
     public String toString() {
         return String.format("[responseOpt: %s, lastFetchableOffset: %s, " +
-                        "maybeOffsetsError: %s, completed: %s]",
+                "maybeOffsetsError: %s, completed: %s]",
                 responseOpt, lastFetchableOffset, maybeOffsetsError, completed);
     }
 }

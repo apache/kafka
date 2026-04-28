@@ -51,7 +51,7 @@ public class ScramSaslServerTest {
     @BeforeEach
     public void setUp() throws Exception {
         ScramMechanism mechanism = ScramMechanism.SCRAM_SHA_256;
-        formatter  = new ScramFormatter(mechanism);
+        formatter = new ScramFormatter(mechanism);
         CredentialCache.Cache<ScramCredential> credentialCache = new CredentialCache().createCache(mechanism.mechanismName(), ScramCredential.class);
         credentialCache.put(USER_A, formatter.generateCredential("passwordA", 4096));
         credentialCache.put(USER_B, formatter.generateCredential("passwordB", 4096));
@@ -132,17 +132,17 @@ public class ScramSaslServerTest {
         byte[] serverFirstMsgBytes = spySaslServer.evaluateResponse(clientFirstMsgBytes);
         ServerFirstMessage serverFirstMessage = new ServerFirstMessage(serverFirstMsgBytes);
         assertTrue(serverFirstMessage.nonce().startsWith(clientFirstMessage.nonce()),
-                "Nonce in server message should start with client first message's nonce");
+            "Nonce in server message should start with client first message's nonce");
 
         //send client final message with nonce prepended with clientFirstMessage's nonce
         byte[] clientFinalMessage = clientFinalMessage(clientFirstMessage.nonce() + serverFirstMessage.nonce());
         Mockito.doNothing()
-                .when(spySaslServer).verifyClientProof(Mockito.any(ScramMessages.ClientFinalMessage.class));
+            .when(spySaslServer).verifyClientProof(Mockito.any(ScramMessages.ClientFinalMessage.class));
         SaslException saslException = assertThrows(SaslException.class,
-                () -> spySaslServer.evaluateResponse(clientFinalMessage));
+            () -> spySaslServer.evaluateResponse(clientFinalMessage));
         assertEquals("Invalid client nonce in the final client message.",
-                saslException.getMessage(),
-                "Failure message: " + saslException.getMessage());
+            saslException.getMessage(),
+            "Failure message: " + saslException.getMessage());
     }
 
     private byte[] clientFirstMessage(String userName, String authorizationId) {

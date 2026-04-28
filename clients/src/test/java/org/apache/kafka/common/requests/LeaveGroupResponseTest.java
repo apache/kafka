@@ -50,13 +50,13 @@ public class LeaveGroupResponseTest {
     @BeforeEach
     public void setUp() {
         memberResponses = Arrays.asList(new MemberResponse()
-                                            .setMemberId("member_1")
-                                            .setGroupInstanceId("instance_1")
-                                            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()),
-                                        new MemberResponse()
-                                            .setMemberId("member_2")
-                                            .setGroupInstanceId("instance_2")
-                                            .setErrorCode(Errors.FENCED_INSTANCE_ID.code())
+                .setMemberId("member_1")
+                .setGroupInstanceId("instance_1")
+                .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()),
+            new MemberResponse()
+                .setMemberId("member_2")
+                .setGroupInstanceId("instance_2")
+                .setErrorCode(Errors.FENCED_INSTANCE_ID.code())
         );
     }
 
@@ -69,16 +69,16 @@ public class LeaveGroupResponseTest {
 
         for (short version : ApiKeys.LEAVE_GROUP.allVersions()) {
             LeaveGroupResponse leaveGroupResponse = new LeaveGroupResponse(memberResponses,
-                                                                           Errors.NONE,
-                                                                           throttleTimeMs,
-                                                                           version);
+                Errors.NONE,
+                throttleTimeMs,
+                version);
 
             if (version >= 3) {
                 assertEquals(expectedErrorCounts, leaveGroupResponse.errorCounts());
                 assertEquals(memberResponses, leaveGroupResponse.memberResponses());
             } else {
                 assertEquals(Collections.singletonMap(Errors.UNKNOWN_MEMBER_ID, 1),
-                             leaveGroupResponse.errorCounts());
+                    leaveGroupResponse.errorCounts());
                 assertEquals(Collections.emptyList(), leaveGroupResponse.memberResponses());
             }
 
@@ -107,8 +107,8 @@ public class LeaveGroupResponseTest {
     @Test
     public void testEqualityWithSerialization() {
         LeaveGroupResponseData responseData = new LeaveGroupResponseData()
-                .setErrorCode(Errors.NONE.code())
-                .setThrottleTimeMs(throttleTimeMs);
+            .setErrorCode(Errors.NONE.code())
+            .setThrottleTimeMs(throttleTimeMs);
         for (short version : ApiKeys.LEAVE_GROUP.allVersions()) {
             LeaveGroupResponse primaryResponse = LeaveGroupResponse.parse(
                 MessageUtil.toByteBufferAccessor(responseData, version), version);
@@ -149,16 +149,16 @@ public class LeaveGroupResponseTest {
         for (short version : ApiKeys.LEAVE_GROUP.allVersions()) {
             List<MemberResponse> localResponses = version > 2 ? memberResponses : memberResponses.subList(0, 1);
             LeaveGroupResponse primaryResponse = new LeaveGroupResponse(localResponses,
-                                                                        Errors.NONE,
-                                                                        throttleTimeMs,
-                                                                        version);
+                Errors.NONE,
+                throttleTimeMs,
+                version);
 
             // The order of members should not alter result data.
             Collections.reverse(localResponses);
             LeaveGroupResponse reversedResponse = new LeaveGroupResponse(localResponses,
-                                                                         Errors.NONE,
-                                                                         throttleTimeMs,
-                                                                         version);
+                Errors.NONE,
+                throttleTimeMs,
+                version);
 
             assertEquals(primaryResponse, primaryResponse);
             assertEquals(primaryResponse, reversedResponse);
@@ -199,7 +199,7 @@ public class LeaveGroupResponseTest {
             assertEquals(memberResponses, response.memberResponses());
         }
     }
-    
+
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.LEAVE_GROUP)
     public void testErrorResponses(short version) {
@@ -209,11 +209,11 @@ public class LeaveGroupResponseTest {
 
         LeaveGroupResponse responseNoMembers = new LeaveGroupResponse(dataNoMembers, version);
         assertEquals(Errors.GROUP_ID_NOT_FOUND, responseNoMembers.topLevelError());
-        
+
         LeaveGroupResponseData dataMembers = new LeaveGroupResponseData()
             .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
             .setMembers(memberResponses);
-        
+
         LeaveGroupResponse responseMembers = new LeaveGroupResponse(dataMembers, version);
         assertEquals(Errors.GROUP_ID_NOT_FOUND, responseMembers.topLevelError());
     }

@@ -74,7 +74,7 @@ public class KTableSourceTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, Integer> inputTopic =
-                    driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer());
+                driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer());
             inputTopic.pipeInput("A", 1, 10L);
             inputTopic.pipeInput("B", 2, 11L);
             inputTopic.pipeInput("C", 3, 12L);
@@ -100,8 +100,8 @@ public class KTableSourceTest {
         final String topic1 = "topic1";
 
         builder.table(topic1, Consumed.with(Serdes.String(), Serdes.Integer()), Materialized.as("store"))
-               .toStream()
-               .to("output");
+            .toStream()
+            .to("output");
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, Integer> inputTopic =
@@ -124,9 +124,9 @@ public class KTableSourceTest {
 
             assertEquals(
                 asList(new TestRecord<>("A", 1, Instant.ofEpochMilli(10L)),
-                           new TestRecord<>("B", 2, Instant.ofEpochMilli(11L)),
-                           new TestRecord<>("B", 3, Instant.ofEpochMilli(13L)),
-                           new TestRecord<>("A", 1, Instant.ofEpochMilli(9L))),
+                    new TestRecord<>("B", 2, Instant.ofEpochMilli(11L)),
+                    new TestRecord<>("B", 3, Instant.ofEpochMilli(13L)),
+                    new TestRecord<>("A", 1, Instant.ofEpochMilli(9L))),
                 outputTopic.readRecordsToList()
             );
         }
@@ -168,7 +168,7 @@ public class KTableSourceTest {
         builder.table(topic, stringConsumed, Materialized.as("store"));
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableSource.class);
-            final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(

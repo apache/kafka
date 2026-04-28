@@ -67,7 +67,7 @@ public class ConsumerRecordTest {
         RecordHeaders headers = new RecordHeaders();
         headers.add(new RecordHeader("header key", "header value".getBytes(StandardCharsets.UTF_8)));
         ConsumerRecord<String, String> record = new ConsumerRecord<>(topic, partition, offset, timestamp, timestampType,
-                serializedKeySize, serializedValueSize, key, value, headers, Optional.empty());
+            serializedKeySize, serializedValueSize, key, value, headers, Optional.empty());
         assertEquals(topic, record.topic());
         assertEquals(partition, record.partition());
         assertEquals(offset, record.offset());
@@ -84,7 +84,7 @@ public class ConsumerRecordTest {
         Optional<Integer> leaderEpoch = Optional.of(10);
         Optional<Short> deliveryCount = Optional.of((short) 1);
         record = new ConsumerRecord<>(topic, partition, offset, timestamp, timestampType,
-                serializedKeySize, serializedValueSize, key, value, headers, leaderEpoch, deliveryCount);
+            serializedKeySize, serializedValueSize, key, value, headers, leaderEpoch, deliveryCount);
         assertEquals(topic, record.topic());
         assertEquals(partition, record.partition());
         assertEquals(offset, record.offset());

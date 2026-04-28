@@ -107,7 +107,7 @@ public class ScramSaslClient implements SaslClient {
                             callbackHandler.handle(new Callback[]{extensionsCallback});
                         } catch (UnsupportedCallbackException e) {
                             log.debug("Extensions callback is not supported by client callback handler {}, no extensions will be added",
-                                    callbackHandler);
+                                callbackHandler);
                         }
                     } catch (Throwable e) {
                         throw new SaslException("User name or extensions could not be obtained", e);
@@ -125,7 +125,7 @@ public class ScramSaslClient implements SaslClient {
                     if (!serverFirstMessage.nonce().startsWith(clientNonce))
                         throw new SaslException("Invalid server nonce: does not start with client nonce");
                     if (serverFirstMessage.iterations() < mechanism.minIterations())
-                        throw new SaslException("Requested iterations " + serverFirstMessage.iterations() +  " is less than the minimum " + mechanism.minIterations() + " for " + mechanism);
+                        throw new SaslException("Requested iterations " + serverFirstMessage.iterations() + " is less than the minimum " + mechanism.minIterations() + " for " + mechanism);
                     PasswordCallback passwordCallback = new PasswordCallback("Password:", false);
                     try {
                         callbackHandler.handle(new Callback[]{passwordCallback});
@@ -217,11 +217,11 @@ public class ScramSaslClient implements SaslClient {
 
         @Override
         public SaslClient createSaslClient(String[] mechanisms,
-                String authorizationId,
-                String protocol,
-                String serverName,
-                Map<String, ?> props,
-                CallbackHandler cbh) throws SaslException {
+            String authorizationId,
+            String protocol,
+            String serverName,
+            Map<String, ?> props,
+            CallbackHandler cbh) throws SaslException {
 
             ScramMechanism mechanism = null;
             for (String mech : mechanisms) {
@@ -231,7 +231,7 @@ public class ScramSaslClient implements SaslClient {
             }
             if (mechanism == null)
                 throw new SaslException(String.format("Requested mechanisms '%s' not supported. Supported mechanisms are '%s'.",
-                        Arrays.asList(mechanisms), ScramMechanism.mechanismNames()));
+                    Arrays.asList(mechanisms), ScramMechanism.mechanismNames()));
 
             try {
                 return new ScramSaslClient(mechanism, cbh);

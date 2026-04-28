@@ -34,11 +34,11 @@ class RocksDBRangeIterator extends RocksDbIterator {
     private final boolean toInclusive;
 
     RocksDBRangeIterator(final String storeName,
-                         final RocksIterator iter,
-                         final Bytes from,
-                         final Bytes to,
-                         final boolean forward,
-                         final boolean toInclusive) {
+        final RocksIterator iter,
+        final Bytes from,
+        final Bytes to,
+        final boolean forward,
+        final boolean toInclusive) {
         super(storeName, iter, forward);
         this.forward = forward;
         this.toInclusive = toInclusive;

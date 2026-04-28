@@ -82,14 +82,14 @@ public class HerderRequestHandler {
      * request to the indicated target.
      */
     public <T, U> T completeOrForwardRequest(FutureCallback<T> cb,
-                                             String path,
-                                             String method,
-                                             HttpHeaders headers,
-                                             Map<String, String> queryParameters,
-                                             Object body,
-                                             TypeReference<U> resultType,
-                                             Translator<T, U> translator,
-                                             Boolean forward) throws Throwable {
+            String path,
+            String method,
+            HttpHeaders headers,
+            Map<String, String> queryParameters,
+            Object body,
+            TypeReference<U> resultType,
+            Translator<T, U> translator,
+            Boolean forward) throws Throwable {
         try {
             return completeRequest(cb);
         } catch (RequestTargetException e) {
@@ -130,18 +130,19 @@ public class HerderRequestHandler {
     }
 
     public <T, U> T completeOrForwardRequest(FutureCallback<T> cb, String path, String method, HttpHeaders headers, Object body,
-                                             TypeReference<U> resultType, Translator<T, U> translator, Boolean forward) throws Throwable {
+            TypeReference<U> resultType, Translator<T, U> translator, Boolean forward) throws Throwable {
         return completeOrForwardRequest(cb, path, method, headers, null, body, resultType, translator, forward);
     }
 
     public <T> T completeOrForwardRequest(FutureCallback<T> cb, String path, String method, HttpHeaders headers, Object body,
-                                                 TypeReference<T> resultType, Boolean forward) throws Throwable {
+            TypeReference<T> resultType, Boolean forward) throws Throwable {
         return completeOrForwardRequest(cb, path, method, headers, body, resultType, new IdentityTranslator<>(), forward);
     }
 
     public void completeOrForwardRequest(FutureCallback<Void> cb, String path, String method, HttpHeaders headers, Object body,
-                                          Boolean forward) throws Throwable {
-        completeOrForwardRequest(cb, path, method, headers, body, new TypeReference<>() { }, new IdentityTranslator<>(), forward);
+            Boolean forward) throws Throwable {
+        completeOrForwardRequest(cb, path, method, headers, body, new TypeReference<>() {
+        }, new IdentityTranslator<>(), forward);
     }
 
     public interface Translator<T, U> {

@@ -20,8 +20,11 @@ import java.util.Map;
 
 public interface LoggingControllerDelegate {
     Map<String, String> loggers();
+
     boolean logLevel(String loggerName, String logLevel);
+
     boolean unsetLogLevel(String loggerName);
+
     default boolean loggerExists(String loggerName) {
         return loggers().containsKey(loggerName);
     }

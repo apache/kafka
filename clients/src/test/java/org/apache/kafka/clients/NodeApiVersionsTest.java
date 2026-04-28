@@ -49,7 +49,7 @@ public class NodeApiVersionsTest {
         String prefix = "(";
         for (ApiKeys apiKey : ApiKeys.clientApis()) {
             bld.append(prefix).append(apiKey.name).
-                    append("(").append(apiKey.id).append("): UNSUPPORTED");
+                append("(").append(apiKey.id).append("): UNSUPPORTED");
             prefix = ", ";
         }
         bld.append(")");
@@ -68,9 +68,9 @@ public class NodeApiVersionsTest {
         for (ApiKeys apiKey : ApiKeys.values()) {
             if (apiKey == ApiKeys.DELETE_TOPICS) {
                 versionList.add(new ApiVersion()
-                        .setApiKey(apiKey.id)
-                        .setMinVersion((short) 10000)
-                        .setMaxVersion((short) 10001));
+                    .setApiKey(apiKey.id)
+                    .setMinVersion((short) 10000)
+                    .setMaxVersion((short) 10001));
             } else versionList.add(ApiVersionsResponse.toApiVersion(apiKey));
         }
         NodeApiVersions versions = new NodeApiVersions(versionList, Collections.emptyList());
@@ -84,17 +84,17 @@ public class NodeApiVersionsTest {
                 bld.append(apiKey.name + "(" + apiKey.id + "): 0 to -1 [unusable: node too new]");
             } else {
                 bld.append(apiKey.name).append("(").
-                        append(apiKey.id).append("): ");
+                    append(apiKey.id).append("): ");
                 if (apiKey.oldestVersion() ==
-                        apiKey.latestVersion()) {
+                    apiKey.latestVersion()) {
                     bld.append(apiKey.oldestVersion());
                 } else {
                     bld.append(apiKey.oldestVersion()).
-                            append(" to ").
-                            append(apiKey.latestVersion());
+                        append(" to ").
+                        append(apiKey.latestVersion());
                 }
                 bld.append(" [usable: ").append(apiKey.latestVersion()).
-                        append("]");
+                    append("]");
             }
             prefix = ", ";
         }
@@ -151,11 +151,11 @@ public class NodeApiVersionsTest {
         List<ApiVersion> versionList = new LinkedList<>(defaultResponse.data().apiKeys());
         // Add an API key that we don't know about.
         versionList.add(new ApiVersion()
-                .setApiKey((short) 100)
-                .setMinVersion((short) 0)
-                .setMaxVersion((short) 1));
+            .setApiKey((short) 100)
+            .setMinVersion((short) 0)
+            .setMaxVersion((short) 1));
         NodeApiVersions versions = new NodeApiVersions(versionList, Collections.emptyList());
-        for (ApiKeys apiKey: ApiKeys.apisForListener(scope)) {
+        for (ApiKeys apiKey : ApiKeys.apisForListener(scope)) {
             assertEquals(apiKey.latestVersion(), versions.latestUsableVersion(apiKey));
         }
     }

@@ -252,7 +252,7 @@ public class ClientQuotasRequestTest {
     }
 
     private void verifyIpQuotas(ClientQuotaFilterComponent entityFilter, Map<ClientQuotaEntity, Double> expectedMatches,
-        String unknownHost) throws InterruptedException {
+                                String unknownHost) throws InterruptedException {
 
         TestUtils.retryOnExceptionWithTimeout(5000L, () -> {
             Map<ClientQuotaEntity, Map<String, Double>> result = describeClientQuotas(
@@ -702,7 +702,7 @@ public class ClientQuotasRequestTest {
     }
 
     private Map<ClientQuotaEntity, KafkaFuture<Void>> alterClientQuotas(Map<ClientQuotaEntity, Map<String,
-        Optional<Double>>> request, boolean validateOnly) {
+                                                                            Optional<Double>>> request, boolean validateOnly) {
 
         List<ClientQuotaAlteration> entries = request.entrySet().stream().map(entry -> {
             ClientQuotaEntity entity = entry.getKey();

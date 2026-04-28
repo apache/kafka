@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class OAuthBearerUnsecuredJwsTest {
     private static final String QUOTE = "\"";
     private static final String HEADER_COMPACT_SERIALIZATION = Base64.getUrlEncoder().withoutPadding()
-            .encodeToString("{\"alg\":\"none\"}".getBytes(StandardCharsets.UTF_8)) + ".";
+        .encodeToString("{\"alg\":\"none\"}".getBytes(StandardCharsets.UTF_8)) + ".";
 
     @Test
     public void validClaims() throws OAuthBearerIllegalTokenException {
@@ -44,8 +44,8 @@ public class OAuthBearerUnsecuredJwsTest {
         appendCommaJsonText(sb, "exp", expirationTimeSeconds);
         sb.append("}");
         String compactSerialization = HEADER_COMPACT_SERIALIZATION
-                + Base64.getUrlEncoder().withoutPadding().encodeToString(sb.toString().getBytes(StandardCharsets.UTF_8))
-                + ".";
+            + Base64.getUrlEncoder().withoutPadding().encodeToString(sb.toString().getBytes(StandardCharsets.UTF_8))
+            + ".";
         OAuthBearerUnsecuredJws testJwt = new OAuthBearerUnsecuredJws(compactSerialization, "sub", "scope");
         assertEquals(compactSerialization, testJwt.value());
         assertEquals("sub", testJwt.principalClaimName());
@@ -150,7 +150,7 @@ public class OAuthBearerUnsecuredJwsTest {
 
     private static void appendJsonText(StringBuilder sb, String claimName, String claimValue) {
         sb.append(QUOTE).append(escape(claimName)).append(QUOTE).append(":").append(QUOTE).append(escape(claimValue))
-                .append(QUOTE);
+            .append(QUOTE);
     }
 
     private static String escape(String jsonStringValue) {

@@ -78,7 +78,7 @@ public class ResourceTypeTest {
     @Test
     public void testExhaustive() {
         assertEquals(INFOS.length, ResourceType.values().length);
-        for (int i = 0; i < INFOS.length; i++) {
+        for (int i = 0;i < INFOS.length;i++) {
             assertEquals(INFOS[i].resourceType, ResourceType.values()[i]);
         }
     }

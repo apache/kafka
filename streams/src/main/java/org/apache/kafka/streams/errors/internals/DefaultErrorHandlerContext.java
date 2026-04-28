@@ -40,15 +40,15 @@ public class DefaultErrorHandlerContext implements ErrorHandlerContext {
     private final ProcessorContext processorContext;
 
     public DefaultErrorHandlerContext(final ProcessorContext processorContext,
-                                      final String topic,
-                                      final int partition,
-                                      final long offset,
-                                      final Headers headers,
-                                      final String processorNodeId,
-                                      final TaskId taskId,
-                                      final long timestamp,
-                                      final byte[] sourceRawKey,
-                                      final byte[] sourceRawValue) {
+        final String topic,
+        final int partition,
+        final long offset,
+        final Headers headers,
+        final String processorNodeId,
+        final TaskId taskId,
+        final long timestamp,
+        final byte[] sourceRawKey,
+        final byte[] sourceRawValue) {
         this.topic = topic;
         this.partition = partition;
         this.offset = offset;

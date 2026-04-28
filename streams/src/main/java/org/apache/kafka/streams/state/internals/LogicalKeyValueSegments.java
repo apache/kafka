@@ -46,10 +46,10 @@ public class LogicalKeyValueSegments extends AbstractSegments<LogicalKeyValueSeg
     private final Map<Long, LogicalKeyValueSegment> reservedSegments = new HashMap<>();
 
     LogicalKeyValueSegments(final String name,
-                            final String parentDir,
-                            final long retentionPeriod,
-                            final long segmentInterval,
-                            final RocksDBMetricsRecorder metricsRecorder) {
+        final String parentDir,
+        final long retentionPeriod,
+        final long segmentInterval,
+        final RocksDBMetricsRecorder metricsRecorder) {
         super(name, retentionPeriod, segmentInterval);
         this.metricsRecorder = metricsRecorder;
         this.physicalStore = new RocksDBStore(name, parentDir, metricsRecorder, false);
@@ -71,7 +71,7 @@ public class LogicalKeyValueSegments extends AbstractSegments<LogicalKeyValueSeg
     }
 
     LogicalKeyValueSegment createReservedSegment(final long segmentId,
-                                                 final String segmentName) {
+        final String segmentName) {
         if (segmentId >= 0) {
             throw new IllegalArgumentException("segmentId for a reserved segment must be negative");
         }

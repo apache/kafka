@@ -63,11 +63,11 @@ public class ClusterConfig {
 
     @SuppressWarnings("checkstyle:ParameterNumber")
     private ClusterConfig(Set<Type> types, int brokers, int controllers, int disksPerBroker, boolean autoStart,
-                  SecurityProtocol brokerSecurityProtocol, ListenerName brokerListenerName,
-                  SecurityProtocol controllerSecurityProtocol, ListenerName controllerListenerName, File trustStoreFile,
-                  MetadataVersion metadataVersion, Map<String, String> serverProperties,
-                  Map<Integer, Map<String, String>> perServerProperties, List<String> tags, Map<Feature, Short> features,
-                  boolean standalone) {
+            SecurityProtocol brokerSecurityProtocol, ListenerName brokerListenerName,
+            SecurityProtocol controllerSecurityProtocol, ListenerName controllerListenerName, File trustStoreFile,
+            MetadataVersion metadataVersion, Map<String, String> serverProperties,
+            Map<Integer, Map<String, String>> perServerProperties, List<String> tags, Map<Feature, Short> features,
+            boolean standalone) {
         // do fail fast. the following values are invalid for kraft modes.
         if (brokers < 0) throw new IllegalArgumentException("Number of brokers must be greater or equal to zero.");
         if (controllers < 0) throw new IllegalArgumentException("Number of controller must be greater or equal to zero.");
@@ -221,7 +221,8 @@ public class ClusterConfig {
         private Map<Feature, Short> features = Map.of();
         private boolean standalone = false;
 
-        private Builder() {}
+        private Builder() {
+        }
 
         public Builder setTypes(Set<Type> types) {
             this.types = Set.copyOf(types);

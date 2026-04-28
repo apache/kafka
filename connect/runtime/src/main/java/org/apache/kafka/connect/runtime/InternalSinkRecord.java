@@ -41,9 +41,9 @@ public class InternalSinkRecord extends SinkRecord {
     }
 
     protected InternalSinkRecord(ProcessingContext<ConsumerRecord<byte[], byte[]>> context, String topic,
-                                 int partition, Schema keySchema, Object key, Schema valueSchema,
-                                 Object value, long kafkaOffset, Long timestamp,
-                                 TimestampType timestampType, Iterable<Header> headers) {
+            int partition, Schema keySchema, Object key, Schema valueSchema,
+            Object value, long kafkaOffset, Long timestamp,
+            TimestampType timestampType, Iterable<Header> headers) {
         super(topic, partition, keySchema, key, valueSchema, value, kafkaOffset, timestamp, timestampType, headers,
                 context.original().topic(), context.original().partition(),
                 context.original().offset());
@@ -52,8 +52,8 @@ public class InternalSinkRecord extends SinkRecord {
 
     @Override
     public SinkRecord newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key,
-                                Schema valueSchema, Object value, Long timestamp,
-                                Iterable<Header> headers) {
+            Schema valueSchema, Object value, Long timestamp,
+            Iterable<Header> headers) {
         return new InternalSinkRecord(context, topic, kafkaPartition, keySchema, key,
                 valueSchema, value, kafkaOffset(), timestamp, timestampType(), headers);
     }

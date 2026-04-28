@@ -71,7 +71,7 @@ public class PluginMetricsImplTest {
         LinkedHashMap<String, String> tags = new LinkedHashMap<>();
         tags.put("k1", "value");
         assertThrows(IllegalArgumentException.class,
-                () -> pmi.metricName("name", "description", tags));
+            () -> pmi.metricName("name", "description", tags));
     }
 
     @Test

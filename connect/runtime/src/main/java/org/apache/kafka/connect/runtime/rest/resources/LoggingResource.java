@@ -105,8 +105,8 @@ public class LoggingResource {
     @Operation(summary = "Set the log level for the specified logger")
     @SuppressWarnings("fallthrough")
     public Response setLevel(final @PathParam("logger") String namespace,
-                             final Map<String, String> levelMap,
-                             @DefaultValue("worker") @QueryParam("scope") @Parameter(description = "The scope for the logging modification (single-worker, cluster-wide, etc.)") String scope) {
+            final Map<String, String> levelMap,
+            @DefaultValue("worker") @QueryParam("scope") @Parameter(description = "The scope for the logging modification (single-worker, cluster-wide, etc.)") String scope) {
         if (scope == null) {
             log.warn("Received null scope in request to adjust logging level; will default to {}", WORKER_SCOPE);
             scope = WORKER_SCOPE;

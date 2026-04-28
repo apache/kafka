@@ -63,10 +63,10 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
     private boolean sendOldValues = false;
 
     public KStreamSlidingWindowAggregate(final SlidingWindows windows,
-                                         final StoreFactory storeFactory,
-                                         final EmitStrategy emitStrategy,
-                                         final Initializer<VAgg> initializer,
-                                         final Aggregator<? super KIn, ? super VIn, VAgg> aggregator) {
+        final StoreFactory storeFactory,
+        final EmitStrategy emitStrategy,
+        final Initializer<VAgg> initializer,
+        final Aggregator<? super KIn, ? super VIn, VAgg> aggregator) {
         this.windows = windows;
         this.storeName = storeFactory.storeName();
         this.storeFactory = storeFactory;
@@ -98,8 +98,8 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
         private Boolean reverseIteratorPossible = null;
 
         protected KStreamSlidingWindowAggregateProcessor(final String storeName,
-                                                         final EmitStrategy emitStrategy,
-                                                         final boolean sendOldValues) {
+            final EmitStrategy emitStrategy,
+            final boolean sendOldValues) {
             super(storeName, emitStrategy, sendOldValues);
         }
 
@@ -145,7 +145,7 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                         reverseIteratorPossible = true;
                         log.debug("Sliding Windows aggregate using a reverse iterator");
                     }
-                } catch (final UnsupportedOperationException e)  {
+                } catch (final UnsupportedOperationException e) {
                     reverseIteratorPossible = false;
                     log.debug("Sliding Windows aggregate using a forward iterator");
                 }
@@ -373,13 +373,13 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
         }
 
         private void createWindows(final Record<KIn, VIn> record,
-                                   final long closeTime,
-                                   final Set<Long> windowStartTimes,
-                                   final ValueTimestampHeaders<VAgg> rightWinAgg,
-                                   final ValueTimestampHeaders<VAgg> leftWinAgg,
-                                   final boolean leftWinAlreadyCreated,
-                                   final boolean rightWinAlreadyCreated,
-                                   final Long previousRecordTimestamp) {
+            final long closeTime,
+            final Set<Long> windowStartTimes,
+            final ValueTimestampHeaders<VAgg> rightWinAgg,
+            final ValueTimestampHeaders<VAgg> leftWinAgg,
+            final boolean leftWinAlreadyCreated,
+            final boolean rightWinAlreadyCreated,
+            final Long previousRecordTimestamp) {
             // create right window for previous record
             if (previousRecordTimestamp != null) {
                 final long previousRightWinStart = previousRecordTimestamp + 1;
@@ -407,8 +407,8 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
         }
 
         private void createCurrentRecordRightWindow(final long inputRecordTimestamp,
-                                                    final ValueTimestampHeaders<VAgg> rightWinAgg,
-                                                    final Record<KIn, VIn> record) {
+            final ValueTimestampHeaders<VAgg> rightWinAgg,
+            final Record<KIn, VIn> record) {
             final TimeWindow window = new TimeWindow(inputRecordTimestamp + 1, inputRecordTimestamp + 1 + windows.timeDifferenceMs());
             windowStore.put(
                 record.key(),
@@ -418,8 +418,8 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
         }
 
         private void createPreviousRecordRightWindow(final long windowStart,
-                                                     final Record<KIn, VIn> record,
-                                                     final long closeTime) {
+            final Record<KIn, VIn> record,
+            final long closeTime) {
             final TimeWindow window = new TimeWindow(windowStart, windowStart + windows.timeDifferenceMs());
             final ValueTimestampHeaders<VAgg> valueTimestampHeaders = ValueTimestampHeaders.make(initializer.apply(), record.timestamp(), new RecordHeaders());
             updateWindowAndForward(window, valueTimestampHeaders, record, closeTime);
@@ -432,8 +432,8 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
 
         // checks if the previous record's right window does not already exist and the current record falls within previous record's right window
         private boolean previousRecordRightWindowDoesNotExistAndIsNotEmpty(final Set<Long> windowStartTimes,
-                                                                           final long previousRightWindowStart,
-                                                                           final long inputRecordTimestamp) {
+            final long previousRightWindowStart,
+            final long inputRecordTimestamp) {
             return !windowStartTimes.contains(previousRightWindowStart) && previousRightWindowStart + windows.timeDifferenceMs() >= inputRecordTimestamp;
         }
 
@@ -461,9 +461,9 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
         }
 
         private void updateWindowAndForward(final Window window,
-                                            final ValueTimestampHeaders<VAgg> valueTimestampHeaders,
-                                            final Record<KIn, VIn> record,
-                                            final long windowCloseTime) {
+            final ValueTimestampHeaders<VAgg> valueTimestampHeaders,
+            final Record<KIn, VIn> record,
+            final long windowCloseTime) {
             final long windowStart = window.start();
             final long windowEnd = window.end();
 
@@ -495,7 +495,7 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
 
             @Override
             public String[] storeNames() {
-                return new String[] {storeName};
+                return new String[]{storeName};
             }
         };
     }

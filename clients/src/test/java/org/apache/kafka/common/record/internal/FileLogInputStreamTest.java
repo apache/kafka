@@ -72,7 +72,7 @@ public class FileLogInputStreamTest {
         public Stream<? extends Arguments> provideArguments(ExtensionContext context) {
             List<Arguments> arguments = new ArrayList<>();
             for (byte magic : asList(MAGIC_VALUE_V0, MAGIC_VALUE_V1, MAGIC_VALUE_V2))
-                for (CompressionType type: CompressionType.values())
+                for (CompressionType type : CompressionType.values())
                     arguments.add(Arguments.of(new Args(magic, Compression.of(type).build())));
             return arguments.stream();
         }
@@ -206,9 +206,9 @@ public class FileLogInputStreamTest {
             };
 
             fileRecords.append(MemoryRecords.withIdempotentRecords(magic, 15L, compression, producerId,
-                    producerEpoch, baseSequence, partitionLeaderEpoch, firstBatchRecords));
+                producerEpoch, baseSequence, partitionLeaderEpoch, firstBatchRecords));
             fileRecords.append(MemoryRecords.withTransactionalRecords(magic, 27L, compression, producerId,
-                    producerEpoch, baseSequence + firstBatchRecords.length, partitionLeaderEpoch, secondBatchRecords));
+                producerEpoch, baseSequence + firstBatchRecords.length, partitionLeaderEpoch, secondBatchRecords));
             fileRecords.flush();
 
             FileLogInputStream logInputStream = new FileLogInputStream(fileRecords, 0, fileRecords.sizeInBytes());
@@ -220,7 +220,7 @@ public class FileLogInputStreamTest {
 
             FileChannelRecordBatch secondBatch = logInputStream.nextBatch();
             assertProducerData(secondBatch, producerId, producerEpoch, baseSequence + firstBatchRecords.length,
-                    true, secondBatchRecords);
+                true, secondBatchRecords);
             assertGenericRecordBatchData(args, secondBatch, 27L, 238423489L, secondBatchRecords);
             assertEquals(partitionLeaderEpoch, secondBatch.partitionLeaderEpoch());
 
@@ -272,7 +272,7 @@ public class FileLogInputStreamTest {
     }
 
     private void assertProducerData(RecordBatch batch, long producerId, short producerEpoch, int baseSequence,
-                                    boolean isTransactional, SimpleRecord... records) {
+        boolean isTransactional, SimpleRecord... records) {
         assertEquals(producerId, batch.producerId());
         assertEquals(producerEpoch, batch.producerEpoch());
         assertEquals(baseSequence, batch.baseSequence());
@@ -289,7 +289,7 @@ public class FileLogInputStreamTest {
     }
 
     private void assertGenericRecordBatchData(Args args, RecordBatch batch, long baseOffset, long maxTimestamp,
-                                              SimpleRecord... records) {
+        SimpleRecord... records) {
         Compression compression = args.compression;
         byte magic = args.magic;
         assertEquals(magic, batch.magic());
@@ -310,7 +310,7 @@ public class FileLogInputStreamTest {
         assertTrue(batch.isValid());
 
         List<Record> batchRecords = TestUtils.toList(batch);
-        for (int i = 0; i < records.length; i++) {
+        for (int i = 0;i < records.length;i++) {
             assertEquals(baseOffset + i, batchRecords.get(i).offset());
             assertEquals(records[i].key(), batchRecords.get(i).key());
             assertEquals(records[i].value(), batchRecords.get(i).value());

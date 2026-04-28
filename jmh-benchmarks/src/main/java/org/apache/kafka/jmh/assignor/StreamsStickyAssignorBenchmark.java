@@ -107,8 +107,8 @@ public class StreamsStickyAssignorBenchmark {
 
         Map<String, StreamsGroupMember> members = createMembers();
         this.assignmentConfigs = Map.of(
-            "num.standby.replicas",
-            Integer.toString(standbyReplicas)
+                "num.standby.replicas",
+                Integer.toString(standbyReplicas)
         );
         this.groupSpec = StreamsAssignorBenchmarkUtils.createGroupSpec(members, assignmentConfigs);
 
@@ -123,8 +123,8 @@ public class StreamsStickyAssignorBenchmark {
         int numberOfMembers = assignmentType.equals(AssignmentType.INCREMENTAL) ? memberCount - 1 : memberCount;
 
         return StreamsAssignorBenchmarkUtils.createStreamsMembers(
-            numberOfMembers,
-            membersPerProcess
+                numberOfMembers,
+                membersPerProcess
         );
     }
 
@@ -136,38 +136,38 @@ public class StreamsStickyAssignorBenchmark {
 
         for (Map.Entry<String, AssignmentMemberSpec> member : groupSpec.members().entrySet()) {
             MemberAssignment memberAssignment = members.getOrDefault(
-                member.getKey(),
-                new MemberAssignment(Map.of(), Map.of(), Map.of())
+                    member.getKey(),
+                    new MemberAssignment(Map.of(), Map.of(), Map.of())
             );
 
             updatedMemberSpec.put(member.getKey(), new AssignmentMemberSpec(
-                Optional.empty(),
-                Optional.empty(),
-                memberAssignment.activeTasks(),
-                memberAssignment.standbyTasks(),
-                memberAssignment.warmupTasks(),
-                member.getValue().processId(),
-                Map.of(),
-                Map.of(),
-                Map.of()
+                    Optional.empty(),
+                    Optional.empty(),
+                    memberAssignment.activeTasks(),
+                    memberAssignment.standbyTasks(),
+                    memberAssignment.warmupTasks(),
+                    member.getValue().processId(),
+                    Map.of(),
+                    Map.of(),
+                    Map.of()
             ));
         }
 
         updatedMemberSpec.put("newMember", new AssignmentMemberSpec(
-            Optional.empty(),
-            Optional.empty(),
-            Map.of(),
-            Map.of(),
-            Map.of(),
-            "process-newMember",
-            Map.of(),
-            Map.of(),
-            Map.of()
+                Optional.empty(),
+                Optional.empty(),
+                Map.of(),
+                Map.of(),
+                Map.of(),
+                "process-newMember",
+                Map.of(),
+                Map.of(),
+                Map.of()
         ));
 
         groupSpec = new GroupSpecImpl(
-            updatedMemberSpec,
-            assignmentConfigs
+                updatedMemberSpec,
+                assignmentConfigs
         );
     }
 

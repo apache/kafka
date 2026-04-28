@@ -66,9 +66,9 @@ public class ZstdCompression implements Compression {
     public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
         try {
             return new ChunkedBytesStream(wrapForZstdInput(buffer, decompressionBufferSupplier),
-                    decompressionBufferSupplier,
-                    decompressionOutputSize(),
-                    false);
+                decompressionBufferSupplier,
+                decompressionOutputSize(),
+                false);
         } catch (Throwable e) {
             throw new KafkaException(e);
         }

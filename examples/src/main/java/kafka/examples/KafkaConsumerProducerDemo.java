@@ -39,8 +39,8 @@ public class KafkaConsumerProducerDemo {
         try {
             if (args.length == 0) {
                 Utils.printHelp("This example takes 2 parameters (i.e. 10000 sync):%n" +
-                    "- records: total number of records to send (required)%n" +
-                    "- mode: pass 'sync' to send records synchronously (optional)");
+                        "- records: total number of records to send (required)%n" +
+                        "- mode: pass 'sync' to send records synchronously (optional)");
                 return;
             }
 
@@ -53,12 +53,12 @@ public class KafkaConsumerProducerDemo {
 
             // stage 2: produce records to topic1
             Producer producerThread = new Producer(
-                "producer", KafkaProperties.BOOTSTRAP_SERVERS, TOPIC_NAME, isAsync, null, false, numRecords, -1, latch);
+                    "producer", KafkaProperties.BOOTSTRAP_SERVERS, TOPIC_NAME, isAsync, null, false, numRecords, -1, latch);
             producerThread.start();
 
             // stage 3: consume records from topic1
             Consumer consumerThread = new Consumer(
-                "consumer", KafkaProperties.BOOTSTRAP_SERVERS, TOPIC_NAME, GROUP_NAME, Optional.empty(), false, numRecords, latch);
+                    "consumer", KafkaProperties.BOOTSTRAP_SERVERS, TOPIC_NAME, GROUP_NAME, Optional.empty(), false, numRecords, latch);
             consumerThread.start();
 
             if (!latch.await(5, TimeUnit.MINUTES)) {

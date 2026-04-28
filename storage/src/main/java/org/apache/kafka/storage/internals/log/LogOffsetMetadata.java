@@ -39,8 +39,8 @@ public final class LogOffsetMetadata {
     }
 
     public LogOffsetMetadata(long messageOffset,
-                             long segmentBaseOffset,
-                             int relativePositionInSegment) {
+            long segmentBaseOffset,
+            int relativePositionInSegment) {
         this.messageOffset = messageOffset;
         this.segmentBaseOffset = segmentBaseOffset;
         this.relativePositionInSegment = relativePositionInSegment;

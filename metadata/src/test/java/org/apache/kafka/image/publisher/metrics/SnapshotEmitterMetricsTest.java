@@ -82,7 +82,7 @@ public class SnapshotEmitterMetricsTest {
                 ));
             ctx.metrics.close();
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(ctx.registry, "KafkaController",
-                    Set.of());
+                Set.of());
         }
     }
 

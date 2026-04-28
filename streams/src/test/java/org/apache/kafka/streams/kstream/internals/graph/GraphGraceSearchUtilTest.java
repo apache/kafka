@@ -54,7 +54,8 @@ public class GraphGraceSearchUtilTest {
             new ProcessorParameters<>(
                 () -> new Processor<String, Long, String, Long>() {
                     @Override
-                    public void process(final Record<String, Long> record) {}
+                    public void process(final Record<String, Long> record) {
+                    }
 
                 },
                 "graceless"
@@ -67,7 +68,8 @@ public class GraphGraceSearchUtilTest {
                 () -> new Processor<String, Long, String, Long>() {
 
                     @Override
-                    public void process(final Record<String, Long> record) {}
+                    public void process(final Record<String, Long> record) {
+                    }
 
                 },
                 "stateless"
@@ -147,7 +149,8 @@ public class GraphGraceSearchUtilTest {
                 () -> new Processor<String, Long, String, Long>() {
 
                     @Override
-                    public void process(final Record<String, Long> record) {}
+                    public void process(final Record<String, Long> record) {
+                    }
 
                 },
                 "dummy"
@@ -161,7 +164,8 @@ public class GraphGraceSearchUtilTest {
                 () -> new Processor<String, Long, String, Long>() {
 
                     @Override
-                    public void process(final Record<String, Long> record) {}
+                    public void process(final Record<String, Long> record) {
+                    }
 
                 },
                 "dummyChild-graceless"
@@ -198,7 +202,8 @@ public class GraphGraceSearchUtilTest {
                 () -> new Processor<String, Long, String, Long>() {
 
                     @Override
-                    public void process(final Record<String, Long> record) {}
+                    public void process(final Record<String, Long> record) {
+                    }
 
                 },
                 "statelessParent"
@@ -212,7 +217,8 @@ public class GraphGraceSearchUtilTest {
                 () -> new Processor<String, Long, String, Long>() {
 
                     @Override
-                    public void process(final Record<String, Long> record) {}
+                    public void process(final Record<String, Long> record) {
+                    }
 
                 },
                 "stateless"
@@ -265,7 +271,8 @@ public class GraphGraceSearchUtilTest {
                 () -> new Processor<String, Long, String, Long>() {
 
                     @Override
-                    public void process(final Record<String, Long> record) {}
+                    public void process(final Record<String, Long> record) {
+                    }
 
                 },
                 "stateless"

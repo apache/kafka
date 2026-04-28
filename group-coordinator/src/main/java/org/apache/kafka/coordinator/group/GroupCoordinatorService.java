@@ -518,8 +518,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private static void throwIfInvalidTopology(
         StreamsGroupHeartbeatRequestData.Topology topology
     ) throws StreamsInvalidTopologyException {
-        for (StreamsGroupHeartbeatRequestData.Subtopology subtopology: topology.subtopologies()) {
-            for (StreamsGroupHeartbeatRequestData.TopicInfo topicInfo: subtopology.stateChangelogTopics()) {
+        for (StreamsGroupHeartbeatRequestData.Subtopology subtopology : topology.subtopologies()) {
+            for (StreamsGroupHeartbeatRequestData.TopicInfo topicInfo : subtopology.stateChangelogTopics()) {
                 if (topicInfo.partitions() != 0) {
                     throw new StreamsInvalidTopologyException(String.format(
                         "Changelog topic %s must have an undefined partition count, but it is set to %d.",
@@ -747,7 +747,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
             });
     }
-    
+
     private AlterShareGroupOffsetsResponseData buildErrorResponse(AlterShareGroupOffsetsResponseData response, InitializeShareGroupStateResult result) {
         AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData();
         Map<Uuid, Map<Integer, PartitionErrorData>> topicPartitionErrorsMap = result.getErrors();
@@ -876,8 +876,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(groupId),
             coordinator -> coordinator.uninitializeShareGroupState(groupId, topicPartitionMap)
         ).thenApply(__ -> new ShareGroupHeartbeatResponseData()
-            .setErrorCode(error.code())
-            .setErrorMessage(error.message())
+                .setErrorCode(error.code())
+                .setErrorMessage(error.message())
         ).exceptionally(exception -> {
             log.error("Unable to cleanup topic partitions from share group state metadata", exception);
             Errors err = Errors.forException(new IllegalStateException("Unable to cleanup topic partitions from share group state metadata", exception));
@@ -1076,11 +1076,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 if (error == Errors.UNKNOWN_MEMBER_ID) {
                     // Group was not found.
                     List<LeaveGroupResponseData.MemberResponse> memberResponses = request.members().stream()
-                         .map(member -> new LeaveGroupResponseData.MemberResponse()
-                             .setMemberId(member.memberId())
-                             .setGroupInstanceId(member.groupInstanceId())
-                             .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()))
-                         .toList();
+                        .map(member -> new LeaveGroupResponseData.MemberResponse()
+                            .setMemberId(member.memberId())
+                            .setGroupInstanceId(member.groupInstanceId())
+                            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()))
+                        .toList();
                     return new LeaveGroupResponseData()
                         .setMembers(memberResponses);
                 } else {
@@ -1240,7 +1240,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         return FutureUtils.combineFutures(futures, ArrayList::new, List::addAll);
     }
-    
+
     /**
      * See {@link GroupCoordinator#shareGroupDescribe(AuthorizableRequestContext, List)}.
      */
@@ -1305,7 +1305,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         if (!isActive.get() || metadataImage == null) {
             return CompletableFuture.completedFuture(AlterShareGroupOffsetsRequest.getErrorResponseData(Errors.COORDINATOR_NOT_AVAILABLE));
         }
-        
+
         if (groupId == null || groupId.isEmpty()) {
             return CompletableFuture.completedFuture(AlterShareGroupOffsetsRequest.getErrorResponseData(Errors.INVALID_GROUP_ID));
         }
@@ -2405,30 +2405,30 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         return switch (apiError.error()) {
             case UNKNOWN_TOPIC_OR_PARTITION, NOT_ENOUGH_REPLICAS, REQUEST_TIMED_OUT ->
-                    // Remap REQUEST_TIMED_OUT to NOT_COORDINATOR, since consumers on versions prior
-                    // to 3.9 do not expect the error and won't retry the request. NOT_COORDINATOR
-                    // additionally triggers coordinator re-lookup, which is necessary if the client is
-                    // talking to a zombie coordinator.
-                    //
-                    // While handleOperationException does remap UNKNOWN_TOPIC_OR_PARTITION,
-                    // NOT_ENOUGH_REPLICAS and REQUEST_TIMED_OUT to COORDINATOR_NOT_AVAILABLE,
-                    // COORDINATOR_NOT_AVAILABLE is also not handled by consumers on versions prior to
-                    // 3.9.
+                // Remap REQUEST_TIMED_OUT to NOT_COORDINATOR, since consumers on versions prior
+                // to 3.9 do not expect the error and won't retry the request. NOT_COORDINATOR
+                // additionally triggers coordinator re-lookup, which is necessary if the client is
+                // talking to a zombie coordinator.
+                //
+                // While handleOperationException does remap UNKNOWN_TOPIC_OR_PARTITION,
+                // NOT_ENOUGH_REPLICAS and REQUEST_TIMED_OUT to COORDINATOR_NOT_AVAILABLE,
+                // COORDINATOR_NOT_AVAILABLE is also not handled by consumers on versions prior to
+                // 3.9.
                 OffsetFetchResponse.groupError(
-                            request,
-                            Errors.NOT_COORDINATOR,
-                            context.requestVersion()
+                    request,
+                    Errors.NOT_COORDINATOR,
+                    context.requestVersion()
                 );
             default -> handleOperationException(
-                    operationName,
+                operationName,
+                request,
+                exception,
+                (error, __) -> OffsetFetchResponse.groupError(
                     request,
-                    exception,
-                    (error, __) -> OffsetFetchResponse.groupError(
-                        request,
-                        error,
-                        context.requestVersion()
-                    ),
-                    log
+                    error,
+                    context.requestVersion()
+                ),
+                log
             );
         };
     }

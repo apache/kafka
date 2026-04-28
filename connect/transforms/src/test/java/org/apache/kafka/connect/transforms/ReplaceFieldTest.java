@@ -75,11 +75,11 @@ public class ReplaceFieldTest {
         xform.configure(props);
 
         final Schema schema = SchemaBuilder.struct()
-            .field("dont", Schema.STRING_SCHEMA)
-            .field("abc", Schema.INT32_SCHEMA)
-            .field("foo", Schema.BOOLEAN_SCHEMA)
-            .field("etc", Schema.STRING_SCHEMA)
-            .build();
+                .field("dont", Schema.STRING_SCHEMA)
+                .field("abc", Schema.INT32_SCHEMA)
+                .field("foo", Schema.BOOLEAN_SCHEMA)
+                .field("etc", Schema.STRING_SCHEMA)
+                .build();
 
         final SinkRecord record = new SinkRecord("test", 0, null, null, schema, null, 0);
         final SinkRecord transformedRecord = xform.apply(record);

@@ -40,20 +40,20 @@ public class AlterReplicaLogDirsRequestTest {
     @Test
     public void testErrorResponse() {
         AlterReplicaLogDirsRequestData data = new AlterReplicaLogDirsRequestData()
-                .setDirs(new AlterReplicaLogDirCollection(
-                        singletonList(new AlterReplicaLogDir()
-                                .setPath("/data0")
-                                .setTopics(new AlterReplicaLogDirTopicCollection(
-                                        singletonList(new AlterReplicaLogDirTopic()
-                                                .setName("topic")
-                                                .setPartitions(asList(0, 1, 2))))))));
+            .setDirs(new AlterReplicaLogDirCollection(
+                singletonList(new AlterReplicaLogDir()
+                    .setPath("/data0")
+                    .setTopics(new AlterReplicaLogDirTopicCollection(
+                        singletonList(new AlterReplicaLogDirTopic()
+                            .setName("topic")
+                            .setPartitions(asList(0, 1, 2))))))));
         AlterReplicaLogDirsResponse errorResponse = new AlterReplicaLogDirsRequest.Builder(data).build()
-                .getErrorResponse(123, new LogDirNotFoundException("/data0"));
+            .getErrorResponse(123, new LogDirNotFoundException("/data0"));
         assertEquals(1, errorResponse.data().results().size());
         AlterReplicaLogDirTopicResult topicResponse = errorResponse.data().results().get(0);
         assertEquals("topic", topicResponse.topicName());
         assertEquals(3, topicResponse.partitions().size());
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0;i < 3;i++) {
             assertEquals(i, topicResponse.partitions().get(i).partitionIndex());
             assertEquals(Errors.LOG_DIR_NOT_FOUND.code(), topicResponse.partitions().get(i).errorCode());
         }
@@ -62,22 +62,22 @@ public class AlterReplicaLogDirsRequestTest {
     @Test
     public void testPartitionDir() {
         AlterReplicaLogDirsRequestData data = new AlterReplicaLogDirsRequestData()
-                .setDirs(new AlterReplicaLogDirCollection(
-                        asList(new AlterReplicaLogDir()
-                                .setPath("/data0")
-                                .setTopics(new AlterReplicaLogDirTopicCollection(
-                                        asList(new AlterReplicaLogDirTopic()
-                                                .setName("topic")
-                                                .setPartitions(asList(0, 1)),
-                                               new AlterReplicaLogDirTopic()
-                                                .setName("topic2")
-                                                .setPartitions(singletonList(7))))),
-                                new AlterReplicaLogDir()
-                                        .setPath("/data1")
-                                        .setTopics(new AlterReplicaLogDirTopicCollection(
-                                                singletonList(new AlterReplicaLogDirTopic()
-                                                        .setName("topic3")
-                                                        .setPartitions(singletonList(12))))))));
+            .setDirs(new AlterReplicaLogDirCollection(
+                asList(new AlterReplicaLogDir()
+                        .setPath("/data0")
+                        .setTopics(new AlterReplicaLogDirTopicCollection(
+                            asList(new AlterReplicaLogDirTopic()
+                                    .setName("topic")
+                                    .setPartitions(asList(0, 1)),
+                                new AlterReplicaLogDirTopic()
+                                    .setName("topic2")
+                                    .setPartitions(singletonList(7))))),
+                    new AlterReplicaLogDir()
+                        .setPath("/data1")
+                        .setTopics(new AlterReplicaLogDirTopicCollection(
+                            singletonList(new AlterReplicaLogDirTopic()
+                                .setName("topic3")
+                                .setPartitions(singletonList(12))))))));
         AlterReplicaLogDirsRequest request = new AlterReplicaLogDirsRequest.Builder(data).build();
         Map<TopicPartition, String> expect = new HashMap<>();
         expect.put(new TopicPartition("topic", 0), "/data0");

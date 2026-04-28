@@ -64,7 +64,7 @@ public class CachingSessionStore
     private long maxObservedTimestamp; // Refers to the window end time (determines segmentId)
 
     CachingSessionStore(final SessionStore<Bytes, byte[]> bytesStore,
-                        final long segmentInterval) {
+        final long segmentInterval) {
         super(bytesStore);
         this.keySchema = new SessionKeySchema();
         this.cacheFunction = new SegmentedCacheFunction(keySchema, segmentInterval);
@@ -123,7 +123,7 @@ public class CachingSessionStore
 
     @Override
     public boolean setFlushListener(final CacheFlushListener<byte[], byte[]> flushListener,
-                                    final boolean sendOldValues) {
+        final boolean sendOldValues) {
         this.flushListener = flushListener;
         this.sendOldValues = sendOldValues;
 
@@ -159,25 +159,25 @@ public class CachingSessionStore
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes key,
-                                                                  final long earliestSessionEndTime,
-                                                                  final long latestSessionStartTime) {
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime) {
         validateStoreOpen();
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
             new CacheIteratorWrapper(key, earliestSessionEndTime, latestSessionStartTime, true) :
             internalContext.cache().range(cacheName,
-                        cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, earliestSessionEndTime)),
-                        cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, latestSessionStartTime))
+                cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, earliestSessionEndTime)),
+                cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, latestSessionStartTime))
             );
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrapped().findSessions(key,
-                                                                                               earliestSessionEndTime,
-                                                                                               latestSessionStartTime);
+            earliestSessionEndTime,
+            latestSessionStartTime);
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key,
-                                                                             key,
-                                                                             earliestSessionEndTime,
-                                                                             latestSessionStartTime,
-                                                                             true);
+            key,
+            earliestSessionEndTime,
+            latestSessionStartTime,
+            true);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
         return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, cacheFunction, true);
@@ -185,8 +185,8 @@ public class CachingSessionStore
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes key,
-                                                                          final long earliestSessionEndTime,
-                                                                          final long latestSessionStartTime) {
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime) {
         validateStoreOpen();
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
@@ -217,9 +217,9 @@ public class CachingSessionStore
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes keyFrom,
-                                                                  final Bytes keyTo,
-                                                                  final long earliestSessionEndTime,
-                                                                  final long latestSessionStartTime) {
+        final Bytes keyTo,
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime) {
         if (keyFrom != null && keyTo != null && keyFrom.compareTo(keyTo) > 0) {
             LOG.warn(INVALID_RANGE_WARN_MSG);
             return KeyValueIterators.emptyIterator();
@@ -235,10 +235,10 @@ public class CachingSessionStore
             keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime
         );
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyFrom,
-                                                                             keyTo,
-                                                                             earliestSessionEndTime,
-                                                                             latestSessionStartTime,
-                                                                     true);
+            keyTo,
+            earliestSessionEndTime,
+            latestSessionStartTime,
+            true);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
         return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, cacheFunction, true);
@@ -246,9 +246,9 @@ public class CachingSessionStore
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes keyFrom,
-                                                                          final Bytes keyTo,
-                                                                          final long earliestSessionEndTime,
-                                                                          final long latestSessionStartTime) {
+        final Bytes keyTo,
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime) {
         if (keyFrom != null && keyTo != null && keyFrom.compareTo(keyTo) > 0) {
             LOG.warn(INVALID_RANGE_WARN_MSG);
             return KeyValueIterators.emptyIterator();
@@ -307,13 +307,13 @@ public class CachingSessionStore
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
-                                                           final Bytes keyTo) {
+        final Bytes keyTo) {
         return findSessions(keyFrom, keyTo, 0, Long.MAX_VALUE);
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom,
-                                                                   final Bytes keyTo) {
+        final Bytes keyTo) {
         return backwardFindSessions(keyFrom, keyTo, 0, Long.MAX_VALUE);
     }
 
@@ -341,7 +341,7 @@ public class CachingSessionStore
         );
         if (!suppressed.isEmpty()) {
             throwSuppressed("Caught an exception while closing caching session store for store " + name(),
-                            suppressed);
+                suppressed);
         }
     }
 
@@ -363,17 +363,17 @@ public class CachingSessionStore
         private ThreadCache.MemoryLRUCacheBytesIterator current;
 
         private CacheIteratorWrapper(final Bytes key,
-                                     final long earliestSessionEndTime,
-                                     final long latestSessionStartTime,
-                                     final boolean forward) {
+            final long earliestSessionEndTime,
+            final long latestSessionStartTime,
+            final boolean forward) {
             this(key, key, earliestSessionEndTime, latestSessionStartTime, forward);
         }
 
         private CacheIteratorWrapper(final Bytes keyFrom,
-                                     final Bytes keyTo,
-                                     final long earliestSessionEndTime,
-                                     final long latestSessionStartTime,
-                                     final boolean forward) {
+            final Bytes keyTo,
+            final long earliestSessionEndTime,
+            final long latestSessionStartTime,
+            final boolean forward) {
             this.keyFrom = keyFrom;
             this.keyTo = keyTo;
             this.latestSessionStartTime = latestSessionStartTime;

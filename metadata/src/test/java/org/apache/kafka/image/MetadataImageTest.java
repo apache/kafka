@@ -55,8 +55,8 @@ public class MetadataImageTest {
             DelegationTokenImageTest.IMAGE1);
 
         DELTA1 = new MetadataDelta.Builder().
-                setImage(IMAGE1).
-                build();
+            setImage(IMAGE1).
+            build();
         RecordTestUtils.replayAll(DELTA1, FeaturesImageTest.DELTA1_RECORDS);
         RecordTestUtils.replayAll(DELTA1, ClusterImageTest.DELTA1_RECORDS);
         RecordTestUtils.replayAll(DELTA1, TopicsImageTest.DELTA1_RECORDS);

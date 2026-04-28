@@ -65,7 +65,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class WindowStoreFetchTest {
-    private enum StoreType { InMemory, RocksDB, Timed }
+    private enum StoreType {InMemory, RocksDB, Timed}
     private static final String STORE_NAME = "store";
     private static final int DATA_SIZE = 5;
     private static final long WINDOW_SIZE = 500L;
@@ -87,10 +87,10 @@ public class WindowStoreFetchTest {
     private String innerLowBetween;
     private String innerHighBetween;
 
-    public void setup(final StoreType storeType, 
-                      final boolean enableLogging, 
-                      final boolean enableCaching, 
-                      final boolean forward) {
+    public void setup(final StoreType storeType,
+        final boolean enableLogging,
+        final boolean enableCaching,
+        final boolean forward) {
         this.storeType = storeType;
         this.enableLogging = enableLogging;
         this.enableCaching = enableCaching;
@@ -146,7 +146,7 @@ public class WindowStoreFetchTest {
     @BeforeEach
     public void setup() {
         streamsConfig = mkProperties(mkMap(
-                mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
     }
 
@@ -171,7 +171,7 @@ public class WindowStoreFetchTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology)) {
             //get input topic and stateStore
             final TestInputTopic<String, String> input = driver
-                    .createInputTopic("input", new StringSerializer(), new StringSerializer());
+                .createInputTopic("input", new StringSerializer(), new StringSerializer());
             final WindowStore<String, Long> stateStore = driver.getWindowStore(STORE_NAME);
 
             //write some data
@@ -184,8 +184,8 @@ public class WindowStoreFetchTest {
 
             // query the state store
             try (final KeyValueIterator<Windowed<String>, Long> scanIterator = this.forward ?
-                stateStore.fetchAll(0, Long.MAX_VALUE) :
-                stateStore.backwardFetchAll(0, Long.MAX_VALUE)) {
+                     stateStore.fetchAll(0, Long.MAX_VALUE) :
+                     stateStore.backwardFetchAll(0, Long.MAX_VALUE)) {
 
                 final Iterator<KeyValue<Windowed<String>, Long>> dataIterator = this.forward ?
                     expectedRecords.iterator() :
@@ -195,8 +195,8 @@ public class WindowStoreFetchTest {
             }
 
             try (final KeyValueIterator<Windowed<String>, Long> scanIterator = this.forward ?
-                stateStore.fetch(null, null, 0, Long.MAX_VALUE) :
-                stateStore.backwardFetch(null, null, 0, Long.MAX_VALUE)) {
+                     stateStore.fetch(null, null, 0, Long.MAX_VALUE) :
+                     stateStore.backwardFetch(null, null, 0, Long.MAX_VALUE)) {
 
                 final Iterator<KeyValue<Windowed<String>, Long>> dataIterator = this.forward ?
                     expectedRecords.iterator() :
@@ -238,9 +238,9 @@ public class WindowStoreFetchTest {
     }
 
     private static Stream<Arguments> buildParameters(final List<StoreType> types,
-                                                     final List<Boolean> logging,
-                                                     final List<Boolean> caching,
-                                                     final List<Boolean> forward) {
+        final List<Boolean> logging,
+        final List<Boolean> caching,
+        final List<Boolean> forward) {
         final Stream.Builder<Arguments> builder = Stream.builder();
         for (final StoreType type : types) {
             for (final boolean log : logging) {
@@ -277,9 +277,9 @@ public class WindowStoreFetchTest {
 
         final WindowBytesStoreSupplier stateStoreSupplier = createStore.get();
         final Materialized<String, Long, WindowStore<Bytes, byte[]>> stateStoreConfig = Materialized
-                .<String, Long>as(stateStoreSupplier)
-                .withKeySerde(Serdes.String())
-                .withValueSerde(Serdes.Long());
+            .<String, Long>as(stateStoreSupplier)
+            .withKeySerde(Serdes.String())
+            .withValueSerde(Serdes.Long());
         if (cachingEnabled) {
             stateStoreConfig.withCachingEnabled();
         } else {

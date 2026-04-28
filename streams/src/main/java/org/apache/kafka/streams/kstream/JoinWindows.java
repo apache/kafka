@@ -87,9 +87,9 @@ public class JoinWindows extends Windows<Window> {
     }
 
     private JoinWindows(final long beforeMs,
-                        final long afterMs,
-                        final long graceMs,
-                        final boolean enableSpuriousResultFix) {
+        final long afterMs,
+        final long graceMs,
+        final boolean enableSpuriousResultFix) {
         if (beforeMs + afterMs < 0) {
             throw new IllegalArgumentException("Window interval (ie, beforeMs+afterMs) must not be negative.");
         }

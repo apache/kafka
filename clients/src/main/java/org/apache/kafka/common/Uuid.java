@@ -104,7 +104,7 @@ public class Uuid implements Comparable<Uuid> {
             return false;
         Uuid id = (Uuid) obj;
         return this.mostSignificantBits == id.mostSignificantBits &&
-                this.leastSignificantBits == id.leastSignificantBits;
+            this.leastSignificantBits == id.leastSignificantBits;
     }
 
     /**
@@ -175,7 +175,7 @@ public class Uuid implements Comparable<Uuid> {
     public static Uuid[] toArray(List<Uuid> list) {
         if (list == null) return null;
         Uuid[] array = new Uuid[list.size()];
-        for (int i = 0; i < list.size(); i++) {
+        for (int i = 0;i < list.size();i++) {
             array[i] = list.get(i);
         }
         return array;

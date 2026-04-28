@@ -38,13 +38,13 @@ public class ReadShareGroupStateSummaryParameters implements PersisterParameters
 
     public static ReadShareGroupStateSummaryParameters from(ReadShareGroupStateSummaryRequestData data) {
         return new Builder()
-                .setGroupTopicPartitionData(new GroupTopicPartitionData<>(data.groupId(), data.topics().stream()
-                        .map(topicData -> new TopicData<>(topicData.topicId(),
-                                topicData.partitions().stream()
-                                        .map(partitionData -> PartitionFactory.newPartitionIdLeaderEpochData(partitionData.partition(), partitionData.leaderEpoch()))
-                                        .collect(Collectors.toList())))
+            .setGroupTopicPartitionData(new GroupTopicPartitionData<>(data.groupId(), data.topics().stream()
+                .map(topicData -> new TopicData<>(topicData.topicId(),
+                    topicData.partitions().stream()
+                        .map(partitionData -> PartitionFactory.newPartitionIdLeaderEpochData(partitionData.partition(), partitionData.leaderEpoch()))
                         .collect(Collectors.toList())))
-                .build();
+                .collect(Collectors.toList())))
+            .build();
     }
 
     public static class Builder {

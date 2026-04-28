@@ -214,20 +214,21 @@ public class BrokerLifecycleManager {
     private volatile OptionalLong previousBrokerEpoch = OptionalLong.empty();
 
     public BrokerLifecycleManager(
-            AbstractKafkaConfig config,
-            Time time,
-            String threadNamePrefix,
-            Set<Uuid> logDirs) {
-        this(config, time, threadNamePrefix, logDirs, () -> { }, () -> false);
+        AbstractKafkaConfig config,
+        Time time,
+        String threadNamePrefix,
+        Set<Uuid> logDirs) {
+        this(config, time, threadNamePrefix, logDirs, () -> {
+        }, () -> false);
     }
 
     public BrokerLifecycleManager(
-            AbstractKafkaConfig config,
-            Time time,
-            String threadNamePrefix,
-            Set<Uuid> logDirs,
-            Runnable shutdownHook,
-            Supplier<Boolean> cordonedLogDirsSupported) {
+        AbstractKafkaConfig config,
+        Time time,
+        String threadNamePrefix,
+        Set<Uuid> logDirs,
+        Runnable shutdownHook,
+        Supplier<Boolean> cordonedLogDirsSupported) {
         this.config = config;
         this.time = time;
         this.logDirs = logDirs;
@@ -239,10 +240,10 @@ public class BrokerLifecycleManager {
         this.rack = config.rack();
         this.initialTimeoutNs = MILLISECONDS.toNanos(config.initialRegistrationTimeoutMs());
         this.eventQueue = new KafkaEventQueue(
-                time,
-                logContext,
-                threadNamePrefix + "lifecycle-manager-",
-                new ShutdownEvent());
+            time,
+            logContext,
+            threadNamePrefix + "lifecycle-manager-",
+            new ShutdownEvent());
     }
 
     /**
@@ -256,12 +257,12 @@ public class BrokerLifecycleManager {
      * @param previousBrokerEpoch           The broker epoch before the reboot.
      */
     public void start(Supplier<Long> highestMetadataOffsetProvider,
-               NodeToControllerChannelManager channelManager,
-               String clusterId,
-               ListenerCollection advertisedListeners,
-               Map<String, VersionRange> supportedFeatures,
-               OptionalLong previousBrokerEpoch,
-               Set<Uuid> cordonedLogDirs) {
+                      NodeToControllerChannelManager channelManager,
+                      String clusterId,
+                      ListenerCollection advertisedListeners,
+                      Map<String, VersionRange> supportedFeatures,
+                      OptionalLong previousBrokerEpoch,
+                      Set<Uuid> cordonedLogDirs) {
         this.previousBrokerEpoch = previousBrokerEpoch;
         if (!cordonedLogDirs.isEmpty()) {
             // At this point we don't have fresh metadata yet so we don't know if the cordoned log dirs feature is supported.
@@ -269,7 +270,7 @@ public class BrokerLifecycleManager {
             eventQueue.append(new CordonedDirEvent(cordonedLogDirs));
         }
         eventQueue.append(new StartupEvent(highestMetadataOffsetProvider,
-                channelManager, clusterId, advertisedListeners, supportedFeatures));
+            channelManager, clusterId, advertisedListeners, supportedFeatures));
     }
 
     public CompletableFuture<Void> setReadyToUnfence() {
@@ -286,8 +287,8 @@ public class BrokerLifecycleManager {
         eventQueue.append(new OfflineDirEvent(directory));
         // If we can't communicate the offline directory to the controller, we should shut down.
         eventQueue.scheduleDeferred("offlineDirFailure",
-                new EventQueue.DeadlineFunction(time.nanoseconds() + MILLISECONDS.toNanos(timeout)),
-                new OfflineDirBrokerFailureEvent(directory));
+            new EventQueue.DeadlineFunction(time.nanoseconds() + MILLISECONDS.toNanos(timeout)),
+            new OfflineDirBrokerFailureEvent(directory));
     }
 
     /**
@@ -500,8 +501,8 @@ public class BrokerLifecycleManager {
             BrokerLifecycleManager.this.advertisedListeners = advertisedListeners.duplicate();
             BrokerLifecycleManager.this.supportedFeatures = Map.copyOf(supportedFeatures);
             eventQueue.scheduleDeferred("initialRegistrationTimeout",
-                    new EventQueue.DeadlineFunction(time.nanoseconds() + initialTimeoutNs),
-                    new RegistrationTimeoutEvent());
+                new EventQueue.DeadlineFunction(time.nanoseconds() + initialTimeoutNs),
+                new RegistrationTimeoutEvent());
             sendBrokerRegistration();
             logger.info("Incarnation {} of broker {} in cluster {} is now STARTING.", incarnationId, nodeId, clusterId);
         }
@@ -510,10 +511,10 @@ public class BrokerLifecycleManager {
     private void sendBrokerRegistration() {
         BrokerRegistrationRequestData.FeatureCollection features = new BrokerRegistrationRequestData.FeatureCollection();
         supportedFeatures.forEach((name, range) ->
-                features.add(new BrokerRegistrationRequestData.Feature()
-                        .setName(name)
-                        .setMinSupportedVersion(range.min())
-                        .setMaxSupportedVersion(range.max()))
+            features.add(new BrokerRegistrationRequestData.Feature()
+                .setName(name)
+                .setMinSupportedVersion(range.min())
+                .setMaxSupportedVersion(range.max()))
         );
         List<Uuid> sortedLogDirs = new ArrayList<>(logDirs);
         sortedLogDirs.sort(Uuid::compareTo);
@@ -532,7 +533,7 @@ public class BrokerLifecycleManager {
             logger.debug("Sending broker registration {}", data);
         }
         channelManager.sendRequest(new BrokerRegistrationRequest.Builder(data),
-                new BrokerRegistrationResponseHandler());
+            new BrokerRegistrationResponseHandler());
         communicationInFlight = true;
     }
 
@@ -659,7 +660,7 @@ public class BrokerLifecycleManager {
             }
             if (response.authenticationException() != null) {
                 logger.error("Unable to send broker heartbeat for {} because of an authentication exception.",
-                        nodeId, response.authenticationException());
+                    nodeId, response.authenticationException());
                 scheduleNextCommunicationAfterFailure();
             } else if (response.versionMismatch() != null) {
                 logger.error("Unable to send broker heartbeat for {} because of an API version problem.", nodeId, response.versionMismatch());
@@ -705,7 +706,7 @@ public class BrokerLifecycleManager {
                         case PENDING_CONTROLLED_SHUTDOWN -> {
                             if (!responseData.shouldShutDown()) {
                                 logger.info("The broker is in PENDING_CONTROLLED_SHUTDOWN state, still waiting " +
-                                        "for the active controller.");
+                                    "for the active controller.");
                                 if (!gotControlledShutdownResponse) {
                                     // If this is the first pending controlled shutdown response we got,
                                     // schedule our next heartbeat a little bit sooner than we usually would.

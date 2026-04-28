@@ -86,7 +86,7 @@ public class GlobalKTableJoinsTest {
     }
 
     private void verifyJoin(final Map<String, ValueAndTimestamp<String>> expected,
-                            final MockApiProcessorSupplier<String, String, Void, Void> supplier) {
+        final MockApiProcessorSupplier<String, String, Void, Void> supplier) {
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {

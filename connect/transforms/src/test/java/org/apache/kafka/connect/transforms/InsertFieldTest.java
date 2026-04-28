@@ -60,7 +60,7 @@ public class InsertFieldTest {
     public void topLevelStructRequired() {
         xformValue.configure(Map.of("topic.field", "topic_field"));
         assertThrows(DataException.class,
-            () -> xformValue.apply(new SourceRecord(null, null, "", 0, Schema.INT32_SCHEMA, 42)));
+                () -> xformValue.apply(new SourceRecord(null, null, "", 0, Schema.INT32_SCHEMA, 42)));
     }
 
     @Test
@@ -182,7 +182,7 @@ public class InsertFieldTest {
         xformKey.configure(props);
 
         final SourceRecord record = new SourceRecord(null, null, "test", 0,
-            null, Map.of("magic", 42L), null, null);
+                null, Map.of("magic", 42L), null, null);
 
         final SourceRecord transformedRecord = xformKey.apply(record);
 
@@ -206,7 +206,7 @@ public class InsertFieldTest {
         xformKey.configure(props);
 
         final SourceRecord record = new SourceRecord(null, null, "test", 0,
-            null, null, null, Map.of("magic", 42L));
+                null, null, null, Map.of("magic", 42L));
 
         final SourceRecord transformedRecord = xformKey.apply(record);
 

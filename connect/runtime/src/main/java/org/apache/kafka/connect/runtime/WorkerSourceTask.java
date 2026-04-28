@@ -71,31 +71,31 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
     private final AtomicReference<Exception> producerSendException;
 
     public WorkerSourceTask(ConnectorTaskId id,
-                            SourceTask task,
-                            TaskStatus.Listener statusListener,
-                            TargetState initialState,
-                            Plugin<Converter> keyConverterPlugin,
-                            Plugin<Converter> valueConverterPlugin,
-                            ErrorHandlingMetrics errorMetrics,
-                            Plugin<HeaderConverter> headerConverterPlugin,
-                            TransformationChain<SourceRecord, SourceRecord> transformationChain,
-                            Producer<byte[], byte[]> producer,
-                            TopicAdmin admin,
-                            Map<String, TopicCreationGroup> topicGroups,
-                            CloseableOffsetStorageReader offsetReader,
-                            OffsetStorageWriter offsetWriter,
-                            ConnectorOffsetBackingStore offsetStore,
-                            WorkerConfig workerConfig,
-                            ClusterConfigState configState,
-                            ConnectMetrics connectMetrics,
-                            ClassLoader loader,
-                            Time time,
-                            RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
-                            StatusBackingStore statusBackingStore,
-                            Executor closeExecutor,
-                            Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier,
-                            TaskPluginsMetadata pluginsMetadata,
-                            Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
+            SourceTask task,
+            TaskStatus.Listener statusListener,
+            TargetState initialState,
+            Plugin<Converter> keyConverterPlugin,
+            Plugin<Converter> valueConverterPlugin,
+            ErrorHandlingMetrics errorMetrics,
+            Plugin<HeaderConverter> headerConverterPlugin,
+            TransformationChain<SourceRecord, SourceRecord> transformationChain,
+            Producer<byte[], byte[]> producer,
+            TopicAdmin admin,
+            Map<String, TopicCreationGroup> topicGroups,
+            CloseableOffsetStorageReader offsetReader,
+            OffsetStorageWriter offsetWriter,
+            ConnectorOffsetBackingStore offsetStore,
+            WorkerConfig workerConfig,
+            ClusterConfigState configState,
+            ConnectMetrics connectMetrics,
+            ClassLoader loader,
+            Time time,
+            RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
+            StatusBackingStore statusBackingStore,
+            Executor closeExecutor,
+            Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier,
+            TaskPluginsMetadata pluginsMetadata,
+            Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
 
         super(id, task, statusListener, initialState, configState, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, transformationChain,
                 null, producer,
@@ -230,8 +230,8 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
         }
 
         if (offsetsToCommit.isEmpty()) {
-            log.debug("{} Either no records were produced by the task since the last offset commit, " 
-                    + "or every record has been filtered out by a transformation " 
+            log.debug("{} Either no records were produced by the task since the last offset commit, "
+                    + "or every record has been filtered out by a transformation "
                     + "or dropped due to transformation or conversion errors.",
                     this
             );
@@ -241,7 +241,7 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
             log.info("{} Committing offsets for {} acknowledged messages", this, offsetsToCommit.numCommittableMessages());
             if (offsetsToCommit.hasPending()) {
                 log.debug("{} There are currently {} pending messages spread across {} source partitions whose offsets will not be committed. "
-                                + "The source partition with the most pending messages is {}, with {} pending messages",
+                        + "The source partition with the most pending messages is {}, with {} pending messages",
                         this,
                         offsetsToCommit.numUncommittableMessages(),
                         offsetsToCommit.numDeques(),
@@ -250,7 +250,7 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
                 );
             } else {
                 log.debug("{} There are currently no pending messages for this offset commit; "
-                                + "all messages dispatched to the task's producer since the last commit have been acknowledged",
+                        + "all messages dispatched to the task's producer since the last commit have been acknowledged",
                         this
                 );
             }

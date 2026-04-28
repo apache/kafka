@@ -51,9 +51,9 @@ public class TaskExecutor {
     private final TaskExecutionMetadata executionMetadata;
 
     public TaskExecutor(final TasksRegistry tasks,
-                        final TaskManager taskManager,
-                        final TaskExecutionMetadata executionMetadata,
-                        final LogContext logContext) {
+        final TaskManager taskManager,
+        final TaskExecutionMetadata executionMetadata,
+        final LogContext logContext) {
         this.tasks = tasks;
         this.taskManager = taskManager;
         this.executionMetadata = executionMetadata;
@@ -137,7 +137,7 @@ public class TaskExecutor {
      * @return number of committed offsets, or -1 if we are in the middle of a rebalance and cannot commit
      */
     int commitTasksAndMaybeUpdateCommittableOffsets(final Collection<? extends Task> tasksToCommit,
-                                                    final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadata) {
+        final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadata) {
         int committed = 0;
         for (final Task task : tasksToCommit) {
             // we need to call commitNeeded first since we need to update committable offsets
@@ -186,11 +186,11 @@ public class TaskExecutor {
                 } catch (final TimeoutException timeoutException) {
                     log.error(
                         String.format("Committing task(s) %s failed.",
-                                      offsetsPerTask
-                                          .keySet()
-                                          .stream()
-                                          .map(t -> t.id().toString())
-                                          .collect(Collectors.joining(", "))),
+                            offsetsPerTask
+                                .keySet()
+                                .stream()
+                                .map(t -> t.id().toString())
+                                .collect(Collectors.joining(", "))),
                         timeoutException
                     );
                     offsetsPerTask
@@ -209,15 +209,15 @@ public class TaskExecutor {
                     updateTaskCommitMetadata(allOffsets);
                 } catch (final CommitFailedException error) {
                     throw new TaskMigratedException("Consumer committing offsets failed, " +
-                                                        "indicating the corresponding thread is no longer part of the group", error);
+                        "indicating the corresponding thread is no longer part of the group", error);
                 } catch (final TimeoutException timeoutException) {
                     log.error(
                         String.format("Committing task(s) %s failed.",
-                                      offsetsPerTask
-                                          .keySet()
-                                          .stream()
-                                          .map(t -> t.id().toString())
-                                          .collect(Collectors.joining(", "))),
+                            offsetsPerTask
+                                .keySet()
+                                .stream()
+                                .map(t -> t.id().toString())
+                                .collect(Collectors.joining(", "))),
                         timeoutException
                     );
                     throw timeoutException;

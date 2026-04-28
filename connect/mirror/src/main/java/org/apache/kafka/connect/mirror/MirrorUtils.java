@@ -58,7 +58,8 @@ public final class MirrorUtils {
     private static final Logger log = LoggerFactory.getLogger(MirrorUtils.class);
 
     // utility class
-    private MirrorUtils() {}
+    private MirrorUtils() {
+    }
 
     static KafkaProducer<byte[], byte[]> newProducer(Map<String, Object> props) {
         return new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer());
@@ -287,19 +288,19 @@ public final class MirrorUtils {
             }
             if (cause instanceof UnsupportedVersionException) {
                 log.debug("Unable to create topic '{}' since the brokers do not support the CreateTopics API." +
-                                " Falling back to assume topic exists or will be auto-created by the broker.",
+                        " Falling back to assume topic exists or will be auto-created by the broker.",
                         topicName);
                 return;
             }
             if (cause instanceof TopicAuthorizationException) {
                 log.debug("Not authorized to create topic(s) '{}' upon the brokers." +
-                                " Falling back to assume topic(s) exist or will be auto-created by the broker.",
+                        " Falling back to assume topic(s) exist or will be auto-created by the broker.",
                         topicName);
                 return;
             }
             if (cause instanceof ClusterAuthorizationException) {
                 log.debug("Not authorized to create topic '{}'." +
-                                " Falling back to assume topic exists or will be auto-created by the broker.",
+                        " Falling back to assume topic exists or will be auto-created by the broker.",
                         topicName);
                 return;
             }

@@ -65,49 +65,49 @@ public class SessionToHeadersStoreAdapter implements SessionStore<Bytes, byte[]>
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes key,
-                                                                  final long earliestSessionEndTime,
-                                                                  final long latestSessionStartTime) {
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime) {
         return new SessionToHeadersIteratorAdapter(
             store.findSessions(key, earliestSessionEndTime, latestSessionStartTime));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final long earliestSessionEndTime,
-                                                                  final long latestSessionEndTime) {
+        final long latestSessionEndTime) {
         return new SessionToHeadersIteratorAdapter(
             store.findSessions(earliestSessionEndTime, latestSessionEndTime));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes key,
-                                                                          final long earliestSessionEndTime,
-                                                                          final long latestSessionStartTime) {
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime) {
         return new SessionToHeadersIteratorAdapter(
             store.backwardFindSessions(key, earliestSessionEndTime, latestSessionStartTime));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes keyFrom,
-                                                                  final Bytes keyTo,
-                                                                  final long earliestSessionEndTime,
-                                                                  final long latestSessionStartTime) {
+        final Bytes keyTo,
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime) {
         return new SessionToHeadersIteratorAdapter(
             store.findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes keyFrom,
-                                                                          final Bytes keyTo,
-                                                                          final long earliestSessionEndTime,
-                                                                          final long latestSessionStartTime) {
+        final Bytes keyTo,
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime) {
         return new SessionToHeadersIteratorAdapter(
             store.backwardFindSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime));
     }
 
     @Override
     public byte[] fetchSession(final Bytes key,
-                               final long sessionStartTime,
-                               final long sessionEndTime) {
+        final long sessionStartTime,
+        final long sessionEndTime) {
         return convertToHeaderFormat(store.fetchSession(key, sessionStartTime, sessionEndTime));
     }
 
@@ -184,8 +184,8 @@ public class SessionToHeadersStoreAdapter implements SessionStore<Bytes, byte[]>
 
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
+        final PositionBound positionBound,
+        final QueryConfig config) {
         final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
         final QueryResult<R> result;
         if (query instanceof WindowRangeQuery) {

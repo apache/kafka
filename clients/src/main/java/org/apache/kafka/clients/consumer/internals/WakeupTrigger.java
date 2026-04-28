@@ -167,10 +167,12 @@ public class WakeupTrigger {
         return pendingTask.get();
     }
 
-    interface Wakeupable { }
+    interface Wakeupable {
+    }
 
     // Set to block wakeups from happening and pending actions to be registered.
-    static class DisabledWakeups implements Wakeupable { }
+    static class DisabledWakeups implements Wakeupable {
+    }
 
     static class ActiveFuture implements Wakeupable {
         private final CompletableFuture<?> future;
@@ -184,7 +186,8 @@ public class WakeupTrigger {
         }
     }
 
-    static class WakeupFuture implements Wakeupable { }
+    static class WakeupFuture implements Wakeupable {
+    }
 
     static class FetchAction implements Wakeupable {
 

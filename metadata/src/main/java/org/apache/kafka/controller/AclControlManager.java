@@ -96,7 +96,7 @@ public class AclControlManager {
         Set<StandardAcl> aclsToCreate = new HashSet<>(acls.size());
         List<AclCreateResult> results = new ArrayList<>(acls.size());
         List<ApiMessageAndVersion> records =
-                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+            BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         for (AclBinding acl : acls) {
             try {
                 validateNewAcl(acl);
@@ -230,7 +230,7 @@ public class AclControlManager {
         idToAcl.put(aclWithId.id(), aclWithId.acl());
         existingAcls.add(aclWithId.acl());
         log.info("Replayed AccessControlEntryRecord for {}, setting {}", record.id(),
-                aclWithId.acl());
+            aclWithId.acl());
     }
 
     public void replay(RemoveAccessControlEntryRecord record) {

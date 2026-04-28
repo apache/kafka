@@ -41,8 +41,8 @@ public class JsonArray implements JsonValue {
 
     public Iterator<JsonValue> iterator() {
         Stream<JsonNode> nodeStream = StreamSupport.stream(
-                Spliterators.spliteratorUnknownSize(node.elements(), Spliterator.ORDERED),
-                false);
+            Spliterators.spliteratorUnknownSize(node.elements(), Spliterator.ORDERED),
+            false);
         Stream<JsonValue> results = nodeStream.map(JsonValue::apply);
         return results.collect(Collectors.toList()).iterator();
     }

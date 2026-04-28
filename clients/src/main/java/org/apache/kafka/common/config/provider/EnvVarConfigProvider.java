@@ -41,7 +41,7 @@ public class EnvVarConfigProvider implements ConfigProvider {
 
     public static final String ALLOWLIST_PATTERN_CONFIG = "allowlist.pattern";
     public static final String ALLOWLIST_PATTERN_CONFIG_DOC = "A pattern / regular expression that needs to match for environment variables" +
-            " to be used by this config provider.";
+        " to be used by this config provider.";
     private final Map<String, String> envVarMap;
     private Map<String, String> filteredEnvVarMap;
 
@@ -59,7 +59,7 @@ public class EnvVarConfigProvider implements ConfigProvider {
 
         if (configs.containsKey(ALLOWLIST_PATTERN_CONFIG)) {
             envVarPattern = Pattern.compile(
-                    String.valueOf(configs.get(ALLOWLIST_PATTERN_CONFIG))
+                String.valueOf(configs.get(ALLOWLIST_PATTERN_CONFIG))
             );
         } else {
             envVarPattern = Pattern.compile(".*");
@@ -67,9 +67,9 @@ public class EnvVarConfigProvider implements ConfigProvider {
         }
 
         filteredEnvVarMap = envVarMap.entrySet().stream()
-                .filter(envVar -> envVarPattern.matcher(envVar.getKey()).matches())
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)
-                );
+            .filter(envVar -> envVarPattern.matcher(envVar.getKey()).matches())
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)
+            );
     }
 
     @Override

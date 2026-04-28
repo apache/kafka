@@ -56,14 +56,14 @@ public class DescribeConfigsRequest extends AbstractRequest {
     public DescribeConfigsResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
         return new DescribeConfigsResponse(new DescribeConfigsResponseData()
-                .setThrottleTimeMs(throttleTimeMs)
-                .setResults(data.resources().stream().map(result ->
-                    new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(error.code())
-                            .setErrorMessage(error.message())
-                            .setResourceName(result.resourceName())
-                            .setResourceType(result.resourceType()))
+            .setThrottleTimeMs(throttleTimeMs)
+            .setResults(data.resources().stream().map(result ->
+                new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(error.code())
+                    .setErrorMessage(error.message())
+                    .setResourceName(result.resourceName())
+                    .setResourceType(result.resourceType()))
                 .collect(Collectors.toList())
-        ));
+            ));
     }
 
     public static DescribeConfigsRequest parse(Readable readable, short version) {

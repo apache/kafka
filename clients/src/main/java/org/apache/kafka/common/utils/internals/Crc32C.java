@@ -28,7 +28,8 @@ import java.util.zip.Checksum;
  */
 public final class Crc32C {
 
-    private Crc32C() {}
+    private Crc32C() {
+    }
 
     /**
      * Compute the CRC32C (Castagnoli) of the segment of the byte array given by the specified size and offset

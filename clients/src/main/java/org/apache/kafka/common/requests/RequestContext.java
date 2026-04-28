@@ -47,13 +47,13 @@ public class RequestContext implements AuthorizableRequestContext {
     public final Optional<KafkaPrincipalSerde> principalSerde;
 
     public RequestContext(RequestHeader header,
-                          String connectionId,
-                          InetAddress clientAddress,
-                          KafkaPrincipal principal,
-                          ListenerName listenerName,
-                          SecurityProtocol securityProtocol,
-                          ClientInformation clientInformation,
-                          boolean fromPrivilegedListener) {
+        String connectionId,
+        InetAddress clientAddress,
+        KafkaPrincipal principal,
+        ListenerName listenerName,
+        SecurityProtocol securityProtocol,
+        ClientInformation clientInformation,
+        boolean fromPrivilegedListener) {
         this(header,
             connectionId,
             clientAddress,
@@ -88,15 +88,15 @@ public class RequestContext implements AuthorizableRequestContext {
     }
 
     public RequestContext(RequestHeader header,
-                          String connectionId,
-                          InetAddress clientAddress,
-                          Optional<Integer> clientPort,
-                          KafkaPrincipal principal,
-                          ListenerName listenerName,
-                          SecurityProtocol securityProtocol,
-                          ClientInformation clientInformation,
-                          boolean fromPrivilegedListener,
-                          Optional<KafkaPrincipalSerde> principalSerde) {
+        String connectionId,
+        InetAddress clientAddress,
+        Optional<Integer> clientPort,
+        KafkaPrincipal principal,
+        ListenerName listenerName,
+        SecurityProtocol securityProtocol,
+        ClientInformation clientInformation,
+        boolean fromPrivilegedListener,
+        Optional<KafkaPrincipalSerde> principalSerde) {
         this.header = header;
         this.connectionId = connectionId;
         this.clientAddress = clientAddress;
@@ -121,10 +121,10 @@ public class RequestContext implements AuthorizableRequestContext {
                 return AbstractRequest.parseRequest(apiKey, apiVersion, new ByteBufferAccessor(buffer));
             } catch (Throwable ex) {
                 throw new InvalidRequestException("Error getting request for apiKey: " + apiKey +
-                        ", apiVersion: " + header.apiVersion() +
-                        ", connectionId: " + connectionId +
-                        ", listenerName: " + listenerName +
-                        ", principal: " + principal, ex);
+                    ", apiVersion: " + header.apiVersion() +
+                    ", connectionId: " + connectionId +
+                    ", listenerName: " + listenerName +
+                    ", principal: " + principal, ex);
             }
         }
     }

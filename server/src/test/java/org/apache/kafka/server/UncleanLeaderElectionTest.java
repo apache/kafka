@@ -76,12 +76,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(
-        brokers = 2,
-        serverProperties = {
-            // trim the retry count and backoff interval to reduce test execution time
-            @ClusterConfigProperty(key = ReplicationConfigs.UNCLEAN_LEADER_ELECTION_INTERVAL_MS_CONFIG, value = "10"),
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-        }
+    brokers = 2,
+    serverProperties = {
+        // trim the retry count and backoff interval to reduce test execution time
+        @ClusterConfigProperty(key = ReplicationConfigs.UNCLEAN_LEADER_ELECTION_INTERVAL_MS_CONFIG, value = "10"),
+        @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    }
 )
 public class UncleanLeaderElectionTest {
 
@@ -117,14 +117,14 @@ public class UncleanLeaderElectionTest {
 
     private void disableEligibleLeaderReplicas() throws Exception {
         admin.updateFeatures(
-                    Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, new FeatureUpdate((short) 0, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE))
+            Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, new FeatureUpdate((short) 0, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE))
         ).all().get();
     }
 
     @ClusterTest(
-         serverProperties = {
-             @ClusterConfigProperty(key = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, value = "true")
-         }
+        serverProperties = {
+            @ClusterConfigProperty(key = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, value = "true")
+        }
     )
     public void testUncleanLeaderElectionEnabledClassic() throws Exception {
         testUncleanLeaderElectionEnabled(GroupProtocol.CLASSIC);
@@ -185,7 +185,7 @@ public class UncleanLeaderElectionTest {
 
         // create topic with 1 partition, 2 replicas, one on each broker, and unclean leader election enabled
         NewTopic newTopic = new NewTopic(TOPIC, Map.of(PARTITION_ID, List.of(BROKER_ID_0, BROKER_ID_1)))
-                .configs(Map.of(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true"));
+            .configs(Map.of(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true"));
         admin.createTopics(List.of(newTopic)).all().get();
 
         verifyUncleanLeaderElectionEnabled(groupProtocol);
@@ -214,7 +214,7 @@ public class UncleanLeaderElectionTest {
 
         // create topic with 1 partition, 2 replicas, one on each broker, and unclean leader election disabled
         NewTopic newTopic = new NewTopic(TOPIC, Map.of(PARTITION_ID, List.of(BROKER_ID_0, BROKER_ID_1)))
-                .configs(Map.of(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "false"));
+            .configs(Map.of(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "false"));
         admin.createTopics(List.of(newTopic)).all().get();
 
         verifyUncleanLeaderElectionDisabled(groupProtocol);
@@ -226,7 +226,7 @@ public class UncleanLeaderElectionTest {
 
         // create topic with an invalid value for unclean leader election
         NewTopic newTopic = new NewTopic(TOPIC, Map.of(PARTITION_ID, List.of(BROKER_ID_0, BROKER_ID_1)))
-                .configs(Map.of(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "invalid"));
+            .configs(Map.of(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "invalid"));
         Throwable e = assertThrows(ExecutionException.class, () -> admin.createTopics(List.of(newTopic)).all().get());
         assertInstanceOf(InvalidConfigurationException.class, e.getCause());
     }
@@ -236,7 +236,7 @@ public class UncleanLeaderElectionTest {
         int leaderId = awaitLeaderChange(cluster, TOPIC_PARTITION, Optional.empty());
         LOG.debug("Leader for {} is elected to be: {}", TOPIC, leaderId);
         assertTrue(leaderId == BROKER_ID_0 || leaderId == BROKER_ID_1,
-                "Leader id is set to expected value for topic: " + TOPIC);
+            "Leader id is set to expected value for topic: " + TOPIC);
 
         // the non-leader broker is the follower
         int followerId = leaderId == BROKER_ID_0 ? BROKER_ID_1 : BROKER_ID_0;
@@ -278,7 +278,7 @@ public class UncleanLeaderElectionTest {
         int leaderId = awaitLeaderChange(cluster, TOPIC_PARTITION, Optional.empty());
         LOG.debug("Leader for {} is elected to be: {}", TOPIC, leaderId);
         assertTrue(leaderId == BROKER_ID_0 || leaderId == BROKER_ID_1,
-                "Leader id is set to expected value for topic: " + TOPIC);
+            "Leader id is set to expected value for topic: " + TOPIC);
 
         // the non-leader broker is the follower
         int followerId = leaderId == BROKER_ID_0 ? BROKER_ID_1 : BROKER_ID_0;
@@ -312,7 +312,7 @@ public class UncleanLeaderElectionTest {
 
         // message production and consumption should both fail while leader is down
         Throwable e = assertThrows(ExecutionException.class, () ->
-                produceMessage(cluster, TOPIC, "third", 1000, 1000));
+            produceMessage(cluster, TOPIC, "third", 1000, 1000));
         assertInstanceOf(TimeoutException.class, e.getCause());
 
         assertEquals(List.of(), consumeAllMessages(0, groupProtocol));
@@ -324,10 +324,10 @@ public class UncleanLeaderElectionTest {
         produceMessage(cluster, TOPIC, "third");
         //make sure follower server joins the ISR
         waitForCondition(
-                () -> {
-                    Optional<LeaderAndIsr> partitionInfoOpt = follower.metadataCache().getLeaderAndIsr(TOPIC, PARTITION_ID);
-                    return partitionInfoOpt.isPresent() && partitionInfoOpt.get().isr().contains(followerId);
-                }, DEFAULT_MAX_WAIT_MS, "Inconsistent metadata after first server startup");
+            () -> {
+                Optional<LeaderAndIsr> partitionInfoOpt = follower.metadataCache().getLeaderAndIsr(TOPIC, PARTITION_ID);
+                return partitionInfoOpt.isPresent() && partitionInfoOpt.get().isr().contains(followerId);
+            }, DEFAULT_MAX_WAIT_MS, "Inconsistent metadata after first server startup");
 
         leader.shutdown();
         leader.awaitShutdown();
@@ -340,20 +340,20 @@ public class UncleanLeaderElectionTest {
 
     private long getLeaderElectionCount() {
         Meter meter = (Meter) KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
-                .filter(entry -> entry.getKey().getName().endsWith("UncleanLeaderElectionsPerSec"))
-                .map(Map.Entry::getValue)
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("Unable to find metric UncleanLeaderElectionsPerSec"));
+            .filter(entry -> entry.getKey().getName().endsWith("UncleanLeaderElectionsPerSec"))
+            .map(Map.Entry::getValue)
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("Unable to find metric UncleanLeaderElectionsPerSec"));
         return meter.count();
     }
 
     private List<String> consumeAllMessages(int numMessages, GroupProtocol groupProtocol) throws Exception {
         Map<String, Object> consumerConfig = Map.of(
-                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
-                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
-                ConsumerConfig.GROUP_ID_CONFIG, "group" + RANDOM.nextLong(),
-                ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false,
-                ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name()
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            ConsumerConfig.GROUP_ID_CONFIG, "group" + RANDOM.nextLong(),
+            ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false,
+            ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name()
         );
 
         try (Consumer<String, String> consumer = cluster.consumer(consumerConfig)) {
@@ -426,7 +426,7 @@ public class UncleanLeaderElectionTest {
 
         // message production and consumption should both fail while leader is down
         Throwable e = assertThrows(ExecutionException.class, () ->
-                produceMessage(cluster, TOPIC, "third", 1000, 1000));
+            produceMessage(cluster, TOPIC, "third", 1000, 1000));
         assertEquals(TimeoutException.class, e.getCause().getClass());
 
         assertEquals(List.of(), consumeAllMessages(0, groupProtocol));
@@ -448,20 +448,20 @@ public class UncleanLeaderElectionTest {
     private AlterConfigsResult alterTopicConfigs(Map<String, String> configs) {
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, TOPIC);
         Collection<AlterConfigOp> configEntries = configs.entrySet().stream()
-                .map(e ->
-                        new AlterConfigOp(new ConfigEntry(e.getKey(), e.getValue()), AlterConfigOp.OpType.SET))
-                .toList();
+            .map(e ->
+                new AlterConfigOp(new ConfigEntry(e.getKey(), e.getValue()), AlterConfigOp.OpType.SET))
+            .toList();
         return admin.incrementalAlterConfigs(Map.of(configResource, configEntries));
     }
 
     private void waitForNoLeaderAndIsrHasOldLeaderId(MetadataCache metadataCache, int leaderId) throws InterruptedException {
         waitForCondition(
-                () -> metadataCache.getLeaderAndIsr(TOPIC, PARTITION_ID)
-                        .filter(leaderAndIsr -> leaderAndIsr.leader() == LeaderConstants.NO_LEADER)
-                        .filter(leaderAndIsr -> leaderAndIsr.isr().equals(Set.of(leaderId)))
-                        .isPresent(),
-                DEFAULT_MAX_WAIT_MS,
-                "Timed out waiting for broker metadata cache updates the info for topic partition:" + TOPIC_PARTITION);
+            () -> metadataCache.getLeaderAndIsr(TOPIC, PARTITION_ID)
+                .filter(leaderAndIsr -> leaderAndIsr.leader() == LeaderConstants.NO_LEADER)
+                .filter(leaderAndIsr -> leaderAndIsr.isr().equals(Set.of(leaderId)))
+                .isPresent(),
+            DEFAULT_MAX_WAIT_MS,
+            "Timed out waiting for broker metadata cache updates the info for topic partition:" + TOPIC_PARTITION);
     }
 
 }

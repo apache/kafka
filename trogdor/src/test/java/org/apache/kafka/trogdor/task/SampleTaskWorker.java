@@ -43,7 +43,7 @@ public class SampleTaskWorker implements TaskWorker {
 
     @Override
     public synchronized void start(Platform platform, WorkerStatusTracker status,
-                      final KafkaFutureImpl<String> haltFuture) {
+        final KafkaFutureImpl<String> haltFuture) {
         if (this.future != null)
             return;
         this.status = status;

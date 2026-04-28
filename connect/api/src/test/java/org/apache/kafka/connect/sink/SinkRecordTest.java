@@ -47,14 +47,14 @@ public class SinkRecordTest {
     @BeforeEach
     public void beforeEach() {
         record = new SinkRecord(TOPIC_NAME, PARTITION_NUMBER, Schema.STRING_SCHEMA, "key", Schema.BOOLEAN_SCHEMA, false, KAFKA_OFFSET,
-                                KAFKA_TIMESTAMP, TS_TYPE, null, TOPIC_NAME, PARTITION_NUMBER, KAFKA_OFFSET);
+                KAFKA_TIMESTAMP, TS_TYPE, null, TOPIC_NAME, PARTITION_NUMBER, KAFKA_OFFSET);
     }
 
     @Test
     public void shouldCreateSinkRecordWithHeaders() {
         Headers headers = new ConnectHeaders().addString("h1", "hv1").addBoolean("h2", true);
         record = new SinkRecord(TOPIC_NAME, PARTITION_NUMBER, Schema.STRING_SCHEMA, "key", Schema.BOOLEAN_SCHEMA, false, KAFKA_OFFSET,
-                                KAFKA_TIMESTAMP, TS_TYPE, headers);
+                KAFKA_TIMESTAMP, TS_TYPE, headers);
         assertNotNull(record.headers());
         assertSame(headers, record.headers());
         assertFalse(record.headers().isEmpty());
@@ -78,7 +78,7 @@ public class SinkRecordTest {
     @Test
     public void shouldDuplicateRecordAndCloneHeaders() {
         SinkRecord duplicate = record.newRecord(TOPIC_NAME, PARTITION_NUMBER, Schema.STRING_SCHEMA, "key", Schema.BOOLEAN_SCHEMA, false,
-                                                KAFKA_TIMESTAMP);
+                KAFKA_TIMESTAMP);
 
         assertEquals(TOPIC_NAME, duplicate.topic());
         assertEquals(PARTITION_NUMBER, duplicate.kafkaPartition());
@@ -100,7 +100,7 @@ public class SinkRecordTest {
     public void shouldDuplicateRecordUsingNewHeaders() {
         Headers newHeaders = new ConnectHeaders().addString("h3", "hv3");
         SinkRecord duplicate = record.newRecord(TOPIC_NAME, PARTITION_NUMBER, Schema.STRING_SCHEMA, "key", Schema.BOOLEAN_SCHEMA, false,
-                                                KAFKA_TIMESTAMP, newHeaders);
+                KAFKA_TIMESTAMP, newHeaders);
 
         assertEquals(TOPIC_NAME, duplicate.topic());
         assertEquals(PARTITION_NUMBER, duplicate.kafkaPartition());

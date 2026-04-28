@@ -101,7 +101,7 @@ public class HandlingSourceTopicDeletionIntegrationTest {
 
         try (final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, streamsConfiguration);
              final KafkaStreams kafkaStreams2 = new KafkaStreams(topology, streamsConfiguration)) {
-            
+
             kafkaStreams1.setUncaughtExceptionHandler(exception -> {
                 calledUncaughtExceptionHandler1.set(true);
                 return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;

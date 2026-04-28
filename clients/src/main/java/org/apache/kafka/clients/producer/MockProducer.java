@@ -111,10 +111,10 @@ public class MockProducer<K, V> implements Producer<K, V> {
      * @param valueSerializer The serializer for value that implements {@link Serializer}.
      */
     public MockProducer(final Cluster cluster,
-                        final boolean autoComplete,
-                        final Partitioner partitioner,
-                        final Serializer<K> keySerializer,
-                        final Serializer<V> valueSerializer) {
+        final boolean autoComplete,
+        final Partitioner partitioner,
+        final Serializer<K> keySerializer,
+        final Serializer<V> valueSerializer) {
         this.cluster = cluster;
         this.autoComplete = autoComplete;
         this.partitioner = partitioner;
@@ -135,9 +135,9 @@ public class MockProducer<K, V> implements Producer<K, V> {
      * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer) new MockProducer(Cluster.empty(), autoComplete, partitioner, keySerializer, valueSerializer)}
      */
     public MockProducer(final boolean autoComplete,
-                        final Partitioner partitioner,
-                        final Serializer<K> keySerializer,
-                        final Serializer<V> valueSerializer) {
+        final Partitioner partitioner,
+        final Serializer<K> keySerializer,
+        final Serializer<V> valueSerializer) {
         this(Cluster.empty(), autoComplete, partitioner, keySerializer, valueSerializer);
     }
 
@@ -189,7 +189,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
 
     @Override
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                         ConsumerGroupMetadata groupMetadata) throws ProducerFencedException {
+        ConsumerGroupMetadata groupMetadata) throws ProducerFencedException {
         Objects.requireNonNull(groupMetadata);
         verifyNotClosed();
         verifyNotFenced();
@@ -215,7 +215,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         verifyNotFenced();
         verifyTransactionsInitialized();
         verifyTransactionInFlight();
-        
+
         // Return a new PreparedTxnState with mock values for producerId and epoch
         // Using 1000L and (short)1 as arbitrary values for a valid PreparedTxnState
         return new PreparedTxnState(1000L, (short) 1);
@@ -271,7 +271,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         verifyNotClosed();
         verifyNotFenced();
         verifyTransactionsInitialized();
-        
+
         if (!this.transactionInFlight) {
             throw new IllegalStateException("There is no prepared transaction to complete.");
         }
@@ -279,7 +279,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         // For testing purposes, we'll consider a prepared state with producerId=1000L and epoch=1 as valid
         // This should match what's returned in prepareTransaction()
         PreparedTxnState currentState = new PreparedTxnState(1000L, (short) 1);
-        
+
         if (currentState.equals(preparedTxnState)) {
             commitTransaction();
         } else {
@@ -351,12 +351,12 @@ public class MockProducer<K, V> implements Producer<K, V> {
         TopicPartition topicPartition = new TopicPartition(record.topic(), partition);
         ProduceRequestResult result = new ProduceRequestResult(topicPartition);
         FutureRecordMetadata future = new FutureRecordMetadata(result, 0, RecordBatch.NO_TIMESTAMP,
-                0, 0, Time.SYSTEM);
+            0, 0, Time.SYSTEM);
         long offset = nextOffset(topicPartition);
         long baseOffset = Math.max(0, offset - Integer.MAX_VALUE);
         int batchIndex = (int) Math.min(Integer.MAX_VALUE, offset);
         Completion completion = new Completion(offset, new RecordMetadata(topicPartition, baseOffset, batchIndex,
-                RecordBatch.NO_TIMESTAMP, 0, 0), result, callback, topicPartition);
+            RecordBatch.NO_TIMESTAMP, 0, 0), result, callback, topicPartition);
 
         if (!this.transactionInFlight)
             this.sent.add(record);
@@ -637,9 +637,9 @@ public class MockProducer<K, V> implements Producer<K, V> {
             // they have given us a partition, use it
             if (partition < 0 || partition >= numPartitions)
                 throw new IllegalArgumentException("Invalid partition given with record: " + partition
-                                                   + " is not in the range [0..."
-                                                   + numPartitions
-                                                   + "].");
+                    + " is not in the range [0..."
+                    + numPartitions
+                    + "].");
             return partition;
         }
         byte[] keyBytes = keySerializer.serialize(topic, record.headers(), record.key());
@@ -658,10 +658,10 @@ public class MockProducer<K, V> implements Producer<K, V> {
         private final TopicPartition tp;
 
         public Completion(long offset,
-                          RecordMetadata metadata,
-                          ProduceRequestResult result,
-                          Callback callback,
-                          TopicPartition tp) {
+            RecordMetadata metadata,
+            ProduceRequestResult result,
+            Callback callback,
+            TopicPartition tp) {
             this.metadata = metadata;
             this.offset = offset;
             this.result = result;

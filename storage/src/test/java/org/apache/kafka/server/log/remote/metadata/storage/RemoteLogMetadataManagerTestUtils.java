@@ -75,7 +75,7 @@ public class RemoteLogMetadataManagerTestUtils {
             Objects.requireNonNull(bootstrapServers);
             String logDir = TestUtils.tempDirectory("rlmm_segs_").getAbsolutePath();
             TopicBasedRemoteLogMetadataManager topicBasedRemoteLogMetadataManager =
-                new TopicBasedRemoteLogMetadataManager(remoteLogMetadataTopicPartitioner, remotePartitionMetadataStore);
+                    new TopicBasedRemoteLogMetadataManager(remoteLogMetadataTopicPartitioner, remotePartitionMetadataStore);
 
             // Initialize TopicBasedRemoteLogMetadataManager.
             Map<String, Object> configs = new HashMap<>();

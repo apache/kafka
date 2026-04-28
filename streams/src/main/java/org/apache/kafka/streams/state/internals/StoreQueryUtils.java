@@ -109,7 +109,8 @@ public final class StoreQueryUtils {
         );
 
     // make this class uninstantiable
-    private StoreQueryUtils() { }
+    private StoreQueryUtils() {
+    }
 
     @SuppressWarnings("unchecked")
     public static <R> QueryResult<R> handleBasicQueries(
@@ -232,9 +233,9 @@ public final class StoreQueryUtils {
 
     @SuppressWarnings("unchecked")
     private static <R> QueryResult<R> runKeyQuery(final Query<R> query,
-                                                  final PositionBound positionBound,
-                                                  final QueryConfig config,
-                                                  final StateStore store) {
+        final PositionBound positionBound,
+        final QueryConfig config,
+        final StateStore store) {
 
         if (store instanceof KeyValueStore) {
             final KeyQuery<Bytes, byte[]> rawKeyQuery = (KeyQuery<Bytes, byte[]>) query;
@@ -257,9 +258,9 @@ public final class StoreQueryUtils {
 
     @SuppressWarnings("unchecked")
     private static <R> QueryResult<R> runWindowKeyQuery(final Query<R> query,
-                                                        final PositionBound positionBound,
-                                                        final QueryConfig config,
-                                                        final StateStore store) {
+        final PositionBound positionBound,
+        final QueryConfig config,
+        final StateStore store) {
         if (store instanceof WindowStore) {
             final WindowKeyQuery<Bytes, byte[]> windowKeyQuery =
                 (WindowKeyQuery<Bytes, byte[]>) query;
@@ -293,9 +294,9 @@ public final class StoreQueryUtils {
 
     @SuppressWarnings("unchecked")
     private static <R> QueryResult<R> runWindowRangeQuery(final Query<R> query,
-                                                          final PositionBound positionBound,
-                                                          final QueryConfig config,
-                                                          final StateStore store) {
+        final PositionBound positionBound,
+        final QueryConfig config,
+        final StateStore store) {
         if (store instanceof WindowStore) {
             final WindowRangeQuery<Bytes, byte[]> windowRangeQuery =
                 (WindowRangeQuery<Bytes, byte[]>) query;
@@ -402,12 +403,12 @@ public final class StoreQueryUtils {
             final MultiVersionedKeyQuery<Bytes, byte[]> rawKeyQuery = (MultiVersionedKeyQuery<Bytes, byte[]>) query;
             try {
                 final VersionedRecordIterator<byte[]> segmentIterator =
-                        rocksDBVersionedStore.get(
-                            rawKeyQuery.key(),
-                            rawKeyQuery.fromTime().get().toEpochMilli(),
-                            rawKeyQuery.toTime().get().toEpochMilli(),
-                            rawKeyQuery.resultOrder()
-                        );
+                    rocksDBVersionedStore.get(
+                        rawKeyQuery.key(),
+                        rawKeyQuery.fromTime().get().toEpochMilli(),
+                        rawKeyQuery.toTime().get().toEpochMilli(),
+                        rawKeyQuery.resultOrder()
+                    );
                 return (QueryResult<R>) QueryResult.forResult(segmentIterator);
             } catch (final Exception e) {
                 final String message = parseStoreException(e, store, query);
@@ -452,16 +453,16 @@ public final class StoreQueryUtils {
         return rawVersionedRecord ->
             rawVersionedRecord.validTo().isPresent()
                 ? new VersionedRecord<>(
-                      // deserializeValue s only used via IQ, so it's ok to not pass any headers
-                      deserializer.deserialize(serdes.topic(), new RecordHeaders(), rawVersionedRecord.value()),
-                      rawVersionedRecord.timestamp(),
-                      rawVersionedRecord.validTo().get()
-                  )
+                // deserializeValue s only used via IQ, so it's ok to not pass any headers
+                deserializer.deserialize(serdes.topic(), new RecordHeaders(), rawVersionedRecord.value()),
+                rawVersionedRecord.timestamp(),
+                rawVersionedRecord.validTo().get()
+            )
                 : new VersionedRecord<>(
-                      // deserializeValue s only used via IQ, so it's ok to not pass any headers
-                      deserializer.deserialize(serdes.topic(), new RecordHeaders(), rawVersionedRecord.value()),
-                      rawVersionedRecord.timestamp()
-                  );
+                // deserializeValue s only used via IQ, so it's ok to not pass any headers
+                deserializer.deserialize(serdes.topic(), new RecordHeaders(), rawVersionedRecord.value()),
+                rawVersionedRecord.timestamp()
+            );
     }
 
     @SuppressWarnings("resource")

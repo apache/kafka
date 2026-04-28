@@ -49,14 +49,14 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
 
     @Override
     public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
-                                     MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException {
+        MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException {
         PlaintextTransportLayer transportLayer = null;
         try {
             transportLayer = buildTransportLayer(key);
             final PlaintextTransportLayer finalTransportLayer = transportLayer;
             Supplier<Authenticator> authenticatorCreator = () -> new PlaintextAuthenticator(configs, finalTransportLayer, listenerName);
             return buildChannel(id, transportLayer, authenticatorCreator, maxReceiveSize,
-                    memoryPool != null ? memoryPool : MemoryPool.NONE, metadataRegistry);
+                memoryPool != null ? memoryPool : MemoryPool.NONE, metadataRegistry);
         } catch (Exception e) {
             // Ideally these resources are closed by the KafkaChannel but this builder should close the resources instead
             // if an error occurs due to which KafkaChannel is not created.
@@ -67,7 +67,7 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
 
     // visible for testing
     KafkaChannel buildChannel(String id, TransportLayer transportLayer, Supplier<Authenticator> authenticatorCreator,
-                              int maxReceiveSize, MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) {
+        int maxReceiveSize, MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) {
         return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize, memoryPool, metadataRegistry);
     }
 
@@ -76,7 +76,8 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
     }
 
     @Override
-    public void close() {}
+    public void close() {
+    }
 
     private static class PlaintextAuthenticator implements Authenticator {
         private final PlaintextTransportLayer transportLayer;
@@ -90,7 +91,8 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
         }
 
         @Override
-        public void authenticate() {}
+        public void authenticate() {
+        }
 
         @Override
         public KafkaPrincipal principal() {

@@ -34,7 +34,7 @@ public class MockProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, 
     private final MockApiProcessor<KIn, VIn, KOut, VOut> delegate;
 
     public MockProcessor(final PunctuationType punctuationType,
-                         final long scheduleInterval) {
+        final long scheduleInterval) {
         delegate = new MockApiProcessor<>(punctuationType, scheduleInterval);
     }
 

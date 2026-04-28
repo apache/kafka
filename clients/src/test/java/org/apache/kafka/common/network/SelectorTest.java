@@ -212,13 +212,13 @@ public class SelectorTest {
 
         // create connections
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
-        for (int i = 0; i < conns; i++)
+        for (int i = 0;i < conns;i++)
             connect(Integer.toString(i), addr);
         // send echo requests and receive responses
         Map<String, Integer> requests = new HashMap<>();
         Map<String, Integer> responses = new HashMap<>();
         int responseCount = 0;
-        for (int i = 0; i < conns; i++) {
+        for (int i = 0;i < conns;i++) {
             String node = Integer.toString(i);
             selector.send(createSend(node, node + "-0"));
         }
@@ -269,7 +269,7 @@ public class SelectorTest {
     static List<KafkaMetric> cipherMetrics(Metrics metrics) {
         return metrics.metrics().entrySet().stream().
             filter(e -> e.getKey().description().
-                contains("The number of connections with this SSL cipher and protocol.")).
+            contains("The number of connections with this SSL cipher and protocol.")).
             map(Map.Entry::getValue).
             collect(Collectors.toList());
     }
@@ -404,11 +404,13 @@ public class SelectorTest {
         AtomicInteger closedChannelsCount = new AtomicInteger(0);
         ChannelBuilder channelBuilder = new PlaintextChannelBuilder(null) {
             private int channelIndex = 0;
+
             @Override
             KafkaChannel buildChannel(String id, TransportLayer transportLayer, Supplier<Authenticator> authenticatorCreator,
-                                      int maxReceiveSize, MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) {
+                int maxReceiveSize, MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) {
                 return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize, memoryPool, metadataRegistry) {
                     private final int index = channelIndex++;
+
                     @Override
                     public void close() throws IOException {
                         closedChannelsCount.getAndIncrement();
@@ -433,10 +435,10 @@ public class SelectorTest {
         final ChannelBuilder channelBuilder = mock(ChannelBuilder.class);
 
         when(channelBuilder.buildChannel(eq(channelId), any(SelectionKey.class), anyInt(), any(MemoryPool.class),
-                any(ChannelMetadataRegistry.class))).thenThrow(new RuntimeException("Test exception"));
+            any(ChannelMetadataRegistry.class))).thenThrow(new RuntimeException("Test exception"));
 
         try (MockedConstruction<Selector.SelectorChannelMetadataRegistry> mockedMetadataRegistry =
-                     mockConstruction(Selector.SelectorChannelMetadataRegistry.class)) {
+                 mockConstruction(Selector.SelectorChannelMetadataRegistry.class)) {
             Selector selector = new Selector(CONNECTION_MAX_IDLE_MS, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
             final SocketChannel socketChannel = SocketChannel.open();
             socketChannel.configureBlocking(false);
@@ -491,11 +493,11 @@ public class SelectorTest {
 
     private static class ImmediatelyConnectingSelector extends Selector {
         public ImmediatelyConnectingSelector(long connectionMaxIdleMS,
-                                             Metrics metrics,
-                                             Time time,
-                                             String metricGrpPrefix,
-                                             ChannelBuilder channelBuilder,
-                                             LogContext logContext) {
+            Metrics metrics,
+            Time time,
+            String metricGrpPrefix,
+            ChannelBuilder channelBuilder,
+            LogContext logContext) {
             super(connectionMaxIdleMS, metrics, time, metricGrpPrefix, channelBuilder, logContext);
         }
 
@@ -631,7 +633,7 @@ public class SelectorTest {
     @Test
     public void testGracefulClose() throws Exception {
         int maxReceiveCountAfterClose = 0;
-        for (int i = 6; i <= 100 && maxReceiveCountAfterClose < 5; i++) {
+        for (int i = 6;i <= 100 && maxReceiveCountAfterClose < 5;i++) {
             int receiveCount = 0;
             KafkaChannel channel = createConnectionWithPendingReceives(i);
             // Poll until one or more receives complete and then close the server-side connection
@@ -801,12 +803,12 @@ public class SelectorTest {
         // create connections
         int expectedConnections = 5;
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
-        for (int i = 0; i < expectedConnections; i++)
+        for (int i = 0;i < expectedConnections;i++)
             connect(Integer.toString(i), addr);
 
         // Poll continuously, as we cannot guarantee that the first call will see all connections
         int seenConnections = 0;
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0;i < 10;i++) {
             selector.poll(100L);
             seenConnections += selector.connected().size();
             if (seenConnections == expectedConnections)
@@ -825,7 +827,7 @@ public class SelectorTest {
             ss.bind(new InetSocketAddress(0));
             InetSocketAddress serverAddress = (InetSocketAddress) ss.getLocalAddress();
 
-            for (int i = 0; i < conns; i++) {
+            for (int i = 0;i < conns;i++) {
                 Thread sender = createSender(serverAddress, randomPayload(1));
                 sender.start();
                 try (SocketChannel channel = ss.accept()) {
@@ -902,12 +904,12 @@ public class SelectorTest {
     public void testLowestPriorityChannel() throws Exception {
         int conns = 5;
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
-        for (int i = 0; i < conns; i++) {
+        for (int i = 0;i < conns;i++) {
             connect(String.valueOf(i), addr);
         }
         assertNotNull(selector.lowestPriorityChannel());
-        for (int i = conns - 1; i >= 0; i--) {
-            if (i != 2) 
+        for (int i = conns - 1;i >= 0;i--) {
+            if (i != 2)
                 assertEquals("", blockingRequest(String.valueOf(i), ""));
             time.sleep(10);
         }
@@ -920,7 +922,7 @@ public class SelectorTest {
         assertEquals("3", selector.lowestPriorityChannel().id());
         closingChannels.remove("3");
 
-        for (int i = 0; i < conns; i++) {
+        for (int i = 0;i < conns;i++) {
             selector.close(String.valueOf(i));
         }
         assertNull(selector.lowestPriorityChannel());
@@ -966,7 +968,7 @@ public class SelectorTest {
         int numChannels = 4;
         Map<String, KafkaChannel> channels = TestUtils.fieldValue(selector, Selector.class, "channels");
         Set<SelectionKey> selectionKeys = new HashSet<>();
-        for (int i = 0; i < numChannels; i++) {
+        for (int i = 0;i < numChannels;i++) {
             String id = String.valueOf(i);
             KafkaChannel channel = mock(KafkaChannel.class);
             channels.put(id, channel);
@@ -982,8 +984,8 @@ public class SelectorTest {
             when(selectionKey.isReadable()).thenReturn(true);
             when(selectionKey.readyOps()).thenReturn(SelectionKey.OP_READ);
             when(selectionKey.attachment())
-                    .thenReturn(channel)
-                    .thenReturn(null);
+                .thenReturn(channel)
+                .thenReturn(null);
             selectionKeys.add(selectionKey);
 
             NetworkReceive receive = mock(NetworkReceive.class);
@@ -1061,7 +1063,7 @@ public class SelectorTest {
                 responses++;
             }
 
-            for (int i = 0; i < selector.completedSends().size() && requests < endIndex; i++, requests++) {
+            for (int i = 0;i < selector.completedSends().size() && requests < endIndex;i++, requests++) {
                 selector.send(createSend(node, requestPrefix + "-" + requests));
             }
         }
@@ -1110,8 +1112,8 @@ public class SelectorTest {
 
     private KafkaMetric getMetric(String name) throws Exception {
         Optional<Map.Entry<MetricName, KafkaMetric>> metric = metrics.metrics().entrySet().stream()
-                .filter(entry -> entry.getKey().name().equals(name))
-                .findFirst();
+            .filter(entry -> entry.getKey().name().equals(name))
+            .findFirst();
         if (metric.isEmpty())
             throw new Exception(String.format("Could not find metric called %s", name));
 
@@ -1145,7 +1147,7 @@ public class SelectorTest {
      */
     private void sendNoReceive(KafkaChannel channel, int numRequests) throws Exception {
         selector.mute(channel.id());
-        for (int i = 0; i < numRequests; i++) {
+        for (int i = 0;i < numRequests;i++) {
             selector.send(createSend(channel.id(), String.valueOf(i)));
             do {
                 selector.poll(10);

@@ -51,8 +51,8 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
      * for server channel builder and will be null for client channel builder.
      */
     public SslChannelBuilder(ConnectionMode connectionMode,
-                             ListenerName listenerName,
-                             boolean isInterBrokerListener) {
+        ListenerName listenerName,
+        boolean isInterBrokerListener) {
         this.connectionMode = connectionMode;
         this.listenerName = listenerName;
         this.isInterBrokerListener = isInterBrokerListener;
@@ -95,7 +95,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
 
     @Override
     public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
-                                     MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException {
+        MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException {
         SslTransportLayer transportLayer = null;
         try {
             transportLayer = buildTransportLayer(sslFactory, id, key, metadataRegistry);
@@ -103,7 +103,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
             Supplier<Authenticator> authenticatorCreator = () ->
                 new SslAuthenticator(configs, finalTransportLayer, listenerName, sslPrincipalMapper);
             return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize,
-                    memoryPool != null ? memoryPool : MemoryPool.NONE, metadataRegistry);
+                memoryPool != null ? memoryPool : MemoryPool.NONE, metadataRegistry);
         } catch (Exception e) {
             // Ideally these resources are closed by the KafkaChannel but this builder should close the resources instead
             // if an error occurs due to which KafkaChannel is not created.
@@ -137,11 +137,13 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
             this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, null, sslPrincipalMapper);
             this.listenerName = listenerName;
         }
+
         /**
          * No-Op for plaintext authenticator
          */
         @Override
-        public void authenticate() {}
+        public void authenticate() {
+        }
 
         /**
          * Constructs Principal using configured principalBuilder.
@@ -154,9 +156,9 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
             if (listenerName == null)
                 throw new IllegalStateException("Unexpected call to principal() when listenerName is null");
             SslAuthenticationContext context = new SslAuthenticationContext(
-                    transportLayer.sslSession(),
-                    clientAddress,
-                    listenerName.value());
+                transportLayer.sslSession(),
+                clientAddress,
+                listenerName.value());
             return principalBuilder.build(context);
         }
 

@@ -99,7 +99,7 @@ public class NewTopicTest {
         Map<Integer, List<Integer>> returnedAssignments = newTopic.replicasAssignments();
 
         assertThrows(UnsupportedOperationException.class, () ->
-                returnedAssignments.put(1, Arrays.asList(3, 4))
+            returnedAssignments.put(1, Arrays.asList(3, 4))
         );
     }
 
@@ -151,15 +151,15 @@ public class NewTopicTest {
     public void testToString() {
         NewTopic topic1 = new NewTopic(TEST_TOPIC, NUM_PARTITIONS, REPLICATION_FACTOR);
         String expected1 = "(name=" + TEST_TOPIC + ", numPartitions=" + NUM_PARTITIONS
-                + ", replicationFactor=" + REPLICATION_FACTOR + ", replicasAssignments=null, configs=null)";
+            + ", replicationFactor=" + REPLICATION_FACTOR + ", replicasAssignments=null, configs=null)";
         assertEquals(expected1, topic1.toString());
 
         Map<String, String> configs = new HashMap<>();
         configs.put(CLEANUP_POLICY_CONFIG_KEY, CLEANUP_POLICY_CONFIG_VALUE);
         topic1.configs(configs);
         String expected2 = "(name=" + TEST_TOPIC + ", numPartitions=" + NUM_PARTITIONS
-                + ", replicationFactor=" + REPLICATION_FACTOR + ", replicasAssignments=null, configs="
-                + "{" + CLEANUP_POLICY_CONFIG_KEY + "=" + CLEANUP_POLICY_CONFIG_VALUE + "})";
+            + ", replicationFactor=" + REPLICATION_FACTOR + ", replicasAssignments=null, configs="
+            + "{" + CLEANUP_POLICY_CONFIG_KEY + "=" + CLEANUP_POLICY_CONFIG_VALUE + "})";
         assertEquals(expected2, topic1.toString());
 
         int partitionIndex = 0;
@@ -167,8 +167,8 @@ public class NewTopicTest {
         replicasAssignments.put(partitionIndex, BROKER_IDS);
         NewTopic topic2 = new NewTopic(TEST_TOPIC, replicasAssignments);
         String expected3 = "(name=" + TEST_TOPIC + ", numPartitions=default"
-                + ", replicationFactor=default, replicasAssignments="
-                + "{" + partitionIndex + "=" + BROKER_IDS + "}" + ", configs=null)";
+            + ", replicationFactor=default, replicasAssignments="
+            + "{" + partitionIndex + "=" + BROKER_IDS + "}" + ", configs=null)";
         assertEquals(expected3, topic2.toString());
     }
 

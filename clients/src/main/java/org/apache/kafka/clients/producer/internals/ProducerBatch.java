@@ -61,7 +61,7 @@ public final class ProducerBatch {
 
     private static final Logger log = LoggerFactory.getLogger(ProducerBatch.class);
 
-    private enum FinalState { ABORTED, FAILED, SUCCEEDED }
+    private enum FinalState {ABORTED, FAILED, SUCCEEDED}
 
     final long createdMs;
     final TopicPartition topicPartition;
@@ -103,7 +103,7 @@ public final class ProducerBatch {
         this.retry = false;
         this.isSplitBatch = isSplitBatch;
         float compressionRatioEstimation = CompressionRatioEstimator.estimation(topicPartition.topic(),
-                                                                                recordsBuilder.compression().type());
+            recordsBuilder.compression().type());
         this.currentLeaderEpoch = OptionalInt.empty();
         this.attemptsWhenLeaderLastChanged = 0;
         recordsBuilder.setEstimatedCompressionRatio(compressionRatioEstimation);
@@ -150,13 +150,13 @@ public final class ProducerBatch {
         } else {
             this.recordsBuilder.append(timestamp, key, value, headers);
             this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.estimateSizeInBytesUpperBound(magic(),
-                    recordsBuilder.compression().type(), key, value, headers));
+                recordsBuilder.compression().type(), key, value, headers));
             this.lastAppendTime = now;
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
-                                                                   timestamp,
-                                                                   key == null ? -1 : key.length,
-                                                                   value == null ? -1 : value.length,
-                                                                   Time.SYSTEM);
+                timestamp,
+                key == null ? -1 : key.length,
+                value == null ? -1 : value.length,
+                Time.SYSTEM);
             // we have to keep every future returned to the users in case the batch needs to be
             // split to several new batches and resent.
             thunks.add(new Thunk(callback, future));
@@ -176,12 +176,12 @@ public final class ProducerBatch {
             // No need to get the CRC.
             this.recordsBuilder.append(timestamp, key, value, headers);
             this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.estimateSizeInBytesUpperBound(magic(),
-                    recordsBuilder.compression().type(), key, value, headers));
+                recordsBuilder.compression().type(), key, value, headers));
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
-                                                                   timestamp,
-                                                                   key == null ? -1 : key.remaining(),
-                                                                   value == null ? -1 : value.remaining(),
-                                                                   Time.SYSTEM);
+                timestamp,
+                key == null ? -1 : key.remaining(),
+                value == null ? -1 : value.remaining(),
+                Time.SYSTEM);
             // Chain the future to the original thunk.
             thunk.future.chain(future);
             this.thunks.add(thunk);
@@ -303,7 +303,7 @@ public final class ProducerBatch {
         produceFuture.set(baseOffset, logAppendTime, recordExceptions);
 
         // execute callbacks
-        for (int i = 0; i < thunks.size(); i++) {
+        for (int i = 0;i < thunks.size();i++) {
             try {
                 Thunk thunk = thunks.get(i);
                 if (thunk.callback != null) {
@@ -340,7 +340,7 @@ public final class ProducerBatch {
         RecordBatch recordBatch = recordBatchIter.next();
         if (recordBatch.magic() < MAGIC_VALUE_V2 && !recordBatch.isCompressed())
             throw new IllegalArgumentException("Batch splitting cannot be used with non-compressed messages " +
-                    "with version v0 and v1");
+                "with version v0 and v1");
 
         if (recordBatchIter.hasNext())
             throw new IllegalArgumentException("A producer batch should only have one record batch.");
@@ -405,14 +405,14 @@ public final class ProducerBatch {
 
     private ProducerBatch createBatchOffAccumulatorForRecord(Record record, int batchSize) {
         int initialSize = Math.max(AbstractRecords.estimateSizeInBytesUpperBound(magic(),
-                recordsBuilder.compression().type(), record.key(), record.value(), record.headers()), batchSize);
+            recordsBuilder.compression().type(), record.key(), record.value(), record.headers()), batchSize);
         ByteBuffer buffer = ByteBuffer.allocate(initialSize);
 
         // Note that we intentionally do not set producer state (producerId, epoch, sequence, and isTransactional)
         // for the newly created batch. This will be set when the batch is dequeued for sending (which is consistent
         // with how normal batches are handled).
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic(), recordsBuilder.compression(),
-                TimestampType.CREATE_TIME, 0L);
+            TimestampType.CREATE_TIME, 0L);
         return new ProducerBatch(topicPartition, builder, this.createdMs, true);
     }
 
@@ -502,7 +502,7 @@ public final class ProducerBatch {
 
     public void resetProducerState(ProducerIdAndEpoch producerIdAndEpoch, int baseSequence) {
         log.info("Resetting sequence number of batch with current sequence {} for partition {} to {}",
-                this.baseSequence(), this.topicPartition, baseSequence);
+            this.baseSequence(), this.topicPartition, baseSequence);
         reopened = true;
         recordsBuilder.reopenAndRewriteProducerState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, baseSequence, isTransactional());
     }
@@ -519,8 +519,8 @@ public final class ProducerBatch {
         recordsBuilder.close();
         if (!recordsBuilder.isControlBatch()) {
             CompressionRatioEstimator.updateEstimation(topicPartition.topic(),
-                                                       recordsBuilder.compression().type(),
-                                                       (float) recordsBuilder.compressionRatio());
+                recordsBuilder.compression().type(),
+                (float) recordsBuilder.compressionRatio());
         }
         reopened = false;
     }

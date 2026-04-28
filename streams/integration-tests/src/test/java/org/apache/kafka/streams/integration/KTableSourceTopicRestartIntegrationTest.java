@@ -196,8 +196,8 @@ public class KTableSourceTopicRestartIntegrationTest {
     }
 
     private void assertNumberValuesRead(final Map<String, String> valueMap,
-                                        final Map<String, String> expectedMap,
-                                        final String errorMessage) throws InterruptedException {
+        final Map<String, String> expectedMap,
+        final String errorMessage) throws InterruptedException {
         TestUtils.waitForCondition(
             () -> valueMap.equals(expectedMap),
             30 * 1000L,
@@ -212,9 +212,9 @@ public class KTableSourceTopicRestartIntegrationTest {
         }
 
         IntegrationTestUtils.produceKeyValuesSynchronously(sourceTopic,
-                                                           keyValueList,
-                                                           PRODUCER_CONFIG,
-                                                           time);
+            keyValueList,
+            PRODUCER_CONFIG,
+            time);
     }
 
     private Map<String, String> createExpectedResultsMap(final String... keys) {
@@ -229,23 +229,23 @@ public class KTableSourceTopicRestartIntegrationTest {
 
         @Override
         public void onRestoreStart(final TopicPartition topicPartition,
-                                   final String storeName,
-                                   final long startingOffset,
-                                   final long endingOffset) {
+            final String storeName,
+            final long startingOffset,
+            final long endingOffset) {
             produceKeyValues("d");
         }
 
         @Override
         public void onBatchRestored(final TopicPartition topicPartition,
-                                    final String storeName,
-                                    final long batchEndOffset,
-                                    final long numRestored) {
+            final String storeName,
+            final long batchEndOffset,
+            final long numRestored) {
         }
 
         @Override
         public void onRestoreEnd(final TopicPartition topicPartition,
-                                 final String storeName,
-                                 final long totalRestored) {
+            final String storeName,
+            final long totalRestored) {
         }
     }
 

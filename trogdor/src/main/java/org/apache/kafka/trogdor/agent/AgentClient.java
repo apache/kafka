@@ -126,14 +126,16 @@ public class AgentClient {
     public AgentStatusResponse status() throws Exception {
         HttpResponse<AgentStatusResponse> resp =
             JsonRestServer.httpRequest(url("/agent/status"), "GET",
-                null, new TypeReference<AgentStatusResponse>() { }, maxTries);
+                null, new TypeReference<AgentStatusResponse>() {
+                }, maxTries);
         return resp.body();
     }
 
     public UptimeResponse uptime() throws Exception {
         HttpResponse<UptimeResponse> resp =
             JsonRestServer.httpRequest(url("/agent/uptime"), "GET",
-                null, new TypeReference<UptimeResponse>() { }, maxTries);
+                null, new TypeReference<UptimeResponse>() {
+                }, maxTries);
         return resp.body();
     }
 
@@ -141,7 +143,8 @@ public class AgentClient {
         HttpResponse<Empty> resp =
             JsonRestServer.httpRequest(
                 url("/agent/worker/create"), "POST",
-                request, new TypeReference<Empty>() { }, maxTries);
+                request, new TypeReference<Empty>() {
+                }, maxTries);
         resp.body();
     }
 
@@ -149,7 +152,8 @@ public class AgentClient {
         HttpResponse<Empty> resp =
             JsonRestServer.httpRequest(url(
                 "/agent/worker/stop"), "PUT",
-                request, new TypeReference<Empty>() { }, maxTries);
+                request, new TypeReference<Empty>() {
+                }, maxTries);
         resp.body();
     }
 
@@ -158,7 +162,8 @@ public class AgentClient {
         uriBuilder.queryParam("workerId", request.workerId());
         HttpResponse<Empty> resp =
             JsonRestServer.httpRequest(uriBuilder.build().toString(), "DELETE",
-                null, new TypeReference<Empty>() { }, maxTries);
+                null, new TypeReference<Empty>() {
+                }, maxTries);
         resp.body();
     }
 
@@ -166,7 +171,8 @@ public class AgentClient {
         HttpResponse<Empty> resp =
             JsonRestServer.httpRequest(url(
                 "/agent/shutdown"), "PUT",
-                null, new TypeReference<Empty>() { }, maxTries);
+                null, new TypeReference<Empty>() {
+                }, maxTries);
         resp.body();
     }
 

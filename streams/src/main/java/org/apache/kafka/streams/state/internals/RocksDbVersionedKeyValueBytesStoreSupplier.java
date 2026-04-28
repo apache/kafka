@@ -27,14 +27,14 @@ public class RocksDbVersionedKeyValueBytesStoreSupplier implements VersionedByte
     private final long segmentIntervalMs;
 
     public RocksDbVersionedKeyValueBytesStoreSupplier(final String name,
-                                                      final long historyRetentionMs
+        final long historyRetentionMs
     ) {
         this(name, historyRetentionMs, defaultSegmentInterval(historyRetentionMs));
     }
 
     public RocksDbVersionedKeyValueBytesStoreSupplier(final String name,
-                                                      final long historyRetentionMs,
-                                                      final long segmentIntervalMs
+        final long historyRetentionMs,
+        final long segmentIntervalMs
     ) {
         this.name = name;
         this.historyRetentionMs = historyRetentionMs;

@@ -144,7 +144,7 @@ public final class GlobVisitor implements Consumer<MetadataShellState> {
                 MetadataNode child = node.child(nodeName);
                 if (child == null) {
                     throw new RuntimeException("Expected " + nodeName + " to be a valid child of " +
-                            node.getClass() + ", but it was not.");
+                        node.getClass() + ", but it was not.");
                 }
                 if (accept(globComponents, componentIndex + 1, child, newPath)) {
                     matchedAny = true;

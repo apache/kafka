@@ -127,7 +127,7 @@ public class JmxReporterTest {
         Map<String, String> configs = new HashMap<>();
 
         configs.put(JmxReporter.EXCLUDE_CONFIG,
-                    JmxReporter.getMBeanName("", metrics.metricName("pack.bean2.total", "grp2")));
+            JmxReporter.getMBeanName("", metrics.metricName("pack.bean2.total", "grp2")));
 
         try {
             JmxReporter reporter = new JmxReporter();
@@ -146,7 +146,7 @@ public class JmxReporterTest {
             sensor.record();
 
             configs.put(JmxReporter.EXCLUDE_CONFIG,
-                        JmxReporter.getMBeanName("", metrics.metricName("pack.bean2.avg", "grp1")));
+                JmxReporter.getMBeanName("", metrics.metricName("pack.bean2.avg", "grp1")));
 
             reporter.reconfigure(configs);
 

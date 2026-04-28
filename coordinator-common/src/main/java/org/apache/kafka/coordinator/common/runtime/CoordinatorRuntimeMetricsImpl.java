@@ -184,35 +184,35 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
         this.metricsGroup = Objects.requireNonNull(metricsGroup);
 
         this.numPartitionsLoading = kafkaMetricName(
-            NUM_PARTITIONS_METRIC_NAME,
-            "The number of partitions in Loading state.",
-            "state", "loading"
+                NUM_PARTITIONS_METRIC_NAME,
+                "The number of partitions in Loading state.",
+                "state", "loading"
         );
 
         this.numPartitionsActive = kafkaMetricName(
-            NUM_PARTITIONS_METRIC_NAME,
-            "The number of partitions in Active state.",
-            "state", "active"
+                NUM_PARTITIONS_METRIC_NAME,
+                "The number of partitions in Active state.",
+                "state", "active"
         );
 
         this.numPartitionsFailed = kafkaMetricName(
-            NUM_PARTITIONS_METRIC_NAME,
-            "The number of partitions in Failed state.",
-            "state", "failed"
+                NUM_PARTITIONS_METRIC_NAME,
+                "The number of partitions in Failed state.",
+                "state", "failed"
         );
 
         this.eventQueueSize = kafkaMetricName("event-queue-size", "The event accumulator queue size.");
 
         this.bufferCacheSize = kafkaMetricName(
-            BATCH_BUFFER_CACHE_SIZE_METRIC_NAME,
-            "The current total size in bytes of the append buffers being held in the coordinator's cache."
+                BATCH_BUFFER_CACHE_SIZE_METRIC_NAME,
+                "The current total size in bytes of the append buffers being held in the coordinator's cache."
         );
 
         this.bufferCacheDiscardCount = kafkaMetricName(
-            BATCH_BUFFER_CACHE_DISCARD_COUNT_METRIC_NAME,
-            "The count of over-sized append buffers that were discarded instead of being cached upon release."
+                BATCH_BUFFER_CACHE_DISCARD_COUNT_METRIC_NAME,
+                "The count of over-sized append buffers that were discarded instead of being cached upon release."
         );
-        
+
         metrics.addMetric(numPartitionsLoading, (Gauge<Long>) (config, now) -> numPartitionsLoadingCounter.get());
         metrics.addMetric(numPartitionsActive, (Gauge<Long>) (config, now) -> numPartitionsActiveCounter.get());
         metrics.addMetric(numPartitionsFailed, (Gauge<Long>) (config, now) -> numPartitionsFailedCounter.get());
@@ -220,107 +220,107 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
 
         this.partitionLoadSensor = metrics.sensor(this.metricsGroup + "-PartitionLoadTime");
         this.partitionLoadSensor.add(
-            metrics.metricName(
-                "partition-load-time-max",
-                this.metricsGroup,
-                "The max time it took to load the partitions in the last 30 sec."
-            ), new Max());
+                metrics.metricName(
+                        "partition-load-time-max",
+                        this.metricsGroup,
+                        "The max time it took to load the partitions in the last 30 sec."
+                ), new Max());
         this.partitionLoadSensor.add(
-            metrics.metricName(
-                "partition-load-time-avg",
-                this.metricsGroup,
-                "The average time it took to load the partitions in the last 30 sec."
-            ), new Avg());
+                metrics.metricName(
+                        "partition-load-time-avg",
+                        this.metricsGroup,
+                        "The average time it took to load the partitions in the last 30 sec."
+                ), new Avg());
 
         this.threadIdleSensor = metrics.sensor(this.metricsGroup + "-ThreadIdleRatio");
         this.threadIdleSensor.add(
-            metrics.metricName(
-                "thread-idle-ratio-avg",
-                this.metricsGroup,
-                "The fraction of time the threads spent waiting for an event. This is an average across " +
-                    "all coordinator event processor threads."),
-            new Rate(TimeUnit.MILLISECONDS));
+                metrics.metricName(
+                        "thread-idle-ratio-avg",
+                        this.metricsGroup,
+                        "The fraction of time the threads spent waiting for an event. This is an average across " +
+                                "all coordinator event processor threads."),
+                new Rate(TimeUnit.MILLISECONDS));
 
         KafkaMetricHistogram eventQueueTimeHistogram = KafkaMetricHistogram.newLatencyHistogram(
-            suffix -> kafkaMetricName(
-                EVENT_QUEUE_TIME_METRIC_NAME + "-" + suffix,
-                "The " + suffix + " event queue time in milliseconds"
-            )
+                suffix -> kafkaMetricName(
+                        EVENT_QUEUE_TIME_METRIC_NAME + "-" + suffix,
+                        "The " + suffix + " event queue time in milliseconds"
+                )
         );
         this.eventQueueTimeSensor = metrics.sensor(this.metricsGroup + "-EventQueueTime");
         this.eventQueueTimeSensor.add(eventQueueTimeHistogram);
 
         KafkaMetricHistogram eventProcessingTimeHistogram = KafkaMetricHistogram.newLatencyHistogram(
-            suffix -> kafkaMetricName(
-                EVENT_PROCESSING_TIME_METRIC_NAME + "-" + suffix,
-                "The " + suffix + " event processing time in milliseconds"
-            )
+                suffix -> kafkaMetricName(
+                        EVENT_PROCESSING_TIME_METRIC_NAME + "-" + suffix,
+                        "The " + suffix + " event processing time in milliseconds"
+                )
         );
         this.eventProcessingTimeSensor = metrics.sensor(this.metricsGroup + "-EventProcessingTime");
         this.eventProcessingTimeSensor.add(eventProcessingTimeHistogram);
 
         KafkaMetricHistogram eventPurgatoryTimeHistogram = KafkaMetricHistogram.newLatencyHistogram(
-            suffix -> kafkaMetricName(
-                EVENT_PURGATORY_TIME_METRIC_NAME + "-" + suffix,
-                "The " + suffix + " event purgatory time in milliseconds"
-            )
+                suffix -> kafkaMetricName(
+                        EVENT_PURGATORY_TIME_METRIC_NAME + "-" + suffix,
+                        "The " + suffix + " event purgatory time in milliseconds"
+                )
         );
         this.eventPurgatoryTimeSensor = metrics.sensor(this.metricsGroup + "-EventPurgatoryTime");
         this.eventPurgatoryTimeSensor.add(eventPurgatoryTimeHistogram);
 
         KafkaMetricHistogram lingerTimeHistogram = KafkaMetricHistogram.newLatencyHistogram(
-            suffix -> kafkaMetricName(
-                BATCH_LINGER_TIME_METRIC_NAME + "-" + suffix,
-                "The " + suffix + " effective linger time in milliseconds"
-            )
+                suffix -> kafkaMetricName(
+                        BATCH_LINGER_TIME_METRIC_NAME + "-" + suffix,
+                        "The " + suffix + " effective linger time in milliseconds"
+                )
         );
         this.lingerTimeSensor = metrics.sensor(this.metricsGroup + "-LingerTime");
         this.lingerTimeSensor.add(lingerTimeHistogram);
 
         KafkaMetricHistogram flushTimeHistogram = KafkaMetricHistogram.newLatencyHistogram(
-            suffix -> kafkaMetricName(
-                BATCH_FLUSH_TIME_METRIC_NAME + "-" + suffix,
-                "The " + suffix + " flush time in milliseconds"
-            )
+                suffix -> kafkaMetricName(
+                        BATCH_FLUSH_TIME_METRIC_NAME + "-" + suffix,
+                        "The " + suffix + " flush time in milliseconds"
+                )
         );
         this.flushSensor = metrics.sensor(this.metricsGroup + "-Flush");
         this.flushSensor.add(flushTimeHistogram);
         this.flushSensor.add(
-            metrics.metricName(
-                "batch-flush-rate",
-                this.metricsGroup,
-                "The flushes per second."),
-            new Rate(TimeUnit.SECONDS, new WindowedCount()));
+                metrics.metricName(
+                        "batch-flush-rate",
+                        this.metricsGroup,
+                        "The flushes per second."),
+                new Rate(TimeUnit.SECONDS, new WindowedCount()));
 
         if (enableBackgroundMetrics) {
             this.backgroundThreadBusySensor = metrics.sensor(this.metricsGroup + "-BackgroundThreadBusyRatio");
             this.backgroundThreadBusySensor.add(
-                metrics.metricName(
-                    "background-thread-idle-ratio-avg",
-                    this.metricsGroup,
-                    "The fraction of time the background threads are idle. This is an average across " +
-                        "all coordinator background threads."),
-                new Rate(TimeUnit.MILLISECONDS) {
-                    @Override
-                    public double measure(MetricConfig config, long now) {
-                        return 1.0 - super.measure(config, now);
-                    }
-                });
+                    metrics.metricName(
+                            "background-thread-idle-ratio-avg",
+                            this.metricsGroup,
+                            "The fraction of time the background threads are idle. This is an average across " +
+                                    "all coordinator background threads."),
+                    new Rate(TimeUnit.MILLISECONDS) {
+                        @Override
+                        public double measure(MetricConfig config, long now) {
+                            return 1.0 - super.measure(config, now);
+                        }
+                    });
 
             KafkaMetricHistogram backgroundQueueTimeHistogram = KafkaMetricHistogram.newLatencyHistogram(
-                suffix -> kafkaMetricName(
-                    BACKGROUND_QUEUE_TIME_METRIC_NAME + "-" + suffix,
-                    "The " + suffix + " background queue time in milliseconds"
-                )
+                    suffix -> kafkaMetricName(
+                            BACKGROUND_QUEUE_TIME_METRIC_NAME + "-" + suffix,
+                            "The " + suffix + " background queue time in milliseconds"
+                    )
             );
             this.backgroundQueueTimeSensor = metrics.sensor(this.metricsGroup + "-BackgroundQueueTime");
             this.backgroundQueueTimeSensor.add(backgroundQueueTimeHistogram);
 
             KafkaMetricHistogram backgroundProcessingTimeHistogram = KafkaMetricHistogram.newLatencyHistogram(
-                suffix -> kafkaMetricName(
-                    BACKGROUND_PROCESSING_TIME_METRIC_NAME + "-" + suffix,
-                    "The " + suffix + " background processing time in milliseconds"
-                )
+                    suffix -> kafkaMetricName(
+                            BACKGROUND_PROCESSING_TIME_METRIC_NAME + "-" + suffix,
+                            "The " + suffix + " background processing time in milliseconds"
+                    )
             );
             this.backgroundProcessingTimeSensor = metrics.sensor(this.metricsGroup + "-BackgroundProcessingTime");
             this.backgroundProcessingTimeSensor.add(backgroundProcessingTimeHistogram);
@@ -347,12 +347,12 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
     @Override
     public void close() {
         Arrays.asList(
-            numPartitionsLoading,
-            numPartitionsActive,
-            numPartitionsFailed,
-            eventQueueSize,
-            bufferCacheSize,
-            bufferCacheDiscardCount
+                numPartitionsLoading,
+                numPartitionsActive,
+                numPartitionsFailed,
+                eventQueueSize,
+                bufferCacheSize,
+                bufferCacheDiscardCount
         ).forEach(metrics::removeMetric);
 
         metrics.removeSensor(partitionLoadSensor.name());

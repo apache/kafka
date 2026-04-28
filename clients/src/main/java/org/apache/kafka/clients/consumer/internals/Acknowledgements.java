@@ -244,7 +244,7 @@ public class Acknowledgements {
         long currentOffset = currentAcknowledgeBatch.firstOffset();
         int currentStartIndex = 0;
         int recordsWithSameAcknowledgeType = 1;
-        for (int i = 1; i < currentAcknowledgeBatch.acknowledgeTypes().size(); i++) {
+        for (int i = 1;i < currentAcknowledgeBatch.acknowledgeTypes().size();i++) {
             byte acknowledgeType = currentAcknowledgeBatch.acknowledgeTypes().get(i);
             // If we have a continuous set of records with the same acknowledgement type exceeding the default count,
             // then we optimise the batches to include only start and end offset and have only 1 acknowledge type in the array.
@@ -266,7 +266,7 @@ public class Acknowledgements {
                 batch1.setLastOffset(currentOffset + i - recordsWithSameAcknowledgeType - currentStartIndex - 1);
                 if (batch1.lastOffset() >= batch1.firstOffset()) {
                     batch1.setAcknowledgeTypes(new ArrayList<>(currentAcknowledgeBatch.acknowledgeTypes().subList(currentStartIndex,
-                            i - recordsWithSameAcknowledgeType)));
+                        i - recordsWithSameAcknowledgeType)));
                     batches.add(batch1);
                 }
 
@@ -293,7 +293,7 @@ public class Acknowledgements {
             batch.setFirstOffset(currentOffset);
             batch.setLastOffset(currentOffset + currentAcknowledgeBatch.acknowledgeTypes().size() - currentStartIndex - 1);
             batch.setAcknowledgeTypes(new ArrayList<>(currentAcknowledgeBatch.acknowledgeTypes().subList(currentStartIndex,
-                    currentAcknowledgeBatch.acknowledgeTypes().size())));
+                currentAcknowledgeBatch.acknowledgeTypes().size())));
             batches.add(batch);
         }
         return batches;
@@ -307,7 +307,7 @@ public class Acknowledgements {
     private boolean canOptimiseForSingleAcknowledgeType(AcknowledgementBatch acknowledgementBatch) {
         if (acknowledgementBatch == null || acknowledgementBatch.acknowledgeTypes().size() == 1) return false;
         int firstAcknowledgeType = acknowledgementBatch.acknowledgeTypes().get(0);
-        for (int i = 1; i < acknowledgementBatch.acknowledgeTypes().size(); i++) {
+        for (int i = 1;i < acknowledgementBatch.acknowledgeTypes().size();i++) {
             if (acknowledgementBatch.acknowledgeTypes().get(i) != firstAcknowledgeType) return false;
         }
         return true;

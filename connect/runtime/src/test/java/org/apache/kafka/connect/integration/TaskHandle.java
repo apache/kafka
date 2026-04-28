@@ -236,7 +236,7 @@ public class TaskHandle {
             throw new DataException(msg);
         }
         log.debug("Task {} saw {} records, expected {} records",
-                  taskId, expectedRecords - recordsRemainingLatch.getCount(), expectedRecords);
+                taskId, expectedRecords - recordsRemainingLatch.getCount(), expectedRecords);
     }
 
     /**
@@ -272,7 +272,7 @@ public class TaskHandle {
             throw new DataException(msg);
         }
         log.debug("Task {} saw {} records, expected {} records",
-                  taskId, expectedCommits - recordsToCommitLatch.getCount(), expectedCommits);
+                taskId, expectedCommits - recordsToCommitLatch.getCount(), expectedCommits);
     }
 
     /**

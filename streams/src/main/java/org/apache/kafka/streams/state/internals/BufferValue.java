@@ -34,9 +34,9 @@ public final class BufferValue {
     private final ProcessorRecordContext recordContext;
 
     BufferValue(final byte[] priorValue,
-                final byte[] oldValue,
-                final byte[] newValue,
-                final ProcessorRecordContext recordContext) {
+        final byte[] oldValue,
+        final byte[] newValue,
+        final ProcessorRecordContext recordContext) {
         this.oldValue = oldValue;
         this.newValue = newValue;
         this.recordContext = recordContext;

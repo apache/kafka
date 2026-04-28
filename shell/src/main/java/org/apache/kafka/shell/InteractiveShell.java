@@ -140,7 +140,7 @@ public final class InteractiveShell implements AutoCloseable {
         return new HistoryIterator(first, last);
     }
 
-    public class HistoryIterator implements  Iterator<Entry<Integer, String>> {
+    public class HistoryIterator implements Iterator<Entry<Integer, String>> {
         private final int last;
         private int index;
 

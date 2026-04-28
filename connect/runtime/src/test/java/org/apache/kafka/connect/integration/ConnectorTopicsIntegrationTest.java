@@ -249,7 +249,7 @@ public class ConnectorTopicsIntegrationTest {
     public void assertNoTopicStatusInStatusTopic() {
         String statusTopic = workerProps.get(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG);
         Consumer<byte[], byte[]> verifiableConsumer = connect.kafka().createConsumer(
-            Map.of("group.id", "verifiable-consumer-group-0"));
+                Map.of("group.id", "verifiable-consumer-group-0"));
 
         List<PartitionInfo> partitionInfos = verifiableConsumer.partitionsFor(statusTopic);
         if (partitionInfos.isEmpty()) {

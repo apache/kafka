@@ -176,15 +176,15 @@ public class ShareGroupMember extends ModernGroupMember {
     private final Map<Uuid, Set<Integer>> assignedPartitions;
 
     private ShareGroupMember(
-          String memberId,
-          int memberEpoch,
-          int previousMemberEpoch,
-          String rackId,
-          String clientId,
-          String clientHost,
-          Set<String> subscribedTopicNames,
-          MemberState state,
-          Map<Uuid, Set<Integer>> assignedPartitions
+        String memberId,
+        int memberEpoch,
+        int previousMemberEpoch,
+        String rackId,
+        String clientId,
+        String clientHost,
+        Set<String> subscribedTopicNames,
+        MemberState state,
+        Map<Uuid, Set<Integer>> assignedPartitions
     ) {
         super(
             memberId,

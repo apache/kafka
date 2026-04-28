@@ -98,6 +98,7 @@ public class SnapshottableHashTableTest {
             new SnapshottableHashTable<>(registry, 1);
         assertEquals(0, table.snapshottableSize(Long.MAX_VALUE));
     }
+
     @Test
     public void testDeleteOnEmptyDeltaTable() {
         // A simple test case to validate the behavior of the TimelineHashSet
@@ -278,7 +279,7 @@ public class SnapshottableHashTableTest {
     public void testIteratorAtOlderEpoch() {
         SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         SnapshottableHashTable<TestElement> table =
-                new SnapshottableHashTable<>(registry, 4);
+            new SnapshottableHashTable<>(registry, 4);
         assertNull(table.snapshottableAddOrReplace(E_3B));
         registry.getOrCreateSnapshot(0);
         assertNull(table.snapshottableAddOrReplace(E_1A));

@@ -42,7 +42,7 @@ public class PartitionsAssignedEvent extends CompletableBackgroundEvent<Void> {
      * @param addedPartitions The newly added partitions (passed to the callback)
      */
     public PartitionsAssignedEvent(final Set<TopicPartition> assignedPartitions,
-                                   final SortedSet<TopicPartition> addedPartitions) {
+        final SortedSet<TopicPartition> addedPartitions) {
         super(Type.PARTITIONS_ASSIGNED, Long.MAX_VALUE);
         this.assignedPartitions = Collections.unmodifiableSet(Objects.requireNonNull(assignedPartitions));
         this.addedPartitions = Collections.unmodifiableSortedSet(Objects.requireNonNull(addedPartitions));
@@ -65,7 +65,7 @@ public class PartitionsAssignedEvent extends CompletableBackgroundEvent<Void> {
     @Override
     protected String toStringBase() {
         return super.toStringBase() +
-                ", assignedPartitions=" + assignedPartitions +
-                ", addedPartitions=" + addedPartitions;
+            ", assignedPartitions=" + assignedPartitions +
+            ", addedPartitions=" + addedPartitions;
     }
 }

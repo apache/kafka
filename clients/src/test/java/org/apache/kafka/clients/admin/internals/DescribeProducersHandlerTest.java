@@ -62,7 +62,7 @@ public class DescribeProducersHandlerTest {
             new LogContext()
         );
     }
-    
+
 
     @Test
     public void testBrokerIdSetInOptions() {

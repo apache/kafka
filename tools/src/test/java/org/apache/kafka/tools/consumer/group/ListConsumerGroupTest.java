@@ -141,48 +141,48 @@ public class ListConsumerGroupTest {
                  ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"})
             ) {
                 Set<GroupListing> expectedListing = Set.of(
-                        new GroupListing(
-                                topicPartitionsGroup,
-                                Optional.of(GroupType.CLASSIC),
-                                "",
-                                Optional.of(GroupState.EMPTY)
-                        ),
-                        new GroupListing(
-                                protocolGroup,
-                                Optional.of(GroupType.parse(groupProtocol.name())),
-                                ConsumerProtocol.PROTOCOL_TYPE,
-                                Optional.of(GroupState.STABLE)
-                        )
+                    new GroupListing(
+                        topicPartitionsGroup,
+                        Optional.of(GroupType.CLASSIC),
+                        "",
+                        Optional.of(GroupState.EMPTY)
+                    ),
+                    new GroupListing(
+                        protocolGroup,
+                        Optional.of(GroupType.parse(groupProtocol.name())),
+                        ConsumerProtocol.PROTOCOL_TYPE,
+                        Optional.of(GroupState.STABLE)
+                    )
                 );
 
                 assertGroupListing(
-                        service,
-                        Set.of(),
-                        EnumSet.allOf(GroupState.class),
-                        expectedListing
+                    service,
+                    Set.of(),
+                    EnumSet.allOf(GroupState.class),
+                    expectedListing
                 );
 
                 expectedListing = Set.of(
-                        new GroupListing(
-                                protocolGroup,
-                                Optional.of(GroupType.parse(groupProtocol.name())),
-                                ConsumerProtocol.PROTOCOL_TYPE,
-                                Optional.of(GroupState.STABLE)
-                        )
+                    new GroupListing(
+                        protocolGroup,
+                        Optional.of(GroupType.parse(groupProtocol.name())),
+                        ConsumerProtocol.PROTOCOL_TYPE,
+                        Optional.of(GroupState.STABLE)
+                    )
                 );
 
                 assertGroupListing(
-                        service,
-                        Set.of(),
-                        Set.of(GroupState.STABLE),
-                        expectedListing
+                    service,
+                    Set.of(),
+                    Set.of(GroupState.STABLE),
+                    expectedListing
                 );
 
                 assertGroupListing(
-                        service,
-                        Set.of(),
-                        Set.of(GroupState.PREPARING_REBALANCE),
-                        Set.of()
+                    service,
+                    Set.of(),
+                    Set.of(GroupState.PREPARING_REBALANCE),
+                    Set.of()
                 );
             }
 
@@ -204,43 +204,43 @@ public class ListConsumerGroupTest {
              ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"})
         ) {
             Set<GroupListing> expectedListing = Set.of(
-                    new GroupListing(
-                            topicPartitionsGroup,
-                            Optional.of(GroupType.CLASSIC),
-                            "",
-                            Optional.of(GroupState.EMPTY)
-                    ),
-                    new GroupListing(
-                            protocolGroup,
-                            Optional.of(GroupType.CLASSIC),
-                            ConsumerProtocol.PROTOCOL_TYPE,
-                            Optional.of(GroupState.STABLE)
-                    )
+                new GroupListing(
+                    topicPartitionsGroup,
+                    Optional.of(GroupType.CLASSIC),
+                    "",
+                    Optional.of(GroupState.EMPTY)
+                ),
+                new GroupListing(
+                    protocolGroup,
+                    Optional.of(GroupType.CLASSIC),
+                    ConsumerProtocol.PROTOCOL_TYPE,
+                    Optional.of(GroupState.STABLE)
+                )
             );
 
             // No filters explicitly mentioned. Expectation is that all groups are returned.
             assertGroupListing(
-                    service,
-                    Set.of(),
-                    Set.of(),
-                    expectedListing
+                service,
+                Set.of(),
+                Set.of(),
+                expectedListing
             );
 
             // When group type is mentioned:
             // Old Group Coordinator returns empty listings if the type is not Classic.
             // New Group Coordinator returns groups according to the filter.
             assertGroupListing(
-                    service,
-                    Set.of(GroupType.CONSUMER),
-                    Set.of(),
-                    Set.of()
+                service,
+                Set.of(GroupType.CONSUMER),
+                Set.of(),
+                Set.of()
             );
 
             assertGroupListing(
-                    service,
-                    Set.of(GroupType.CLASSIC),
-                    Set.of(),
-                    expectedListing
+                service,
+                Set.of(GroupType.CLASSIC),
+                Set.of(),
+                expectedListing
             );
         }
     }
@@ -263,71 +263,71 @@ public class ListConsumerGroupTest {
 
             // No filters explicitly mentioned. Expectation is that all groups are returned.
             Set<GroupListing> expectedListing = Set.of(
-                    new GroupListing(
-                            topicPartitionsGroup,
-                            Optional.of(GroupType.CLASSIC),
-                            "",
-                            Optional.of(GroupState.EMPTY)
-                    ),
-                    new GroupListing(
-                            topicGroup,
-                            Optional.of(GroupType.CLASSIC),
-                            ConsumerProtocol.PROTOCOL_TYPE,
-                            Optional.of(GroupState.STABLE)
-                    ),
-                    new GroupListing(
-                            protocolGroup,
-                            Optional.of(GroupType.CONSUMER),
-                            ConsumerProtocol.PROTOCOL_TYPE,
-                            Optional.of(GroupState.STABLE)
-                    )
+                new GroupListing(
+                    topicPartitionsGroup,
+                    Optional.of(GroupType.CLASSIC),
+                    "",
+                    Optional.of(GroupState.EMPTY)
+                ),
+                new GroupListing(
+                    topicGroup,
+                    Optional.of(GroupType.CLASSIC),
+                    ConsumerProtocol.PROTOCOL_TYPE,
+                    Optional.of(GroupState.STABLE)
+                ),
+                new GroupListing(
+                    protocolGroup,
+                    Optional.of(GroupType.CONSUMER),
+                    ConsumerProtocol.PROTOCOL_TYPE,
+                    Optional.of(GroupState.STABLE)
+                )
             );
 
             assertGroupListing(
-                    service,
-                    Set.of(),
-                    Set.of(),
-                    expectedListing
+                service,
+                Set.of(),
+                Set.of(),
+                expectedListing
             );
 
             // When group type is mentioned:
             // New Group Coordinator returns groups according to the filter.
             expectedListing = Set.of(
-                    new GroupListing(
-                            protocolGroup,
-                            Optional.of(GroupType.CONSUMER),
-                            ConsumerProtocol.PROTOCOL_TYPE,
-                            Optional.of(GroupState.STABLE)
-                    )
+                new GroupListing(
+                    protocolGroup,
+                    Optional.of(GroupType.CONSUMER),
+                    ConsumerProtocol.PROTOCOL_TYPE,
+                    Optional.of(GroupState.STABLE)
+                )
             );
 
             assertGroupListing(
-                    service,
-                    Set.of(GroupType.CONSUMER),
-                    Set.of(),
-                    expectedListing
+                service,
+                Set.of(GroupType.CONSUMER),
+                Set.of(),
+                expectedListing
             );
 
             expectedListing = Set.of(
-                    new GroupListing(
-                            topicPartitionsGroup,
-                            Optional.of(GroupType.CLASSIC),
-                            "",
-                            Optional.of(GroupState.EMPTY)
-                    ),
-                    new GroupListing(
-                            topicGroup,
-                            Optional.of(GroupType.CLASSIC),
-                            ConsumerProtocol.PROTOCOL_TYPE,
-                            Optional.of(GroupState.STABLE)
-                    )
+                new GroupListing(
+                    topicPartitionsGroup,
+                    Optional.of(GroupType.CLASSIC),
+                    "",
+                    Optional.of(GroupState.EMPTY)
+                ),
+                new GroupListing(
+                    topicGroup,
+                    Optional.of(GroupType.CLASSIC),
+                    ConsumerProtocol.PROTOCOL_TYPE,
+                    Optional.of(GroupState.STABLE)
+                )
             );
 
             assertGroupListing(
-                    service,
-                    Set.of(GroupType.CLASSIC),
-                    Set.of(),
-                    expectedListing
+                service,
+                Set.of(GroupType.CLASSIC),
+                Set.of(),
+                expectedListing
             );
         }
     }
@@ -344,75 +344,75 @@ public class ListConsumerGroupTest {
              AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic)
         ) {
             validateListOutput(
-                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list"),
-                    List.of(),
-                    Set.of(
-                            List.of(protocolGroup),
-                            List.of(topicPartitionsGroup)
-                    )
+                List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list"),
+                List.of(),
+                Set.of(
+                    List.of(protocolGroup),
+                    List.of(topicPartitionsGroup)
+                )
             );
 
             validateListOutput(
-                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"),
-                    List.of("GROUP", "STATE"),
-                    Set.of(
-                            List.of(protocolGroup, "Stable"),
-                            List.of(topicPartitionsGroup, "Empty")
-                    )
+                List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"),
+                List.of("GROUP", "STATE"),
+                Set.of(
+                    List.of(protocolGroup, "Stable"),
+                    List.of(topicPartitionsGroup, "Empty")
+                )
             );
 
             validateListOutput(
-                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type"),
-                    List.of("GROUP", "TYPE"),
-                    Set.of(
-                            List.of(protocolGroup, "Classic"),
-                            List.of(topicPartitionsGroup, "Classic")
-                    )
+                List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type"),
+                List.of("GROUP", "TYPE"),
+                Set.of(
+                    List.of(protocolGroup, "Classic"),
+                    List.of(topicPartitionsGroup, "Classic")
+                )
             );
 
             validateListOutput(
-                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "--state"),
-                    List.of("GROUP", "TYPE", "STATE"),
-                    Set.of(
-                            List.of(protocolGroup, "Classic", "Stable"),
-                            List.of(topicPartitionsGroup, "Classic", "Empty")
-                    )
+                List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "--state"),
+                List.of("GROUP", "TYPE", "STATE"),
+                Set.of(
+                    List.of(protocolGroup, "Classic", "Stable"),
+                    List.of(topicPartitionsGroup, "Classic", "Empty")
+                )
             );
 
             validateListOutput(
-                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state", "Stable"),
-                    List.of("GROUP", "STATE"),
-                    Set.of(
-                            List.of(protocolGroup, "Stable")
-                    )
+                List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state", "Stable"),
+                List.of("GROUP", "STATE"),
+                Set.of(
+                    List.of(protocolGroup, "Stable")
+                )
             );
 
             // Check case-insensitivity in state filter.
             validateListOutput(
-                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state", "stable"),
-                    List.of("GROUP", "STATE"),
-                    Set.of(
-                            List.of(protocolGroup, "Stable")
-                    )
+                List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state", "stable"),
+                List.of("GROUP", "STATE"),
+                Set.of(
+                    List.of(protocolGroup, "Stable")
+                )
             );
 
             validateListOutput(
-                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "Classic"),
-                    List.of("GROUP", "TYPE"),
-                    Set.of(
-                            List.of(protocolGroup, "Classic"),
-                            List.of(topicPartitionsGroup, "Classic")
-                    )
+                List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "Classic"),
+                List.of("GROUP", "TYPE"),
+                Set.of(
+                    List.of(protocolGroup, "Classic"),
+                    List.of(topicPartitionsGroup, "Classic")
+                )
             );
 
             // Check case-insensitivity in type filter.
             validateListOutput(
-                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "classic"),
-                    List.of("GROUP", "TYPE"),
-                    Set.of(
-                            List.of(protocolGroup, "Classic"),
-                            List.of(topicPartitionsGroup, "Classic")
-                    )
+                List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "classic"),
+                List.of("GROUP", "TYPE"),
+                Set.of(
+                    List.of(protocolGroup, "Classic"),
+                    List.of(topicPartitionsGroup, "Classic")
+                )
             );
         }
     }
@@ -429,85 +429,85 @@ public class ListConsumerGroupTest {
              AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic)
         ) {
             validateListOutput(
-                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list"),
-                    List.of(),
-                    Set.of(
-                            List.of(protocolGroup),
-                            List.of(topicPartitionsGroup)
-                    )
+                List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list"),
+                List.of(),
+                Set.of(
+                    List.of(protocolGroup),
+                    List.of(topicPartitionsGroup)
+                )
             );
 
             validateListOutput(
-                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"),
-                    List.of("GROUP", "STATE"),
-                    Set.of(
-                            List.of(protocolGroup, "Stable"),
-                            List.of(topicPartitionsGroup, "Empty")
-                    )
+                List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"),
+                List.of("GROUP", "STATE"),
+                Set.of(
+                    List.of(protocolGroup, "Stable"),
+                    List.of(topicPartitionsGroup, "Empty")
+                )
             );
 
             validateListOutput(
-                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type"),
-                    List.of("GROUP", "TYPE"),
-                    Set.of(
-                            List.of(protocolGroup, "Consumer"),
-                            List.of(topicPartitionsGroup, "Classic")
-                    )
+                List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type"),
+                List.of("GROUP", "TYPE"),
+                Set.of(
+                    List.of(protocolGroup, "Consumer"),
+                    List.of(topicPartitionsGroup, "Classic")
+                )
             );
 
             validateListOutput(
-                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "--state"),
-                    List.of("GROUP", "TYPE", "STATE"),
-                    Set.of(
-                            List.of(protocolGroup, "Consumer", "Stable"),
-                            List.of(topicPartitionsGroup, "Classic", "Empty")
-                    )
+                List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "--state"),
+                List.of("GROUP", "TYPE", "STATE"),
+                Set.of(
+                    List.of(protocolGroup, "Consumer", "Stable"),
+                    List.of(topicPartitionsGroup, "Classic", "Empty")
+                )
             );
 
             validateListOutput(
-                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "consumer"),
-                    List.of("GROUP", "TYPE"),
-                    Set.of(
-                            List.of(protocolGroup, "Consumer")
-                    )
+                List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "consumer"),
+                List.of("GROUP", "TYPE"),
+                Set.of(
+                    List.of(protocolGroup, "Consumer")
+                )
             );
 
             validateListOutput(
-                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "consumer", "--state", "Stable"),
-                    List.of("GROUP", "TYPE", "STATE"),
-                    Set.of(
-                            List.of(protocolGroup, "Consumer", "Stable")
-                    )
+                List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "consumer", "--state", "Stable"),
+                List.of("GROUP", "TYPE", "STATE"),
+                Set.of(
+                    List.of(protocolGroup, "Consumer", "Stable")
+                )
             );
         }
     }
 
     private AutoCloseable consumerGroupClosable(GroupProtocol protocol, String groupId, String topicName) {
         Map<String, Object> configs = composeConfigs(
-                groupId,
-                protocol.name,
-                Map.of()
+            groupId,
+            protocol.name,
+            Map.of()
         );
 
         return ConsumerGroupCommandTestUtils.buildConsumers(
-                1,
-                false,
-                topicName,
-                () -> new KafkaConsumer<String, String>(configs)
+            1,
+            false,
+            topicName,
+            () -> new KafkaConsumer<String, String>(configs)
         );
     }
 
     private AutoCloseable consumerGroupClosable(String groupId, Set<TopicPartition> topicPartitions) {
         Map<String, Object> configs = composeConfigs(
-                groupId,
-                GroupProtocol.CLASSIC.name,
-                Map.of()
+            groupId,
+            GroupProtocol.CLASSIC.name,
+            Map.of()
         );
 
         return ConsumerGroupCommandTestUtils.buildConsumers(
-                1,
-                topicPartitions,
-                () -> new KafkaConsumer<String, String>(configs)
+            1,
+            topicPartitions,
+            () -> new KafkaConsumer<String, String>(configs)
         );
     }
 
@@ -529,8 +529,8 @@ public class ListConsumerGroupTest {
     private ConsumerGroupCommand.ConsumerGroupService getConsumerGroupService(String[] args) {
         ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(args);
         ConsumerGroupCommand.ConsumerGroupService service = new ConsumerGroupCommand.ConsumerGroupService(
-                opts,
-                Map.of(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
+            opts,
+            Map.of(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
         );
 
         return service;

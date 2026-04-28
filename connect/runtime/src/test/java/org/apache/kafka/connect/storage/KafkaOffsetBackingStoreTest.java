@@ -86,6 +86,7 @@ public class KafkaOffsetBackingStoreTest {
     private static final short TOPIC_PARTITIONS = 2;
     private static final short TOPIC_REPLICATION_FACTOR = 5;
     private static final Map<String, String> DEFAULT_PROPS = new HashMap<>();
+
     static {
         DEFAULT_PROPS.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "broker1:9092,broker2:9093");
         DEFAULT_PROPS.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, TOPIC);
@@ -98,7 +99,9 @@ public class KafkaOffsetBackingStoreTest {
         DEFAULT_PROPS.put(DistributedConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         DEFAULT_PROPS.put(DistributedConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
     }
+
     private static final Map<ByteBuffer, ByteBuffer> FIRST_SET = new HashMap<>();
+
     static {
         FIRST_SET.put(buffer("key"), buffer("value"));
         FIRST_SET.put(null, null);

@@ -168,7 +168,7 @@ public class AbstractConfigTest {
         // unset with default
         assertFalse(config.unused().contains("sasl.kerberos.min.time.before.relogin"));
         assertEquals(SaslConfigs.DEFAULT_KERBEROS_MIN_TIME_BEFORE_RELOGIN,
-                valuesWithPrefixOverride.get("sasl.kerberos.min.time.before.relogin"));
+            valuesWithPrefixOverride.get("sasl.kerberos.min.time.before.relogin"));
         assertFalse(config.unused().contains("sasl.kerberos.min.time.before.relogin"));
 
         // unset with no default
@@ -180,9 +180,9 @@ public class AbstractConfigTest {
     @Test
     public void testValuesWithSecondaryPrefix() {
         String prefix = "listener.name.listener1.";
-        Password saslJaasConfig1 =  new Password("test.myLoginModule1 required;");
-        Password saslJaasConfig2 =  new Password("test.myLoginModule2 required;");
-        Password saslJaasConfig3 =  new Password("test.myLoginModule3 required;");
+        Password saslJaasConfig1 = new Password("test.myLoginModule1 required;");
+        Password saslJaasConfig2 = new Password("test.myLoginModule2 required;");
+        Password saslJaasConfig3 = new Password("test.myLoginModule3 required;");
         Properties props = new Properties();
         props.put("listener.name.listener1.test-mechanism.sasl.jaas.config", saslJaasConfig1.value());
         props.put("test-mechanism.sasl.jaas.config", saslJaasConfig2.value());
@@ -262,7 +262,7 @@ public class AbstractConfigTest {
         TestConfig config = new TestConfig(props);
 
         assertTrue(config.unused().contains(ConfiguredFakeMetricsReporter.EXTRA_CONFIG),
-                ConfiguredFakeMetricsReporter.EXTRA_CONFIG + " should be marked unused before getConfiguredInstances is called");
+            ConfiguredFakeMetricsReporter.EXTRA_CONFIG + " should be marked unused before getConfiguredInstances is called");
 
         config.getConfiguredInstances(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
         assertFalse(config.unused().contains(ConfiguredFakeMetricsReporter.EXTRA_CONFIG),
@@ -293,16 +293,16 @@ public class AbstractConfigTest {
         try {
             Map<String, String> props = new HashMap<>();
             String threeConsumerInterceptors = MockConsumerInterceptor.class.getName() + ", "
-                    + MockConsumerInterceptor.class.getName() + ", "
-                    + MockConsumerInterceptor.class.getName();
+                + MockConsumerInterceptor.class.getName() + ", "
+                + MockConsumerInterceptor.class.getName();
             props.put(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, threeConsumerInterceptors);
             props.put("client.id", "test");
             TestConfig testConfig = new TestConfig(props);
 
             MockConsumerInterceptor.setThrowOnConfigExceptionThreshold(3);
             assertThrows(
-                    Exception.class,
-                    () -> testConfig.getConfiguredInstances(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, Object.class)
+                Exception.class,
+                () -> testConfig.getConfiguredInstances(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, Object.class)
             );
             assertEquals(3, MockConsumerInterceptor.CONFIG_COUNT.get());
             assertEquals(3, MockConsumerInterceptor.CLOSE_COUNT.get());
@@ -317,6 +317,7 @@ public class AbstractConfigTest {
             public RestrictedClassLoader() {
                 super(null);
             }
+
             @Override
             protected Class<?> findClass(String name) throws ClassNotFoundException {
                 if (name.equals(ClassTestConfig.DEFAULT_CLASS.getName()) || name.equals(ClassTestConfig.RESTRICTED_CLASS.getName()))
@@ -464,19 +465,19 @@ public class AbstractConfigTest {
         System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, "file");
         assertThrows(ConfigException.class, () -> new TestIndirectConfigResolution(Map.of("config.providers", "file",
                 "config.providers.file.class", MockFileConfigProvider.class.getName()),
-                Map.of()));
+            Map.of()));
 
         // case1: MockFileConfigProvider is allowed by org.apache.kafka.automatic.config.providers
         System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, MockFileConfigProvider.class.getName());
         Map<String, String> props = Map.of("config.providers", "file",
-                "config.providers.file.class", MockFileConfigProvider.class.getName(),
-                "config.providers.file.param.testId", UUID.randomUUID().toString(),
-                "test.key", "${file:/path:key}");
+            "config.providers.file.class", MockFileConfigProvider.class.getName(),
+            "config.providers.file.param.testId", UUID.randomUUID().toString(),
+            "test.key", "${file:/path:key}");
         assertEquals("testKey", new TestIndirectConfigResolution(props, Map.of()).originals().get("test.key"));
 
         // case2: MockFileConfigProvider and EnvVarConfigProvider are allowed by org.apache.kafka.automatic.config.providers
         System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY,
-                MockFileConfigProvider.class.getName() + "," + EnvVarConfigProvider.class.getName());
+            MockFileConfigProvider.class.getName() + "," + EnvVarConfigProvider.class.getName());
         assertEquals("testKey", new TestIndirectConfigResolution(props, Map.of()).originals().get("test.key"));
     }
 
@@ -619,8 +620,8 @@ public class AbstractConfigTest {
         TestIndirectConfigResolution config = new TestIndirectConfigResolution(props);
 
         assertEquals(
-                TestIndirectConfigResolution.INDIRECT_CONFIGS_DOC,
-                    config.documentationOf(TestIndirectConfigResolution.INDIRECT_CONFIGS)
+            TestIndirectConfigResolution.INDIRECT_CONFIGS_DOC,
+            config.documentationOf(TestIndirectConfigResolution.INDIRECT_CONFIGS)
         );
     }
 
@@ -641,10 +642,10 @@ public class AbstractConfigTest {
 
         static {
             CONFIG = new ConfigDef().define(INDIRECT_CONFIGS,
-                    Type.LIST,
-                    "",
-                    Importance.LOW,
-                    INDIRECT_CONFIGS_DOC);
+                Type.LIST,
+                "",
+                Importance.LOW,
+                INDIRECT_CONFIGS_DOC);
         }
 
         public TestIndirectConfigResolution(Map<?, ?> props) {
@@ -662,9 +663,10 @@ public class AbstractConfigTest {
         static final Class<?> RESTRICTED_CLASS = ConfiguredFakeMetricsReporter.class;
 
         private static final ConfigDef CONFIG;
+
         static {
             CONFIG = new ConfigDef().define("class.prop", Type.CLASS, DEFAULT_CLASS, Importance.HIGH, "docs")
-                                    .define("list.prop", Type.LIST, Collections.singletonList(DEFAULT_CLASS), Importance.HIGH, "docs");
+                .define("list.prop", Type.LIST, Collections.singletonList(DEFAULT_CLASS), Importance.HIGH, "docs");
         }
 
         public ClassTestConfig() {
@@ -678,7 +680,7 @@ public class AbstractConfigTest {
         void checkInstances(Class<?> expectedClassPropClass, Class<?>... expectedListPropClasses) {
             assertEquals(expectedClassPropClass, getConfiguredInstance("class.prop", MetricsReporter.class).getClass());
             List<?> list = getConfiguredInstances("list.prop", MetricsReporter.class);
-            for (int i = 0; i < list.size(); i++)
+            for (int i = 0;i < list.size();i++)
                 assertEquals(expectedListPropClasses[i], list.get(i).getClass());
         }
 
@@ -714,15 +716,15 @@ public class AbstractConfigTest {
 
         static {
             CONFIG = new ConfigDef().define(METRIC_REPORTER_CLASSES_CONFIG,
-                                            Type.LIST,
-                                            "",
-                                            Importance.LOW,
-                                            METRIC_REPORTER_CLASSES_DOC)
-                                    .define(PREPROCESSOR_CONFIG,
-                                            Type.STRING,
-                                            "",
-                                            Importance.LOW,
-                                            PREPROCESSOR_CONFIG_DOC);
+                Type.LIST,
+                "",
+                Importance.LOW,
+                METRIC_REPORTER_CLASSES_DOC)
+                .define(PREPROCESSOR_CONFIG,
+                    Type.STRING,
+                    "",
+                    Importance.LOW,
+                    PREPROCESSOR_CONFIG_DOC);
         }
 
         public TestConfig(Map<?, ?> props) {
@@ -739,6 +741,7 @@ public class AbstractConfigTest {
 
     public static class ConfiguredFakeMetricsReporter extends FakeMetricsReporter {
         public static final String EXTRA_CONFIG = "metric.extra_config";
+
         @Override
         public void configure(Map<String, ?> configs) {
             // Calling get() should have the side effect of marking that config as used.

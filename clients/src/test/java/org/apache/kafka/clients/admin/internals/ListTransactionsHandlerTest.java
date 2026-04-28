@@ -217,7 +217,7 @@ public class ListTransactionsHandlerTest {
                         .setTransactionalId("bar")
                         .setProducerId(98765L)
                         .setTransactionState("PrepareAbort")
-            ))
+                ))
         );
     }
 

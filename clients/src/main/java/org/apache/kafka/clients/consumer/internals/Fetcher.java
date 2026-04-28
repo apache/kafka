@@ -63,24 +63,24 @@ public class Fetcher<K, V> extends AbstractFetch {
     private final FetchCollector<K, V> fetchCollector;
 
     public Fetcher(LogContext logContext,
-                   ConsumerNetworkClient client,
-                   ConsumerMetadata metadata,
-                   SubscriptionState subscriptions,
-                   FetchConfig fetchConfig,
-                   Deserializers<K, V> deserializers,
-                   FetchMetricsManager metricsManager,
-                   Time time,
-                   ApiVersions apiVersions) {
+        ConsumerNetworkClient client,
+        ConsumerMetadata metadata,
+        SubscriptionState subscriptions,
+        FetchConfig fetchConfig,
+        Deserializers<K, V> deserializers,
+        FetchMetricsManager metricsManager,
+        Time time,
+        ApiVersions apiVersions) {
         super(logContext, metadata, subscriptions, fetchConfig, new FetchBuffer(logContext), metricsManager, time, apiVersions);
         this.log = logContext.logger(Fetcher.class);
         this.client = client;
         this.fetchCollector = new FetchCollector<>(logContext,
-                metadata,
-                subscriptions,
-                fetchConfig,
-                deserializers,
-                metricsManager,
-                time);
+            metadata,
+            subscriptions,
+            fetchConfig,
+            deserializers,
+            metricsManager,
+            time);
     }
 
     @Override
@@ -105,25 +105,25 @@ public class Fetcher<K, V> extends AbstractFetch {
     public synchronized int sendFetches() {
         final Map<Node, FetchSessionHandler.FetchRequestData> fetchRequests = prepareFetchRequests();
         sendFetchesInternal(
-                fetchRequests,
-                (fetchTarget, data, clientResponse) -> {
-                    synchronized (Fetcher.this) {
-                        handleFetchSuccess(fetchTarget, data, clientResponse);
-                    }
-                },
-                (fetchTarget, data, error) -> {
-                    synchronized (Fetcher.this) {
-                        handleFetchFailure(fetchTarget, data, error);
-                    }
-                });
+            fetchRequests,
+            (fetchTarget, data, clientResponse) -> {
+                synchronized (Fetcher.this) {
+                    handleFetchSuccess(fetchTarget, data, clientResponse);
+                }
+            },
+            (fetchTarget, data, error) -> {
+                synchronized (Fetcher.this) {
+                    handleFetchFailure(fetchTarget, data, error);
+                }
+            });
         return fetchRequests.size();
     }
 
     protected void maybeCloseFetchSessions(final Timer timer) {
         final List<RequestFuture<ClientResponse>> requestFutures = sendFetchesInternal(
-                prepareCloseFetchSessionRequests(),
-                this::handleCloseFetchSessionSuccess,
-                this::handleCloseFetchSessionFailure
+            prepareCloseFetchSessionRequests(),
+            this::handleCloseFetchSessionSuccess,
+            this::handleCloseFetchSessionFailure
         );
 
         // Poll to ensure that request has been written to the socket. Wait until either the timer has expired or until
@@ -137,8 +137,8 @@ public class Fetcher<K, V> extends AbstractFetch {
             // we ran out of time before completing all futures. It is ok since we don't want to block the shutdown
             // here.
             log.debug("All requests couldn't be sent in the specific timeout period {}ms. " +
-                    "This may result in unnecessary fetch sessions at the broker. Consider increasing the timeout passed for " +
-                    "KafkaConsumer.close(...)", timer.timeoutMs());
+                "This may result in unnecessary fetch sessions at the broker. Consider increasing the timeout passed for " +
+                "KafkaConsumer.close(...)", timer.timeoutMs());
         }
     }
 
@@ -181,8 +181,8 @@ public class Fetcher<K, V> extends AbstractFetch {
      * @return List of {@link RequestFuture callbacks}
      */
     private List<RequestFuture<ClientResponse>> sendFetchesInternal(Map<Node, FetchSessionHandler.FetchRequestData> fetchRequests,
-                                                                    ResponseHandler<ClientResponse> successHandler,
-                                                                    ResponseHandler<Throwable> errorHandler) {
+        ResponseHandler<ClientResponse> successHandler,
+        ResponseHandler<Throwable> errorHandler) {
         final List<RequestFuture<ClientResponse>> requestFutures = new ArrayList<>();
 
         for (Map.Entry<Node, FetchSessionHandler.FetchRequestData> entry : fetchRequests.entrySet()) {

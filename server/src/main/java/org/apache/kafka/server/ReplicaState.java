@@ -23,11 +23,11 @@ package org.apache.kafka.server;
  */
 public enum ReplicaState {
     TRUNCATING {
-        @Override
-        public String toString() {
-            return "Truncating";
-        }
-    },
+    @Override
+    public String toString() {
+        return "Truncating";
+    }
+},
 
     FETCHING {
         @Override

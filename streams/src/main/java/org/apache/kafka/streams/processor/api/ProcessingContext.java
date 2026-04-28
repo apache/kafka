@@ -157,8 +157,8 @@ public interface ProcessingContext {
      * @throws IllegalArgumentException if the interval is not representable in milliseconds
      */
     Cancellable schedule(final Duration interval,
-                         final PunctuationType type,
-                         final Punctuator callback);
+        final PunctuationType type,
+        final Punctuator callback);
 
     /**
      * Schedule a periodic operation for processors. A processor may call this method during
@@ -196,9 +196,9 @@ public interface ProcessingContext {
      * @throws IllegalArgumentException if the interval is not representable in milliseconds
      */
     Cancellable schedule(final Instant startTime,
-                         final Duration interval,
-                         final PunctuationType type,
-                         final Punctuator callback);
+        final Duration interval,
+        final PunctuationType type,
+        final Punctuator callback);
 
     /**
      * Request a commit. Note that calling {@code commit()} is only a request for a commit, but it does not execute one.

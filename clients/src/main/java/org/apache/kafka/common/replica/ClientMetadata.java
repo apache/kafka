@@ -60,7 +60,7 @@ public interface ClientMetadata {
         private final String listenerName;
 
         public DefaultClientMetadata(String rackId, String clientId, InetAddress clientAddress,
-                                     KafkaPrincipal principal, String listenerName) {
+            KafkaPrincipal principal, String listenerName) {
             this.rackId = rackId;
             this.clientId = clientId;
             this.clientAddress = clientAddress;
@@ -99,10 +99,10 @@ public interface ClientMetadata {
             if (o == null || getClass() != o.getClass()) return false;
             DefaultClientMetadata that = (DefaultClientMetadata) o;
             return Objects.equals(rackId, that.rackId) &&
-                    Objects.equals(clientId, that.clientId) &&
-                    Objects.equals(clientAddress, that.clientAddress) &&
-                    Objects.equals(principal, that.principal) &&
-                    Objects.equals(listenerName, that.listenerName);
+                Objects.equals(clientId, that.clientId) &&
+                Objects.equals(clientAddress, that.clientAddress) &&
+                Objects.equals(principal, that.principal) &&
+                Objects.equals(listenerName, that.listenerName);
         }
 
         @Override
@@ -113,12 +113,12 @@ public interface ClientMetadata {
         @Override
         public String toString() {
             return "DefaultClientMetadata{" +
-                    "rackId='" + rackId + '\'' +
-                    ", clientId='" + clientId + '\'' +
-                    ", clientAddress=" + clientAddress +
-                    ", principal=" + principal +
-                    ", listenerName='" + listenerName + '\'' +
-                    '}';
+                "rackId='" + rackId + '\'' +
+                ", clientId='" + clientId + '\'' +
+                ", clientAddress=" + clientAddress +
+                ", principal=" + principal +
+                ", listenerName='" + listenerName + '\'' +
+                '}';
         }
     }
 }

@@ -54,9 +54,9 @@ public class KafkaExactlyOnceDemo {
         try {
             if (args.length != 3) {
                 Utils.printHelp("This example takes 3 parameters (i.e. 6 3 10000):%n" +
-                    "- partition: number of partitions for input and output topics (required)%n" +
-                    "- instances: number of application instances (required)%n" +
-                    "- records: total number of records (required)");
+                        "- partition: number of partitions for input and output topics (required)%n" +
+                        "- instances: number of application instances (required)%n" +
+                        "- records: total number of records (required)");
                 return;
             }
 
@@ -89,13 +89,13 @@ public class KafkaExactlyOnceDemo {
             // stage 3: read from input-topic, process once and write to the output-topic
             CountDownLatch processorsLatch = new CountDownLatch(numInstances);
             List<ExactlyOnceMessageProcessor> processors = IntStream.range(0, numInstances)
-                .mapToObj(id -> new ExactlyOnceMessageProcessor(
-                        "processor-" + id,
-                        KafkaProperties.BOOTSTRAP_SERVERS,
-                        INPUT_TOPIC,
-                        OUTPUT_TOPIC,
-                        processorsLatch))
-                .collect(Collectors.toList());
+                    .mapToObj(id -> new ExactlyOnceMessageProcessor(
+                            "processor-" + id,
+                            KafkaProperties.BOOTSTRAP_SERVERS,
+                            INPUT_TOPIC,
+                            OUTPUT_TOPIC,
+                            processorsLatch))
+                    .collect(Collectors.toList());
             processors.forEach(ExactlyOnceMessageProcessor::start);
             if (!processorsLatch.await(2, TimeUnit.MINUTES)) {
                 Utils.printErr("Timeout after 2 minutes waiting for record copy");

@@ -70,18 +70,20 @@ public class DelayedProduce extends DelayedOperation {
         @Override
         public String toString() {
             return String.format(
-                    "[acksPending: %s, error: %s, startOffset: %s, requiredOffset: %d]",
-                    acksPending,
-                    responseStatus.error.code(),
-                    responseStatus.baseOffset,
-                    requiredOffset
+                "[acksPending: %s, error: %s, startOffset: %s, requiredOffset: %d]",
+                acksPending,
+                responseStatus.error.code(),
+                responseStatus.baseOffset,
+                requiredOffset
             );
         }
     }
 
     @FunctionalInterface
     public interface PartitionStatusValidator {
-        record Result(boolean hasEnough, Errors error) { }
+        record Result(boolean hasEnough, Errors error) {
+        }
+
         /**
          * Validates the status of a partition and its replicas to determine
          * if a delayed produce operation can be completed.
@@ -198,18 +200,18 @@ public class DelayedProduce extends DelayedOperation {
     public static void recordExpiration(TopicPartition partition) {
         AGGREGATE_EXPIRATION_METER.mark();
         PARTITION_EXPIRATION_METERS.computeIfAbsent(partition,
-                key -> METRICS_GROUP.newMeter("ExpiresPerSec",
-                        "requests",
-                        TimeUnit.SECONDS,
-                        MetricsUtils.getTags("topic", key.topic(), "partition", String.valueOf(key.partition())))
+            key -> METRICS_GROUP.newMeter("ExpiresPerSec",
+                "requests",
+                TimeUnit.SECONDS,
+                MetricsUtils.getTags("topic", key.topic(), "partition", String.valueOf(key.partition())))
         ).mark();
     }
 
     public static void removePartitionMetrics(TopicPartition partition) {
         if (PARTITION_EXPIRATION_METERS.remove(partition) != null) {
             METRICS_GROUP.removeMetric("ExpiresPerSec",
-                    MetricsUtils.getTags("topic", partition.topic(),
-                            "partition", String.valueOf(partition.partition())));
+                MetricsUtils.getTags("topic", partition.topic(),
+                    "partition", String.valueOf(partition.partition())));
         }
     }
 }

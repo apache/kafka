@@ -55,12 +55,12 @@ public class FindCoordinatorResponse extends AbstractResponse {
         if (this.data.coordinators().isEmpty()) {
             // version <= 3
             return Optional.of(new Coordinator()
-                    .setErrorCode(data.errorCode())
-                    .setErrorMessage(data.errorMessage())
-                    .setHost(data.host())
-                    .setPort(data.port())
-                    .setNodeId(data.nodeId())
-                    .setKey(key));
+                .setErrorCode(data.errorCode())
+                .setErrorMessage(data.errorMessage())
+                .setHost(data.host())
+                .setPort(data.port())
+                .setNodeId(data.nodeId())
+                .setKey(key));
         }
         // version >= 4
         return data.coordinators().stream().filter(c -> c.key().equals(key)).findFirst();
@@ -125,12 +125,12 @@ public class FindCoordinatorResponse extends AbstractResponse {
             return data.coordinators();
         else {
             FindCoordinatorResponseData.Coordinator coordinator = new Coordinator()
-                    .setErrorCode(data.errorCode())
-                    .setErrorMessage(data.errorMessage())
-                    .setKey(null)
-                    .setNodeId(data.nodeId())
-                    .setHost(data.host())
-                    .setPort(data.port());
+                .setErrorCode(data.errorCode())
+                .setErrorMessage(data.errorMessage())
+                .setKey(null)
+                .setNodeId(data.nodeId())
+                .setHost(data.host())
+                .setPort(data.port());
             return List.of(coordinator);
         }
     }

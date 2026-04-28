@@ -57,14 +57,14 @@ public class TestKitNodes {
 
         public Builder() {
             this(BootstrapMetadata.fromVersions(
-                    MetadataVersion.latestTesting(),
-                    Feature.PRODUCTION_FEATURES.stream()
-                            .collect(Collectors.toMap(
-                                    Feature::featureName,
-                                    feature -> feature.defaultLevel(MetadataVersion.latestTesting()),
-                                    (existing, replacement) -> existing,
-                                    TreeMap::new)),
-                    "testkit"));
+                MetadataVersion.latestTesting(),
+                Feature.PRODUCTION_FEATURES.stream()
+                    .collect(Collectors.toMap(
+                        Feature::featureName,
+                        feature -> feature.defaultLevel(MetadataVersion.latestTesting()),
+                        (existing, replacement) -> existing,
+                        TreeMap::new)),
+                "testkit"));
         }
 
         public Builder(BootstrapMetadata bootstrapMetadata) {
@@ -84,7 +84,7 @@ public class TestKitNodes {
 
         public Builder setBootstrapMetadataVersion(MetadataVersion metadataVersion) {
             this.bootstrapMetadata = bootstrapMetadata.copyWithFeatureRecord(
-                    MetadataVersion.FEATURE_NAME, metadataVersion.featureLevel());
+                MetadataVersion.FEATURE_NAME, metadataVersion.featureLevel());
             return this;
         }
 
@@ -176,17 +176,17 @@ public class TestKitNodes {
                 .toList();
 
             String unknownIds = perServerProperties.keySet().stream()
-                    .filter(id -> !controllerNodeIds.contains(id))
-                    .filter(id -> !brokerNodeIds.contains(id))
-                    .map(Object::toString)
-                    .collect(Collectors.joining(", "));
+                .filter(id -> !controllerNodeIds.contains(id))
+                .filter(id -> !brokerNodeIds.contains(id))
+                .map(Object::toString)
+                .collect(Collectors.joining(", "));
             if (!unknownIds.isEmpty()) {
                 throw new IllegalArgumentException(
-                        String.format("Unknown server id %s in perServerProperties, the existent server ids are %s",
-                                unknownIds,
-                                Stream.concat(brokerNodeIds.stream(), controllerNodeIds.stream())
-                                        .map(Object::toString)
-                                        .collect(Collectors.joining(", "))));
+                    String.format("Unknown server id %s in perServerProperties, the existent server ids are %s",
+                        unknownIds,
+                        Stream.concat(brokerNodeIds.stream(), controllerNodeIds.stream())
+                            .map(Object::toString)
+                            .collect(Collectors.joining(", "))));
             }
 
             TreeMap<Integer, TestKitNode> controllerNodes = new TreeMap<>();
@@ -293,11 +293,11 @@ public class TestKitNodes {
     }
 
     private static TestKitNode buildBrokerNode(int id,
-                                              String baseDirectory,
-                                              String clusterId,
-                                              boolean combined,
-                                              Map<String, String> propertyOverrides,
-                                              int numDisksPerBroker) {
+                                               String baseDirectory,
+                                               String clusterId,
+                                               boolean combined,
+                                               Map<String, String> propertyOverrides,
+                                               int numDisksPerBroker) {
         List<String> logDataDirectories = IntStream
             .range(0, numDisksPerBroker)
             .mapToObj(i -> {
@@ -344,22 +344,22 @@ public class TestKitNodes {
     }
 
     private static TestKitNode buildControllerNode(int id,
-                                                  String baseDirectory,
-                                                  String clusterId,
-                                                  boolean combined,
-                                                  Map<String, String> propertyOverrides,
-                                                  int numDisksPerController) {
+                                                   String baseDirectory,
+                                                   String clusterId,
+                                                   boolean combined,
+                                                   Map<String, String> propertyOverrides,
+                                                   int numDisksPerController) {
         List<String> logDataDirectories = combined
             ? IntStream
-                .range(0, numDisksPerController)
-                .mapToObj(i -> String.format("combined_%d_%d", id, i))
-                .map(logDir -> {
-                    if (Paths.get(logDir).isAbsolute()) {
-                        return logDir;
-                    }
-                    return new File(baseDirectory, logDir).getAbsolutePath();
-                })
-                .toList()
+            .range(0, numDisksPerController)
+            .mapToObj(i -> String.format("combined_%d_%d", id, i))
+            .map(logDir -> {
+                if (Paths.get(logDir).isAbsolute()) {
+                    return logDir;
+                }
+                return new File(baseDirectory, logDir).getAbsolutePath();
+            })
+            .toList()
             : List.of(new File(baseDirectory, String.format("controller_%d", id)).getAbsolutePath());
         String metadataDirectory = new File(baseDirectory,
             combined ? String.format("combined_%d_0", id) : String.format("controller_%d", id)).getAbsolutePath();

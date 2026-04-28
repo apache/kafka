@@ -1567,9 +1567,9 @@ public class FetchSessionTest {
             0,
             0,
             fetchData)
-        .metadata(metadata)
-        .removed(toForget)
-        .build();
+            .metadata(metadata)
+            .removed(toForget)
+            .build();
     }
 
     private FetchRequest createRequestWithoutTopicIds(FetchMetadata metadata,
@@ -1582,9 +1582,9 @@ public class FetchSessionTest {
             0,
             0,
             fetchData)
-        .metadata(metadata)
-        .removed(List.of())
-        .build();
+            .metadata(metadata)
+            .removed(List.of())
+            .build();
     }
 
     private FetchContext newContext(FetchManager fetchManager, FetchRequest request, Map<Uuid, String> topicNames) {
@@ -1679,10 +1679,10 @@ public class FetchSessionTest {
                 topicIdPartition.topic() == null
                     ? errorResponse(Errors.UNKNOWN_TOPIC_ID.code())
                     : new FetchResponseData.PartitionData()
-                        .setPartitionIndex(1)
-                        .setHighWatermark(10)
-                        .setLastStableOffset(10)
-                        .setLogStartOffset(10)
+                    .setPartitionIndex(1)
+                    .setHighWatermark(10)
+                    .setLastStableOffset(10)
+                    .setLogStartOffset(10)
             )
         );
 

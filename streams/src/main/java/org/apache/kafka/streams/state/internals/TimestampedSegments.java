@@ -28,9 +28,9 @@ class TimestampedSegments extends AbstractSegments<TimestampedSegment> {
     private final RocksDBMetricsRecorder metricsRecorder;
 
     TimestampedSegments(final String name,
-                        final String metricsScope,
-                        final long retentionPeriod,
-                        final long segmentInterval) {
+        final String metricsScope,
+        final long retentionPeriod,
+        final long segmentInterval) {
         super(name, retentionPeriod, segmentInterval);
         metricsRecorder = new RocksDBMetricsRecorder(metricsScope, name);
     }

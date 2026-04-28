@@ -38,6 +38,6 @@ public interface ConnectAssignor {
      * @return the assignment of connectors and tasks to workers
      */
     Map<String, ByteBuffer> performAssignment(String leaderId, ConnectProtocolCompatibility protocol,
-                                              List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata,
-                                              WorkerCoordinator coordinator);
+            List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata,
+            WorkerCoordinator coordinator);
 }

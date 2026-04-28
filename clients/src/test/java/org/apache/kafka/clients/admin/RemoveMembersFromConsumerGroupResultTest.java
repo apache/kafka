@@ -87,7 +87,7 @@ public class RemoveMembersFromConsumerGroupResultTest {
     public void testMemberLevelErrorInResponseConstructor() throws InterruptedException, ExecutionException {
         RemoveMembersFromConsumerGroupResult memberLevelErrorResult = createAndVerifyMemberLevelError();
         assertThrows(IllegalArgumentException.class, () -> memberLevelErrorResult.memberResult(
-            new MemberToRemove("invalid-instance-id"))
+                new MemberToRemove("invalid-instance-id"))
         );
     }
 

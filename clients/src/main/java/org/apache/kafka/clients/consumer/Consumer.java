@@ -64,12 +64,12 @@ public interface Consumer<K, V> extends Closeable {
     void assign(Collection<TopicPartition> partitions);
 
     /**
-    * @see KafkaConsumer#subscribe(Pattern, ConsumerRebalanceListener)
+     * @see KafkaConsumer#subscribe(Pattern, ConsumerRebalanceListener)
     */
     void subscribe(Pattern pattern, ConsumerRebalanceListener callback);
 
     /**
-    * @see KafkaConsumer#subscribe(Pattern)
+     * @see KafkaConsumer#subscribe(Pattern)
     */
     void subscribe(Pattern pattern);
 
@@ -112,6 +112,7 @@ public interface Consumer<K, V> extends Closeable {
      * @see KafkaConsumer#commitSync(Map, Duration)
      */
     void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets, final Duration timeout);
+
     /**
      * @see KafkaConsumer#commitAsync()
      */
@@ -136,6 +137,7 @@ public interface Consumer<K, V> extends Closeable {
      * @see KafkaConsumer#unregisterMetricFromSubscription(KafkaMetric)
      */
     void unregisterMetricFromSubscription(KafkaMetric metric);
+
     /**
      * @see KafkaConsumer#seek(TopicPartition, long)
      */
@@ -160,7 +162,7 @@ public interface Consumer<K, V> extends Closeable {
      * @see KafkaConsumer#position(TopicPartition)
      */
     long position(TopicPartition partition);
-    
+
     /**
      * @see KafkaConsumer#position(TopicPartition, Duration)
      */

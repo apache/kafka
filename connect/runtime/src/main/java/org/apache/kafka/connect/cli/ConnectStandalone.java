@@ -88,9 +88,9 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneHerder, Stan
                         log.info("Created connector {}", info.result().name());
                 });
                 connect.herder().putConnectorConfig(
-                    createConnectorRequest.name(), createConnectorRequest.config(),
-                    createConnectorRequest.initialTargetState(),
-                    false, cb);
+                        createConnectorRequest.name(), createConnectorRequest.config(),
+                        createConnectorRequest.initialTargetState(),
+                        false, cb);
                 cb.get();
             }
             connect.herder().ready();
@@ -120,11 +120,12 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneHerder, Stan
 
         File connectorConfigurationFile = Paths.get(filePath).toFile();
         try {
-            Map<String, String> connectorConfigs = objectMapper.readValue(connectorConfigurationFile, new TypeReference<>() { });
+            Map<String, String> connectorConfigs = objectMapper.readValue(connectorConfigurationFile, new TypeReference<>() {
+            });
 
             if (!connectorConfigs.containsKey(NAME_CONFIG)) {
                 throw new ConnectException("Connector configuration at '" + filePath + "' is missing the mandatory '" + NAME_CONFIG + "' "
-                    + "configuration");
+                        + "configuration");
             }
             return new CreateConnectorRequest(connectorConfigs.get(NAME_CONFIG), connectorConfigs, null);
         } catch (StreamReadException | DatabindException e) {
@@ -133,11 +134,12 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneHerder, Stan
 
         try {
             objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-            CreateConnectorRequest createConnectorRequest = objectMapper.readValue(connectorConfigurationFile, new TypeReference<>() { });
+            CreateConnectorRequest createConnectorRequest = objectMapper.readValue(connectorConfigurationFile, new TypeReference<>() {
+            });
             if (createConnectorRequest.config().containsKey(NAME_CONFIG)) {
                 if (!createConnectorRequest.config().get(NAME_CONFIG).equals(createConnectorRequest.name())) {
                     throw new ConnectException("Connector name configuration in 'config' doesn't match the one specified in 'name' at '" + filePath
-                        + "'");
+                            + "'");
                 }
             } else {
                 createConnectorRequest.config().put(NAME_CONFIG, createConnectorRequest.name());
@@ -145,21 +147,21 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneHerder, Stan
             return createConnectorRequest;
         } catch (StreamReadException | DatabindException e) {
             log.debug("Could not parse connector configuration file '{}' into an object of type {}",
-                filePath, CreateConnectorRequest.class.getSimpleName());
+                    filePath, CreateConnectorRequest.class.getSimpleName());
         }
 
         Map<String, String> connectorConfigs = Utils.propsToStringMap(Utils.loadProps(filePath));
         if (!connectorConfigs.containsKey(NAME_CONFIG)) {
             throw new ConnectException("Connector configuration at '" + filePath + "' is missing the mandatory '" + NAME_CONFIG + "' "
-                + "configuration");
+                    + "configuration");
         }
         return new CreateConnectorRequest(connectorConfigs.get(NAME_CONFIG), connectorConfigs, null);
     }
 
     @Override
     protected StandaloneHerder createHerder(StandaloneConfig config, String workerId, Plugins plugins,
-                                  ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
-                                  RestServer restServer, RestClient restClient) {
+            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+            RestServer restServer, RestClient restClient) {
 
         OffsetBackingStore offsetBackingStore = new FileOffsetBackingStore(plugins.newInternalConverter(
                 true, JsonConverter.class.getName(), Map.of(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false")));

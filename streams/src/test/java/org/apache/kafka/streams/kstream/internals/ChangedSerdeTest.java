@@ -48,9 +48,9 @@ public class ChangedSerdeTest {
 
     private static final Serializer<String> STRING_SERIALIZER = Serdes.String().serializer();
     private static final ChangedSerializer<String> CHANGED_STRING_SERIALIZER =
-            new ChangedSerializer<>(STRING_SERIALIZER);
+        new ChangedSerializer<>(STRING_SERIALIZER);
     private static final ChangedDeserializer<String> CHANGED_STRING_DESERIALIZER =
-            new ChangedDeserializer<>(Serdes.String().deserializer());
+        new ChangedDeserializer<>(Serdes.String().deserializer());
 
     private static final int ENCODING_FLAG_SIZE = 1;
     private static final int IS_LATEST_FLAG_SIZE = 1;
@@ -71,8 +71,8 @@ public class ChangedSerdeTest {
         final Change<String> data = new Change<>(null, null);
 
         assertThrows(
-                StreamsException.class,
-                () -> CHANGED_STRING_SERIALIZER.serialize(TOPIC, HEADERS, data));
+            StreamsException.class,
+            () -> CHANGED_STRING_SERIALIZER.serialize(TOPIC, HEADERS, data));
     }
 
     @Test
@@ -83,8 +83,8 @@ public class ChangedSerdeTest {
         serializer.configure(configs, false);
 
         assertThrows(
-                StreamsException.class,
-                () -> serializer.serialize(TOPIC, HEADERS, data));
+            StreamsException.class,
+            () -> serializer.serialize(TOPIC, HEADERS, data));
     }
 
     @Test

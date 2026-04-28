@@ -92,19 +92,19 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     private boolean aborted = false;
 
     public MemoryRecordsBuilder(ByteBufferOutputStream bufferStream,
-                                byte magic,
-                                Compression compression,
-                                TimestampType timestampType,
-                                long baseOffset,
-                                long logAppendTime,
-                                long producerId,
-                                short producerEpoch,
-                                int baseSequence,
-                                boolean isTransactional,
-                                boolean isControlBatch,
-                                int partitionLeaderEpoch,
-                                int writeLimit,
-                                long deleteHorizonMs) {
+        byte magic,
+        Compression compression,
+        TimestampType timestampType,
+        long baseOffset,
+        long logAppendTime,
+        long producerId,
+        short producerEpoch,
+        int baseSequence,
+        boolean isTransactional,
+        boolean isControlBatch,
+        int partitionLeaderEpoch,
+        int writeLimit,
+        long deleteHorizonMs) {
         if (magic > RecordBatch.MAGIC_VALUE_V0 && timestampType == TimestampType.NO_TIMESTAMP_TYPE)
             throw new IllegalArgumentException("TimestampType must be set for magic >= 0");
         if (magic < RecordBatch.MAGIC_VALUE_V2) {
@@ -148,21 +148,21 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     }
 
     public MemoryRecordsBuilder(ByteBufferOutputStream bufferStream,
-                                byte magic,
-                                Compression compression,
-                                TimestampType timestampType,
-                                long baseOffset,
-                                long logAppendTime,
-                                long producerId,
-                                short producerEpoch,
-                                int baseSequence,
-                                boolean isTransactional,
-                                boolean isControlBatch,
-                                int partitionLeaderEpoch,
-                                int writeLimit) {
+        byte magic,
+        Compression compression,
+        TimestampType timestampType,
+        long baseOffset,
+        long logAppendTime,
+        long producerId,
+        short producerEpoch,
+        int baseSequence,
+        boolean isTransactional,
+        boolean isControlBatch,
+        int partitionLeaderEpoch,
+        int writeLimit) {
         this(bufferStream, magic, compression, timestampType, baseOffset, logAppendTime, producerId,
-             producerEpoch, baseSequence, isTransactional, isControlBatch, partitionLeaderEpoch, writeLimit,
-             RecordBatch.NO_TIMESTAMP);
+            producerEpoch, baseSequence, isTransactional, isControlBatch, partitionLeaderEpoch, writeLimit,
+            RecordBatch.NO_TIMESTAMP);
     }
 
     /**
@@ -186,21 +186,21 @@ public class MemoryRecordsBuilder implements AutoCloseable {
      *                   record added exceeds the size).
      */
     public MemoryRecordsBuilder(ByteBuffer buffer,
-                                byte magic,
-                                Compression compression,
-                                TimestampType timestampType,
-                                long baseOffset,
-                                long logAppendTime,
-                                long producerId,
-                                short producerEpoch,
-                                int baseSequence,
-                                boolean isTransactional,
-                                boolean isControlBatch,
-                                int partitionLeaderEpoch,
-                                int writeLimit) {
+        byte magic,
+        Compression compression,
+        TimestampType timestampType,
+        long baseOffset,
+        long logAppendTime,
+        long producerId,
+        short producerEpoch,
+        int baseSequence,
+        boolean isTransactional,
+        boolean isControlBatch,
+        int partitionLeaderEpoch,
+        int writeLimit) {
         this(new ByteBufferOutputStream(buffer), magic, compression, timestampType, baseOffset, logAppendTime,
-                producerId, producerEpoch, baseSequence, isTransactional, isControlBatch, partitionLeaderEpoch,
-                writeLimit);
+            producerId, producerEpoch, baseSequence, isTransactional, isControlBatch, partitionLeaderEpoch,
+            writeLimit);
     }
 
     public ByteBuffer buffer() {
@@ -421,8 +421,8 @@ public class MemoryRecordsBuilder implements AutoCloseable {
             maxTimestamp = this.maxTimestamp;
 
         DefaultRecordBatch.writeHeader(buffer, baseOffset, offsetDelta, size, magic, compression.type(), timestampType,
-                baseTimestamp, maxTimestamp, producerId, producerEpoch, baseSequence, isTransactional, isControlBatch,
-                hasDeleteHorizonMs(), partitionLeaderEpoch, numRecords);
+            baseTimestamp, maxTimestamp, producerId, producerEpoch, baseSequence, isTransactional, isControlBatch,
+            hasDeleteHorizonMs(), partitionLeaderEpoch, numRecords);
 
         buffer.position(pos);
         return writtenCompressed;
@@ -453,14 +453,14 @@ public class MemoryRecordsBuilder implements AutoCloseable {
      * Append a new record at the given offset.
      */
     private void appendWithOffset(long offset, boolean isControlRecord, long timestamp, ByteBuffer key,
-                                  ByteBuffer value, Header[] headers) {
+        ByteBuffer value, Header[] headers) {
         try {
             if (isControlRecord != isControlBatch)
                 throw new IllegalArgumentException("Control records can only be appended to control batches");
 
             if (lastOffset != null && offset <= lastOffset)
                 throw new IllegalArgumentException(String.format("Illegal offset %d following previous offset %d " +
-                        "(Offsets must increase monotonically).", offset, lastOffset));
+                    "(Offsets must increase monotonically).", offset, lastOffset));
 
             if (timestamp < 0 && timestamp != RecordBatch.NO_TIMESTAMP)
                 throw new IllegalArgumentException("Invalid negative timestamp " + timestamp);
@@ -753,7 +753,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     }
 
     private void appendDefaultRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value,
-                                     Header[] headers) throws IOException {
+        Header[] headers) throws IOException {
         ensureOpenForRecordAppend();
         int offsetDelta = (int) (offset - baseOffset);
         long timestampDelta = timestamp - baseTimestamp;
@@ -786,7 +786,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
             throw new IllegalArgumentException("Maximum number of records per batch exceeded, max records: " + Integer.MAX_VALUE);
         if (offset - baseOffset > Integer.MAX_VALUE)
             throw new IllegalArgumentException("Maximum offset delta exceeded, base offset: " + baseOffset +
-                    ", last offset: " + offset);
+                ", last offset: " + offset);
 
         numRecords += 1;
         uncompressedRecordsSizeInBytes += size;
@@ -910,7 +910,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         public final long shallowOffsetOfMaxTimestamp;
 
         public RecordsInfo(long maxTimestamp,
-                           long shallowOffsetOfMaxTimestamp) {
+            long shallowOffsetOfMaxTimestamp) {
             this.maxTimestamp = maxTimestamp;
             this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
         }

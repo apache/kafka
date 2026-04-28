@@ -100,7 +100,7 @@ public class TestRecord<K, V> {
         this.headers = new RecordHeaders(headers);
         this.recordTime = null;
     }
-    
+
     /**
      * Creates a record.
      *
@@ -208,11 +208,11 @@ public class TestRecord<K, V> {
     @Override
     public String toString() {
         return new StringJoiner(", ", TestRecord.class.getSimpleName() + "[", "]")
-                .add("key=" + key)
-                .add("value=" + value)
-                .add("headers=" + headers)
-                .add("recordTime=" + recordTime)
-                .toString();
+            .add("key=" + key)
+            .add("value=" + value)
+            .add("headers=" + headers)
+            .add("recordTime=" + recordTime)
+            .toString();
     }
 
     @Override

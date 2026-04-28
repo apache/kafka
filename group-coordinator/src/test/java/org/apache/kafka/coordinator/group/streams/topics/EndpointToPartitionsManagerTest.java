@@ -67,7 +67,7 @@ class EndpointToPartitionsManagerTest {
         streamsGroupMember = mock(StreamsGroupMember.class);
         configuredTopology = mock(ConfiguredTopology.class);
         configuredSubtopologyOne = new ConfiguredSubtopology(1, Set.of("Topic-A"), new HashMap<>(), new HashSet<>(), new HashMap<>());
-        Map<String, ConfiguredInternalTopic> repartitionSourceTopics = Map.of("Topic-B",  new ConfiguredInternalTopic("Topic-B", 1, Optional.of((short) 1), Collections.emptyMap()));
+        Map<String, ConfiguredInternalTopic> repartitionSourceTopics = Map.of("Topic-B", new ConfiguredInternalTopic("Topic-B", 1, Optional.of((short) 1), Collections.emptyMap()));
         configuredSubtopologyTwo = new ConfiguredSubtopology(1, new HashSet<>(), repartitionSourceTopics, new HashSet<>(), new HashMap<>());
         SortedMap<String, ConfiguredSubtopology> configuredSubtopologyOneMap = new TreeMap<>();
         configuredSubtopologyOneMap.put("0", configuredSubtopologyOne);
@@ -100,7 +100,7 @@ class EndpointToPartitionsManagerTest {
         when(configuredTopology.subtopologies()).thenReturn(Optional.of(configuredSubtopologyMap));
 
         StreamsGroupHeartbeatResponseData.EndpointToPartitions result =
-                EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup, new KRaftCoordinatorMetadataImage(metadataImage));
+            EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup, new KRaftCoordinatorMetadataImage(metadataImage));
 
         assertEquals(responseEndpoint, result.userEndpoint());
         assertEquals(1, result.activePartitions().size());
@@ -126,7 +126,7 @@ class EndpointToPartitionsManagerTest {
                                                                      List<Integer> topicAExpectedPartitions,
                                                                      List<Integer> topicBExpectedPartitions,
                                                                      String testName
-                                                                     ) {
+    ) {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(Uuid.randomUuid(), "Topic-A", topicAPartitions)
             .addTopic(Uuid.randomUuid(), "Topic-B", topicBPartitions)
@@ -156,7 +156,7 @@ class EndpointToPartitionsManagerTest {
         StreamsGroupHeartbeatResponseData.TopicPartition topicAPartition = result.activePartitions().get(0);
         assertEquals("Topic-A", topicAPartition.topic());
         assertEquals(topicAExpectedPartitions, topicAPartition.partitions().stream().sorted().toList());
-        
+
         StreamsGroupHeartbeatResponseData.TopicPartition topicBPartition = result.activePartitions().get(1);
         assertEquals("Topic-B", topicBPartition.topic());
         assertEquals(topicBExpectedPartitions, topicBPartition.partitions().stream().sorted().toList());
@@ -164,8 +164,8 @@ class EndpointToPartitionsManagerTest {
 
     static Stream<Arguments> argsProvider() {
         return Stream.of(
-                arguments(2, 5, List.of(0, 1), List.of(0, 1, 2, 3, 4), "Should assign correct partitions when partitions differ between topics"),
-                arguments(3, 3, List.of(0, 1, 2), List.of(0, 1, 2), "Should assign correct partitions when partitions same between topics")
+            arguments(2, 5, List.of(0, 1), List.of(0, 1, 2, 3, 4), "Should assign correct partitions when partitions differ between topics"),
+            arguments(3, 3, List.of(0, 1, 2), List.of(0, 1, 2), "Should assign correct partitions when partitions same between topics")
         );
     }
 }

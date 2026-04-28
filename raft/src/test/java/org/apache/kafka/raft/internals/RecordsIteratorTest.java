@@ -179,10 +179,10 @@ public final class RecordsIteratorTest {
         }
 
         try (RecordsIterator<String> iterator = createIterator(
-                MemoryRecords.readableRecords(buffer.get()),
-                BufferSupplier.NO_CACHING,
-                true
-            )
+                 MemoryRecords.readableRecords(buffer.get()),
+                 BufferSupplier.NO_CACHING,
+                 true
+             )
         ) {
             // Consume the control record batch
             Batch<String> batch = iterator.next();
@@ -229,10 +229,10 @@ public final class RecordsIteratorTest {
         }
 
         try (RecordsIterator<String> iterator = createIterator(
-                MemoryRecords.readableRecords(buffer.get()),
-                BufferSupplier.NO_CACHING,
-                true
-            )
+                 MemoryRecords.readableRecords(buffer.get()),
+                 BufferSupplier.NO_CACHING,
+                 true
+             )
         ) {
             // Consume the control record batch
             Batch<String> batch = iterator.next();
@@ -301,10 +301,10 @@ public final class RecordsIteratorTest {
         Set<ByteBuffer> allocatedBuffers = Collections.newSetFromMap(new IdentityHashMap<>());
 
         try (RecordsIterator<String> iterator = createIterator(
-                records,
-                mockBufferSupplier(allocatedBuffers),
-                validateCrc
-            )
+                 records,
+                 mockBufferSupplier(allocatedBuffers),
+                 validateCrc
+             )
         ) {
             for (TestBatch<String> batch : expectedBatches) {
                 assertTrue(iterator.hasNext());
@@ -382,20 +382,20 @@ public final class RecordsIteratorTest {
         ByteBuffer buffer = ByteBuffer.allocate(128);
 
         try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
-                buffer,
-                RecordBatch.CURRENT_MAGIC_VALUE,
-                Compression.NONE,
-                TimestampType.CREATE_TIME,
-                0, // initialOffset
-                0, // timestamp
-                RecordBatch.NO_PRODUCER_ID,
-                RecordBatch.NO_PRODUCER_EPOCH,
-                RecordBatch.NO_SEQUENCE,
-                false,
-                true,
-                1, // leaderEpoch
-                buffer.capacity()
-            )
+                 buffer,
+                 RecordBatch.CURRENT_MAGIC_VALUE,
+                 Compression.NONE,
+                 TimestampType.CREATE_TIME,
+                 0, // initialOffset
+                 0, // timestamp
+                 RecordBatch.NO_PRODUCER_ID,
+                 RecordBatch.NO_PRODUCER_EPOCH,
+                 RecordBatch.NO_SEQUENCE,
+                 false,
+                 true,
+                 1, // leaderEpoch
+                 buffer.capacity()
+             )
         ) {
             final Message message = defaultControlRecord(type);
             builder.appendControlRecord(

@@ -106,11 +106,11 @@ class ConsumerTask implements Runnable, Closeable {
     private final long offsetFetchRetryIntervalMs;
 
     public ConsumerTask(RemotePartitionMetadataEventHandler remotePartitionMetadataEventHandler,
-                        RemoteLogMetadataTopicPartitioner topicPartitioner,
-                        Consumer<byte[], byte[]> consumer,
-                        long pollTimeoutMs,
-                        long offsetFetchRetryIntervalMs,
-                        Time time) {
+            RemoteLogMetadataTopicPartitioner topicPartitioner,
+            Consumer<byte[], byte[]> consumer,
+            long pollTimeoutMs,
+            long offsetFetchRetryIntervalMs,
+            Time time) {
         this.consumer = consumer;
         this.remotePartitionMetadataEventHandler = Objects.requireNonNull(remotePartitionMetadataEventHandler);
         this.topicPartitioner = Objects.requireNonNull(topicPartitioner);
@@ -204,7 +204,7 @@ class ConsumerTask implements Runnable, Closeable {
                     } else {
                         log.debug("The user-topic-partition {} could not be marked initialized since the read-offset is {} " +
                                 "but the end-offset is {} for the metadata-partition {}", utp, readOffset, holder.endOffset,
-                            metadataPartition);
+                                metadataPartition);
                     }
                 } else {
                     log.debug("The offset-holder is null for the metadata-partition {}. The consumer may not have picked" +
@@ -215,8 +215,8 @@ class ConsumerTask implements Runnable, Closeable {
         }
         if (isAllInitialized) {
             log.info("Initialized for all the {} assigned user-partitions mapped to the {} meta-partitions in {} ms",
-                assignedUserTopicIdPartitions.size(), assignedMetadataPartitions.size(),
-                time.milliseconds() - uninitializedAt);
+                    assignedUserTopicIdPartitions.size(), assignedMetadataPartitions.size(),
+                    time.milliseconds() - uninitializedAt);
         }
         isAllUserTopicPartitionsInitialized = isAllInitialized;
     }
@@ -262,9 +262,9 @@ class ConsumerTask implements Runnable, Closeable {
             consumer.seekToBeginning(seekToBeginOffsetPartitions);
             // for other metadata partitions, read from the offset where the processing left last time.
             remoteLogPartitions.stream()
-                .filter(tp -> !seekToBeginOffsetPartitions.contains(tp) &&
-                    readOffsetsByMetadataPartition.containsKey(tp.partition()))
-                .forEach(tp -> consumer.seek(tp, readOffsetsByMetadataPartition.get(tp.partition())));
+                    .filter(tp -> !seekToBeginOffsetPartitions.contains(tp) &&
+                            readOffsetsByMetadataPartition.containsKey(tp.partition()))
+                    .forEach(tp -> consumer.seek(tp, readOffsetsByMetadataPartition.get(tp.partition())));
             Set<TopicIdPartition> processedAssignmentPartitions = new HashSet<>();
             // mark all the user-topic-partitions as assigned to the consumer.
             assignedUserTopicIdPartitionsSnapshot.forEach(utp -> {
@@ -289,9 +289,9 @@ class ConsumerTask implements Runnable, Closeable {
         // (eg) none of the segments for a partition were uploaded. Those partition resources won't be cleared.
         // It can be fixed later when required since they are empty resources.
         Set<TopicIdPartition> unassignedPartitions = readOffsetsByUserTopicPartition.keySet()
-            .stream()
-            .filter(e -> !assignedPartitions.contains(e))
-            .collect(Collectors.toSet());
+                .stream()
+                .filter(e -> !assignedPartitions.contains(e))
+                .collect(Collectors.toSet());
         unassignedPartitions.forEach(unassignedPartition -> {
             remotePartitionMetadataEventHandler.clearTopicPartition(unassignedPartition);
             readOffsetsByUserTopicPartition.remove(unassignedPartition);
@@ -308,7 +308,7 @@ class ConsumerTask implements Runnable, Closeable {
     }
 
     private void updateAssignments(final Set<TopicIdPartition> addedPartitions,
-                                   final Set<TopicIdPartition> removedPartitions) {
+            final Set<TopicIdPartition> removedPartitions) {
         log.info("Updating assignments for partitions added: {} and removed: {}", addedPartitions, removedPartitions);
         if (!addedPartitions.isEmpty() || !removedPartitions.isEmpty()) {
             synchronized (assignPartitionsLock) {
@@ -359,9 +359,9 @@ class ConsumerTask implements Runnable, Closeable {
     private void fetchStartAndEndOffsets() {
         try {
             final Set<TopicPartition> uninitializedPartitions = assignedUserTopicIdPartitions.values().stream()
-                .filter(utp -> utp.isAssigned && !utp.isInitialized)
-                .map(utp -> toRemoteLogPartition(utp.metadataPartition))
-                .collect(Collectors.toSet());
+                    .filter(utp -> utp.isAssigned && !utp.isInitialized)
+                    .map(utp -> toRemoteLogPartition(utp.metadataPartition))
+                    .collect(Collectors.toSet());
             // Removing the previous offset holder if it exists. During reassignment, if the list-offset
             // call to `earliest` and `latest` offset fails, then we should not use the previous values.
             uninitializedPartitions.forEach(tp -> offsetHolderByMetadataPartition.remove(tp));
@@ -369,9 +369,9 @@ class ConsumerTask implements Runnable, Closeable {
                 Map<TopicPartition, Long> endOffsets = consumer.endOffsets(uninitializedPartitions);
                 Map<TopicPartition, Long> startOffsets = consumer.beginningOffsets(uninitializedPartitions);
                 offsetHolderByMetadataPartition = endOffsets.entrySet()
-                    .stream()
-                    .collect(Collectors.toMap(Map.Entry::getKey,
-                        e -> new StartAndEndOffsetHolder(startOffsets.get(e.getKey()), e.getValue())));
+                        .stream()
+                        .collect(Collectors.toMap(Map.Entry::getKey,
+                                e -> new StartAndEndOffsetHolder(startOffsets.get(e.getKey()), e.getValue())));
 
             }
             hasLastOffsetsFetchFailed = false;
@@ -410,8 +410,8 @@ class ConsumerTask implements Runnable, Closeable {
 
     static Set<TopicPartition> toRemoteLogPartitions(final Set<Integer> partitions) {
         return partitions.stream()
-            .map(ConsumerTask::toRemoteLogPartition)
-            .collect(Collectors.toSet());
+                .map(ConsumerTask::toRemoteLogPartition)
+                .collect(Collectors.toSet());
     }
 
     static TopicPartition toRemoteLogPartition(int partition) {
@@ -442,11 +442,11 @@ class ConsumerTask implements Runnable, Closeable {
         @Override
         public String toString() {
             return "UserTopicIdPartition{" +
-                "topicIdPartition=" + topicIdPartition +
-                ", metadataPartition=" + metadataPartition +
-                ", isInitialized=" + isInitialized +
-                ", isAssigned=" + isAssigned +
-                '}';
+                    "topicIdPartition=" + topicIdPartition +
+                    ", metadataPartition=" + metadataPartition +
+                    ", isInitialized=" + isInitialized +
+                    ", isAssigned=" + isAssigned +
+                    '}';
         }
 
         @Override
@@ -475,9 +475,9 @@ class ConsumerTask implements Runnable, Closeable {
         @Override
         public String toString() {
             return "StartAndEndOffsetHolder{" +
-                "startOffset=" + startOffset +
-                ", endOffset=" + endOffset +
-                '}';
+                    "startOffset=" + startOffset +
+                    ", endOffset=" + endOffset +
+                    '}';
         }
     }
 }

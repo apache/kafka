@@ -68,10 +68,10 @@ public class ConsumerNetworkClientTest {
     private final Cluster cluster = TestUtils.singletonCluster(topicName, 1);
     private final Node node = cluster.nodes().get(0);
     private final Metadata metadata = new Metadata(100, 100, 50000, new LogContext(),
-            new ClusterResourceListeners());
+        new ClusterResourceListeners());
     private MockClient client = new MockClient(time, metadata);
     private ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(new LogContext(),
-            client, metadata, time, 100, 1000, Integer.MAX_VALUE);
+        client, metadata, time, 100, 1000, Integer.MAX_VALUE);
 
     @Test
     public void send() {
@@ -169,7 +169,7 @@ public class ConsumerNetworkClientTest {
     public void doNotBlockIfPollConditionIsSatisfied() {
         NetworkClient mockNetworkClient = mock(NetworkClient.class);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(new LogContext(),
-                mockNetworkClient, metadata, time, 100, 1000, Integer.MAX_VALUE);
+            mockNetworkClient, metadata, time, 100, 1000, Integer.MAX_VALUE);
 
         // expect poll, but with no timeout
         consumerClient.poll(time.timer(Long.MAX_VALUE), () -> false);
@@ -182,7 +182,7 @@ public class ConsumerNetworkClientTest {
 
         NetworkClient mockNetworkClient = mock(NetworkClient.class);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(new LogContext(),
-                mockNetworkClient, metadata, time, 100, 1000, Integer.MAX_VALUE);
+            mockNetworkClient, metadata, time, 100, 1000, Integer.MAX_VALUE);
 
         when(mockNetworkClient.inFlightRequestCount()).thenReturn(1);
         consumerClient.poll(time.timer(timeout), () -> true);
@@ -195,7 +195,7 @@ public class ConsumerNetworkClientTest {
 
         NetworkClient mockNetworkClient = mock(NetworkClient.class);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(new LogContext(),
-                mockNetworkClient, metadata, time, retryBackoffMs, 1000, Integer.MAX_VALUE);
+            mockNetworkClient, metadata, time, retryBackoffMs, 1000, Integer.MAX_VALUE);
 
         when(mockNetworkClient.inFlightRequestCount()).thenReturn(0);
 
@@ -244,7 +244,7 @@ public class ConsumerNetworkClientTest {
     @Test
     public void testInvalidTopicExceptionPropagatedFromMetadata() {
         MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith("clusterId", 1,
-                Collections.singletonMap("topic", Errors.INVALID_TOPIC_EXCEPTION), Collections.emptyMap());
+            Collections.singletonMap("topic", Errors.INVALID_TOPIC_EXCEPTION), Collections.emptyMap());
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, time.milliseconds());
         assertThrows(InvalidTopicException.class, () -> consumerClient.poll(time.timer(Duration.ZERO)));
     }
@@ -252,7 +252,7 @@ public class ConsumerNetworkClientTest {
     @Test
     public void testTopicAuthorizationExceptionPropagatedFromMetadata() {
         MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith("clusterId", 1,
-                Collections.singletonMap("topic", Errors.TOPIC_AUTHORIZATION_FAILED), Collections.emptyMap());
+            Collections.singletonMap("topic", Errors.TOPIC_AUTHORIZATION_FAILED), Collections.emptyMap());
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, time.milliseconds());
         assertThrows(TopicAuthorizationException.class, () -> consumerClient.poll(time.timer(Duration.ZERO)));
     }
@@ -318,6 +318,7 @@ public class ConsumerNetworkClientTest {
                 else
                     return false;
             }
+
             @Override
             public boolean connectionFailed(Node node) {
                 return disconnected.get();
@@ -401,9 +402,9 @@ public class ConsumerNetworkClientTest {
 
     private HeartbeatRequest.Builder heartbeat() {
         return new HeartbeatRequest.Builder(new HeartbeatRequestData()
-                .setGroupId("group")
-                .setGenerationId(1)
-                .setMemberId("memberId"));
+            .setGroupId("group")
+            .setGenerationId(1)
+            .setMemberId("memberId"));
     }
 
     private HeartbeatResponse heartbeatResponse(Errors error) {

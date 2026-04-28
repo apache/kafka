@@ -60,7 +60,7 @@ public final class AddVoterHandlerState {
             throw new IllegalStateException(
                 String.format(
                     "Cannot override last offset to %s for adding voter %s because it is " +
-                    "already set to %s",
+                        "already set to %s",
                     lastOffset,
                     voterKey,
                     this.lastOffset

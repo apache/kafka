@@ -36,7 +36,8 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addSumMetricToSensor;
 
 public class ClientMetrics {
-    private ClientMetrics() {}
+    private ClientMetrics() {
+    }
 
     private static final Logger log = LoggerFactory.getLogger(ClientMetrics.class);
     private static final String VERSION = "version";
@@ -51,12 +52,12 @@ public class ClientMetrics {
     private static final String DEFAULT_VALUE = "unknown";
     private static final String FAILED_STREAM_THREADS = "failed-stream-threads";
     private static final String RECORDING_LEVEL = "recording-level";
-    
+
 
     static {
         final Properties props = new Properties();
         try (InputStream resourceStream = ClientMetrics.class.getResourceAsStream(
-            "/kafka/kafka-streams-version.properties")) {
+                 "/kafka/kafka-streams-version.properties")) {
 
             props.load(resourceStream);
         } catch (final Exception exception) {
@@ -112,7 +113,7 @@ public class ClientMetrics {
     }
 
     public static void addTopologyDescriptionMetric(final StreamsMetricsImpl streamsMetrics,
-                                                    final Gauge<String> topologyDescription) {
+        final Gauge<String> topologyDescription) {
         streamsMetrics.addClientLevelMutableMetric(
             TOPOLOGY_DESCRIPTION,
             TOPOLOGY_DESCRIPTION_DESCRIPTION,
@@ -122,7 +123,7 @@ public class ClientMetrics {
     }
 
     public static void addStateMetric(final StreamsMetricsImpl streamsMetrics,
-                                      final Gauge<String> stateProvider) {
+        final Gauge<String> stateProvider) {
         streamsMetrics.addClientLevelMutableMetric(
             STATE,
             STATE_DESCRIPTION,
@@ -132,9 +133,9 @@ public class ClientMetrics {
     }
 
     public static void addClientStateTelemetryMetric(final String processId,
-                                                     final String applicationId,
-                                                     final StreamsMetricsImpl streamsMetrics,
-                                                     final Gauge<Integer> stateProvider) {
+        final String applicationId,
+        final StreamsMetricsImpl streamsMetrics,
+        final Gauge<Integer> stateProvider) {
         final Map<String, String> additionalTags = new LinkedHashMap<>();
         additionalTags.put(PROCESS_ID_TAG, processId);
         additionalTags.put(APPLICATION_ID_TAG, applicationId);
@@ -149,19 +150,19 @@ public class ClientMetrics {
     }
 
     public static void addClientRecordingLevelMetric(final String processId,
-                                                     final StreamsMetricsImpl streamsMetrics,
-                                                     final int recordingLevel) {
+        final StreamsMetricsImpl streamsMetrics,
+        final int recordingLevel) {
         streamsMetrics.addClientLevelImmutableMetric(
-                RECORDING_LEVEL,
-                RECORDING_LEVEL_DESCRIPTION,
-                Collections.singletonMap(PROCESS_ID_TAG, processId),
-                RecordingLevel.INFO,
-                recordingLevel
+            RECORDING_LEVEL,
+            RECORDING_LEVEL_DESCRIPTION,
+            Collections.singletonMap(PROCESS_ID_TAG, processId),
+            RecordingLevel.INFO,
+            recordingLevel
         );
     }
 
     public static void addNumAliveStreamThreadMetric(final StreamsMetricsImpl streamsMetrics,
-                                                     final Gauge<Integer> stateProvider) {
+        final Gauge<Integer> stateProvider) {
         streamsMetrics.addClientLevelMutableMetric(
             ALIVE_STREAM_THREADS,
             ALIVE_STREAM_THREADS_DESCRIPTION,

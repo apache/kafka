@@ -39,8 +39,8 @@ public class RemoveNamedTopologyResult {
     }
 
     public RemoveNamedTopologyResult(final KafkaFutureImpl<Void> removeTopologyFuture,
-                                     final String removedTopology,
-                                     final Runnable resetOffsets) {
+        final String removedTopology,
+        final Runnable resetOffsets) {
         Objects.requireNonNull(removeTopologyFuture);
         this.removeTopologyFuture = removeTopologyFuture;
         resetOffsetsFuture = new ResetOffsetsFuture(removedTopology, removeTopologyFuture, resetOffsets);
@@ -76,8 +76,8 @@ public class RemoveNamedTopologyResult {
         final KafkaFutureImpl<Void> removeTopologyFuture;
 
         public ResetOffsetsFuture(final String removedTopology,
-                                  final KafkaFutureImpl<Void> removeTopologyFuture,
-                                  final Runnable resetOffsets) {
+            final KafkaFutureImpl<Void> removeTopologyFuture,
+            final Runnable resetOffsets) {
             final LogContext logContext = new LogContext(String.format("topology [%s]", removedTopology));
             this.log = logContext.logger(this.getClass());
 
@@ -99,7 +99,7 @@ public class RemoveNamedTopologyResult {
                 resetOffsets.run();
             } catch (final Throwable e) {
                 log.error("Failed to reset offsets, you should do so manually if you want to add new topologies"
-                              + "in the future that consume from the same input topics");
+                    + "in the future that consume from the same input topics");
                 firstError.compareAndSet(e, null);
             }
 

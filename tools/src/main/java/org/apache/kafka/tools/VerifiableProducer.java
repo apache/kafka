@@ -94,7 +94,7 @@ public class VerifiableProducer implements AutoCloseable {
     private final Long startTime;
 
     public VerifiableProducer(KafkaProducer<String, String> producer, String topic, int throughput, int maxMessages,
-                              Integer valuePrefix, Long createTime, Integer repeatingKeys) {
+        Integer valuePrefix, Long createTime, Integer repeatingKeys) {
 
         this.topic = topic;
         this.throughput = throughput;
@@ -163,7 +163,7 @@ public class VerifiableProducer implements AutoCloseable {
             .type(String.class)
             .metavar("CONFIG-FILE")
             .help("(DEPRECATED) Producer config properties file. " +
-                    "This option will be removed in a future version. Use --command-config instead.");
+                "This option will be removed in a future version. Use --command-config instead.");
 
         parser.addArgument("--message-create-time")
             .action(store())
@@ -200,7 +200,7 @@ public class VerifiableProducer implements AutoCloseable {
 
         return parser;
     }
-    
+
     /**
      * Read a properties file from the given path
      * @param filename The path of the file to read
@@ -244,9 +244,9 @@ public class VerifiableProducer implements AutoCloseable {
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("bootstrapServer"));
 
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
-                "org.apache.kafka.common.serialization.StringSerializer");
+            "org.apache.kafka.common.serialization.StringSerializer");
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
-                "org.apache.kafka.common.serialization.StringSerializer");
+            "org.apache.kafka.common.serialization.StringSerializer");
         producerProps.put(ProducerConfig.ACKS_CONFIG, Integer.toString(res.getInt("acks")));
         // No producer retries
         producerProps.put(ProducerConfig.RETRIES_CONFIG, "0");
@@ -325,7 +325,7 @@ public class VerifiableProducer implements AutoCloseable {
         printJson(new ShutdownComplete());
     }
 
-    @JsonPropertyOrder({ "timestamp", "name" })
+    @JsonPropertyOrder({"timestamp", "name"})
     private abstract static class ProducerEvent {
         private final long timestamp = System.currentTimeMillis();
 

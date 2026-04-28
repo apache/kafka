@@ -62,9 +62,9 @@ public class ShareGroupHeartbeatRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         return new ShareGroupHeartbeatResponse(
-                new ShareGroupHeartbeatResponseData()
-                        .setThrottleTimeMs(throttleTimeMs)
-                        .setErrorCode(Errors.forException(e).code())
+            new ShareGroupHeartbeatResponseData()
+                .setThrottleTimeMs(throttleTimeMs)
+                .setErrorCode(Errors.forException(e).code())
         );
     }
 
@@ -75,6 +75,6 @@ public class ShareGroupHeartbeatRequest extends AbstractRequest {
 
     public static ShareGroupHeartbeatRequest parse(Readable readable, short version) {
         return new ShareGroupHeartbeatRequest(new ShareGroupHeartbeatRequestData(
-                readable, version), version);
+            readable, version), version);
     }
 }

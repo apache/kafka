@@ -293,19 +293,19 @@ public class ShareSessionCacheTest {
 
     private ImplicitLinkedHashCollection<CachedSharePartition> mockedSharePartitionMap(int size) {
         ImplicitLinkedHashCollection<CachedSharePartition> cacheMap = new
-                ImplicitLinkedHashCollection<>(size);
+            ImplicitLinkedHashCollection<>(size);
         for (int i = 0; i < size; i++)
             cacheMap.add(new CachedSharePartition("test", Uuid.randomUuid(), i, false));
         return cacheMap;
     }
 
     private void assertShareCacheContains(ShareSessionCache cache,
-                                         List<ShareSessionKey> sessionKeys) {
+                                          List<ShareSessionKey> sessionKeys) {
         int i = 0;
         assertEquals(sessionKeys.size(), cache.size());
         for (ShareSessionKey sessionKey : sessionKeys) {
             assertFalse(cache.get(sessionKey).isEmpty(),
-                    "Missing session " + ++i + " out of " + sessionKeys.size() + " ( " + sessionKey + " )");
+                "Missing session " + ++i + " out of " + sessionKeys.size() + " ( " + sessionKey + " )");
         }
     }
 

@@ -63,7 +63,7 @@ import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 public class SwallowUnknownTopicErrorIntegrationTest {
     private static final int NUM_BROKERS = 1;
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS,
-            Utils.mkProperties(Collections.singletonMap("auto.create.topics.enable", "false")));
+        Utils.mkProperties(Collections.singletonMap("auto.create.topics.enable", "false")));
 
     @BeforeAll
     public static void startCluster() throws IOException {
@@ -150,15 +150,17 @@ public class SwallowUnknownTopicErrorIntegrationTest {
 
     public static class TestHandler implements ProductionExceptionHandler {
 
-        public TestHandler() { }
+        public TestHandler() {
+        }
 
         @Override
-        public void configure(final Map<String, ?> configs) { }
+        public void configure(final Map<String, ?> configs) {
+        }
 
         @Override
         public Response handleError(final ErrorHandlerContext context,
-                                    final ProducerRecord<byte[], byte[]> record,
-                                    final Exception exception) {
+            final ProducerRecord<byte[], byte[]> record,
+            final Exception exception) {
             if (exception instanceof TimeoutException &&
                 exception.getCause() != null &&
                 exception.getCause() instanceof UnknownTopicOrPartitionException) {

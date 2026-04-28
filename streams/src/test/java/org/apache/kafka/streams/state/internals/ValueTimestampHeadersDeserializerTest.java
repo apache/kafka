@@ -220,9 +220,9 @@ public class ValueTimestampHeadersDeserializerTest {
 
     private static Stream<Arguments> headers() {
         return Stream.of(
-                new RecordHeaders().add("key1", "value1".getBytes()),
-                new RecordHeaders()
-            ).map(Arguments::of);
+            new RecordHeaders().add("key1", "value1".getBytes()),
+            new RecordHeaders()
+        ).map(Arguments::of);
     }
 
     @Test
@@ -272,10 +272,10 @@ public class ValueTimestampHeadersDeserializerTest {
     @Test
     public void shouldThrowExceptionWhenDataIsTooShort() {
         // Create malformed data: only headersSize varint, no actual headers or timestamp
-        final byte[] malformedData = new byte[] {0x02};  // headersSize = 1 but no data follows
+        final byte[] malformedData = new byte[]{0x02};  // headersSize = 1 but no data follows
 
         assertThrows(SerializationException.class, () ->
-            deserializer.deserialize(TOPIC, malformedData),
+                deserializer.deserialize(TOPIC, malformedData),
             "Should throw SerializationException for malformed data"
         );
     }
@@ -283,13 +283,13 @@ public class ValueTimestampHeadersDeserializerTest {
     @Test
     public void shouldThrowExceptionWhenHeadersSizeIsInconsistent() {
         // Create data with headersSize = 10 but not enough actual data
-        final byte[] malformedData = new byte[] {
+        final byte[] malformedData = new byte[]{
             0x14,  // headersSize = 10 (ZigZag encoding)
             0x00, 0x00  // Only 2 bytes when 10 + 8 (timestamp) are expected
         };
 
         assertThrows(SerializationException.class, () ->
-            deserializer.deserialize(TOPIC, malformedData),
+                deserializer.deserialize(TOPIC, malformedData),
             "Should throw SerializationException when buffer doesn't have enough data"
         );
     }

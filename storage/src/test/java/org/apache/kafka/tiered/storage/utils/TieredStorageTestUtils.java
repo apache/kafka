@@ -71,7 +71,7 @@ public class TieredStorageTestUtils {
     }
 
     public static Map<String, TopicDescription> describeTopics(TieredStorageTestContext context,
-                                                                List<String> topics)
+            List<String> topics)
             throws ExecutionException, InterruptedException {
         return context.admin()
                 .describeTopics(topics)
@@ -87,7 +87,7 @@ public class TieredStorageTestUtils {
      * @return The records found in the local tiered storage.
      */
     public static List<Record> tieredStorageRecords(TieredStorageTestContext context,
-                                                    TopicPartition topicPartition) {
+            TopicPartition topicPartition) {
         return context.takeTieredStorageSnapshot()
                 .getFilesets(topicPartition)
                 .stream()
@@ -105,10 +105,10 @@ public class TieredStorageTestUtils {
 
     @SuppressWarnings("removal")
     public static Properties createPropsForRemoteStorage(String testClassName,
-                                                         String storageDirPath,
-                                                         int brokerCount,
-                                                         int numRemoteLogMetadataPartitions,
-                                                         Properties overridingProps) {
+            String storageDirPath,
+            int brokerCount,
+            int numRemoteLogMetadataPartitions,
+            Properties overridingProps) {
         Assertions.assertTrue(STORAGE_WAIT_TIMEOUT_SEC > TimeUnit.MILLISECONDS.toSeconds(RLM_TASK_INTERVAL_MS),
                 "STORAGE_WAIT_TIMEOUT_SEC should be greater than RLM_TASK_INTERVAL_MS");
 

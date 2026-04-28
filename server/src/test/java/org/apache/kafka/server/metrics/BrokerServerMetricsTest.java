@@ -40,25 +40,25 @@ public final class BrokerServerMetricsTest {
 
         // Metric description is not used for metric name equality
         Set<MetricName> expectedMetrics = Set.of(
-                new MetricName("last-applied-record-offset", expectedGroup, "", Map.of()),
-                new MetricName("last-applied-record-timestamp", expectedGroup, "", Map.of()),
-                new MetricName("last-applied-record-lag-ms", expectedGroup, "", Map.of()),
-                new MetricName("metadata-load-error-count", expectedGroup, "", Map.of()),
-                new MetricName("metadata-apply-error-count", expectedGroup, "", Map.of()),
-                new MetricName("ignored-static-voters", expectedGroup, "", Map.of())
+            new MetricName("last-applied-record-offset", expectedGroup, "", Map.of()),
+            new MetricName("last-applied-record-timestamp", expectedGroup, "", Map.of()),
+            new MetricName("last-applied-record-lag-ms", expectedGroup, "", Map.of()),
+            new MetricName("metadata-load-error-count", expectedGroup, "", Map.of()),
+            new MetricName("metadata-apply-error-count", expectedGroup, "", Map.of()),
+            new MetricName("ignored-static-voters", expectedGroup, "", Map.of())
         );
 
         try (BrokerServerMetrics ignored = new BrokerServerMetrics(metrics)) {
             Map<MetricName, KafkaMetric> metricsMap = metrics.metrics().entrySet().stream()
-                    .filter(entry -> Objects.equals(entry.getKey().group(), expectedGroup))
-                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                .filter(entry -> Objects.equals(entry.getKey().group(), expectedGroup))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
             assertEquals(expectedMetrics.size(), metricsMap.size());
             metricsMap.forEach((name, metric) -> assertTrue(expectedMetrics.contains(name)));
         }
 
         Map<MetricName, KafkaMetric> metricsMap = metrics.metrics().entrySet().stream()
-                .filter(entry -> Objects.equals(entry.getKey().group(), expectedGroup))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+            .filter(entry -> Objects.equals(entry.getKey().group(), expectedGroup))
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
         assertEquals(0, metricsMap.size());
     }
 
@@ -72,10 +72,10 @@ public final class BrokerServerMetricsTest {
             // Update metric value and check
             long expectedValue = 1000;
             brokerMetrics.updateLastAppliedImageProvenance(new MetadataProvenance(
-                    expectedValue,
-                    brokerMetrics.lastAppliedImageProvenance().get().lastContainedEpoch(),
-                    brokerMetrics.lastAppliedTimestamp(),
-                    true));
+                expectedValue,
+                brokerMetrics.lastAppliedImageProvenance().get().lastContainedEpoch(),
+                brokerMetrics.lastAppliedTimestamp(),
+                true));
             assertEquals(expectedValue, offsetMetric.metricValue());
         }
     }
@@ -96,10 +96,10 @@ public final class BrokerServerMetricsTest {
             long timestamp = 500L;
 
             brokerMetrics.updateLastAppliedImageProvenance(new MetadataProvenance(
-                    brokerMetrics.lastAppliedOffset(),
-                    brokerMetrics.lastAppliedImageProvenance().get().lastContainedEpoch(),
-                    timestamp,
-                    true));
+                brokerMetrics.lastAppliedOffset(),
+                brokerMetrics.lastAppliedImageProvenance().get().lastContainedEpoch(),
+                timestamp,
+                true));
             assertEquals(timestamp, timestampMetric.metricValue());
             assertEquals(time.milliseconds() - timestamp, lagMetric.metricValue());
         }

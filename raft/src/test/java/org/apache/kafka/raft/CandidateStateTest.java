@@ -56,7 +56,7 @@ public class CandidateStateTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testSingleNodeQuorum(boolean withDirectoryId) {
         CandidateState state = newCandidateState(voterSetWithLocal(IntStream.empty(), withDirectoryId));
         assertTrue(state.epochElection().isVoteGranted());
@@ -65,7 +65,7 @@ public class CandidateStateTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testTwoNodeQuorumVoteRejected(boolean withDirectoryId) {
         ReplicaKey otherNode = replicaKey(1, withDirectoryId);
         CandidateState state = newCandidateState(
@@ -80,7 +80,7 @@ public class CandidateStateTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testTwoNodeQuorumVoteGranted(boolean withDirectoryId) {
         ReplicaKey otherNode = replicaKey(1, withDirectoryId);
         CandidateState state = newCandidateState(
@@ -96,7 +96,7 @@ public class CandidateStateTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testThreeNodeQuorumVoteGranted(boolean withDirectoryId) {
         ReplicaKey node1 = replicaKey(1, withDirectoryId);
         ReplicaKey node2 = replicaKey(2, withDirectoryId);
@@ -117,7 +117,7 @@ public class CandidateStateTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testThreeNodeQuorumVoteRejected(boolean withDirectoryId) {
         ReplicaKey node1 = replicaKey(1, withDirectoryId);
         ReplicaKey node2 = replicaKey(2, withDirectoryId);
@@ -138,7 +138,7 @@ public class CandidateStateTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testCannotRejectVoteFromLocalId(boolean withDirectoryId) {
         int otherNodeId = 1;
         CandidateState state = newCandidateState(
@@ -151,7 +151,7 @@ public class CandidateStateTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testCannotChangeVoteGrantedToRejected(boolean withDirectoryId) {
         int otherNodeId = 1;
         CandidateState state = newCandidateState(
@@ -163,7 +163,7 @@ public class CandidateStateTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testCannotChangeVoteRejectedToGranted(boolean withDirectoryId) {
         int otherNodeId = 1;
         CandidateState state = newCandidateState(
@@ -175,7 +175,7 @@ public class CandidateStateTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testCannotGrantOrRejectNonVoters(boolean withDirectoryId) {
         int nonVoterId = 1;
         CandidateState state = newCandidateState(voterSetWithLocal(IntStream.empty(), withDirectoryId));
@@ -184,7 +184,7 @@ public class CandidateStateTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testIdempotentGrant(boolean withDirectoryId) {
         int otherNodeId = 1;
         CandidateState state = newCandidateState(
@@ -206,7 +206,7 @@ public class CandidateStateTest {
     }
 
     @ParameterizedTest
-    @CsvSource({ "true,true", "true,false", "false,true", "false,false" })
+    @CsvSource({"true,true", "true,false", "false,true", "false,false"})
     public void testGrantVote(boolean isLogUpToDate, boolean withDirectoryId) {
         ReplicaKey node0 = replicaKey(0, withDirectoryId);
         ReplicaKey node1 = replicaKey(1, withDirectoryId);

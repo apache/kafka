@@ -97,41 +97,41 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
         }).when(spyRemotePartitionMetadataStore).handleRemoteLogSegmentMetadata(any());
 
         try (TopicBasedRemoteLogMetadataManager remoteLogMetadataManager = RemoteLogMetadataManagerTestUtils.builder()
-                .bootstrapServers(clusterInstance.bootstrapServers())
-                .remoteLogMetadataTopicPartitioner(numMetadataTopicPartitions -> new RemoteLogMetadataTopicPartitioner(numMetadataTopicPartitions) {
-                    @Override
-                    public int metadataPartition(TopicIdPartition topicIdPartition) {
-                        // Always return partition 0 except for noMessagesTopicIdPartition. So that, any new user
-                        // partition(other than noMessagesTopicIdPartition) added to RLMM will use the same metadata partition.
-                        // That will make the secondary consumer assignment.
-                        if (emptyTopicIdPartition.equals(topicIdPartition)) {
-                            return 1;
-                        } else {
-                            return 0;
-                        }
-                    }
-                })
-                .remotePartitionMetadataStore(() -> spyRemotePartitionMetadataStore)
-                .build()) {
+                     .bootstrapServers(clusterInstance.bootstrapServers())
+                     .remoteLogMetadataTopicPartitioner(numMetadataTopicPartitions -> new RemoteLogMetadataTopicPartitioner(numMetadataTopicPartitions) {
+                         @Override
+                         public int metadataPartition(TopicIdPartition topicIdPartition) {
+                             // Always return partition 0 except for noMessagesTopicIdPartition. So that, any new user
+                             // partition(other than noMessagesTopicIdPartition) added to RLMM will use the same metadata partition.
+                             // That will make the secondary consumer assignment.
+                             if (emptyTopicIdPartition.equals(topicIdPartition)) {
+                                 return 1;
+                             } else {
+                                 return 0;
+                             }
+                         }
+                     })
+                     .remotePartitionMetadataStore(() -> spyRemotePartitionMetadataStore)
+                     .build()) {
 
             // Add segments for these partitions but an exception is received as they have not yet been subscribed.
             // These messages would have been published to the respective metadata topic partitions but the ConsumerManager
             // has not yet been subscribing as they are not yet registered.
             int segSize = 1048576;
             RemoteLogSegmentMetadata leaderSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
-                0, 100, -1L, 0,
-                time.milliseconds(), segSize, Map.of(0, 0L));
+                    0, 100, -1L, 0,
+                    time.milliseconds(), segSize, Map.of(0, 0L));
             ExecutionException exception = assertThrows(ExecutionException.class,
                     () -> remoteLogMetadataManager.addRemoteLogSegmentMetadata(leaderSegmentMetadata).get());
             assertEquals("org.apache.kafka.common.KafkaException: This consumer is not assigned to the target partition 0. Currently assigned partitions: []",
-                exception.getMessage());
+                    exception.getMessage());
 
             RemoteLogSegmentMetadata followerSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(followerTopicIdPartition, Uuid.randomUuid()),
-                0, 100, -1L, 0,
-                time.milliseconds(), segSize, Map.of(0, 0L));
+                    0, 100, -1L, 0,
+                    time.milliseconds(), segSize, Map.of(0, 0L));
             exception = assertThrows(ExecutionException.class, () -> remoteLogMetadataManager.addRemoteLogSegmentMetadata(followerSegmentMetadata).get());
             assertEquals("org.apache.kafka.common.KafkaException: This consumer is not assigned to the target partition 0. Currently assigned partitions: []",
-                exception.getMessage());
+                    exception.getMessage());
 
             // `listRemoteLogSegments` will receive an exception as these topic partitions are not yet registered.
             assertThrows(RemoteStorageException.class, () -> remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition));

@@ -60,26 +60,26 @@ public class ControllerMutationQuotaManager extends ClientQuotaManager {
     @Override
     protected MetricName clientQuotaMetricName(Map<String, String> quotaMetricTags) {
         return metrics.metricName("tokens", QuotaType.CONTROLLER_MUTATION.toString(),
-                "Tracking remaining tokens in the token bucket per user/client-id",
-                quotaMetricTags);
+            "Tracking remaining tokens in the token bucket per user/client-id",
+            quotaMetricTags);
     }
 
     private MetricName clientRateMetricName(Map<String, String> quotaMetricTags) {
         return metrics.metricName("mutation-rate", QuotaType.CONTROLLER_MUTATION.toString(),
-                "Tracking mutation-rate per user/client-id",
-                quotaMetricTags);
+            "Tracking mutation-rate per user/client-id",
+            quotaMetricTags);
     }
 
     @Override
     protected void registerQuotaMetrics(Map<String, String> metricTags, Sensor sensor) {
         sensor.add(
-                clientRateMetricName(metricTags),
-                new Rate()
+            clientRateMetricName(metricTags),
+            new Rate()
         );
         sensor.add(
-                clientQuotaMetricName(metricTags),
-                new TokenBucket(),
-                getQuotaMetricConfig(metricTags)
+            clientQuotaMetricName(metricTags),
+            new TokenBucket(),
+            getQuotaMetricConfig(metricTags)
         );
     }
 
@@ -110,7 +110,7 @@ public class ControllerMutationQuotaManager extends ClientQuotaManager {
             int throttleTimeMs = (int) throttleTimeMs(e);
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Quota violated for sensor ({}). Delay time: ({})",
-                        quotaSensor.name(), throttleTimeMs);
+                    quotaSensor.name(), throttleTimeMs);
             }
             return throttleTimeMs;
         }
@@ -180,8 +180,8 @@ public class ControllerMutationQuotaManager extends ClientQuotaManager {
     public static long throttleTimeMs(QuotaViolationException e) {
         if (e.metric().measurable() instanceof TokenBucket) {
             return Math.round(-e.value() / e.bound() * 1000);
-        } 
-        throw new IllegalArgumentException("Metric " + e.metric().metricName() + 
+        }
+        throw new IllegalArgumentException("Metric " + e.metric().metricName() +
             " is not a TokenBucket metric, value " + e.metric().measurable());
     }
 }

@@ -85,7 +85,7 @@ public class ConsumerProtocolUtils {
             throw new TaskAssignmentException("Named topologies are not compatible with protocol version " + version);
         }
     }
-    
+
     public static TaskId readTaskIdFrom(final ByteBuffer buf, final int version) {
         final int subtopology = buf.getInt();
         final int partition = buf.getInt();
@@ -108,7 +108,7 @@ public class ConsumerProtocolUtils {
      */
     private static String getNamedTopologyOrElseNull(final String namedTopology) {
         return (namedTopology == null || namedTopology.length() == 0) ?
-                null :
-                namedTopology;
+            null :
+            namedTopology;
     }
 }

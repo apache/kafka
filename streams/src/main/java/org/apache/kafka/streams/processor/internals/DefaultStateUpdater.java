@@ -103,8 +103,8 @@ public class DefaultStateUpdater implements StateUpdater {
         private volatile KafkaFutureImpl<Uuid> clientInstanceIdFuture = new KafkaFutureImpl<>();
 
         public StateUpdaterThread(final String name,
-                                  final StreamsMetricsImpl metrics,
-                                  final ChangelogReader changelogReader) {
+            final StreamsMetricsImpl metrics,
+            final ChangelogReader changelogReader) {
             super(name);
             this.changelogReader = changelogReader;
             this.updaterMetrics = new StateUpdaterMetrics(metrics, name);
@@ -521,8 +521,8 @@ public class DefaultStateUpdater implements StateUpdater {
         }
 
         private void removeTask(final TaskId taskId,
-                                final CompletableFuture<RemovedTaskResult> future,
-                                final StandbyUpdateListener.SuspendReason suspendReason) {
+            final CompletableFuture<RemovedTaskResult> future,
+            final StandbyUpdateListener.SuspendReason suspendReason) {
             try {
                 if (!removeUpdatingTask(taskId, future, suspendReason)
                     && !removePausedTask(taskId, future, suspendReason)
@@ -543,8 +543,8 @@ public class DefaultStateUpdater implements StateUpdater {
         }
 
         private boolean removeUpdatingTask(final TaskId taskId,
-                                           final CompletableFuture<RemovedTaskResult> future,
-                                           final StandbyUpdateListener.SuspendReason suspendReason) {
+            final CompletableFuture<RemovedTaskResult> future,
+            final StandbyUpdateListener.SuspendReason suspendReason) {
             if (!updatingTasks.containsKey(taskId)) {
                 return false;
             }
@@ -561,15 +561,15 @@ public class DefaultStateUpdater implements StateUpdater {
         }
 
         private void prepareUpdatingTaskForRemoval(final Task task,
-                                                   final StandbyUpdateListener.SuspendReason suspendReason) {
+            final StandbyUpdateListener.SuspendReason suspendReason) {
             measureCheckpointLatency(() -> task.maybeCheckpoint());
             final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
             changelogReader.unregister(changelogPartitions, suspendReason);
         }
 
         private boolean removePausedTask(final TaskId taskId,
-                                         final CompletableFuture<RemovedTaskResult> future,
-                                         final StandbyUpdateListener.SuspendReason suspendReason) {
+            final CompletableFuture<RemovedTaskResult> future,
+            final StandbyUpdateListener.SuspendReason suspendReason) {
             if (!pausedTasks.containsKey(taskId)) {
                 return false;
             }
@@ -583,7 +583,7 @@ public class DefaultStateUpdater implements StateUpdater {
         }
 
         private void preparePausedTaskForRemoval(final Task task,
-                                                 final StandbyUpdateListener.SuspendReason suspendReason) {
+            final StandbyUpdateListener.SuspendReason suspendReason) {
             final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
             changelogReader.unregister(changelogPartitions, suspendReason);
         }
@@ -668,7 +668,7 @@ public class DefaultStateUpdater implements StateUpdater {
         }
 
         private void maybeCompleteRestoration(final StreamTask task,
-                                              final Set<TopicPartition> restoredChangelogs) {
+            final Set<TopicPartition> restoredChangelogs) {
             final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
             if (restoredChangelogs.containsAll(changelogPartitions)) {
                 try {
@@ -762,11 +762,11 @@ public class DefaultStateUpdater implements StateUpdater {
         }
 
         private void recordWindowedSum(final long now,
-                                       final double idleTime,
-                                       final double checkpointTime,
-                                       final double activeRestoreTime,
-                                       final double standbyRestoreTime,
-                                       final double totalLatency) {
+            final double idleTime,
+            final double checkpointTime,
+            final double activeRestoreTime,
+            final double standbyRestoreTime,
+            final double totalLatency) {
             idleTimeWindowedSum.record(metricsConfig, idleTime, now);
             checkpointTimeWindowedSum.record(metricsConfig, checkpointTime, now);
             activeRestoreTimeWindowedSum.record(metricsConfig, activeRestoreTime, now);
@@ -784,9 +784,9 @@ public class DefaultStateUpdater implements StateUpdater {
         }
 
         private void recordRatio(final long now,
-                                 final double runOnceLatencyWindow,
-                                 final WindowedSum windowedSum,
-                                 final Sensor ratioSensor) {
+            final double runOnceLatencyWindow,
+            final WindowedSum windowedSum,
+            final Sensor ratioSensor) {
             if (runOnceLatencyWindow > 0.0) {
                 final double elapsedTime = windowedSum.measure(metricsConfig, now);
                 ratioSensor.record(elapsedTime / runOnceLatencyWindow, now);
@@ -821,12 +821,12 @@ public class DefaultStateUpdater implements StateUpdater {
     private StateUpdaterThread stateUpdaterThread = null;
 
     public DefaultStateUpdater(final String name,
-                               final StreamsMetricsImpl metrics,
-                               final StreamsConfig config,
-                               final Consumer<byte[], byte[]> restoreConsumer,
-                               final ChangelogReader changelogReader,
-                               final TopologyMetadata topologyMetadata,
-                               final Time time) {
+        final StreamsMetricsImpl metrics,
+        final StreamsConfig config,
+        final Consumer<byte[], byte[]> restoreConsumer,
+        final ChangelogReader changelogReader,
+        final TopologyMetadata topologyMetadata,
+        final Time time) {
         this.time = time;
         this.name = name;
         this.metrics = metrics;
@@ -906,7 +906,7 @@ public class DefaultStateUpdater implements StateUpdater {
 
     @Override
     public CompletableFuture<RemovedTaskResult> remove(final TaskId taskId,
-                                                       final StandbyUpdateListener.SuspendReason suspendReason) {
+        final StandbyUpdateListener.SuspendReason suspendReason) {
         final CompletableFuture<RemovedTaskResult> future = new CompletableFuture<>();
         tasksAndActionsLock.lock();
         try {

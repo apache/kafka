@@ -66,13 +66,13 @@ public class KStreamProcessorApiTest {
             builder.addStateStore(storeBuilder);
         }
         builder.stream("input", Consumed.with(Serdes.String(), Serdes.String()))
-                .processValues(new TransformerSupplier(shouldAddStoreDirectly ? null : storeBuilder), "store")
-                .to("output", Produced.with(Serdes.String(), Serdes.String()));
+            .processValues(new TransformerSupplier(shouldAddStoreDirectly ? null : storeBuilder), "store")
+            .to("output", Produced.with(Serdes.String(), Serdes.String()));
 
         final List<KeyValue<String, String>> words = Arrays.asList(KeyValue.pair("a", "foo"), KeyValue.pair("b", "bar"), KeyValue.pair("c", "baz"));
         try (TopologyTestDriver testDriver = new TopologyTestDriver(builder.build())) {
             final TestInputTopic<String, String>
-                    testDriverInputTopic =
+                testDriverInputTopic =
                     testDriver.createInputTopic("input", Serdes.String().serializer(), Serdes.String().serializer());
 
             words.forEach(clk -> testDriverInputTopic.pipeInput(clk.key, clk.value));
@@ -81,7 +81,7 @@ public class KStreamProcessorApiTest {
 
             final Deserializer<String> keyDeserializer = Serdes.String().deserializer();
             final List<String> actualOutput =
-                    new ArrayList<>(testDriver.createOutputTopic("output", keyDeserializer, Serdes.String().deserializer()).readValuesToList());
+                new ArrayList<>(testDriver.createOutputTopic("output", keyDeserializer, Serdes.String().deserializer()).readValuesToList());
 
             final KeyValueStore<String, String> stateStore = testDriver.getKeyValueStore("store");
 
@@ -91,9 +91,10 @@ public class KStreamProcessorApiTest {
             Assertions.assertEquals("bazUpdated", stateStore.get("c"));
         }
     }
-    
+
     private static class TransformerSupplier implements FixedKeyProcessorSupplier<String, String, String> {
         private final StoreBuilder<?> storeBuilder;
+
         public TransformerSupplier(final StoreBuilder<?> storeBuilder) {
             this.storeBuilder = storeBuilder;
         }
@@ -121,6 +122,7 @@ public class KStreamProcessorApiTest {
 
             };
         }
+
         @Override
         public Set<StoreBuilder<?>> stores() {
             if (storeBuilder != null) {

@@ -87,7 +87,8 @@ public class KStreamForeachTest {
 
     @Test
     public void testTypeVariance() {
-        final ForeachAction<Number, Object> consume = (key, value) -> { };
+        final ForeachAction<Number, Object> consume = (key, value) -> {
+        };
 
         new StreamsBuilder()
             .<Integer, String>stream("emptyTopic")

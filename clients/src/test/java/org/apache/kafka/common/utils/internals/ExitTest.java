@@ -69,7 +69,8 @@ public class ExitTest {
             list.add(runnable);
         });
         try {
-            Runnable runnable = () -> { };
+            Runnable runnable = () -> {
+            };
             String name = "name";
             Exit.addShutdownHook(name, runnable);
             assertEquals(Arrays.asList(name, runnable), list);

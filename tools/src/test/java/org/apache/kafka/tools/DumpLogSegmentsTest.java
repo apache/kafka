@@ -139,10 +139,11 @@ public class DumpLogSegmentsTest {
     private static final Pattern SIZE_PATTERN = Pattern.compile(".+?size:\\s(\\d+).+");
 
     private record BatchInfo(
-        List<SimpleRecord> records,
-        boolean hasKeys,
-        boolean hasValues
-    ) { }
+    List<SimpleRecord> records,
+    boolean hasKeys,
+    boolean hasValues
+    ) {
+    }
 
     private final File tmpDir = TestUtils.tempDir();
     private final File logDir = TestUtils.randomPartitionLogDir(tmpDir);
@@ -215,7 +216,7 @@ public class DumpLogSegmentsTest {
             secondBatchRecords.add(new SimpleRecord(
                 now + i * 3L,
                 ("message key " + i).getBytes(),
-                    null
+                null
             ));
         }
         batches.add(new BatchInfo(secondBatchRecords, true, false));
@@ -224,7 +225,7 @@ public class DumpLogSegmentsTest {
         for (int i = 30; i < 50; i++) {
             thirdBatchRecords.add(new SimpleRecord(
                 now + i * 5L,
-                    null,
+                null,
                 ("message value " + i).getBytes()
             ));
         }
@@ -293,18 +294,18 @@ public class DumpLogSegmentsTest {
         addSimpleRecords(log, batches);
 
         // Verify that records are printed with --print-data-log even if --deep-iteration is not specified
-        verifyRecordsInOutput(batches, true, new String[] {"--print-data-log", "--files", logFilePath});
+        verifyRecordsInOutput(batches, true, new String[]{"--print-data-log", "--files", logFilePath});
         // Verify that records are printed with --print-data-log if --deep-iteration is also specified
-        verifyRecordsInOutput(batches, true, new String[] {"--print-data-log", "--deep-iteration", "--files", logFilePath});
+        verifyRecordsInOutput(batches, true, new String[]{"--print-data-log", "--deep-iteration", "--files", logFilePath});
         // Verify that records are printed with --value-decoder even if --print-data-log is not specified
-        verifyRecordsInOutput(batches, true, new String[] {"--value-decoder-class", "org.apache.kafka.tools.api.StringDecoder", "--files", logFilePath});
+        verifyRecordsInOutput(batches, true, new String[]{"--value-decoder-class", "org.apache.kafka.tools.api.StringDecoder", "--files", logFilePath});
         // Verify that records are printed with --key-decoder even if --print-data-log is not specified
-        verifyRecordsInOutput(batches, true, new String[] {"--key-decoder-class", "org.apache.kafka.tools.api.StringDecoder", "--files", logFilePath});
+        verifyRecordsInOutput(batches, true, new String[]{"--key-decoder-class", "org.apache.kafka.tools.api.StringDecoder", "--files", logFilePath});
         // Verify that records are printed with --deep-iteration even if --print-data-log is not specified
-        verifyRecordsInOutput(batches, false, new String[] {"--deep-iteration", "--files", logFilePath});
+        verifyRecordsInOutput(batches, false, new String[]{"--deep-iteration", "--files", logFilePath});
 
         // Verify that records are not printed by default
-        verifyNoRecordsInOutput(new String[] {"--files", logFilePath});
+        verifyNoRecordsInOutput(new String[]{"--files", logFilePath});
     }
 
     @Test
@@ -336,7 +337,7 @@ public class DumpLogSegmentsTest {
         log = createTestLog();
         addSimpleRecords(log, new ArrayList<>());
 
-        String output = runDumpLogSegments(new String[] {"--index-sanity-check", "--files", indexFilePath});
+        String output = runDumpLogSegments(new String[]{"--index-sanity-check", "--files", indexFilePath});
         assertTrue(output.contains("passed sanity check"), output);
     }
 
@@ -346,7 +347,7 @@ public class DumpLogSegmentsTest {
         addSimpleRecords(log, new ArrayList<>());
 
         String errOutput = captureStandardErr(
-            () -> runDumpLogSegments(new String[] {"--verify-index-only", "--files", indexFilePath}));
+            () -> runDumpLogSegments(new String[]{"--verify-index-only", "--files", indexFilePath}));
         assertTrue(errOutput.isEmpty(), errOutput);
     }
 
@@ -377,7 +378,7 @@ public class DumpLogSegmentsTest {
         LogConfig logConfig = createLogConfig(1024 * 1024);
         log = createLog(logConfig);
 
-        String output = runDumpLogSegments(new String[] {"--remote-log-metadata-decoder", "--files", logFilePath});
+        String output = runDumpLogSegments(new String[]{"--remote-log-metadata-decoder", "--files", logFilePath});
         assertEquals(0, batchCount(output));
         assertEquals(0, recordCount(output));
         assertTrue(output.contains("Log starting offset: 0"));
@@ -405,7 +406,7 @@ public class DumpLogSegmentsTest {
         String expectedDeletePayload = String.format("RemotePartitionDeleteMetadata{topicPartition=%s:%s-0, " +
             "state=DELETE_PARTITION_MARKED, eventTimestampMs=0, brokerId=0}", topicId, topicName);
 
-        String output = runDumpLogSegments(new String[] {"--remote-log-metadata-decoder", "--files", logFilePath});
+        String output = runDumpLogSegments(new String[]{"--remote-log-metadata-decoder", "--files", logFilePath});
         assertEquals(1, batchCount(output));
         assertEquals(1, recordCount(output));
         assertTrue(output.contains("Log starting offset: 0"));
@@ -425,7 +426,7 @@ public class DumpLogSegmentsTest {
             new RemoteLogSegmentMetadataUpdate(
                 remoteLogSegmentId,
                 time.milliseconds(),
-                Optional.of(new RemoteLogSegmentMetadata.CustomMetadata(new byte[] {0, 1, 2, 3})),
+                Optional.of(new RemoteLogSegmentMetadata.CustomMetadata(new byte[]{0, 1, 2, 3})),
                 RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
                 0
             ),
@@ -453,7 +454,7 @@ public class DumpLogSegmentsTest {
         String expectedDeletePayload = String.format("RemotePartitionDeleteMetadata{topicPartition=%s:%s-0, " +
             "state=DELETE_PARTITION_MARKED, eventTimestampMs=0, brokerId=0}", topicId, topicName);
 
-        String output = runDumpLogSegments(new String[] {"--remote-log-metadata-decoder", "--files", logFilePath});
+        String output = runDumpLogSegments(new String[]{"--remote-log-metadata-decoder", "--files", logFilePath});
         assertEquals(1, batchCount(output));
         assertEquals(2, recordCount(output));
         assertTrue(output.contains("Log starting offset: 0"));
@@ -474,7 +475,7 @@ public class DumpLogSegmentsTest {
             new RemoteLogSegmentMetadataUpdate(
                 remoteLogSegmentId,
                 time.milliseconds(),
-                Optional.of(new RemoteLogSegmentMetadata.CustomMetadata(new byte[] {0, 1, 2, 3})),
+                Optional.of(new RemoteLogSegmentMetadata.CustomMetadata(new byte[]{0, 1, 2, 3})),
                 RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
                 0
             ),
@@ -503,7 +504,7 @@ public class DumpLogSegmentsTest {
         String expectedDeletePayload = String.format("RemotePartitionDeleteMetadata{topicPartition=%s:%s-0, " +
             "state=DELETE_PARTITION_MARKED, eventTimestampMs=0, brokerId=0}", topicId, topicName);
 
-        String output = runDumpLogSegments(new String[] {"--remote-log-metadata-decoder", "--files", logFilePath});
+        String output = runDumpLogSegments(new String[]{"--remote-log-metadata-decoder", "--files", logFilePath});
         assertEquals(2, batchCount(output));
         assertEquals(4, recordCount(output));
         assertTrue(output.contains("Log starting offset: 0"));
@@ -536,7 +537,7 @@ public class DumpLogSegmentsTest {
         String expectedDeletePayload = String.format("RemotePartitionDeleteMetadata{topicPartition=%s:%s-0, " +
             "state=DELETE_PARTITION_MARKED, eventTimestampMs=0, brokerId=0}", topicId, topicName);
 
-        String output = runDumpLogSegments(new String[] {"--remote-log-metadata-decoder", "--files",
+        String output = runDumpLogSegments(new String[]{"--remote-log-metadata-decoder", "--files",
             secondSegment.log().file().getAbsolutePath()});
         assertEquals(1, batchCount(output));
         assertEquals(1, recordCount(output));
@@ -546,14 +547,14 @@ public class DumpLogSegmentsTest {
 
     @Test
     public void testDumpRemoteLogMetadataWithCorruption() throws Exception {
-        SimpleRecord[] metadataRecords = new SimpleRecord[] {new SimpleRecord(null, "corrupted".getBytes())};
+        SimpleRecord[] metadataRecords = new SimpleRecord[]{new SimpleRecord(null, "corrupted".getBytes())};
 
         LogConfig logConfig = createLogConfig(1024 * 1024);
         log = createLog(logConfig);
         log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, metadataRecords), 0);
         log.flush(false);
 
-        String output = runDumpLogSegments(new String[] {"--remote-log-metadata-decoder", "--files", logFilePath});
+        String output = runDumpLogSegments(new String[]{"--remote-log-metadata-decoder", "--files", logFilePath});
         assertEquals(1, batchCount(output));
         assertEquals(1, recordCount(output));
         assertTrue(output.contains("Log starting offset: 0"));
@@ -582,7 +583,7 @@ public class DumpLogSegmentsTest {
         Files.setPosixFilePermissions(Paths.get(logFilePath), PosixFilePermissions.fromString("-w-------"));
 
         RuntimeException thrown = assertThrows(RuntimeException.class,
-            () -> runDumpLogSegments(new String[] {"--remote-log-metadata-decoder", "--files", logFilePath}));
+            () -> runDumpLogSegments(new String[]{"--remote-log-metadata-decoder", "--files", logFilePath}));
         assertInstanceOf(AccessDeniedException.class, thrown.getCause());
     }
 
@@ -593,7 +594,7 @@ public class DumpLogSegmentsTest {
         });
         try {
             IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class,
-                () -> runDumpLogSegments(new String[] {"--remote-log-metadata-decoder"}));
+                () -> runDumpLogSegments(new String[]{"--remote-log-metadata-decoder"}));
             assertEquals("Missing required argument \"[files]\"", thrown.getMessage());
         } finally {
             Exit.resetExitProcedure();
@@ -604,7 +605,7 @@ public class DumpLogSegmentsTest {
     public void testDumpRemoteLogMetadataNoSuchFileException() {
         String noSuchFileLogPath = "/tmp/nosuchfile/00000000000000000000.log";
         RuntimeException thrown = assertThrows(RuntimeException.class,
-            () -> runDumpLogSegments(new String[] {"--remote-log-metadata-decoder", "--files", noSuchFileLogPath}));
+            () -> runDumpLogSegments(new String[]{"--remote-log-metadata-decoder", "--files", noSuchFileLogPath}));
         assertInstanceOf(NoSuchFileException.class, thrown.getCause());
     }
 
@@ -641,12 +642,12 @@ public class DumpLogSegmentsTest {
         log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records.toArray(new SimpleRecord[0])), 1);
         log.flush(false);
 
-        String output = runDumpLogSegments(new String[] {"--cluster-metadata-decoder", "--files", logFilePath});
+        String output = runDumpLogSegments(new String[]{"--cluster-metadata-decoder", "--files", logFilePath});
         assertTrue(output.contains("Log starting offset: 0"));
         assertTrue(output.contains("TOPIC_RECORD"));
         assertTrue(output.contains("BROKER_RECORD"));
 
-        output = runDumpLogSegments(new String[] {"--cluster-metadata-decoder", "--skip-record-metadata", "--files", logFilePath});
+        output = runDumpLogSegments(new String[]{"--cluster-metadata-decoder", "--skip-record-metadata", "--files", logFilePath});
         assertTrue(output.contains("TOPIC_RECORD"));
         assertTrue(output.contains("BROKER_RECORD"));
 
@@ -658,7 +659,7 @@ public class DumpLogSegmentsTest {
         log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(null, buf.array())), 2);
         log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records.toArray(new SimpleRecord[0])), 2);
 
-        output = runDumpLogSegments(new String[] {"--cluster-metadata-decoder", "--skip-record-metadata", "--files", logFilePath});
+        output = runDumpLogSegments(new String[]{"--cluster-metadata-decoder", "--skip-record-metadata", "--files", logFilePath});
         assertTrue(output.contains("TOPIC_RECORD"));
         assertTrue(output.contains("BROKER_RECORD"));
         assertTrue(output.contains("skipping"));
@@ -694,7 +695,7 @@ public class DumpLogSegmentsTest {
         ), 0, AppendOrigin.COORDINATOR);
         log.flush(false);
 
-        String output = runDumpLogSegments(new String[] {"--cluster-metadata-decoder", "--files", logFilePath});
+        String output = runDumpLogSegments(new String[]{"--cluster-metadata-decoder", "--files", logFilePath});
         assertTrue(output.contains("endTxnMarker"), output);
         assertTrue(output.contains("LeaderChange"), output);
         assertTrue(output.contains("SnapshotHeader"), output);
@@ -735,18 +736,18 @@ public class DumpLogSegmentsTest {
         long lastContainedLogTimestamp = 10000;
 
         try (RecordsSnapshotWriter<ApiMessageAndVersion> snapshotWriter = new RecordsSnapshotWriter.Builder()
-            .setTime(new MockTime())
-            .setLastContainedLogTimestamp(lastContainedLogTimestamp)
-            .setRawSnapshotWriter(metadataLog.createNewSnapshot(new OffsetAndEpoch(0, 0)).get())
-            .setKraftVersion(KRaftVersion.KRAFT_VERSION_1)
-            .setVoterSet(Optional.of(createVoterSet()))
-            .build(MetadataRecordSerde.INSTANCE)
+                 .setTime(new MockTime())
+                 .setLastContainedLogTimestamp(lastContainedLogTimestamp)
+                 .setRawSnapshotWriter(metadataLog.createNewSnapshot(new OffsetAndEpoch(0, 0)).get())
+                 .setKraftVersion(KRaftVersion.KRAFT_VERSION_1)
+                 .setVoterSet(Optional.of(createVoterSet()))
+                 .build(MetadataRecordSerde.INSTANCE)
         ) {
             snapshotWriter.append(metadataRecords);
             snapshotWriter.freeze();
         }
 
-        String output = runDumpLogSegments(new String[] {"--cluster-metadata-decoder", "--files", snapshotPath});
+        String output = runDumpLogSegments(new String[]{"--cluster-metadata-decoder", "--files", snapshotPath});
         assertTrue(output.contains("Snapshot end offset: 0, epoch: 0"), output);
         assertTrue(output.contains("TOPIC_RECORD"), output);
         assertTrue(output.contains("BROKER_RECORD"), output);
@@ -756,7 +757,7 @@ public class DumpLogSegmentsTest {
         assertTrue(output.contains("KRaftVoters"), output);
         assertTrue(output.contains("\"lastContainedLogTimestamp\":" + lastContainedLogTimestamp), output);
 
-        output = runDumpLogSegments(new String[] {"--cluster-metadata-decoder", "--skip-record-metadata", "--files", snapshotPath});
+        output = runDumpLogSegments(new String[]{"--cluster-metadata-decoder", "--skip-record-metadata", "--files", snapshotPath});
         assertTrue(output.contains("Snapshot end offset: 0, epoch: 0"), output);
         assertTrue(output.contains("TOPIC_RECORD"), output);
         assertTrue(output.contains("BROKER_RECORD"), output);
@@ -801,14 +802,14 @@ public class DumpLogSegmentsTest {
         int partialBatches = totalBatches / 2;
 
         // Get all the batches
-        String output = runDumpLogSegments(new String[] {"--files", logFilePath});
+        String output = runDumpLogSegments(new String[]{"--files", logFilePath});
         ListIterator<String> lines = Arrays.asList(output.split("\n")).listIterator();
 
         // Get total bytes of the partial batches
         int partialBatchesBytes = readPartialBatchesBytes(lines, partialBatches);
 
         // Request only the partial batches by bytes
-        String partialOutput = runDumpLogSegments(new String[] {"--max-bytes", Integer.toString(partialBatchesBytes), "--files", logFilePath});
+        String partialOutput = runDumpLogSegments(new String[]{"--max-bytes", Integer.toString(partialBatchesBytes), "--files", logFilePath});
         ListIterator<String> partialLines = Arrays.asList(partialOutput.split("\n")).listIterator();
 
         // Count the total of partial batches limited by bytes
@@ -1142,7 +1143,7 @@ public class DumpLogSegmentsTest {
     private void assertDumpLogRecordMetadata(UnifiedLog log) throws Exception {
         FetchDataInfo logReadInfo = log.read(0, Integer.MAX_VALUE, FetchIsolation.LOG_END, true);
 
-        String output = runDumpLogSegments(new String[] {"--deep-iteration", "--files", logFilePath});
+        String output = runDumpLogSegments(new String[]{"--deep-iteration", "--files", logFilePath});
         ListIterator<String> lines = Arrays.asList(output.split("\n")).listIterator();
 
         for (RecordBatch batch : logReadInfo.records.batches()) {
@@ -1210,19 +1211,19 @@ public class DumpLogSegmentsTest {
                     .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
                     .setPartition(0),
                 new ApiMessageAndVersion(new ShareSnapshotValue()
-                    .setSnapshotEpoch(0)
-                    .setStateEpoch(0)
-                    .setLeaderEpoch(0)
-                    .setStartOffset(0)
-                    .setCreateTimestamp(timestamp)
-                    .setWriteTimestamp(timestamp)
-                    .setStateBatches(List.of(
-                        new ShareSnapshotValue.StateBatch()
-                            .setFirstOffset(0)
-                            .setLastOffset(4)
-                            .setDeliveryState((byte) 2)
-                            .setDeliveryCount((short) 1)
-                    )),
+                        .setSnapshotEpoch(0)
+                        .setStateEpoch(0)
+                        .setLeaderEpoch(0)
+                        .setStartOffset(0)
+                        .setCreateTimestamp(timestamp)
+                        .setWriteTimestamp(timestamp)
+                        .setStateBatches(List.of(
+                            new ShareSnapshotValue.StateBatch()
+                                .setFirstOffset(0)
+                                .setLastOffset(4)
+                                .setDeliveryState((byte) 2)
+                                .setDeliveryCount((short) 1)
+                        )),
                     (short) 0)
             )),
             Optional.of("{\"type\":\"0\",\"data\":{\"groupId\":\"gs1\",\"topicId\":\"Uj5wn_FqTXirEASvVZRY1w\",\"partition\":0}}"),
@@ -1240,16 +1241,16 @@ public class DumpLogSegmentsTest {
                     .setTopicId(Uuid.fromString("Uj5wn_FqTXirEASvVZRY1w"))
                     .setPartition(0),
                 new ApiMessageAndVersion(new ShareUpdateValue()
-                    .setSnapshotEpoch(0)
-                    .setLeaderEpoch(0)
-                    .setStartOffset(0)
-                    .setStateBatches(List.of(
-                        new ShareUpdateValue.StateBatch()
-                            .setFirstOffset(0)
-                            .setLastOffset(4)
-                            .setDeliveryState((byte) 2)
-                            .setDeliveryCount((short) 1)
-                    )),
+                        .setSnapshotEpoch(0)
+                        .setLeaderEpoch(0)
+                        .setStartOffset(0)
+                        .setStateBatches(List.of(
+                            new ShareUpdateValue.StateBatch()
+                                .setFirstOffset(0)
+                                .setLastOffset(4)
+                                .setDeliveryState((byte) 2)
+                                .setDeliveryCount((short) 1)
+                        )),
                     (short) 0)
             )),
             Optional.of("{\"type\":\"1\",\"data\":{\"groupId\":\"gs1\",\"topicId\":\"Uj5wn_FqTXirEASvVZRY1w\",\"partition\":0}}"),
@@ -1454,7 +1455,7 @@ public class DumpLogSegmentsTest {
         }
 
         // Dump the legacy log file
-        String output = runDumpLogSegments(new String[] {"--deep-iteration", "--files", legacyLogFile.getAbsolutePath()});
+        String output = runDumpLogSegments(new String[]{"--deep-iteration", "--files", legacyLogFile.getAbsolutePath()});
 
         // Verify the output contains legacy batch fields
         assertTrue(output.contains("Log starting offset:"), "Output should contain log starting offset");
@@ -1473,7 +1474,7 @@ public class DumpLogSegmentsTest {
 
         assertEquals(openBraces, closeBraces,
             "Output should have balanced braces (no unmatched closing brace). " +
-            "Found " + openBraces + " '{' and " + closeBraces + " '}'");
+                "Found " + openBraces + " '{' and " + closeBraces + " '}'");
     }
 
     @Test

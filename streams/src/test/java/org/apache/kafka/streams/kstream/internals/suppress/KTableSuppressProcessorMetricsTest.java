@@ -137,7 +137,7 @@ public class KTableSuppressProcessorMetricsTest {
             storeName, Serdes.String(),
             Serdes.Long()
         )
-            .withLoggingDisabled()
+        .withLoggingDisabled()
             .build();
 
         @SuppressWarnings("unchecked")
@@ -202,8 +202,8 @@ public class KTableSuppressProcessorMetricsTest {
 
     @SuppressWarnings("unchecked")
     private static <T> void verifyMetric(final Map<MetricName, ? extends Metric> metrics,
-                                         final MetricName metricName,
-                                         final Matcher<T> matcher) {
+        final MetricName metricName,
+        final Matcher<T> matcher) {
         assertThat(metrics.get(metricName).metricName().description(), is(metricName.description()));
         assertThat((T) metrics.get(metricName).metricValue(), matcher);
     }

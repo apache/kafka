@@ -181,15 +181,15 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         final String newConsumer = "consumer2";
 
         subscriptions.put(firstConsumer,
-                          new Subscription(
-                              singletonList("source1"),
-                              getInfo(PID_1, allTasks).encode()
-                          ));
+            new Subscription(
+                singletonList("source1"),
+                getInfo(PID_1, allTasks).encode()
+            ));
         subscriptions.put(newConsumer,
-                          new Subscription(
-                              singletonList("source1"),
-                              getInfo(PID_2, EMPTY_TASKS).encode()
-                          ));
+            new Subscription(
+                singletonList("source1"),
+                getInfo(PID_2, EMPTY_TASKS).encode()
+            ));
 
         final Map<String, Assignment> assignments = partitionAssignor
             .assign(metadata, new GroupSubscription(subscriptions))
@@ -227,8 +227,8 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
 
         createMockTaskManager();
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
-                singletonList(APPLICATION_ID + "-store1-changelog"),
-                singletonList(3)),
+            singletonList(APPLICATION_ID + "-store1-changelog"),
+            singletonList(3)),
             true);
         configurePartitionAssignorWith(singletonMap(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, rebalanceInterval));
 
@@ -236,15 +236,15 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         final String newConsumer = "consumer2";
 
         subscriptions.put(firstConsumer,
-                          new Subscription(
-                              singletonList("source1"),
-                              getInfo(PID_1, allTasks).encode()
-                          ));
+            new Subscription(
+                singletonList("source1"),
+                getInfo(PID_1, allTasks).encode()
+            ));
         subscriptions.put(newConsumer,
-                          new Subscription(
-                              singletonList("source1"),
-                              getInfo(PID_2, EMPTY_TASKS).encode()
-                          ));
+            new Subscription(
+                singletonList("source1"),
+                getInfo(PID_2, EMPTY_TASKS).encode()
+            ));
 
         final Map<String, Assignment> assignments = partitionAssignor
             .assign(metadata, new GroupSubscription(subscriptions))
@@ -279,10 +279,10 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
      *            of partitions of the ith topic in changelogTopics is given by the ith element of topicsNumPartitions
      */
     private static Map<TopicPartition, Long> getTopicPartitionOffsetsMap(final List<String> changelogTopics,
-                                                                         final List<Integer> topicsNumPartitions) {
+        final List<Integer> topicsNumPartitions) {
         if (changelogTopics.size() != topicsNumPartitions.size()) {
             throw new IllegalStateException("Passed in " + changelogTopics.size() + " changelog topic names, but " +
-                                                topicsNumPartitions.size() + " different numPartitions for the topics");
+                topicsNumPartitions.size() + " different numPartitions for the topics");
         }
         final Map<TopicPartition, Long> changelogEndOffsets = new HashMap<>();
         for (int i = 0; i < changelogTopics.size(); ++i) {
@@ -296,7 +296,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
     }
 
     private static SubscriptionInfo getInfo(final ProcessId processId,
-                                            final Set<TaskId> prevTasks) {
+        final Set<TaskId> prevTasks) {
         return new SubscriptionInfo(
             LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks), (byte) 0, 0, Collections.emptyMap());
     }

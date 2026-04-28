@@ -46,6 +46,7 @@ public class ListDeserializerTest {
     private final ListDeserializer<?> listDeserializer = new ListDeserializer<>();
     private final Map<String, Object> props = new HashMap<>();
     private final String nonExistingClass = "non.existing.class";
+
     private static class FakeObject {
     }
 

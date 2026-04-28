@@ -35,11 +35,16 @@ public enum QuotaType {
 
     public static ClientQuotaType toClientQuotaType(QuotaType quotaType) {
         switch (quotaType) {
-            case FETCH: return ClientQuotaType.FETCH;
-            case PRODUCE: return ClientQuotaType.PRODUCE;
-            case REQUEST: return ClientQuotaType.REQUEST;
-            case CONTROLLER_MUTATION: return ClientQuotaType.CONTROLLER_MUTATION;
-            default: throw new IllegalArgumentException("Not a client quota type: " + quotaType);
+            case FETCH:
+                return ClientQuotaType.FETCH;
+            case PRODUCE:
+                return ClientQuotaType.PRODUCE;
+            case REQUEST:
+                return ClientQuotaType.REQUEST;
+            case CONTROLLER_MUTATION:
+                return ClientQuotaType.CONTROLLER_MUTATION;
+            default:
+                throw new IllegalArgumentException("Not a client quota type: " + quotaType);
         }
     }
 

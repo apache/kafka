@@ -146,15 +146,15 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
                 topicName, new TxnOffsetCommitResponseTopic().setName(topicName));
 
             topic.partitions().add(new TxnOffsetCommitResponsePartition()
-                                       .setErrorCode(entry.getValue().code())
-                                       .setPartitionIndex(topicPartition.partition())
+                .setErrorCode(entry.getValue().code())
+                .setPartitionIndex(topicPartition.partition())
             );
             responseTopicDataMap.put(topicName, topic);
         }
 
         data = new TxnOffsetCommitResponseData()
-                   .setTopics(new ArrayList<>(responseTopicDataMap.values()))
-                   .setThrottleTimeMs(requestThrottleMs);
+            .setTopics(new ArrayList<>(responseTopicDataMap.values()))
+            .setThrottleTimeMs(requestThrottleMs);
     }
 
     @Override
@@ -175,8 +175,8 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         return errorCounts(data.topics().stream().flatMap(topic ->
-                topic.partitions().stream().map(partition ->
-                        Errors.forCode(partition.errorCode()))));
+            topic.partitions().stream().map(partition ->
+                Errors.forCode(partition.errorCode()))));
     }
 
     public Map<TopicPartition, Errors> errors() {
@@ -184,7 +184,7 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
         for (TxnOffsetCommitResponseTopic topic : data.topics()) {
             for (TxnOffsetCommitResponsePartition partition : topic.partitions()) {
                 errorMap.put(new TopicPartition(topic.name(), partition.partitionIndex()),
-                             Errors.forCode(partition.errorCode()));
+                    Errors.forCode(partition.errorCode()));
             }
         }
         return errorMap;

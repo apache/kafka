@@ -55,7 +55,7 @@ class RemoteLogLeaderEpochStateTest {
         RemoteLogSegmentId segmentId2 = new RemoteLogSegmentId(tpId, Uuid.randomUuid());
         epochState.handleSegmentWithCopySegmentFinishedState(0L, segmentId1, 10L);
         assertThrows(RemoteResourceNotFoundException.class,
-            () -> epochState.listAllRemoteLogSegments(Collections.singletonMap(segmentId2, null)));
+                () -> epochState.listAllRemoteLogSegments(Collections.singletonMap(segmentId2, null)));
     }
 
     @Test
@@ -197,7 +197,7 @@ class RemoteLogLeaderEpochStateTest {
     }
 
     private RemoteLogSegmentMetadata createRemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId,
-                                                                    long startOffset) {
+            long startOffset) {
         RemoteLogSegmentMetadata metadata = mock(RemoteLogSegmentMetadata.class);
         when(metadata.remoteLogSegmentId()).thenReturn(remoteLogSegmentId);
         when(metadata.startOffset()).thenReturn(startOffset);

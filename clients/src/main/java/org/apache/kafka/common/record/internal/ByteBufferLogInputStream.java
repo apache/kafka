@@ -71,10 +71,10 @@ class ByteBufferLogInputStream implements LogInputStream<MutableRecordBatch> {
         // V0 has the smallest overhead, stricter checking is done later
         if (recordSize < LegacyRecord.RECORD_OVERHEAD_V0)
             throw new CorruptRecordException(String.format("Record size %d is less than the minimum record overhead (%d)",
-                    recordSize, LegacyRecord.RECORD_OVERHEAD_V0));
+                recordSize, LegacyRecord.RECORD_OVERHEAD_V0));
         if (recordSize > maxMessageSize)
             throw new CorruptRecordException(String.format("Record size %d exceeds the largest allowable message size (%d).",
-                    recordSize, maxMessageSize));
+                recordSize, maxMessageSize));
 
         if (remaining < HEADER_SIZE_UP_TO_MAGIC)
             return null;

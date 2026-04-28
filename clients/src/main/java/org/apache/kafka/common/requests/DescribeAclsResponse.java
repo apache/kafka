@@ -120,14 +120,14 @@ public class DescribeAclsResponse extends AbstractResponse {
     private static Stream<AclBinding> aclBindings(DescribeAclsResource resource) {
         return resource.acls().stream().map(acl -> {
             ResourcePattern pattern = new ResourcePattern(
-                    ResourceType.fromCode(resource.resourceType()),
-                    resource.resourceName(),
-                    PatternType.fromCode(resource.patternType()));
+                ResourceType.fromCode(resource.resourceType()),
+                resource.resourceName(),
+                PatternType.fromCode(resource.patternType()));
             AccessControlEntry entry = new AccessControlEntry(
-                    acl.principal(),
-                    acl.host(),
-                    AclOperation.fromCode(acl.operation()),
-                    AclPermissionType.fromCode(acl.permissionType()));
+                acl.principal(),
+                acl.host(),
+                AclOperation.fromCode(acl.operation()),
+                AclPermissionType.fromCode(acl.permissionType()));
             return new AclBinding(pattern, entry);
         });
     }

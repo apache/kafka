@@ -115,8 +115,8 @@ public class StandbyTaskCreationIntegrationTest {
         final String stateStoreName = "myTransformState";
         final StoreBuilder<KeyValueStore<Integer, Integer>> keyValueStoreBuilder =
             Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(stateStoreName),
-                                        Serdes.Integer(),
-                                        Serdes.Integer()).withLoggingDisabled();
+                Serdes.Integer(),
+                Serdes.Integer()).withLoggingDisabled();
         builder.addStateStore(keyValueStoreBuilder);
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.Integer(), Serdes.Integer()))
             // don't use method reference below as it won't create a new `Processor` instance but re-use the same object
@@ -168,9 +168,9 @@ public class StandbyTaskCreationIntegrationTest {
     }
 
     private void createClients(final Topology topology1,
-                               final Properties streamsConfiguration1,
-                               final Topology topology2,
-                               final Properties streamsConfiguration2) {
+        final Properties streamsConfiguration1,
+        final Topology topology2,
+        final Properties streamsConfiguration2) {
 
         client1 = new KafkaStreams(topology1, streamsConfiguration1);
         client2 = new KafkaStreams(topology2, streamsConfiguration2);

@@ -122,7 +122,7 @@ public class SinglePointMetricTest {
         assertEquals(1, metric.getGauge().getDataPointsCount());
         NumberDataPoint point = metric.getGauge().getDataPoints(0);
         assertEquals(2, point.getAttributesCount());
-        for (int i = 0; i < point.getAttributesCount(); i++) {
+        for (int i = 0;i < point.getAttributesCount();i++) {
             assertTrue(
                 point.getAttributes(i).getKey().equals("tag1") || point.getAttributes(i).getKey().equals("tag2"));
             assertTrue(
@@ -156,7 +156,7 @@ public class SinglePointMetricTest {
         assertEquals(1, metric.getGauge().getDataPointsCount());
         NumberDataPoint point = metric.getGauge().getDataPoints(0);
         assertEquals(2, point.getAttributesCount());
-        for (int i = 0; i < point.getAttributesCount(); i++) {
+        for (int i = 0;i < point.getAttributesCount();i++) {
             assertTrue(
                 point.getAttributes(i).getKey().equals("tag1") || point.getAttributes(i).getKey().equals("tag2"));
             assertTrue(
@@ -231,7 +231,7 @@ public class SinglePointMetricTest {
         assertEquals(1, metric.getSum().getDataPointsCount());
         NumberDataPoint point = metric.getSum().getDataPoints(0);
         assertEquals(2, point.getAttributesCount());
-        for (int i = 0; i < point.getAttributesCount(); i++) {
+        for (int i = 0;i < point.getAttributesCount();i++) {
             assertTrue(
                 point.getAttributes(i).getKey().equals("tag1") || point.getAttributes(i).getKey().equals("tag2"));
             assertTrue(
@@ -284,7 +284,7 @@ public class SinglePointMetricTest {
         assertEquals(1, metric.getSum().getDataPointsCount());
         NumberDataPoint point = metric.getSum().getDataPoints(0);
         assertEquals(2, point.getAttributesCount());
-        for (int i = 0; i < point.getAttributesCount(); i++) {
+        for (int i = 0;i < point.getAttributesCount();i++) {
             assertTrue(
                 point.getAttributes(i).getKey().equals("tag1") || point.getAttributes(i).getKey().equals("tag2"));
             assertTrue(

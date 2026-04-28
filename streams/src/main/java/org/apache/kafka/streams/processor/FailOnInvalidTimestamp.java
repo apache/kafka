@@ -59,9 +59,9 @@ public class FailOnInvalidTimestamp extends ExtractRecordMetadataTimestamp {
      */
     @Override
     public long onInvalidTimestamp(final ConsumerRecord<Object, Object> record,
-                                   final long recordTimestamp,
-                                   final long partitionTime)
-            throws StreamsException {
+        final long recordTimestamp,
+        final long partitionTime)
+        throws StreamsException {
 
         final String message = "Input record " + record + " has invalid (negative) timestamp. " +
             "Possibly because a pre-0.10 producer client was used to write this record to Kafka without embedding " +

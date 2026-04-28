@@ -271,6 +271,7 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
             .build();
 
     public static final String LOGGER_CLUSTER_PREFIX = "logger-cluster-";
+
     public static String LOGGER_CLUSTER_KEY(String namespace) {
         return LOGGER_CLUSTER_PREFIX + namespace;
     }
@@ -595,7 +596,7 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
         // Send all the individual updates
         int index = 0;
         List<ProducerKeyValue> keyValues = new ArrayList<>();
-        for (Map<String, String> taskConfig: configs) {
+        for (Map<String, String> taskConfig : configs) {
             Struct connectConfig = new Struct(TASK_CONFIGURATION_V0);
             connectConfig.put("properties", taskConfig);
             byte[] serializedConfig = converter.fromConnectData(topic, TASK_CONFIGURATION_V0, connectConfig);
@@ -656,7 +657,7 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
         log.debug("Writing target state {} for connector {}", state, connector);
         try {
             configLog.sendWithReceipt(TARGET_STATE_KEY(connector), serializeTargetState(state))
-                .get(READ_WRITE_TOTAL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+                    .get(READ_WRITE_TOTAL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to write target state to Kafka", e);
             throw new ConnectException("Error writing target state to Kafka", e);
@@ -790,8 +791,8 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
         adminProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
 
         Map<String, Object> topicSettings = config instanceof DistributedConfig
-                                            ? ((DistributedConfig) config).configStorageTopicSettings()
-                                            : Map.of();
+                ? ((DistributedConfig) config).configStorageTopicSettings()
+                : Map.of();
         NewTopic topicDescription = TopicAdmin.defineTopic(topic)
                 .config(topicSettings) // first so that we override user-supplied settings as needed
                 .compacted()
@@ -1065,8 +1066,8 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
                 processConnectorRemoval(connectorName);
                 log.debug(
                         "Ignoring task configs for connector {}; it appears that the connector was deleted previously "
-                            + "and that log compaction has since removed any trace of its previous configurations "
-                            + "from the config topic",
+                                + "and that log compaction has since removed any trace of its previous configurations "
+                                + "from the config topic",
                         connectorName
                 );
                 return;
@@ -1173,7 +1174,7 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
 
     private void processTaskCountRecord(String connectorName, SchemaAndValue value) {
         if (!(value.value() instanceof Map)) {
-            log.error("Ignoring task count record for connector '{}' because it is in the wrong format: {}",  connectorName, className(value.value()));
+            log.error("Ignoring task count record for connector '{}' because it is in the wrong format: {}", connectorName, className(value.value()));
             return;
         }
         @SuppressWarnings("unchecked")

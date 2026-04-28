@@ -30,8 +30,8 @@ public class PartitionMetadataReadBuffer {
     private final BufferedReader reader;
 
     public PartitionMetadataReadBuffer(
-        String location,
-        BufferedReader reader
+            String location,
+            BufferedReader reader
     ) {
         this.location = location;
         this.reader = reader;

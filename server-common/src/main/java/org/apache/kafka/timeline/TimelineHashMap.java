@@ -36,10 +36,10 @@ import java.util.Set;
  * @param <V>   The value type of the set.
  */
 public class TimelineHashMap<K, V>
-        extends SnapshottableHashTable<TimelineHashMap.TimelineHashMapEntry<K, V>>
-        implements Map<K, V> {
+    extends SnapshottableHashTable<TimelineHashMap.TimelineHashMapEntry<K, V>>
+    implements Map<K, V> {
     static class TimelineHashMapEntry<K, V>
-            implements SnapshottableHashTable.ElementWithStartEpoch, Map.Entry<K, V> {
+        implements SnapshottableHashTable.ElementWithStartEpoch, Map.Entry<K, V> {
         private final K key;
         private final V value;
         private long startEpoch;

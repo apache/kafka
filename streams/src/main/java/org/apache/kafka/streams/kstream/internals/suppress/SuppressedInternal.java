@@ -46,10 +46,10 @@ public class SuppressedInternal<K> implements Suppressed<K>, NamedSuppressed<K> 
      *                             compact).
      */
     public SuppressedInternal(final String name,
-                              final Duration suppressionTime,
-                              final BufferConfig<?> bufferConfig,
-                              final TimeDefinition<K> timeDefinition,
-                              final boolean safeToDropTombstones) {
+        final Duration suppressionTime,
+        final BufferConfig<?> bufferConfig,
+        final TimeDefinition<K> timeDefinition,
+        final boolean safeToDropTombstones) {
         this.name = name;
         this.timeToWaitForMoreEvents = suppressionTime == null ? DEFAULT_SUPPRESSION_TIME : suppressionTime;
         this.timeDefinition = timeDefinition == null ? TimeDefinitions.RecordTimeDefinition.instance() : timeDefinition;
@@ -108,11 +108,11 @@ public class SuppressedInternal<K> implements Suppressed<K>, NamedSuppressed<K> 
     @Override
     public String toString() {
         return "SuppressedInternal{" +
-                "name='" + name + '\'' +
-                ", bufferConfig=" + bufferConfig +
-                ", timeToWaitForMoreEvents=" + timeToWaitForMoreEvents +
-                ", timeDefinition=" + timeDefinition +
-                ", safeToDropTombstones=" + safeToDropTombstones +
-                '}';
+            "name='" + name + '\'' +
+            ", bufferConfig=" + bufferConfig +
+            ", timeToWaitForMoreEvents=" + timeToWaitForMoreEvents +
+            ", timeDefinition=" + timeDefinition +
+            ", safeToDropTombstones=" + safeToDropTombstones +
+            '}';
     }
 }

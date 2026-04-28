@@ -114,7 +114,7 @@ public class ShareMembershipManagerTest {
 
     private ShareMembershipManager createMembershipManagerJoiningGroup() {
         ShareMembershipManager manager = spy(new ShareMembershipManager(
-                logContext, GROUP_ID, RACK_ID, subscriptionState, metadata, time, rebalanceMetricsManager));
+            logContext, GROUP_ID, RACK_ID, subscriptionState, metadata, time, rebalanceMetricsManager));
         assertMemberIdIsGenerated(manager.memberId());
         manager.transitionToJoining();
         return manager;
@@ -124,7 +124,7 @@ public class ShareMembershipManagerTest {
     public void testMembershipManagerRegistersForClusterMetadataUpdatesOnFirstJoin() {
         // First join should register to get metadata updates
         ShareMembershipManager manager = new ShareMembershipManager(
-                logContext, GROUP_ID, RACK_ID, subscriptionState, metadata, time, rebalanceMetricsManager);
+            logContext, GROUP_ID, RACK_ID, subscriptionState, metadata, time, rebalanceMetricsManager);
         manager.transitionToJoining();
         clearInvocations(metadata);
 
@@ -159,7 +159,7 @@ public class ShareMembershipManagerTest {
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
         ShareGroupHeartbeatResponse responseWithAssignment =
-                createShareGroupHeartbeatResponse(createAssignment(true), membershipManager.memberId());
+            createShareGroupHeartbeatResponse(createAssignment(true), membershipManager.memberId());
         membershipManager.onHeartbeatSuccess(responseWithAssignment);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
     }
@@ -192,7 +192,7 @@ public class ShareMembershipManagerTest {
     @Test
     public void testTransitionToFailedWhenTryingToJoin() {
         ShareMembershipManager membershipManager = new ShareMembershipManager(
-                logContext, GROUP_ID, RACK_ID, subscriptionState, metadata, time, rebalanceMetricsManager);
+            logContext, GROUP_ID, RACK_ID, subscriptionState, metadata, time, rebalanceMetricsManager);
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         membershipManager.transitionToJoining();
 
@@ -247,17 +247,17 @@ public class ShareMembershipManagerTest {
         int epoch = 5;
 
         membershipManager.onHeartbeatSuccess(createShareGroupHeartbeatResponse(new ShareGroupHeartbeatResponseData()
-                .setErrorCode(Errors.NONE.code())
-                .setMemberId(membershipManager.memberId())
-                .setMemberEpoch(epoch)));
+            .setErrorCode(Errors.NONE.code())
+            .setMemberId(membershipManager.memberId())
+            .setMemberEpoch(epoch)));
 
         verify(listener).onMemberEpochUpdated(Optional.of(epoch), membershipManager.memberId);
         clearInvocations(listener);
 
         membershipManager.onHeartbeatSuccess(createShareGroupHeartbeatResponse(new ShareGroupHeartbeatResponseData()
-                .setErrorCode(Errors.NONE.code())
-                .setMemberId(membershipManager.memberId())
-                .setMemberEpoch(epoch)));
+            .setErrorCode(Errors.NONE.code())
+            .setMemberId(membershipManager.memberId())
+            .setMemberEpoch(epoch)));
         verify(listener, never()).onMemberEpochUpdated(any(), any());
     }
 
@@ -296,8 +296,8 @@ public class ShareMembershipManagerTest {
         membershipManager.transitionToFenced();
         testFenceIsNoOp(membershipManager);
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state(), "Member should " +
-                "transition from LEAVING to UNSUBSCRIBED when getting fenced (it does not need to " +
-                "send leave request if fenced");
+            "transition from LEAVING to UNSUBSCRIBED when getting fenced (it does not need to " +
+            "send leave request if fenced");
         assertTrue(leaveOperation.isDone(), "Fenced member should complete the ongoing leave operation");
     }
 
@@ -324,7 +324,7 @@ public class ShareMembershipManagerTest {
         membershipManager.leaveGroup();
         assertEquals(MemberState.LEAVING, membershipManager.state());
         assertEquals(ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH,
-                membershipManager.memberEpoch());
+            membershipManager.memberEpoch());
     }
 
     /**
@@ -337,11 +337,11 @@ public class ShareMembershipManagerTest {
         Uuid topic1 = Uuid.randomUuid();
         final ShareGroupHeartbeatResponseData.Assignment assignment1 = new ShareGroupHeartbeatResponseData.Assignment();
         final ShareGroupHeartbeatResponseData.Assignment assignment2 = new ShareGroupHeartbeatResponseData.Assignment()
-                .setTopicPartitions(List.of(
-                        new ShareGroupHeartbeatResponseData.TopicPartitions()
-                                .setTopicId(topic1)
-                                .setPartitions(Arrays.asList(0, 1, 2))
-                ));
+            .setTopicPartitions(List.of(
+                new ShareGroupHeartbeatResponseData.TopicPartitions()
+                    .setTopicId(topic1)
+                    .setPartitions(Arrays.asList(0, 1, 2))
+            ));
         when(metadata.topicNames()).thenReturn(Map.of(topic1, "topic1"));
         assertEquals(toTopicIdPartitionMap(assignment1), membershipManager.currentAssignment().partitions);
 
@@ -389,15 +389,15 @@ public class ShareMembershipManagerTest {
         Uuid topic1 = Uuid.randomUuid();
         Uuid topic2 = Uuid.randomUuid();
         final ShareGroupHeartbeatResponseData.Assignment assignment1 = new ShareGroupHeartbeatResponseData.Assignment()
-                .setTopicPartitions(Arrays.asList(
-                        new ShareGroupHeartbeatResponseData.TopicPartitions().setTopicId(topic1).setPartitions(List.of(0)),
-                        new ShareGroupHeartbeatResponseData.TopicPartitions().setTopicId(topic2).setPartitions(List.of(0))
-                ));
+            .setTopicPartitions(Arrays.asList(
+                new ShareGroupHeartbeatResponseData.TopicPartitions().setTopicId(topic1).setPartitions(List.of(0)),
+                new ShareGroupHeartbeatResponseData.TopicPartitions().setTopicId(topic2).setPartitions(List.of(0))
+            ));
         final ShareGroupHeartbeatResponseData.Assignment assignment2 = new ShareGroupHeartbeatResponseData.Assignment()
-                .setTopicPartitions(Arrays.asList(
-                        new ShareGroupHeartbeatResponseData.TopicPartitions().setTopicId(topic1).setPartitions(Arrays.asList(0, 1)),
-                        new ShareGroupHeartbeatResponseData.TopicPartitions().setTopicId(topic2).setPartitions(List.of(0))
-                ));
+            .setTopicPartitions(Arrays.asList(
+                new ShareGroupHeartbeatResponseData.TopicPartitions().setTopicId(topic1).setPartitions(Arrays.asList(0, 1)),
+                new ShareGroupHeartbeatResponseData.TopicPartitions().setTopicId(topic2).setPartitions(List.of(0))
+            ));
         when(metadata.topicNames()).thenReturn(Map.of(topic1, "topic1"));
 
         // Receive assignment - full reconciliation triggered
@@ -407,7 +407,7 @@ public class ShareMembershipManagerTest {
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         membershipManager.poll(time.milliseconds());
         verifyReconciliationTriggeredAndCompleted(membershipManager,
-                List.of(new TopicIdPartition(topic1, new TopicPartition("topic1", 0)))
+            List.of(new TopicIdPartition(topic1, new TopicPartition("topic1", 0)))
         );
         membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
@@ -451,7 +451,7 @@ public class ShareMembershipManagerTest {
 
         // Receive assignment with only topic1-0, entering STABLE state.
         ShareMembershipManager membershipManager =
-                mockMemberSuccessfullyReceivesAndAcksAssignment(topicId1, topic1, List.of(0));
+            mockMemberSuccessfullyReceivesAndAcksAssignment(topicId1, topic1, List.of(0));
 
         membershipManager.onHeartbeatRequestGenerated();
 
@@ -543,13 +543,13 @@ public class ShareMembershipManagerTest {
     }
 
     private void assertSendLeaveCompleted(ShareMembershipManager membershipManager,
-                                          CompletableFuture<Void> sendLeave) {
+        CompletableFuture<Void> sendLeave) {
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state(), "Member should " +
-                "remain UNSUBSCRIBED after receiving the response to the HB to leave");
+            "remain UNSUBSCRIBED after receiving the response to the HB to leave");
         assertEquals(-1, membershipManager.memberEpoch());
         assertTrue(membershipManager.currentAssignment().isNone());
         assertTrue(sendLeave.isDone(), "Leave group result should complete when the response to" +
-                " the heartbeat request to leave is received.");
+            " the heartbeat request to leave is received.");
         assertFalse(sendLeave.isCompletedExceptionally());
     }
 
@@ -625,7 +625,7 @@ public class ShareMembershipManagerTest {
         assertEquals(-1, membershipManager.memberEpoch());
         assertTrue(membershipManager.currentAssignment().partitions.isEmpty());
         assertFalse(leaveResult.isDone(), "Leave group result should not complete until the " +
-                "heartbeat request to leave is sent out.");
+            "heartbeat request to leave is sent out.");
     }
 
     @Test
@@ -641,8 +641,8 @@ public class ShareMembershipManagerTest {
         membershipManager.poll(time.milliseconds());
 
         List<TopicIdPartition> assignedPartitions = Arrays.asList(
-                new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
-                new TopicIdPartition(topicId, new TopicPartition(topicName, 1)));
+            new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
+            new TopicIdPartition(topicId, new TopicPartition(topicName, 1)));
         verifyReconciliationTriggeredAndCompleted(membershipManager, assignedPartitions);
 
         assertEquals(1, membershipManager.currentAssignment().partitions.size());
@@ -787,7 +787,7 @@ public class ShareMembershipManagerTest {
         // should fail.
         ShareGroupHeartbeatResponse unknownMemberResponse = createShareGroupHeartbeatResponseWithError(membershipManager.memberId());
         assertThrows(IllegalArgumentException.class,
-                () -> membershipManager.onHeartbeatSuccess(unknownMemberResponse));
+            () -> membershipManager.onHeartbeatSuccess(unknownMemberResponse));
     }
 
     /**
@@ -933,14 +933,14 @@ public class ShareMembershipManagerTest {
         String topic1Name = "topic1";
         Uuid topic2 = Uuid.randomUuid();
         ShareGroupHeartbeatResponseData.Assignment assignment = new ShareGroupHeartbeatResponseData.Assignment()
-                .setTopicPartitions(Arrays.asList(
-                        new ShareGroupHeartbeatResponseData.TopicPartitions()
-                                .setTopicId(topic1)
-                                .setPartitions(List.of(0)),
-                        new ShareGroupHeartbeatResponseData.TopicPartitions()
-                                .setTopicId(topic2)
-                                .setPartitions(Arrays.asList(1, 3))
-                ));
+            .setTopicPartitions(Arrays.asList(
+                new ShareGroupHeartbeatResponseData.TopicPartitions()
+                    .setTopicId(topic1)
+                    .setPartitions(List.of(0)),
+                new ShareGroupHeartbeatResponseData.TopicPartitions()
+                    .setTopicId(topic2)
+                    .setPartitions(Arrays.asList(1, 3))
+            ));
         when(metadata.topicNames()).thenReturn(Map.of(topic1, topic1Name));
 
         // Receive assignment partly in metadata - reconcile+ack what's in metadata, keep the
@@ -987,7 +987,7 @@ public class ShareMembershipManagerTest {
         TopicIdPartition ownedPartition = new TopicIdPartition(topicId, new TopicPartition(topicName, 0));
         ShareMembershipManager membershipManager = createMemberInStableState();
         mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName,
-                List.of(ownedPartition));
+            List.of(ownedPartition));
 
         // New assignment received, adding partitions 1 and 2 to the previously owned partition 0.
         receiveAssignment(topicId, Arrays.asList(0, 1, 2), membershipManager);
@@ -1041,10 +1041,10 @@ public class ShareMembershipManagerTest {
         Uuid topicId = Uuid.randomUuid();
         String topicName = "topic1";
         TopicIdPartition ownedPartition = new TopicIdPartition(topicId,
-                new TopicPartition(topicName, 0));
+            new TopicPartition(topicName, 0));
         ShareMembershipManager membershipManager = createMembershipManagerJoiningGroup();
         mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName,
-                List.of(ownedPartition));
+            List.of(ownedPartition));
 
         mockRevocation();
 
@@ -1070,10 +1070,10 @@ public class ShareMembershipManagerTest {
 
         // Assignment not in metadata
         ShareGroupHeartbeatResponseData.Assignment targetAssignment = new ShareGroupHeartbeatResponseData.Assignment()
-                .setTopicPartitions(List.of(
-                        new ShareGroupHeartbeatResponseData.TopicPartitions()
-                                .setTopicId(topicId)
-                                .setPartitions(Arrays.asList(0, 1))));
+            .setTopicPartitions(List.of(
+                new ShareGroupHeartbeatResponseData.TopicPartitions()
+                    .setTopicId(topicId)
+                    .setPartitions(Arrays.asList(0, 1))));
         ShareMembershipManager membershipManager = mockJoinAndReceiveAssignment(true, targetAssignment);
         membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
@@ -1100,10 +1100,10 @@ public class ShareMembershipManagerTest {
 
         // Assignment not in metadata
         ShareGroupHeartbeatResponseData.Assignment targetAssignment = new ShareGroupHeartbeatResponseData.Assignment()
-                .setTopicPartitions(List.of(
-                        new ShareGroupHeartbeatResponseData.TopicPartitions()
-                                .setTopicId(topicId)
-                                .setPartitions(Arrays.asList(0, 1))));
+            .setTopicPartitions(List.of(
+                new ShareGroupHeartbeatResponseData.TopicPartitions()
+                    .setTopicId(topicId)
+                    .setPartitions(Arrays.asList(0, 1))));
         ShareMembershipManager membershipManager = mockJoinAndReceiveAssignment(true, targetAssignment);
         membershipManager.onHeartbeatRequestGenerated();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
@@ -1142,9 +1142,9 @@ public class ShareMembershipManagerTest {
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         List<Integer> partitions = Arrays.asList(0, 1);
         Set<TopicPartition> assignedPartitions =
-                partitions.stream().map(p -> new TopicPartition(topicName, p)).collect(Collectors.toSet());
+            partitions.stream().map(p -> new TopicPartition(topicName, p)).collect(Collectors.toSet());
         Map<Uuid, SortedSet<Integer>> assignedTopicIdPartitions = Map.of(topicId,
-                new TreeSet<>(partitions));
+            new TreeSet<>(partitions));
         assertEquals(assignedTopicIdPartitions, membershipManager.currentAssignment().partitions);
         assertFalse(membershipManager.reconciliationInProgress());
 
@@ -1380,10 +1380,10 @@ public class ShareMembershipManagerTest {
     }
 
     private ShareMembershipManager mockMemberSuccessfullyReceivesAndAcksAssignment(
-            Uuid topicId, String topicName, List<Integer> partitions) {
+        Uuid topicId, String topicName, List<Integer> partitions) {
         ShareMembershipManager membershipManager = createMembershipManagerJoiningGroup();
         mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName,
-                List.of());
+            List.of());
 
         receiveAssignment(topicId, partitions, membershipManager);
 
@@ -1391,8 +1391,8 @@ public class ShareMembershipManagerTest {
         membershipManager.poll(time.milliseconds());
 
         List<TopicIdPartition> assignedPartitions =
-                partitions.stream().map(tp -> new TopicIdPartition(topicId,
-                        new TopicPartition(topicName, tp))).collect(Collectors.toList());
+            partitions.stream().map(tp -> new TopicIdPartition(topicId,
+                new TopicPartition(topicName, tp))).collect(Collectors.toList());
         verifyReconciliationTriggeredAndCompleted(membershipManager, assignedPartitions);
         return membershipManager;
     }
@@ -1403,7 +1403,7 @@ public class ShareMembershipManagerTest {
     }
 
     private void verifyReconciliationTriggeredAndCompleted(ShareMembershipManager membershipManager,
-                                                           List<TopicIdPartition> expectedAssignment) {
+        List<TopicIdPartition> expectedAssignment) {
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         verify(membershipManager).markReconciliationInProgress();
         verify(membershipManager).markReconciliationCompleted();
@@ -1446,14 +1446,14 @@ public class ShareMembershipManagerTest {
     }
 
     private void testRevocationCompleted(ShareMembershipManager membershipManager,
-                                         List<TopicIdPartition> expectedCurrentAssignment) {
+        List<TopicIdPartition> expectedCurrentAssignment) {
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         Map<Uuid, SortedSet<Integer>> assignmentByTopicId = assignmentByTopicId(expectedCurrentAssignment);
         assertEquals(assignmentByTopicId, membershipManager.currentAssignment().partitions);
         assertFalse(membershipManager.reconciliationInProgress());
 
         List<TopicPartition> expectedTopicPartitionAssignment =
-                buildTopicPartitions(expectedCurrentAssignment);
+            buildTopicPartitions(expectedCurrentAssignment);
         HashSet<TopicPartition> expectedSet = new HashSet<>(expectedTopicPartitionAssignment);
         verify(subscriptionState).assignFromSubscribedAwaitingCallback(expectedSet, Set.of());
     }
@@ -1468,9 +1468,9 @@ public class ShareMembershipManagerTest {
     }
 
     private void mockOwnedPartitionAndAssignmentReceived(ShareMembershipManager membershipManager,
-                                                         Uuid topicId,
-                                                         String topicName,
-                                                         Collection<TopicIdPartition> previouslyOwned) {
+        Uuid topicId,
+        String topicName,
+        Collection<TopicIdPartition> previouslyOwned) {
         when(subscriptionState.assignedPartitions()).thenReturn(getTopicPartitions(previouslyOwned));
         HashMap<Uuid, SortedSet<Integer>> partitionsByTopicId = new HashMap<>();
         partitionsByTopicId.put(topicId, new TreeSet<>(previouslyOwned.stream().map(TopicIdPartition::partition).collect(Collectors.toSet())));
@@ -1481,8 +1481,8 @@ public class ShareMembershipManagerTest {
 
     private Set<TopicPartition> getTopicPartitions(Collection<TopicIdPartition> topicIdPartitions) {
         return topicIdPartitions.stream().map(topicIdPartition ->
-                        new TopicPartition(topicIdPartition.topic(), topicIdPartition.partition()))
-                .collect(Collectors.toSet());
+            new TopicPartition(topicIdPartition.topic(), topicIdPartition.partition()))
+            .collect(Collectors.toSet());
     }
 
     private void mockOwnedPartition(ShareMembershipManager membershipManager, Uuid topicId, String topic) {
@@ -1498,7 +1498,7 @@ public class ShareMembershipManagerTest {
     }
 
     private ShareMembershipManager mockJoinAndReceiveAssignment(boolean triggerReconciliation,
-                                                                ShareGroupHeartbeatResponseData.Assignment assignment) {
+        ShareGroupHeartbeatResponseData.Assignment assignment) {
         ShareMembershipManager membershipManager = createMembershipManagerJoiningGroup();
         ShareGroupHeartbeatResponse heartbeatResponse = createShareGroupHeartbeatResponse(assignment, membershipManager.memberId());
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
@@ -1534,20 +1534,20 @@ public class ShareMembershipManagerTest {
 
     private void receiveAssignment(Map<Uuid, SortedSet<Integer>> topicIdPartitionList, ShareMembershipManager membershipManager) {
         ShareGroupHeartbeatResponseData.Assignment targetAssignment = new ShareGroupHeartbeatResponseData.Assignment()
-                .setTopicPartitions(topicIdPartitionList.entrySet().stream().map(tp ->
-                        new ShareGroupHeartbeatResponseData.TopicPartitions()
-                                .setTopicId(tp.getKey())
-                                .setPartitions(new ArrayList<>(tp.getValue()))).collect(Collectors.toList()));
+            .setTopicPartitions(topicIdPartitionList.entrySet().stream().map(tp ->
+                new ShareGroupHeartbeatResponseData.TopicPartitions()
+                    .setTopicId(tp.getKey())
+                    .setPartitions(new ArrayList<>(tp.getValue()))).collect(Collectors.toList()));
         ShareGroupHeartbeatResponse heartbeatResponse = createShareGroupHeartbeatResponse(targetAssignment, membershipManager.memberId());
         membershipManager.onHeartbeatSuccess(heartbeatResponse);
     }
 
     private void receiveAssignment(Uuid topicId, List<Integer> partitions, ShareMembershipManager membershipManager) {
         ShareGroupHeartbeatResponseData.Assignment targetAssignment = new ShareGroupHeartbeatResponseData.Assignment()
-                .setTopicPartitions(List.of(
-                        new ShareGroupHeartbeatResponseData.TopicPartitions()
-                                .setTopicId(topicId)
-                                .setPartitions(partitions)));
+            .setTopicPartitions(List.of(
+                new ShareGroupHeartbeatResponseData.TopicPartitions()
+                    .setTopicId(topicId)
+                    .setPartitions(partitions)));
         ShareGroupHeartbeatResponse heartbeatResponse = createShareGroupHeartbeatResponse(targetAssignment, membershipManager.memberId());
         membershipManager.onHeartbeatSuccess(heartbeatResponse);
     }
@@ -1555,7 +1555,7 @@ public class ShareMembershipManagerTest {
     private void receiveEmptyAssignment(ShareMembershipManager membershipManager) {
         // New empty assignment received, revoking owned partition.
         ShareGroupHeartbeatResponseData.Assignment targetAssignment = new ShareGroupHeartbeatResponseData.Assignment()
-                .setTopicPartitions(List.of());
+            .setTopicPartitions(List.of());
         ShareGroupHeartbeatResponse heartbeatResponse = createShareGroupHeartbeatResponse(targetAssignment, membershipManager.memberId());
         membershipManager.onHeartbeatSuccess(heartbeatResponse);
     }
@@ -1587,7 +1587,7 @@ public class ShareMembershipManagerTest {
 
         assertEquals(MemberState.LEAVING, membershipManager.state());
         assertFalse(leaveResult.isDone(), "Leave group result should not complete until the " +
-                "heartbeat request to leave is sent out.");
+            "heartbeat request to leave is sent out.");
 
         assertTransitionToUnsubscribeOnHBSentAndWaitForResponseToCompleteLeave(membershipManager, leaveResult);
         assertEquals(-1, membershipManager.memberEpoch());
@@ -1612,17 +1612,17 @@ public class ShareMembershipManagerTest {
     }
 
     private ShareGroupHeartbeatResponse createShareGroupHeartbeatResponse(
-            ShareGroupHeartbeatResponseData data) {
+        ShareGroupHeartbeatResponseData data) {
         return new ShareGroupHeartbeatResponse(data);
     }
 
     private ShareGroupHeartbeatResponse createShareGroupHeartbeatResponse(
-            ShareGroupHeartbeatResponseData.Assignment assignment, String memberId) {
+        ShareGroupHeartbeatResponseData.Assignment assignment, String memberId) {
         return new ShareGroupHeartbeatResponse(new ShareGroupHeartbeatResponseData()
-                .setErrorCode(Errors.NONE.code())
-                .setMemberId(memberId)
-                .setMemberEpoch(MEMBER_EPOCH)
-                .setAssignment(assignment));
+            .setErrorCode(Errors.NONE.code())
+            .setMemberId(memberId)
+            .setMemberEpoch(MEMBER_EPOCH)
+            .setAssignment(assignment));
     }
 
     private ShareGroupHeartbeatResponse createShareGroupLeaveResponse(String memberId) {
@@ -1634,9 +1634,9 @@ public class ShareMembershipManagerTest {
 
     private ShareGroupHeartbeatResponse createShareGroupHeartbeatResponseWithError(String memberId) {
         return new ShareGroupHeartbeatResponse(new ShareGroupHeartbeatResponseData()
-                .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
-                .setMemberId(memberId)
-                .setMemberEpoch(5));
+            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+            .setMemberId(memberId)
+            .setMemberEpoch(5));
     }
 
     private void assertMemberIdIsGenerated(String originalMemberId) {
@@ -1654,14 +1654,14 @@ public class ShareMembershipManagerTest {
             when(metadata.topicNames()).thenReturn(topicNames);
         }
         return new ShareGroupHeartbeatResponseData.Assignment()
-                .setTopicPartitions(Arrays.asList(
-                        new ShareGroupHeartbeatResponseData.TopicPartitions()
-                                .setTopicId(topic1)
-                                .setPartitions(Arrays.asList(0, 1, 2)),
-                        new ShareGroupHeartbeatResponseData.TopicPartitions()
-                                .setTopicId(topic2)
-                                .setPartitions(Arrays.asList(3, 4, 5))
-                ));
+            .setTopicPartitions(Arrays.asList(
+                new ShareGroupHeartbeatResponseData.TopicPartitions()
+                    .setTopicId(topic1)
+                    .setPartitions(Arrays.asList(0, 1, 2)),
+                new ShareGroupHeartbeatResponseData.TopicPartitions()
+                    .setTopicId(topic2)
+                    .setPartitions(Arrays.asList(3, 4, 5))
+            ));
     }
 
     private ShareMembershipManager memberJoinWithAssignment() {
@@ -1680,9 +1680,9 @@ public class ShareMembershipManagerTest {
      */
     private static Stream<Arguments> notInGroupStates() {
         return Stream.of(
-                Arguments.of(MemberState.UNSUBSCRIBED),
-                Arguments.of(MemberState.FENCED),
-                Arguments.of(MemberState.FATAL),
-                Arguments.of(MemberState.STALE));
+            Arguments.of(MemberState.UNSUBSCRIBED),
+            Arguments.of(MemberState.FENCED),
+            Arguments.of(MemberState.FATAL),
+            Arguments.of(MemberState.STALE));
     }
 }

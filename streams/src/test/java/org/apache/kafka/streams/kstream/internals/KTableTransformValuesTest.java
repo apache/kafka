@@ -371,7 +371,7 @@ public class KTableTransformValuesTest {
 
         driver = new TopologyTestDriver(builder.build(), props(withHeaders));
         final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
+            driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 
         inputTopic.pipeInput("A", "a", 5L);
         inputTopic.pipeInput("B", "b", 10L);
@@ -379,8 +379,8 @@ public class KTableTransformValuesTest {
 
 
         assertThat(output(), hasItems(new KeyValueTimestamp<>("A", "A->a!", 5),
-                new KeyValueTimestamp<>("B", "B->b!", 10),
-                new KeyValueTimestamp<>("D", "D->null!", 15)
+            new KeyValueTimestamp<>("B", "B->b!", 10),
+            new KeyValueTimestamp<>("D", "D->null!", 15)
         ));
         assertNull(driver.getKeyValueStore(QUERYABLE_NAME), "Store should not be materialized");
     }
@@ -402,14 +402,14 @@ public class KTableTransformValuesTest {
 
         driver = new TopologyTestDriver(builder.build(), props(withHeaders));
         final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
+            driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
         inputTopic.pipeInput("A", "a", 5L);
         inputTopic.pipeInput("B", "b", 10L);
         inputTopic.pipeInput("C", null, 15L);
 
         assertThat(output(), hasItems(new KeyValueTimestamp<>("A", "A->a!", 5),
-                new KeyValueTimestamp<>("B", "B->b!", 10),
-                new KeyValueTimestamp<>("C", "C->null!", 15)));
+            new KeyValueTimestamp<>("B", "B->b!", 10),
+            new KeyValueTimestamp<>("C", "C->null!", 15)));
 
         {
             final KeyValueStore<String, String> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
@@ -443,15 +443,15 @@ public class KTableTransformValuesTest {
 
         driver = new TopologyTestDriver(builder.build(), props(withHeaders));
         final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
+            driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 
         inputTopic.pipeInput("A", "ignored", 5L);
         inputTopic.pipeInput("A", "ignored1", 15L);
         inputTopic.pipeInput("A", "ignored2", 10L);
 
         assertThat(output(), equalTo(Arrays.asList(new KeyValueTimestamp<>("A", "1", 5),
-                new KeyValueTimestamp<>("A", "2", 15),
-                new KeyValueTimestamp<>("A", "3", 15))));
+            new KeyValueTimestamp<>("A", "2", 15),
+            new KeyValueTimestamp<>("A", "3", 15))));
 
         final KeyValueStore<String, Integer> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
         assertThat(keyValueStore.get("A"), is(3));
@@ -473,15 +473,15 @@ public class KTableTransformValuesTest {
 
         driver = new TopologyTestDriver(builder.build(), props(withHeaders));
         final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
+            driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
 
         inputTopic.pipeInput("A", "a", 5L);
         inputTopic.pipeInput("A", "aa", 15L);
         inputTopic.pipeInput("A", "aaa", 10);
 
         assertThat(output(), equalTo(Arrays.asList(new KeyValueTimestamp<>("A", "1", 5),
-                new KeyValueTimestamp<>("A", "2", 15),
-                new KeyValueTimestamp<>("A", "3", 15))));
+            new KeyValueTimestamp<>("A", "2", 15),
+            new KeyValueTimestamp<>("A", "3", 15))));
         assertThat(driver.getAllStateStores().keySet(),
             equalTo(Set.of("inputTopic-STATE-STORE-0000000000", "KTABLE-AGGREGATE-STATE-STORE-0000000005")));
     }
@@ -541,7 +541,7 @@ public class KTableTransformValuesTest {
     }
 
     private static void throwIfStoresNotAvailable(final ProcessorContext context,
-                                                  final List<String> expectedStoredNames) {
+        final List<String> expectedStoredNames) {
         final List<String> missing = new ArrayList<>();
 
         for (final String storedName : expectedStoredNames) {
@@ -586,7 +586,8 @@ public class KTableTransformValuesTest {
         }
 
         @Override
-        public void close() {}
+        public void close() {
+        }
     }
 
     private static class NullSupplier implements ValueTransformerWithKeySupplier<String, String, String> {
@@ -607,7 +608,8 @@ public class KTableTransformValuesTest {
         private int counter;
 
         @Override
-        public void init(final ProcessorContext context) {}
+        public void init(final ProcessorContext context) {
+        }
 
         @Override
         public Integer transform(final String readOnlyKey, final String value) {
@@ -615,7 +617,8 @@ public class KTableTransformValuesTest {
         }
 
         @Override
-        public void close() {}
+        public void close() {
+        }
     }
 
     private static class StatelessTransformerSupplier implements ValueTransformerWithKeySupplier<String, String, Integer> {
@@ -627,7 +630,8 @@ public class KTableTransformValuesTest {
 
     private static class StatelessTransformer implements ValueTransformerWithKey<String, String, Integer> {
         @Override
-        public void init(final ProcessorContext context) {}
+        public void init(final ProcessorContext context) {
+        }
 
         @Override
         public Integer transform(final String readOnlyKey, final String value) {
@@ -635,6 +639,7 @@ public class KTableTransformValuesTest {
         }
 
         @Override
-        public void close() {}
+        public void close() {
+        }
     }
 }

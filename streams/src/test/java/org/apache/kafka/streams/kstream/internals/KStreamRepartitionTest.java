@@ -97,8 +97,8 @@ public class KStreamRepartitionTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> testInputTopic = driver.createInputTopic(inputTopic,
-                                                                                           new IntegerSerializer(),
-                                                                                           new StringSerializer());
+                new IntegerSerializer(),
+                new StringSerializer());
 
             final String topicName = repartitionOutputTopic(props, repartitionOperationName);
 
@@ -132,33 +132,33 @@ public class KStreamRepartitionTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final Repartitioned<Integer, String> inputTopicRepartitioned = Repartitioned
-                .<Integer, String>as(inputTopicRepartitionedName)
-                .withNumberOfPartitions(inputTopicNumberOfPartitions);
+            .<Integer, String>as(inputTopicRepartitionedName)
+            .withNumberOfPartitions(inputTopicNumberOfPartitions);
 
         final Repartitioned<Integer, String> topicBRepartitioned = Repartitioned
-                .<Integer, String>as(topicBRepartitionedName)
-                .withNumberOfPartitions(topicBNumberOfPartitions);
+            .<Integer, String>as(topicBRepartitionedName)
+            .withNumberOfPartitions(topicBNumberOfPartitions);
 
         final KStream<Integer, String> topicBStream = builder
-                .stream(topicB, Consumed.with(Serdes.Integer(), Serdes.String()))
-                .repartition(topicBRepartitioned);
+            .stream(topicB, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .repartition(topicBRepartitioned);
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
-                .repartition(inputTopicRepartitioned)
-                .join(topicBStream, (value1, value2) -> value2, JoinWindows.of(Duration.ofSeconds(10)))
-                .to(outputTopic);
+            .repartition(inputTopicRepartitioned)
+            .join(topicBStream, (value1, value2) -> value2, JoinWindows.of(Duration.ofSeconds(10)))
+            .to(outputTopic);
 
         final Map<String, Integer> repartitionTopicsWithNumOfPartitions = Utils.mkMap(
-                Utils.mkEntry(toRepartitionTopicName(topicBRepartitionedName), topicBNumberOfPartitions),
-                Utils.mkEntry(toRepartitionTopicName(inputTopicRepartitionedName), inputTopicNumberOfPartitions)
+            Utils.mkEntry(toRepartitionTopicName(topicBRepartitionedName), topicBNumberOfPartitions),
+            Utils.mkEntry(toRepartitionTopicName(inputTopicRepartitionedName), inputTopicNumberOfPartitions)
         );
 
         final TopologyException expected = assertThrows(
-                TopologyException.class, () -> builder.build(props)
+            TopologyException.class, () -> builder.build(props)
         );
         final String expectedErrorMessage = String.format("Following topics do not have the same " +
-                        "number of partitions: [%s]",
-                new TreeMap<>(repartitionTopicsWithNumOfPartitions));
+            "number of partitions: [%s]",
+            new TreeMap<>(repartitionTopicsWithNumOfPartitions));
         assertNotNull(expected);
         assertTrue(expected.getMessage().contains(expectedErrorMessage));
     }

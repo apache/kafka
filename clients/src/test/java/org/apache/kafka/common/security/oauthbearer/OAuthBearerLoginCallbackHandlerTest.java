@@ -68,7 +68,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
 
         try {
             OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
-            handler.handle(new Callback[] {callback});
+            handler.handle(new Callback[]{callback});
 
             assertNotNull(callback.token());
             OAuthBearerToken token = callback.token();
@@ -147,7 +147,8 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         handler.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries(), jwtRetriever, jwtValidator);
 
         try {
-            Callback unsupportedCallback = new Callback() { };
+            Callback unsupportedCallback = new Callback() {
+            };
             assertThrows(UnsupportedCallbackException.class, () -> handler.handle(new Callback[]{unsupportedCallback}));
         } finally {
             handler.close();
@@ -210,7 +211,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
     @Test
     public void testNotConfigured() {
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
-        assertThrowsWithMessage(IllegalStateException.class, () -> handler.handle(new Callback[] {}), "first call the configure method");
+        assertThrowsWithMessage(IllegalStateException.class, () -> handler.handle(new Callback[]{}), "first call the configure method");
     }
 
     private void testInvalidAccessToken(String accessToken, String expectedMessageSubstring) throws Exception {

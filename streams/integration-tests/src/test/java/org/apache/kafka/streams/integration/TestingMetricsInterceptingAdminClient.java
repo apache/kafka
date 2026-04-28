@@ -468,7 +468,7 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     public DescribeShareGroupsResult describeShareGroups(final Collection<String> groupIds, final DescribeShareGroupsOptions options) {
         return adminDelegate.describeShareGroups(groupIds, options);
     }
-    
+
     @Override
     public DescribeStreamsGroupsResult describeStreamsGroups(final Collection<String> groupIds, final DescribeStreamsGroupsOptions options) {
         return adminDelegate.describeStreamsGroups(groupIds, options);

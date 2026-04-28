@@ -38,7 +38,7 @@ public class BasicPlatformTest {
         File configFile = TestUtils.tempFile();
         try {
             try (OutputStreamWriter writer = new OutputStreamWriter(Files.newOutputStream(configFile.toPath()),
-                    StandardCharsets.UTF_8)) {
+                     StandardCharsets.UTF_8)) {
                 writer.write("{\n");
                 writer.write("  \"platform\": \"org.apache.kafka.trogdor.basic.BasicPlatform\",\n");
                 writer.write("  \"nodes\": {\n");

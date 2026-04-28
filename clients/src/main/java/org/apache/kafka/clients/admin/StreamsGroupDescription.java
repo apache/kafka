@@ -44,15 +44,15 @@ public class StreamsGroupDescription {
     private final Set<AclOperation> authorizedOperations;
 
     public StreamsGroupDescription(
-            final String groupId,
-            final int groupEpoch,
-            final int targetAssignmentEpoch,
-            final int topologyEpoch,
-            final Collection<StreamsGroupSubtopologyDescription> subtopologies,
-            final Collection<StreamsGroupMemberDescription> members,
-            final GroupState groupState,
-            final Node coordinator,
-            final Set<AclOperation> authorizedOperations
+        final String groupId,
+        final int groupEpoch,
+        final int targetAssignmentEpoch,
+        final int topologyEpoch,
+        final Collection<StreamsGroupSubtopologyDescription> subtopologies,
+        final Collection<StreamsGroupMemberDescription> members,
+        final GroupState groupState,
+        final Node coordinator,
+        final Set<AclOperation> authorizedOperations
     ) {
         this.groupId = Objects.requireNonNull(groupId, "groupId must be non-null");
         this.groupEpoch = groupEpoch;

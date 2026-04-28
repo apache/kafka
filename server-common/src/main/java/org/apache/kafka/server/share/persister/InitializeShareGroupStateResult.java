@@ -41,13 +41,13 @@ public class InitializeShareGroupStateResult implements PersisterResult {
 
     public static InitializeShareGroupStateResult from(InitializeShareGroupStateResponseData data) {
         return new Builder()
-                .setTopicsData(data.results().stream()
-                        .map(initializeStateResult -> new TopicData<>(initializeStateResult.topicId(),
-                                initializeStateResult.partitions().stream()
-                                        .map(partitionResult -> PartitionFactory.newPartitionErrorData(partitionResult.partition(), partitionResult.errorCode(), partitionResult.errorMessage()))
-                                        .collect(Collectors.toList())))
-                        .collect(Collectors.toList()))
-                .build();
+            .setTopicsData(data.results().stream()
+                .map(initializeStateResult -> new TopicData<>(initializeStateResult.topicId(),
+                    initializeStateResult.partitions().stream()
+                        .map(partitionResult -> PartitionFactory.newPartitionErrorData(partitionResult.partition(), partitionResult.errorCode(), partitionResult.errorMessage()))
+                        .collect(Collectors.toList())))
+                .collect(Collectors.toList()))
+            .build();
     }
 
     public Map<Errors, Integer> errorCounts() {

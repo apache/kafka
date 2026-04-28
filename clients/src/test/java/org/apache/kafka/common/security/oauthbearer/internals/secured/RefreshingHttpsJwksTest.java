@@ -64,8 +64,8 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
         MockTime time = new MockTime();
         HttpsJwks httpsJwks = spyHttpsJwks();
 
-       // we use mocktime here to ensure that scheduled refresh _doesn't_ run and update the invocation count
-       // we expect httpsJwks.refresh() to be invoked twice, once from init() and maybeExpediteRefresh() each
+        // we use mocktime here to ensure that scheduled refresh _doesn't_ run and update the invocation count
+        // we expect httpsJwks.refresh() to be invoked twice, once from init() and maybeExpediteRefresh() each
         try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(time, httpsJwks)) {
             refreshingHttpsJwks.init();
             verify(httpsJwks, times(1)).refresh();
@@ -284,7 +284,7 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
             } else {
                 long triggerTimeMs = timeMs + delayMs;
                 List<AbstractMap.SimpleEntry<Long, KafkaFutureImpl<Long>>> futures =
-                        waiters.computeIfAbsent(triggerTimeMs, k -> new ArrayList<>());
+                    waiters.computeIfAbsent(triggerTimeMs, k -> new ArrayList<>());
                 futures.add(new AbstractMap.SimpleEntry<>(period, waiter));
             }
         }

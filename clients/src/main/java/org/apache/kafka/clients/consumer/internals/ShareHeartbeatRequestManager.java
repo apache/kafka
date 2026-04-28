@@ -58,14 +58,14 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
         "using ShareGroupHeartbeat API version 1 or later. This version of the API was introduced in Apache Kafka v4.1.";
 
     public ShareHeartbeatRequestManager(
-            final LogContext logContext,
-            final Time time,
-            final ConsumerConfig config,
-            final CoordinatorRequestManager coordinatorRequestManager,
-            final SubscriptionState subscriptions,
-            final ShareMembershipManager membershipManager,
-            final BackgroundEventHandler backgroundEventHandler,
-            final Metrics metrics) {
+        final LogContext logContext,
+        final Time time,
+        final ConsumerConfig config,
+        final CoordinatorRequestManager coordinatorRequestManager,
+        final SubscriptionState subscriptions,
+        final ShareMembershipManager membershipManager,
+        final BackgroundEventHandler backgroundEventHandler,
+        final Metrics metrics) {
         super(logContext, time, config, coordinatorRequestManager, backgroundEventHandler,
             new HeartbeatMetricsManager(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX));
         this.membershipManager = membershipManager;
@@ -74,15 +74,15 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
 
     // Visible for testing
     ShareHeartbeatRequestManager(
-            final LogContext logContext,
-            final Timer timer,
-            final ConsumerConfig config,
-            final CoordinatorRequestManager coordinatorRequestManager,
-            final ShareMembershipManager membershipManager,
-            final HeartbeatState heartbeatState,
-            final HeartbeatRequestState heartbeatRequestState,
-            final BackgroundEventHandler backgroundEventHandler,
-            final Metrics metrics) {
+        final LogContext logContext,
+        final Timer timer,
+        final ConsumerConfig config,
+        final CoordinatorRequestManager coordinatorRequestManager,
+        final ShareMembershipManager membershipManager,
+        final HeartbeatState heartbeatState,
+        final HeartbeatRequestState heartbeatRequestState,
+        final BackgroundEventHandler backgroundEventHandler,
+        final Metrics metrics) {
         super(logContext, timer, config, coordinatorRequestManager, heartbeatRequestState, backgroundEventHandler,
             new HeartbeatMetricsManager(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX));
         this.membershipManager = membershipManager;
@@ -116,7 +116,7 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
             // custom message for it. Note that the case where the protocol is not supported at all should fail
             // on the client side when building the request and checking supporting APIs (handled on onFailure).
             case UNSUPPORTED_VERSION:
-                logger.error("{} failed due to unsupported version: {}", 
+                logger.error("{} failed due to unsupported version: {}",
                     heartbeatRequestName(), SHARE_PROTOCOL_NOT_SUPPORTED_MSG);
                 handleFatalFailure(error.exception(SHARE_PROTOCOL_NOT_SUPPORTED_MSG));
                 errorHandled = true;
@@ -202,8 +202,8 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
         private final SentFields sentFields;
 
         public HeartbeatState(
-                final SubscriptionState subscriptions,
-                final ShareMembershipManager shareMembershipManager) {
+            final SubscriptionState subscriptions,
+            final ShareMembershipManager shareMembershipManager) {
             this.subscriptions = subscriptions;
             this.shareMembershipManager = shareMembershipManager;
             this.sentFields = new SentFields();
@@ -248,7 +248,8 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
             private String rackId = null;
             private TreeSet<String> subscribedTopicNames = null;
 
-            SentFields() {}
+            SentFields() {
+            }
 
             void reset() {
                 rackId = null;

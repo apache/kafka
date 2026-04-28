@@ -64,7 +64,8 @@ public class ErrorsTest {
 
     @Test
     public void testForExceptionInheritance() {
-        class ExtendedTimeoutException extends TimeoutException { }
+        class ExtendedTimeoutException extends TimeoutException {
+        }
 
         Errors expectedError = Errors.forException(new TimeoutException());
         Errors actualError = Errors.forException(new ExtendedTimeoutException());

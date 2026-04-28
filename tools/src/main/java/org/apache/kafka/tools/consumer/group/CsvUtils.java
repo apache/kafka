@@ -46,7 +46,7 @@ public class CsvUtils {
     }
 
     public static class CsvRecordWithGroup {
-        public static final String[] FIELDS = new String[] {"group", "topic", "partition", "offset"};
+        public static final String[] FIELDS = new String[]{"group", "topic", "partition", "offset"};
 
         @JsonProperty
         private String group;

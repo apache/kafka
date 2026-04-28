@@ -53,6 +53,7 @@ import static org.mockito.Mockito.when;
 
 public class ExpiringCredentialRefreshingLoginTest {
     private static final Configuration EMPTY_WILDCARD_CONFIGURATION;
+
     static {
         EMPTY_WILDCARD_CONFIGURATION = new Configuration() {
             @Override
@@ -76,10 +77,10 @@ public class ExpiringCredentialRefreshingLoginTest {
         private final boolean clientReloginAllowedBeforeLogout;
 
         public TestExpiringCredentialRefreshingLogin(ExpiringCredentialRefreshConfig refreshConfig,
-                LoginContextFactory loginContextFactory, Time time, final long lifetimeMillis,
-                final long absoluteLastRefreshMs, boolean clientReloginAllowedBeforeLogout) {
+            LoginContextFactory loginContextFactory, Time time, final long lifetimeMillis,
+            final long absoluteLastRefreshMs, boolean clientReloginAllowedBeforeLogout) {
             super("contextName", EMPTY_WILDCARD_CONFIGURATION, refreshConfig, null,
-                    TestExpiringCredentialRefreshingLogin.class, loginContextFactory, Objects.requireNonNull(time));
+                TestExpiringCredentialRefreshingLogin.class, loginContextFactory, Objects.requireNonNull(time));
             this.time = time;
             this.lifetimeMillis = lifetimeMillis;
             this.absoluteLastRefreshTimeMs = absoluteLastRefreshMs;
@@ -167,7 +168,7 @@ public class ExpiringCredentialRefreshingLoginTest {
                 @Override
                 public String toString() {
                     return String.format("startTimeMs=%d, expireTimeMs=%d, absoluteLastRefreshTimeMs=%s", startTimeMs(),
-                            expireTimeMs(), absoluteLastRefreshTimeMs());
+                        expireTimeMs(), absoluteLastRefreshTimeMs());
                 }
 
             };
@@ -186,7 +187,7 @@ public class ExpiringCredentialRefreshingLoginTest {
         private final LoginContext mockLoginContext;
 
         public TestLoginContext(TestExpiringCredentialRefreshingLogin testExpiringCredentialRefreshingLogin,
-                LoginContext mockLoginContext) throws LoginException {
+            LoginContext mockLoginContext) throws LoginException {
             super("contextName", null, null, EMPTY_WILDCARD_CONFIGURATION);
             this.testExpiringCredentialRefreshingLogin = Objects.requireNonNull(testExpiringCredentialRefreshingLogin);
             // sanity check to make sure it is likely a mock
@@ -232,24 +233,25 @@ public class ExpiringCredentialRefreshingLoginTest {
         private TestLoginContext testLoginContext;
 
         public void configure(LoginContext mockLoginContext,
-                TestExpiringCredentialRefreshingLogin testExpiringCredentialRefreshingLogin) throws LoginException {
+            TestExpiringCredentialRefreshingLogin testExpiringCredentialRefreshingLogin) throws LoginException {
             // sanity check to make sure it is likely a mock
             if (!MockUtil.isMock(mockLoginContext))
                 throw new IllegalArgumentException();
             this.testLoginContext = new TestLoginContext(Objects.requireNonNull(testExpiringCredentialRefreshingLogin),
-                    mockLoginContext);
+                mockLoginContext);
         }
 
         @Override
         public LoginContext createLoginContext(ExpiringCredentialRefreshingLogin expiringCredentialRefreshingLogin) throws LoginException {
             return new LoginContext("", null, null, EMPTY_WILDCARD_CONFIGURATION) {
                 private boolean loginSuccess = false;
+
                 @Override
                 public void login() throws LoginException {
                     testLoginContext.login();
                     loginSuccess = true;
                 }
-        
+
                 @Override
                 public void logout() throws LoginException {
                     if (!loginSuccess)
@@ -257,7 +259,7 @@ public class ExpiringCredentialRefreshingLoginTest {
                         throw new IllegalStateException("logout called without a successful login");
                     testLoginContext.logout();
                 }
-        
+
                 @Override
                 public Subject getSubject() {
                     return testLoginContext.getSubject();
@@ -320,8 +322,8 @@ public class ExpiringCredentialRefreshingLoginTest {
 
     @Test
     public void testRefresh() throws Exception {
-        for (int numExpectedRefreshes : new int[] {0, 1, 2}) {
-            for (boolean clientReloginAllowedBeforeLogout : new boolean[] {true, false}) {
+        for (int numExpectedRefreshes : new int[]{0, 1, 2}) {
+            for (boolean clientReloginAllowedBeforeLogout : new boolean[]{true, false}) {
                 Subject subject = new Subject();
                 final LoginContext mockLoginContext = mock(LoginContext.class);
                 when(mockLoginContext.getSubject()).thenReturn(subject);
@@ -342,7 +344,7 @@ public class ExpiringCredentialRefreshingLoginTest {
                  * interval).
                  */
                 long absoluteLastRefreshMs = startMs + (1 + numExpectedRefreshes) * 1000 * 60 * refreshEveryMinutes
-                        - 1000 * 60 * refreshEveryMinutes / 2;
+                    - 1000 * 60 * refreshEveryMinutes / 2;
                 /*
                  * Identify buffer time on either side for the refresh algorithm
                  */
@@ -356,16 +358,16 @@ public class ExpiringCredentialRefreshingLoginTest {
                  */
                 MockScheduler mockScheduler = new MockScheduler(mockTime);
                 List<KafkaFutureImpl<Long>> waiters = addWaiters(mockScheduler, 1000 * 60 * refreshEveryMinutes,
-                        numExpectedRefreshes + 1);
+                    numExpectedRefreshes + 1);
 
                 // Create the ExpiringCredentialRefreshingLogin instance under test
                 TestLoginContextFactory testLoginContextFactory = new TestLoginContextFactory();
                 TestExpiringCredentialRefreshingLogin testExpiringCredentialRefreshingLogin = new TestExpiringCredentialRefreshingLogin(
-                        refreshConfigThatPerformsReloginEveryGivenPercentageOfLifetime(
-                                1.0 * refreshEveryMinutes / lifetimeMinutes, minPeriodSeconds, bufferSeconds,
-                                clientReloginAllowedBeforeLogout),
-                        testLoginContextFactory, mockTime, 1000 * 60 * lifetimeMinutes, absoluteLastRefreshMs,
-                        clientReloginAllowedBeforeLogout);
+                    refreshConfigThatPerformsReloginEveryGivenPercentageOfLifetime(
+                        1.0 * refreshEveryMinutes / lifetimeMinutes, minPeriodSeconds, bufferSeconds,
+                        clientReloginAllowedBeforeLogout),
+                    testLoginContextFactory, mockTime, 1000 * 60 * lifetimeMinutes, absoluteLastRefreshMs,
+                    clientReloginAllowedBeforeLogout);
                 testLoginContextFactory.configure(mockLoginContext, testExpiringCredentialRefreshingLogin);
 
                 /*
@@ -379,7 +381,7 @@ public class ExpiringCredentialRefreshingLoginTest {
                 assertTrue(testLoginContextFactory.refresherThreadStartedFuture().isDone());
                 testLoginContextFactory.refresherThreadDoneFuture().get(1L, TimeUnit.SECONDS);
                 assertEquals(expectedFinalMs, mockTime.milliseconds());
-                for (int i = 0; i < numExpectedRefreshes; ++i) {
+                for (int i = 0;i < numExpectedRefreshes;++i) {
                     KafkaFutureImpl<Long> waiter = waiters.get(i);
                     assertTrue(waiter.isDone());
                     assertEquals((i + 1) * 1000 * 60 * refreshEveryMinutes, waiter.get() - startMs);
@@ -393,7 +395,7 @@ public class ExpiringCredentialRefreshingLoginTest {
                 InOrder inOrder = inOrder(mockLoginContext);
                 inOrder.verify(mockLoginContext).login();
                 inOrder.verify(mockLoginContext).getSubject();
-                for (int i = 0; i < numExpectedRefreshes; ++i) {
+                for (int i = 0;i < numExpectedRefreshes;++i) {
                     if (clientReloginAllowedBeforeLogout) {
                         inOrder.verify(mockLoginContext).login();
                         inOrder.verify(mockLoginContext).logout();
@@ -431,7 +433,7 @@ public class ExpiringCredentialRefreshingLoginTest {
          * interval).
          */
         long absoluteLastRefreshMs = startMs + (1 + numExpectedRefreshes) * 1000 * 60 * refreshEveryMinutes
-                - 1000 * 60 * refreshEveryMinutes / 2;
+            - 1000 * 60 * refreshEveryMinutes / 2;
         /*
          * Identify buffer time on either side for the refresh algorithm that will cause
          * the entire lifetime to be taken up. In other words, make sure there is no way
@@ -447,16 +449,16 @@ public class ExpiringCredentialRefreshingLoginTest {
          */
         MockScheduler mockScheduler = new MockScheduler(mockTime);
         List<KafkaFutureImpl<Long>> waiters = addWaiters(mockScheduler, 1000 * 60 * refreshEveryMinutes,
-                numExpectedRefreshes + 1);
+            numExpectedRefreshes + 1);
 
         // Create the ExpiringCredentialRefreshingLogin instance under test
         TestLoginContextFactory testLoginContextFactory = new TestLoginContextFactory();
         TestExpiringCredentialRefreshingLogin testExpiringCredentialRefreshingLogin = new TestExpiringCredentialRefreshingLogin(
-                refreshConfigThatPerformsReloginEveryGivenPercentageOfLifetime(
-                        1.0 * refreshEveryMinutes / lifetimeMinutes, minPeriodSeconds, bufferSeconds,
-                        clientReloginAllowedBeforeLogout),
-                testLoginContextFactory, mockTime, 1000 * 60 * lifetimeMinutes, absoluteLastRefreshMs,
-                clientReloginAllowedBeforeLogout);
+            refreshConfigThatPerformsReloginEveryGivenPercentageOfLifetime(
+                1.0 * refreshEveryMinutes / lifetimeMinutes, minPeriodSeconds, bufferSeconds,
+                clientReloginAllowedBeforeLogout),
+            testLoginContextFactory, mockTime, 1000 * 60 * lifetimeMinutes, absoluteLastRefreshMs,
+            clientReloginAllowedBeforeLogout);
         testLoginContextFactory.configure(mockLoginContext, testExpiringCredentialRefreshingLogin);
 
         /*
@@ -470,7 +472,7 @@ public class ExpiringCredentialRefreshingLoginTest {
         assertTrue(testLoginContextFactory.refresherThreadStartedFuture().isDone());
         testLoginContextFactory.refresherThreadDoneFuture().get(1L, TimeUnit.SECONDS);
         assertEquals(expectedFinalMs, mockTime.milliseconds());
-        for (int i = 0; i < numExpectedRefreshes; ++i) {
+        for (int i = 0;i < numExpectedRefreshes;++i) {
             KafkaFutureImpl<Long> waiter = waiters.get(i);
             assertTrue(waiter.isDone());
             assertEquals((i + 1) * 1000 * 60 * refreshEveryMinutes, waiter.get() - startMs);
@@ -479,7 +481,7 @@ public class ExpiringCredentialRefreshingLoginTest {
 
         InOrder inOrder = inOrder(mockLoginContext);
         inOrder.verify(mockLoginContext).login();
-        for (int i = 0; i < numExpectedRefreshes; ++i) {
+        for (int i = 0;i < numExpectedRefreshes;++i) {
             inOrder.verify(mockLoginContext).login();
             inOrder.verify(mockLoginContext).logout();
         }
@@ -509,7 +511,7 @@ public class ExpiringCredentialRefreshingLoginTest {
          * interval).
          */
         long absoluteLastRefreshMs = startMs + (1 + numExpectedRefreshes) * 1000 * 60 * refreshEveryMinutes
-                - 1000 * 60 * refreshEveryMinutes / 2;
+            - 1000 * 60 * refreshEveryMinutes / 2;
         /*
          * Identify buffer time on either side for the refresh algorithm that will cause
          * the entire lifetime to be taken up. In other words, make sure there is no way
@@ -525,16 +527,16 @@ public class ExpiringCredentialRefreshingLoginTest {
          */
         MockScheduler mockScheduler = new MockScheduler(mockTime);
         List<KafkaFutureImpl<Long>> waiters = addWaiters(mockScheduler, 1000 * 60 * refreshEveryMinutes,
-                numExpectedRefreshes + 1);
+            numExpectedRefreshes + 1);
 
         // Create the ExpiringCredentialRefreshingLogin instance under test
         TestLoginContextFactory testLoginContextFactory = new TestLoginContextFactory();
         TestExpiringCredentialRefreshingLogin testExpiringCredentialRefreshingLogin = new TestExpiringCredentialRefreshingLogin(
-                refreshConfigThatPerformsReloginEveryGivenPercentageOfLifetime(
-                        1.0 * refreshEveryMinutes / lifetimeMinutes, minPeriodSeconds, bufferSeconds,
-                        clientReloginAllowedBeforeLogout),
-                testLoginContextFactory, mockTime, 1000 * 60 * lifetimeMinutes, absoluteLastRefreshMs,
-                clientReloginAllowedBeforeLogout) {
+            refreshConfigThatPerformsReloginEveryGivenPercentageOfLifetime(
+                1.0 * refreshEveryMinutes / lifetimeMinutes, minPeriodSeconds, bufferSeconds,
+                clientReloginAllowedBeforeLogout),
+            testLoginContextFactory, mockTime, 1000 * 60 * lifetimeMinutes, absoluteLastRefreshMs,
+            clientReloginAllowedBeforeLogout) {
 
             @Override
             public long getCreateMs() {
@@ -554,7 +556,7 @@ public class ExpiringCredentialRefreshingLoginTest {
         assertTrue(testLoginContextFactory.refresherThreadStartedFuture().isDone());
         testLoginContextFactory.refresherThreadDoneFuture().get(1L, TimeUnit.SECONDS);
         assertEquals(expectedFinalMs, mockTime.milliseconds());
-        for (int i = 0; i < numExpectedRefreshes; ++i) {
+        for (int i = 0;i < numExpectedRefreshes;++i) {
             KafkaFutureImpl<Long> waiter = waiters.get(i);
             assertTrue(waiter.isDone());
             assertEquals((i + 1) * 1000 * 60 * refreshEveryMinutes, waiter.get() - startMs);
@@ -563,7 +565,7 @@ public class ExpiringCredentialRefreshingLoginTest {
 
         InOrder inOrder = inOrder(mockLoginContext);
         inOrder.verify(mockLoginContext).login();
-        for (int i = 0; i < numExpectedRefreshes; ++i) {
+        for (int i = 0;i < numExpectedRefreshes;++i) {
             inOrder.verify(mockLoginContext).login();
             inOrder.verify(mockLoginContext).logout();
         }
@@ -593,7 +595,7 @@ public class ExpiringCredentialRefreshingLoginTest {
          * interval).
          */
         long absoluteLastRefreshMs = startMs + (1 + numExpectedRefreshes) * 1000 * 60 * refreshEveryMinutes
-                - 1000 * 60 * refreshEveryMinutes / 2;
+            - 1000 * 60 * refreshEveryMinutes / 2;
 
         /*
          * Identify a minimum period that will cause the refresh time to be delayed a
@@ -610,16 +612,16 @@ public class ExpiringCredentialRefreshingLoginTest {
          */
         MockScheduler mockScheduler = new MockScheduler(mockTime);
         List<KafkaFutureImpl<Long>> waiters = addWaiters(mockScheduler,
-                1000 * (60 * refreshEveryMinutes + bufferIntrusionSeconds), numExpectedRefreshes + 1);
+            1000 * (60 * refreshEveryMinutes + bufferIntrusionSeconds), numExpectedRefreshes + 1);
 
         // Create the ExpiringCredentialRefreshingLogin instance under test
         TestLoginContextFactory testLoginContextFactory = new TestLoginContextFactory();
         TestExpiringCredentialRefreshingLogin testExpiringCredentialRefreshingLogin = new TestExpiringCredentialRefreshingLogin(
-                refreshConfigThatPerformsReloginEveryGivenPercentageOfLifetime(
-                        1.0 * refreshEveryMinutes / lifetimeMinutes, minPeriodSeconds, bufferSeconds,
-                        clientReloginAllowedBeforeLogout),
-                testLoginContextFactory, mockTime, 1000 * 60 * lifetimeMinutes, absoluteLastRefreshMs,
-                clientReloginAllowedBeforeLogout);
+            refreshConfigThatPerformsReloginEveryGivenPercentageOfLifetime(
+                1.0 * refreshEveryMinutes / lifetimeMinutes, minPeriodSeconds, bufferSeconds,
+                clientReloginAllowedBeforeLogout),
+            testLoginContextFactory, mockTime, 1000 * 60 * lifetimeMinutes, absoluteLastRefreshMs,
+            clientReloginAllowedBeforeLogout);
         testLoginContextFactory.configure(mockLoginContext, testExpiringCredentialRefreshingLogin);
 
         /*
@@ -627,24 +629,24 @@ public class ExpiringCredentialRefreshingLoginTest {
          * thread to exit, and make sure the correct calls happened at the correct times
          */
         long expectedFinalMs = startMs
-                + numExpectedRefreshes * 1000 * (60 * refreshEveryMinutes + bufferIntrusionSeconds);
+            + numExpectedRefreshes * 1000 * (60 * refreshEveryMinutes + bufferIntrusionSeconds);
         assertFalse(testLoginContextFactory.refresherThreadStartedFuture().isDone());
         assertFalse(testLoginContextFactory.refresherThreadDoneFuture().isDone());
         testExpiringCredentialRefreshingLogin.login();
         assertTrue(testLoginContextFactory.refresherThreadStartedFuture().isDone());
         testLoginContextFactory.refresherThreadDoneFuture().get(1L, TimeUnit.SECONDS);
         assertEquals(expectedFinalMs, mockTime.milliseconds());
-        for (int i = 0; i < numExpectedRefreshes; ++i) {
+        for (int i = 0;i < numExpectedRefreshes;++i) {
             KafkaFutureImpl<Long> waiter = waiters.get(i);
             assertTrue(waiter.isDone());
             assertEquals((i + 1) * 1000 * (60 * refreshEveryMinutes + bufferIntrusionSeconds),
-                    waiter.get() - startMs);
+                waiter.get() - startMs);
         }
         assertFalse(waiters.get(numExpectedRefreshes).isDone());
 
         InOrder inOrder = inOrder(mockLoginContext);
         inOrder.verify(mockLoginContext).login();
-        for (int i = 0; i < numExpectedRefreshes; ++i) {
+        for (int i = 0;i < numExpectedRefreshes;++i) {
             inOrder.verify(mockLoginContext).login();
             inOrder.verify(mockLoginContext).logout();
         }
@@ -674,7 +676,7 @@ public class ExpiringCredentialRefreshingLoginTest {
          * interval).
          */
         long absoluteLastRefreshMs = startMs + (1 + numExpectedRefreshes) * 1000 * 60 * refreshEveryMinutes
-                - 1000 * 60 * refreshEveryMinutes / 2;
+            - 1000 * 60 * refreshEveryMinutes / 2;
         /*
          * Identify a minimum period that will cause the refresh time to be delayed a
          * bit.
@@ -690,16 +692,16 @@ public class ExpiringCredentialRefreshingLoginTest {
          */
         MockScheduler mockScheduler = new MockScheduler(mockTime);
         List<KafkaFutureImpl<Long>> waiters = addWaiters(mockScheduler,
-                1000 * (60 * refreshEveryMinutes - bufferIntrusionSeconds), numExpectedRefreshes + 1);
+            1000 * (60 * refreshEveryMinutes - bufferIntrusionSeconds), numExpectedRefreshes + 1);
 
         // Create the ExpiringCredentialRefreshingLogin instance under test
         TestLoginContextFactory testLoginContextFactory = new TestLoginContextFactory();
         TestExpiringCredentialRefreshingLogin testExpiringCredentialRefreshingLogin = new TestExpiringCredentialRefreshingLogin(
-                refreshConfigThatPerformsReloginEveryGivenPercentageOfLifetime(
-                        1.0 * refreshEveryMinutes / lifetimeMinutes, minPeriodSeconds, bufferSeconds,
-                        clientReloginAllowedBeforeLogout),
-                testLoginContextFactory, mockTime, 1000 * 60 * lifetimeMinutes, absoluteLastRefreshMs,
-                clientReloginAllowedBeforeLogout);
+            refreshConfigThatPerformsReloginEveryGivenPercentageOfLifetime(
+                1.0 * refreshEveryMinutes / lifetimeMinutes, minPeriodSeconds, bufferSeconds,
+                clientReloginAllowedBeforeLogout),
+            testLoginContextFactory, mockTime, 1000 * 60 * lifetimeMinutes, absoluteLastRefreshMs,
+            clientReloginAllowedBeforeLogout);
         testLoginContextFactory.configure(mockLoginContext, testExpiringCredentialRefreshingLogin);
 
         /*
@@ -707,24 +709,24 @@ public class ExpiringCredentialRefreshingLoginTest {
          * thread to exit, and make sure the correct calls happened at the correct times
          */
         long expectedFinalMs = startMs
-                + numExpectedRefreshes * 1000 * (60 * refreshEveryMinutes - bufferIntrusionSeconds);
+            + numExpectedRefreshes * 1000 * (60 * refreshEveryMinutes - bufferIntrusionSeconds);
         assertFalse(testLoginContextFactory.refresherThreadStartedFuture().isDone());
         assertFalse(testLoginContextFactory.refresherThreadDoneFuture().isDone());
         testExpiringCredentialRefreshingLogin.login();
         assertTrue(testLoginContextFactory.refresherThreadStartedFuture().isDone());
         testLoginContextFactory.refresherThreadDoneFuture().get(1L, TimeUnit.SECONDS);
         assertEquals(expectedFinalMs, mockTime.milliseconds());
-        for (int i = 0; i < numExpectedRefreshes; ++i) {
+        for (int i = 0;i < numExpectedRefreshes;++i) {
             KafkaFutureImpl<Long> waiter = waiters.get(i);
             assertTrue(waiter.isDone());
             assertEquals((i + 1) * 1000 * (60 * refreshEveryMinutes - bufferIntrusionSeconds),
-                    waiter.get() - startMs);
+                waiter.get() - startMs);
         }
         assertFalse(waiters.get(numExpectedRefreshes).isDone());
 
         InOrder inOrder = inOrder(mockLoginContext);
         inOrder.verify(mockLoginContext).login();
-        for (int i = 0; i < numExpectedRefreshes; ++i) {
+        for (int i = 0;i < numExpectedRefreshes;++i) {
             inOrder.verify(mockLoginContext).login();
             inOrder.verify(mockLoginContext).logout();
         }
@@ -755,7 +757,7 @@ public class ExpiringCredentialRefreshingLoginTest {
          * interval).
          */
         long absoluteLastRefreshMs = startMs + (1 + numExpectedRefreshes) * 1000 * 60 * refreshEveryMinutes
-                - 1000 * 60 * refreshEveryMinutes / 2;
+            - 1000 * 60 * refreshEveryMinutes / 2;
         /*
          * Identify buffer time on either side for the refresh algorithm
          */
@@ -765,11 +767,11 @@ public class ExpiringCredentialRefreshingLoginTest {
         // Create the ExpiringCredentialRefreshingLogin instance under test
         TestLoginContextFactory testLoginContextFactory = new TestLoginContextFactory();
         TestExpiringCredentialRefreshingLogin testExpiringCredentialRefreshingLogin = new TestExpiringCredentialRefreshingLogin(
-                refreshConfigThatPerformsReloginEveryGivenPercentageOfLifetime(
-                        1.0 * refreshEveryMinutes / lifetimeMinutes, minPeriodSeconds, bufferSeconds,
-                        clientReloginAllowedBeforeLogout),
-                testLoginContextFactory, mockTime, 1000 * 60 * lifetimeMinutes, absoluteLastRefreshMs,
-                clientReloginAllowedBeforeLogout);
+            refreshConfigThatPerformsReloginEveryGivenPercentageOfLifetime(
+                1.0 * refreshEveryMinutes / lifetimeMinutes, minPeriodSeconds, bufferSeconds,
+                clientReloginAllowedBeforeLogout),
+            testLoginContextFactory, mockTime, 1000 * 60 * lifetimeMinutes, absoluteLastRefreshMs,
+            clientReloginAllowedBeforeLogout);
         testLoginContextFactory.configure(mockLoginContext, testExpiringCredentialRefreshingLogin);
 
         /*
@@ -785,9 +787,9 @@ public class ExpiringCredentialRefreshingLoginTest {
     }
 
     private static List<KafkaFutureImpl<Long>> addWaiters(MockScheduler mockScheduler, long refreshEveryMillis,
-            int numWaiters) {
+        int numWaiters) {
         List<KafkaFutureImpl<Long>> retvalWaiters = new ArrayList<>(numWaiters);
-        for (int i = 1; i <= numWaiters; ++i) {
+        for (int i = 1;i <= numWaiters;++i) {
             KafkaFutureImpl<Long> waiter = new KafkaFutureImpl<>();
             mockScheduler.addWaiter(i * refreshEveryMillis, waiter);
             retvalWaiters.add(waiter);
@@ -796,14 +798,14 @@ public class ExpiringCredentialRefreshingLoginTest {
     }
 
     private static ExpiringCredentialRefreshConfig refreshConfigThatPerformsReloginEveryGivenPercentageOfLifetime(
-            double refreshWindowFactor, short minPeriodSeconds, short bufferSeconds,
-            boolean clientReloginAllowedBeforeLogout) {
+        double refreshWindowFactor, short minPeriodSeconds, short bufferSeconds,
+        boolean clientReloginAllowedBeforeLogout) {
         Map<Object, Object> configs = new HashMap<>();
         configs.put(SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_FACTOR, refreshWindowFactor);
         configs.put(SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_JITTER, 0);
         configs.put(SaslConfigs.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS, minPeriodSeconds);
         configs.put(SaslConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS, bufferSeconds);
         return new ExpiringCredentialRefreshConfig(new ConfigDef().withClientSaslSupport().parse(configs),
-                clientReloginAllowedBeforeLogout);
+            clientReloginAllowedBeforeLogout);
     }
 }

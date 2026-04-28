@@ -126,7 +126,7 @@ public class CommandLineUtils {
             for (OptionSpec<?> arg : invalidOptions) {
                 if (options.has(arg)) {
                     printUsageAndExit(parser, String.format("Option combination \"%s\" can't be used with option \"%s\"%s",
-                            usedOptions, arg, trailingAdditionalMessage.orElse("")));
+                        usedOptions, arg, trailingAdditionalMessage.orElse("")));
                 }
             }
         }
@@ -154,9 +154,9 @@ public class CommandLineUtils {
 
         if (presentCount != 1) {
             printUsageAndExit(parser, "Exactly one of the following arguments is required: " +
-                    Arrays.stream(optionSpecs)
-                            .map(Object::toString)
-                            .collect(Collectors.joining(", ")));
+                Arrays.stream(optionSpecs)
+                    .map(Object::toString)
+                    .collect(Collectors.joining(", ")));
         }
     }
 
@@ -244,18 +244,18 @@ public class CommandLineUtils {
         if (bootstrapServer.isPresent()) {
             if (bootstrapControllers.isPresent()) {
                 throw new InitializeBootstrapException("You cannot specify both " +
-                        "--bootstrap-controller and --bootstrap-server.");
+                    "--bootstrap-controller and --bootstrap-server.");
             }
             properties.setProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
-                    bootstrapServer.get());
+                bootstrapServer.get());
             properties.remove(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
         } else if (bootstrapControllers.isPresent()) {
             properties.remove(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
             properties.setProperty(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG,
-                    bootstrapControllers.get());
+                bootstrapControllers.get());
         } else {
             throw new InitializeBootstrapException("You must specify either --bootstrap-controller " +
-                    "or --bootstrap-server.");
+                "or --bootstrap-server.");
         }
     }
 
@@ -271,7 +271,7 @@ public class CommandLineUtils {
                 options.has(bootstrapServer) ?
                     Optional.of(options.valueOf(bootstrapServer)) : Optional.empty(),
                 options.has(bootstrapControllers) ?
-                        Optional.of(options.valueOf(bootstrapControllers)) : Optional.empty());
+                    Optional.of(options.valueOf(bootstrapControllers)) : Optional.empty());
         } catch (InitializeBootstrapException e) {
             printUsageAndExit(parser, e.getMessage());
         }

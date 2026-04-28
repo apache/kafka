@@ -46,9 +46,9 @@ public class ChangelogTopics {
     private final Logger log;
 
     public ChangelogTopics(final InternalTopicManager internalTopicManager,
-                           final Map<Subtopology, TopicsInfo> topicGroups,
-                           final Map<Subtopology, Set<TaskId>> tasksForTopicGroup,
-                           final String logPrefix) {
+        final Map<Subtopology, TopicsInfo> topicGroups,
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup,
+        final String logPrefix) {
         this.internalTopicManager = internalTopicManager;
         this.topicGroups = topicGroups;
         this.tasksForTopicGroup = tasksForTopicGroup;

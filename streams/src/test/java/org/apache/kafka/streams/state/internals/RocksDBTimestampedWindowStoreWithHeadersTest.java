@@ -60,24 +60,24 @@ public class RocksDBTimestampedWindowStoreWithHeadersTest {
         final Properties props = StreamsTestUtils.getStreamsConfig();
         baseDir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext<>(
-                baseDir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsConfig(props)
+            baseDir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsConfig(props)
         );
 
         final SegmentedBytesStore segmentedBytesStore = new RocksDBSegmentedBytesStore(
-                STORE_NAME,
-                "test-metrics-scope",
-                RETENTION_PERIOD,
-                SEGMENT_INTERVAL,
-                new WindowKeySchema()
+            STORE_NAME,
+            "test-metrics-scope",
+            RETENTION_PERIOD,
+            SEGMENT_INTERVAL,
+            new WindowKeySchema()
         );
 
         windowStore = new RocksDBTimestampedWindowStoreWithHeaders(
-                segmentedBytesStore,
-                false,
-                WINDOW_SIZE
+            segmentedBytesStore,
+            false,
+            WINDOW_SIZE
         );
 
         windowStore.init(context, windowStore);
@@ -93,9 +93,9 @@ public class RocksDBTimestampedWindowStoreWithHeadersTest {
     @Test
     public void shouldReturnUnknownQueryTypeForWindowKeyQuery() {
         final WindowKeyQuery<Bytes, byte[]> query = WindowKeyQuery.withKeyAndWindowStartRange(
-                new Bytes("test-key".getBytes()),
-                Instant.ofEpochMilli(0),
-                Instant.ofEpochMilli(Long.MAX_VALUE)
+            new Bytes("test-key".getBytes()),
+            Instant.ofEpochMilli(0),
+            Instant.ofEpochMilli(Long.MAX_VALUE)
         );
         final PositionBound positionBound = PositionBound.unbounded();
         final QueryConfig config = new QueryConfig(false);
@@ -105,9 +105,9 @@ public class RocksDBTimestampedWindowStoreWithHeadersTest {
         // Verify: Window store with headers currently returns UNKNOWN_QUERY_TYPE
         assertFalse(result.isSuccess(), "Expected query to fail with unknown query type");
         assertEquals(
-                FailureReason.UNKNOWN_QUERY_TYPE,
-                result.getFailureReason(),
-                "Expected UNKNOWN_QUERY_TYPE failure reason"
+            FailureReason.UNKNOWN_QUERY_TYPE,
+            result.getFailureReason(),
+            "Expected UNKNOWN_QUERY_TYPE failure reason"
         );
         assertNotNull(result.getPosition(), "Expected position to be set");
     }
@@ -115,21 +115,21 @@ public class RocksDBTimestampedWindowStoreWithHeadersTest {
     @Test
     public void shouldReturnUnknownQueryTypeForWindowRangeQuery() {
         final WindowRangeQuery<Bytes, byte[]> query = WindowRangeQuery.withWindowStartRange(
-                Instant.ofEpochMilli(0),
-                Instant.ofEpochMilli(Long.MAX_VALUE)
+            Instant.ofEpochMilli(0),
+            Instant.ofEpochMilli(Long.MAX_VALUE)
         );
         final PositionBound positionBound = PositionBound.unbounded();
         final QueryConfig config = new QueryConfig(false);
 
         final QueryResult<KeyValueIterator<org.apache.kafka.streams.kstream.Windowed<Bytes>, byte[]>> result =
-                windowStore.query(query, positionBound, config);
+            windowStore.query(query, positionBound, config);
 
         // Verify: Window store with headers currently returns UNKNOWN_QUERY_TYPE
         assertFalse(result.isSuccess(), "Expected query to fail with unknown query type");
         assertEquals(
-                FailureReason.UNKNOWN_QUERY_TYPE,
-                result.getFailureReason(),
-                "Expected UNKNOWN_QUERY_TYPE failure reason"
+            FailureReason.UNKNOWN_QUERY_TYPE,
+            result.getFailureReason(),
+            "Expected UNKNOWN_QUERY_TYPE failure reason"
         );
         assertNotNull(result.getPosition(), "Expected position to be set");
     }
@@ -137,9 +137,9 @@ public class RocksDBTimestampedWindowStoreWithHeadersTest {
     @Test
     public void shouldCollectExecutionInfoWhenRequested() {
         final WindowKeyQuery<Bytes, byte[]> query = WindowKeyQuery.withKeyAndWindowStartRange(
-                new Bytes("test-key".getBytes()),
-                Instant.ofEpochMilli(0),
-                Instant.ofEpochMilli(Long.MAX_VALUE)
+            new Bytes("test-key".getBytes()),
+            Instant.ofEpochMilli(0),
+            Instant.ofEpochMilli(Long.MAX_VALUE)
         );
         final PositionBound positionBound = PositionBound.unbounded();
         final QueryConfig config = new QueryConfig(true); // Enable execution info
@@ -149,21 +149,21 @@ public class RocksDBTimestampedWindowStoreWithHeadersTest {
         // Verify: Execution info was collected
         assertFalse(result.getExecutionInfo().isEmpty(), "Expected execution info to be collected");
         assertTrue(
-                result.getExecutionInfo().get(0).contains("Handled in"),
-                "Expected execution info to contain handling information"
+            result.getExecutionInfo().get(0).contains("Handled in"),
+            "Expected execution info to contain handling information"
         );
         assertTrue(
-                result.getExecutionInfo().get(0).contains(RocksDBTimestampedWindowStoreWithHeaders.class.getName()),
-                "Expected execution info to mention the class name"
+            result.getExecutionInfo().get(0).contains(RocksDBTimestampedWindowStoreWithHeaders.class.getName()),
+            "Expected execution info to mention the class name"
         );
     }
 
     @Test
     public void shouldNotCollectExecutionInfoWhenNotRequested() {
         final WindowKeyQuery<Bytes, byte[]> query = WindowKeyQuery.withKeyAndWindowStartRange(
-                new Bytes("test-key".getBytes()),
-                Instant.ofEpochMilli(0),
-                Instant.ofEpochMilli(Long.MAX_VALUE)
+            new Bytes("test-key".getBytes()),
+            Instant.ofEpochMilli(0),
+            Instant.ofEpochMilli(Long.MAX_VALUE)
         );
         final PositionBound positionBound = PositionBound.unbounded();
         final QueryConfig config = new QueryConfig(false); // Disable execution info

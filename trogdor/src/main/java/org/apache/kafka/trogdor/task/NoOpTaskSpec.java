@@ -28,7 +28,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public class NoOpTaskSpec extends TaskSpec {
     @JsonCreator
     public NoOpTaskSpec(@JsonProperty("startMs") long startMs,
-                         @JsonProperty("durationMs") long durationMs) {
+        @JsonProperty("durationMs") long durationMs) {
         super(startMs, durationMs);
     }
 

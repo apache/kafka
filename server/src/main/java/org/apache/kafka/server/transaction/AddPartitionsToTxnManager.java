@@ -121,10 +121,11 @@ public class AddPartitionsToTxnManager extends InterBrokerSendThread {
      * comes in, one request will be in the map and one will return to the producer with a response depending on the epoch.
      */
     public record TransactionDataAndCallbacks(
-            AddPartitionsToTxnTransactionCollection transactionData,
-            Map<String, AppendCallback> callbacks,
-            Map<String, Long> startTimeMs,
-            TransactionSupportedOperation transactionSupportedOperation) { }
+        AddPartitionsToTxnTransactionCollection transactionData,
+        Map<String, AppendCallback> callbacks,
+        Map<String, Long> startTimeMs,
+        TransactionSupportedOperation transactionSupportedOperation) {
+    }
 
     private class AddPartitionsToTxnHandler implements RequestCompletionHandler {
         private final Node node;
@@ -146,9 +147,9 @@ public class AddPartitionsToTxnManager extends InterBrokerSendThread {
                 // We may see unsupported version exception if we try to send a verify only request to a broker that can't handle it.
                 // In this case, skip verification.
                 log.warn("AddPartitionsToTxnRequest failed for node {} with invalid version exception. " +
-                        "This suggests verification is not supported. Continuing handling the produce request.", response.destination());
+                    "This suggests verification is not supported. Continuing handling the produce request.", response.destination());
                 transactionDataAndCallbacks.callbacks().forEach((txnId, callback) ->
-                        sendCallback(callback, Map.of(), transactionDataAndCallbacks.startTimeMs.get(txnId)));
+                    sendCallback(callback, Map.of(), transactionDataAndCallbacks.startTimeMs.get(txnId)));
             } else if (response.wasDisconnected() || response.wasTimedOut()) {
                 log.warn("AddPartitionsToTxnRequest failed for node {} with a network exception.", response.destination());
                 sendCallbacksToAll(Errors.NETWORK_EXCEPTION.code());
@@ -156,11 +157,11 @@ public class AddPartitionsToTxnManager extends InterBrokerSendThread {
                 AddPartitionsToTxnResponseData responseData = ((AddPartitionsToTxnResponse) response.responseBody()).data();
                 if (responseData.errorCode() != 0) {
                     log.error("AddPartitionsToTxnRequest for node {} returned with error {}.",
-                            response.destination(), Errors.forCode(responseData.errorCode()));
+                        response.destination(), Errors.forCode(responseData.errorCode()));
                     // The client should not be exposed to CLUSTER_AUTHORIZATION_FAILED so modify the error to signify the verification did not complete.
                     // Return INVALID_TXN_STATE.
                     short finalError = responseData.errorCode() == Errors.CLUSTER_AUTHORIZATION_FAILED.code()
-                            ? Errors.INVALID_TXN_STATE.code() : responseData.errorCode();
+                        ? Errors.INVALID_TXN_STATE.code() : responseData.errorCode();
                     sendCallbacksToAll(finalError);
                 } else {
                     for (AddPartitionsToTxnResponseData.AddPartitionsToTxnResult txnResult : responseData.resultsByTransaction()) {
@@ -174,7 +175,7 @@ public class AddPartitionsToTxnManager extends InterBrokerSendThread {
                                     if (partitionResult.partitionErrorCode() == Errors.PRODUCER_FENCED.code()) {
                                         code = Errors.INVALID_PRODUCER_EPOCH.code();
                                     } else if (partitionResult.partitionErrorCode() == Errors.TRANSACTION_ABORTABLE.code()
-                                            && transactionDataAndCallbacks.transactionSupportedOperation().equals(DEFAULT_ERROR)) { // For backward compatibility with clients
+                                        && transactionDataAndCallbacks.transactionSupportedOperation().equals(DEFAULT_ERROR)) { // For backward compatibility with clients
                                         code = Errors.INVALID_TXN_STATE.code();
                                     } else {
                                         code = partitionResult.partitionErrorCode();
@@ -199,7 +200,7 @@ public class AddPartitionsToTxnManager extends InterBrokerSendThread {
 
         private void sendCallbacksToAll(short errorCode) {
             transactionDataAndCallbacks.callbacks.forEach((txnId, cb) ->
-                    sendCallback(cb, buildErrorMap(txnId, errorCode), transactionDataAndCallbacks.startTimeMs.get(txnId)));
+                sendCallback(cb, buildErrorMap(txnId, errorCode), transactionDataAndCallbacks.startTimeMs.get(txnId)));
         }
     }
 
@@ -218,11 +219,11 @@ public class AddPartitionsToTxnManager extends InterBrokerSendThread {
     private final Histogram verificationTimeMs = metricsGroup.newHistogram(VERIFICATION_TIME_MS_METRIC_NAME);
 
     public AddPartitionsToTxnManager(
-            AbstractKafkaConfig config,
-            NetworkClient client,
-            MetadataCache metadataCache,
-            Function<String, Integer> partitionFor,
-            Time time) {
+        AbstractKafkaConfig config,
+        NetworkClient client,
+        MetadataCache metadataCache,
+        Function<String, Integer> partitionFor,
+        Time time) {
         super("AddPartitionsToTxnSenderThread-" + config.brokerId(), client, config.requestTimeoutMs(), time);
         this.interBrokerListenerName = config.interBrokerListenerName();
         this.metadataCache = metadataCache;
@@ -231,16 +232,16 @@ public class AddPartitionsToTxnManager extends InterBrokerSendThread {
     }
 
     public void addOrVerifyTransaction(
-            String transactionalId,
-            long producerId,
-            short producerEpoch,
-            Collection<TopicPartition> topicPartitions,
-            AppendCallback callback,
-            TransactionSupportedOperation transactionSupportedOperation) {
+        String transactionalId,
+        long producerId,
+        short producerEpoch,
+        Collection<TopicPartition> topicPartitions,
+        AppendCallback callback,
+        TransactionSupportedOperation transactionSupportedOperation) {
         Optional<Node> coordinator = getTransactionCoordinator(partitionFor.apply(transactionalId));
         if (coordinator.isEmpty()) {
             callback.complete(topicPartitions.stream().collect(
-                    Collectors.toMap(Function.identity(), tp -> Errors.COORDINATOR_NOT_AVAILABLE)));
+                Collectors.toMap(Function.identity(), tp -> Errors.COORDINATOR_NOT_AVAILABLE)));
         } else {
             AddPartitionsToTxnTopicCollection topicCollection = new AddPartitionsToTxnTopicCollection();
             topicPartitions.forEach(tp -> {
@@ -253,30 +254,30 @@ public class AddPartitionsToTxnManager extends InterBrokerSendThread {
             });
 
             AddPartitionsToTxnTransaction transactionData = new AddPartitionsToTxnTransaction()
-                    .setTransactionalId(transactionalId)
-                    .setProducerId(producerId)
-                    .setProducerEpoch(producerEpoch)
-                    .setVerifyOnly(!transactionSupportedOperation.supportsEpochBump)
-                    .setTopics(topicCollection);
+                .setTransactionalId(transactionalId)
+                .setProducerId(producerId)
+                .setProducerEpoch(producerEpoch)
+                .setVerifyOnly(!transactionSupportedOperation.supportsEpochBump)
+                .setTopics(topicCollection);
 
             addTxnData(coordinator.get(), transactionData, callback, transactionSupportedOperation);
         }
     }
 
     private void addTxnData(
-            Node node,
-            AddPartitionsToTxnTransaction transactionData,
-            AppendCallback callback,
-            TransactionSupportedOperation transactionSupportedOperation) {
+        Node node,
+        AddPartitionsToTxnTransaction transactionData,
+        AppendCallback callback,
+        TransactionSupportedOperation transactionSupportedOperation) {
         synchronized (nodesToTransactions) {
             long curTime = time.milliseconds();
             // Check if we have already had either node or individual transaction. Add the Node if it isn't there.
             TransactionDataAndCallbacks existingNodeAndTransactionData = nodesToTransactions.computeIfAbsent(node,
-                    ignored -> new TransactionDataAndCallbacks(
-                            new AddPartitionsToTxnTransactionCollection(1),
-                            new HashMap<>(),
-                            new HashMap<>(),
-                            transactionSupportedOperation));
+                ignored -> new TransactionDataAndCallbacks(
+                    new AddPartitionsToTxnTransactionCollection(1),
+                    new HashMap<>(),
+                    new HashMap<>(),
+                    transactionSupportedOperation));
 
             AddPartitionsToTxnTransaction existingTransactionData = existingNodeAndTransactionData.transactionData.find(transactionData.transactionalId());
 
@@ -287,7 +288,7 @@ public class AddPartitionsToTxnManager extends InterBrokerSendThread {
             if (existingTransactionData != null) {
                 if (existingTransactionData.producerEpoch() <= transactionData.producerEpoch()) {
                     Errors error = (existingTransactionData.producerEpoch() < transactionData.producerEpoch())
-                            ? Errors.INVALID_PRODUCER_EPOCH : Errors.NETWORK_EXCEPTION;
+                        ? Errors.INVALID_PRODUCER_EPOCH : Errors.NETWORK_EXCEPTION;
                     AppendCallback oldCallback = existingNodeAndTransactionData.callbacks.get(transactionData.transactionalId());
                     existingNodeAndTransactionData.transactionData.remove(transactionData);
                     sendCallback(oldCallback, topicPartitionsToError(existingTransactionData, error), existingNodeAndTransactionData.startTimeMs.get(transactionData.transactionalId()));
@@ -307,8 +308,8 @@ public class AddPartitionsToTxnManager extends InterBrokerSendThread {
 
     private Optional<Node> getTransactionCoordinator(int partition) {
         return metadataCache.getLeaderAndIsr(Topic.TRANSACTION_STATE_TOPIC_NAME, partition)
-                .filter(leaderAndIsr -> leaderAndIsr.leader() != MetadataResponse.NO_LEADER_ID)
-                .flatMap(metadata -> metadataCache.getAliveBrokerNode(metadata.leader(), interBrokerListenerName));
+            .filter(leaderAndIsr -> leaderAndIsr.leader() != MetadataResponse.NO_LEADER_ID)
+            .flatMap(metadata -> metadataCache.getAliveBrokerNode(metadata.leader(), interBrokerListenerName));
     }
 
     private Map<TopicPartition, Errors> topicPartitionsToError(AddPartitionsToTxnTransaction txnData, Errors error) {
@@ -338,10 +339,10 @@ public class AddPartitionsToTxnManager extends InterBrokerSendThread {
                 var transactionDataAndCallbacks = entry.getValue();
                 if (!inflightNodes.contains(node)) {
                     list.add(new RequestAndCompletionHandler(
-                            currentTimeMs,
-                            node,
-                            AddPartitionsToTxnRequest.Builder.forBroker(transactionDataAndCallbacks.transactionData()),
-                            new AddPartitionsToTxnHandler(node, transactionDataAndCallbacks)
+                        currentTimeMs,
+                        node,
+                        AddPartitionsToTxnRequest.Builder.forBroker(transactionDataAndCallbacks.transactionData()),
+                        new AddPartitionsToTxnHandler(node, transactionDataAndCallbacks)
                     ));
                     inflightNodes.add(node);
                     iter.remove();

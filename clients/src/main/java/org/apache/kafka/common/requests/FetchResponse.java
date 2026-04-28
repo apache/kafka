@@ -161,8 +161,8 @@ public class FetchResponse extends AbstractResponse {
      * @return              The response size in bytes.
      */
     public static int sizeOf(short version,
-                             Iterator<Map.Entry<TopicIdPartition,
-                             FetchResponseData.PartitionData>> partIterator) {
+        Iterator<Map.Entry<TopicIdPartition,
+            FetchResponseData.PartitionData>> partIterator) {
         // Since the throttleTimeMs and metadata field sizes are constant and fixed, we can
         // use arbitrary values here without affecting the result.
         FetchResponseData data = toMessage(Errors.NONE, 0, INVALID_SESSION_ID, partIterator, List.of());
@@ -177,7 +177,7 @@ public class FetchResponse extends AbstractResponse {
 
     public static Optional<FetchResponseData.EpochEndOffset> divergingEpoch(FetchResponseData.PartitionData partitionResponse) {
         return partitionResponse.divergingEpoch().epoch() < 0 ? Optional.empty()
-                : Optional.of(partitionResponse.divergingEpoch());
+            : Optional.of(partitionResponse.divergingEpoch());
     }
 
     public static boolean isDivergingEpoch(FetchResponseData.PartitionData partitionResponse) {
@@ -186,7 +186,7 @@ public class FetchResponse extends AbstractResponse {
 
     public static Optional<Integer> preferredReadReplica(FetchResponseData.PartitionData partitionResponse) {
         return partitionResponse.preferredReadReplica() == INVALID_PREFERRED_REPLICA_ID ? Optional.empty()
-                : Optional.of(partitionResponse.preferredReadReplica());
+            : Optional.of(partitionResponse.preferredReadReplica());
     }
 
     public static boolean isPreferredReplica(FetchResponseData.PartitionData partitionResponse) {
@@ -244,10 +244,10 @@ public class FetchResponse extends AbstractResponse {
 
     // TODO: remove as a part of KAFKA-12410
     public static FetchResponse of(Errors error,
-                                   int throttleTimeMs,
-                                   int sessionId,
-                                   LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> responseData,
-                                   List<Node> nodeEndpoints) {
+        int throttleTimeMs,
+        int sessionId,
+        LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> responseData,
+        List<Node> nodeEndpoints) {
         return new FetchResponse(toMessage(error, throttleTimeMs, sessionId, responseData.entrySet().iterator(), nodeEndpoints));
     }
 
@@ -262,10 +262,10 @@ public class FetchResponse extends AbstractResponse {
     }
 
     private static FetchResponseData toMessage(Errors error,
-                                               int throttleTimeMs,
-                                               int sessionId,
-                                               Iterator<Map.Entry<TopicIdPartition, FetchResponseData.PartitionData>> partIterator,
-                                               List<Node> nodeEndpoints) {
+        int throttleTimeMs,
+        int sessionId,
+        Iterator<Map.Entry<TopicIdPartition, FetchResponseData.PartitionData>> partIterator,
+        List<Node> nodeEndpoints) {
         List<FetchResponseData.FetchableTopicResponse> topicResponseList = new ArrayList<>();
         while (partIterator.hasNext()) {
             Map.Entry<TopicIdPartition, FetchResponseData.PartitionData> entry = partIterator.next();
@@ -295,14 +295,14 @@ public class FetchResponse extends AbstractResponse {
         FetchResponseData data = new FetchResponseData();
         // KafkaApis should only pass in node endpoints on error, otherwise this should be an empty list
         nodeEndpoints.forEach(endpoint -> data.nodeEndpoints().add(
-                new FetchResponseData.NodeEndpoint()
-                        .setNodeId(endpoint.id())
-                        .setHost(endpoint.host())
-                        .setPort(endpoint.port())
-                        .setRack(endpoint.rack())));
+            new FetchResponseData.NodeEndpoint()
+                .setNodeId(endpoint.id())
+                .setHost(endpoint.host())
+                .setPort(endpoint.port())
+                .setRack(endpoint.rack())));
         return data.setThrottleTimeMs(throttleTimeMs)
-                .setErrorCode(error.code())
-                .setSessionId(sessionId)
-                .setResponses(topicResponseList);
+            .setErrorCode(error.code())
+            .setSessionId(sessionId)
+            .setResponses(topicResponseList);
     }
 }

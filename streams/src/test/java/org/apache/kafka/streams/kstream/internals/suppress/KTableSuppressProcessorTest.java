@@ -81,8 +81,8 @@ public class KTableSuppressProcessorTest {
 
 
         Harness(final Suppressed<K> suppressed,
-                final Serde<K> keySerde,
-                final Serde<V> valueSerde) {
+            final Serde<K> keySerde,
+            final Serde<V> valueSerde) {
 
             final String storeName = "test-store";
 

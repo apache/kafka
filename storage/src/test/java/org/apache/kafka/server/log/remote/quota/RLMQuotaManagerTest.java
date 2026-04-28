@@ -44,7 +44,7 @@ public class RLMQuotaManagerTest {
     @Test
     public void testQuotaExceeded() {
         RLMQuotaManager quotaManager = new RLMQuotaManager(
-            new RLMQuotaManagerConfig(50, 11, 1), metrics, QUOTA_TYPE, DESCRIPTION, time);
+                new RLMQuotaManagerConfig(50, 11, 1), metrics, QUOTA_TYPE, DESCRIPTION, time);
 
         assertEquals(0L, quotaManager.getThrottleTimeMs());
         quotaManager.record(500);
@@ -64,19 +64,19 @@ public class RLMQuotaManagerTest {
     @Test
     public void testQuotaUpdate() {
         RLMQuotaManager quotaManager = new RLMQuotaManager(
-            new RLMQuotaManagerConfig(50, 11, 1), metrics, QUOTA_TYPE, DESCRIPTION, time);
+                new RLMQuotaManagerConfig(50, 11, 1), metrics, QUOTA_TYPE, DESCRIPTION, time);
 
         assertFalse(quotaManager.getThrottleTimeMs() > 0);
         quotaManager.record(51);
         assertTrue(quotaManager.getThrottleTimeMs() > 0);
 
         Map<MetricName, KafkaMetric> fetchQuotaMetrics = metrics.metrics().entrySet().stream()
-            .filter(entry -> entry.getKey().name().equals("byte-rate") && entry.getKey().group().equals(QUOTA_TYPE.toString()))
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                .filter(entry -> entry.getKey().name().equals("byte-rate") && entry.getKey().group().equals(QUOTA_TYPE.toString()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
         Map<MetricName, KafkaMetric> nonQuotaMetrics = metrics.metrics().entrySet().stream()
-            .filter(entry -> !entry.getKey().name().equals("byte-rate") || !entry.getKey().group().equals(QUOTA_TYPE.toString()))
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                .filter(entry -> !entry.getKey().name().equals("byte-rate") || !entry.getKey().group().equals(QUOTA_TYPE.toString()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
         assertEquals(1, fetchQuotaMetrics.size());
         assertFalse(nonQuotaMetrics.isEmpty());
@@ -114,6 +114,6 @@ public class RLMQuotaManagerTest {
 
     private Map<MetricName, MetricConfig> extractMetricConfig(Map<MetricName, KafkaMetric> metrics) {
         return metrics.entrySet().stream()
-            .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().config()));
+                .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().config()));
     }
 }

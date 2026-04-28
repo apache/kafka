@@ -74,11 +74,11 @@ public class StreamsResetterTest {
     @BeforeEach
     public void beforeEach() {
         consumer.assign(List.of(topicPartition));
-        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0L, new byte[] {}, new byte[] {}));
-        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 1L, new byte[] {}, new byte[] {}));
-        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 2L, new byte[] {}, new byte[] {}));
-        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 3L, new byte[] {}, new byte[] {}));
-        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 4L, new byte[] {}, new byte[] {}));
+        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0L, new byte[]{}, new byte[]{}));
+        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 1L, new byte[]{}, new byte[]{}));
+        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 2L, new byte[]{}, new byte[]{}));
+        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 3L, new byte[]{}, new byte[]{}));
+        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 4L, new byte[]{}, new byte[]{}));
     }
 
     @Test
@@ -321,10 +321,10 @@ public class StreamsResetterTest {
         final ConsumerGroupDescription consumerGroupDescription = mock(ConsumerGroupDescription.class);
 
         when(adminClient.describeConsumerGroups(eq(Set.of(groupId)), any()))
-                .thenReturn(new DescribeConsumerGroupsResult(Map.of(groupId, KafkaFutureImpl.completedFuture(consumerGroupDescription))));
+            .thenReturn(new DescribeConsumerGroupsResult(Map.of(groupId, KafkaFutureImpl.completedFuture(consumerGroupDescription))));
         when(adminClient.removeMembersFromConsumerGroup(eq(groupId), any()))
-                .thenReturn(createRemoveMembersFromConsumerGroupResult(KafkaFutureImpl.completedFuture(Map.of(new LeaveGroupRequestData.MemberIdentity(), Errors.UNKNOWN_MEMBER_ID)), Set.of()))
-                .thenReturn(createRemoveMembersFromConsumerGroupResult(KafkaFutureImpl.completedFuture(Map.of()), Set.of()));
+            .thenReturn(createRemoveMembersFromConsumerGroupResult(KafkaFutureImpl.completedFuture(Map.of(new LeaveGroupRequestData.MemberIdentity(), Errors.UNKNOWN_MEMBER_ID)), Set.of()))
+            .thenReturn(createRemoveMembersFromConsumerGroupResult(KafkaFutureImpl.completedFuture(Map.of()), Set.of()));
         when(consumerGroupDescription.members()).thenReturn(List.of(mock(MemberDescription.class)));
 
         streamsResetter.maybeDeleteActiveConsumers(groupId, adminClient, true);
@@ -340,9 +340,9 @@ public class StreamsResetterTest {
         final ConsumerGroupDescription consumerGroupDescription = mock(ConsumerGroupDescription.class);
 
         when(adminClient.describeConsumerGroups(eq(Set.of(groupId)), any()))
-                .thenReturn(new DescribeConsumerGroupsResult(Map.of(groupId, KafkaFutureImpl.completedFuture(consumerGroupDescription))));
+            .thenReturn(new DescribeConsumerGroupsResult(Map.of(groupId, KafkaFutureImpl.completedFuture(consumerGroupDescription))));
         when(adminClient.removeMembersFromConsumerGroup(eq(groupId), any()))
-                .thenReturn(createRemoveMembersFromConsumerGroupResult(KafkaFutureImpl.completedFuture(Map.of(new LeaveGroupRequestData.MemberIdentity(), Errors.UNKNOWN_MEMBER_ID)), Set.of()));
+            .thenReturn(createRemoveMembersFromConsumerGroupResult(KafkaFutureImpl.completedFuture(Map.of(new LeaveGroupRequestData.MemberIdentity(), Errors.UNKNOWN_MEMBER_ID)), Set.of()));
         when(consumerGroupDescription.members()).thenReturn(List.of(mock(MemberDescription.class)));
 
         assertThrows(ExecutionException.class, () -> streamsResetter.maybeDeleteActiveConsumers(groupId, adminClient, true));
@@ -358,7 +358,7 @@ public class StreamsResetterTest {
         final ConsumerGroupDescription consumerGroupDescription = mock(ConsumerGroupDescription.class);
 
         when(adminClient.describeConsumerGroups(eq(Set.of(groupId)), any()))
-                .thenReturn(new DescribeConsumerGroupsResult(Map.of(groupId, KafkaFutureImpl.completedFuture(consumerGroupDescription))));
+            .thenReturn(new DescribeConsumerGroupsResult(Map.of(groupId, KafkaFutureImpl.completedFuture(consumerGroupDescription))));
         when(consumerGroupDescription.members()).thenReturn(List.of(mock(MemberDescription.class)));
 
         assertThrows(IllegalStateException.class, () -> streamsResetter.maybeDeleteActiveConsumers(groupId, adminClient, false));
@@ -374,9 +374,9 @@ public class StreamsResetterTest {
         final ConsumerGroupDescription consumerGroupDescription = mock(ConsumerGroupDescription.class);
 
         when(adminClient.describeConsumerGroups(eq(Set.of(groupId)), any()))
-                .thenReturn(new DescribeConsumerGroupsResult(Map.of(groupId, KafkaFutureImpl.completedFuture(consumerGroupDescription))));
+            .thenReturn(new DescribeConsumerGroupsResult(Map.of(groupId, KafkaFutureImpl.completedFuture(consumerGroupDescription))));
         when(adminClient.removeMembersFromConsumerGroup(eq(groupId), any()))
-                .thenReturn(createRemoveMembersFromConsumerGroupResult(KafkaFutureImpl.completedFuture(Map.of()), Set.of()));
+            .thenReturn(createRemoveMembersFromConsumerGroupResult(KafkaFutureImpl.completedFuture(Map.of()), Set.of()));
         when(consumerGroupDescription.members()).thenReturn(List.of(mock(MemberDescription.class)));
 
         streamsResetter.maybeDeleteActiveConsumers(groupId, adminClient, true);
@@ -394,7 +394,7 @@ public class StreamsResetterTest {
         final KafkaFutureImpl<ConsumerGroupDescription> future = new KafkaFutureImpl<>();
         future.completeExceptionally(new GroupIdNotFoundException(groupId));
         when(adminClient.describeConsumerGroups(eq(Set.of(groupId)), any()))
-                .thenReturn(new DescribeConsumerGroupsResult(Map.of(groupId, future)));
+            .thenReturn(new DescribeConsumerGroupsResult(Map.of(groupId, future)));
         when(consumerGroupDescription.members()).thenReturn(List.of(mock(MemberDescription.class)));
 
         streamsResetter.maybeDeleteActiveConsumers(groupId, adminClient, true);
@@ -403,7 +403,7 @@ public class StreamsResetterTest {
     }
 
     private RemoveMembersFromConsumerGroupResult createRemoveMembersFromConsumerGroupResult(final KafkaFuture<Map<LeaveGroupRequestData.MemberIdentity, Errors>> future,
-                                                                                            final Set<MemberToRemove> memberInfos) throws Exception {
+        final Set<MemberToRemove> memberInfos) throws Exception {
         final Constructor<RemoveMembersFromConsumerGroupResult> constructor = RemoveMembersFromConsumerGroupResult.class.getDeclaredConstructor(KafkaFuture.class, Set.class);
         constructor.setAccessible(true);
         return constructor.newInstance(future, memberInfos);

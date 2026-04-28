@@ -47,8 +47,8 @@ import static org.mockito.Mockito.when;
 public class WorkerTestUtils {
 
     public static ClusterConfigState clusterConfigState(long offset,
-                                                        int connectorNum,
-                                                        int taskNum) {
+            int connectorNum,
+            int taskNum) {
         Map<String, Map<String, String>> connectorConfigs = connectorConfigs(1, connectorNum);
         Map<String, AppliedConnectorConfig> appliedConnectorConfigs = connectorConfigs.entrySet().stream()
                 .collect(Collectors.toMap(
@@ -70,8 +70,8 @@ public class WorkerTestUtils {
     }
 
     public static Map<String, Integer> connectorTaskCounts(int start,
-                                                           int connectorNum,
-                                                           int taskCounts) {
+            int connectorNum,
+            int taskCounts) {
         return IntStream.range(start, connectorNum + 1)
                 .mapToObj(i -> new SimpleEntry<>("connector" + i, taskCounts))
                 .collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue));
@@ -84,20 +84,20 @@ public class WorkerTestUtils {
     }
 
     public static Map<String, TargetState> connectorTargetStates(int start,
-                                                                 int connectorNum,
-                                                                 TargetState state) {
+            int connectorNum,
+            TargetState state) {
         return IntStream.range(start, connectorNum + 1)
                 .mapToObj(i -> new SimpleEntry<>("connector" + i, state))
                 .collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue));
     }
 
     public static Map<ConnectorTaskId, Map<String, String>> taskConfigs(int start,
-                                                                        int connectorNum,
-                                                                        int taskNum) {
+            int connectorNum,
+            int taskNum) {
         return IntStream.range(start, taskNum + 1)
                 .mapToObj(i -> new SimpleEntry<>(
-                        new ConnectorTaskId("connector" + i / connectorNum + 1, i),
-                        new HashMap<String, String>())
+                                new ConnectorTaskId("connector" + i / connectorNum + 1, i),
+                                new HashMap<String, String>())
                 ).collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue));
     }
 
@@ -106,12 +106,12 @@ public class WorkerTestUtils {
     }
 
     public static void assertAssignment(String expectedLeader,
-                                        long expectedOffset,
-                                        List<String> expectedAssignedConnectors,
-                                        int expectedAssignedTaskNum,
-                                        List<String> expectedRevokedConnectors,
-                                        int expectedRevokedTaskNum,
-                                        ExtendedAssignment assignment) {
+            long expectedOffset,
+            List<String> expectedAssignedConnectors,
+            int expectedAssignedTaskNum,
+            List<String> expectedRevokedConnectors,
+            int expectedRevokedTaskNum,
+            ExtendedAssignment assignment) {
         assertAssignment(false, expectedLeader, expectedOffset,
                 expectedAssignedConnectors, expectedAssignedTaskNum,
                 expectedRevokedConnectors, expectedRevokedTaskNum,
@@ -120,13 +120,13 @@ public class WorkerTestUtils {
     }
 
     public static void assertAssignment(String expectedLeader,
-                                        long expectedOffset,
-                                        List<String> expectedAssignedConnectors,
-                                        int expectedAssignedTaskNum,
-                                        List<String> expectedRevokedConnectors,
-                                        int expectedRevokedTaskNum,
-                                        int expectedDelay,
-                                        ExtendedAssignment assignment) {
+            long expectedOffset,
+            List<String> expectedAssignedConnectors,
+            int expectedAssignedTaskNum,
+            List<String> expectedRevokedConnectors,
+            int expectedRevokedTaskNum,
+            int expectedDelay,
+            ExtendedAssignment assignment) {
         assertAssignment(false, expectedLeader, expectedOffset,
                 expectedAssignedConnectors, expectedAssignedTaskNum,
                 expectedRevokedConnectors, expectedRevokedTaskNum,
@@ -135,14 +135,14 @@ public class WorkerTestUtils {
     }
 
     public static void assertAssignment(boolean expectFailed,
-                                        String expectedLeader,
-                                        long expectedOffset,
-                                        List<String> expectedAssignedConnectors,
-                                        int expectedAssignedTaskNum,
-                                        List<String> expectedRevokedConnectors,
-                                        int expectedRevokedTaskNum,
-                                        int expectedDelay,
-                                        ExtendedAssignment assignment) {
+            String expectedLeader,
+            long expectedOffset,
+            List<String> expectedAssignedConnectors,
+            int expectedAssignedTaskNum,
+            List<String> expectedRevokedConnectors,
+            int expectedRevokedTaskNum,
+            int expectedDelay,
+            ExtendedAssignment assignment) {
         assertNotNull(assignment, "Assignment can't be null");
 
         assertEquals(expectFailed, assignment.failed(), "Wrong status in " + assignment);
@@ -174,7 +174,7 @@ public class WorkerTestUtils {
             List<Object> results) {
         Transformation<R> transformation = mock(Transformation.class);
         OngoingStubbing<R> stub = when(transformation.apply(any()));
-        for (Object result: results) {
+        for (Object result : results) {
             if (result instanceof Exception) {
                 stub = stub.thenThrow((Exception) result);
             } else {

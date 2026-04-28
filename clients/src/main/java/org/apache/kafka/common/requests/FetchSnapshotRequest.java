@@ -74,7 +74,7 @@ public final class FetchSnapshotRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<FetchSnapshotRequest> {
         private final FetchSnapshotRequestData data;
 
-        public Builder(FetchSnapshotRequestData  data) {
+        public Builder(FetchSnapshotRequestData data) {
             super(ApiKeys.FETCH_SNAPSHOT);
             this.data = data;
         }

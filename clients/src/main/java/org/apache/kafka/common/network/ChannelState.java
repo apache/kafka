@@ -84,7 +84,7 @@ public class ChannelState {
     public ChannelState(State state, String remoteAddress) {
         this(state, null, remoteAddress);
     }
-    
+
     public ChannelState(State state, AuthenticationException exception, String remoteAddress) {
         this.state = state;
         this.exception = exception;

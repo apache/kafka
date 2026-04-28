@@ -36,7 +36,7 @@ public class RemoveMembersFromConsumerGroupResult {
     private final Set<MemberToRemove> memberInfos;
 
     RemoveMembersFromConsumerGroupResult(KafkaFuture<Map<MemberIdentity, Errors>> future,
-                                         Set<MemberToRemove> memberInfos) {
+        Set<MemberToRemove> memberInfos) {
         this.future = future;
         this.memberInfos = memberInfos;
     }
@@ -53,11 +53,11 @@ public class RemoveMembersFromConsumerGroupResult {
                 result.completeExceptionally(throwable);
             } else {
                 if (removeAll()) {
-                    for (Map.Entry<MemberIdentity, Errors> entry: memberErrors.entrySet()) {
+                    for (Map.Entry<MemberIdentity, Errors> entry : memberErrors.entrySet()) {
                         Exception exception = entry.getValue().exception();
                         if (exception != null) {
                             Throwable ex = new KafkaException("Encounter exception when trying to remove: "
-                                    + entry.getKey(), exception);
+                                + entry.getKey(), exception);
                             result.completeExceptionally(ex);
                             return;
                         }
@@ -98,8 +98,8 @@ public class RemoveMembersFromConsumerGroupResult {
     }
 
     private boolean maybeCompleteExceptionally(Map<MemberIdentity, Errors> memberErrors,
-                                               MemberIdentity member,
-                                               KafkaFutureImpl<Void> result) {
+        MemberIdentity member,
+        KafkaFutureImpl<Void> result) {
         Throwable exception = KafkaAdminClient.getSubLevelError(memberErrors, member,
             "Member \"" + member + "\" was not included in the removal response");
         if (exception != null) {

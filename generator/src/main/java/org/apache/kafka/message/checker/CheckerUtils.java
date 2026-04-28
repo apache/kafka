@@ -82,8 +82,8 @@ class CheckerUtils {
         if (field.flexibleVersions().isEmpty()) {
             if (!topLevelFlexibleVersions.contains(field.taggedVersions())) {
                 throw new RuntimeException("Tagged versions for " + what + " " +
-                        field.name() + " are " + field.taggedVersions() + ", but top " +
-                        "level flexible versions are " + topLevelFlexibleVersions);
+                    field.name() + " are " + field.taggedVersions() + ", but top " +
+                    "level flexible versions are " + topLevelFlexibleVersions);
             }
         }
     }
@@ -97,7 +97,7 @@ class CheckerUtils {
     static MessageSpec readMessageSpecFromFile(String schemaPath) {
         if (!Files.isReadable(Paths.get(schemaPath))) {
             throw new RuntimeException("Path " + schemaPath + " does not point to " +
-                    "a readable file.");
+                "a readable file.");
         }
         try {
             return MessageGenerator.JSON_SERDE.readValue(new File(schemaPath), MessageSpec.class);

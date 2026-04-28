@@ -139,7 +139,7 @@ public class AdminClientTestUtils {
 
     public static DescribeTopicsResult describeTopicsResult(Map<String, TopicDescription> topicDescriptions) {
         return DescribeTopicsResult.ofTopicNames(topicDescriptions.entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> KafkaFuture.completedFuture(e.getValue()))));
+            .collect(Collectors.toMap(Map.Entry::getKey, e -> KafkaFuture.completedFuture(e.getValue()))));
     }
 
     public static ListGroupsResult listGroupsResult(GroupListing... groups) {
@@ -155,7 +155,7 @@ public class AdminClientTestUtils {
     public static ListConsumerGroupOffsetsResult listConsumerGroupOffsetsResult(Map<String, Map<TopicPartition, OffsetAndMetadata>> offsets) {
         Map<CoordinatorKey, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> resultMap = offsets.entrySet().stream()
             .collect(Collectors.toMap(e -> CoordinatorKey.byGroupId(e.getKey()),
-                                      e -> KafkaFutureImpl.completedFuture(e.getValue())));
+                e -> KafkaFutureImpl.completedFuture(e.getValue())));
         return new ListConsumerGroupOffsetsResult(resultMap);
     }
 

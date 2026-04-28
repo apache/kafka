@@ -78,13 +78,13 @@ public class MockConsumerInterceptor implements ClusterResourceListener, Consume
         for (TopicPartition tp : records.partitions()) {
             List<ConsumerRecord<String, String>> lst = new ArrayList<>();
             long nextOffset = 0;
-            for (ConsumerRecord<String, String> record: records.records(tp)) {
+            for (ConsumerRecord<String, String> record : records.records(tp)) {
                 lst.add(new ConsumerRecord<>(record.topic(), record.partition(), record.offset(),
-                                             record.timestamp(), record.timestampType(),
-                                             record.serializedKeySize(),
-                                             record.serializedValueSize(),
-                                             record.key(), record.value().toUpperCase(Locale.ROOT),
-                                             new RecordHeaders(), Optional.empty()));
+                    record.timestamp(), record.timestampType(),
+                    record.serializedKeySize(),
+                    record.serializedValueSize(),
+                    record.key(), record.value().toUpperCase(Locale.ROOT),
+                    new RecordHeaders(), Optional.empty()));
                 nextOffset = record.offset() + 1;
             }
             if (lst.isEmpty()) {

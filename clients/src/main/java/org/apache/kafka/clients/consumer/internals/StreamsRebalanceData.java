@@ -121,12 +121,13 @@ public class StreamsRebalanceData {
         }
 
     }
+
     public static class EndpointPartitions {
         private final List<TopicPartition> activePartitions;
         private final List<TopicPartition> standbyPartitions;
 
         public EndpointPartitions(final List<TopicPartition> activePartitions,
-                                  final List<TopicPartition> standbyPartitions) {
+            final List<TopicPartition> standbyPartitions) {
             this.activePartitions = activePartitions;
             this.standbyPartitions = standbyPartitions;
         }
@@ -138,12 +139,13 @@ public class StreamsRebalanceData {
         public List<TopicPartition> standbyPartitions() {
             return new ArrayList<>(standbyPartitions);
         }
+
         @Override
         public String toString() {
             return "EndpointPartitions {"
-                    + "activePartitions=" + activePartitions
-                    + ", standbyPartitions=" + standbyPartitions
-                    + '}';
+                + "activePartitions=" + activePartitions
+                + ", standbyPartitions=" + standbyPartitions
+                + '}';
         }
     }
 
@@ -167,9 +169,9 @@ public class StreamsRebalanceData {
         }
 
         public Assignment(final Set<TaskId> activeTasks,
-                          final Set<TaskId> standbyTasks,
-                          final Set<TaskId> warmupTasks,
-                          final boolean isGroupReady) {
+            final Set<TaskId> standbyTasks,
+            final Set<TaskId> warmupTasks,
+            final boolean isGroupReady) {
             this.activeTasks = Set.copyOf(Objects.requireNonNull(activeTasks, "Active tasks cannot be null"));
             this.standbyTasks = Set.copyOf(Objects.requireNonNull(standbyTasks, "Standby tasks cannot be null"));
             this.warmupTasks = Set.copyOf(Objects.requireNonNull(warmupTasks, "Warmup tasks cannot be null"));
@@ -236,10 +238,10 @@ public class StreamsRebalanceData {
         private final Collection<Set<String>> copartitionGroups;
 
         public Subtopology(final Set<String> sourceTopics,
-                           final Set<String> repartitionSinkTopics,
-                           final Map<String, TopicInfo> repartitionSourceTopics,
-                           final Map<String, TopicInfo> stateChangelogTopics,
-                           final Collection<Set<String>> copartitionGroups
+            final Set<String> repartitionSinkTopics,
+            final Map<String, TopicInfo> repartitionSourceTopics,
+            final Map<String, TopicInfo> stateChangelogTopics,
+            final Collection<Set<String>> copartitionGroups
         ) {
             this.sourceTopics = Set.copyOf(Objects.requireNonNull(sourceTopics, "Subtopology ID cannot be null"));
             this.repartitionSinkTopics =
@@ -252,7 +254,7 @@ public class StreamsRebalanceData {
                 Collections.unmodifiableCollection(Objects.requireNonNull(
                     copartitionGroups,
                     "Co-partition groups cannot be null"
-                    )
+                )
                 );
         }
 
@@ -295,8 +297,8 @@ public class StreamsRebalanceData {
         private final Map<String, String> topicConfigs;
 
         public TopicInfo(final Optional<Integer> numPartitions,
-                         final Optional<Short> replicationFactor,
-                         final Map<String, String> topicConfigs) {
+            final Optional<Short> replicationFactor,
+            final Map<String, String> topicConfigs) {
             this.numPartitions = Objects.requireNonNull(numPartitions, "Number of partitions cannot be null");
             this.replicationFactor = Objects.requireNonNull(replicationFactor, "Replication factor cannot be null");
             this.topicConfigs =
@@ -348,10 +350,10 @@ public class StreamsRebalanceData {
     private final AtomicInteger taskOffsetIntervalMs = new AtomicInteger(-1);
 
     public StreamsRebalanceData(final UUID processId,
-                                final Optional<HostInfo> endpoint,
-                                final Optional<String> rackId,
-                                final Map<String, Subtopology> subtopologies,
-                                final Map<String, String> clientTags) {
+        final Optional<HostInfo> endpoint,
+        final Optional<String> rackId,
+        final Map<String, Subtopology> subtopologies,
+        final Map<String, String> clientTags) {
         this.processId = Objects.requireNonNull(processId, "Process ID cannot be null");
         this.endpoint = Objects.requireNonNull(endpoint, "Endpoint cannot be null");
         this.rackId = Objects.requireNonNull(rackId, "Rack ID cannot be null");

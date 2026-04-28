@@ -37,13 +37,13 @@ import static org.apache.kafka.streams.state.internals.Utils.timestamp;
 public class ChangeLoggingTimestampedWindowBytesStoreWithHeaders extends ChangeLoggingWindowBytesStore {
 
     ChangeLoggingTimestampedWindowBytesStoreWithHeaders(final WindowStore<Bytes, byte[]> bytesStore,
-                                                        final boolean retainDuplicates) {
+        final boolean retainDuplicates) {
         super(bytesStore, retainDuplicates, WindowKeySchema::toStoreKeyBinary);
     }
 
     @Override
     void log(final Bytes key,
-             final byte[] valueTimestampHeaders) {
+        final byte[] valueTimestampHeaders) {
         internalContext.logChange(
             name(),
             key,

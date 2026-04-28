@@ -101,15 +101,15 @@ public class KTableKTableForeignKeyJoinDistributedTest {
         producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         final List<KeyValue<String, String>> leftTable = Arrays.asList(
-                new KeyValue<>("lhsValue1", "lhsValue1|rhs1"),
-                new KeyValue<>("lhsValue2", "lhsValue2|rhs2"),
-                new KeyValue<>("lhsValue3", "lhsValue3|rhs3"),
-                new KeyValue<>("lhsValue4", "lhsValue4|rhs4")
+            new KeyValue<>("lhsValue1", "lhsValue1|rhs1"),
+            new KeyValue<>("lhsValue2", "lhsValue2|rhs2"),
+            new KeyValue<>("lhsValue3", "lhsValue3|rhs3"),
+            new KeyValue<>("lhsValue4", "lhsValue4|rhs4")
         );
         final List<KeyValue<String, String>> rightTable = Arrays.asList(
-                new KeyValue<>("rhs1", "rhsValue1"),
-                new KeyValue<>("rhs2", "rhsValue2"),
-                new KeyValue<>("rhs3", "rhsValue3")
+            new KeyValue<>("rhs1", "rhsValue1"),
+            new KeyValue<>("rhs2", "rhsValue2"),
+            new KeyValue<>("rhs3", "rhsValue3")
         );
 
         IntegrationTestUtils.produceKeyValuesSynchronously(LEFT_TABLE, leftTable, producerConfig, CLUSTER.time);
@@ -144,10 +144,10 @@ public class KTableKTableForeignKeyJoinDistributedTest {
 
     private void configureBuilder(final StreamsBuilder builder) {
         final KTable<String, String> left = builder.table(
-                LEFT_TABLE
+            LEFT_TABLE
         );
         final KTable<String, String> right = builder.table(
-                RIGHT_TABLE
+            RIGHT_TABLE
         );
 
         final Function<String, String> extractor = value -> value.split("\\|")[1];
@@ -155,8 +155,8 @@ public class KTableKTableForeignKeyJoinDistributedTest {
 
         final KTable<String, String> fkJoin = left.join(right, extractor, joiner);
         fkJoin
-                .toStream()
-                .to(OUTPUT);
+            .toStream()
+            .to(OUTPUT);
     }
 
     @ParameterizedTest
@@ -178,10 +178,10 @@ public class KTableKTableForeignKeyJoinDistributedTest {
 
 
         createClients(
-                builder1.build(streamsConfiguration1),
-                streamsConfiguration1,
-                builder2.build(streamsConfiguration2),
-                streamsConfiguration2
+            builder1.build(streamsConfiguration1),
+            streamsConfiguration1,
+            builder2.build(streamsConfiguration2),
+            streamsConfiguration2
         );
 
         setStateListenersForVerification(thread -> !thread.activeTasks().isEmpty());
@@ -189,16 +189,16 @@ public class KTableKTableForeignKeyJoinDistributedTest {
         startClients();
 
         waitUntilBothClientAreOK(
-                "At least one client did not reach state RUNNING with active tasks"
+            "At least one client did not reach state RUNNING with active tasks"
         );
         final Set<KeyValue<String, String>> expectedResult = new HashSet<>();
         expectedResult.add(new KeyValue<>("lhsValue1", "(lhsValue1|rhs1,rhsValue1)"));
         expectedResult.add(new KeyValue<>("lhsValue2", "(lhsValue2|rhs2,rhsValue2)"));
         expectedResult.add(new KeyValue<>("lhsValue3", "(lhsValue3|rhs3,rhsValue3)"));
         final Set<KeyValue<String, String>> result = new HashSet<>(IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                CONSUMER_CONFIG,
-                OUTPUT,
-                expectedResult.size()));
+            CONSUMER_CONFIG,
+            OUTPUT,
+            expectedResult.size()));
 
         assertEquals(expectedResult, result);
         //Check that both clients are still running
@@ -207,9 +207,9 @@ public class KTableKTableForeignKeyJoinDistributedTest {
     }
 
     private void createClients(final Topology topology1,
-                               final Properties streamsConfiguration1,
-                               final Topology topology2,
-                               final Properties streamsConfiguration2) {
+        final Properties streamsConfiguration1,
+        final Topology topology2,
+        final Properties streamsConfiguration2) {
 
         client1 = new KafkaStreams(topology1, streamsConfiguration1);
         client2 = new KafkaStreams(topology2, streamsConfiguration2);
@@ -218,13 +218,13 @@ public class KTableKTableForeignKeyJoinDistributedTest {
     private void setStateListenersForVerification(final Predicate<ThreadMetadata> taskCondition) {
         client1.setStateListener((newState, oldState) -> {
             if (newState == KafkaStreams.State.RUNNING &&
-                    client1.metadataForLocalThreads().stream().allMatch(taskCondition)) {
+                client1.metadataForLocalThreads().stream().allMatch(taskCondition)) {
                 client1IsOk = true;
             }
         });
         client2.setStateListener((newState, oldState) -> {
             if (newState == KafkaStreams.State.RUNNING &&
-                    client2.metadataForLocalThreads().stream().allMatch(taskCondition)) {
+                client2.metadataForLocalThreads().stream().allMatch(taskCondition)) {
                 client2IsOk = true;
             }
         });
@@ -237,10 +237,10 @@ public class KTableKTableForeignKeyJoinDistributedTest {
 
     private void waitUntilBothClientAreOK(final String message) throws Exception {
         TestUtils.waitForCondition(() -> client1IsOk && client2IsOk,
-                30 * 1000,
-                () -> message + ": "
-                        + "Client 1 is " + (!client1IsOk ? "NOT " : "") + "OK, "
-                        + "client 2 is " + (!client2IsOk ? "NOT " : "") + "OK."
+            30 * 1000,
+            () -> message + ": "
+                + "Client 1 is " + (!client1IsOk ? "NOT " : "") + "OK, "
+                + "client 2 is " + (!client2IsOk ? "NOT " : "") + "OK."
         );
     }
 }

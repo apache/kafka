@@ -36,8 +36,8 @@ public class MirrorSourceTaskConfig extends MirrorSourceConfig {
     Set<TopicPartition> taskTopicPartitions() {
         List<String> fields = getList(TASK_TOPIC_PARTITIONS);
         return fields.stream()
-            .map(MirrorUtils::decodeTopicPartition)
-            .collect(Collectors.toSet());
+                .map(MirrorUtils::decodeTopicPartition)
+                .collect(Collectors.toSet());
     }
 
     MirrorSourceLegacyMetrics legacyMetrics() {
@@ -54,18 +54,18 @@ public class MirrorSourceTaskConfig extends MirrorSourceConfig {
     String entityLabel() {
         return super.entityLabel() + "-" + (getInt(TASK_INDEX) == null ? "?" : getInt(TASK_INDEX));
     }
- 
+
     protected static final ConfigDef TASK_CONFIG_DEF = new ConfigDef(CONNECTOR_CONFIG_DEF)
-        .define(
-            TASK_TOPIC_PARTITIONS,
-            ConfigDef.Type.LIST,
-            ConfigDef.NO_DEFAULT_VALUE,
-            ConfigDef.ValidList.anyNonDuplicateValues(false, false),
-            ConfigDef.Importance.LOW,
-            TASK_TOPIC_PARTITIONS_DOC)
-        .define(TASK_INDEX,
-                ConfigDef.Type.INT,
-                null,
-                ConfigDef.Importance.LOW,
-                "The index of the task");
+            .define(
+                    TASK_TOPIC_PARTITIONS,
+                    ConfigDef.Type.LIST,
+                    ConfigDef.NO_DEFAULT_VALUE,
+                    ConfigDef.ValidList.anyNonDuplicateValues(false, false),
+                    ConfigDef.Importance.LOW,
+                    TASK_TOPIC_PARTITIONS_DOC)
+            .define(TASK_INDEX,
+                    ConfigDef.Type.INT,
+                    null,
+                    ConfigDef.Importance.LOW,
+                    "The index of the task");
 }

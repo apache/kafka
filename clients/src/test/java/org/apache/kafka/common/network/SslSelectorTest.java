@@ -103,9 +103,9 @@ public abstract class SslSelectorTest extends SelectorTest {
         String request = TestUtils.randomString(requestSize);
 
         Map<String, Object> sslServerConfigs = TestSslUtils.createSslConfig(
-                TestKeyManagerFactory.ALGORITHM,
-                TestTrustManagerFactory.ALGORITHM,
-                TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS
+            TestKeyManagerFactory.ALGORITHM,
+            TestTrustManagerFactory.ALGORITHM,
+            TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS
         );
         sslServerConfigs.put(SecurityConfig.SECURITY_PROVIDERS_CONFIG, testProviderCreator.getClass().getName());
         EchoServer server = new EchoServer(SecurityProtocol.SSL, sslServerConfigs);
@@ -186,7 +186,7 @@ public abstract class SslSelectorTest extends SelectorTest {
     }
 
     private void verifyNoUnnecessaryPollWithBytesBuffered(Consumer<SelectionKey> disableRead)
-            throws Exception {
+        throws Exception {
         this.selector.close();
 
         String node1 = "1";
@@ -211,7 +211,7 @@ public abstract class SslSelectorTest extends SelectorTest {
         // Truncate the read buffers to ensure that there is buffered data, but not enough to make progress.
         int largeRequestSize = 100 * 1024;
         connect(node1, new InetSocketAddress("localhost", server.port));
-        selector.send(createSend(node1,  TestUtils.randomString(largeRequestSize)));
+        selector.send(createSend(node1, TestUtils.randomString(largeRequestSize)));
         waitForBytesBuffered(selector, node1);
         TestSslChannelBuilder.TestSslTransportLayer.transportLayers.get(node1).truncateReadBuffer();
         disableRead.accept(selector.channel(node1).selectionKey());
@@ -251,13 +251,13 @@ public abstract class SslSelectorTest extends SelectorTest {
         String tlsProtocol = "TLSv1.2";
         File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
         Map<String, Object> sslServerConfigs = new TestSslUtils.SslConfigsBuilder(ConnectionMode.SERVER)
-                .tlsProtocol(tlsProtocol)
-                .createNewTrustStore(trustStoreFile)
-                .build();
+            .tlsProtocol(tlsProtocol)
+            .createNewTrustStore(trustStoreFile)
+            .build();
         channelBuilder = new SslChannelBuilder(ConnectionMode.SERVER, null, false);
         channelBuilder.configure(sslServerConfigs);
         selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
-                new HashMap<>(), true, false, channelBuilder, pool, new LogContext());
+            new HashMap<>(), true, false, channelBuilder, pool, new LogContext());
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
             ss.bind(new InetSocketAddress(0));
@@ -346,7 +346,7 @@ public abstract class SslSelectorTest extends SelectorTest {
 
         @Override
         protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key,
-                                                        ChannelMetadataRegistry metadataRegistry) {
+            ChannelMetadataRegistry metadataRegistry) {
             SocketChannel socketChannel = (SocketChannel) key.channel();
             SSLEngine sslEngine = sslFactory.createSslEngine(socketChannel.socket());
             return new TestSslTransportLayer(id, key, sslEngine, metadataRegistry);
@@ -361,7 +361,7 @@ public abstract class SslSelectorTest extends SelectorTest {
             boolean muteSocket = false;
 
             public TestSslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine,
-                                         ChannelMetadataRegistry metadataRegistry) {
+                ChannelMetadataRegistry metadataRegistry) {
                 super(channelId, key, sslEngine, metadataRegistry);
                 transportLayers.put(channelId, this);
             }

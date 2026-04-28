@@ -95,7 +95,8 @@ public class OffsetSyncStore implements AutoCloseable {
                 admin,
                 (error, record) -> this.handleRecord(record),
                 Time.SYSTEM,
-                ignored -> { },
+                ignored -> {
+                },
                 topicPartition -> topicPartition.partition() == 0
         );
     }

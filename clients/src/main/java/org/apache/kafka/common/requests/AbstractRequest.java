@@ -356,7 +356,7 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return DeleteShareGroupOffsetsRequest.parse(readable, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
-                        "code should be updated to do so.", apiKey));
+                    "code should be updated to do so.", apiKey));
         }
     }
 }

@@ -66,7 +66,7 @@ class BaseHashTable<T> {
     static int expectedSizeToCapacity(int expectedSize) {
         long minCapacity = (long) Math.ceil((float) expectedSize / MAX_LOAD_FACTOR);
         return Math.max(MIN_CAPACITY,
-                (int) Math.min(MAX_CAPACITY, roundUpToPowerOfTwo(minCapacity)));
+            (int) Math.min(MAX_CAPACITY, roundUpToPowerOfTwo(minCapacity)));
     }
 
     private static long roundUpToPowerOfTwo(long i) {
@@ -74,7 +74,7 @@ class BaseHashTable<T> {
             return 0;
         } else if (i > (1L << 62)) {
             throw new ArithmeticException("There are no 63-bit powers of 2 higher than " +
-                    "or equal to " + i);
+                "or equal to " + i);
         } else {
             return 1L << -Long.numberOfLeadingZeros(i - 1);
         }
@@ -110,7 +110,7 @@ class BaseHashTable<T> {
 
     final T baseAddOrReplace(T newObject) {
         if (((size + 1) * MAX_LOAD_FACTOR > elements.length) &&
-                (elements.length < MAX_CAPACITY)) {
+            (elements.length < MAX_CAPACITY)) {
             int newSize = elements.length * 2;
             rehash(newSize);
         }
@@ -122,7 +122,7 @@ class BaseHashTable<T> {
             return null;
         } else if (cur instanceof Object[]) {
             T[] curArray = (T[]) cur;
-            for (int i =  0; i < curArray.length; i++) {
+            for (int i = 0; i < curArray.length; i++) {
                 T value = curArray[i];
                 if (value.equals(newObject)) {
                     curArray[i] = newObject;
@@ -140,7 +140,7 @@ class BaseHashTable<T> {
             return (T) cur;
         } else {
             size++;
-            elements[slot] = new Object[] {cur, newObject};
+            elements[slot] = new Object[]{cur, newObject};
             return null;
         }
     }

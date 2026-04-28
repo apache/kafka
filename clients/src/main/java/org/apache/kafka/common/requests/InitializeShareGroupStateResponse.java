@@ -74,7 +74,7 @@ public class InitializeShareGroupStateResponse extends AbstractResponse {
         request.topics().forEach(topicData -> {
             List<InitializeShareGroupStateResponseData.PartitionResult> partitionResults = new ArrayList<>();
             topicData.partitions().forEach(partitionData -> partitionResults.add(
-                toErrorResponsePartitionResult(partitionData.partition(), error, error.message()))
+                    toErrorResponsePartitionResult(partitionData.partition(), error, error.message()))
             );
             initStateResults.add(toResponseInitializeStateResult(topicData.topicId(), partitionResults));
         });

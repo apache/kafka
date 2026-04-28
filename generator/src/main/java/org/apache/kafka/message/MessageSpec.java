@@ -42,21 +42,21 @@ public final class MessageSpec {
     @JsonCreator
     @SuppressWarnings({"NPathComplexity", "CyclomaticComplexity"})
     public MessageSpec(@JsonProperty("name") String name,
-                       @JsonProperty("validVersions") String validVersions,
-                       @JsonProperty("deprecatedVersions") String deprecatedVersions,
-                       @JsonProperty("fields") List<FieldSpec> fields,
-                       @JsonProperty("apiKey") Short apiKey,
-                       @JsonProperty("type") MessageSpecType type,
-                       @JsonProperty("commonStructs") List<StructSpec> commonStructs,
-                       @JsonProperty("flexibleVersions") String flexibleVersions,
-                       @JsonProperty("listeners") List<RequestListenerType> listeners,
-                       @JsonProperty("latestVersionUnstable") boolean latestVersionUnstable
+        @JsonProperty("validVersions") String validVersions,
+        @JsonProperty("deprecatedVersions") String deprecatedVersions,
+        @JsonProperty("fields") List<FieldSpec> fields,
+        @JsonProperty("apiKey") Short apiKey,
+        @JsonProperty("type") MessageSpecType type,
+        @JsonProperty("commonStructs") List<StructSpec> commonStructs,
+        @JsonProperty("flexibleVersions") String flexibleVersions,
+        @JsonProperty("listeners") List<RequestListenerType> listeners,
+        @JsonProperty("latestVersionUnstable") boolean latestVersionUnstable
     ) {
         this.struct = new StructSpec(name, validVersions, deprecatedVersions, fields);
         this.apiKey = apiKey == null ? Optional.empty() : Optional.of(apiKey);
         this.type = Objects.requireNonNull(type);
         this.commonStructs = commonStructs == null ? List.of() :
-                List.copyOf(commonStructs);
+            List.copyOf(commonStructs);
         // If the struct has no valid versions (the typical use case is to completely remove support for
         // an existing protocol api while ensuring the api key id is not reused), we configure the spec
         // to effectively be empty
@@ -67,25 +67,25 @@ public final class MessageSpec {
         } else {
             if (flexibleVersions == null) {
                 throw new RuntimeException("You must specify a value for flexibleVersions. " +
-                        "Please use 0+ for all new messages.");
+                    "Please use 0+ for all new messages.");
             }
             this.flexibleVersions = Versions.parse(flexibleVersions, Versions.NONE);
             if ((!this.flexibleVersions().empty()) &&
-                    (this.flexibleVersions.highest() < Short.MAX_VALUE)) {
+                (this.flexibleVersions.highest() < Short.MAX_VALUE)) {
                 throw new RuntimeException("Field " + name + " specifies flexibleVersions " +
-                        this.flexibleVersions + ", which is not open-ended.  flexibleVersions must " +
-                        "be either none, or an open-ended range (that ends with a plus sign).");
+                    this.flexibleVersions + ", which is not open-ended.  flexibleVersions must " +
+                    "be either none, or an open-ended range (that ends with a plus sign).");
             }
 
             if (listeners != null && !listeners.isEmpty() && type != MessageSpecType.REQUEST) {
                 throw new RuntimeException("The `requestScope` property is only valid for " +
-                        "messages with type `request`");
+                    "messages with type `request`");
             }
             this.listeners = listeners;
 
             if (latestVersionUnstable && type != MessageSpecType.REQUEST) {
                 throw new RuntimeException("The `latestVersionUnstable` property is only valid for " +
-                        "messages with type `request`");
+                    "messages with type `request`");
             }
             this.latestVersionUnstable = latestVersionUnstable;
 

@@ -38,7 +38,7 @@ public class ByteBufferChannel implements TransferableChannel {
             throw new IndexOutOfBoundsException();
         int position = buf.position();
         int count = offset + length;
-        for (int i = offset; i < count; i++) buf.put(srcs[i].duplicate());
+        for (int i = offset;i < count;i++) buf.put(srcs[i].duplicate());
         return buf.position() - position;
     }
 

@@ -91,7 +91,7 @@ public abstract class SampledStat implements MeasurableStat {
         if (samples.isEmpty())
             this.samples.add(newSample(now));
         Sample oldest = this.samples.get(0);
-        for (int i = 1; i < this.samples.size(); i++) {
+        for (int i = 1;i < this.samples.size();i++) {
             Sample curr = this.samples.get(i);
             if (curr.startTimeMs < oldest.startTimeMs)
                 oldest = curr;

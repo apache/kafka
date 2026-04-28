@@ -37,7 +37,7 @@ public class GenericReadOnlyWindowStoreFacade<K, InV, OutV> implements ReadOnlyW
     private final Function<InV, OutV> valueConverter;
 
     public GenericReadOnlyWindowStoreFacade(final ReadOnlyWindowStore<K, InV> inner,
-                                            final Function<InV, OutV> valueConverter) {
+        final Function<InV, OutV> valueConverter) {
         this.inner = inner;
         this.valueConverter = valueConverter;
     }
@@ -49,43 +49,43 @@ public class GenericReadOnlyWindowStoreFacade<K, InV, OutV> implements ReadOnlyW
 
     @Override
     public WindowStoreIterator<OutV> fetch(final K key,
-                                           final Instant timeFrom,
-                                           final Instant timeTo) throws IllegalArgumentException {
+        final Instant timeFrom,
+        final Instant timeTo) throws IllegalArgumentException {
         return new GenericWindowStoreIteratorFacade<>(inner.fetch(key, timeFrom, timeTo), valueConverter);
     }
 
     @Override
     public WindowStoreIterator<OutV> backwardFetch(final K key,
-                                                   final Instant timeFrom,
-                                                   final Instant timeTo) throws IllegalArgumentException {
+        final Instant timeFrom,
+        final Instant timeTo) throws IllegalArgumentException {
         return new GenericWindowStoreIteratorFacade<>(inner.backwardFetch(key, timeFrom, timeTo), valueConverter);
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, OutV> fetch(final K keyFrom,
-                                                     final K keyTo,
-                                                     final Instant timeFrom,
-                                                     final Instant timeTo) throws IllegalArgumentException {
+        final K keyTo,
+        final Instant timeFrom,
+        final Instant timeTo) throws IllegalArgumentException {
         return new GenericKeyValueIteratorFacade<>(inner.fetch(keyFrom, keyTo, timeFrom, timeTo), valueConverter);
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, OutV> backwardFetch(final K keyFrom,
-                                                             final K keyTo,
-                                                             final Instant timeFrom,
-                                                             final Instant timeTo) throws IllegalArgumentException {
+        final K keyTo,
+        final Instant timeFrom,
+        final Instant timeTo) throws IllegalArgumentException {
         return new GenericKeyValueIteratorFacade<>(inner.backwardFetch(keyFrom, keyTo, timeFrom, timeTo), valueConverter);
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, OutV> fetchAll(final Instant timeFrom,
-                                                        final Instant timeTo) throws IllegalArgumentException {
+        final Instant timeTo) throws IllegalArgumentException {
         return new GenericKeyValueIteratorFacade<>(inner.fetchAll(timeFrom, timeTo), valueConverter);
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, OutV> backwardFetchAll(final Instant timeFrom,
-                                                                final Instant timeTo) throws IllegalArgumentException {
+        final Instant timeTo) throws IllegalArgumentException {
         return new GenericKeyValueIteratorFacade<>(inner.backwardFetchAll(timeFrom, timeTo), valueConverter);
     }
 

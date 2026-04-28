@@ -32,7 +32,7 @@ public class ProtocolTest {
         String requestVersion;
         String responseVersion;
         for (ApiKeys key : ApiKeys.clientApis()) {
-            for (short version = key.oldestVersion(); version <= key.latestVersion(); version++) {
+            for (short version = key.oldestVersion();version <= key.latestVersion();version++) {
                 requestVersion = key.name + " Request (Version: " + version;
                 responseVersion = key.name + " Response (Version: " + version;
 

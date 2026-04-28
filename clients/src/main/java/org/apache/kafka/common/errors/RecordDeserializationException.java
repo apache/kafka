@@ -50,9 +50,9 @@ public class RecordDeserializationException extends SerializationException {
      */
     @Deprecated
     public RecordDeserializationException(TopicPartition partition,
-                                          long offset,
-                                          String message,
-                                          Throwable cause) {
+        long offset,
+        String message,
+        Throwable cause) {
         super(message, cause);
         this.origin = null;
         this.partition = partition;
@@ -65,15 +65,15 @@ public class RecordDeserializationException extends SerializationException {
     }
 
     public RecordDeserializationException(DeserializationExceptionOrigin origin,
-                                          TopicPartition partition,
-                                          long offset,
-                                          long timestamp,
-                                          TimestampType timestampType,
-                                          ByteBuffer keyBuffer,
-                                          ByteBuffer valueBuffer,
-                                          Headers headers,
-                                          String message,
-                                          Throwable cause) {
+        TopicPartition partition,
+        long offset,
+        long timestamp,
+        TimestampType timestampType,
+        ByteBuffer keyBuffer,
+        ByteBuffer valueBuffer,
+        Headers headers,
+        String message,
+        Throwable cause) {
         super(message, cause);
         this.origin = origin;
         this.offset = offset;

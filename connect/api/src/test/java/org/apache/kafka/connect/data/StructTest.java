@@ -116,31 +116,31 @@ public class StructTest {
     @Test
     public void testInvalidFieldType() {
         assertThrows(DataException.class,
-            () -> new Struct(FLAT_STRUCT_SCHEMA).put("int8", "should fail because this is a string, not int8"));
+                () -> new Struct(FLAT_STRUCT_SCHEMA).put("int8", "should fail because this is a string, not int8"));
     }
 
     @Test
     public void testInvalidArrayFieldElements() {
         assertThrows(DataException.class,
-            () -> new Struct(NESTED_SCHEMA).put("array", List.of("should fail since elements should be int8s")));
+                () -> new Struct(NESTED_SCHEMA).put("array", List.of("should fail since elements should be int8s")));
     }
 
     @Test
     public void testInvalidMapKeyElements() {
         assertThrows(DataException.class,
-            () -> new Struct(NESTED_SCHEMA).put("map", Map.of("should fail because keys should be int8s", (byte) 12)));
+                () -> new Struct(NESTED_SCHEMA).put("map", Map.of("should fail because keys should be int8s", (byte) 12)));
     }
 
     @Test
     public void testInvalidStructFieldSchema() {
         assertThrows(DataException.class,
-            () -> new Struct(NESTED_SCHEMA).put("nested", new Struct(MAP_SCHEMA)));
+                () -> new Struct(NESTED_SCHEMA).put("nested", new Struct(MAP_SCHEMA)));
     }
 
     @Test
     public void testInvalidStructFieldValue() {
         assertThrows(DataException.class,
-            () -> new Struct(NESTED_SCHEMA).put("nested", new Struct(NESTED_CHILD_SCHEMA)));
+                () -> new Struct(NESTED_SCHEMA).put("nested", new Struct(NESTED_CHILD_SCHEMA)));
     }
 
 
@@ -299,14 +299,14 @@ public class StructTest {
         Struct struct = new Struct(schema);
         Exception e = assertThrows(DataException.class, struct::validate);
         assertEquals("Invalid value: null used for required field: \"one\", schema type: STRING",
-            e.getMessage());
+                e.getMessage());
     }
 
     @Test
     public void testPutNullField() {
         final String fieldName = "fieldName";
         Schema testSchema = SchemaBuilder.struct()
-            .field(fieldName, Schema.STRING_SCHEMA);
+                .field(fieldName, Schema.STRING_SCHEMA);
         Struct struct = new Struct(testSchema);
 
         assertThrows(DataException.class, () -> struct.put((Field) null, "valid"));
@@ -316,11 +316,11 @@ public class StructTest {
     public void testInvalidPutIncludesFieldName() {
         final String fieldName = "fieldName";
         Schema testSchema = SchemaBuilder.struct()
-            .field(fieldName, Schema.STRING_SCHEMA);
+                .field(fieldName, Schema.STRING_SCHEMA);
         Struct struct = new Struct(testSchema);
 
         Exception e = assertThrows(DataException.class, () -> struct.put(fieldName, null));
         assertEquals("Invalid value: null used for required field: \"fieldName\", schema type: STRING",
-            e.getMessage());
+                e.getMessage());
     }
 }

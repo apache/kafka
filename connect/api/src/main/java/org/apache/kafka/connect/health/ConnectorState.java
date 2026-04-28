@@ -36,9 +36,9 @@ public class ConnectorState extends AbstractState {
     @Override
     public String toString() {
         return "ConnectorState{"
-            + "state='" + state() + '\''
-            + ", traceMessage='" + traceMessage() + '\''
-            + ", workerId='" + workerId() + '\''
-            + '}';
+                + "state='" + state() + '\''
+                + ", traceMessage='" + traceMessage() + '\''
+                + ", workerId='" + workerId() + '\''
+                + '}';
     }
 }

@@ -23,13 +23,14 @@ import org.apache.kafka.common.record.TimestampType;
 import java.util.Optional;
 
 public final class ConsumerRecordUtil {
-    private ConsumerRecordUtil() {}
+    private ConsumerRecordUtil() {
+    }
 
     public static <K, V> ConsumerRecord<K, V> record(final String topic,
-                                                     final int partition,
-                                                     final long offset,
-                                                     final K key,
-                                                     final V value) {
+        final int partition,
+        final long offset,
+        final K key,
+        final V value) {
         // the no-time constructor in ConsumerRecord initializes the
         // timestamp to -1, which is an invalid configuration. Here,
         // we initialize it to 0.

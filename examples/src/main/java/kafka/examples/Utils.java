@@ -85,8 +85,8 @@ public class Utils {
                 // use default RF to avoid NOT_ENOUGH_REPLICAS error with minISR > 1
                 short replicationFactor = -1;
                 List<NewTopic> newTopics = Arrays.stream(topicNames)
-                    .map(name -> new NewTopic(name, numPartitions, replicationFactor))
-                    .collect(Collectors.toList());
+                        .map(name -> new NewTopic(name, numPartitions, replicationFactor))
+                        .collect(Collectors.toList());
                 try {
                     admin.createTopics(newTopics).all().get();
                     printOut("Created topics: %s", Arrays.toString(topicNames));

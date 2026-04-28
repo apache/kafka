@@ -96,9 +96,9 @@ public class SubscriptionReceiveProcessorSupplierTest {
         final StoreBuilder<TimestampedKeyValueStoreWithHeaders<Bytes, SubscriptionWrapper<String>>> storeBuilder = storeBuilder();
         final SubscriptionReceiveProcessorSupplier<String, String> supplier = supplier(storeBuilder);
         final Processor<String,
-                        SubscriptionWrapper<String>,
-                        CombinedKey<String, String>,
-                        Change<ValueTimestampHeaders<SubscriptionWrapper<String>>>> processor = supplier.get();
+            SubscriptionWrapper<String>,
+            CombinedKey<String, String>,
+            Change<ValueTimestampHeaders<SubscriptionWrapper<String>>>> processor = supplier.get();
         stateStore = storeBuilder.build();
         context.addStateStore(stateStore);
         stateStore.init(context, stateStore);
@@ -124,7 +124,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
             null
         );
         final ValueTimestampHeaders<SubscriptionWrapper<String>> newValue = ValueTimestampHeaders.make(
-                newWrapper, 1L, null);
+            newWrapper, 1L, null);
         final Record<String, SubscriptionWrapper<String>> record = new Record<>(
             FK,
             newWrapper,
@@ -133,12 +133,12 @@ public class SubscriptionReceiveProcessorSupplierTest {
         processor.process(record);
 
         final List<CapturedForward<? extends CombinedKey<String, String>,
-                                   ? extends Change<ValueTimestampHeaders<SubscriptionWrapper<String>>>>> forwarded = context.forwarded();
+            ? extends Change<ValueTimestampHeaders<SubscriptionWrapper<String>>>>> forwarded = context.forwarded();
         assertNull(stateStore.get(key));
         assertEquals(1, forwarded.size());
         assertEquals(
             record.withKey(new CombinedKey<>(FK, PK1))
-                  .withValue(new Change<>(newValue, oldValue)),
+                .withValue(new Change<>(newValue, oldValue)),
             forwarded.get(0).record()
         );
     }

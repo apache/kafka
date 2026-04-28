@@ -37,71 +37,71 @@ import org.apache.kafka.connect.storage.HeaderConverter;
  */
 public final class SamplingHeaderConverter implements SamplingTestPlugin, HeaderConverter {
 
-  private static final ClassLoader STATIC_CLASS_LOADER;
-  private static List<SamplingTestPlugin> instances;
-  private final ClassLoader classloader;
-  private Map<String, SamplingTestPlugin> samples;
+    private static final ClassLoader STATIC_CLASS_LOADER;
+    private static List<SamplingTestPlugin> instances;
+    private final ClassLoader classloader;
+    private Map<String, SamplingTestPlugin> samples;
 
-  static {
-    STATIC_CLASS_LOADER = Thread.currentThread().getContextClassLoader();
-    instances = Collections.synchronizedList(new ArrayList<>());
-  }
+    static {
+        STATIC_CLASS_LOADER = Thread.currentThread().getContextClassLoader();
+        instances = Collections.synchronizedList(new ArrayList<>());
+    }
 
-  {
-    samples = new HashMap<>();
-    classloader = Thread.currentThread().getContextClassLoader();
-  }
+    {
+        samples = new HashMap<>();
+        classloader = Thread.currentThread().getContextClassLoader();
+    }
 
-  public SamplingHeaderConverter() {
-    logMethodCall(samples);
-    instances.add(this);
-  }
+    public SamplingHeaderConverter() {
+        logMethodCall(samples);
+        instances.add(this);
+    }
 
-  @Override
-  public SchemaAndValue toConnectHeader(String topic, String headerKey, byte[] value) {
-    logMethodCall(samples);
-    return null;
-  }
+    @Override
+    public SchemaAndValue toConnectHeader(String topic, String headerKey, byte[] value) {
+        logMethodCall(samples);
+        return null;
+    }
 
-  @Override
-  public byte[] fromConnectHeader(String topic, String headerKey, Schema schema, Object value) {
-    logMethodCall(samples);
-    return new byte[0];
-  }
+    @Override
+    public byte[] fromConnectHeader(String topic, String headerKey, Schema schema, Object value) {
+        logMethodCall(samples);
+        return new byte[0];
+    }
 
-  @Override
-  public ConfigDef config() {
-    logMethodCall(samples);
-    return null;
-  }
+    @Override
+    public ConfigDef config() {
+        logMethodCall(samples);
+        return null;
+    }
 
-  @Override
-  public void configure(final Map<String, ?> configs) {
-    logMethodCall(samples);
-  }
+    @Override
+    public void configure(final Map<String, ?> configs) {
+        logMethodCall(samples);
+    }
 
-  @Override
-  public void close() {
-    logMethodCall(samples);
-  }
+    @Override
+    public void close() {
+        logMethodCall(samples);
+    }
 
-  @Override
-  public ClassLoader staticClassloader() {
-    return STATIC_CLASS_LOADER;
-  }
+    @Override
+    public ClassLoader staticClassloader() {
+        return STATIC_CLASS_LOADER;
+    }
 
-  @Override
-  public ClassLoader classloader() {
-    return classloader;
-  }
+    @Override
+    public ClassLoader classloader() {
+        return classloader;
+    }
 
-  @Override
-  public Map<String, SamplingTestPlugin> otherSamples() {
-    return samples;
-  }
+    @Override
+    public Map<String, SamplingTestPlugin> otherSamples() {
+        return samples;
+    }
 
-  @Override
-  public List<SamplingTestPlugin> allInstances() {
-    return instances;
-  }
+    @Override
+    public List<SamplingTestPlugin> allInstances() {
+        return instances;
+    }
 }

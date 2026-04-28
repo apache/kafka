@@ -113,10 +113,10 @@ public class TopicMetadataRequestManager implements RequestManager {
      */
     public CompletableFuture<Map<String, List<PartitionInfo>>> requestAllTopicsMetadata(final long deadlineMs) {
         TopicMetadataRequestState newRequest = new TopicMetadataRequestState(
-                logContext,
-                deadlineMs,
-                retryBackoffMs,
-                retryBackoffMaxMs);
+            logContext,
+            deadlineMs,
+            retryBackoffMs,
+            retryBackoffMaxMs);
         inflightRequests.add(newRequest);
         return newRequest.future;
     }
@@ -129,11 +129,11 @@ public class TopicMetadataRequestManager implements RequestManager {
      */
     public CompletableFuture<Map<String, List<PartitionInfo>>> requestTopicMetadata(final String topic, final long deadlineMs) {
         TopicMetadataRequestState newRequest = new TopicMetadataRequestState(
-                logContext,
-                topic,
-                deadlineMs,
-                retryBackoffMs,
-                retryBackoffMaxMs);
+            logContext,
+            topic,
+            deadlineMs,
+            retryBackoffMs,
+            retryBackoffMaxMs);
         inflightRequests.add(newRequest);
         return newRequest.future;
     }
@@ -149,21 +149,21 @@ public class TopicMetadataRequestManager implements RequestManager {
         CompletableFuture<Map<String, List<PartitionInfo>>> future;
 
         public TopicMetadataRequestState(final LogContext logContext,
-                                         final long deadlineMs,
-                                         final long retryBackoffMs,
-                                         final long retryBackoffMaxMs) {
+            final long deadlineMs,
+            final long retryBackoffMs,
+            final long retryBackoffMaxMs) {
             super(logContext, TopicMetadataRequestState.class.getSimpleName(), retryBackoffMs,
-                    retryBackoffMaxMs, deadlineTimer(time, deadlineMs));
+                retryBackoffMaxMs, deadlineTimer(time, deadlineMs));
             future = new CompletableFuture<>();
             this.topic = null;
             this.allTopics = true;
         }
 
         public TopicMetadataRequestState(final LogContext logContext,
-                                         final String topic,
-                                         final long deadlineMs,
-                                         final long retryBackoffMs,
-                                         final long retryBackoffMaxMs) {
+            final String topic,
+            final long deadlineMs,
+            final long retryBackoffMs,
+            final long retryBackoffMaxMs) {
             super(logContext, TopicMetadataRequestState.class.getSimpleName(), retryBackoffMs,
                 retryBackoffMaxMs, deadlineTimer(time, deadlineMs));
             future = new CompletableFuture<>();
@@ -192,11 +192,11 @@ public class TopicMetadataRequestManager implements RequestManager {
             // The request state is removed from inflightRequests via an iterator by the caller of this method,
             // so don't remove it from inflightRequests here.
             future.completeExceptionally(
-                    new TimeoutException("Timeout expired while fetching topic metadata"));
+                new TimeoutException("Timeout expired while fetching topic metadata"));
         }
 
         private NetworkClientDelegate.UnsentRequest createUnsentRequest(
-                final MetadataRequest.Builder request) {
+            final MetadataRequest.Builder request) {
             NetworkClientDelegate.UnsentRequest unsent = new NetworkClientDelegate.UnsentRequest(
                 request,
                 Optional.empty());
@@ -211,7 +211,7 @@ public class TopicMetadataRequestManager implements RequestManager {
         }
 
         private void handleError(final Throwable exception,
-                                 final long completionTimeMs) {
+            final long completionTimeMs) {
             if (exception instanceof RetriableException) {
                 if (isExpired()) {
                     completeFutureAndRemoveRequest(new TimeoutException("Timeout expired while fetching topic metadata"));

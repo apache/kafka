@@ -55,7 +55,7 @@ public class SecurityUtils {
             NAME_TO_OPERATIONS.put(operationName.toUpperCase(Locale.ROOT), operation);
         }
         for (AclPermissionType permissionType : AclPermissionType.values()) {
-            String permissionName  = toPascalCase(permissionType.name());
+            String permissionName = toPascalCase(permissionType.name());
             NAME_TO_PERMISSION_TYPES.put(permissionName, permissionType);
             NAME_TO_PERMISSION_TYPES.put(permissionName.toUpperCase(Locale.ROOT), permissionType);
         }
@@ -82,7 +82,7 @@ public class SecurityUtils {
         }
         try {
             String[] securityProviderClasses = securityProviderClassesStr.replaceAll("\\s+", "").split(",");
-            for (int index = 0; index < securityProviderClasses.length; index++) {
+            for (int index = 0;index < securityProviderClasses.length;index++) {
                 SecurityProviderCreator securityProviderCreator =
                     (SecurityProviderCreator) Class.forName(securityProviderClasses[index]).getConstructor().newInstance();
                 securityProviderCreator.configure(configs);
@@ -90,7 +90,7 @@ public class SecurityUtils {
             }
         } catch (ClassCastException e) {
             LOGGER.error("Creators provided through " + SecurityConfig.SECURITY_PROVIDERS_CONFIG +
-                    " are expected to be sub-classes of SecurityProviderCreator");
+                " are expected to be sub-classes of SecurityProviderCreator");
         } catch (ClassNotFoundException cnfe) {
             LOGGER.error("Unrecognized security provider creator class", cnfe);
         } catch (ReflectiveOperationException e) {
@@ -149,7 +149,7 @@ public class SecurityUtils {
     }
 
     public static void authorizeByResourceTypeCheckArgs(AclOperation op,
-                                                        ResourceType type) {
+        ResourceType type) {
         if (type == ResourceType.ANY) {
             throw new IllegalArgumentException(
                 "Must specify a non-filter resource type for authorizeByResourceType");

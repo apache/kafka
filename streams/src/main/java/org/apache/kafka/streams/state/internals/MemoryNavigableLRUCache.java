@@ -46,15 +46,15 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
         if (Objects.nonNull(from) && Objects.nonNull(to) && from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
-                    "This may be due to range arguments set in the wrong order, " +
-                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                    "Note that the built-in numerical serdes do not follow this for negative numbers");
+                "This may be due to range arguments set in the wrong order, " +
+                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
         } else {
             final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
             final Iterator<Bytes> keys = getIterator(treeMap, from, to, true);
             return new DelegatingPeekingKeyValueIterator<>(name(),
-                    new MemoryNavigableLRUCache.CacheIterator(keys, treeMap));
+                new MemoryNavigableLRUCache.CacheIterator(keys, treeMap));
         }
     }
 
@@ -62,15 +62,15 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
     public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from, final Bytes to) {
         if (Objects.nonNull(from) && Objects.nonNull(to) && from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
-                    "This may be due to range arguments set in the wrong order, " +
-                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                    "Note that the built-in numerical serdes do not follow this for negative numbers");
+                "This may be due to range arguments set in the wrong order, " +
+                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
         } else {
             final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
             final Iterator<Bytes> keys = getIterator(treeMap, from, to, false);
             return new DelegatingPeekingKeyValueIterator<>(name(),
-                    new MemoryNavigableLRUCache.CacheIterator(keys, treeMap));
+                new MemoryNavigableLRUCache.CacheIterator(keys, treeMap));
         }
     }
 
@@ -101,12 +101,12 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
     }
 
     @Override
-    public  KeyValueIterator<Bytes, byte[]> all() {
+    public KeyValueIterator<Bytes, byte[]> all() {
         return range(null, null);
     }
 
     @Override
-    public  KeyValueIterator<Bytes, byte[]> reverseAll() {
+    public KeyValueIterator<Bytes, byte[]> reverseAll() {
         return reverseRange(null, null);
     }
 

@@ -81,30 +81,30 @@ public class ClientUtilsTest {
     // 20 bytes
     private static final int RECORD_METADATA_BYTES =
         8 + // timestamp
-        8 + // offset
-        4;  // partition
+            8 + // offset
+            4;  // partition
 
     // 57 bytes
     private static final long SIZE_IN_BYTES =
         KEY_BYTES +
-        VALUE_BYTES +
-        TOPIC_BYTES +
-        HEADERS_BYTES +
-        RECORD_METADATA_BYTES;
+            VALUE_BYTES +
+            TOPIC_BYTES +
+            HEADERS_BYTES +
+            RECORD_METADATA_BYTES;
 
     // 54 bytes
     private static final long NULL_KEY_SIZE_IN_BYTES =
         VALUE_BYTES +
-        TOPIC_BYTES +
-        HEADERS_BYTES +
-        RECORD_METADATA_BYTES;
+            TOPIC_BYTES +
+            HEADERS_BYTES +
+            RECORD_METADATA_BYTES;
 
     // 52 bytes
     private static final long TOMBSTONE_SIZE_IN_BYTES =
         KEY_BYTES +
-        TOPIC_BYTES +
-        HEADERS_BYTES +
-        RECORD_METADATA_BYTES;
+            TOPIC_BYTES +
+            HEADERS_BYTES +
+            RECORD_METADATA_BYTES;
 
     private static final Set<TopicPartition> PARTITIONS = Set.of(
         new TopicPartition(TOPIC, 1),
@@ -181,7 +181,7 @@ public class ClientUtilsTest {
 
         assertThrows(StreamsException.class, () -> fetchEndOffsets(PARTITIONS, adminClient));
     }
-    
+
     @Test
     public void shouldComputeSizeInBytesForConsumerRecord() {
         final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(

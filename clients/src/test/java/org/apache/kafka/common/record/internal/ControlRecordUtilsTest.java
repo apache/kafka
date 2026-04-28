@@ -92,7 +92,7 @@ public class ControlRecordUtilsTest {
         byte[] keyData = new byte[]{0, 0, 0, (byte) controlRecordType.type()};
 
         DefaultRecord record = new DefaultRecord(
-            256, (byte) 0, 0, 0L, 0, ByteBuffer.wrap(keyData),  valueBuffer, null
+            256, (byte) 0, 0, 0L, 0, ByteBuffer.wrap(keyData), valueBuffer, null
         );
 
         VotersRecord deserializedData = ControlRecordUtils.deserializeVotersRecord(record);

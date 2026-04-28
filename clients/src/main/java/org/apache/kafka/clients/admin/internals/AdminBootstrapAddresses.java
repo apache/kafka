@@ -60,8 +60,8 @@ public final class AdminBootstrapAddresses {
         if (bootstrapServers.isEmpty()) {
             if (controllerServers.isEmpty()) {
                 throw new ConfigException("You must set either " +
-                        CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + " or " +
-                        AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
+                    CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + " or " +
+                    AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
             } else {
                 return new AdminBootstrapAddresses(true,
                     ClientUtils.parseAndValidateAddresses(controllerServers, clientDnsLookupConfig));
@@ -72,8 +72,8 @@ public final class AdminBootstrapAddresses {
                     ClientUtils.parseAndValidateAddresses(bootstrapServers, clientDnsLookupConfig));
             } else {
                 throw new ConfigException("You cannot set both " +
-                        CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + " and " +
-                        AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
+                    CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + " and " +
+                    AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
             }
         }
     }

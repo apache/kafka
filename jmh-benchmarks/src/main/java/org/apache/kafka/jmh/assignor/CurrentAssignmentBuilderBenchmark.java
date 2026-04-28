@@ -95,30 +95,30 @@ public class CurrentAssignmentBuilderBenchmark {
         int memberEpoch = 10;
         for (Uuid topicId : topicIds) {
             Map<Integer, Integer> partitionEpochs = IntStream.range(0, partitionsPerTopic)
-                .boxed()
-                .collect(Collectors.toMap(p -> p, p -> memberEpoch));
+                    .boxed()
+                    .collect(Collectors.toMap(p -> p, p -> memberEpoch));
             assignedPartitions.put(topicId, partitionEpochs);
         }
 
         ConsumerGroupMember.Builder memberBuilder = new ConsumerGroupMember.Builder("member")
-            .setState(MemberState.STABLE)
-            .setMemberEpoch(memberEpoch)
-            .setPreviousMemberEpoch(memberEpoch)
-            .setSubscribedTopicNames(topicNames)
-            .setAssignedPartitions(assignedPartitions);
+                .setState(MemberState.STABLE)
+                .setMemberEpoch(memberEpoch)
+                .setPreviousMemberEpoch(memberEpoch)
+                .setSubscribedTopicNames(topicNames)
+                .setAssignedPartitions(assignedPartitions);
 
         member = memberBuilder.build();
         memberWithUnsubscribedTopics = memberBuilder
-            .setSubscribedTopicNames(topicNames.subList(0, topicNames.size() - 1))
-            .build();
+                .setSubscribedTopicNames(topicNames.subList(0, topicNames.size() - 1))
+                .build();
     }
 
     private void setupTargetAssignment() {
         Map<Uuid, Set<Integer>> assignedPartitions = new HashMap<>();
         for (Uuid topicId : topicIds) {
             Set<Integer> partitions = IntStream.range(0, partitionsPerTopic)
-                .boxed()
-                .collect(Collectors.toSet());
+                    .boxed()
+                    .collect(Collectors.toSet());
             assignedPartitions.put(topicId, partitions);
         }
         targetAssignment = new Assignment(assignedPartitions);
@@ -129,10 +129,10 @@ public class CurrentAssignmentBuilderBenchmark {
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public ConsumerGroupMember stableToStableWithNoChange() {
         return new CurrentAssignmentBuilder(member)
-            .withMetadataImage(metadataImage)
-            .withTargetAssignment(member.memberEpoch(), targetAssignment)
-            .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
-            .build();
+                .withMetadataImage(metadataImage)
+                .withTargetAssignment(member.memberEpoch(), targetAssignment)
+                .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
+                .build();
     }
 
     @Benchmark
@@ -140,10 +140,10 @@ public class CurrentAssignmentBuilderBenchmark {
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public ConsumerGroupMember stableToStableWithNewTargetAssignment() {
         return new CurrentAssignmentBuilder(member)
-            .withMetadataImage(metadataImage)
-            .withTargetAssignment(member.memberEpoch() + 1, targetAssignment)
-            .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
-            .build();
+                .withMetadataImage(metadataImage)
+                .withTargetAssignment(member.memberEpoch() + 1, targetAssignment)
+                .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
+                .build();
     }
 
     @Benchmark
@@ -151,11 +151,11 @@ public class CurrentAssignmentBuilderBenchmark {
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public ConsumerGroupMember stableToStableWithSubscriptionChange() {
         return new CurrentAssignmentBuilder(member)
-            .withMetadataImage(metadataImage)
-            .withTargetAssignment(member.memberEpoch(), targetAssignment)
-            .withHasSubscriptionChanged(true)
-            .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
-            .build();
+                .withMetadataImage(metadataImage)
+                .withTargetAssignment(member.memberEpoch(), targetAssignment)
+                .withHasSubscriptionChanged(true)
+                .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
+                .build();
     }
 
     @Benchmark
@@ -163,10 +163,10 @@ public class CurrentAssignmentBuilderBenchmark {
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public ConsumerGroupMember stableToUnrevokedPartitionsWithSubscriptionChange() {
         return new CurrentAssignmentBuilder(memberWithUnsubscribedTopics)
-            .withMetadataImage(metadataImage)
-            .withTargetAssignment(memberWithUnsubscribedTopics.memberEpoch(), targetAssignment)
-            .withHasSubscriptionChanged(true)
-            .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
-            .build();
+                .withMetadataImage(metadataImage)
+                .withTargetAssignment(memberWithUnsubscribedTopics.memberEpoch(), targetAssignment)
+                .withHasSubscriptionChanged(true)
+                .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
+                .build();
     }
 }

@@ -84,16 +84,16 @@ public class ReflectionScanner extends PluginScanner {
                 .enableClassInfo();
         try (ScanResult classGraph = classGraphBuilder.scan()) {
             return new PluginScanResult(
-                  getPluginDesc(classGraph, PluginType.SINK, source),
-                  getPluginDesc(classGraph, PluginType.SOURCE, source),
-                  getPluginDesc(classGraph, PluginType.CONVERTER, source),
-                  getPluginDesc(classGraph, PluginType.HEADER_CONVERTER, source),
-                  getTransformationPluginDesc(source, classGraph),
-                  getPredicatePluginDesc(source, classGraph),
-                  getServiceLoaderPluginDesc(PluginType.CONFIGPROVIDER, source),
-                  getServiceLoaderPluginDesc(PluginType.REST_EXTENSION, source),
-                  getServiceLoaderPluginDesc(PluginType.CONNECTOR_CLIENT_CONFIG_OVERRIDE_POLICY, source)
-          );
+                    getPluginDesc(classGraph, PluginType.SINK, source),
+                    getPluginDesc(classGraph, PluginType.SOURCE, source),
+                    getPluginDesc(classGraph, PluginType.CONVERTER, source),
+                    getPluginDesc(classGraph, PluginType.HEADER_CONVERTER, source),
+                    getTransformationPluginDesc(source, classGraph),
+                    getPredicatePluginDesc(source, classGraph),
+                    getServiceLoaderPluginDesc(PluginType.CONFIGPROVIDER, source),
+                    getServiceLoaderPluginDesc(PluginType.REST_EXTENSION, source),
+                    getServiceLoaderPluginDesc(PluginType.CONNECTOR_CLIENT_CONFIG_OVERRIDE_POLICY, source)
+            );
         }
     }
 

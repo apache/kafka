@@ -93,7 +93,7 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder {
             return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, shortName);
         } catch (IOException e) {
             throw new KafkaException("Failed to set name for '" + kerberosName +
-                    "' based on Kerberos authentication rules.", e);
+                "' based on Kerberos authentication rules.", e);
         }
     }
 
@@ -106,16 +106,16 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder {
             }
         } catch (IOException e) {
             throw new KafkaException("Failed to map name for '" + principal.getName() +
-                    "' based on SSL principal mapping rules.", e);
+                "' based on SSL principal mapping rules.", e);
         }
     }
 
     @Override
     public byte[] serialize(KafkaPrincipal principal) {
         DefaultPrincipalData data = new DefaultPrincipalData()
-                                        .setType(principal.getPrincipalType())
-                                        .setName(principal.getName())
-                                        .setTokenAuthenticated(principal.tokenAuthenticated());
+            .setType(principal.getPrincipalType())
+            .setName(principal.getName())
+            .setTokenAuthenticated(principal.tokenAuthenticated());
         return MessageUtil.toVersionPrefixedBytes(DefaultPrincipalData.HIGHEST_SUPPORTED_VERSION, data);
     }
 

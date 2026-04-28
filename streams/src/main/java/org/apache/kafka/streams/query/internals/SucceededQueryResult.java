@@ -43,8 +43,8 @@ public final class SucceededQueryResult<R>
      * Special constructor used in {@link InternalQueryResultUtil}.
      */
     SucceededQueryResult(final R result,
-                         final List<String> executionInfo,
-                         final Position position) {
+        final List<String> executionInfo,
+        final Position position) {
         super(executionInfo, position);
         this.result = result;
     }

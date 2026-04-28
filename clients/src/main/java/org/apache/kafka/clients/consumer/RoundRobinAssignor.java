@@ -102,13 +102,13 @@ public class RoundRobinAssignor extends AbstractPartitionAssignor {
 
     @Override
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
-                                                    Map<String, Subscription> subscriptions) {
+        Map<String, Subscription> subscriptions) {
         Map<String, List<TopicPartition>> assignment = new HashMap<>();
         List<MemberInfo> memberInfoList = new ArrayList<>();
         for (Map.Entry<String, Subscription> memberSubscription : subscriptions.entrySet()) {
             assignment.put(memberSubscription.getKey(), new ArrayList<>());
             memberInfoList.add(new MemberInfo(memberSubscription.getKey(),
-                                              memberSubscription.getValue().groupInstanceId()));
+                memberSubscription.getValue().groupInstanceId()));
         }
 
         CircularIterator<MemberInfo> assigner = new CircularIterator<>(Utils.sorted(memberInfoList));
@@ -123,7 +123,7 @@ public class RoundRobinAssignor extends AbstractPartitionAssignor {
     }
 
     private List<TopicPartition> allPartitionsSorted(Map<String, Integer> partitionsPerTopic,
-                                                     Map<String, Subscription> subscriptions) {
+        Map<String, Subscription> subscriptions) {
         SortedSet<String> topics = new TreeSet<>();
         for (Subscription subscription : subscriptions.values())
             topics.addAll(subscription.topics());

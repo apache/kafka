@@ -84,13 +84,13 @@ public class AddPartitionsToTxnManagerTest {
     private final Function<String, Integer> partitionFor = mock(Function.class);
     private final MockTime time = new MockTime();
     private final AbstractKafkaConfig config = new AbstractKafkaConfig(
-            AbstractKafkaConfig.CONFIG_DEF,
-            Map.of(
-                KRaftConfigs.PROCESS_ROLES_CONFIG, "broker", 
-                KRaftConfigs.NODE_ID_CONFIG, "1",
-                KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER"),
-            Map.of(),
-            false) {
+        AbstractKafkaConfig.CONFIG_DEF,
+        Map.of(
+            KRaftConfigs.PROCESS_ROLES_CONFIG, "broker",
+            KRaftConfigs.NODE_ID_CONFIG, "1",
+            KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER"),
+        Map.of(),
+        false) {
         @Override
         public void addReconfigurable(org.apache.kafka.common.Reconfigurable reconfigurable) {
             // No-op for test
@@ -102,13 +102,13 @@ public class AddPartitionsToTxnManagerTest {
         }
     };
     private final AddPartitionsToTxnManager addPartitionsToTxnManager =
-            new AddPartitionsToTxnManager(config, networkClient, metadataCache, partitionFor, time);
+        new AddPartitionsToTxnManager(config, networkClient, metadataCache, partitionFor, time);
 
     private final String topic = "foo";
     private final List<TopicPartition> topicPartitions = List.of(
-            new TopicPartition(topic, 1),
-            new TopicPartition(topic, 2),
-            new TopicPartition(topic, 3));
+        new TopicPartition(topic, 1),
+        new TopicPartition(topic, 2),
+        new TopicPartition(topic, 3));
 
     private final Node node0 = new Node(0, "host1", 0);
     private final Node node1 = new Node(1, "host2", 1);
@@ -123,11 +123,11 @@ public class AddPartitionsToTxnManagerTest {
     private final long producerId3 = 2L;
 
     private final ClientResponse authenticationErrorResponse =
-            clientResponse(null, new SaslAuthenticationException(""), null, false);
+        clientResponse(null, new SaslAuthenticationException(""), null, false);
     private final ClientResponse versionMismatchResponse =
-            clientResponse(null, null, new UnsupportedVersionException(""), false);
+        clientResponse(null, null, new UnsupportedVersionException(""), false);
     private final ClientResponse disconnectedResponse =
-            clientResponse(null, null, null, true);
+        clientResponse(null, null, null, true);
 
     @AfterEach
     public void teardown() throws InterruptedException {
@@ -138,8 +138,8 @@ public class AddPartitionsToTxnManagerTest {
     @ValueSource(booleans = {true, false})
     public void testAddTxnData(boolean isAddPartition) {
         var operation = isAddPartition ?
-                TransactionSupportedOperation.ADD_PARTITION :
-                TransactionSupportedOperation.GENERIC_ERROR_SUPPORTED;
+            TransactionSupportedOperation.ADD_PARTITION :
+            TransactionSupportedOperation.GENERIC_ERROR_SUPPORTED;
 
         when(partitionFor.apply(transactionalId1)).thenReturn(0);
         when(partitionFor.apply(transactionalId2)).thenReturn(1);
@@ -153,11 +153,11 @@ public class AddPartitionsToTxnManagerTest {
         Map<TopicPartition, Errors> transaction3Errors = new HashMap<>();
 
         addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId1, producerId1, (short) 0,
-                topicPartitions, setErrors(transaction1Errors), operation);
+            topicPartitions, setErrors(transaction1Errors), operation);
         addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId2, producerId2, (short) 0,
-                topicPartitions, setErrors(transaction2Errors), operation);
+            topicPartitions, setErrors(transaction2Errors), operation);
         addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId3, producerId3, (short) 0,
-                topicPartitions, setErrors(transaction3Errors), operation);
+            topicPartitions, setErrors(transaction3Errors), operation);
 
         // We will try to add transaction1 3 more times (retries).
         // One will have the same epoch, one will have a newer epoch,
@@ -169,34 +169,34 @@ public class AddPartitionsToTxnManagerTest {
         // Trying to add more transactional data for the same transactional ID, producer ID,
         // and epoch should simply replace the old data and send a retriable response.
         addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId1, producerId1, (short) 0,
-                topicPartitions, setErrors(transaction1RetryWithSameEpochErrors), operation);
+            topicPartitions, setErrors(transaction1RetryWithSameEpochErrors), operation);
         var expectedNetworkErrors = topicPartitions.stream()
-                .collect(Collectors.toMap(Function.identity(), e -> Errors.NETWORK_EXCEPTION));
+            .collect(Collectors.toMap(Function.identity(), e -> Errors.NETWORK_EXCEPTION));
         assertEquals(expectedNetworkErrors, transaction1Errors);
 
         // Trying to add more transactional data for the same transactional ID and producer ID,
         // but a new epoch should replace the old data and send an error response for it.
         addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId1, producerId1, (short) 1,
-                topicPartitions, setErrors(transaction1RetryWithNewerEpochErrors), operation);
+            topicPartitions, setErrors(transaction1RetryWithNewerEpochErrors), operation);
         var expectedEpochErrors = topicPartitions.stream()
-                .collect(Collectors.toMap(Function.identity(), e -> Errors.INVALID_PRODUCER_EPOCH));
+            .collect(Collectors.toMap(Function.identity(), e -> Errors.INVALID_PRODUCER_EPOCH));
         assertEquals(expectedEpochErrors, transaction1RetryWithSameEpochErrors);
 
         // Trying to add more transactional data for the same transactional ID and producer ID,
         // but an older epoch should immediately return with error and keep the old data queued to send.
         addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId1, producerId1, (short) 0,
-                topicPartitions, setErrors(transaction1RetryWithOldEpochErrors), operation);
+            topicPartitions, setErrors(transaction1RetryWithOldEpochErrors), operation);
         assertEquals(expectedEpochErrors, transaction1RetryWithOldEpochErrors);
 
         addPartitionsToTxnManager.generateRequests().forEach(requestAndHandler -> {
             if (requestAndHandler.destination.equals(node0)) {
                 assertEquals(time.milliseconds(), requestAndHandler.creationTimeMs);
                 var transactions = new AddPartitionsToTxnTransactionCollection(
-                        List.of(transactionData(transactionalId3, producerId3, (short) 0, !isAddPartition),
-                                transactionData(transactionalId1, producerId1, (short) 1, !isAddPartition)));
+                    List.of(transactionData(transactionalId3, producerId3, (short) 0, !isAddPartition),
+                        transactionData(transactionalId1, producerId1, (short) 1, !isAddPartition)));
                 assertEquals(
-                        AddPartitionsToTxnRequest.Builder.forBroker(transactions).data,
-                        ((AddPartitionsToTxnRequest.Builder) requestAndHandler.request).data);
+                    AddPartitionsToTxnRequest.Builder.forBroker(transactions).data,
+                    ((AddPartitionsToTxnRequest.Builder) requestAndHandler.request).data);
             } else {
                 verifyRequest(node1, transactionalId2, producerId2, !isAddPartition, requestAndHandler);
             }
@@ -214,15 +214,15 @@ public class AddPartitionsToTxnManagerTest {
         mockTransactionStateMetadata(2, 2, Optional.of(node2));
 
         var operation = isAddPartition
-                ? TransactionSupportedOperation.ADD_PARTITION
-                : TransactionSupportedOperation.GENERIC_ERROR_SUPPORTED;
+            ? TransactionSupportedOperation.ADD_PARTITION
+            : TransactionSupportedOperation.GENERIC_ERROR_SUPPORTED;
 
         Map<TopicPartition, Errors> transactionErrors = new HashMap<>();
 
         addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId1, producerId1, (short) 0,
-                topicPartitions, setErrors(transactionErrors), operation);
+            topicPartitions, setErrors(transactionErrors), operation);
         addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId2, producerId2, (short) 0,
-                topicPartitions, setErrors(transactionErrors), operation);
+            topicPartitions, setErrors(transactionErrors), operation);
 
         var requestsAndHandlers = addPartitionsToTxnManager.generateRequests();
         assertEquals(2, requestsAndHandlers.size());
@@ -236,9 +236,9 @@ public class AddPartitionsToTxnManagerTest {
         });
 
         addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId2, producerId2, (short) 0,
-                topicPartitions, setErrors(transactionErrors), operation);
+            topicPartitions, setErrors(transactionErrors), operation);
         addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId3, producerId3, (short) 0,
-                topicPartitions, setErrors(transactionErrors), operation);
+            topicPartitions, setErrors(transactionErrors), operation);
 
         // Test creationTimeMs increases too.
         time.sleep(10);
@@ -247,14 +247,14 @@ public class AddPartitionsToTxnManagerTest {
         // The request for node1 should not be added because one request is already inflight.
         assertEquals(1, requestsAndHandlers2.size());
         requestsAndHandlers2.forEach(requestAndHandler ->
-                verifyRequest(node2, transactionalId3, producerId3, !isAddPartition, requestAndHandler));
+            verifyRequest(node2, transactionalId3, producerId3, !isAddPartition, requestAndHandler));
 
         // Complete the request for node1 so the new one can go through.
         requestsAndHandlers.stream()
-                .filter(requestAndHandler -> requestAndHandler.destination.equals(node1))
-                .findFirst()
-                .orElseThrow()
-                .handler.onComplete(authenticationErrorResponse);
+            .filter(requestAndHandler -> requestAndHandler.destination.equals(node1))
+            .findFirst()
+            .orElseThrow()
+            .handler.onComplete(authenticationErrorResponse);
         var requestsAndHandlers3 = addPartitionsToTxnManager.generateRequests();
         assertEquals(1, requestsAndHandlers3.size());
         requestsAndHandlers3.forEach(requestAndHandler ->
@@ -269,21 +269,21 @@ public class AddPartitionsToTxnManagerTest {
             Map<TopicPartition, Errors> errors = new HashMap<>();
 
             addPartitionsToTxnManager.addOrVerifyTransaction(
-                    transactionalId1,
-                    producerId1,
-                    (short) 0,
-                    topicPartitions,
-                    setErrors(errors),
-                    TransactionSupportedOperation.GENERIC_ERROR_SUPPORTED);
+                transactionalId1,
+                producerId1,
+                (short) 0,
+                topicPartitions,
+                setErrors(errors),
+                TransactionSupportedOperation.GENERIC_ERROR_SUPPORTED);
 
             var expected = topicPartitions.stream()
-                    .collect(Collectors.toMap(Function.identity(), e -> Errors.COORDINATOR_NOT_AVAILABLE));
+                .collect(Collectors.toMap(Function.identity(), e -> Errors.COORDINATOR_NOT_AVAILABLE));
             assertEquals(expected, errors);
         };
 
         // The transaction state topic does not exist.
         when(metadataCache.getLeaderAndIsr(Topic.TRANSACTION_STATE_TOPIC_NAME, 0))
-                .thenReturn(Optional.empty());
+            .thenReturn(Optional.empty());
         checkError.run();
 
         // The partition has no leader
@@ -309,9 +309,9 @@ public class AddPartitionsToTxnManagerTest {
             transaction2Errors.clear();
 
             addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId1, producerId1, (short) 0,
-                    topicPartitions, setErrors(transaction1Errors), TransactionSupportedOperation.GENERIC_ERROR_SUPPORTED);
+                topicPartitions, setErrors(transaction1Errors), TransactionSupportedOperation.GENERIC_ERROR_SUPPORTED);
             addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId2, producerId2, (short) 0,
-                    topicPartitions, setErrors(transaction2Errors), TransactionSupportedOperation.GENERIC_ERROR_SUPPORTED);
+                topicPartitions, setErrors(transaction2Errors), TransactionSupportedOperation.GENERIC_ERROR_SUPPORTED);
         };
 
         Consumer<TransactionSupportedOperation> addTransactionsToVerifyRequestVersion = operationExpected -> {
@@ -319,13 +319,13 @@ public class AddPartitionsToTxnManagerTest {
             transaction2Errors.clear();
 
             addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId1, producerId1, (short) 0,
-                    topicPartitions, setErrors(transaction1Errors), operationExpected);
+                topicPartitions, setErrors(transaction1Errors), operationExpected);
             addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId2, producerId2, (short) 0,
-                    topicPartitions, setErrors(transaction2Errors), operationExpected);
+                topicPartitions, setErrors(transaction2Errors), operationExpected);
         };
 
         var expectedAuthErrors = topicPartitions.stream()
-                .collect(Collectors.toMap(Function.identity(), e -> Errors.SASL_AUTHENTICATION_FAILED));
+            .collect(Collectors.toMap(Function.identity(), e -> Errors.SASL_AUTHENTICATION_FAILED));
         addTransactionsToVerify.run();
         receiveResponse(authenticationErrorResponse);
         assertEquals(expectedAuthErrors, transaction1Errors);
@@ -339,16 +339,16 @@ public class AddPartitionsToTxnManagerTest {
         assertEquals(expectedVersionMismatchErrors, transaction2Errors);
 
         var expectedDisconnectedErrors = topicPartitions.stream()
-                .collect(Collectors.toMap(Function.identity(), e -> Errors.NETWORK_EXCEPTION));
+            .collect(Collectors.toMap(Function.identity(), e -> Errors.NETWORK_EXCEPTION));
         addTransactionsToVerify.run();
         receiveResponse(disconnectedResponse);
         assertEquals(expectedDisconnectedErrors, transaction1Errors);
         assertEquals(expectedDisconnectedErrors, transaction2Errors);
 
         var expectedTopLevelErrors = topicPartitions.stream()
-                .collect(Collectors.toMap(Function.identity(), e -> Errors.INVALID_TXN_STATE));
+            .collect(Collectors.toMap(Function.identity(), e -> Errors.INVALID_TXN_STATE));
         var topLevelErrorAddPartitionsResponse = new AddPartitionsToTxnResponse(
-                new AddPartitionsToTxnResponseData().setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code()));
+            new AddPartitionsToTxnResponseData().setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code()));
         var topLevelErrorResponse = clientResponse(topLevelErrorAddPartitionsResponse, null, null, false);
         addTransactionsToVerify.run();
         receiveResponse(topLevelErrorResponse);
@@ -356,22 +356,22 @@ public class AddPartitionsToTxnManagerTest {
         assertEquals(expectedTopLevelErrors, transaction2Errors);
 
         var preConvertedTransaction1Errors = topicPartitions.stream()
-                .collect(Collectors.toMap(Function.identity(), e -> Errors.PRODUCER_FENCED));
+            .collect(Collectors.toMap(Function.identity(), e -> Errors.PRODUCER_FENCED));
         var expectedTransaction1Errors = topicPartitions.stream()
-                .collect(Collectors.toMap(Function.identity(), e -> Errors.INVALID_PRODUCER_EPOCH));
+            .collect(Collectors.toMap(Function.identity(), e -> Errors.INVALID_PRODUCER_EPOCH));
         var preConvertedTransaction2Errors = Map.of(
-                new TopicPartition("foo", 1), Errors.NONE,
-                new TopicPartition("foo", 2), Errors.INVALID_TXN_STATE,
-                new TopicPartition("foo", 3), Errors.NONE);
+            new TopicPartition("foo", 1), Errors.NONE,
+            new TopicPartition("foo", 2), Errors.INVALID_TXN_STATE,
+            new TopicPartition("foo", 3), Errors.NONE);
         var expectedTransaction2Errors = Map.of(new TopicPartition("foo", 2), Errors.INVALID_TXN_STATE);
 
         var transaction1ErrorResponse = AddPartitionsToTxnResponse.resultForTransaction(
-                transactionalId1, preConvertedTransaction1Errors);
+            transactionalId1, preConvertedTransaction1Errors);
         var transaction2ErrorResponse = AddPartitionsToTxnResponse.resultForTransaction(
-                transactionalId2, preConvertedTransaction2Errors);
+            transactionalId2, preConvertedTransaction2Errors);
         var mixedErrorsAddPartitionsResponse = new AddPartitionsToTxnResponse(new AddPartitionsToTxnResponseData()
-                .setResultsByTransaction(new AddPartitionsToTxnResultCollection(
-                        List.of(transaction1ErrorResponse, transaction2ErrorResponse))));
+            .setResultsByTransaction(new AddPartitionsToTxnResultCollection(
+                List.of(transaction1ErrorResponse, transaction2ErrorResponse))));
         var mixedErrorsResponse = clientResponse(mixedErrorsAddPartitionsResponse, null, null, false);
 
         addTransactionsToVerify.run();
@@ -380,30 +380,30 @@ public class AddPartitionsToTxnManagerTest {
         assertEquals(expectedTransaction2Errors, transaction2Errors);
 
         var preConvertedTransactionAbortableErrorsTxn1 = topicPartitions.stream()
-                .collect(Collectors.toMap(Function.identity(), e -> Errors.TRANSACTION_ABORTABLE));
+            .collect(Collectors.toMap(Function.identity(), e -> Errors.TRANSACTION_ABORTABLE));
         var preConvertedTransactionAbortableErrorsTxn2 = Map.of(
-                new TopicPartition("foo", 1), Errors.NONE,
-                new TopicPartition("foo", 2), Errors.TRANSACTION_ABORTABLE,
-                new TopicPartition("foo", 3), Errors.NONE);
+            new TopicPartition("foo", 1), Errors.NONE,
+            new TopicPartition("foo", 2), Errors.TRANSACTION_ABORTABLE,
+            new TopicPartition("foo", 3), Errors.NONE);
         var transactionAbortableErrorResponseTxn1 =
-                AddPartitionsToTxnResponse.resultForTransaction(transactionalId1, preConvertedTransactionAbortableErrorsTxn1);
+            AddPartitionsToTxnResponse.resultForTransaction(transactionalId1, preConvertedTransactionAbortableErrorsTxn1);
         var transactionAbortableErrorResponseTxn2 =
-                AddPartitionsToTxnResponse.resultForTransaction(transactionalId2, preConvertedTransactionAbortableErrorsTxn2);
+            AddPartitionsToTxnResponse.resultForTransaction(transactionalId2, preConvertedTransactionAbortableErrorsTxn2);
         var mixedErrorsAddPartitionsResponseAbortableError = new AddPartitionsToTxnResponse(new AddPartitionsToTxnResponseData()
-                .setResultsByTransaction(new AddPartitionsToTxnResultCollection(
-                        List.of(transactionAbortableErrorResponseTxn1, transactionAbortableErrorResponseTxn2))));
+            .setResultsByTransaction(new AddPartitionsToTxnResultCollection(
+                List.of(transactionAbortableErrorResponseTxn1, transactionAbortableErrorResponseTxn2))));
         var mixedAbortableErrorsResponse =
-                clientResponse(mixedErrorsAddPartitionsResponseAbortableError, null, null, false);
+            clientResponse(mixedErrorsAddPartitionsResponseAbortableError, null, null, false);
 
         var expectedTransactionAbortableErrorsTxn1LowerVersion = topicPartitions.stream()
-                .collect(Collectors.toMap(Function.identity(), e -> Errors.INVALID_TXN_STATE));
+            .collect(Collectors.toMap(Function.identity(), e -> Errors.INVALID_TXN_STATE));
         var expectedTransactionAbortableErrorsTxn2LowerVersion =
-                Map.of(new TopicPartition("foo", 2), Errors.INVALID_TXN_STATE);
+            Map.of(new TopicPartition("foo", 2), Errors.INVALID_TXN_STATE);
 
         var expectedTransactionAbortableErrorsTxn1HigherVersion = topicPartitions.stream()
-                .collect(Collectors.toMap(Function.identity(), e -> Errors.TRANSACTION_ABORTABLE));
+            .collect(Collectors.toMap(Function.identity(), e -> Errors.TRANSACTION_ABORTABLE));
         var expectedTransactionAbortableErrorsTxn2HigherVersion =
-                Map.of(new TopicPartition("foo", 2), Errors.TRANSACTION_ABORTABLE);
+            Map.of(new TopicPartition("foo", 2), Errors.TRANSACTION_ABORTABLE);
 
         addTransactionsToVerifyRequestVersion.accept(TransactionSupportedOperation.DEFAULT_ERROR);
         receiveResponse(mixedAbortableErrorsResponse);
@@ -441,19 +441,19 @@ public class AddPartitionsToTxnManagerTest {
 
         var mockMetricsGroupCtor = mockConstruction(KafkaMetricsGroup.class, (mock, context) -> {
             when(mock.newMeter(eq(AddPartitionsToTxnManager.VERIFICATION_FAILURE_RATE_METRIC_NAME), anyString(), any(TimeUnit.class)))
-                    .thenReturn(mockVerificationFailureMeter);
+                .thenReturn(mockVerificationFailureMeter);
             when(mock.newHistogram(eq(AddPartitionsToTxnManager.VERIFICATION_TIME_MS_METRIC_NAME)))
-                    .thenReturn(mockVerificationTime);
+                .thenReturn(mockVerificationTime);
         });
 
         var addPartitionsManagerWithMockedMetrics = new AddPartitionsToTxnManager(
-                config, networkClient, metadataCache, partitionFor, time);
+            config, networkClient, metadataCache, partitionFor, time);
 
         try {
             addPartitionsManagerWithMockedMetrics.addOrVerifyTransaction(transactionalId1, producerId1, (short) 0,
-                    topicPartitions, setErrors(transactionErrors), TransactionSupportedOperation.GENERIC_ERROR_SUPPORTED);
+                topicPartitions, setErrors(transactionErrors), TransactionSupportedOperation.GENERIC_ERROR_SUPPORTED);
             addPartitionsManagerWithMockedMetrics.addOrVerifyTransaction(transactionalId2, producerId2, (short) 0,
-                    topicPartitions, setErrors(transactionErrors), TransactionSupportedOperation.GENERIC_ERROR_SUPPORTED);
+                topicPartitions, setErrors(transactionErrors), TransactionSupportedOperation.GENERIC_ERROR_SUPPORTED);
 
             time.sleep(100);
 
@@ -496,36 +496,36 @@ public class AddPartitionsToTxnManagerTest {
 
     private void mockTransactionStateMetadata(int partitionIndex, int leaderId, Optional<Node> leaderNode) {
         when(metadataCache.getLeaderAndIsr(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionIndex))
-                .thenReturn(Optional.of(new LeaderAndIsr(leaderId, List.of(leaderId))));
+            .thenReturn(Optional.of(new LeaderAndIsr(leaderId, List.of(leaderId))));
         if (leaderId != MetadataResponse.NO_LEADER_ID) {
             when(metadataCache.getAliveBrokerNode(leaderId, config.interBrokerListenerName()))
-                    .thenReturn(leaderNode);
+                .thenReturn(leaderNode);
         }
     }
 
     private ClientResponse clientResponse(
-            AbstractResponse response,
-            AuthenticationException authException,
-            UnsupportedVersionException mismatchException,
-            boolean disconnected) {
+        AbstractResponse response,
+        AuthenticationException authException,
+        UnsupportedVersionException mismatchException,
+        boolean disconnected) {
         return new ClientResponse(null, null, null, 0, 0,
-                disconnected, mismatchException, authException, response);
+            disconnected, mismatchException, authException, response);
     }
 
     private AddPartitionsToTxnTransaction transactionData(
-            String transactionalId,
-            long producerId,
-            short producerEpoch,
-            boolean verifyOnly) {
+        String transactionalId,
+        long producerId,
+        short producerEpoch,
+        boolean verifyOnly) {
         return new AddPartitionsToTxnTransaction()
-                .setTransactionalId(transactionalId)
-                .setProducerId(producerId)
-                .setProducerEpoch(producerEpoch)
-                .setVerifyOnly(verifyOnly)
-                .setTopics(new AddPartitionsToTxnTopicCollection(
-                        List.of(new AddPartitionsToTxnTopic()
-                                .setName(topic)
-                                .setPartitions(List.of(1, 2, 3)))));
+            .setTransactionalId(transactionalId)
+            .setProducerId(producerId)
+            .setProducerEpoch(producerEpoch)
+            .setVerifyOnly(verifyOnly)
+            .setTopics(new AddPartitionsToTxnTopicCollection(
+                List.of(new AddPartitionsToTxnTopic()
+                    .setName(topic)
+                    .setPartitions(List.of(1, 2, 3)))));
     }
 
     private void receiveResponse(ClientResponse response) {
@@ -533,18 +533,18 @@ public class AddPartitionsToTxnManagerTest {
     }
 
     private void verifyRequest(
-            Node expectedDestination,
-            String transactionalId,
-            long producerId,
-            boolean verifyOnly,
-            RequestAndCompletionHandler requestAndHandler) {
+        Node expectedDestination,
+        String transactionalId,
+        long producerId,
+        boolean verifyOnly,
+        RequestAndCompletionHandler requestAndHandler) {
         assertEquals(time.milliseconds(), requestAndHandler.creationTimeMs);
         assertEquals(expectedDestination, requestAndHandler.destination);
         assertEquals(
-                AddPartitionsToTxnRequest.Builder.forBroker(
-                        new AddPartitionsToTxnTransactionCollection(
-                                List.of(transactionData(transactionalId, producerId, (short) 0, verifyOnly)))
-                ).data,
-                ((AddPartitionsToTxnRequest.Builder) requestAndHandler.request).data);
+            AddPartitionsToTxnRequest.Builder.forBroker(
+                new AddPartitionsToTxnTransactionCollection(
+                    List.of(transactionData(transactionalId, producerId, (short) 0, verifyOnly)))
+            ).data,
+            ((AddPartitionsToTxnRequest.Builder) requestAndHandler.request).data);
     }
 }

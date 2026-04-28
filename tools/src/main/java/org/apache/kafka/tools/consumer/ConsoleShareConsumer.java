@@ -104,7 +104,7 @@ public class ConsoleShareConsumer {
     }
 
     static void process(int maxMessages, MessageFormatter formatter, ConsumerWrapper consumer, PrintStream output,
-                        boolean rejectMessageOnError, AcknowledgeType acknowledgeType) {
+        boolean rejectMessageOnError, AcknowledgeType acknowledgeType) {
         while (messageCount < maxMessages || maxMessages == -1) {
             ConsumerRecord<byte[], byte[]> msg;
             try {
@@ -121,7 +121,7 @@ public class ConsoleShareConsumer {
             messageCount += 1;
             try {
                 formatter.writeTo(new ConsumerRecord<>(msg.topic(), msg.partition(), msg.offset(), msg.timestamp(), msg.timestampType(),
-                        0, 0, msg.key(), msg.value(), msg.headers(), Optional.empty(), msg.deliveryCount()), output);
+                    0, 0, msg.key(), msg.value(), msg.headers(), Optional.empty(), msg.deliveryCount()), output);
                 consumer.acknowledge(msg, acknowledgeType);
             } catch (Throwable t) {
                 if (rejectMessageOnError) {
@@ -161,8 +161,8 @@ public class ConsoleShareConsumer {
         Iterator<ConsumerRecord<byte[], byte[]>> recordIter = Collections.emptyIterator();
 
         public ConsumerWrapper(String topic,
-                               ShareConsumer<byte[], byte[]> consumer,
-                               long timeoutMs) {
+            ShareConsumer<byte[], byte[]> consumer,
+            long timeoutMs) {
             this.topic = topic;
             this.consumer = consumer;
             this.timeoutMs = timeoutMs;

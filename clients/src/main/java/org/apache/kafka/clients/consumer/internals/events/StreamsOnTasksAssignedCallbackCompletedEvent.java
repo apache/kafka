@@ -28,7 +28,7 @@ public class StreamsOnTasksAssignedCallbackCompletedEvent extends ApplicationEve
     private final Optional<KafkaException> error;
 
     public StreamsOnTasksAssignedCallbackCompletedEvent(final CompletableFuture<Void> future,
-                                                        final Optional<KafkaException> error) {
+        final Optional<KafkaException> error) {
         super(Type.STREAMS_ON_TASKS_ASSIGNED_CALLBACK_COMPLETED);
         this.future = Objects.requireNonNull(future);
         this.error = Objects.requireNonNull(error);

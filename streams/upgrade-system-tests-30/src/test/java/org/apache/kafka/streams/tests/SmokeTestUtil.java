@@ -125,7 +125,8 @@ public class SmokeTestUtil {
     public static void sleep(final long duration) {
         try {
             Thread.sleep(duration);
-        } catch (final Exception ignore) { }
+        } catch (final Exception ignore) {
+        }
     }
 
 }

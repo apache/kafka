@@ -312,9 +312,9 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
 
     @Override
     public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
-                                                          final K keyTo,
-                                                          final Instant timeFrom,
-                                                          final Instant timeTo) throws IllegalArgumentException {
+        final K keyTo,
+        final Instant timeFrom,
+        final Instant timeTo) throws IllegalArgumentException {
         final long timeFromTs = ApiUtils.validateMillisecondInstant(timeFrom, prepareMillisCheckFailMsgPrefix(timeFrom, "timeFrom"));
         final long timeToTs = ApiUtils.validateMillisecondInstant(timeTo, prepareMillisCheckFailMsgPrefix(timeTo, "timeTo"));
         if (!open) {
@@ -379,7 +379,8 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     }
 
     @Override
-    public void init(final StateStoreContext stateStoreContext, final StateStore root) {}
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+    }
 
     @Override
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {

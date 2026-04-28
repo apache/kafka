@@ -75,7 +75,7 @@ public class JaasContextTest {
 
     @Test
     public void testControlFlag() throws Exception {
-        LoginModuleControlFlag[] controlFlags = new LoginModuleControlFlag[] {
+        LoginModuleControlFlag[] controlFlags = new LoginModuleControlFlag[]{
             LoginModuleControlFlag.REQUIRED,
             LoginModuleControlFlag.REQUISITE,
             LoginModuleControlFlag.SUFFICIENT,
@@ -98,7 +98,7 @@ public class JaasContextTest {
     @Test
     public void testMultipleOptions() throws Exception {
         Map<String, Object> options = new HashMap<>();
-        for (int i = 0; i < 10; i++)
+        for (int i = 0;i < 10;i++)
             options.put("propName" + i, "propValue" + i);
         checkConfiguration("test.testMultipleOptions", LoginModuleControlFlag.SUFFICIENT, options);
     }
@@ -125,7 +125,7 @@ public class JaasContextTest {
         StringBuilder builder = new StringBuilder();
         int moduleCount = 3;
         Map<Integer, Map<String, Object>> moduleOptions = new HashMap<>();
-        for (int i = 0; i < moduleCount; i++) {
+        for (int i = 0;i < moduleCount;i++) {
             Map<String, Object> options = new HashMap<>();
             options.put("index", "Index" + i);
             options.put("module", "Module" + i);
@@ -141,7 +141,7 @@ public class JaasContextTest {
         AppConfigurationEntry[] dynamicEntries = configuration.getAppConfigurationEntry(clientContextName);
         assertEquals(moduleCount, dynamicEntries.length);
 
-        for (int i = 0; i < moduleCount; i++) {
+        for (int i = 0;i < moduleCount;i++) {
             AppConfigurationEntry entry = dynamicEntries[i];
             checkEntry(entry, "test.Module" + i, LoginModuleControlFlag.REQUIRED, moduleOptions.get(i));
         }
@@ -149,7 +149,7 @@ public class JaasContextTest {
         String serverContextName = "SERVER";
         writeConfiguration(serverContextName, jaasConfigProp);
         AppConfigurationEntry[] staticEntries = Configuration.getConfiguration().getAppConfigurationEntry(serverContextName);
-        for (int i = 0; i < moduleCount; i++) {
+        for (int i = 0;i < moduleCount;i++) {
             AppConfigurationEntry staticEntry = staticEntries[i];
             checkEntry(staticEntry, dynamicEntries[i].getLoginModuleName(), LoginModuleControlFlag.REQUIRED, dynamicEntries[i].getOptions());
         }
@@ -197,33 +197,33 @@ public class JaasContextTest {
 
         //test ListenerName Override
         writeConfiguration(Arrays.asList(
-                "KafkaServer { test.LoginModuleDefault required; };",
-                "plaintext.KafkaServer { com.sun.security.auth.module.JndiLoginModule requisite; };"
+            "KafkaServer { test.LoginModuleDefault required; };",
+            "plaintext.KafkaServer { com.sun.security.auth.module.JndiLoginModule requisite; };"
         ));
         assertThrows(IllegalArgumentException.class, () -> JaasContext.loadServerContext(new ListenerName("plaintext"),
-                "SOME-MECHANISM", Collections.emptyMap()));
+            "SOME-MECHANISM", Collections.emptyMap()));
 
         //test ListenerName Override
         writeConfiguration(Arrays.asList(
-                "KafkaServer { test.LoginModuleDefault required; };",
-                "plaintext.KafkaServer { com.sun.security.auth.module.LdapLoginModule requisite; };"
+            "KafkaServer { test.LoginModuleDefault required; };",
+            "plaintext.KafkaServer { com.sun.security.auth.module.LdapLoginModule requisite; };"
         ));
         assertThrows(IllegalArgumentException.class, () -> JaasContext.loadServerContext(new ListenerName("plaintext"),
-                "SOME-MECHANISM", Collections.emptyMap()));
+            "SOME-MECHANISM", Collections.emptyMap()));
 
         //test org.apache.kafka.disallowed.login.modules system property with multiple modules
         System.setProperty(DISALLOWED_LOGIN_MODULES_CONFIG, " com.ibm.security.auth.module.LdapLoginModule , com.ibm.security.auth.module.Krb5LoginModule ");
 
         String jaasConfigProp3 = "com.ibm.security.auth.module.LdapLoginModule required;";
-        assertThrows(IllegalArgumentException.class, () ->  configurationEntry(JaasContext.Type.CLIENT, jaasConfigProp3));
+        assertThrows(IllegalArgumentException.class, () -> configurationEntry(JaasContext.Type.CLIENT, jaasConfigProp3));
 
         //test ListenerName Override
         writeConfiguration(Arrays.asList(
-                "KafkaServer { test.LoginModuleDefault required; };",
-                "plaintext.KafkaServer { com.ibm.security.auth.module.Krb5LoginModule requisite; };"
+            "KafkaServer { test.LoginModuleDefault required; };",
+            "plaintext.KafkaServer { com.ibm.security.auth.module.Krb5LoginModule requisite; };"
         ));
         assertThrows(IllegalArgumentException.class, () -> JaasContext.loadServerContext(new ListenerName("plaintext"),
-                "SOME-MECHANISM", Collections.emptyMap()));
+            "SOME-MECHANISM", Collections.emptyMap()));
 
 
         //  clear disallowed login modules
@@ -234,29 +234,29 @@ public class JaasContextTest {
 
         //test ListenerName Override
         writeConfiguration(Arrays.asList(
-                "KafkaServer { com.ibm.security.auth.module.LdapLoginModule required; };",
-                "plaintext.KafkaServer { com.sun.security.auth.module.JndiLoginModule requisite; };"
+            "KafkaServer { com.ibm.security.auth.module.LdapLoginModule required; };",
+            "plaintext.KafkaServer { com.sun.security.auth.module.JndiLoginModule requisite; };"
         ));
         JaasContext context = JaasContext.loadServerContext(new ListenerName("plaintext"),
-                "SOME-MECHANISM", Collections.emptyMap());
+            "SOME-MECHANISM", Collections.emptyMap());
         assertEquals(1, context.configurationEntries().size());
         checkEntry(context.configurationEntries().get(0), "com.sun.security.auth.module.JndiLoginModule",
-                LoginModuleControlFlag.REQUISITE, Collections.emptyMap());
+            LoginModuleControlFlag.REQUISITE, Collections.emptyMap());
 
         //test ListenerName Override
         writeConfiguration(Arrays.asList(
-                "KafkaServer { com.sun.security.auth.module.LdapLoginModule required; };",
-                "plaintext.KafkaServer { com.sun.security.auth.module.LdapLoginModule requisite; };"
+            "KafkaServer { com.sun.security.auth.module.LdapLoginModule required; };",
+            "plaintext.KafkaServer { com.sun.security.auth.module.LdapLoginModule requisite; };"
         ));
         context = JaasContext.loadServerContext(new ListenerName("plaintext"),
-                "SOME-MECHANISM", Collections.emptyMap());
+            "SOME-MECHANISM", Collections.emptyMap());
         assertEquals(1, context.configurationEntries().size());
         checkEntry(context.configurationEntries().get(0), "com.sun.security.auth.module.LdapLoginModule",
-                LoginModuleControlFlag.REQUISITE, Collections.emptyMap());
+            LoginModuleControlFlag.REQUISITE, Collections.emptyMap());
     }
-    
+
     @Test
-     void testAllowedLoginModulesSystemProperty() {
+    void testAllowedLoginModulesSystemProperty() {
         AppConfigurationEntry ldap = new AppConfigurationEntry(
             "com.ibm.security.auth.module.LdapLoginModule",
             AppConfigurationEntry.LoginModuleControlFlag.REQUIRED,
@@ -273,16 +273,16 @@ public class JaasContextTest {
         //  set allowed list, but not set disallowed list
         System.setProperty(JaasUtils.ALLOWED_LOGIN_MODULES_CONFIG, "com.ibm.security.auth.module.LdapLoginModule");
         throwIfLoginModuleIsNotAllowed(ldap);
-        assertThrows(IllegalArgumentException.class, () ->  throwIfLoginModuleIsNotAllowed(jndi));
-        
+        assertThrows(IllegalArgumentException.class, () -> throwIfLoginModuleIsNotAllowed(jndi));
+
         //  set both allowed list and disallowed list
         System.setProperty(JaasUtils.DISALLOWED_LOGIN_MODULES_CONFIG, "com.ibm.security.auth.module.LdapLoginModule");
         throwIfLoginModuleIsNotAllowed(ldap);
-        assertThrows(IllegalArgumentException.class, () ->  throwIfLoginModuleIsNotAllowed(jndi));
-        
+        assertThrows(IllegalArgumentException.class, () -> throwIfLoginModuleIsNotAllowed(jndi));
+
         //  set disallowed list, but not set allowed list
         System.clearProperty(JaasUtils.ALLOWED_LOGIN_MODULES_CONFIG);
-        IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () ->  throwIfLoginModuleIsNotAllowed(ldap));
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> throwIfLoginModuleIsNotAllowed(ldap));
         //  Ensure the exception message includes the deprecation warning for the disallowed login modules config
         assertTrue(error.getMessage().contains("The system property '" + DISALLOWED_LOGIN_MODULES_CONFIG + "' is deprecated."));
         throwIfLoginModuleIsNotAllowed(jndi);
@@ -330,7 +330,7 @@ public class JaasContextTest {
     public void testLoadForServerWithWrongListenerName() throws IOException {
         writeConfiguration("Server", "test.LoginModule required;");
         assertThrows(IllegalArgumentException.class, () -> JaasContext.loadServerContext(new ListenerName("plaintext"),
-                "SOME-MECHANISM", Collections.emptyMap()));
+            "SOME-MECHANISM", Collections.emptyMap()));
     }
 
     private AppConfigurationEntry configurationEntry(JaasContext.Type contextType, String jaasConfigProp) {

@@ -212,7 +212,7 @@ public final class LsCommandHandler implements Commands.Handler {
         for (int s = schemas.length - 1; s > 0; s--) {
             ColumnSchema schema = schemas[s];
             if (schema.columnWidths[schema.columnWidths.length - 1] != 0 &&
-                    schema.totalWidth() <= screenWidth.getAsInt()) {
+                schema.totalWidth() <= screenWidth.getAsInt()) {
                 return schema;
             }
         }

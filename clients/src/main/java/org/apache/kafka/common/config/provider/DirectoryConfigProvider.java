@@ -45,7 +45,7 @@ public class DirectoryConfigProvider implements ConfigProvider {
 
     public static final String ALLOWED_PATHS_CONFIG = "allowed.paths";
     public static final String ALLOWED_PATHS_DOC = "A comma separated list of paths that this config provider is " +
-            "allowed to access. If not set, all paths are allowed.";
+        "allowed to access. If not set, all paths are allowed.";
     private volatile AllowedPaths allowedPaths;
 
     @Override
@@ -54,7 +54,8 @@ public class DirectoryConfigProvider implements ConfigProvider {
     }
 
     @Override
-    public void close() throws IOException { }
+    public void close() throws IOException {
+    }
 
     /**
      * Retrieves the data contained in regular files in the directory given by {@code path}.
@@ -77,8 +78,8 @@ public class DirectoryConfigProvider implements ConfigProvider {
     @Override
     public ConfigData get(String path, Set<String> keys) {
         return get(path, pathname ->
-                Files.isRegularFile(pathname)
-                        && keys.contains(pathname.getFileName().toString()));
+            Files.isRegularFile(pathname)
+                && keys.contains(pathname.getFileName().toString()));
     }
 
     private ConfigData get(String path, Predicate<Path> fileFilter) {

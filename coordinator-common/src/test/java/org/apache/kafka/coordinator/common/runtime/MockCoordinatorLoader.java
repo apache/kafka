@@ -30,9 +30,9 @@ public class MockCoordinatorLoader implements CoordinatorLoader<String> {
     private final List<Long> lastCommittedOffsets;
 
     public MockCoordinatorLoader(
-        LoadSummary summary,
-        List<Long> lastWrittenOffsets,
-        List<Long> lastCommittedOffsets
+            LoadSummary summary,
+            List<Long> lastWrittenOffsets,
+            List<Long> lastCommittedOffsets
     ) {
         this.summary = summary;
         this.lastWrittenOffsets = lastWrittenOffsets;
@@ -45,8 +45,8 @@ public class MockCoordinatorLoader implements CoordinatorLoader<String> {
 
     @Override
     public CompletableFuture<LoadSummary> load(
-        TopicPartition tp,
-        CoordinatorPlayback<String> replayable
+            TopicPartition tp,
+            CoordinatorPlayback<String> replayable
     ) {
         lastWrittenOffsets.forEach(replayable::updateLastWrittenOffset);
         lastCommittedOffsets.forEach(replayable::updateLastCommittedOffset);
@@ -54,5 +54,6 @@ public class MockCoordinatorLoader implements CoordinatorLoader<String> {
     }
 
     @Override
-    public void close() {}
+    public void close() {
+    }
 }

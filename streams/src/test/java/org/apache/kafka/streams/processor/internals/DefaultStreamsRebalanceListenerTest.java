@@ -220,9 +220,9 @@ public class DefaultStreamsRebalanceListenerTest {
         final StreamsRebalanceData streamsRebalanceData = mock(StreamsRebalanceData.class);
         when(streamsRebalanceData.subtopologies()).thenReturn(Map.of());
         createRebalanceListenerWithRebalanceData(streamsRebalanceData);
-        
+
         assertDoesNotThrow(() -> defaultStreamsRebalanceListener.onAllTasksLost());
-        
+
         final InOrder inOrder = inOrder(taskManager, streamsRebalanceData);
         inOrder.verify(taskManager).handleLostAll();
         inOrder.verify(streamsRebalanceData).setReconciledAssignment(StreamsRebalanceData.Assignment.EMPTY);

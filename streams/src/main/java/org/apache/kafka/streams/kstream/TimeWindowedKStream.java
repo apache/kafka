@@ -222,7 +222,7 @@ public interface TimeWindowedKStream<K, V> {
      * that represent the latest (rolling) count (i.e., number of records) for each key within a window
      */
     KTable<Windowed<K>, Long> count(final Named named,
-                                    final Materialized<K, Long, WindowStore<Bytes, byte[]>> materialized);
+        final Materialized<K, Long, WindowStore<Bytes, byte[]>> materialized);
 
     /**
      * Combine the values of records in this stream by the grouped key and defined windows.
@@ -378,7 +378,7 @@ public interface TimeWindowedKStream<K, V> {
      * the latest (rolling) aggregate for each key within a window
      */
     KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
-                                  final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized);
+        final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized);
 
     /**
      * Combine the values of records in this stream by the grouped key and defined windows.
@@ -443,8 +443,8 @@ public interface TimeWindowedKStream<K, V> {
      * the latest (rolling) aggregate for each key within a window
      */
     KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
-                                  final Named named,
-                                  final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized);
+        final Named named,
+        final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized);
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined windows.
@@ -488,7 +488,7 @@ public interface TimeWindowedKStream<K, V> {
      * the latest (rolling) aggregate for each key within a window
      */
     <VOut> KTable<Windowed<K>, VOut> aggregate(final Initializer<VOut> initializer,
-                                               final Aggregator<? super K, ? super V, VOut> aggregator);
+        final Aggregator<? super K, ? super V, VOut> aggregator);
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined windows.
@@ -534,8 +534,8 @@ public interface TimeWindowedKStream<K, V> {
      * the latest (rolling) aggregate for each key within a window
      */
     <VOut> KTable<Windowed<K>, VOut> aggregate(final Initializer<VOut> initializer,
-                                               final Aggregator<? super K, ? super V, VOut> aggregator,
-                                               final Named named);
+        final Aggregator<? super K, ? super V, VOut> aggregator,
+        final Named named);
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined windows.
@@ -596,8 +596,8 @@ public interface TimeWindowedKStream<K, V> {
      * the latest (rolling) aggregate for each key within a window
      */
     <VOut> KTable<Windowed<K>, VOut> aggregate(final Initializer<VOut> initializer,
-                                               final Aggregator<? super K, ? super V, VOut> aggregator,
-                                               final Materialized<K, VOut, WindowStore<Bytes, byte[]>> materialized);
+        final Aggregator<? super K, ? super V, VOut> aggregator,
+        final Materialized<K, VOut, WindowStore<Bytes, byte[]>> materialized);
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined windows.
@@ -659,9 +659,9 @@ public interface TimeWindowedKStream<K, V> {
      * the latest (rolling) aggregate for each key within a window
      */
     <VOut> KTable<Windowed<K>, VOut> aggregate(final Initializer<VOut> initializer,
-                                               final Aggregator<? super K, ? super V, VOut> aggregator,
-                                               final Named named,
-                                               final Materialized<K, VOut, WindowStore<Bytes, byte[]>> materialized);
+        final Aggregator<? super K, ? super V, VOut> aggregator,
+        final Named named,
+        final Materialized<K, VOut, WindowStore<Bytes, byte[]>> materialized);
 
     /**
      * Configure when the aggregated result will be emitted for {@code TimeWindowedKStream}.

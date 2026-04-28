@@ -63,6 +63,7 @@ public class CastTest {
                 Arguments.of(true, "10")
         );
     }
+
     @AfterEach
     public void teardown() {
         xformKey.close();
@@ -104,7 +105,7 @@ public class CastTest {
     public void castNullValueRecordWithSchema() {
         xformValue.configure(Map.of(Cast.SPEC_CONFIG, "foo:int64"));
         SourceRecord original = new SourceRecord(null, null, "topic", 0,
-            Schema.STRING_SCHEMA, "key", Schema.STRING_SCHEMA, null);
+                Schema.STRING_SCHEMA, "key", Schema.STRING_SCHEMA, null);
         SourceRecord transformed = xformValue.apply(original);
         assertEquals(original, transformed);
     }
@@ -130,7 +131,7 @@ public class CastTest {
     public void castNullValueRecordSchemaless() {
         xformValue.configure(Map.of(Cast.SPEC_CONFIG, "foo:int64"));
         SourceRecord original = new SourceRecord(null, null, "topic", 0,
-            Schema.STRING_SCHEMA, "key", null, null);
+                Schema.STRING_SCHEMA, "key", null, null);
         SourceRecord transformed = xformValue.apply(original);
         assertEquals(original, transformed);
     }
@@ -139,7 +140,7 @@ public class CastTest {
     public void castNullKeyRecordWithSchema() {
         xformKey.configure(Map.of(Cast.SPEC_CONFIG, "foo:int64"));
         SourceRecord original = new SourceRecord(null, null, "topic", 0,
-            Schema.STRING_SCHEMA, null, Schema.STRING_SCHEMA, "value");
+                Schema.STRING_SCHEMA, null, Schema.STRING_SCHEMA, "value");
         SourceRecord transformed = xformKey.apply(original);
         assertEquals(original, transformed);
     }
@@ -148,7 +149,7 @@ public class CastTest {
     public void castNullKeyRecordSchemaless() {
         xformKey.configure(Map.of(Cast.SPEC_CONFIG, "foo:int64"));
         SourceRecord original = new SourceRecord(null, null, "topic", 0,
-            null, null, Schema.STRING_SCHEMA, "value");
+                null, null, Schema.STRING_SCHEMA, "value");
         SourceRecord transformed = xformKey.apply(original);
         assertEquals(original, transformed);
     }
@@ -391,24 +392,24 @@ public class CastTest {
     public void castWholeRecordValueSchemalessUnsupportedType() {
         xformValue.configure(Map.of(Cast.SPEC_CONFIG, "int8"));
         assertThrows(DataException.class,
-            () -> xformValue.apply(new SourceRecord(null, null, "topic", 0,
-                    null, List.of("foo"))));
+                () -> xformValue.apply(new SourceRecord(null, null, "topic", 0,
+                        null, List.of("foo"))));
     }
 
     @Test
     public void castLogicalToPrimitive() {
         List<String> specParts = List.of(
-            "date_to_int32:int32",  // Cast to underlying representation
-            "timestamp_to_int64:int64",  // Cast to underlying representation
-            "time_to_int64:int64",  // Cast to wider datatype than underlying representation
-            "decimal_to_int32:int32",  // Cast to narrower datatype with data loss
-            "timestamp_to_float64:float64",  // loss of precision casting to double
-            "null_timestamp_to_int32:int32"
+                "date_to_int32:int32",  // Cast to underlying representation
+                "timestamp_to_int64:int64",  // Cast to underlying representation
+                "time_to_int64:int64",  // Cast to wider datatype than underlying representation
+                "decimal_to_int32:int32",  // Cast to narrower datatype with data loss
+                "timestamp_to_float64:float64",  // loss of precision casting to double
+                "null_timestamp_to_int32:int32"
         );
 
         Date day = new Date(MILLIS_PER_DAY);
         xformValue.configure(Map.of(Cast.SPEC_CONFIG,
-            String.join(",", specParts)));
+                String.join(",", specParts)));
 
         SchemaBuilder builder = SchemaBuilder.struct();
         builder.field("date_to_int32", org.apache.kafka.connect.data.Date.SCHEMA);
@@ -429,8 +430,8 @@ public class CastTest {
         recordValue.put("null_timestamp_to_int32", null);
 
         SourceRecord transformed = xformValue.apply(
-            new SourceRecord(null, null, "topic", 0,
-                supportedTypesSchema, recordValue));
+                new SourceRecord(null, null, "topic", 0,
+                        supportedTypesSchema, recordValue));
 
         assertEquals(1, ((Struct) transformed.value()).get("date_to_int32"));
         assertEquals(0L, ((Struct) transformed.value()).get("timestamp_to_int64"));
@@ -455,7 +456,7 @@ public class CastTest {
         Date timestamp = new Date();
 
         xformValue.configure(Map.of(Cast.SPEC_CONFIG,
-            "date:string,decimal:string,time:string,timestamp:string"));
+                "date:string,decimal:string,time:string,timestamp:string"));
 
         SchemaBuilder builder = SchemaBuilder.struct();
         builder.field("date", org.apache.kafka.connect.data.Date.SCHEMA);
@@ -472,8 +473,8 @@ public class CastTest {
         recordValue.put("timestamp", timestamp);
 
         SourceRecord transformed = xformValue.apply(
-            new SourceRecord(null, null, "topic", 0,
-                supportedTypesSchema, recordValue));
+                new SourceRecord(null, null, "topic", 0,
+                        supportedTypesSchema, recordValue));
 
         assertEquals(Values.dateFormatFor(date).format(date), ((Struct) transformed.value()).get("date"));
         assertEquals("1982", ((Struct) transformed.value()).get("decimal"));
@@ -490,7 +491,7 @@ public class CastTest {
     @Test
     public void castFieldsWithSchema() {
         Date day = new Date(MILLIS_PER_DAY);
-        byte[] byteArray = new byte[] {(byte) 0xFE, (byte) 0xDC, (byte) 0xBA, (byte) 0x98, 0x76, 0x54, 0x32, 0x10};
+        byte[] byteArray = new byte[]{(byte) 0xFE, (byte) 0xDC, (byte) 0xBA, (byte) 0x98, 0x76, 0x54, 0x32, 0x10};
         ByteBuffer byteBuffer = ByteBuffer.wrap(Arrays.copyOf(byteArray, byteArray.length));
 
         xformValue.configure(Map.of(Cast.SPEC_CONFIG,

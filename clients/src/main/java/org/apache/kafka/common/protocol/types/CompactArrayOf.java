@@ -82,7 +82,7 @@ public class CompactArrayOf extends DocumentedType {
         if (size > buffer.remaining())
             throw new SchemaException("Error reading array of size " + size + ", only " + buffer.remaining() + " bytes available");
         Object[] objs = new Object[size];
-        for (int i = 0; i < size; i++)
+        for (int i = 0;i < size;i++)
             objs[i] = type.read(buffer);
         return objs;
     }

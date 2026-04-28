@@ -32,46 +32,46 @@ import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
  */
 public class AliasedStaticField implements SamplingTestPlugin, Converter {
 
-  private static final Map<String, SamplingTestPlugin> SAMPLES;
-  private static final ClassLoader STATIC_CLASS_LOADER;
-  private final ClassLoader classloader;
+    private static final Map<String, SamplingTestPlugin> SAMPLES;
+    private static final ClassLoader STATIC_CLASS_LOADER;
+    private final ClassLoader classloader;
 
-  static {
-    SAMPLES = new HashMap<>();
-    STATIC_CLASS_LOADER = Thread.currentThread().getContextClassLoader();
-  }
+    static {
+        SAMPLES = new HashMap<>();
+        STATIC_CLASS_LOADER = Thread.currentThread().getContextClassLoader();
+    }
 
-  {
-    classloader = Thread.currentThread().getContextClassLoader();
-  }
+    {
+        classloader = Thread.currentThread().getContextClassLoader();
+    }
 
-  @Override
-  public void configure(final Map<String, ?> configs, final boolean isKey) {
+    @Override
+    public void configure(final Map<String, ?> configs, final boolean isKey) {
 
-  }
+    }
 
-  @Override
-  public byte[] fromConnectData(final String topic, final Schema schema, final Object value) {
-    return new byte[0];
-  }
+    @Override
+    public byte[] fromConnectData(final String topic, final Schema schema, final Object value) {
+        return new byte[0];
+    }
 
-  @Override
-  public SchemaAndValue toConnectData(final String topic, final byte[] value) {
-    return null;
-  }
+    @Override
+    public SchemaAndValue toConnectData(final String topic, final byte[] value) {
+        return null;
+    }
 
-  @Override
-  public ClassLoader staticClassloader() {
-    return STATIC_CLASS_LOADER;
-  }
+    @Override
+    public ClassLoader staticClassloader() {
+        return STATIC_CLASS_LOADER;
+    }
 
-  @Override
-  public ClassLoader classloader() {
-    return classloader;
-  }
+    @Override
+    public ClassLoader classloader() {
+        return classloader;
+    }
 
-  @Override
-  public Map<String, SamplingTestPlugin> otherSamples() {
-      return SAMPLES;
-  }
+    @Override
+    public Map<String, SamplingTestPlugin> otherSamples() {
+        return SAMPLES;
+    }
 }

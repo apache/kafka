@@ -91,17 +91,17 @@ public class FileStreamSourceConnectorTest {
         List<Map<String, String>> taskConfigs = connector.taskConfigs(1);
         assertEquals(1, taskConfigs.size());
         assertEquals(FILENAME,
-                taskConfigs.get(0).get(FileStreamSourceConnector.FILE_CONFIG));
+            taskConfigs.get(0).get(FileStreamSourceConnector.FILE_CONFIG));
         assertEquals(SINGLE_TOPIC,
-                taskConfigs.get(0).get(FileStreamSourceConnector.TOPIC_CONFIG));
+            taskConfigs.get(0).get(FileStreamSourceConnector.TOPIC_CONFIG));
 
         // Should be able to return fewer than requested #
         taskConfigs = connector.taskConfigs(2);
         assertEquals(1, taskConfigs.size());
         assertEquals(FILENAME,
-                taskConfigs.get(0).get(FileStreamSourceConnector.FILE_CONFIG));
+            taskConfigs.get(0).get(FileStreamSourceConnector.FILE_CONFIG));
         assertEquals(SINGLE_TOPIC,
-                taskConfigs.get(0).get(FileStreamSourceConnector.TOPIC_CONFIG));
+            taskConfigs.get(0).get(FileStreamSourceConnector.TOPIC_CONFIG));
     }
 
     @Test
@@ -159,8 +159,8 @@ public class FileStreamSourceConnectorTest {
     public void testAlterOffsetsStdin() {
         sourceProperties.remove(FileStreamSourceConnector.FILE_CONFIG);
         Map<Map<String, ?>, Map<String, ?>> offsets = Map.of(
-                Map.of(FILENAME_FIELD, FILENAME),
-                Map.of(POSITION_FIELD, 0L)
+            Map.of(FILENAME_FIELD, FILENAME),
+            Map.of(POSITION_FIELD, 0L)
         );
         assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, offsets));
     }
@@ -168,14 +168,14 @@ public class FileStreamSourceConnectorTest {
     @Test
     public void testAlterOffsetsIncorrectPartitionKey() {
         assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, Map.of(
-                Map.of("other_partition_key", FILENAME),
-                Map.of(POSITION_FIELD, 0L)
+            Map.of("other_partition_key", FILENAME),
+            Map.of(POSITION_FIELD, 0L)
         )));
 
         // null partitions are invalid
         assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, Collections.singletonMap(
-                null,
-                Map.of(POSITION_FIELD, 0L)
+            null,
+            Map.of(POSITION_FIELD, 0L)
         )));
     }
 
@@ -190,8 +190,8 @@ public class FileStreamSourceConnectorTest {
     @Test
     public void testAlterOffsetsIncorrectOffsetKey() {
         Map<Map<String, ?>, Map<String, ?>> offsets = Map.of(
-                Map.of(FILENAME_FIELD, FILENAME),
-                Map.of("other_offset_key", 0L)
+            Map.of(FILENAME_FIELD, FILENAME),
+            Map.of("other_offset_key", 0L)
         );
         assertThrows(ConnectException.class, () -> connector.alterOffsets(sourceProperties, offsets));
     }
@@ -199,8 +199,8 @@ public class FileStreamSourceConnectorTest {
     @Test
     public void testAlterOffsetsOffsetPositionValues() {
         Function<Object, Boolean> alterOffsets = offset -> connector.alterOffsets(sourceProperties, Map.of(
-                Map.of(FILENAME_FIELD, FILENAME),
-                Collections.singletonMap(POSITION_FIELD, offset)
+            Map.of(FILENAME_FIELD, FILENAME),
+            Collections.singletonMap(POSITION_FIELD, offset)
         ));
 
         assertThrows(ConnectException.class, () -> alterOffsets.apply("nan"));
@@ -218,8 +218,8 @@ public class FileStreamSourceConnectorTest {
     @Test
     public void testSuccessfulAlterOffsets() {
         Map<Map<String, ?>, Map<String, ?>> offsets = Map.of(
-                Map.of(FILENAME_FIELD, FILENAME),
-                Map.of(POSITION_FIELD, 0L)
+            Map.of(FILENAME_FIELD, FILENAME),
+            Map.of(POSITION_FIELD, 0L)
         );
 
         // Expect no exception to be thrown when a valid offsets map is passed. An empty offsets map is treated as valid

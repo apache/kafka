@@ -80,7 +80,7 @@ public class SubscriptionInfoTest {
         mkEntry(NAMED_TASK_T1_0_1, 0L),
         mkEntry(NAMED_TASK_T2_0_0, 10L),
         mkEntry(NAMED_TASK_T2_2_0, 5L)
-        );
+    );
     private static final Map<String, String> CLIENT_TAGS = mkMap(mkEntry("t1", "v1"), mkEntry("t2", "v2"));
 
     private static final String IGNORED_USER_ENDPOINT = "ignoredUserEndpoint:80";
@@ -367,12 +367,12 @@ public class SubscriptionInfoTest {
     public void shouldReturnTaskOffsetSumsMapForDecodedSubscription() {
         final SubscriptionInfo info = SubscriptionInfo.decode(
             new SubscriptionInfo(MIN_VERSION_OFFSET_SUM_SUBSCRIPTION,
-                                 LATEST_SUPPORTED_VERSION, PID_1,
-                                 "localhost:80",
-                                 TASK_OFFSET_SUMS,
-                                 IGNORED_UNIQUE_FIELD,
-                                 IGNORED_ERROR_CODE,
-                                 EMPTY_CLIENT_TAGS).encode());
+                LATEST_SUPPORTED_VERSION, PID_1,
+                "localhost:80",
+                TASK_OFFSET_SUMS,
+                IGNORED_UNIQUE_FIELD,
+                IGNORED_ERROR_CODE,
+                EMPTY_CLIENT_TAGS).encode());
         assertThat(info.taskOffsetSums(), is(TASK_OFFSET_SUMS));
     }
 
@@ -394,7 +394,7 @@ public class SubscriptionInfoTest {
                 ACTIVE_TASKS,
                 STANDBY_TASKS,
                 "localhost:80")
-            .encode());
+                .encode());
 
         assertThat(info.taskOffsetSums(), is(expectedOffsetSumsMap));
     }
@@ -410,8 +410,8 @@ public class SubscriptionInfoTest {
     @Test
     public void shouldNotErrorAccessingFutureVars() {
         final SubscriptionInfo info =
-                new SubscriptionInfo(8, LATEST_SUPPORTED_VERSION,
-                    PID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, EMPTY_CLIENT_TAGS);
+            new SubscriptionInfo(8, LATEST_SUPPORTED_VERSION,
+                PID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, EMPTY_CLIENT_TAGS);
         try {
             info.errorCode();
         } catch (final Exception e) {
@@ -422,8 +422,8 @@ public class SubscriptionInfoTest {
     @Test
     public void shouldEncodeAndDecodeVersion9() {
         final SubscriptionInfo info =
-                new SubscriptionInfo(9, LATEST_SUPPORTED_VERSION,
-                    PID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, EMPTY_CLIENT_TAGS);
+            new SubscriptionInfo(9, LATEST_SUPPORTED_VERSION,
+                PID_1, "localhost:80", TASK_OFFSET_SUMS, IGNORED_UNIQUE_FIELD, IGNORED_ERROR_CODE, EMPTY_CLIENT_TAGS);
         assertThat(info, is(SubscriptionInfo.decode(info.encode())));
     }
 
@@ -489,7 +489,7 @@ public class SubscriptionInfoTest {
 
     private static ByteBuffer encodeFutureVersion() {
         final ByteBuffer buf = ByteBuffer.allocate(4 /* used version */
-                                                       + 4 /* supported version */);
+            + 4 /* supported version */);
         buf.putInt(LATEST_SUPPORTED_VERSION + 1);
         buf.putInt(LATEST_SUPPORTED_VERSION + 1);
         buf.rewind();

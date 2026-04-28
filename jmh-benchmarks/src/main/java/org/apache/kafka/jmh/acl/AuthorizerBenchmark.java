@@ -107,23 +107,23 @@ public class AuthorizerBenchmark {
         // to return the matching ACLs. Using a more efficient data structure (e.g. a prefix
         // tree) should improve performance significantly.
         actions = List.of(new Action(AclOperation.WRITE,
-            new ResourcePattern(ResourceType.TOPIC, resourceNamePrefix + 95, PatternType.LITERAL),
-            1, true, true));
+                new ResourcePattern(ResourceType.TOPIC, resourceNamePrefix + 95, PatternType.LITERAL),
+                1, true, true));
         authorizeContext = new RequestContext(new RequestHeader(ApiKeys.PRODUCE, Integer.valueOf(1).shortValue(),
-            "someclient", 1), "1", InetAddress.getByName("127.0.0.1"), principal,
-            ListenerName.normalised("listener"), SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false);
+                        "someclient", 1), "1", InetAddress.getByName("127.0.0.1"), principal,
+                ListenerName.normalised("listener"), SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false);
         authorizeByResourceTypeContext = new RequestContext(new RequestHeader(ApiKeys.PRODUCE, Integer.valueOf(1).shortValue(),
-            "someclient", 1), "1", InetAddress.getByName(authorizeByResourceTypeHostName), principal,
-            ListenerName.normalised("listener"), SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false);
+                        "someclient", 1), "1", InetAddress.getByName(authorizeByResourceTypeHostName), principal,
+                ListenerName.normalised("listener"), SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false);
     }
 
     private void prepareAclCache() {
         Map<ResourcePattern, Set<AccessControlEntry>> aclEntries = new HashMap<>();
         for (int resourceId = 0; resourceId < resourceCount; resourceId++) {
             ResourcePattern resource = new ResourcePattern(
-                (resourceId % 10 == 0) ? ResourceType.GROUP : ResourceType.TOPIC,
-                resourceNamePrefix + resourceId,
-                (resourceId % 5 == 0) ? PatternType.PREFIXED : PatternType.LITERAL);
+                    (resourceId % 10 == 0) ? ResourceType.GROUP : ResourceType.TOPIC,
+                    resourceNamePrefix + resourceId,
+                    (resourceId % 5 == 0) ? PatternType.PREFIXED : PatternType.LITERAL);
 
             Set<AccessControlEntry> entries = aclEntries.computeIfAbsent(resource, k -> new HashSet<>());
 
@@ -132,7 +132,7 @@ public class AuthorizerBenchmark {
                 // is principal.toString without any suffix
                 String principalName = principal.toString() + (aclId == 0 ? "" : aclId);
                 AccessControlEntry allowAce = new AccessControlEntry(
-                    principalName, "*", AclOperation.READ, AclPermissionType.ALLOW);
+                        principalName, "*", AclOperation.READ, AclPermissionType.ALLOW);
 
                 entries.add(new AccessControlEntry(allowAce.principal(), allowAce.host(), allowAce.operation(), allowAce.permissionType()));
 
@@ -143,11 +143,11 @@ public class AuthorizerBenchmark {
         }
 
         ResourcePattern resourcePrefix = new ResourcePattern(ResourceType.TOPIC, resourceNamePrefix,
-            PatternType.PREFIXED);
+                PatternType.PREFIXED);
         Set<AccessControlEntry> entriesPrefix = aclEntries.computeIfAbsent(resourcePrefix, k -> new HashSet<>());
         for (int hostId = 0; hostId < hostPreCount; hostId++) {
             AccessControlEntry allowAce = new AccessControlEntry(principal.toString(), "127.0.0." + hostId,
-                AclOperation.READ, AclPermissionType.ALLOW);
+                    AclOperation.READ, AclPermissionType.ALLOW);
             entriesPrefix.add(new AccessControlEntry(allowAce.principal(), allowAce.host(), allowAce.operation(), allowAce.permissionType()));
 
             if (shouldDeny()) {
@@ -157,7 +157,7 @@ public class AuthorizerBenchmark {
         }
 
         ResourcePattern resourceWildcard = new ResourcePattern(ResourceType.TOPIC, ResourcePattern.WILDCARD_RESOURCE,
-            PatternType.LITERAL);
+                PatternType.LITERAL);
         Set<AccessControlEntry> entriesWildcard = aclEntries.computeIfAbsent(resourceWildcard, k -> new HashSet<>());
         // get dynamic entries number for wildcard acl
         for (int hostId = 0; hostId < resourceCount / 10; hostId++) {
@@ -169,7 +169,7 @@ public class AuthorizerBenchmark {
             }
 
             AccessControlEntry allowAce = new AccessControlEntry(principal.toString(), hostName,
-                AclOperation.READ, AclPermissionType.ALLOW);
+                    AclOperation.READ, AclPermissionType.ALLOW);
             entriesWildcard.add(new AccessControlEntry(allowAce.principal(), allowAce.host(), allowAce.operation(), allowAce.permissionType()));
             if (shouldDeny()) {
                 entriesWildcard.add(new AccessControlEntry(principal.toString(), hostName,

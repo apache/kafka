@@ -53,13 +53,13 @@ public class UuidTest {
         assertEquals(id1.hashCode(), id2.hashCode());
         assertNotEquals(id1.hashCode(), id3.hashCode());
     }
-    
+
     @Test
     public void testHashCode() {
         Uuid id1 = new Uuid(16L, 7L);
         Uuid id2 = new Uuid(1043L, 20075L);
         Uuid id3 = new Uuid(104312423523523L, 200732425676585L);
-        
+
         assertEquals(23, id1.hashCode());
         assertEquals(19064, id2.hashCode());
         assertEquals(-2011255899, id3.hashCode());
@@ -115,12 +115,12 @@ public class UuidTest {
     void testToArray() {
         assertNull(Uuid.toArray(null));
         assertArrayEquals(
-                new Uuid[]{
-                    Uuid.ZERO_UUID, Uuid.fromString("UXyU9i5ARn6W00ON2taeWA")
-                },
-                Uuid.toArray(Arrays.asList(
-                    Uuid.ZERO_UUID, Uuid.fromString("UXyU9i5ARn6W00ON2taeWA")
-                ))
+            new Uuid[]{
+                Uuid.ZERO_UUID, Uuid.fromString("UXyU9i5ARn6W00ON2taeWA")
+            },
+            Uuid.toArray(Arrays.asList(
+                Uuid.ZERO_UUID, Uuid.fromString("UXyU9i5ARn6W00ON2taeWA")
+            ))
         );
     }
 
@@ -128,12 +128,12 @@ public class UuidTest {
     void testToList() {
         assertNull(Uuid.toList(null));
         assertEquals(
-                Arrays.asList(
-                    Uuid.ZERO_UUID, Uuid.fromString("UXyU9i5ARn6W00ON2taeWA")
-                ),
-                Uuid.toList(new Uuid[]{
-                    Uuid.ZERO_UUID, Uuid.fromString("UXyU9i5ARn6W00ON2taeWA")
-                })
+            Arrays.asList(
+                Uuid.ZERO_UUID, Uuid.fromString("UXyU9i5ARn6W00ON2taeWA")
+            ),
+            Uuid.toList(new Uuid[]{
+                Uuid.ZERO_UUID, Uuid.fromString("UXyU9i5ARn6W00ON2taeWA")
+            })
         );
     }
 }

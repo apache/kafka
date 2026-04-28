@@ -29,7 +29,7 @@ public class CacheFlushListenerStub<K, V> implements CacheFlushListener<byte[], 
     final Map<K, Change<V>> forwarded = new HashMap<>();
 
     CacheFlushListenerStub(final Deserializer<K> keyDeserializer,
-                           final Deserializer<V> valueDeserializer) {
+        final Deserializer<V> valueDeserializer) {
         this.keyDeserializer = keyDeserializer;
         this.valueDeserializer = valueDeserializer;
     }

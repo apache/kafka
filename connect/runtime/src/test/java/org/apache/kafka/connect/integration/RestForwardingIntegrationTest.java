@@ -106,7 +106,7 @@ public class RestForwardingIntegrationTest {
 
     @AfterEach
     public void tearDown() throws IOException {
-        for (CloseableHttpResponse response: responses) {
+        for (CloseableHttpResponse response : responses) {
             response.close();
         }
         AtomicReference<Throwable> firstException = new AtomicReference<>();

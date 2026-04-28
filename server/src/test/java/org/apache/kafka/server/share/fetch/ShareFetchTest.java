@@ -83,7 +83,7 @@ public class ShareFetchTest {
         MemoryRecords records = buildRecords(1L, 3, 1);
 
         ShareFetchResponse shareFetch = shareFetchResponse(tidp, records, Errors.NONE, "", (short) 0,
-                "", List.of(), 0);
+            "", List.of(), 0);
         LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseData = shareFetch.responseData(Map.of(tidp.topicId(), tidp.topic()));
         assertEquals(1, responseData.size());
         responseData.forEach((topicIdPartition, partitionData) -> assertEquals(records, partitionData.records()));
@@ -230,7 +230,7 @@ public class ShareFetchTest {
 
     private MemoryRecords buildRecords(long baseOffset, int count, long firstMessageId) {
         MemoryRecordsBuilder builder = MemoryRecords.builder(
-                ByteBuffer.allocate(1024), Compression.NONE, TimestampType.CREATE_TIME, baseOffset);
+            ByteBuffer.allocate(1024), Compression.NONE, TimestampType.CREATE_TIME, baseOffset);
         for (int i = 0; i < count; i++)
             builder.append(0L, "key".getBytes(), ("value-" + (firstMessageId + i)).getBytes());
         return builder.build();
@@ -240,14 +240,14 @@ public class ShareFetchTest {
                                                   String errorMessage, short acknowledgeErrorCode, String acknowledgeErrorMessage,
                                                   List<ShareFetchResponseData.AcquiredRecords> acquiredRecords, int throttleTime) {
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> partitions = Map.of(tp,
-                new ShareFetchResponseData.PartitionData()
-                        .setPartitionIndex(tp.topicPartition().partition())
-                        .setErrorCode(error.code())
-                        .setErrorMessage(errorMessage)
-                        .setAcknowledgeErrorCode(acknowledgeErrorCode)
-                        .setAcknowledgeErrorMessage(acknowledgeErrorMessage)
-                        .setRecords(records)
-                        .setAcquiredRecords(acquiredRecords));
+            new ShareFetchResponseData.PartitionData()
+                .setPartitionIndex(tp.topicPartition().partition())
+                .setErrorCode(error.code())
+                .setErrorMessage(errorMessage)
+                .setAcknowledgeErrorCode(acknowledgeErrorCode)
+                .setAcknowledgeErrorMessage(acknowledgeErrorMessage)
+                .setRecords(records)
+                .setAcquiredRecords(acquiredRecords));
         return ShareFetchResponse.of(Errors.NONE, throttleTime, new LinkedHashMap<>(partitions), List.of(), Integer.MAX_VALUE);
     }
 }

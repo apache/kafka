@@ -31,16 +31,16 @@ class ShareConsumerConfig extends ConsumerConfig {
      * A list of configuration keys not supported for SHARE consumer.
      */
     private static final List<String> SHARE_GROUP_UNSUPPORTED_CONFIGS = List.of(
-            ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
-            ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG,
-            ConsumerConfig.GROUP_INSTANCE_ID_CONFIG,
-            ConsumerConfig.ISOLATION_LEVEL_CONFIG,
-            ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
-            ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
-            ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG,
-            ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG,
-            ConsumerConfig.GROUP_PROTOCOL_CONFIG,
-            ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG
+        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
+        ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG,
+        ConsumerConfig.GROUP_INSTANCE_ID_CONFIG,
+        ConsumerConfig.ISOLATION_LEVEL_CONFIG,
+        ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
+        ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
+        ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG,
+        ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG,
+        ConsumerConfig.GROUP_PROTOCOL_CONFIG,
+        ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG
     );
 
     ShareConsumerConfig(Properties props) {
@@ -70,7 +70,7 @@ class ShareConsumerConfig extends ConsumerConfig {
         });
         if (!invalidConfigs.isEmpty()) {
             throw new ConfigException(String.join(", ", invalidConfigs) +
-                    " cannot be set when using a share group.");
+                " cannot be set when using a share group.");
         }
     }
 

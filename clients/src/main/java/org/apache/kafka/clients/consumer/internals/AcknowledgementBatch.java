@@ -63,16 +63,16 @@ public class AcknowledgementBatch {
 
     public ShareAcknowledgeRequestData.AcknowledgementBatch toShareAcknowledgeRequest() {
         return new ShareAcknowledgeRequestData.AcknowledgementBatch()
-                .setFirstOffset(firstOffset)
-                .setLastOffset(lastOffset)
-                .setAcknowledgeTypes(acknowledgeTypes);
+            .setFirstOffset(firstOffset)
+            .setLastOffset(lastOffset)
+            .setAcknowledgeTypes(acknowledgeTypes);
     }
 
     public ShareFetchRequestData.AcknowledgementBatch toShareFetchRequest() {
         return new ShareFetchRequestData.AcknowledgementBatch()
-                .setFirstOffset(firstOffset)
-                .setLastOffset(lastOffset)
-                .setAcknowledgeTypes(acknowledgeTypes);
+            .setFirstOffset(firstOffset)
+            .setLastOffset(lastOffset)
+            .setAcknowledgeTypes(acknowledgeTypes);
     }
 
     @Override
@@ -100,9 +100,9 @@ public class AcknowledgementBatch {
     @Override
     public String toString() {
         return "AcknowledgementBatch("
-                + "firstOffset=" + firstOffset
-                + ", lastOffset=" + lastOffset
-                + ", acknowledgeTypes=" + MessageUtil.deepToString(acknowledgeTypes.iterator())
-                + ")";
+            + "firstOffset=" + firstOffset
+            + ", lastOffset=" + lastOffset
+            + ", acknowledgeTypes=" + MessageUtil.deepToString(acknowledgeTypes.iterator())
+            + ")";
     }
 }

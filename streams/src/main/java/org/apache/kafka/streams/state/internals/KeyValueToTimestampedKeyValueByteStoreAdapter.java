@@ -66,13 +66,13 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
 
     @Override
     public void put(final Bytes key,
-                    final byte[] valueWithTimestamp) {
+        final byte[] valueWithTimestamp) {
         store.put(key, rawValue(valueWithTimestamp));
     }
 
     @Override
     public byte[] putIfAbsent(final Bytes key,
-                              final byte[] valueWithTimestamp) {
+        final byte[] valueWithTimestamp) {
         return convertToTimestampedFormat(store.putIfAbsent(
             key,
             rawValue(valueWithTimestamp)));
@@ -139,7 +139,6 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
         final QueryConfig config) {
 
 
-
         final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
         QueryResult<R> result = store.query(query, positionBound, config);
 
@@ -180,13 +179,13 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
 
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
-                                                 final Bytes to) {
+        final Bytes to) {
         return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.range(from, to));
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
-                                                        final Bytes to) {
+        final Bytes to) {
         return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.reverseRange(from, to));
     }
 
@@ -202,7 +201,7 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
 
     @Override
     public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
-                                                                                    final PS prefixKeySerializer) {
+        final PS prefixKeySerializer) {
         return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.prefixScan(prefix, prefixKeySerializer));
     }
 

@@ -101,35 +101,41 @@ public class ConnectorsResourceTest {
     private static final Boolean FORWARD = true;
     private static final Map<String, String> CONNECTOR_CONFIG_SPECIAL_CHARS = new HashMap<>();
     private static final HttpHeaders NULL_HEADERS = null;
+
     static {
         CONNECTOR_CONFIG_SPECIAL_CHARS.put("name", CONNECTOR_NAME_SPECIAL_CHARS);
         CONNECTOR_CONFIG_SPECIAL_CHARS.put("sample_config", "test_config");
     }
 
     private static final Map<String, String> CONNECTOR_CONFIG = new HashMap<>();
+
     static {
         CONNECTOR_CONFIG.put("name", CONNECTOR_NAME);
         CONNECTOR_CONFIG.put("sample_config", "test_config");
     }
 
     private static final Map<String, String> CONNECTOR_CONFIG_PATCH = new HashMap<>();
+
     static {
         CONNECTOR_CONFIG_PATCH.put("sample_config", "test_config_new");
         CONNECTOR_CONFIG_PATCH.put("sample_config_2", "test_config_2");
     }
 
     private static final Map<String, String> CONNECTOR_CONFIG_PATCHED = new HashMap<>(CONNECTOR_CONFIG);
+
     static {
         CONNECTOR_CONFIG_PATCHED.putAll(CONNECTOR_CONFIG_PATCH);
     }
 
     private static final Map<String, String> CONNECTOR_CONFIG_CONTROL_SEQUENCES = new HashMap<>();
+
     static {
         CONNECTOR_CONFIG_CONTROL_SEQUENCES.put("name", CONNECTOR_NAME_CONTROL_SEQUENCES1);
         CONNECTOR_CONFIG_CONTROL_SEQUENCES.put("sample_config", "test_config");
     }
 
     private static final Map<String, String> CONNECTOR_CONFIG_WITHOUT_NAME = new HashMap<>();
+
     static {
         CONNECTOR_CONFIG_WITHOUT_NAME.put("sample_config", "test_config");
     }
@@ -140,16 +146,20 @@ public class ConnectorsResourceTest {
         CONNECTOR_CONFIG_WITH_EMPTY_NAME.put(ConnectorConfig.NAME_CONFIG, "");
         CONNECTOR_CONFIG_WITH_EMPTY_NAME.put("sample_config", "test_config");
     }
+
     private static final List<ConnectorTaskId> CONNECTOR_TASK_NAMES = List.of(
             new ConnectorTaskId(CONNECTOR_NAME, 0),
             new ConnectorTaskId(CONNECTOR_NAME, 1)
     );
     private static final List<Map<String, String>> TASK_CONFIGS = new ArrayList<>();
+
     static {
         TASK_CONFIGS.add(Map.of("config", "value"));
         TASK_CONFIGS.add(Map.of("config", "other_value"));
     }
+
     private static final List<TaskInfo> TASK_INFOS = new ArrayList<>();
+
     static {
         TASK_INFOS.add(new TaskInfo(new ConnectorTaskId(CONNECTOR_NAME, 0), TASK_CONFIGS.get(0)));
         TASK_INFOS.add(new TaskInfo(new ConnectorTaskId(CONNECTOR_NAME, 1), TASK_CONFIGS.get(1)));
@@ -159,8 +169,8 @@ public class ConnectorsResourceTest {
             List.of("foo_topic", "bar_topic"));
 
     private static final RestRequestTimeout REQUEST_TIMEOUT = RestRequestTimeout.constant(
-        DEFAULT_REST_REQUEST_TIMEOUT_MS,
-        DEFAULT_HEALTH_CHECK_TIMEOUT_MS
+            DEFAULT_REST_REQUEST_TIMEOUT_MS,
+            DEFAULT_HEALTH_CHECK_TIMEOUT_MS
     );
 
     @Mock
@@ -289,11 +299,11 @@ public class ConnectorsResourceTest {
     @Test
     public void testCreateConnector() throws Throwable {
         CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME,
-            Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), null);
+                Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), null);
 
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG,
-            CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
+                CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
         ).when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), isNull(), eq(false), cb.capture());
 
         connectorsResource.createConnector(FORWARD, NULL_HEADERS, body);
@@ -302,11 +312,11 @@ public class ConnectorsResourceTest {
     @Test
     public void testCreateConnectorWithPausedInitialState() throws Throwable {
         CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME,
-            Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), CreateConnectorRequest.InitialState.PAUSED);
+                Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), CreateConnectorRequest.InitialState.PAUSED);
 
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG,
-            CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
+                CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
         ).when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), eq(TargetState.PAUSED), eq(false), cb.capture());
 
         connectorsResource.createConnector(FORWARD, NULL_HEADERS, body);
@@ -315,11 +325,11 @@ public class ConnectorsResourceTest {
     @Test
     public void testCreateConnectorWithStoppedInitialState() throws Throwable {
         CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME,
-            Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), CreateConnectorRequest.InitialState.STOPPED);
+                Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), CreateConnectorRequest.InitialState.STOPPED);
 
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG,
-            CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
+                CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
         ).when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), eq(TargetState.STOPPED), eq(false), cb.capture());
 
         connectorsResource.createConnector(FORWARD, NULL_HEADERS, body);
@@ -328,11 +338,11 @@ public class ConnectorsResourceTest {
     @Test
     public void testCreateConnectorWithRunningInitialState() throws Throwable {
         CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME,
-            Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), CreateConnectorRequest.InitialState.RUNNING);
+                Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), CreateConnectorRequest.InitialState.RUNNING);
 
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG,
-            CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
+                CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
         ).when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), eq(TargetState.STARTED), eq(false), cb.capture());
 
         connectorsResource.createConnector(FORWARD, NULL_HEADERS, body);
@@ -341,11 +351,11 @@ public class ConnectorsResourceTest {
     @Test
     public void testCreateConnectorNotLeader() throws Throwable {
         CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME,
-            Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), null);
+                Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), null);
 
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackNotLeaderException(cb).when(herder)
-            .putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), isNull(), eq(false), cb.capture());
+                .putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), isNull(), eq(false), cb.capture());
 
         when(restClient.httpRequest(eq(LEADER_URL + "connectors?forward=false"), eq("POST"), isNull(), eq(body), any()))
                 .thenReturn(new RestClient.HttpResponse<>(201, new HashMap<>(), new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG, CONNECTOR_TASK_NAMES, ConnectorType.SOURCE)));
@@ -355,11 +365,11 @@ public class ConnectorsResourceTest {
     @Test
     public void testCreateConnectorWithHeaders() throws Throwable {
         CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME,
-            Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), null);
+                Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), null);
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         HttpHeaders httpHeaders = mock(HttpHeaders.class);
         expectAndCallbackNotLeaderException(cb)
-            .when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), isNull(), eq(false), cb.capture());
+                .when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), isNull(), eq(false), cb.capture());
 
         when(restClient.httpRequest(eq(LEADER_URL + "connectors?forward=false"), eq("POST"), eq(httpHeaders), any(), any()))
                 .thenReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
@@ -369,11 +379,11 @@ public class ConnectorsResourceTest {
     @Test
     public void testCreateConnectorExists() {
         CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME,
-            Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), null);
+                Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME), null);
 
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackException(cb, new AlreadyExistsException("already exists"))
-            .when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), isNull(), eq(false), cb.capture());
+                .when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), isNull(), eq(false), cb.capture());
         assertThrows(AlreadyExistsException.class, () -> connectorsResource.createConnector(FORWARD, NULL_HEADERS, body));
     }
 
@@ -387,7 +397,7 @@ public class ConnectorsResourceTest {
 
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(bodyOut.name(), bodyOut.config(),
-            CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
+                CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
         ).when(herder).putConnectorConfig(eq(bodyOut.name()), eq(bodyOut.config()), isNull(), eq(false), cb.capture());
 
         connectorsResource.createConnector(FORWARD, NULL_HEADERS, bodyIn);
@@ -403,7 +413,7 @@ public class ConnectorsResourceTest {
 
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(bodyOut.name(), bodyOut.config(),
-            CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
+                CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
         ).when(herder).putConnectorConfig(eq(bodyOut.name()), eq(bodyOut.config()), isNull(), eq(false), cb.capture());
 
         connectorsResource.createConnector(FORWARD, NULL_HEADERS, bodyIn);
@@ -419,7 +429,7 @@ public class ConnectorsResourceTest {
 
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(bodyOut.name(), bodyOut.config(),
-            CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
+                CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
         ).when(herder).putConnectorConfig(eq(bodyOut.name()), eq(bodyOut.config()), isNull(), eq(false), cb.capture());
 
         connectorsResource.createConnector(FORWARD, NULL_HEADERS, bodyIn);
@@ -437,7 +447,7 @@ public class ConnectorsResourceTest {
     public void testDeleteConnectorNotLeader() throws Throwable {
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackNotLeaderException(cb).when(herder)
-            .deleteConnectorConfig(eq(CONNECTOR_NAME), cb.capture());
+                .deleteConnectorConfig(eq(CONNECTOR_NAME), cb.capture());
         // Should forward request
         when(restClient.httpRequest(eq(LEADER_URL + "connectors/" + CONNECTOR_NAME + "?forward=false"), eq("DELETE"), isNull(), any(), any()))
                 .thenReturn(new RestClient.HttpResponse<>(204, new HashMap<>(), null));
@@ -449,7 +459,7 @@ public class ConnectorsResourceTest {
     public void testDeleteConnectorNotFound() {
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackException(cb, new NotFoundException("not found"))
-            .when(herder).deleteConnectorConfig(eq(CONNECTOR_NAME), cb.capture());
+                .when(herder).deleteConnectorConfig(eq(CONNECTOR_NAME), cb.capture());
 
         assertThrows(NotFoundException.class, () -> connectorsResource.destroyConnector(CONNECTOR_NAME, NULL_HEADERS, FORWARD));
     }
@@ -458,11 +468,11 @@ public class ConnectorsResourceTest {
     public void testGetConnector() throws Throwable {
         final ArgumentCaptor<Callback<ConnectorInfo>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG, CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
-            .when(herder).connectorInfo(eq(CONNECTOR_NAME), cb.capture());
+                .when(herder).connectorInfo(eq(CONNECTOR_NAME), cb.capture());
 
         ConnectorInfo connInfo = connectorsResource.getConnector(CONNECTOR_NAME);
         assertEquals(new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG, CONNECTOR_TASK_NAMES, ConnectorType.SOURCE),
-            connInfo);
+                connInfo);
     }
 
     @Test
@@ -478,7 +488,7 @@ public class ConnectorsResourceTest {
     public void testGetConnectorConfigConnectorNotFound() {
         final ArgumentCaptor<Callback<Map<String, String>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackException(cb, new NotFoundException("not found"))
-            .when(herder).connectorConfig(eq(CONNECTOR_NAME), cb.capture());
+                .when(herder).connectorConfig(eq(CONNECTOR_NAME), cb.capture());
 
         assertThrows(NotFoundException.class, () -> connectorsResource.getConnectorConfig(CONNECTOR_NAME));
     }
@@ -518,7 +528,7 @@ public class ConnectorsResourceTest {
     public void testPutConnectorConfig() throws Throwable {
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, new Herder.Created<>(false, new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG, CONNECTOR_TASK_NAMES,
-            ConnectorType.SINK))
+                ConnectorType.SINK))
         ).when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(CONNECTOR_CONFIG), eq(true), cb.capture());
 
         connectorsResource.putConnectorConfig(CONNECTOR_NAME, NULL_HEADERS, FORWARD, CONNECTOR_CONFIG);
@@ -527,11 +537,11 @@ public class ConnectorsResourceTest {
     @Test
     public void testCreateConnectorWithSpecialCharsInName() throws Throwable {
         CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME_SPECIAL_CHARS,
-            Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME_SPECIAL_CHARS), null);
+                Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME_SPECIAL_CHARS), null);
 
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME_SPECIAL_CHARS, CONNECTOR_CONFIG,
-            CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
+                CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
         ).when(herder).putConnectorConfig(eq(CONNECTOR_NAME_SPECIAL_CHARS), eq(body.config()), isNull(), eq(false), cb.capture());
 
         String rspLocation = connectorsResource.createConnector(FORWARD, NULL_HEADERS, body).getLocation().toString();
@@ -542,11 +552,11 @@ public class ConnectorsResourceTest {
     @Test
     public void testCreateConnectorWithControlSequenceInName() throws Throwable {
         CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME_CONTROL_SEQUENCES1,
-            Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME_CONTROL_SEQUENCES1), null);
+                Map.of(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME_CONTROL_SEQUENCES1), null);
 
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME_CONTROL_SEQUENCES1, CONNECTOR_CONFIG,
-            CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
+                CONNECTOR_TASK_NAMES, ConnectorType.SOURCE))
         ).when(herder).putConnectorConfig(eq(CONNECTOR_NAME_CONTROL_SEQUENCES1), eq(body.config()), isNull(), eq(false), cb.capture());
 
         String rspLocation = connectorsResource.createConnector(FORWARD, NULL_HEADERS, body).getLocation().toString();
@@ -559,7 +569,7 @@ public class ConnectorsResourceTest {
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
 
         expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME_SPECIAL_CHARS, CONNECTOR_CONFIG_SPECIAL_CHARS, CONNECTOR_TASK_NAMES,
-            ConnectorType.SINK))
+                ConnectorType.SINK))
         ).when(herder).putConnectorConfig(eq(CONNECTOR_NAME_SPECIAL_CHARS), eq(CONNECTOR_CONFIG_SPECIAL_CHARS), eq(true), cb.capture());
 
         String rspLocation = connectorsResource.putConnectorConfig(CONNECTOR_NAME_SPECIAL_CHARS, NULL_HEADERS, FORWARD, CONNECTOR_CONFIG_SPECIAL_CHARS).getLocation().toString();
@@ -572,7 +582,7 @@ public class ConnectorsResourceTest {
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
 
         expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME_CONTROL_SEQUENCES1, CONNECTOR_CONFIG_CONTROL_SEQUENCES, CONNECTOR_TASK_NAMES,
-            ConnectorType.SINK))
+                ConnectorType.SINK))
         ).when(herder).putConnectorConfig(eq(CONNECTOR_NAME_CONTROL_SEQUENCES1), eq(CONNECTOR_CONFIG_CONTROL_SEQUENCES), eq(true), cb.capture());
 
         String rspLocation = connectorsResource.putConnectorConfig(CONNECTOR_NAME_CONTROL_SEQUENCES1, NULL_HEADERS, FORWARD, CONNECTOR_CONFIG_CONTROL_SEQUENCES).getLocation().toString();
@@ -585,7 +595,7 @@ public class ConnectorsResourceTest {
         Map<String, String> connConfig = new HashMap<>(CONNECTOR_CONFIG);
         connConfig.put(ConnectorConfig.NAME_CONFIG, "mismatched-name");
         assertThrows(BadRequestException.class, () -> connectorsResource.putConnectorConfig(CONNECTOR_NAME,
-            NULL_HEADERS, FORWARD, connConfig));
+                NULL_HEADERS, FORWARD, connConfig));
     }
 
     @Test
@@ -640,7 +650,7 @@ public class ConnectorsResourceTest {
     public void testGetConnectorTaskConfigsConnectorNotFound() {
         final ArgumentCaptor<Callback<List<TaskInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackException(cb, new NotFoundException("connector not found"))
-            .when(herder).taskConfigs(eq(CONNECTOR_NAME), cb.capture());
+                .when(herder).taskConfigs(eq(CONNECTOR_NAME), cb.capture());
 
         assertThrows(NotFoundException.class, () -> connectorsResource.getTaskConfigs(CONNECTOR_NAME));
     }
@@ -650,7 +660,7 @@ public class ConnectorsResourceTest {
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, true, false);
         final ArgumentCaptor<Callback<ConnectorStateInfo>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackException(cb, new NotFoundException("not found"))
-            .when(herder).restartConnectorAndTasks(eq(restartRequest), cb.capture());
+                .when(herder).restartConnectorAndTasks(eq(restartRequest), cb.capture());
 
         assertThrows(NotFoundException.class, () ->
                 connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, restartRequest.includeTasks(), restartRequest.onlyFailed(), FORWARD)
@@ -662,7 +672,7 @@ public class ConnectorsResourceTest {
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, true, false);
         final ArgumentCaptor<Callback<ConnectorStateInfo>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackNotLeaderException(cb).when(herder)
-            .restartConnectorAndTasks(eq(restartRequest), cb.capture());
+                .restartConnectorAndTasks(eq(restartRequest), cb.capture());
 
         when(restClient.httpRequest(eq(LEADER_URL + "connectors/" + CONNECTOR_NAME + "/restart?forward=true&includeTasks=" + restartRequest.includeTasks() + "&onlyFailed=" + restartRequest.onlyFailed()), eq("POST"), isNull(), isNull(), any()))
                 .thenReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
@@ -675,7 +685,7 @@ public class ConnectorsResourceTest {
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, true, false);
         final ArgumentCaptor<Callback<ConnectorStateInfo>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackException(cb, new RebalanceNeededException("Request cannot be completed because a rebalance is expected"))
-            .when(herder).restartConnectorAndTasks(eq(restartRequest), cb.capture());
+                .when(herder).restartConnectorAndTasks(eq(restartRequest), cb.capture());
 
         ConnectRestException ex = assertThrows(ConnectRestException.class, () ->
                 connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, restartRequest.includeTasks(), restartRequest.onlyFailed(), FORWARD)
@@ -693,7 +703,7 @@ public class ConnectorsResourceTest {
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, true, false);
         final ArgumentCaptor<Callback<ConnectorStateInfo>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackResult(cb, connectorStateInfo)
-            .when(herder).restartConnectorAndTasks(eq(restartRequest), cb.capture());
+                .when(herder).restartConnectorAndTasks(eq(restartRequest), cb.capture());
 
         Response response = connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, restartRequest.includeTasks(), restartRequest.onlyFailed(), FORWARD);
         assertEquals(CONNECTOR_NAME, ((ConnectorStateInfo) response.getEntity()).name());
@@ -705,7 +715,7 @@ public class ConnectorsResourceTest {
     public void testRestartConnectorNotFound() {
         final ArgumentCaptor<Callback<Void>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackException(cb, new NotFoundException("not found"))
-            .when(herder).restartConnector(eq(CONNECTOR_NAME), cb.capture());
+                .when(herder).restartConnector(eq(CONNECTOR_NAME), cb.capture());
 
         assertThrows(NotFoundException.class, () ->
                 connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, false, false, FORWARD)
@@ -716,7 +726,7 @@ public class ConnectorsResourceTest {
     public void testRestartConnectorLeaderRedirect() throws Throwable {
         final ArgumentCaptor<Callback<Void>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackNotLeaderException(cb).when(herder)
-            .restartConnector(eq(CONNECTOR_NAME), cb.capture());
+                .restartConnector(eq(CONNECTOR_NAME), cb.capture());
 
         when(restClient.httpRequest(eq(LEADER_URL + "connectors/" + CONNECTOR_NAME + "/restart?forward=true"), eq("POST"), isNull(), isNull(), any()))
                 .thenReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
@@ -729,7 +739,7 @@ public class ConnectorsResourceTest {
         final ArgumentCaptor<Callback<Void>> cb = ArgumentCaptor.forClass(Callback.class);
         String ownerUrl = "http://owner:8083";
         expectAndCallbackException(cb, new NotAssignedException("not owner test", ownerUrl))
-            .when(herder).restartConnector(eq(CONNECTOR_NAME), cb.capture());
+                .when(herder).restartConnector(eq(CONNECTOR_NAME), cb.capture());
         when(restClient.httpRequest(eq("http://owner:8083/connectors/" + CONNECTOR_NAME + "/restart?forward=false"), eq("POST"), isNull(), isNull(), any()))
                 .thenReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
         Response response = connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, false, false, true);
@@ -741,7 +751,7 @@ public class ConnectorsResourceTest {
         ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
         final ArgumentCaptor<Callback<Void>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackException(cb, new NotFoundException("not found"))
-            .when(herder).restartTask(eq(taskId), cb.capture());
+                .when(herder).restartTask(eq(taskId), cb.capture());
 
         assertThrows(NotFoundException.class, () -> connectorsResource.restartTask(CONNECTOR_NAME, 0, NULL_HEADERS, FORWARD));
     }
@@ -752,7 +762,7 @@ public class ConnectorsResourceTest {
 
         final ArgumentCaptor<Callback<Void>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackNotLeaderException(cb).when(herder)
-            .restartTask(eq(taskId), cb.capture());
+                .restartTask(eq(taskId), cb.capture());
 
         when(restClient.httpRequest(eq(LEADER_URL + "connectors/" + CONNECTOR_NAME + "/tasks/0/restart?forward=true"), eq("POST"), isNull(), isNull(), any()))
                 .thenReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
@@ -766,7 +776,7 @@ public class ConnectorsResourceTest {
         final ArgumentCaptor<Callback<Void>> cb = ArgumentCaptor.forClass(Callback.class);
         String ownerUrl = "http://owner:8083";
         expectAndCallbackException(cb, new NotAssignedException("not owner test", ownerUrl))
-            .when(herder).restartTask(eq(taskId), cb.capture());
+                .when(herder).restartTask(eq(taskId), cb.capture());
 
         when(restClient.httpRequest(eq("http://owner:8083/connectors/" + CONNECTOR_NAME + "/tasks/0/restart?forward=false"), eq("POST"), isNull(), isNull(), any()))
                 .thenReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
@@ -780,7 +790,7 @@ public class ConnectorsResourceTest {
         connectorsResource = new ConnectorsResource(herder, serverConfig, restClient, REQUEST_TIMEOUT);
 
         Exception e = assertThrows(ConnectRestException.class,
-            () -> connectorsResource.getConnectorActiveTopics(CONNECTOR_NAME));
+                () -> connectorsResource.getConnectorActiveTopics(CONNECTOR_NAME));
         assertEquals("Topic tracking is disabled.", e.getMessage());
     }
 
@@ -792,7 +802,7 @@ public class ConnectorsResourceTest {
         connectorsResource = new ConnectorsResource(herder, serverConfig, restClient, REQUEST_TIMEOUT);
 
         Exception e = assertThrows(ConnectRestException.class,
-            () -> connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers));
+                () -> connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers));
         assertEquals("Topic tracking is disabled.", e.getMessage());
     }
 
@@ -804,7 +814,7 @@ public class ConnectorsResourceTest {
         connectorsResource = new ConnectorsResource(herder, serverConfig, restClient, REQUEST_TIMEOUT);
 
         Exception e = assertThrows(ConnectRestException.class,
-            () -> connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers));
+                () -> connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers));
         assertEquals("Topic tracking reset is disabled.", e.getMessage());
     }
 
@@ -813,7 +823,7 @@ public class ConnectorsResourceTest {
         when(serverConfig.topicTrackingEnabled()).thenReturn(true);
         when(serverConfig.topicTrackingResetEnabled()).thenReturn(true);
         when(herder.connectorActiveTopics(CONNECTOR_NAME))
-            .thenReturn(new ActiveTopicsInfo(CONNECTOR_NAME, CONNECTOR_ACTIVE_TOPICS));
+                .thenReturn(new ActiveTopicsInfo(CONNECTOR_NAME, CONNECTOR_ACTIVE_TOPICS));
         connectorsResource = new ConnectorsResource(herder, serverConfig, restClient, REQUEST_TIMEOUT);
 
         Response response = connectorsResource.getConnectorActiveTopics(CONNECTOR_NAME);
@@ -838,10 +848,10 @@ public class ConnectorsResourceTest {
     public void testCompleteOrForwardWithErrorAndNoForwardUrl() {
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         expectAndCallbackException(cb, new NotLeaderException("not leader", null))
-            .when(herder).deleteConnectorConfig(eq(CONNECTOR_NAME), cb.capture());
+                .when(herder).deleteConnectorConfig(eq(CONNECTOR_NAME), cb.capture());
 
         ConnectRestException e = assertThrows(ConnectRestException.class, () ->
-            connectorsResource.destroyConnector(CONNECTOR_NAME, NULL_HEADERS, FORWARD));
+                connectorsResource.destroyConnector(CONNECTOR_NAME, NULL_HEADERS, FORWARD));
         assertTrue(e.getMessage().contains("no known leader URL"));
     }
 

@@ -39,60 +39,60 @@ import java.util.Map;
  */
 public final class NonMigratedMultiPlugin implements Converter, HeaderConverter, Predicate, Transformation, ConnectorClientConfigOverridePolicy {
 
-  @Override
-  public void configure(Map<String, ?> configs, boolean isKey) {
+    @Override
+    public void configure(Map<String, ?> configs, boolean isKey) {
 
-  }
+    }
 
-  @Override
-  public byte[] fromConnectData(String topic, Schema schema, Object value) {
-    return new byte[0];
-  }
+    @Override
+    public byte[] fromConnectData(String topic, Schema schema, Object value) {
+        return new byte[0];
+    }
 
-  @Override
-  public SchemaAndValue toConnectData(String topic, byte[] value) {
-    return null;
-  }
+    @Override
+    public SchemaAndValue toConnectData(String topic, byte[] value) {
+        return null;
+    }
 
-  @Override
-  public SchemaAndValue toConnectHeader(String topic, String headerKey, byte[] value) {
-    return null;
-  }
+    @Override
+    public SchemaAndValue toConnectHeader(String topic, String headerKey, byte[] value) {
+        return null;
+    }
 
-  @Override
-  public byte[] fromConnectHeader(String topic, String headerKey, Schema schema, Object value) {
-    return new byte[0];
-  }
+    @Override
+    public byte[] fromConnectHeader(String topic, String headerKey, Schema schema, Object value) {
+        return new byte[0];
+    }
 
-  @Override
-  public ConnectRecord apply(ConnectRecord record) {
-    return null;
-  }
+    @Override
+    public ConnectRecord apply(ConnectRecord record) {
+        return null;
+    }
 
-  @Override
-  public ConfigDef config() {
-    return null;
-  }
+    @Override
+    public ConfigDef config() {
+        return null;
+    }
 
-  @Override
-  public boolean test(ConnectRecord record) {
-    return false;
-  }
+    @Override
+    public boolean test(ConnectRecord record) {
+        return false;
+    }
 
-  @Override
-  public void close() {
+    @Override
+    public void close() {
 
-  }
+    }
 
-  @Override
-  public void configure(Map<String, ?> configs) {
+    @Override
+    public void configure(Map<String, ?> configs) {
 
-  }
+    }
 
-  @Override
-  public List<ConfigValue> validate(ConnectorClientConfigRequest connectorClientConfigRequest) {
-    return null;
-  }
+    @Override
+    public List<ConfigValue> validate(ConnectorClientConfigRequest connectorClientConfigRequest) {
+        return null;
+    }
 
     @Override
     public String version() {

@@ -31,7 +31,7 @@ public class AgentStatusResponse extends Message {
 
     @JsonCreator
     public AgentStatusResponse(@JsonProperty("serverStartMs") long serverStartMs,
-            @JsonProperty("workers") TreeMap<Long, WorkerState> workers) {
+        @JsonProperty("workers") TreeMap<Long, WorkerState> workers) {
         this.serverStartMs = serverStartMs;
         this.workers = workers == null ? new TreeMap<>() : workers;
     }

@@ -63,8 +63,8 @@ public class JaasTestUtils {
         @Override
         public String toString() {
             return String.format("%s {\n  %s\n};\n",
-                    contextName,
-                    modules.stream().map(Object::toString).collect(Collectors.joining("\n  ")));
+                contextName,
+                modules.stream().map(Object::toString).collect(Collectors.joining("\n  ")));
         }
     }
 
@@ -170,13 +170,13 @@ public class JaasTestUtils {
             switch (mechanism) {
                 case GSSAPI_MECHANISM:
                     modules.add(JaasModule.krb5LoginModule(
-                            true,
-                            true,
-                            keytabLocation.orElseThrow(() -> new IllegalArgumentException("Keytab location not specified for GSSAPI")).getAbsolutePath(),
-                            KAFKA_SERVER_PRINCIPAL,
-                            true,
-                            Optional.of(SERVICE_NAME),
-                            IS_IBM_SECURITY
+                        true,
+                        true,
+                        keytabLocation.orElseThrow(() -> new IllegalArgumentException("Keytab location not specified for GSSAPI")).getAbsolutePath(),
+                        KAFKA_SERVER_PRINCIPAL,
+                        true,
+                        Optional.of(SERVICE_NAME),
+                        IS_IBM_SECURITY
                     ));
                     break;
                 case PLAIN_MECHANISM:
@@ -213,13 +213,13 @@ public class JaasTestUtils {
         switch (mechanism) {
             case GSSAPI_MECHANISM:
                 return JaasModule.krb5LoginModule(
-                        true,
-                        true,
-                        keytabLocation.orElseThrow(() -> new IllegalArgumentException("Keytab location not specified for GSSAPI")).getAbsolutePath(),
-                        clientPrincipal,
-                        true,
-                        Optional.of(serviceName),
-                        IS_IBM_SECURITY
+                    true,
+                    true,
+                    keytabLocation.orElseThrow(() -> new IllegalArgumentException("Keytab location not specified for GSSAPI")).getAbsolutePath(),
+                    clientPrincipal,
+                    true,
+                    Optional.of(serviceName),
+                    IS_IBM_SECURITY
                 );
             case PLAIN_MECHANISM:
                 return JaasModule.plainLoginModule(plainUser, plainPassword, false, new HashMap<>());
@@ -236,16 +236,16 @@ public class JaasTestUtils {
 
     public static JaasSection kafkaClientSection(Optional<String> mechanism, Optional<File> keytabLocation) {
         return new JaasSection(KAFKA_CLIENT_CONTEXT_NAME,
-                mechanism.map(m -> kafkaClientModule(m,
-                        keytabLocation,
-                        KAFKA_CLIENT_PRINCIPAL_2,
-                        KAFKA_PLAIN_USER_2,
-                        KAFKA_PLAIN_PASSWORD_2,
-                        KAFKA_SCRAM_USER_2,
-                        KAFKA_SCRAM_PASSWORD_2,
-                        KAFKA_OAUTH_BEARER_USER_2,
-                        SERVICE_NAME)
-                ).map(List::of).orElse(List.of()));
+            mechanism.map(m -> kafkaClientModule(m,
+                    keytabLocation,
+                    KAFKA_CLIENT_PRINCIPAL_2,
+                    KAFKA_PLAIN_USER_2,
+                    KAFKA_PLAIN_PASSWORD_2,
+                    KAFKA_SCRAM_USER_2,
+                    KAFKA_SCRAM_PASSWORD_2,
+                    KAFKA_OAUTH_BEARER_USER_2,
+                    SERVICE_NAME)
+            ).map(List::of).orElse(List.of()));
     }
 
     private static void writeToFile(File file, List<JaasSection> jaasSections) throws IOException {
@@ -284,12 +284,12 @@ public class JaasTestUtils {
         File trustStore = trustStoreFile.orElseThrow(() -> new Exception("SSL enabled but no trustStoreFile provided"));
         Properties sslProps = new Properties();
         sslProps.putAll(new TestSslUtils.SslConfigsBuilder(mode)
-                .useClientCert(clientCert)
-                .createNewTrustStore(trustStore)
-                .certAlias(certAlias)
-                .cn(certCn)
-                .tlsProtocol(tlsProtocol)
-                .build());
+            .useClientCert(clientCert)
+            .createNewTrustStore(trustStore)
+            .certAlias(certAlias)
+            .cn(certCn)
+            .tlsProtocol(tlsProtocol)
+            .build());
         return sslProps;
     }
 
@@ -314,8 +314,9 @@ public class JaasTestUtils {
                                              String certCn,
                                              Optional<Properties> saslProperties) throws Exception {
         return securityConfigs(connectionMode, securityProtocol, trustStoreFile, certAlias, certCn, saslProperties,
-                TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS, Optional.empty());
+            TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS, Optional.empty());
     }
+
     /**
      * Returns security configuration options for broker or clients
      *

@@ -46,11 +46,12 @@ public class QuorumControllerTestEnv implements AutoCloseable {
 
     public static class Builder {
         private final MockRaftClientTestEnv clientEnv;
-        private Consumer<QuorumController.Builder> controllerBuilderInitializer = __ -> { };
+        private Consumer<QuorumController.Builder> controllerBuilderInitializer = __ -> {
+        };
         private OptionalLong sessionTimeoutMillis = OptionalLong.empty();
         private OptionalLong leaderImbalanceCheckIntervalNs = OptionalLong.empty();
         private BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
-                fromVersion(MetadataVersion.latestTesting(), "test-provided version");
+            fromVersion(MetadataVersion.latestTesting(), "test-provided version");
 
         public Builder(MockRaftClientTestEnv clientEnv) {
             this.clientEnv = clientEnv;

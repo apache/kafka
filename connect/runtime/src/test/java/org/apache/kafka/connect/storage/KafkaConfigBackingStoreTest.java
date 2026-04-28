@@ -309,10 +309,12 @@ public class KafkaConfigBackingStoreTest {
         doAnswer(expectReadToEnd(Map.of(CONNECTOR_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0))))
                 .doAnswer(expectReadToEnd(Map.of(CONNECTOR_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(1))))
                 // Config deletion
-                .doAnswer(expectReadToEnd(new LinkedHashMap<>() {{
-                            put(configKey, null);
-                            put(targetStateKey, null);
-                        }})
+                .doAnswer(expectReadToEnd(new LinkedHashMap<>() {
+                    {
+                        put(configKey, null);
+                        put(targetStateKey, null);
+                    }
+                })
                 ).when(configLog).readToEnd();
 
         // Writing should block until it is written and read back from Kafka
@@ -375,10 +377,12 @@ public class KafkaConfigBackingStoreTest {
         assertNull(configState.connectorConfig(CONNECTOR_IDS.get(0)));
         assertNull(configState.targetState(CONNECTOR_IDS.get(0)));
 
-        doAnswer(expectReadToEnd(new LinkedHashMap<>() {{
-                    put(TARGET_STATE_KEYS.get(0), TARGET_STATES_SERIALIZED.get(2));
-                    put(CONNECTOR_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0));
-                }})
+        doAnswer(expectReadToEnd(new LinkedHashMap<>() {
+            {
+                put(TARGET_STATE_KEYS.get(0), TARGET_STATES_SERIALIZED.get(2));
+                put(CONNECTOR_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0));
+            }
+        })
         ).when(configLog).readToEnd();
 
         // We expect to write the target state first, followed by the config write and then a read to end
@@ -762,7 +766,7 @@ public class KafkaConfigBackingStoreTest {
     }
 
     @Test
-    public void testRestoreZeroTasks()  {
+    public void testRestoreZeroTasks() {
         // Restoring data should notify only of the latest values after loading is complete. This also validates
         // that inconsistent state is ignored.
 
@@ -829,14 +833,14 @@ public class KafkaConfigBackingStoreTest {
 
         int offset = 0;
         List<ConsumerRecord<String, byte[]>> existingRecords = List.of(
-            new ConsumerRecord<>(TOPIC, 0, offset++, 0L, TimestampType.CREATE_TIME, 0, 0,
-                TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty()),
-            new ConsumerRecord<>(TOPIC, 0, offset++, 0L, TimestampType.CREATE_TIME, 0, 0,
-                TASK_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(1), new RecordHeaders(), Optional.empty()),
-            new ConsumerRecord<>(TOPIC, 0, offset++, 0L, TimestampType.CREATE_TIME, 0, 0,
-                COMMIT_TASKS_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(2), new RecordHeaders(), Optional.empty()),
-            new ConsumerRecord<>(TOPIC, 0, offset++, 0L, TimestampType.CREATE_TIME, 0, 0,
-                CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0), CONFIGS_SERIALIZED.get(3), new RecordHeaders(), Optional.empty()));
+                new ConsumerRecord<>(TOPIC, 0, offset++, 0L, TimestampType.CREATE_TIME, 0, 0,
+                        TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>(TOPIC, 0, offset++, 0L, TimestampType.CREATE_TIME, 0, 0,
+                        TASK_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(1), new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>(TOPIC, 0, offset++, 0L, TimestampType.CREATE_TIME, 0, 0,
+                        COMMIT_TASKS_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(2), new RecordHeaders(), Optional.empty()),
+                new ConsumerRecord<>(TOPIC, 0, offset++, 0L, TimestampType.CREATE_TIME, 0, 0,
+                        CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0), CONFIGS_SERIALIZED.get(3), new RecordHeaders(), Optional.empty()));
         LinkedHashMap<byte[], Struct> deserialized = new LinkedHashMap<>();
         deserialized.put(CONFIGS_SERIALIZED.get(0), TASK_CONFIG_STRUCTS.get(0));
         deserialized.put(CONFIGS_SERIALIZED.get(1), TASK_CONFIG_STRUCTS.get(0));
@@ -1457,9 +1461,11 @@ public class KafkaConfigBackingStoreTest {
         doAnswer(expectReadToEnd(new LinkedHashMap<>()))
                 .doAnswer(expectReadToEnd(new LinkedHashMap<>()))
                 .doAnswer(expectReadToEnd(serializedConfigs))
-                .doAnswer(expectReadToEnd(new LinkedHashMap<>() {{
-                            put(CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0), CONFIGS_SERIALIZED.get(3));
-                        }})
+                .doAnswer(expectReadToEnd(new LinkedHashMap<>() {
+                    {
+                        put(CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0), CONFIGS_SERIALIZED.get(3));
+                    }
+                })
                 )
                 .when(configLog).readToEnd();
 
@@ -1524,11 +1530,13 @@ public class KafkaConfigBackingStoreTest {
 
         doAnswer(expectReadToEnd(new LinkedHashMap<>()))
                 .doAnswer(expectReadToEnd(new LinkedHashMap<>()))
-                .doAnswer(expectReadToEnd(new LinkedHashMap<>() {{
+                .doAnswer(expectReadToEnd(new LinkedHashMap<>() {
+                    {
                         put(TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0));
                         put(TASK_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(1));
                         put(COMMIT_TASKS_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(2));
-                    }})
+                    }
+                })
                 )
                 .when(configLog).readToEnd();
 
@@ -1582,18 +1590,22 @@ public class KafkaConfigBackingStoreTest {
 
         doAnswer(expectReadToEnd(new LinkedHashMap<>()))
                 .doAnswer(expectReadToEnd(new LinkedHashMap<>()))
-                .doAnswer(expectReadToEnd(new LinkedHashMap<>() {{
-                            put(TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0));
-                            put(TASK_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(1));
-                            put(COMMIT_TASKS_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(2));
-                        }})
+                .doAnswer(expectReadToEnd(new LinkedHashMap<>() {
+                    {
+                        put(TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0));
+                        put(TASK_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(1));
+                        put(COMMIT_TASKS_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(2));
+                    }
+                })
                 )
                 .doAnswer(expectReadToEnd(new LinkedHashMap<>()))
                 .doAnswer(expectReadToEnd(new LinkedHashMap<>()))
-                .doAnswer(expectReadToEnd(new LinkedHashMap<>() {{
-                            put(TASK_CONFIG_KEYS.get(2), CONFIGS_SERIALIZED.get(3));
-                            put(COMMIT_TASKS_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(4));
-                        }})
+                .doAnswer(expectReadToEnd(new LinkedHashMap<>() {
+                    {
+                        put(TASK_CONFIG_KEYS.get(2), CONFIGS_SERIALIZED.get(3));
+                        put(COMMIT_TASKS_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(4));
+                    }
+                })
                 )
                 .when(configLog).readToEnd();
 
@@ -1659,7 +1671,7 @@ public class KafkaConfigBackingStoreTest {
 
     // If non-empty, deserializations should be a LinkedHashMap
     private void expectStart(final List<ConsumerRecord<String, byte[]>> preexistingRecords,
-                             final Map<byte[], Struct> deserializations) {
+            final Map<byte[], Struct> deserializations) {
         doAnswer(invocation -> {
             for (ConsumerRecord<String, byte[]> rec : preexistingRecords)
                 capturedConsumedCallback.getValue().onCompletion(null, rec);
@@ -1677,7 +1689,7 @@ public class KafkaConfigBackingStoreTest {
     // from the log. Validate the data that is captured when the conversion is performed matches the specified data
     // (by checking a single field's value)
     private void expectConvertWriteRead2(final String configKey, final Schema valueSchema, final byte[] serialized,
-                                        final Struct value) {
+            final Struct value) {
         doReturn(serialized).when(converter).fromConnectData(eq(TOPIC), eq(valueSchema), eq(value));
         doReturn(producerFuture).when(configLog).sendWithReceipt(eq(configKey), eq(serialized));
         doReturn(new SchemaAndValue(null, structToMap(value))).when(converter).toConnectData(eq(TOPIC), eq(serialized));
@@ -1687,7 +1699,7 @@ public class KafkaConfigBackingStoreTest {
     // from the log. Validate the data that is captured when the conversion is performed matches the specified data
     // (by checking a single field's value)
     private void expectConvertWriteRead(final String configKey, final Schema valueSchema, final byte[] serialized,
-                                        final String dataFieldName, final Object dataFieldValue) {
+            final String dataFieldName, final Object dataFieldValue) {
         final ArgumentCaptor<Struct> capturedRecord = ArgumentCaptor.forClass(Struct.class);
         when(converter.fromConnectData(eq(TOPIC), eq(valueSchema), capturedRecord.capture())).thenReturn(serialized);
         when(configLog.sendWithReceipt(configKey, serialized)).thenReturn(producerFuture);
@@ -1699,7 +1711,7 @@ public class KafkaConfigBackingStoreTest {
     }
 
     private void expectRead(LinkedHashMap<String, byte[]> serializedValues,
-                            Map<String, Struct> deserializedValues) {
+            Map<String, Struct> deserializedValues) {
         for (Map.Entry<String, Struct> deserializedValueEntry : deserializedValues.entrySet()) {
             byte[] serializedValue = serializedValues.get(deserializedValueEntry.getKey());
             when(converter.toConnectData(TOPIC, serializedValue))

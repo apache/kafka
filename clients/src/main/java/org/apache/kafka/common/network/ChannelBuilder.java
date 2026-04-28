@@ -38,7 +38,7 @@ public interface ChannelBuilder extends AutoCloseable, Configurable {
      * @return KafkaChannel
      */
     KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
-                              MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException;
+        MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException;
 
     /**
      * Closes ChannelBuilder

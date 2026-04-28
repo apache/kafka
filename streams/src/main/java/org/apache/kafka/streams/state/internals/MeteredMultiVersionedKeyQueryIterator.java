@@ -37,11 +37,11 @@ class MeteredMultiVersionedKeyQueryIterator<V> implements VersionedRecordIterato
     private final LongAdder numOpenIterators;
 
     public MeteredMultiVersionedKeyQueryIterator(final VersionedRecordIterator<byte[]> iterator,
-                                                 final Sensor sensor,
-                                                 final Time time,
-                                                 final Function<VersionedRecord<byte[]>, VersionedRecord<V>> deserializeValue,
-                                                 final LongAdder numOpenIterators,
-                                                 final Set<MeteredIterator> openIterators) {
+        final Sensor sensor,
+        final Time time,
+        final Function<VersionedRecord<byte[]>, VersionedRecord<V>> deserializeValue,
+        final LongAdder numOpenIterators,
+        final Set<MeteredIterator> openIterators) {
         this.iterator = iterator;
         this.deserializeValue = deserializeValue;
         this.numOpenIterators = numOpenIterators;

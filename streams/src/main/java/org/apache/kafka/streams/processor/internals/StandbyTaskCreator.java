@@ -46,11 +46,11 @@ class StandbyTaskCreator {
     private final Sensor createTaskSensor;
 
     StandbyTaskCreator(final TopologyMetadata topologyMetadata,
-                       final StreamsConfig applicationConfig,
-                       final StreamsMetricsImpl streamsMetrics,
-                       final StateDirectory stateDirectory,
-                       final String threadId,
-                       final LogContext logContext) {
+        final StreamsConfig applicationConfig,
+        final StreamsMetricsImpl streamsMetrics,
+        final StateDirectory stateDirectory,
+        final String threadId,
+        final LogContext logContext) {
         this.topologyMetadata = topologyMetadata;
         this.applicationConfig = applicationConfig;
         this.streamsMetrics = streamsMetrics;
@@ -114,7 +114,7 @@ class StandbyTaskCreator {
      *       we should always reuse the input partition and hence no need validations
      */
     StandbyTask createStandbyTaskFromActive(final StreamTask streamTask,
-                                            final Set<TopicPartition> inputPartitions) {
+        final Set<TopicPartition> inputPartitions) {
         if (!inputPartitions.equals(streamTask.inputPartitions)) {
             log.warn("Detected unmatched input partitions for task {} when recycling it from active to standby", streamTask.id);
         }
@@ -140,10 +140,10 @@ class StandbyTaskCreator {
     }
 
     StandbyTask createStandbyTask(final TaskId taskId,
-                                  final Set<TopicPartition> inputPartitions,
-                                  final ProcessorTopology topology,
-                                  final ProcessorStateManager stateManager,
-                                  final InternalProcessorContext<?, ?> context) {
+        final Set<TopicPartition> inputPartitions,
+        final ProcessorTopology topology,
+        final ProcessorStateManager stateManager,
+        final InternalProcessorContext<?, ?> context) {
         final StandbyTask task = new StandbyTask(
             taskId,
             inputPartitions,

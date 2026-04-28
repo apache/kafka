@@ -71,6 +71,6 @@ abstract class ExtractRecordMetadataTimestamp implements TimestampExtractor {
      * @return a new timestamp for the record (if negative, record will not be processed but dropped silently)
      */
     public abstract long onInvalidTimestamp(final ConsumerRecord<Object, Object> record,
-                                            final long recordTimestamp,
-                                            final long partitionTime);
+        final long recordTimestamp,
+        final long partitionTime);
 }

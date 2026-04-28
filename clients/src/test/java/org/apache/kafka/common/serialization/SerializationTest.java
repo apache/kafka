@@ -55,10 +55,10 @@ public class SerializationTest {
             put(Double.class, Arrays.asList(null, 5678567.12312d, -5678567.12341d));
             put(byte[].class, Arrays.asList(null, "my string".getBytes()));
             put(ByteBuffer.class, Arrays.asList(
-                    null,
-                    ByteBuffer.wrap("my string".getBytes()),
-                    ByteBuffer.allocate(10).put("my string".getBytes()),
-                    ByteBuffer.allocateDirect(10).put("my string".getBytes())));
+                null,
+                ByteBuffer.wrap("my string".getBytes()),
+                ByteBuffer.allocate(10).put("my string".getBytes()),
+                ByteBuffer.allocateDirect(10).put("my string".getBytes())));
             put(Bytes.class, Arrays.asList(null, new Bytes("my string".getBytes())));
             put(UUID.class, Arrays.asList(null, UUID.randomUUID()));
         }
@@ -79,10 +79,10 @@ public class SerializationTest {
 
                     if (value instanceof byte[]) {
                         assertArrayEquals((byte[]) value, (byte[]) serde.deserializer().deserialize(topic, null, (byte[]) value),
-                                "Should get the original " + test.getKey().getSimpleName() + " after serialization and deserialization");
+                            "Should get the original " + test.getKey().getSimpleName() + " after serialization and deserialization");
                     } else {
                         assertEquals(value, serde.deserializer().deserialize(topic, null, wrapNullable(serialized)),
-                                "Should get the original " + test.getKey().getSimpleName() + " after serialization and deserialization");
+                            "Should get the original " + test.getKey().getSimpleName() + " after serialization and deserialization");
                     }
                 }
             }
@@ -98,7 +98,7 @@ public class SerializationTest {
                 assertNull(serde.deserializer().deserialize(topic, null),
                     "Should support null in " + cls.getSimpleName() + " deserialization");
                 assertNull(serde.deserializer().deserialize(topic, null, (ByteBuffer) null),
-                        "Should support null in " + cls.getSimpleName() + " deserialization");
+                    "Should support null in " + cls.getSimpleName() + " deserialization");
             }
         }
     }
@@ -360,10 +360,10 @@ public class SerializationTest {
         try (Serde<Float> serde = Serdes.Float()) {
             // Because of NaN semantics we must assert based on the raw int bits.
             Float roundtrip = serde.deserializer().deserialize(topic,
-                    serde.serializer().serialize(topic, someNaN));
+                serde.serializer().serialize(topic, someNaN));
             assertEquals(someNaNAsIntBits, Float.floatToRawIntBits(roundtrip));
             Float otherRoundtrip = serde.deserializer().deserialize(topic,
-                    serde.serializer().serialize(topic, anotherNaN));
+                serde.serializer().serialize(topic, anotherNaN));
             assertEquals(anotherNaNAsIntBits, Float.floatToRawIntBits(otherRoundtrip));
         }
     }
@@ -421,7 +421,7 @@ public class SerializationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testBooleanSerializer(Boolean dataToSerialize) {
         byte[] testData = new byte[1];
         testData[0] = (byte) (dataToSerialize ? 1 : 0);
@@ -431,7 +431,7 @@ public class SerializationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     public void testBooleanDeserializer(Boolean dataToDeserialize) {
         byte[] testData = new byte[1];
         testData[0] = (byte) (dataToDeserialize ? 1 : 0);

@@ -39,8 +39,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class BrokerFeaturesTest {
     private static final Features<SupportedVersionRange> SUPPORTED_FEATURES = Features.supportedFeatures(Map.of(
-            "test_feature_1", new SupportedVersionRange((short) 1, (short) 4),
-            "test_feature_2", new SupportedVersionRange((short) 1, (short) 3)
+        "test_feature_1", new SupportedVersionRange((short) 1, (short) 4),
+        "test_feature_2", new SupportedVersionRange((short) 1, (short) 3)
     ));
 
     private static final BrokerFeatures BROKER_FEATURES = BrokerFeatures.createDefault(true, SUPPORTED_FEATURES);
@@ -76,8 +76,8 @@ public class BrokerFeaturesTest {
     @Test
     public void testCompatibleFeatures() {
         Map<String, Short> compatibleFeatures = Map.of(
-                "test_feature_1", (short) 3,
-                "test_feature_2", (short) 3
+            "test_feature_1", (short) 3,
+            "test_feature_2", (short) 3
         );
 
         assertTrue(BROKER_FEATURES.incompatibleFeatures(compatibleFeatures).isEmpty());
@@ -87,24 +87,24 @@ public class BrokerFeaturesTest {
     @Test
     public void testDefaultFinalizedFeatures() {
         Map<String, SupportedVersionRange> newFeatures = Map.of(
-                "test_feature_1", new SupportedVersionRange((short) 1, (short) 4),
-                "test_feature_2", new SupportedVersionRange((short) 1, (short) 3),
-                "test_feature_3", new SupportedVersionRange((short) 3, (short) 7)
+            "test_feature_1", new SupportedVersionRange((short) 1, (short) 4),
+            "test_feature_2", new SupportedVersionRange((short) 1, (short) 3),
+            "test_feature_3", new SupportedVersionRange((short) 3, (short) 7)
         );
         Features<SupportedVersionRange> supportedFeatures = Features.supportedFeatures(newFeatures);
         BrokerFeatures brokerFeatures = BrokerFeatures.createDefault(true, supportedFeatures);
 
         Map<String, Short> expectedFeatures = Map.of(
-                MetadataVersion.FEATURE_NAME, MetadataVersion.latestTesting().featureLevel(),
-                TRANSACTION_VERSION.featureName(), TRANSACTION_VERSION.latestTesting(),
-                GROUP_VERSION.featureName(), GROUP_VERSION.latestTesting(),
-                ELIGIBLE_LEADER_REPLICAS_VERSION.featureName(), ELIGIBLE_LEADER_REPLICAS_VERSION.latestTesting(),
-                SHARE_VERSION.featureName(), SHARE_VERSION.latestTesting(),
-                STREAMS_VERSION.featureName(), STREAMS_VERSION.latestTesting(),
-                "kraft.version", (short) 0,
-                "test_feature_1", (short) 4,
-                "test_feature_2", (short) 3,
-                "test_feature_3", (short) 7
+            MetadataVersion.FEATURE_NAME, MetadataVersion.latestTesting().featureLevel(),
+            TRANSACTION_VERSION.featureName(), TRANSACTION_VERSION.latestTesting(),
+            GROUP_VERSION.featureName(), GROUP_VERSION.latestTesting(),
+            ELIGIBLE_LEADER_REPLICAS_VERSION.featureName(), ELIGIBLE_LEADER_REPLICAS_VERSION.latestTesting(),
+            SHARE_VERSION.featureName(), SHARE_VERSION.latestTesting(),
+            STREAMS_VERSION.featureName(), STREAMS_VERSION.latestTesting(),
+            "kraft.version", (short) 0,
+            "test_feature_1", (short) 4,
+            "test_feature_2", (short) 3,
+            "test_feature_3", (short) 7
         );
 
         assertEquals(expectedFeatures, brokerFeatures.defaultFinalizedFeatures());
@@ -115,7 +115,7 @@ public class BrokerFeaturesTest {
     public void ensureDefaultSupportedFeaturesRangeMaxNotZero(boolean unstableVersionsEnabled) {
         BrokerFeatures brokerFeatures = BrokerFeatures.createDefault(unstableVersionsEnabled);
         brokerFeatures.supportedFeatures().features()
-                .values()
-                .forEach(supportedVersionRange -> assertNotEquals(0, supportedVersionRange.max()));
+            .values()
+            .forEach(supportedVersionRange -> assertNotEquals(0, supportedVersionRange.max()));
     }
 }

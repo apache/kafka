@@ -62,7 +62,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(
-        disksPerBroker = 2
+    disksPerBroker = 2
 )
 public class CordonedLogDirsIntegrationTest {
 
@@ -111,8 +111,8 @@ public class CordonedLogDirsIntegrationTest {
             // Update the metadata version to support cordoning log dirs
             short metadataVersion = MetadataVersion.IBP_4_3_IV0.featureLevel();
             UpdateFeaturesResult updateResult = admin.updateFeatures(
-                    Map.of("metadata.version", new FeatureUpdate(metadataVersion, FeatureUpdate.UpgradeType.UPGRADE)),
-                    new UpdateFeaturesOptions());
+                Map.of("metadata.version", new FeatureUpdate(metadataVersion, FeatureUpdate.UpgradeType.UPGRADE)),
+                new UpdateFeaturesOptions());
             updateResult.all().get();
             TestUtils.waitForCondition(() -> {
                 FinalizedVersionRange versionRange = admin.describeFeatures().featureMetadata().get().finalizedFeatures().get(MetadataVersion.FEATURE_NAME);
@@ -234,8 +234,8 @@ public class CordonedLogDirsIntegrationTest {
     }
 
     @ClusterTest(
-            brokers = 2,
-            controllers = 1
+        brokers = 2,
+        controllers = 1
     )
     public void testDecommissionBroker() throws ExecutionException, InterruptedException {
         // Make sure we don't try to decommission the controller
@@ -304,7 +304,7 @@ public class CordonedLogDirsIntegrationTest {
         }
         admin.alterPartitionReassignments(reassignments).all().get();
         TestUtils.waitForCondition(() ->
-                admin.listPartitionReassignments().reassignments().get().isEmpty(), 10_000, "Unable to complete partition reassignments");
+            admin.listPartitionReassignments().reassignments().get().isEmpty(), 10_000, "Unable to complete partition reassignments");
 
         TestUtils.waitForCondition(() -> {
             int replicas = 0;
@@ -320,8 +320,8 @@ public class CordonedLogDirsIntegrationTest {
 
     private Map<ConfigResource, Collection<AlterConfigOp>> cordonedDirsConfig(String value, ConfigResource cr) {
         return Map.of(
-                cr,
-                Set.of(new AlterConfigOp(new ConfigEntry(CORDONED_LOG_DIRS_CONFIG, value), AlterConfigOp.OpType.SET))
+            cr,
+            Set.of(new AlterConfigOp(new ConfigEntry(CORDONED_LOG_DIRS_CONFIG, value), AlterConfigOp.OpType.SET))
         );
     }
 

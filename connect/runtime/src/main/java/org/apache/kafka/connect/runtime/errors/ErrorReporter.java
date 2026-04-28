@@ -34,5 +34,6 @@ public interface ErrorReporter<T> extends AutoCloseable {
     Future<RecordMetadata> report(ProcessingContext<T> context);
 
     @Override
-    default void close() { }
+    default void close() {
+    }
 }

@@ -78,14 +78,14 @@ public class ShareGroupConfigTest {
         configs.put(ShareGroupConfig.SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_CONFIG, 3);
         configs.put(ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG, 2);
         assertEquals("group.share.delivery.count.limit must be greater than or equal to group.share.min.delivery.count.limit",
-                assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+            assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
 
         configs.clear();
         // test for when SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG is greater than SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_CONFIG
         configs.put(ShareGroupConfig.SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_CONFIG, 9);
         configs.put(ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG, 10);
         assertEquals("group.share.max.delivery.count.limit must be greater than or equal to group.share.delivery.count.limit",
-                assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+            assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
 
         configs.clear();
         // test for when SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG is out of bounds
@@ -104,14 +104,14 @@ public class ShareGroupConfigTest {
         configs.put(ShareGroupConfig.SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG, 200);
         configs.put(ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, 150);
         assertEquals("group.share.partition.max.record.locks must be greater than or equal to group.share.min.partition.max.record.locks",
-                assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+            assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
 
         configs.clear();
         // test for when SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG is greater than SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG
         configs.put(ShareGroupConfig.SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG, 3000);
         configs.put(ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, 4000);
         assertEquals("group.share.max.partition.max.record.locks must be greater than or equal to group.share.partition.max.record.locks",
-                assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+            assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
 
         configs.clear();
         // test for when SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG is out of bounds

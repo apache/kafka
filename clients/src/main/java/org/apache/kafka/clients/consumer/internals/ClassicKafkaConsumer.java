@@ -158,10 +158,10 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     ClassicKafkaConsumer(ConsumerConfig config, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
         try {
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
-                    GroupRebalanceConfig.ProtocolType.CONSUMER);
+                GroupRebalanceConfig.ProtocolType.CONSUMER);
             if (groupRebalanceConfig.groupId != null && groupRebalanceConfig.groupId.isEmpty()) {
                 throw new InvalidGroupIdException("The configured " + ConsumerConfig.GROUP_ID_CONFIG
-                        + " should not be an empty string or whitespace.");
+                    + " should not be an empty string or whitespace.");
             }
 
             this.groupId = Optional.ofNullable(groupRebalanceConfig.groupId);
@@ -186,9 +186,9 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer, metrics);
             this.subscriptions = createSubscriptionState(config, logContext);
             ClusterResourceListeners clusterResourceListeners = ClientUtils.configureClusterResourceListeners(
-                    metrics.reporters(),
-                    interceptorList,
-                    Arrays.asList(this.deserializers.keyDeserializer(), this.deserializers.valueDeserializer()));
+                metrics.reporters(),
+                interceptorList,
+                Arrays.asList(this.deserializers.keyDeserializer(), this.deserializers.valueDeserializer()));
             this.metadata = new ConsumerMetadata(config, subscriptions, logContext, clusterResourceListeners);
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
             this.metadata.bootstrap(addresses);
@@ -199,33 +199,33 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             ApiVersions apiVersions = new ApiVersions();
             this.client = createConsumerNetworkClient(config,
-                    metrics,
-                    logContext,
-                    apiVersions,
-                    time,
-                    metadata,
-                    fetchMetricsManager.throttleTimeSensor(),
-                    retryBackoffMs,
-                    clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null));
+                metrics,
+                logContext,
+                apiVersions,
+                time,
+                metadata,
+                fetchMetricsManager.throttleTimeSensor(),
+                retryBackoffMs,
+                clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null));
 
             this.assignors = ConsumerPartitionAssignor.getAssignorInstances(
-                    config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
-                    config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
+                config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
+                config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
             );
 
             // If the classic rebalance protocol is used, log message to guide users towards upgrading to the
             // next-generation consumer rebalance protocol
             if (groupId.isPresent()) {
                 boolean isStreamsConsumer = assignors.stream()
-                        .anyMatch(a -> a.getClass().getName().contains("StreamsPartitionAssignor"));
+                    .anyMatch(a -> a.getClass().getName().contains("StreamsPartitionAssignor"));
                 if (!isStreamsConsumer) {
                     log.info("\n" +
-                            "****************************************************************\n" +
-                            "* The consumer rebalance protocol (KIP-848) is production-ready!\n" +
-                            "* Set the consumer configuration {}={} to try it out.\n" +
-                            "* See https://kafka.apache.org/documentation/#consumer_rebalance_protocol\n" +
-                            "****************************************************************",
-                            ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
+                        "****************************************************************\n" +
+                        "* The consumer rebalance protocol (KIP-848) is production-ready!\n" +
+                        "* Set the consumer configuration {}={} to try it out.\n" +
+                        "* See https://kafka.apache.org/documentation/#consumer_rebalance_protocol\n" +
+                        "****************************************************************",
+                        ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
                 }
             }
 
@@ -236,43 +236,43 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 this.coordinator = null;
             } else {
                 this.coordinator = new ConsumerCoordinator(groupRebalanceConfig,
-                        logContext,
-                        this.client,
-                        assignors,
-                        this.metadata,
-                        this.subscriptions,
-                        metrics,
-                        CONSUMER_METRIC_GROUP_PREFIX,
-                        this.time,
-                        enableAutoCommit,
-                        config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
-                        this.interceptors,
-                        config.getBoolean(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED),
-                        clientTelemetryReporter);
-            }
-            this.fetcher = new Fetcher<>(
                     logContext,
                     this.client,
+                    assignors,
                     this.metadata,
                     this.subscriptions,
-                    fetchConfig,
-                    this.deserializers,
-                    fetchMetricsManager,
+                    metrics,
+                    CONSUMER_METRIC_GROUP_PREFIX,
                     this.time,
-                    apiVersions);
+                    enableAutoCommit,
+                    config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
+                    this.interceptors,
+                    config.getBoolean(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED),
+                    clientTelemetryReporter);
+            }
+            this.fetcher = new Fetcher<>(
+                logContext,
+                this.client,
+                this.metadata,
+                this.subscriptions,
+                fetchConfig,
+                this.deserializers,
+                fetchMetricsManager,
+                this.time,
+                apiVersions);
             this.offsetFetcher = new OffsetFetcher(logContext,
-                    client,
-                    metadata,
-                    subscriptions,
-                    time,
-                    retryBackoffMs,
-                    requestTimeoutMs,
-                    isolationLevel,
-                    apiVersions);
+                client,
+                metadata,
+                subscriptions,
+                time,
+                retryBackoffMs,
+                requestTimeoutMs,
+                isolationLevel,
+                apiVersions);
             this.topicMetadataFetcher = new TopicMetadataFetcher(logContext,
-                    client,
-                    retryBackoffMs,
-                    retryBackoffMaxMs);
+                client,
+                retryBackoffMs,
+                retryBackoffMaxMs);
 
             this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics);
 
@@ -295,14 +295,14 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     // visible for testing
     ClassicKafkaConsumer(LogContext logContext,
-                         Time time,
-                         ConsumerConfig config,
-                         Deserializer<K> keyDeserializer,
-                         Deserializer<V> valueDeserializer,
-                         KafkaClient client,
-                         SubscriptionState subscriptions,
-                         ConsumerMetadata metadata,
-                         List<ConsumerPartitionAssignor> assignors) {
+        Time time,
+        ConsumerConfig config,
+        Deserializer<K> keyDeserializer,
+        Deserializer<V> valueDeserializer,
+        KafkaClient client,
+        SubscriptionState subscriptions,
+        ConsumerMetadata metadata,
+        List<ConsumerPartitionAssignor> assignors) {
         this.log = logContext.logger(getClass());
         this.time = time;
         this.subscriptions = subscriptions;
@@ -382,14 +382,14 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.fetchMetricsManager = new FetchMetricsManager(metrics, fetchMetricsRegistry);
         ApiVersions apiVersions = new ApiVersions();
         FetchConfig fetchConfig = new FetchConfig(
-                minBytes,
-                maxBytes,
-                maxWaitMs,
-                fetchSize,
-                maxPollRecords,
-                checkCrcs,
-                rackId,
-                isolationLevel
+            minBytes,
+            maxBytes,
+            maxWaitMs,
+            fetchSize,
+            maxPollRecords,
+            checkCrcs,
+            rackId,
+            isolationLevel
         );
         this.fetcher = new Fetcher<>(
             logContext,
@@ -461,7 +461,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public void unregisterMetricFromSubscription(KafkaMetric metric) {
         if (!metrics().containsKey(metric.metricName())) {
             clientTelemetryReporter.ifPresent(reporter -> reporter.metricRemoval(metric));
-        }  else {
+        } else {
             log.debug("Skipping unregistration for metric {}. Existing consumer metrics cannot be removed.", metric.metricName());
         }
     }
@@ -578,7 +578,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         throwIfGroupIdNotDefined();
         if (pattern == null || pattern.toString().isEmpty())
             throw new IllegalArgumentException("Topic pattern to subscribe to cannot be " + (pattern == null ?
-                    "null" : "empty"));
+                "null" : "empty"));
 
         acquireAndEnsureOpen();
         try {
@@ -674,7 +674,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
                     if (fetch.records().isEmpty()) {
                         log.trace("Returning empty records from `poll()` "
-                                + "since the consumer's position has advanced for at least one topic partition");
+                            + "since the consumer's position has advanced for at least one topic partition");
                     }
 
                     return this.interceptors.onConsume(new ConsumerRecords<>(fetch.records(), fetch.nextOffsets()));
@@ -706,7 +706,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      */
     private Fetch<K, V> pollForFetches(Timer timer) {
         long pollTimeout = coordinator == null ? timer.remainingMs() :
-                Math.min(coordinator.timeToNextPoll(timer.currentTimeMs()), timer.remainingMs());
+            Math.min(coordinator.timeToNextPoll(timer.currentTimeMs()), timer.remainingMs());
 
         // if data is available already, return it immediately
         final Fetch<K, V> fetch = fetcher.collectFetch();
@@ -763,7 +763,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             offsets.forEach(this::updateLastSeenEpochIfNewer);
             if (!coordinator.commitOffsetsSync(new HashMap<>(offsets), time.timer(timeout))) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before successfully " +
-                        "committing offsets " + offsets);
+                    "committing offsets " + offsets);
             }
         } finally {
             kafkaConsumerMetrics.recordCommitSync(time.nanoseconds() - commitStart);
@@ -803,9 +803,9 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             log.info("Seeking to offset {} for partition {}", offset, partition);
             SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
-                    offset,
-                    Optional.empty(), // This will ensure we skip validation
-                    this.metadata.currentLeader(partition));
+                offset,
+                Optional.empty(), // This will ensure we skip validation
+                this.metadata.currentLeader(partition));
             this.subscriptions.seekUnvalidated(partition, newPosition);
         } finally {
             release();
@@ -823,15 +823,15 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             if (offsetAndMetadata.leaderEpoch().isPresent()) {
                 log.info("Seeking to offset {} for partition {} with epoch {}",
-                        offset, partition, offsetAndMetadata.leaderEpoch().get());
+                    offset, partition, offsetAndMetadata.leaderEpoch().get());
             } else {
                 log.info("Seeking to offset {} for partition {}", offset, partition);
             }
             Metadata.LeaderAndEpoch currentLeaderAndEpoch = this.metadata.currentLeader(partition);
             SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
-                    offsetAndMetadata.offset(),
-                    offsetAndMetadata.leaderEpoch(),
-                    currentLeaderAndEpoch);
+                offsetAndMetadata.offset(),
+                offsetAndMetadata.leaderEpoch(),
+                currentLeaderAndEpoch);
             this.updateLastSeenEpochIfNewer(partition, offsetAndMetadata);
             this.subscriptions.seekUnvalidated(partition, newPosition);
         } finally {
@@ -890,7 +890,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             } while (timer.notExpired());
 
             throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the position " +
-                    "for partition " + partition + " could be determined");
+                "for partition " + partition + " could be determined");
         } finally {
             release();
         }
@@ -911,8 +911,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             offsets = coordinator.fetchCommittedOffsets(partitions, time.timer(timeout));
             if (offsets == null) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the last " +
-                        "committed offset for partitions " + partitions + " could be determined. Try tuning " +
-                        ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG + " larger to relax the threshold.");
+                    "committed offset for partitions " + partitions + " could be determined. Try tuning " +
+                    ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG + " larger to relax the threshold.");
             } else {
                 offsets.forEach(this::updateLastSeenEpochIfNewer);
                 return offsets;
@@ -980,7 +980,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             log.debug("Pausing partitions {}", partitions);
-            for (TopicPartition partition: partitions) {
+            for (TopicPartition partition : partitions) {
                 subscriptions.pause(partition);
             }
         } finally {
@@ -993,7 +993,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             log.debug("Resuming partitions {}", partitions);
-            for (TopicPartition partition: partitions) {
+            for (TopicPartition partition : partitions) {
                 subscriptions.resume(partition);
             }
         } finally {
@@ -1025,7 +1025,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 // OffsetAndTimestamp is always positive.
                 if (entry.getValue() < 0)
                     throw new IllegalArgumentException("The target time for partition " + entry.getKey() + " is " +
-                            entry.getValue() + ". The target time cannot be negative.");
+                        entry.getValue() + ". The target time cannot be negative.");
             }
             return offsetFetcher.offsetsForTimes(timestampsToSearch, time.timer(timeout));
         } finally {
@@ -1252,8 +1252,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         final long threadId = thread.getId();
         if (threadId != currentThread.get() && !currentThread.compareAndSet(NO_CURRENT_THREAD, threadId))
             throw new ConcurrentModificationException("KafkaConsumer is not safe for multi-threaded access. " +
-                    "currentThread(name: " + thread.getName() + ", id: " + threadId + ")" +
-                    " otherThread(id: " + currentThread.get() + ")"
+                "currentThread(name: " + thread.getName() + ", id: " + threadId + ")" +
+                " otherThread(id: " + currentThread.get() + ")"
             );
         refcount.incrementAndGet();
     }
@@ -1269,13 +1269,13 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private void throwIfNoAssignorsConfigured() {
         if (assignors.isEmpty())
             throw new IllegalStateException("Must configure at least one partition assigner class name to " +
-                    ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG + " configuration property");
+                ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG + " configuration property");
     }
 
     private void throwIfGroupIdNotDefined() {
         if (groupId.isEmpty())
             throw new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
-                    "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
+                "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
     }
 
     private void updateLastSeenEpochIfNewer(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) {

@@ -59,10 +59,10 @@ public class StreamsRebalanceListenerTest {
     @BeforeEach
     public void setup() {
         streamsRebalanceListener = new StreamsRebalanceListener(time,
-                taskManager,
-                streamThread,
-                LoggerFactory.getLogger(StreamsRebalanceListenerTest.class),
-                assignmentErrorCode
+            taskManager,
+            streamThread,
+            LoggerFactory.getLogger(StreamsRebalanceListenerTest.class),
+            assignmentErrorCode
         );
     }
 

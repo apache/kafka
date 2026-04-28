@@ -72,8 +72,8 @@ public class TimestampedTupleForwarderTest {
 
         when(store.setFlushListener(null, sendOldValues)).thenReturn(false);
         if (sendOldValues) {
-            doNothing().when(context).forward(new Record<>("key1", new Change<>("newValue1",  "oldValue1", true), 0L));
-            doNothing().when(context).forward(new Record<>("key2", new Change<>("newValue2",  "oldValue2", false), 42L));
+            doNothing().when(context).forward(new Record<>("key1", new Change<>("newValue1", "oldValue1", true), 0L));
+            doNothing().when(context).forward(new Record<>("key2", new Change<>("newValue2", "oldValue2", false), 42L));
         } else {
             doNothing().when(context).forward(new Record<>("key1", new Change<>("newValue1", null, true), 0L));
             doNothing().when(context).forward(new Record<>("key2", new Change<>("newValue2", null, false), 42L));

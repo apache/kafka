@@ -58,10 +58,10 @@ public class ResponseJoinProcessorSupplier<KLeft, VLeft, VRight, VOut>
     private final boolean leftJoin;
 
     public ResponseJoinProcessorSupplier(final KTableValueGetterSupplier<KLeft, VLeft> valueGetterSupplier,
-                                         final Serializer<VLeft> valueSerializer,
-                                         final Supplier<String> valueHashSerdePseudoTopicSupplier,
-                                         final ValueJoiner<? super VLeft, ? super VRight, ? extends VOut> joiner,
-                                         final boolean leftJoin) {
+        final Serializer<VLeft> valueSerializer,
+        final Supplier<String> valueHashSerdePseudoTopicSupplier,
+        final ValueJoiner<? super VLeft, ? super VRight, ? extends VOut> joiner,
+        final boolean leftJoin) {
         this.valueGetterSupplier = valueGetterSupplier;
         constructionTimeValueSerializer = valueSerializer;
         this.valueHashSerdePseudoTopicSupplier = valueHashSerdePseudoTopicSupplier;
@@ -92,9 +92,9 @@ public class ResponseJoinProcessorSupplier<KLeft, VLeft, VRight, VOut>
 
                 final InternalProcessorContext<?, ?> internalProcessorContext = (InternalProcessorContext<?, ?>) context;
                 droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(
-                        Thread.currentThread().getName(),
-                        internalProcessorContext.taskId().toString(),
-                        internalProcessorContext.metrics()
+                    Thread.currentThread().getName(),
+                    internalProcessorContext.taskId().toString(),
+                    internalProcessorContext.metrics()
                 );
             }
 

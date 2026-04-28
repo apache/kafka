@@ -23,7 +23,7 @@ import java.util.function.Function;
  *                      as the start of the offsets retention period.
  */
 public record OffsetExpirationConditionImpl(
-        Function<OffsetAndMetadata, Long> baseTimestamp) implements OffsetExpirationCondition {
+    Function<OffsetAndMetadata, Long> baseTimestamp) implements OffsetExpirationCondition {
 
     /**
      * Determine whether an offset is expired. Older versions have an expire timestamp per partition. If this

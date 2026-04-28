@@ -23,7 +23,7 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 public class TableRepartitionMapNode<K, V> extends ProcessorGraphNode<K, V> implements VersionedSemanticsGraphNode {
 
     public TableRepartitionMapNode(final String nodeName,
-                                   final ProcessorParameters<K, V, ?, ?> processorParameters) {
+        final ProcessorParameters<K, V, ?, ?> processorParameters) {
         super(nodeName, processorParameters);
     }
 

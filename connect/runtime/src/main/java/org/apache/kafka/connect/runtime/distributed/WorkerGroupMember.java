@@ -73,12 +73,12 @@ public class WorkerGroupMember {
     private boolean stopped = false;
 
     public WorkerGroupMember(DistributedConfig config,
-                             String restUrl,
-                             ConfigBackingStore configStorage,
-                             WorkerRebalanceListener listener,
-                             Time time,
-                             String clientId,
-                             LogContext logContext) {
+            String restUrl,
+            ConfigBackingStore configStorage,
+            WorkerRebalanceListener listener,
+            Time time,
+            String clientId,
+            LogContext logContext) {
         try {
             this.clientId = clientId;
             this.log = logContext.logger(WorkerGroupMember.class);

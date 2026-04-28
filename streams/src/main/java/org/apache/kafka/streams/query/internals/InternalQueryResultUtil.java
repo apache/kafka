@@ -26,7 +26,8 @@ import org.apache.kafka.streams.query.QueryResult;
 @Unstable
 public final class InternalQueryResultUtil {
     // uninstantiable utility class
-    public InternalQueryResultUtil() {}
+    public InternalQueryResultUtil() {
+    }
 
     /**
      * Creates a new `QueryResult` preserving the execution info

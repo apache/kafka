@@ -39,7 +39,7 @@ public class TimeIntervalTransactionsGenerator implements TransactionGenerator {
     }
 
     TimeIntervalTransactionsGenerator(@JsonProperty("transactionIntervalMs") int intervalMs,
-                                      Time time) {
+        Time time) {
         if (intervalMs < 1) {
             throw new IllegalArgumentException("Cannot have a negative interval");
         }

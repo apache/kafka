@@ -252,7 +252,7 @@ public class TasksTest {
     @Test
     public void shouldRemovePendingTaskToClose() {
         final StreamTask activeTask1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_B_0))
-                .inState(State.SUSPENDED).build();
+            .inState(State.SUSPENDED).build();
         tasks.addPendingTasksToClose(List.of(activeTask1));
         assertTrue(tasks.pendingTasksToClose().contains(activeTask1));
 

@@ -123,20 +123,20 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @SuppressWarnings({"rawtypes", "this-escape", "checkstyle:ParameterNumber"})
     public StreamTask(final TaskId id,
-                      final Set<TopicPartition> inputPartitions,
-                      final ProcessorTopology topology,
-                      final Consumer<byte[], byte[]> mainConsumer,
-                      final TaskConfig config,
-                      final StreamsMetricsImpl streamsMetrics,
-                      final StateDirectory stateDirectory,
-                      final ThreadCache cache,
-                      final Time time,
-                      final ProcessorStateManager stateMgr,
-                      final RecordCollector recordCollector,
-                      final InternalProcessorContext processorContext,
-                      final LogContext logContext,
-                      final boolean processingThreadsEnabled
-                      ) {
+        final Set<TopicPartition> inputPartitions,
+        final ProcessorTopology topology,
+        final Consumer<byte[], byte[]> mainConsumer,
+        final TaskConfig config,
+        final StreamsMetricsImpl streamsMetrics,
+        final StateDirectory stateDirectory,
+        final ThreadCache cache,
+        final Time time,
+        final ProcessorStateManager stateMgr,
+        final RecordCollector recordCollector,
+        final InternalProcessorContext processorContext,
+        final LogContext logContext,
+        final boolean processingThreadsEnabled
+    ) {
         super(
             id,
             topology,
@@ -222,7 +222,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
         committedOffsets = new HashMap<>();
         highWatermark = new HashMap<>();
-        for (final TopicPartition topicPartition: inputPartitions) {
+        for (final TopicPartition topicPartition : inputPartitions) {
             committedOffsets.put(topicPartition, -1L);
             highWatermark.put(topicPartition, -1L);
         }
@@ -474,8 +474,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             leaderEpoch = offsetAndMetadata.leaderEpoch();
         }
         return Optional.of(new OffsetAndMetadata(offset,
-                leaderEpoch,
-                new TopicPartitionMetadata(partitionTime, processorContext.processorMetadata()).encode()));
+            leaderEpoch,
+            new TopicPartitionMetadata(partitionTime, processorContext.processorMetadata()).encode()));
     }
 
     private Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
@@ -493,11 +493,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     inputPartitions() : consumedOffsets.keySet();
 
                 return partitionsNeedCommit.stream()
-                        .map(partition -> findOffsetAndMetadata(partition)
-                                .map(offsetAndMetadata -> Map.entry(partition, offsetAndMetadata)))
-                        .filter(Optional::isPresent)
-                        .map(Optional::get)
-                        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                    .map(partition -> findOffsetAndMetadata(partition)
+                        .map(offsetAndMetadata -> Map.entry(partition, offsetAndMetadata)))
+                    .filter(Optional::isPresent)
+                    .map(Optional::get)
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
             case CLOSED:
                 throw new IllegalStateException("Illegal state " + state() + " while getting committable offsets for active task " + id);
@@ -636,7 +636,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         // closeClean in handleAssignment. We should throw if we detect this to force the TaskManager to closeDirty
         if (commitNeeded) {
             log.debug("Tried to close clean but there was pending uncommitted data, this means we failed to"
-                          + " commit and should close as dirty instead");
+                + " commit and should close as dirty instead");
             throw new TaskMigratedException("Tried to close dirty task as clean");
         }
     }
@@ -805,7 +805,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             // decreased to the threshold, we can then resume the consumption on this partition
             if (recordInfo.queue().size() <= maxBufferedSize) {
                 log.trace("Resume consumption for partition {}: buffered size {} is under the threshold {}",
-                        partition, recordInfo.queue().size(), maxBufferedSize);
+                    partition, recordInfo.queue().size(), maxBufferedSize);
                 partitionsToResume.add(partition);
             }
 
@@ -909,9 +909,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @SuppressWarnings("unchecked")
     @Override
     public void punctuate(final ProcessorNode<?, ?, ?, ?> node,
-                          final long timestamp,
-                          final PunctuationType type,
-                          final Punctuator punctuator) {
+        final long timestamp,
+        final PunctuationType type,
+        final Punctuator punctuator) {
         if (processorContext.currentNode() != null) {
             throw new IllegalStateException(String.format("%sCurrent node is not null", logPrefix));
         }
@@ -984,19 +984,19 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 final RecordCollector collector = ((RecordCollector.Supplier) processorContext).recordCollector();
                 for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
                     collector.send(
-                            deadLetterQueueRecord.key(),
-                            deadLetterQueueRecord.value(),
-                            node.name(),
-                            processorContext,
-                            deadLetterQueueRecord);
+                        deadLetterQueueRecord.key(),
+                        deadLetterQueueRecord.value(),
+                        node.name(),
+                        processorContext,
+                        deadLetterQueueRecord);
                 }
             }
 
             if (processingExceptionResponse.result() == ProcessingExceptionHandler.Result.FAIL) {
                 log.error("Processing exception handler is set to fail upon" +
-                        " a processing error. If you would rather have the streaming pipeline" +
-                        " continue after a processing error, please set the " +
-                        PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.");
+                    " a processing error. If you would rather have the streaming pipeline" +
+                    " continue after a processing error, please set the " +
+                    PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.");
 
                 throw createStreamsException(node.name(), processingException);
             } else {
@@ -1013,8 +1013,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @SuppressWarnings("unchecked")
     private void updateProcessorContext(final ProcessorNode<?, ?, ?, ?> currNode,
-                                        final long wallClockTime,
-                                        final ProcessorRecordContext recordContext) {
+        final long wallClockTime,
+        final ProcessorRecordContext recordContext) {
         processorContext.setRecordContext(recordContext);
         processorContext.setCurrentNode(currNode);
         processorContext.setSystemTimeMs(wallClockTime);
@@ -1388,7 +1388,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             // if we are in running state, just return the latest offset sentinel indicating
             // we should be at the end of the changelog
             return changelogPartitions().stream()
-                                        .collect(Collectors.toMap(Function.identity(), tp -> Task.LATEST_OFFSET));
+                .collect(Collectors.toMap(Function.identity(), tp -> Task.LATEST_OFFSET));
         } else {
             return Collections.unmodifiableMap(stateMgr.changelogOffsets());
         }
@@ -1446,8 +1446,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         private final DeserializationExceptionHandler defaultDeserializationExceptionHandler;
 
         private RecordQueueCreator(final LogContext logContext,
-                                   final TimestampExtractor defaultTimestampExtractor,
-                                   final DeserializationExceptionHandler defaultDeserializationExceptionHandler) {
+            final TimestampExtractor defaultTimestampExtractor,
+            final DeserializationExceptionHandler defaultDeserializationExceptionHandler) {
             this.logContext = logContext;
             this.defaultTimestampExtractor = defaultTimestampExtractor;
             this.defaultDeserializationExceptionHandler = defaultDeserializationExceptionHandler;
@@ -1457,21 +1457,21 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             final SourceNode<?, ?> source = topology.source(partition.topic());
             if (source == null) {
                 throw new TopologyException(
-                        "Topic " + partition.topic() + " is unknown to the topology. " +
-                                "This may happen if different KafkaStreams instances of the same application execute different Topologies. " +
-                                "Note that Topologies are only identical if all operators are added in the same order."
+                    "Topic " + partition.topic() + " is unknown to the topology. " +
+                        "This may happen if different KafkaStreams instances of the same application execute different Topologies. " +
+                        "Note that Topologies are only identical if all operators are added in the same order."
                 );
             }
 
             final TimestampExtractor sourceTimestampExtractor = source.timestampExtractor();
             final TimestampExtractor timestampExtractor = sourceTimestampExtractor != null ? sourceTimestampExtractor : defaultTimestampExtractor;
             return new RecordQueue(
-                    partition,
-                    source,
-                    timestampExtractor,
-                    defaultDeserializationExceptionHandler,
-                    processorContext,
-                    logContext
+                partition,
+                source,
+                timestampExtractor,
+                defaultDeserializationExceptionHandler,
+                processorContext,
+                logContext
             );
         }
     }

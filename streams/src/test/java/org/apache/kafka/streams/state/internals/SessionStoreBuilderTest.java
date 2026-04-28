@@ -67,10 +67,10 @@ public class SessionStoreBuilderTest {
         when(supplier.metricsScope()).thenReturn("metricScope");
 
         builder = new SessionStoreBuilder<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime());
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime());
     }
 
     @Test
@@ -109,8 +109,8 @@ public class SessionStoreBuilderTest {
     public void shouldHaveChangeLoggingStoreWhenLoggingEnabled() {
         setUp();
         final SessionStore<String, String> store = builder
-                .withLoggingEnabled(Collections.emptyMap())
-                .build();
+            .withLoggingEnabled(Collections.emptyMap())
+            .build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(store, instanceOf(MeteredSessionStore.class));
         assertThat(wrapped, instanceOf(ChangeLoggingSessionBytesStore.class));
@@ -121,9 +121,9 @@ public class SessionStoreBuilderTest {
     public void shouldHaveCachingAndChangeLoggingWhenBothEnabled() {
         setUp();
         final SessionStore<String, String> store = builder
-                .withLoggingEnabled(Collections.emptyMap())
-                .withCachingEnabled()
-                .build();
+            .withLoggingEnabled(Collections.emptyMap())
+            .withCachingEnabled()
+            .build();
         final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
         final WrappedStateStore changeLogging = (WrappedStateStore) caching.wrapped();
         assertThat(store, instanceOf(MeteredSessionStore.class));

@@ -213,7 +213,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * Instead of relying on the consumer to periodically commit consumed offsets, users can also control when records
  * should be considered as consumed and hence commit their offsets. This is useful when the consumption of the messages
  * is coupled with some processing logic and hence a message should not be considered as consumed until it is completed processing.
-
+ 
  * <p>
  * <pre>
  * {@code
@@ -586,8 +586,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *            won't be called in the consumer when the deserializer is passed in directly.
      */
     public KafkaConsumer(Properties properties,
-                         Deserializer<K> keyDeserializer,
-                         Deserializer<V> valueDeserializer) {
+        Deserializer<K> keyDeserializer,
+        Deserializer<V> valueDeserializer) {
         this(propsToMap(properties), keyDeserializer, valueDeserializer);
     }
 
@@ -605,10 +605,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *            won't be called in the consumer when the deserializer is passed in directly.
      */
     public KafkaConsumer(Map<String, Object> configs,
-                         Deserializer<K> keyDeserializer,
-                         Deserializer<V> valueDeserializer) {
+        Deserializer<K> keyDeserializer,
+        Deserializer<V> valueDeserializer) {
         this(new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
-                keyDeserializer, valueDeserializer);
+            keyDeserializer, valueDeserializer);
     }
 
     KafkaConsumer(ConsumerConfig config, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
@@ -616,14 +616,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     KafkaConsumer(LogContext logContext,
-                  Time time,
-                  ConsumerConfig config,
-                  Deserializer<K> keyDeserializer,
-                  Deserializer<V> valueDeserializer,
-                  KafkaClient client,
-                  SubscriptionState subscriptions,
-                  ConsumerMetadata metadata,
-                  List<ConsumerPartitionAssignor> assignors) {
+        Time time,
+        ConsumerConfig config,
+        Deserializer<K> keyDeserializer,
+        Deserializer<V> valueDeserializer,
+        KafkaClient client,
+        SubscriptionState subscriptions,
+        ConsumerMetadata metadata,
+        List<ConsumerPartitionAssignor> assignors) {
         delegate = CREATOR.create(
             logContext,
             time,
@@ -1480,7 +1480,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Get metadata about partitions for all topics that the user is authorized to view. This method will issue a
      * remote call to the server.
-
+     
      * @return The map of topics and its partitions
      *
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this

@@ -75,7 +75,7 @@ public class CoordinatorRecordJsonConvertersGenerator implements TypeClassGenera
             }
 
             default:
-                // Ignore
+            // Ignore
         }
     }
 

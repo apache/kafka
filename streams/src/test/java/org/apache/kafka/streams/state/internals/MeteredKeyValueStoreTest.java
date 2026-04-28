@@ -119,17 +119,17 @@ public class MeteredKeyValueStoreTest {
         final MockTime mockTime = new MockTime();
         this.mockTime = mockTime;
         metered = new MeteredKeyValueStore<>(
-                inner,
-                STORE_TYPE,
-                mockTime,
-                Serdes.String(),
-                Serdes.String()
+            inner,
+            STORE_TYPE,
+            mockTime,
+            Serdes.String(),
+            Serdes.String()
         );
         metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
         tags = mkMap(
-                mkEntry(THREAD_ID_TAG_KEY, threadId),
-                mkEntry("task-id", taskId.toString()),
-                mkEntry(STORE_TYPE + "-state-id", STORE_NAME)
+            mkEntry(THREAD_ID_TAG_KEY, threadId),
+            mkEntry("task-id", taskId.toString()),
+            mkEntry(STORE_TYPE + "-state-id", STORE_NAME)
         );
     }
 
@@ -345,7 +345,8 @@ public class MeteredKeyValueStoreTest {
         assertTrue((Double) commitMetric.metricValue() > 0);
     }
 
-    private interface CachedKeyValueStore extends KeyValueStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> { }
+    private interface CachedKeyValueStore extends KeyValueStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> {
+    }
 
     @SuppressWarnings("unchecked")
     @Test
@@ -398,7 +399,8 @@ public class MeteredKeyValueStoreTest {
             valueSerde
         );
         meteredStore.init(processorContext, meteredStore);
-        assertTrue(meteredStore.setFlushListener(record -> { }, false));
+        assertTrue(meteredStore.setFlushListener(record -> {
+        }, false));
 
         final RecordHeaders headers = new RecordHeaders();
         headers.add(headerKey, "new".getBytes(StandardCharsets.UTF_8));
@@ -646,9 +648,9 @@ public class MeteredKeyValueStoreTest {
 
     private List<MetricName> storeMetrics() {
         return metrics.metrics()
-                      .keySet()
-                      .stream()
-                      .filter(name -> name.group().equals(STORE_LEVEL_GROUP) && name.tags().equals(tags))
-                      .collect(Collectors.toList());
+            .keySet()
+            .stream()
+            .filter(name -> name.group().equals(STORE_LEVEL_GROUP) && name.tags().equals(tags))
+            .collect(Collectors.toList());
     }
 }

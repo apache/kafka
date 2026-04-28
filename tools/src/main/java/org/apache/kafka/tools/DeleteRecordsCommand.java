@@ -174,8 +174,8 @@ public class DeleteRecordsCommand {
                 .ofType(String.class);
 
             offsetJsonFileOpt = parser.accepts("offset-json-file", "REQUIRED: The JSON file with offset per partition. " +
-                    "The format to use is:\n" +
-                    "{\"partitions\":\n  [{\"topic\": \"foo\", \"partition\": 1, \"offset\": 1}],\n \"version\":1\n}")
+                "The format to use is:\n" +
+                "{\"partitions\":\n  [{\"topic\": \"foo\", \"partition\": 1, \"offset\": 1}],\n \"version\":1\n}")
                 .withRequiredArg()
                 .describedAs("Offset json file path")
                 .ofType(String.class);

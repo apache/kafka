@@ -145,7 +145,7 @@ class TxnPartitionEntry {
             int newSequence = inFlightBatch.baseSequence() - recordCount;
             if (newSequence < 0)
                 throw new IllegalStateException("Sequence number for batch with sequence " + inFlightBatch.baseSequence()
-                        + " for partition " + topicPartition + " is going to become negative: " + newSequence);
+                    + " for partition " + topicPartition + " is going to become negative: " + newSequence);
 
             inFlightBatch.resetProducerState(new ProducerIdAndEpoch(inFlightBatch.producerId(), inFlightBatch.producerEpoch()), newSequence);
         });
@@ -165,8 +165,8 @@ class TxnPartitionEntry {
         updatedSequence -= decrement;
         if (updatedSequence < 0) {
             throw new IllegalStateException(
-                    "Sequence number for partition " + topicPartition + " is going to become negative: "
-                            + updatedSequence);
+                "Sequence number for partition " + topicPartition + " is going to become negative: "
+                    + updatedSequence);
         }
         this.nextSequence = updatedSequence;
         return true;

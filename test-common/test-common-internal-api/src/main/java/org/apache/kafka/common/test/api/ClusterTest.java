@@ -41,21 +41,34 @@ import static org.apache.kafka.common.test.api.TestKitDefaults.DEFAULT_CONTROLLE
 @Tag("integration")
 public @interface ClusterTest {
     Type[] types() default {};
+
     int brokers() default 0;
+
     int controllers() default 0;
+
     int disksPerBroker() default 0;
+
     AutoStart autoStart() default AutoStart.DEFAULT;
+
     // The broker/controller listener name and SecurityProtocol configurations must
     // be kept in sync with the default values in TestKitNodes, as many tests
     // directly use TestKitNodes without relying on the ClusterTest annotation.
     SecurityProtocol brokerSecurityProtocol() default SecurityProtocol.PLAINTEXT;
+
     String brokerListener() default DEFAULT_BROKER_LISTENER_NAME;
+
     SecurityProtocol controllerSecurityProtocol() default SecurityProtocol.PLAINTEXT;
+
     String controllerListener() default DEFAULT_CONTROLLER_LISTENER_NAME;
+
     MetadataVersion metadataVersion() default MetadataVersion.IBP_4_4_IV0;
+
     ClusterConfigProperty[] serverProperties() default {};
+
     // users can add tags that they want to display in test
     String[] tags() default {};
+
     ClusterFeature[] features() default {};
+
     boolean standalone() default false;
 }

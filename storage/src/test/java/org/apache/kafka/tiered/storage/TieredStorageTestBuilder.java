@@ -80,11 +80,11 @@ public final class TieredStorageTestBuilder {
     }
 
     public TieredStorageTestBuilder createTopic(String topic,
-                                                int partitionCount,
-                                                int replicationFactor,
-                                                int maxBatchCountPerSegment,
-                                                Map<Integer, List<Integer>> replicaAssignment,
-                                                boolean enableRemoteLogStorage) {
+            int partitionCount,
+            int replicationFactor,
+            int maxBatchCountPerSegment,
+            Map<Integer, List<Integer>> replicaAssignment,
+            boolean enableRemoteLogStorage) {
         assertTrue(maxBatchCountPerSegment >= 1, "Segments size for topic " + topic + " needs to be >= 1");
         assertTrue(partitionCount >= 1, "Partition count for topic " + topic + " needs to be >= 1");
         assertTrue(replicationFactor >= 1, "Replication factor for topic " + topic + " needs to be >= 1");
@@ -97,8 +97,8 @@ public final class TieredStorageTestBuilder {
     }
 
     public TieredStorageTestBuilder createPartitions(String topic,
-                                                     int partitionCount,
-                                                     Map<Integer, List<Integer>> replicaAssignment) {
+            int partitionCount,
+            Map<Integer, List<Integer>> replicaAssignment) {
         assertTrue(partitionCount >= 1, "Partition count for topic " + topic + " needs to be >= 1");
         ExpandPartitionCountSpec spec = new ExpandPartitionCountSpec(topic, partitionCount, replicaAssignment);
         actions.add(new CreatePartitionsAction(spec));
@@ -106,8 +106,8 @@ public final class TieredStorageTestBuilder {
     }
 
     public TieredStorageTestBuilder updateTopicConfig(String topic,
-                                                      Map<String, String> configsToBeAdded,
-                                                      List<String> configsToBeDeleted) {
+            Map<String, String> configsToBeAdded,
+            List<String> configsToBeDeleted) {
         assertTrue(!configsToBeAdded.isEmpty() || !configsToBeDeleted.isEmpty(),
                 "Topic " + topic + " configs shouldn't be empty");
         actions.add(new UpdateTopicConfigAction(topic, configsToBeAdded, configsToBeDeleted));
@@ -120,8 +120,8 @@ public final class TieredStorageTestBuilder {
     }
 
     public TieredStorageTestBuilder produce(String topic,
-                                            int partition,
-                                            KeyValueSpec... keyValues) {
+            int partition,
+            KeyValueSpec... keyValues) {
         assertTrue(partition >= 0, "Partition must be >= 0");
         ProducableSpec spec = getOrCreateProducable(topic, partition);
         for (KeyValueSpec kv : keyValues) {
@@ -132,8 +132,8 @@ public final class TieredStorageTestBuilder {
     }
 
     public TieredStorageTestBuilder produceWithTimestamp(String topic,
-                                                         int partition,
-                                                         KeyValueSpec... keyValues) {
+            int partition,
+            KeyValueSpec... keyValues) {
         assertTrue(partition >= 0, "Partition must be >= 0");
         ProducableSpec spec = getOrCreateProducable(topic, partition);
         for (KeyValueSpec kv : keyValues) {
@@ -145,21 +145,21 @@ public final class TieredStorageTestBuilder {
     }
 
     public TieredStorageTestBuilder expectEarliestLocalOffsetInLogDirectory(String topic,
-                                                                            int partition,
-                                                                            long earliestLocalOffset) {
+            int partition,
+            long earliestLocalOffset) {
         assertTrue(earliestLocalOffset >= 0, "Record offset must be >= 0");
         getOrCreateProducable(topic, partition).setEarliestLocalLogOffset(earliestLocalOffset);
         return this;
     }
 
     public TieredStorageTestBuilder expectSegmentToBeOffloaded(int fromBroker,
-                                                               String topic,
-                                                               int partition,
-                                                               int baseOffset,
-                                                               KeyValueSpec... keyValues) {
+            String topic,
+            int partition,
+            int baseOffset,
+            KeyValueSpec... keyValues) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         List<ProducerRecord<String, String>> records = new ArrayList<>();
-        for (KeyValueSpec kv: keyValues) {
+        for (KeyValueSpec kv : keyValues) {
             records.add(new ProducerRecord<>(topic, partition, kv.getTimestamp(), kv.getKey(), kv.getValue()));
         }
         offloadables.computeIfAbsent(topicPartition, k -> new ArrayList<>())
@@ -168,10 +168,10 @@ public final class TieredStorageTestBuilder {
     }
 
     public TieredStorageTestBuilder consume(String topic,
-                                            int partition,
-                                            long fetchOffset,
-                                            int expectedTotalRecord,
-                                            int expectedRecordsFromSecondTier) {
+            int partition,
+            long fetchOffset,
+            int expectedTotalRecord,
+            int expectedRecordsFromSecondTier) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         assertTrue(partition >= 0, "Partition must be >= 0");
         assertTrue(fetchOffset >= 0, "Fetch offset must be >=0");
@@ -186,24 +186,24 @@ public final class TieredStorageTestBuilder {
     }
 
     public TieredStorageTestBuilder expectLeader(String topic,
-                                                 int partition,
-                                                 int brokerId,
-                                                 boolean electLeader) {
+            int partition,
+            int brokerId,
+            boolean electLeader) {
         actions.add(new ExpectLeaderAction(new TopicPartition(topic, partition), brokerId, electLeader));
         return this;
     }
 
     public TieredStorageTestBuilder expectFetchFromTieredStorage(int fromBroker,
-                                                                 String topic,
-                                                                 int partition,
-                                                                 int segmentFetchRequestCount) {
+            String topic,
+            int partition,
+            int segmentFetchRequestCount) {
         return expectFetchFromTieredStorage(fromBroker, topic, partition, new RemoteFetchCount(segmentFetchRequestCount));
     }
 
     public TieredStorageTestBuilder expectFetchFromTieredStorage(int fromBroker,
-                                                                 String topic,
-                                                                 int partition,
-                                                                 RemoteFetchCount remoteFetchRequestCount) {
+            String topic,
+            int partition,
+            RemoteFetchCount remoteFetchRequestCount) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         assertTrue(partition >= 0, "Partition must be >= 0");
         assertTrue(remoteFetchRequestCount.getSegmentFetchCountAndOp().count() >= 0, "Expected fetch count from tiered storage must be >= 0");
@@ -213,10 +213,10 @@ public final class TieredStorageTestBuilder {
     }
 
     public TieredStorageTestBuilder expectDeletionInRemoteStorage(int fromBroker,
-                                                                  String topic,
-                                                                  int partition,
-                                                                  LocalTieredStorageEvent.EventType eventType,
-                                                                  int eventCount) {
+            String topic,
+            int partition,
+            LocalTieredStorageEvent.EventType eventType,
+            int eventCount) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         deletables.computeIfAbsent(topicPartition, k -> new ArrayList<>())
                 .add(new DeletableSpec(fromBroker, eventType, eventCount));
@@ -229,19 +229,19 @@ public final class TieredStorageTestBuilder {
     }
 
     public TieredStorageTestBuilder expectLeaderEpochCheckpoint(int brokerId,
-                                                                String topic,
-                                                                int partition,
-                                                                int beginEpoch,
-                                                                long startOffset) {
+            String topic,
+            int partition,
+            int beginEpoch,
+            long startOffset) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         actions.add(new ExpectLeaderEpochCheckpointAction(brokerId, topicPartition, beginEpoch, startOffset));
         return this;
     }
 
     public TieredStorageTestBuilder expectListOffsets(String topic,
-                                                      int partition,
-                                                      OffsetSpec offsetSpec,
-                                                      EpochEntry epochEntry) {
+            int partition,
+            OffsetSpec offsetSpec,
+            EpochEntry epochEntry) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         actions.add(new ExpectListOffsetsAction(topicPartition, offsetSpec, epochEntry));
         return this;
@@ -263,52 +263,52 @@ public final class TieredStorageTestBuilder {
     }
 
     public TieredStorageTestBuilder eraseBrokerStorage(int brokerId,
-                                                       FilenameFilter filenameFilter,
-                                                       boolean isStopped) {
+            FilenameFilter filenameFilter,
+            boolean isStopped) {
         actions.add(new EraseBrokerStorageAction(brokerId, filenameFilter, isStopped));
         return this;
     }
 
     public TieredStorageTestBuilder expectEmptyRemoteStorage(String topic,
-                                                             int partition) {
+            int partition) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         actions.add(new ExpectEmptyRemoteStorageAction(topicPartition));
         return this;
     }
 
     public TieredStorageTestBuilder shrinkReplica(String topic,
-                                                  int partition,
-                                                  List<Integer> replicaIds) {
+            int partition,
+            List<Integer> replicaIds) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         actions.add(new ShrinkReplicaAction(topicPartition, replicaIds));
         return this;
     }
 
     public TieredStorageTestBuilder reassignReplica(String topic,
-                                                    int partition,
-                                                    List<Integer> replicaIds) {
+            int partition,
+            List<Integer> replicaIds) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         actions.add(new ReassignReplicaAction(topicPartition, replicaIds));
         return this;
     }
 
     public TieredStorageTestBuilder alterLogDir(String topic,
-                                                int partition,
-                                                int replicaIds) {
+            int partition,
+            int replicaIds) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         actions.add(new AlterLogDirAction(topicPartition, replicaIds));
         return this;
     }
 
     public TieredStorageTestBuilder expectUserTopicMappedToMetadataPartitions(String topic,
-                                                                              List<Integer> metadataPartitions) {
+            List<Integer> metadataPartitions) {
         actions.add(new ExpectUserTopicMappedToMetadataPartitionsAction(topic, metadataPartitions));
         return this;
     }
 
     public TieredStorageTestBuilder deleteRecords(String topic,
-                                                  int partition,
-                                                  long beforeOffset) {
+            int partition,
+            long beforeOffset) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         actions.add(new DeleteRecordsAction(topicPartition, beforeOffset, buildDeleteSegmentSpecList(topic)));
         return this;
@@ -324,11 +324,11 @@ public final class TieredStorageTestBuilder {
                 List<ProducerRecord<String, String>> recordsToProduce = new ArrayList<>(producableSpec.getRecords());
                 List<OffloadedSegmentSpec> offloadedSegmentSpecs =
                         offloadables.computeIfAbsent(topicPartition, k -> new ArrayList<>())
-                        .stream()
-                        .map(spec ->
-                                new OffloadedSegmentSpec(spec.sourceBrokerId(), topicPartition, spec.baseOffset(),
-                                        spec.records()))
-                        .toList();
+                                .stream()
+                                .map(spec ->
+                                        new OffloadedSegmentSpec(spec.sourceBrokerId(), topicPartition, spec.baseOffset(),
+                                                spec.records()))
+                                .toList();
                 ProduceAction action = new ProduceAction(topicPartition, offloadedSegmentSpecs, recordsToProduce,
                         producableSpec.getBatchSize(), producableSpec.getEarliestLocalLogOffset());
                 actions.add(action);
@@ -355,7 +355,7 @@ public final class TieredStorageTestBuilder {
     }
 
     private ProducableSpec getOrCreateProducable(String topic,
-                                                 int partition) {
+            int partition) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);
         return producables.computeIfAbsent(topicPartition,
                 k -> new ProducableSpec(new ArrayList<>(), defaultProducedBatchSize,
@@ -363,7 +363,7 @@ public final class TieredStorageTestBuilder {
     }
 
     private DeleteTopicAction buildDeleteTopicAction(String topic,
-                                                     boolean shouldDelete) {
+            boolean shouldDelete) {
         return new DeleteTopicAction(topic, buildDeleteSegmentSpecList(topic), shouldDelete);
     }
 

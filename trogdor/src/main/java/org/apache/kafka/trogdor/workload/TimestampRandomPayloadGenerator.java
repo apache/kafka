@@ -61,7 +61,7 @@ public class TimestampRandomPayloadGenerator implements PayloadGenerator {
 
     @JsonCreator
     public TimestampRandomPayloadGenerator(@JsonProperty("size") int size,
-                                           @JsonProperty("seed") long seed) {
+        @JsonProperty("seed") long seed) {
         this.size = size;
         this.seed = seed;
         if (size < Long.BYTES) {

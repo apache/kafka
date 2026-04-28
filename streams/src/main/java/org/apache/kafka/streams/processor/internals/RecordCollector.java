@@ -28,32 +28,32 @@ import java.util.Map;
 public interface RecordCollector {
 
     <K, V> void send(final String topic,
-                     final K key,
-                     final V value,
-                     final Headers headers,
-                     final Integer partition,
-                     final Long timestamp,
-                     final Serializer<K> keySerializer,
-                     final Serializer<V> valueSerializer,
-                     final String processorNodeId,
-                     final InternalProcessorContext<Void, Void> context);
+        final K key,
+        final V value,
+        final Headers headers,
+        final Integer partition,
+        final Long timestamp,
+        final Serializer<K> keySerializer,
+        final Serializer<V> valueSerializer,
+        final String processorNodeId,
+        final InternalProcessorContext<Void, Void> context);
 
     <K, V> void send(final String topic,
-                     final K key,
-                     final V value,
-                     final Headers headers,
-                     final Long timestamp,
-                     final Serializer<K> keySerializer,
-                     final Serializer<V> valueSerializer,
-                     final String processorNodeId,
-                     final InternalProcessorContext<Void, Void> context,
-                     final StreamPartitioner<? super K, ? super V> partitioner);
+        final K key,
+        final V value,
+        final Headers headers,
+        final Long timestamp,
+        final Serializer<K> keySerializer,
+        final Serializer<V> valueSerializer,
+        final String processorNodeId,
+        final InternalProcessorContext<Void, Void> context,
+        final StreamPartitioner<? super K, ? super V> partitioner);
 
     <K, V> void send(K key,
-                     V value,
-                     String processorNodeId,
-                     InternalProcessorContext<?, ?> context,
-                     ProducerRecord<byte[], byte[]> serializedRecord);
+        V value,
+        String processorNodeId,
+        InternalProcessorContext<?, ?> context,
+        ProducerRecord<byte[], byte[]> serializedRecord);
 
     /**
      * Initialize the internal {@link Producer}; note this function should be made idempotent

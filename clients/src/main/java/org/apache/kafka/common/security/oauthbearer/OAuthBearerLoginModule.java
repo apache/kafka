@@ -273,11 +273,11 @@ public class OAuthBearerLoginModule implements LoginModule {
 
     @Override
     public void initialize(Subject subject, CallbackHandler callbackHandler, Map<String, ?> sharedState,
-            Map<String, ?> options) {
+        Map<String, ?> options) {
         this.subject = Objects.requireNonNull(subject);
         if (!(Objects.requireNonNull(callbackHandler) instanceof AuthenticateCallbackHandler))
             throw new IllegalArgumentException(String.format("Callback handler must be castable to %s: %s",
-                    AuthenticateCallbackHandler.class.getName(), callbackHandler.getClass().getName()));
+                AuthenticateCallbackHandler.class.getName(), callbackHandler.getClass().getName()));
         this.callbackHandler = (AuthenticateCallbackHandler) callbackHandler;
     }
 
@@ -307,14 +307,14 @@ public class OAuthBearerLoginModule implements LoginModule {
 
         loginState = LoginState.LOGGED_IN_NOT_COMMITTED;
         log.debug("Login succeeded; invoke commit() to commit it; current committed token count={}",
-                committedTokenCount());
+            committedTokenCount());
         return true;
     }
 
     private void identifyToken() throws LoginException {
         OAuthBearerTokenCallback tokenCallback = new OAuthBearerTokenCallback();
         try {
-            callbackHandler.handle(new Callback[] {tokenCallback});
+            callbackHandler.handle(new Callback[]{tokenCallback});
         } catch (IOException | UnsupportedCallbackException e) {
             log.error(e.getMessage(), e);
             throw new LoginException("An internal error occurred while retrieving token from callback handler");
@@ -323,7 +323,7 @@ public class OAuthBearerLoginModule implements LoginModule {
         tokenRequiringCommit = tokenCallback.token();
         if (tokenCallback.errorCode() != null) {
             log.info("Login failed: {} : {} (URI={})", tokenCallback.errorCode(), tokenCallback.errorDescription(),
-                    tokenCallback.errorUri());
+                tokenCallback.errorUri());
             throw new LoginException(tokenCallback.errorDescription());
         }
     }
@@ -334,7 +334,7 @@ public class OAuthBearerLoginModule implements LoginModule {
     private void identifyExtensions() throws LoginException {
         SaslExtensionsCallback extensionsCallback = new SaslExtensionsCallback();
         try {
-            callbackHandler.handle(new Callback[] {extensionsCallback});
+            callbackHandler.handle(new Callback[]{extensionsCallback});
             extensionsRequiringCommit = extensionsCallback.extensions();
         } catch (IOException e) {
             log.error(e.getMessage(), e);
@@ -343,7 +343,7 @@ public class OAuthBearerLoginModule implements LoginModule {
             extensionsRequiringCommit = EMPTY_EXTENSIONS;
             log.debug("CallbackHandler {} does not support SASL extensions. No extensions will be added", callbackHandler.getClass().getName());
         }
-        if (extensionsRequiringCommit ==  null) {
+        if (extensionsRequiringCommit == null) {
             log.error("SASL Extensions cannot be null. Check whether your callback handler is explicitly setting them as null.");
             throw new LoginException("Extensions cannot be null.");
         }
@@ -353,14 +353,14 @@ public class OAuthBearerLoginModule implements LoginModule {
     public boolean logout() {
         if (loginState == LoginState.LOGGED_IN_NOT_COMMITTED)
             throw new IllegalStateException(
-                    "Cannot call logout() immediately after login(); need to first invoke commit() or abort()");
+                "Cannot call logout() immediately after login(); need to first invoke commit() or abort()");
         if (loginState != LoginState.COMMITTED) {
             log.debug("Nothing here to log out");
             return false;
         }
         if (myCommittedToken != null) {
             log.trace("Logging out my token; current committed token count = {}", committedTokenCount());
-            for (Iterator<Object> iterator = subject.getPrivateCredentials().iterator(); iterator.hasNext(); ) {
+            for (Iterator<Object> iterator = subject.getPrivateCredentials().iterator();iterator.hasNext();) {
                 Object privateCredential = iterator.next();
                 if (privateCredential == myCommittedToken) {
                     iterator.remove();

@@ -65,7 +65,7 @@ public class FeaturesImageNode implements MetadataNode {
         } else if (name.startsWith(FINALIZED_PREFIX)) {
             String key = name.substring(FINALIZED_PREFIX.length());
             return new MetadataLeafNode(
-                    image.finalizedVersions().getOrDefault(key, (short) 0).toString());
+                image.finalizedVersions().getOrDefault(key, (short) 0).toString());
         } else {
             return null;
         }

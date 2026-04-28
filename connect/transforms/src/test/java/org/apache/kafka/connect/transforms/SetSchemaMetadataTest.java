@@ -93,10 +93,10 @@ public class SetSchemaMetadataTest {
         final String fieldValue1 = "value1";
         final int fieldValue2 = 1;
         final Schema schema = SchemaBuilder.struct()
-                                      .name("my.orig.SchemaDefn")
-                                      .field(fieldName1, Schema.STRING_SCHEMA)
-                                      .field(fieldName2, Schema.INT32_SCHEMA)
-                                      .build();
+                .name("my.orig.SchemaDefn")
+                .field(fieldName1, Schema.STRING_SCHEMA)
+                .field(fieldName2, Schema.INT32_SCHEMA)
+                .build();
         final Struct value = new Struct(schema).put(fieldName1, fieldValue1).put(fieldName2, fieldValue2);
 
         final Map<String, String> props = new HashMap<>();
@@ -172,17 +172,17 @@ public class SetSchemaMetadataTest {
         final String fieldValue1 = "value1";
         final int fieldValue2 = 1;
         final Schema schema = SchemaBuilder.struct()
-                                      .name("my.orig.SchemaDefn")
-                                      .field(fieldName1, Schema.STRING_SCHEMA)
-                                      .field(fieldName2, Schema.INT32_SCHEMA)
-                                      .build();
+                .name("my.orig.SchemaDefn")
+                .field(fieldName1, Schema.STRING_SCHEMA)
+                .field(fieldName2, Schema.INT32_SCHEMA)
+                .build();
         final Struct value = new Struct(schema).put(fieldName1, fieldValue1).put(fieldName2, fieldValue2);
 
         final Schema newSchema = SchemaBuilder.struct()
-                                      .name("my.updated.SchemaDefn")
-                                      .field(fieldName1, Schema.STRING_SCHEMA)
-                                      .field(fieldName2, Schema.INT32_SCHEMA)
-                                      .build();
+                .name("my.updated.SchemaDefn")
+                .field(fieldName1, Schema.STRING_SCHEMA)
+                .field(fieldName2, Schema.INT32_SCHEMA)
+                .build();
 
         Struct newValue = (Struct) xform.updateSchemaIn(value, newSchema);
         assertMatchingSchema(newValue, newSchema);

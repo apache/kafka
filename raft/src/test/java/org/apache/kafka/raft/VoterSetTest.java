@@ -235,7 +235,7 @@ public final class VoterSetTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     void testEndpoints(boolean withDirectoryId) {
         Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(IntStream.of(1, 2, 3), withDirectoryId);
         VoterSet voterSet = VoterSet.fromMap(new HashMap<>(aVoterMap));

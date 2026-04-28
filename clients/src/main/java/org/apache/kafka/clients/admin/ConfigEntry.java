@@ -57,13 +57,13 @@ public class ConfigEntry {
      * @param synonyms Synonym configs in order of precedence
      */
     public ConfigEntry(String name,
-            String value,
-            ConfigSource source,
-            boolean isSensitive,
-            boolean isReadOnly,
-            List<ConfigSynonym> synonyms,
-            ConfigType type,
-            String documentation) {
+        String value,
+        ConfigSource source,
+        boolean isSensitive,
+        boolean isReadOnly,
+        List<ConfigSynonym> synonyms,
+        ConfigType type,
+        String documentation) {
         Objects.requireNonNull(name, "name should not be null");
         this.name = name;
         this.value = value;
@@ -124,7 +124,7 @@ public class ConfigEntry {
      * The list is empty if synonyms were not requested using {@link DescribeConfigsOptions#includeSynonyms(boolean)}
      */
     public List<ConfigSynonym> synonyms() {
-        return  synonyms;
+        return synonyms;
     }
 
     /**
@@ -151,13 +151,13 @@ public class ConfigEntry {
         ConfigEntry that = (ConfigEntry) o;
 
         return this.name.equals(that.name) &&
-                Objects.equals(this.value, that.value) &&
-                this.isSensitive == that.isSensitive &&
-                this.isReadOnly == that.isReadOnly &&
-                Objects.equals(this.source, that.source) &&
-                Objects.equals(this.synonyms, that.synonyms) &&
-                Objects.equals(this.type, that.type) &&
-                Objects.equals(this.documentation, that.documentation);
+            Objects.equals(this.value, that.value) &&
+            this.isSensitive == that.isSensitive &&
+            this.isReadOnly == that.isReadOnly &&
+            Objects.equals(this.source, that.source) &&
+            Objects.equals(this.synonyms, that.synonyms) &&
+            Objects.equals(this.type, that.type) &&
+            Objects.equals(this.documentation, that.documentation);
     }
 
     @Override
@@ -182,15 +182,15 @@ public class ConfigEntry {
     @Override
     public String toString() {
         return "ConfigEntry(" +
-                "name=" + name +
-                ", value=" + (isSensitive ? "Redacted" : value) +
-                ", source=" + source +
-                ", isSensitive=" + isSensitive +
-                ", isReadOnly=" + isReadOnly +
-                ", synonyms=" + synonyms +
-                ", type=" + type +
-                ", documentation=" + documentation +
-                ")";
+            "name=" + name +
+            ", value=" + (isSensitive ? "Redacted" : value) +
+            ", source=" + source +
+            ", isSensitive=" + isSensitive +
+            ", isReadOnly=" + isReadOnly +
+            ", synonyms=" + synonyms +
+            ", type=" + type +
+            ", documentation=" + documentation +
+            ")";
     }
 
     /**
@@ -284,10 +284,10 @@ public class ConfigEntry {
         @Override
         public String toString() {
             return "ConfigSynonym(" +
-                    "name=" + name +
-                    ", value=" + value +
-                    ", source=" + source +
-                    ")";
+                "name=" + name +
+                ", value=" + value +
+                ", source=" + source +
+                ")";
         }
     }
 }

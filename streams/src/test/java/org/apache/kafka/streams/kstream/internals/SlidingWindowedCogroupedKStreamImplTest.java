@@ -78,14 +78,14 @@ public class SlidingWindowedCogroupedKStreamImplTest {
             props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, StreamsConfig.DSL_STORE_FORMAT_DEFAULT);
         }
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed
-                .with(Serdes.String(), Serdes.String()));
+            .with(Serdes.String(), Serdes.String()));
         final KStream<String, String> stream2 = builder.stream(TOPIC2, Consumed
-                .with(Serdes.String(), Serdes.String()));
+            .with(Serdes.String(), Serdes.String()));
 
         groupedStream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
         final KGroupedStream<String, String> groupedStream2 = stream2.groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
         final CogroupedKStream<String, String> cogroupedStream = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER)
-                .cogroup(groupedStream2, MockAggregator.TOSTRING_REMOVER);
+            .cogroup(groupedStream2, MockAggregator.TOSTRING_REMOVER);
         windowedCogroupedStream = cogroupedStream.windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(
             WINDOW_SIZE_MS), ofMillis(2000L)));
     }
@@ -94,56 +94,56 @@ public class SlidingWindowedCogroupedKStreamImplTest {
     @ValueSource(booleans = {false, true})
     public void shouldNotHaveNullInitializerOnAggregate(final boolean withHeaders) {
         setup(withHeaders);
-        assertThrows(NullPointerException.class, () ->  windowedCogroupedStream.aggregate(null));
+        assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(null));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotHaveNullMaterializedOnTwoOptionAggregate(final boolean withHeaders) {
         setup(withHeaders);
-        assertThrows(NullPointerException.class, () ->  windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, (Materialized<String, String, WindowStore<Bytes, byte[]>>) null));
+        assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, (Materialized<String, String, WindowStore<Bytes, byte[]>>) null));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotHaveNullNamedTwoOptionOnAggregate(final boolean withHeaders) {
         setup(withHeaders);
-        assertThrows(NullPointerException.class, () ->  windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, (Named) null));
+        assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, (Named) null));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotHaveNullInitializerTwoOptionNamedOnAggregate(final boolean withHeaders) {
         setup(withHeaders);
-        assertThrows(NullPointerException.class, () ->  windowedCogroupedStream.aggregate(null, Named.as("test")));
+        assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(null, Named.as("test")));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotHaveNullInitializerTwoOptionMaterializedOnAggregate(final boolean withHeaders) {
         setup(withHeaders);
-        assertThrows(NullPointerException.class, () ->  windowedCogroupedStream.aggregate(null, Materialized.as("test")));
+        assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(null, Materialized.as("test")));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotHaveNullInitializerThreeOptionOnAggregate(final boolean withHeaders) {
         setup(withHeaders);
-        assertThrows(NullPointerException.class, () ->  windowedCogroupedStream.aggregate(null, Named.as("test"), Materialized.as("test")));
+        assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(null, Named.as("test"), Materialized.as("test")));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotHaveNullMaterializedOnAggregate(final boolean withHeaders) {
         setup(withHeaders);
-        assertThrows(NullPointerException.class, () ->  windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, Named.as("Test"), null));
+        assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, Named.as("Test"), null));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldNotHaveNullNamedOnAggregate(final boolean withHeaders) {
         setup(withHeaders);
-        assertThrows(NullPointerException.class, () ->  windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, null, Materialized.as("test")));
+        assertThrows(NullPointerException.class, () -> windowedCogroupedStream.aggregate(MockInitializer.STRING_INIT, null, Materialized.as("test")));
     }
 
     @ParameterizedTest
@@ -152,23 +152,23 @@ public class SlidingWindowedCogroupedKStreamImplTest {
         setup(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed
-                .with(Serdes.String(), Serdes.String()));
+            .with(Serdes.String(), Serdes.String()));
         groupedStream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
         groupedStream.cogroup(MockAggregator.TOSTRING_ADDER)
-                .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(WINDOW_SIZE_MS), ofMillis(2000L)))
-                .aggregate(MockInitializer.STRING_INIT, Named.as("foo"));
+            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(WINDOW_SIZE_MS), ofMillis(2000L)))
+            .aggregate(MockInitializer.STRING_INIT, Named.as("foo"));
 
         assertThat(builder.build().describe().toString(), equalTo(
-                "Topologies:\n" +
-                        "   Sub-topology: 0\n" +
-                        "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n" +
-                        "      --> foo-cogroup-agg-0\n" +
-                        "    Processor: foo-cogroup-agg-0 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
-                        "      --> foo-cogroup-merge\n" +
-                        "      <-- KSTREAM-SOURCE-0000000000\n" +
-                        "    Processor: foo-cogroup-merge (stores: [])\n" +
-                        "      --> none\n" +
-                        "      <-- foo-cogroup-agg-0\n\n"));
+            "Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n" +
+                "      --> foo-cogroup-agg-0\n" +
+                "    Processor: foo-cogroup-agg-0 (stores: [COGROUPKSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
+                "      --> foo-cogroup-merge\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Processor: foo-cogroup-merge (stores: [])\n" +
+                "      --> none\n" +
+                "      <-- foo-cogroup-agg-0\n\n"));
     }
 
     @ParameterizedTest
@@ -176,14 +176,14 @@ public class SlidingWindowedCogroupedKStreamImplTest {
     public void slidingWindowAggregateStreamsTest(final boolean withHeaders) {
         setup(withHeaders);
         final KTable<Windowed<String>, String> customers = windowedCogroupedStream.aggregate(
-                MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));
+            MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));
         customers.toStream().to(OUTPUT);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(
-                    TOPIC, new StringSerializer(), new StringSerializer());
+                TOPIC, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<Windowed<String>, String> testOutputTopic = driver.createOutputTopic(
-                    OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer(), WINDOW_SIZE_MS), new StringDeserializer());
+                OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer(), WINDOW_SIZE_MS), new StringDeserializer());
 
             testInputTopic.pipeInput("k1", "A", 500);
             testInputTopic.pipeInput("k2", "A", 500);
@@ -236,15 +236,15 @@ public class SlidingWindowedCogroupedKStreamImplTest {
         setup(withHeaders);
 
         final KTable<Windowed<String>, String> customers = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER)
-                .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(WINDOW_SIZE_MS), ofMillis(2000L))).aggregate(
-                        MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));
+            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(WINDOW_SIZE_MS), ofMillis(2000L))).aggregate(
+            MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));
         customers.toStream().to(OUTPUT);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic(
-                    TOPIC, new StringSerializer(), new StringSerializer());
+                TOPIC, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<Windowed<String>, String> testOutputTopic = driver.createOutputTopic(
-                    OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer(), WINDOW_SIZE_MS), new StringDeserializer());
+                OUTPUT, new TimeWindowedDeserializer<>(new StringDeserializer(), WINDOW_SIZE_MS), new StringDeserializer());
 
             testInputTopic.pipeInput("k1", "A", 500);
             testInputTopic.pipeInput("k2", "A", 500);
@@ -281,12 +281,12 @@ public class SlidingWindowedCogroupedKStreamImplTest {
     }
 
     private void assertOutputKeyValueTimestamp(final TestOutputTopic<Windowed<String>, String> outputTopic,
-                                               final String expectedKey,
-                                               final String expectedValue,
-                                               final long expectedTimestamp) {
+        final String expectedKey,
+        final String expectedValue,
+        final long expectedTimestamp) {
         final TestRecord<Windowed<String>, String> realRecord = outputTopic.readRecord();
         final TestRecord<String, String> nonWindowedRecord = new TestRecord<>(
-                realRecord.getKey().key(), realRecord.getValue(), null, realRecord.timestamp());
+            realRecord.getKey().key(), realRecord.getValue(), null, realRecord.timestamp());
         final TestRecord<String, String> testRecord = new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp);
         assertThat(nonWindowedRecord, equalTo(testRecord));
     }

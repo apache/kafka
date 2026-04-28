@@ -36,7 +36,7 @@ public class NamedInternalTest {
 
         @Override
         public String newStoreName(final String prefix) {
-            return prefix + "STORE-"  + index++;
+            return prefix + "STORE-" + index++;
         }
 
     }

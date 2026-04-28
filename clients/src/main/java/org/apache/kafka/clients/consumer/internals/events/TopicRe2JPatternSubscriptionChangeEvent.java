@@ -31,8 +31,8 @@ public class TopicRe2JPatternSubscriptionChangeEvent extends SubscriptionChangeE
     private final SubscriptionPattern pattern;
 
     public TopicRe2JPatternSubscriptionChangeEvent(final SubscriptionPattern pattern,
-                                                   final Optional<ConsumerRebalanceListener> listener,
-                                                   final long deadlineMs) {
+        final Optional<ConsumerRebalanceListener> listener,
+        final long deadlineMs) {
         super(Type.TOPIC_RE2J_PATTERN_SUBSCRIPTION_CHANGE, listener, deadlineMs);
         this.pattern = pattern;
     }

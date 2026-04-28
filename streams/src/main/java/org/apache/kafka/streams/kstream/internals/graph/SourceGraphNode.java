@@ -33,8 +33,8 @@ public abstract class SourceGraphNode<K, V> extends GraphNode {
     private final ConsumedInternal<K, V> consumedInternal;
 
     public SourceGraphNode(final String nodeName,
-                           final Collection<String> topicNames,
-                           final ConsumedInternal<K, V> consumedInternal) {
+        final Collection<String> topicNames,
+        final ConsumedInternal<K, V> consumedInternal) {
         super(nodeName);
 
         this.topicNames = new HashSet<>(topicNames);
@@ -43,8 +43,8 @@ public abstract class SourceGraphNode<K, V> extends GraphNode {
     }
 
     public SourceGraphNode(final String nodeName,
-                           final Pattern topicPattern,
-                           final ConsumedInternal<K, V> consumedInternal) {
+        final Pattern topicPattern,
+        final ConsumedInternal<K, V> consumedInternal) {
 
         super(nodeName);
 

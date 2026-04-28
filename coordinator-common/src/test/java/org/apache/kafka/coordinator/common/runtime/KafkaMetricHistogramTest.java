@@ -34,19 +34,19 @@ public class KafkaMetricHistogramTest {
     public void testStats() {
         try (Metrics metrics = new Metrics()) {
             KafkaMetricHistogram histogram = KafkaMetricHistogram.newLatencyHistogram(
-                suffix -> metrics.metricName(
-                    "test-metric-" + suffix,
-                    "test-group",
-                    "test description"
-                )
+                    suffix -> metrics.metricName(
+                            "test-metric-" + suffix,
+                            "test-group",
+                            "test description"
+                    )
             );
 
             Set<MetricName> expected = Set.of(
-                new MetricName("test-metric-max", "test-group", "test description", Map.of()),
-                new MetricName("test-metric-p999", "test-group", "test description", Map.of()),
-                new MetricName("test-metric-p99", "test-group", "test description", Map.of()),
-                new MetricName("test-metric-p95", "test-group", "test description", Map.of()),
-                new MetricName("test-metric-p50", "test-group", "test description", Map.of())
+                    new MetricName("test-metric-max", "test-group", "test description", Map.of()),
+                    new MetricName("test-metric-p999", "test-group", "test description", Map.of()),
+                    new MetricName("test-metric-p99", "test-group", "test description", Map.of()),
+                    new MetricName("test-metric-p95", "test-group", "test description", Map.of()),
+                    new MetricName("test-metric-p50", "test-group", "test description", Map.of())
             );
             Set<MetricName> actual = histogram.stats().stream().map(CompoundStat.NamedMeasurable::name).collect(Collectors.toSet());
             assertEquals(expected, actual);

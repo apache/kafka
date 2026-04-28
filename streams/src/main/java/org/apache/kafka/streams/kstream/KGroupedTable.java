@@ -254,8 +254,8 @@ public interface KGroupedTable<K, V> {
      * latest (rolling) aggregate for each key
      */
     KTable<K, V> reduce(final Reducer<V> adder,
-                        final Reducer<V> subtractor,
-                        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
+        final Reducer<V> subtractor,
+        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
 
 
     /**
@@ -329,9 +329,9 @@ public interface KGroupedTable<K, V> {
      * latest (rolling) aggregate for each key
      */
     KTable<K, V> reduce(final Reducer<V> adder,
-                        final Reducer<V> subtractor,
-                        final Named named,
-                        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
+        final Reducer<V> subtractor,
+        final Named named,
+        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Combine the value of records of the original {@link KTable} that got {@link KTable#groupBy(KeyValueMapper)
@@ -387,7 +387,7 @@ public interface KGroupedTable<K, V> {
      * latest (rolling) aggregate for each key
      */
     KTable<K, V> reduce(final Reducer<V> adder,
-                        final Reducer<V> subtractor);
+        final Reducer<V> subtractor);
 
     /**
      * Aggregate the value of records of the original {@link KTable} that got {@link KTable#groupBy(KeyValueMapper)
@@ -469,9 +469,9 @@ public interface KGroupedTable<K, V> {
      * latest (rolling) aggregate for each key
      */
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
-                                 final Aggregator<? super K, ? super V, VR> adder,
-                                 final Aggregator<? super K, ? super V, VR> subtractor,
-                                 final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+        final Aggregator<? super K, ? super V, VR> adder,
+        final Aggregator<? super K, ? super V, VR> subtractor,
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
 
 
     /**
@@ -555,10 +555,10 @@ public interface KGroupedTable<K, V> {
      * latest (rolling) aggregate for each key
      */
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
-                                 final Aggregator<? super K, ? super V, VR> adder,
-                                 final Aggregator<? super K, ? super V, VR> subtractor,
-                                 final Named named,
-                                 final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+        final Aggregator<? super K, ? super V, VR> adder,
+        final Aggregator<? super K, ? super V, VR> subtractor,
+        final Named named,
+        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Aggregate the value of records of the original {@link KTable} that got {@link KTable#groupBy(KeyValueMapper)
@@ -626,8 +626,8 @@ public interface KGroupedTable<K, V> {
      * latest (rolling) aggregate for each key
      */
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
-                                 final Aggregator<? super K, ? super V, VR> adder,
-                                 final Aggregator<? super K, ? super V, VR> subtractor);
+        final Aggregator<? super K, ? super V, VR> adder,
+        final Aggregator<? super K, ? super V, VR> subtractor);
 
 
     /**
@@ -697,7 +697,7 @@ public interface KGroupedTable<K, V> {
      * latest (rolling) aggregate for each key
      */
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
-                                 final Aggregator<? super K, ? super V, VR> adder,
-                                 final Aggregator<? super K, ? super V, VR> subtractor,
-                                 final Named named);
+        final Aggregator<? super K, ? super V, VR> adder,
+        final Aggregator<? super K, ? super V, VR> subtractor,
+        final Named named);
 }

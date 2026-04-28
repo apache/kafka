@@ -576,6 +576,7 @@ public class GroupCoordinatorServiceTest {
             future.get(5, TimeUnit.SECONDS)
         );
     }
+
     @Test
     public void testStreamsGroupHeartbeatFailsForUnsupportedFeatures() throws Exception {
 
@@ -3682,9 +3683,9 @@ public class GroupCoordinatorServiceTest {
         ReadShareGroupStateSummaryRequestData readShareGroupStateSummaryRequestData = new ReadShareGroupStateSummaryRequestData()
             .setGroupId("share-group-id")
             .setTopics(List.of(new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
-                    .setTopicId(TOPIC_ID)
-                    .setPartitions(List.of(new ReadShareGroupStateSummaryRequestData.PartitionData()
-                        .setPartition(partition)))));
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new ReadShareGroupStateSummaryRequestData.PartitionData()
+                    .setPartition(partition)))));
 
         DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup responseData = new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
             .setGroupId("share-group-id")
@@ -3714,7 +3715,7 @@ public class GroupCoordinatorServiceTest {
         ReadShareGroupStateSummaryResult readShareGroupStateSummaryResult = ReadShareGroupStateSummaryResult.from(readShareGroupStateSummaryResponseData);
         when(persister.readSummary(
             ArgumentMatchers.eq(readShareGroupStateSummaryParameters)
-            )).thenReturn(CompletableFuture.completedFuture(readShareGroupStateSummaryResult));
+        )).thenReturn(CompletableFuture.completedFuture(readShareGroupStateSummaryResult));
 
         CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> future =
             service.describeShareGroupOffsets(requestContext(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS), requestData);
@@ -4981,7 +4982,7 @@ public class GroupCoordinatorServiceTest {
                     .setTopicId(badTopicId)
                     .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
                     .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
-                    ),
+                ),
                 null
             );
 
@@ -5201,7 +5202,7 @@ public class GroupCoordinatorServiceTest {
             .setGroupId(groupId)
             .setTopics(List.of(
                 new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
-                .setTopicName(TOPIC_NAME),
+                    .setTopicName(TOPIC_NAME),
                 new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
                     .setTopicName(badTopicName)
             ));
@@ -5308,7 +5309,7 @@ public class GroupCoordinatorServiceTest {
                     .setTopicId(TOPIC_ID)
                     .setPartitions(List.of(
                         new DeleteShareGroupStateResponseData.PartitionResult()
-                        .setPartition(partition)
+                            .setPartition(partition)
                             .setErrorCode(Errors.NONE.code())
                             .setErrorMessage(null)
                     ))
@@ -5721,8 +5722,8 @@ public class GroupCoordinatorServiceTest {
             .setTopics(null);
 
         AlterShareGroupOffsetsResponseData response = new AlterShareGroupOffsetsResponseData()
-                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
-                .setErrorMessage(Errors.COORDINATOR_NOT_AVAILABLE.message());
+            .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            .setErrorMessage(Errors.COORDINATOR_NOT_AVAILABLE.message());
 
         CompletableFuture<AlterShareGroupOffsetsResponseData> future = service.alterShareGroupOffsets(
             requestContext(ApiKeys.ALTER_SHARE_GROUP_OFFSETS),

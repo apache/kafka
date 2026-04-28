@@ -141,13 +141,13 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
                 log.debug("Refreshing JWKs from {} as no suitable verification key for JWS w/ header {} was found in {}", refreshingHttpsJwks.getLocation(), jws.getHeaders().getFullHeaderAsJsonString(), jwks);
 
             String sb = "Unable to find a suitable verification key for JWS w/ header " + jws.getHeaders().getFullHeaderAsJsonString() +
-                    " from JWKs " + jwks + " obtained from " +
-                    refreshingHttpsJwks.getLocation();
+                " from JWKs " + jwks + " obtained from " +
+                refreshingHttpsJwks.getLocation();
             throw new UnresolvableKeyException(sb);
         } catch (JoseException | IOException e) {
             String sb = "Unable to find a suitable verification key for JWS w/ header " + jws.getHeaders().getFullHeaderAsJsonString() +
-                    " due to an unexpected exception (" + e + ") while obtaining or using keys from JWKS endpoint at " +
-                    refreshingHttpsJwks.getLocation();
+                " due to an unexpected exception (" + e + ") while obtaining or using keys from JWKS endpoint at " +
+                refreshingHttpsJwks.getLocation();
             throw new UnresolvableKeyException(sb, e);
         }
     }

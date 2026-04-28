@@ -39,8 +39,8 @@ public class NoOpRemoteLogMetadataManager implements RemoteLogMetadataManager {
 
     @Override
     public Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(TopicIdPartition topicIdPartition,
-                                                                       int epochForOffset,
-                                                                       long offset) {
+           int epochForOffset,
+           long offset) {
         return Optional.empty();
     }
 
@@ -61,13 +61,13 @@ public class NoOpRemoteLogMetadataManager implements RemoteLogMetadataManager {
 
     @Override
     public Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicIdPartition topicIdPartition,
-                                                                    int leaderEpoch) {
+           int leaderEpoch) {
         return Collections.emptyIterator();
     }
 
     @Override
     public void onPartitionLeadershipChanges(Set<TopicIdPartition> leaderPartitions,
-                                             Set<TopicIdPartition> followerPartitions) {
+           Set<TopicIdPartition> followerPartitions) {
     }
 
     @Override

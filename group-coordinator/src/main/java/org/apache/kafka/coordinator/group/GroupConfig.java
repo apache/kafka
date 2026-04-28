@@ -830,8 +830,8 @@ public final class GroupConfig extends AbstractConfig {
         int heartbeat = rawHeartbeat != null ? Integer.parseInt(rawHeartbeat.toString()) : defaultHeartbeat;
         if (session <= heartbeat) {
             LOG.warn("The effective {} ({}) for group '{}' is not greater than {} ({}). "
-                    + "Check that the broker-level min/max bounds for session timeout "
-                    + "and heartbeat interval do not overlap.",
+                + "Check that the broker-level min/max bounds for session timeout "
+                + "and heartbeat interval do not overlap.",
                 sessionKey, session, groupId, heartbeatKey, heartbeat);
         }
     }
@@ -859,12 +859,12 @@ public final class GroupConfig extends AbstractConfig {
         int value = Integer.parseInt(rawValue.toString());
         if (value < min) {
             LOG.warn("The group config '{}' for group '{}' has value {} which is below the broker's " +
-                    "allowed minimum {}. The effective value will be capped to {}.",
+                "allowed minimum {}. The effective value will be capped to {}.",
                 key, groupId, value, min, min);
             props.put(key, min);
         } else if (value > max) {
             LOG.warn("The group config '{}' for group '{}' has value {} which exceeds the broker's " +
-                    "allowed maximum {}. The effective value will be capped to {}.",
+                "allowed maximum {}. The effective value will be capped to {}.",
                 key, groupId, value, max, max);
             props.put(key, max);
         }
@@ -891,7 +891,7 @@ public final class GroupConfig extends AbstractConfig {
         int value = Integer.parseInt(rawValue.toString());
         if (value > max) {
             LOG.warn("The group config '{}' for group '{}' has value {} which exceeds the broker's " +
-                    "allowed maximum {}. The effective value will be capped to {}.",
+                "allowed maximum {}. The effective value will be capped to {}.",
                 key, groupId, value, max, max);
             props.put(key, max);
         }
@@ -918,7 +918,7 @@ public final class GroupConfig extends AbstractConfig {
         int value = Integer.parseInt(rawValue.toString());
         if (value < min) {
             LOG.warn("The group config '{}' for group '{}' has value {} which is below the broker's " +
-                    "allowed minimum {}. The effective value will be capped to {}.",
+                "allowed minimum {}. The effective value will be capped to {}.",
                 key, groupId, value, min, min);
             props.put(key, min);
         }

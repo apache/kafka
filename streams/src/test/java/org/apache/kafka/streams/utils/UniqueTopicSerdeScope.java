@@ -36,8 +36,8 @@ public class UniqueTopicSerdeScope {
     private final Map<String, Class<?>> topicTypeRegistry = new TreeMap<>();
 
     public <T> UniqueTopicSerdeDecorator<T> decorateSerde(final Serde<T> delegate,
-                                                          final Properties config,
-                                                          final boolean isKey) {
+        final Properties config,
+        final boolean isKey) {
         final UniqueTopicSerdeDecorator<T> decorator = new UniqueTopicSerdeDecorator<>(delegate);
         decorator.configure(config.entrySet().stream().collect(Collectors.toMap(e -> e.getKey().toString(), Map.Entry::getValue)), isKey);
         return decorator;

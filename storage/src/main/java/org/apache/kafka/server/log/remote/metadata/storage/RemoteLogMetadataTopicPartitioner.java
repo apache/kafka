@@ -43,18 +43,18 @@ public class RemoteLogMetadataTopicPartitioner {
     private byte[] toBytes(TopicIdPartition topicIdPartition) {
         // We do not want to depend upon hash code generation of Uuid as that may change.
         int hash = Objects.hash(topicIdPartition.topicId().getLeastSignificantBits(),
-                                topicIdPartition.topicId().getMostSignificantBits(),
-                                topicIdPartition.partition());
+                topicIdPartition.topicId().getMostSignificantBits(),
+                topicIdPartition.partition());
 
         return toBytes(hash);
     }
 
     private byte[] toBytes(int n) {
         return new byte[]{
-            (byte) (n >> 24),
-            (byte) (n >> 16),
-            (byte) (n >> 8),
-            (byte) n
+                (byte) (n >> 24),
+                (byte) (n >> 16),
+                (byte) (n >> 8),
+                (byte) n
         };
     }
 }

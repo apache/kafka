@@ -65,6 +65,6 @@ public class AllocateProducerIdsResponse extends AbstractResponse {
 
     public static AllocateProducerIdsResponse parse(Readable readable, short version) {
         return new AllocateProducerIdsResponse(new AllocateProducerIdsResponseData(
-                readable, version));
+            readable, version));
     }
 }

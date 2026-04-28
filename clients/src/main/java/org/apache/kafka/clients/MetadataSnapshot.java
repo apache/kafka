@@ -57,13 +57,13 @@ public class MetadataSnapshot {
     private Cluster clusterInstance;
 
     public MetadataSnapshot(String clusterId,
-                  Map<Integer, Node> nodes,
-                  Collection<PartitionMetadata> partitions,
-                  Set<String> unauthorizedTopics,
-                  Set<String> invalidTopics,
-                  Set<String> internalTopics,
-                  Node controller,
-                  Map<String, Uuid> topicIds) {
+        Map<Integer, Node> nodes,
+        Collection<PartitionMetadata> partitions,
+        Set<String> unauthorizedTopics,
+        Set<String> invalidTopics,
+        Set<String> internalTopics,
+        Node controller,
+        Map<String, Uuid> topicIds) {
         this(clusterId, nodes, partitions, unauthorizedTopics, invalidTopics, internalTopics, controller, topicIds, null);
     }
 
@@ -160,14 +160,14 @@ public class MetadataSnapshot {
      * @return the merged metadata snapshot
      */
     MetadataSnapshot mergeWith(String newClusterId,
-                            Map<Integer, Node> newNodes,
-                            Collection<PartitionMetadata> addPartitions,
-                            Set<String> addUnauthorizedTopics,
-                            Set<String> addInvalidTopics,
-                            Set<String> addInternalTopics,
-                            Node newController,
-                            Map<String, Uuid> addTopicIds,
-                            BiPredicate<String, Boolean> retainTopic) {
+        Map<Integer, Node> newNodes,
+        Collection<PartitionMetadata> addPartitions,
+        Set<String> addUnauthorizedTopics,
+        Set<String> addInvalidTopics,
+        Set<String> addInternalTopics,
+        Node newController,
+        Map<String, Uuid> addTopicIds,
+        BiPredicate<String, Boolean> retainTopic) {
 
         Predicate<String> shouldRetainTopic = topic -> retainTopic.test(topic, internalTopics.contains(topic));
 
@@ -177,8 +177,8 @@ public class MetadataSnapshot {
         // update with newest information from the MetadataResponse. We always take the latest state, removing existing
         // topic IDs if the latest state contains the topic name but not a topic ID.
         Map<String, Uuid> newTopicIds = this.topicIds.entrySet().stream()
-                .filter(entry -> shouldRetainTopic.test(entry.getKey()))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+            .filter(entry -> shouldRetainTopic.test(entry.getKey()))
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
         for (PartitionMetadata partition : addPartitions) {
             newMetadataByPartition.put(partition.topicPartition, partition);
@@ -200,7 +200,7 @@ public class MetadataSnapshot {
         Set<String> newInternalTopics = fillSet(addInternalTopics, internalTopics, shouldRetainTopic);
 
         return new MetadataSnapshot(newClusterId, newNodes, newMetadataByPartition.values(), newUnauthorizedTopics,
-                newInvalidTopics, newInternalTopics, newController, newTopicIds);
+            newInvalidTopics, newInternalTopics, newController, newTopicIds);
     }
 
     /**
@@ -224,11 +224,11 @@ public class MetadataSnapshot {
 
     private void computeClusterView() {
         List<PartitionInfo> partitionInfos = metadataByPartition.values()
-                .stream()
-                .map(metadata -> MetadataResponse.toPartitionInfo(metadata, nodes))
-                .collect(Collectors.toList());
+            .stream()
+            .map(metadata -> MetadataResponse.toPartitionInfo(metadata, nodes))
+            .collect(Collectors.toList());
         this.clusterInstance = new Cluster(clusterId, nodes.values(), partitionInfos, unauthorizedTopics,
-                invalidTopics, internalTopics, controller, topicIds);
+            invalidTopics, internalTopics, controller, topicIds);
     }
 
     static MetadataSnapshot bootstrap(List<InetSocketAddress> addresses) {
@@ -239,23 +239,23 @@ public class MetadataSnapshot {
             nodeId--;
         }
         return new MetadataSnapshot(null, nodes, Collections.emptyList(),
-                Collections.emptySet(), Collections.emptySet(), Collections.emptySet(),
-                null, Collections.emptyMap(), Cluster.bootstrap(addresses));
+            Collections.emptySet(), Collections.emptySet(), Collections.emptySet(),
+            null, Collections.emptyMap(), Cluster.bootstrap(addresses));
     }
 
     static MetadataSnapshot empty() {
         return new MetadataSnapshot(null, Collections.emptyMap(), Collections.emptyList(),
-                Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap(), Cluster.empty());
+            Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap(), Cluster.empty());
     }
 
     @Override
     public String toString() {
         return "MetadataSnapshot{" +
-                "clusterId='" + clusterId + '\'' +
-                ", nodes=" + nodes +
-                ", partitions=" + metadataByPartition.values() +
-                ", controller=" + controller +
-                '}';
+            "clusterId='" + clusterId + '\'' +
+            ", nodes=" + nodes +
+            ", partitions=" + metadataByPartition.values() +
+            ", controller=" + controller +
+            '}';
     }
 
 }

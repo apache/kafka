@@ -43,17 +43,17 @@ public class CheckpointStoreTest {
         when(config.checkpointsTopic()).thenReturn("checkpoint.topic");
 
         try (CheckpointStore store = new CheckpointStore(config, consumerGroups) {
-            @Override
-            void readCheckpointsImpl(MirrorCheckpointTaskConfig config, Callback<ConsumerRecord<byte[], byte[]>> consumedCallback) {
-                consumedCallback.onCompletion(null, newCheckpointRecord("group1", "t1", 0, 0, 0));
-                // this record must be ignored as not part of consumerGroups for task
-                consumedCallback.onCompletion(null, newCheckpointRecord("group2", "t1", 0, 0, 0));
-                // this record must be ignored as malformed
-                consumedCallback.onCompletion(null,
-                        new ConsumerRecord<>("checkpoint.topic", 0, 0L, new byte[0], new byte[0]));
-                consumedCallback.onCompletion(null, newCheckpointRecord("group1", "t1", 0, 1, 1));
-            }
-        }) {
+                 @Override
+                 void readCheckpointsImpl(MirrorCheckpointTaskConfig config, Callback<ConsumerRecord<byte[], byte[]>> consumedCallback) {
+                     consumedCallback.onCompletion(null, newCheckpointRecord("group1", "t1", 0, 0, 0));
+                     // this record must be ignored as not part of consumerGroups for task
+                     consumedCallback.onCompletion(null, newCheckpointRecord("group2", "t1", 0, 0, 0));
+                     // this record must be ignored as malformed
+                     consumedCallback.onCompletion(null,
+                             new ConsumerRecord<>("checkpoint.topic", 0, 0L, new byte[0], new byte[0]));
+                     consumedCallback.onCompletion(null, newCheckpointRecord("group1", "t1", 0, 1, 1));
+                 }
+             }) {
             assertFalse(store.isInitialized());
 
             assertTrue(store.start(), "expected start to return success");
@@ -74,12 +74,12 @@ public class CheckpointStoreTest {
         when(config.checkpointsTopic()).thenReturn("checkpoint.topic");
 
         try (CheckpointStore store = new CheckpointStore(config, consumerGroups) {
-            @Override
-            void readCheckpointsImpl(MirrorCheckpointTaskConfig config, Callback<ConsumerRecord<byte[], byte[]>> consumedCallback) {
-                consumedCallback.onCompletion(null, newCheckpointRecord("group1", "topic", 1, 0, 0));
-                consumedCallback.onCompletion(new TopicAuthorizationException("test"), null);
-            }
-        }) {
+                 @Override
+                 void readCheckpointsImpl(MirrorCheckpointTaskConfig config, Callback<ConsumerRecord<byte[], byte[]>> consumedCallback) {
+                     consumedCallback.onCompletion(null, newCheckpointRecord("group1", "topic", 1, 0, 0));
+                     consumedCallback.onCompletion(new TopicAuthorizationException("test"), null);
+                 }
+             }) {
 
             assertFalse(store.start(), "expected start to return failure");
             assertTrue(store.isInitialized());

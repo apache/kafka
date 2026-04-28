@@ -136,18 +136,18 @@ public class KStreamKStreamIntegrationTest {
         PRODUCER_CONFIG.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
         final List<KeyValue<String, String>> left1 = asList(
-                new KeyValue<>("Key-1", "left-1a"),
-                new KeyValue<>("Key-2", "left-2a"),
-                new KeyValue<>("Key-3", "left-3a"),
-                new KeyValue<>("Key-4", "left-4a"),
-                new KeyValue<>(null, "left-5a")
+            new KeyValue<>("Key-1", "left-1a"),
+            new KeyValue<>("Key-2", "left-2a"),
+            new KeyValue<>("Key-3", "left-3a"),
+            new KeyValue<>("Key-4", "left-4a"),
+            new KeyValue<>(null, "left-5a")
         );
 
         final List<KeyValue<String, String>> left2 = asList(
-                new KeyValue<>("Key-1", "left-1b"),
-                new KeyValue<>("Key-2", "left-2b"),
-                new KeyValue<>("Key-3", "left-3b"),
-                new KeyValue<>("Key-4", "left-4b")
+            new KeyValue<>("Key-1", "left-1b"),
+            new KeyValue<>("Key-2", "left-2b"),
+            new KeyValue<>("Key-3", "left-3b"),
+            new KeyValue<>("Key-4", "left-4b")
         );
 
         IntegrationTestUtils.produceKeyValuesSynchronously(LEFT_STREAM, left1, PRODUCER_CONFIG, MOCK_TIME);

@@ -110,9 +110,9 @@ public class KStreamAggregationIntegrationTest {
     private static final int NUM_BROKERS = 1;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
-            NUM_BROKERS,
-            mkProperties(
-                    Collections.singletonMap("log.message.timestamp.after.max.ms", String.valueOf(Long.MAX_VALUE))));
+        NUM_BROKERS,
+        mkProperties(
+            Collections.singletonMap("log.message.timestamp.after.max.ms", String.valueOf(Long.MAX_VALUE))));
 
     @BeforeAll
     public static void startCluster() throws Exception {
@@ -211,7 +211,7 @@ public class KStreamAggregationIntegrationTest {
     }
 
     private static <K extends Comparable<K>, V extends Comparable<V>> int compare(final KeyValueTimestamp<K, V> o1,
-                                                                                  final KeyValueTimestamp<K, V> o2) {
+        final KeyValueTimestamp<K, V> o2) {
         final int keyComparison = o1.key().compareTo(o2.key());
         if (keyComparison == 0) {
             final int valueComparison = o1.value().compareTo(o2.value());
@@ -291,14 +291,14 @@ public class KStreamAggregationIntegrationTest {
         assertThat(windowedOutput, is(expectResult));
 
         final Set<String> expectResultString = new HashSet<>(expectResult.size());
-        for (final KeyValueTimestamp<Windowed<String>, String> eachRecord: expectResult) {
+        for (final KeyValueTimestamp<Windowed<String>, String> eachRecord : expectResult) {
             expectResultString.add("CreateTime:" + eachRecord.timestamp() + ", "
                 + eachRecord.key() + ", " + eachRecord.value());
         }
 
         // check every message is contained in the expect result
         final String[] allRecords = resultFromConsoleConsumer.split("\n");
-        for (final String record: allRecords) {
+        for (final String record : allRecords) {
             assertTrue(expectResultString.contains(record));
         }
     }
@@ -342,7 +342,7 @@ public class KStreamAggregationIntegrationTest {
                 new KeyValueTimestamp<>("D", 2, mockTime.milliseconds()),
                 new KeyValueTimestamp<>("E", 1, mockTime.milliseconds()),
                 new KeyValueTimestamp<>("E", 2, mockTime.milliseconds())
-           ))
+            ))
         );
     }
 
@@ -416,13 +416,13 @@ public class KStreamAggregationIntegrationTest {
         assertThat(windowedMessages, is(expectResult));
 
         final Set<String> expectResultString = new HashSet<>(expectResult.size());
-        for (final KeyValueTimestamp<Windowed<String>, Integer> eachRecord: expectResult) {
+        for (final KeyValueTimestamp<Windowed<String>, Integer> eachRecord : expectResult) {
             expectResultString.add("CreateTime:" + eachRecord.timestamp() + ", " + eachRecord.key() + ", " + eachRecord.value());
         }
 
         // check every message is contained in the expect result
         final String[] allRecords = resultFromConsoleConsumer.split("\n");
-        for (final String record: allRecords) {
+        for (final String record : allRecords) {
             assertTrue(expectResultString.contains(record));
         }
     }
@@ -625,14 +625,14 @@ public class KStreamAggregationIntegrationTest {
         assertThat(windowedOutput, is(expectResult));
 
         final Set<String> expectResultString = new HashSet<>(expectResult.size());
-        for (final KeyValueTimestamp<Windowed<String>, String> eachRecord: expectResult) {
+        for (final KeyValueTimestamp<Windowed<String>, String> eachRecord : expectResult) {
             expectResultString.add("CreateTime:" + eachRecord.timestamp() + ", "
-                    + eachRecord.key() + ", " + eachRecord.value());
+                + eachRecord.key() + ", " + eachRecord.value());
         }
 
         // check every message is contained in the expect result
         final String[] allRecords = resultFromConsoleConsumer.split("\n");
-        for (final String record: allRecords) {
+        for (final String record : allRecords) {
             assertTrue(expectResultString.contains(record));
         }
     }
@@ -740,13 +740,13 @@ public class KStreamAggregationIntegrationTest {
         assertThat(windowedMessages, is(expectResult));
 
         final Set<String> expectResultString = new HashSet<>(expectResult.size());
-        for (final KeyValueTimestamp<Windowed<String>, Integer> eachRecord: expectResult) {
+        for (final KeyValueTimestamp<Windowed<String>, Integer> eachRecord : expectResult) {
             expectResultString.add("CreateTime:" + eachRecord.timestamp() + ", " + eachRecord.key() + ", " + eachRecord.value());
         }
 
         // check every message is contained in the expect result
         final String[] allRecords = resultFromConsoleConsumer.split("\n");
-        for (final String record: allRecords) {
+        for (final String record : allRecords) {
             assertTrue(expectResultString.contains(record));
         }
     }
@@ -907,9 +907,9 @@ public class KStreamAggregationIntegrationTest {
     }
 
     private void produceSessionWindowData(final Properties producerConfig,
-                                           final boolean withHeaders,
-                                           final long t1, final long t2, final long t3,
-                                           final long t4, final long t5) throws Exception {
+        final boolean withHeaders,
+        final long t1, final long t2, final long t3,
+        final long t4, final long t5) throws Exception {
         final List<KeyValue<String, String>> t1Messages = Arrays.asList(
             new KeyValue<>("bob", "start"),
             new KeyValue<>("penny", "start"),
@@ -935,10 +935,10 @@ public class KStreamAggregationIntegrationTest {
     }
 
     private void produceWithOptionalHeaders(final Collection<KeyValue<String, String>> records,
-                                             final Properties producerConfig,
-                                             final boolean withHeaders,
-                                             final String batchId,
-                                             final long timestamp) throws Exception {
+        final Properties producerConfig,
+        final boolean withHeaders,
+        final String batchId,
+        final long timestamp) throws Exception {
         if (withHeaders) {
             final Headers headers = new RecordHeaders(Arrays.asList(
                 new RecordHeader("batch", batchId.getBytes(StandardCharsets.UTF_8)),
@@ -953,7 +953,7 @@ public class KStreamAggregationIntegrationTest {
     }
 
     private void verifySessionStore(final String storeName,
-                                    final long t1, final long t3, final long t4) throws Exception {
+        final long t1, final long t3, final long t4) throws Exception {
         final ReadOnlySessionStore<String, String> sessionStore =
             IntegrationTestUtils.getStore(storeName, kafkaStreams, QueryableStoreTypes.sessionStore());
 
@@ -963,7 +963,7 @@ public class KStreamAggregationIntegrationTest {
             assertFalse(bob.hasNext());
         }
     }
-    
+
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void shouldCountUnlimitedWindows(final boolean withHeaders) throws Exception {
@@ -1081,21 +1081,21 @@ public class KStreamAggregationIntegrationTest {
     }
 
     private <K, V> List<KeyValueTimestamp<K, V>> receiveMessages(final Deserializer<K> keyDeserializer,
-                                                                 final Deserializer<V> valueDeserializer,
-                                                                 final int numMessages,
-                                                                 final TestInfo testInfo)
-            throws Exception {
+        final Deserializer<V> valueDeserializer,
+        final int numMessages,
+        final TestInfo testInfo)
+        throws Exception {
 
         return receiveMessages(keyDeserializer, valueDeserializer, null, numMessages, testInfo);
     }
 
     @SuppressWarnings("resource")
     private <K, V> List<KeyValueTimestamp<K, V>> receiveMessages(final Deserializer<K> keyDeserializer,
-                                                                 final Deserializer<V> valueDeserializer,
-                                                                 final Class<?> innerClass,
-                                                                 final int numMessages,
-                                                                 final TestInfo testInfo)
-            throws Exception {
+        final Deserializer<V> valueDeserializer,
+        final Class<?> innerClass,
+        final int numMessages,
+        final TestInfo testInfo)
+        throws Exception {
 
         final String safeTestName = safeUniqueTestName(testInfo);
         final Properties consumerProperties = new Properties();
@@ -1113,18 +1113,18 @@ public class KStreamAggregationIntegrationTest {
                 Serdes.serdeFrom(innerClass).getClass().getName());
         }
         return IntegrationTestUtils.waitUntilMinKeyValueWithTimestampRecordsReceived(
-                consumerProperties,
-                outputTopic,
-                numMessages,
-                60 * 1000);
+            consumerProperties,
+            outputTopic,
+            numMessages,
+            60 * 1000);
     }
 
     @SuppressWarnings("resource")
     private <K, V> List<KeyValueTimestamp<K, V>> receiveMessagesWithTimestamp(final Deserializer<K> keyDeserializer,
-                                                                              final Deserializer<V> valueDeserializer,
-                                                                              final Class<?> innerClass,
-                                                                              final int numMessages,
-                                                                              final TestInfo testInfo) throws Exception {
+        final Deserializer<V> valueDeserializer,
+        final Class<?> innerClass,
+        final int numMessages,
+        final TestInfo testInfo) throws Exception {
         final String safeTestName = safeUniqueTestName(testInfo);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -1149,10 +1149,10 @@ public class KStreamAggregationIntegrationTest {
 
     @SuppressWarnings("resource")
     private <K, V> String readWindowedKeyedMessagesViaConsoleConsumer(final Deserializer<K> keyDeserializer,
-                                                                      final Deserializer<V> valueDeserializer,
-                                                                      final Class<?> innerClass,
-                                                                      final int numMessages,
-                                                                      final boolean printTimestamp) throws Exception {
+        final Deserializer<V> valueDeserializer,
+        final Class<?> innerClass,
+        final int numMessages,
+        final boolean printTimestamp) throws Exception {
         final ByteArrayOutputStream newConsole = new ByteArrayOutputStream();
         final PrintStream originalStream = System.out;
         try (final PrintStream newStream = new PrintStream(newConsole)) {
@@ -1160,7 +1160,7 @@ public class KStreamAggregationIntegrationTest {
 
             final String keySeparator = ", ";
             // manually construct the console consumer argument array
-            final String[] args = new String[] {
+            final String[] args = new String[]{
                 "--bootstrap-server", CLUSTER.bootstrapServers(),
                 "--from-beginning",
                 "--formatter-property", "print.key=true",

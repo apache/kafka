@@ -83,7 +83,7 @@ public class DeleteRecordsHandlerTest {
     @Test
     public void testHandleSuccessfulResponse() {
         AdminApiHandler.ApiResult<TopicPartition, DeletedRecords> result =
-                handleResponse(createResponse(emptyMap(), recordsToDelete.keySet()));
+            handleResponse(createResponse(emptyMap(), recordsToDelete.keySet()));
         assertResult(result, recordsToDelete.keySet(), emptyMap(), emptyList(), emptySet());
     }
 
@@ -94,7 +94,7 @@ public class DeleteRecordsHandlerTest {
         errorsByPartition.put(errorPartition, Errors.REQUEST_TIMED_OUT.code());
 
         AdminApiHandler.ApiResult<TopicPartition, DeletedRecords> result =
-                handleResponse(createResponse(errorsByPartition));
+            handleResponse(createResponse(errorsByPartition));
 
         // Timeouts should be retried within the fulfillment stage as they are a common type of
         // retriable error.
@@ -112,7 +112,7 @@ public class DeleteRecordsHandlerTest {
         errorsByPartition.put(errorPartition, error.code());
 
         AdminApiHandler.ApiResult<TopicPartition, DeletedRecords> result =
-                handleResponse(createResponse(errorsByPartition));
+            handleResponse(createResponse(errorsByPartition));
 
         // Some invalid metadata errors should be retried from the lookup stage as the partition-to-leader
         // mappings should be recalculated.
@@ -131,7 +131,7 @@ public class DeleteRecordsHandlerTest {
         errorsByPartition.put(errorPartition, error.code());
 
         AdminApiHandler.ApiResult<TopicPartition, DeletedRecords> result =
-                handleResponse(createResponse(errorsByPartition));
+            handleResponse(createResponse(errorsByPartition));
 
         Map<TopicPartition, Throwable> failed = new HashMap<>();
         failed.put(errorPartition, error.exception());
@@ -148,7 +148,7 @@ public class DeleteRecordsHandlerTest {
         errorsByPartition.put(errorPartition, error.code());
 
         AdminApiHandler.ApiResult<TopicPartition, DeletedRecords> result =
-                handleResponse(createResponse(errorsByPartition));
+            handleResponse(createResponse(errorsByPartition));
 
         Map<TopicPartition, Throwable> failed = new HashMap<>();
         failed.put(errorPartition, error.exception());
@@ -174,7 +174,7 @@ public class DeleteRecordsHandlerTest {
         errorsByPartition.put(retriableErrorPartition2, retriableError2.code());
 
         AdminApiHandler.ApiResult<TopicPartition, DeletedRecords> result =
-                handleResponse(createResponse(errorsByPartition));
+            handleResponse(createResponse(errorsByPartition));
 
         Set<TopicPartition> completed = new HashSet<>(recordsToDelete.keySet());
 
@@ -199,7 +199,7 @@ public class DeleteRecordsHandlerTest {
         recordsToDeleteMap.remove(errorPartition);
 
         AdminApiHandler.ApiResult<TopicPartition, DeletedRecords> result =
-                handleResponse(createResponse(emptyMap(), recordsToDeleteMap.keySet()));
+            handleResponse(createResponse(emptyMap(), recordsToDeleteMap.keySet()));
 
         assertEquals(recordsToDelete.size() - 1, result.completedKeys.size());
         assertEquals(1, result.failedKeys.size());
@@ -218,13 +218,13 @@ public class DeleteRecordsHandlerTest {
         MetadataResponseTopic topicMetadata = new MetadataResponseTopic();
         topicMetadata.setName("t0").setErrorCode(Errors.NONE.code());
         topicMetadata.partitions().add(new MetadataResponsePartition()
-                .setPartitionIndex(0).setLeaderId(node1.id()).setErrorCode(Errors.NONE.code()));
+            .setPartitionIndex(0).setLeaderId(node1.id()).setErrorCode(Errors.NONE.code()));
         topicMetadata.partitions().add(new MetadataResponsePartition()
-                .setPartitionIndex(1).setLeaderId(node2.id()).setErrorCode(Errors.NONE.code()));
+            .setPartitionIndex(1).setLeaderId(node2.id()).setErrorCode(Errors.NONE.code()));
         topicMetadata.partitions().add(new MetadataResponsePartition()
-                .setPartitionIndex(2).setLeaderId(node1.id()).setErrorCode(Errors.NONE.code()));
+            .setPartitionIndex(2).setLeaderId(node1.id()).setErrorCode(Errors.NONE.code()));
         topicMetadata.partitions().add(new MetadataResponsePartition()
-                .setPartitionIndex(3).setLeaderId(node2.id()).setErrorCode(Errors.NONE.code()));
+            .setPartitionIndex(3).setLeaderId(node2.id()).setErrorCode(Errors.NONE.code()));
         metadataResponseData.topics().add(topicMetadata);
         MetadataResponse metadataResponse = new MetadataResponse(metadataResponseData, ApiKeys.METADATA.latestVersion());
 
@@ -246,15 +246,15 @@ public class DeleteRecordsHandlerTest {
         DeleteRecordsRequest deleteRequest = handler.buildBatchedRequest(node1.id(), partitionsPerBroker.get(node1.id())).build();
         assertEquals(2, deleteRequest.data().topics().get(0).partitions().size());
         assertEquals(Set.of(t0p0, t0p2),
-                deleteRequest.data().topics().get(0).partitions().stream()
-                        .map(drp -> new TopicPartition("t0", drp.partitionIndex()))
-                        .collect(Collectors.toSet()));
+            deleteRequest.data().topics().get(0).partitions().stream()
+                .map(drp -> new TopicPartition("t0", drp.partitionIndex()))
+                .collect(Collectors.toSet()));
         deleteRequest = handler.buildBatchedRequest(node2.id(), partitionsPerBroker.get(node2.id())).build();
         assertEquals(2, deleteRequest.data().topics().get(0).partitions().size());
         assertEquals(Set.of(t0p1, t0p3),
-                deleteRequest.data().topics().get(0).partitions().stream()
-                        .map(drp -> new TopicPartition("t0", drp.partitionIndex()))
-                        .collect(Collectors.toSet()));
+            deleteRequest.data().topics().get(0).partitions().stream()
+                .map(drp -> new TopicPartition("t0", drp.partitionIndex()))
+                .collect(Collectors.toSet()));
     }
 
     private DeleteRecordsResponse createResponse(Map<TopicPartition, Short> errorsByPartition) {
@@ -262,15 +262,15 @@ public class DeleteRecordsHandlerTest {
     }
 
     private DeleteRecordsResponse createResponse(
-            Map<TopicPartition, Short> errorsByPartition,
-            Set<TopicPartition> topicPartitions
+        Map<TopicPartition, Short> errorsByPartition,
+        Set<TopicPartition> topicPartitions
     ) {
         Map<String, DeleteRecordsResponseData.DeleteRecordsTopicResultCollection> responsesByTopic = new HashMap<>();
 
         DeleteRecordsResponseData.DeleteRecordsTopicResultCollection topicResponse = null;
         for (TopicPartition topicPartition : topicPartitions) {
             topicResponse = responsesByTopic.computeIfAbsent(
-                    topicPartition.topic(), t -> new DeleteRecordsResponseData.DeleteRecordsTopicResultCollection());
+                topicPartition.topic(), t -> new DeleteRecordsResponseData.DeleteRecordsTopicResultCollection());
             topicResponse.add(new DeleteRecordsResponseData.DeleteRecordsTopicResult().setName(topicPartition.topic()));
             DeleteRecordsResponseData.DeleteRecordsPartitionResult partitionResponse = new DeleteRecordsResponseData.DeleteRecordsPartitionResult();
             partitionResponse.setPartitionIndex(topicPartition.partition());
@@ -284,16 +284,16 @@ public class DeleteRecordsHandlerTest {
 
     private AdminApiHandler.ApiResult<TopicPartition, DeletedRecords> handleResponse(DeleteRecordsResponse response) {
         DeleteRecordsHandler handler =
-                new DeleteRecordsHandler(recordsToDelete, logContext, timeout);
+            new DeleteRecordsHandler(recordsToDelete, logContext, timeout);
         return handler.handleResponse(node1, recordsToDelete.keySet(), response);
     }
 
     private void assertResult(
-            AdminApiHandler.ApiResult<TopicPartition, DeletedRecords> result,
-            Set<TopicPartition> expectedCompleted,
-            Map<TopicPartition, Throwable> expectedFailed,
-            List<TopicPartition> expectedUnmapped,
-            Set<TopicPartition> expectedRetriable
+        AdminApiHandler.ApiResult<TopicPartition, DeletedRecords> result,
+        Set<TopicPartition> expectedCompleted,
+        Map<TopicPartition, Throwable> expectedFailed,
+        List<TopicPartition> expectedUnmapped,
+        Set<TopicPartition> expectedRetriable
     ) {
         assertEquals(expectedCompleted, result.completedKeys.keySet());
         assertEquals(expectedFailed, result.failedKeys);

@@ -197,6 +197,7 @@ public class SnapshotRegistry {
             .map(Object::toString)
             .collect(Collectors.joining(", "));
     }
+
     /**
      * Gets the snapshot for a specific epoch.
      */

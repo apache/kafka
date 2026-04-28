@@ -84,7 +84,7 @@ public class ConsumerRecordsTest {
 
         assertEquals(partitionSize * topics.size(), consumerRecords.nextOffsets().size());
         for (String topic : topics) {
-            for (int partition = 0; partition < partitionSize; partition++) {
+            for (int partition = 0;partition < partitionSize;partition++) {
                 TopicPartition topicPartition = new TopicPartition(topic, partition);
                 List<ConsumerRecord<Integer, String>> records = consumerRecords.records(topicPartition);
 
@@ -94,7 +94,7 @@ public class ConsumerRecordsTest {
                     assertEquals(recordSize, records.size());
                     final ConsumerRecord<Integer, String> lastRecord = records.get(recordSize - 1);
                     assertEquals(new OffsetAndMetadata(lastRecord.offset() + 1, lastRecord.leaderEpoch(), ""), consumerRecords.nextOffsets().get(topicPartition));
-                    for (int i = 0; i < records.size(); i++) {
+                    for (int i = 0;i < records.size();i++) {
                         ConsumerRecord<Integer, String> record = records.get(i);
                         validateRecordPayload(topic, record, partition, i, recordSize);
                     }
@@ -181,16 +181,16 @@ public class ConsumerRecordsTest {
     }
 
     private ConsumerRecords<Integer, String> buildTopicTestRecords(int recordSize,
-                                                                   int partitionSize,
-                                                                   int emptyPartitionIndex,
-                                                                   Collection<String> topics) {
+        int partitionSize,
+        int emptyPartitionIndex,
+        Collection<String> topics) {
         Map<TopicPartition, List<ConsumerRecord<Integer, String>>> partitionToRecords = new LinkedHashMap<>();
         Map<TopicPartition, OffsetAndMetadata> nextOffsets = new HashMap<>();
         for (String topic : topics) {
-            for (int i = 0; i < partitionSize; i++) {
+            for (int i = 0;i < partitionSize;i++) {
                 List<ConsumerRecord<Integer, String>> records = new ArrayList<>(recordSize);
                 if (i != emptyPartitionIndex) {
-                    for (int j = 0; j < recordSize; j++) {
+                    for (int j = 0;j < recordSize;j++) {
                         records.add(
                             new ConsumerRecord<>(topic, i, j, 0L, TimestampType.CREATE_TIME,
                                 0, 0, j, String.valueOf(j), new RecordHeaders(), Optional.empty())

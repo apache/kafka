@@ -325,6 +325,7 @@ public class JsonConverterBenchmark {
                     .field("transaction", buildTransactionSchema())
                     .build();
         }
+
         private static org.apache.kafka.connect.data.Schema buildValueSchema() {
 
             return SchemaBuilder.struct()
@@ -423,7 +424,7 @@ public class JsonConverterBenchmark {
 
 
     @Setup(Level.Trial)
-    public void setup(BenchmarkParams params)  {
+    public void setup(BenchmarkParams params) {
 
         converter = new JsonConverter(Boolean.parseBoolean(params.getParam("blackbirdModule")));
         converter.configure(Map.of(), false);

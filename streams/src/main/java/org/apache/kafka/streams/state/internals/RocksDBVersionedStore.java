@@ -257,9 +257,9 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
                 // the desired result is contained in this segment
                 final SegmentSearchResult searchResult =
-                        RocksDBVersionedStoreSegmentValueFormatter
-                                .deserialize(rawSegmentValue)
-                                .find(asOfTimestamp, true);
+                    RocksDBVersionedStoreSegmentValueFormatter
+                        .deserialize(rawSegmentValue)
+                        .find(asOfTimestamp, true);
                 if (searchResult.value() != null) {
                     return new VersionedRecord<>(searchResult.value(), searchResult.validFrom(), searchResult.validTo());
                 } else {
@@ -331,9 +331,9 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
     @Override
     public <R> QueryResult<R> query(
-            final Query<R> query,
-            final PositionBound positionBound,
-            final QueryConfig config) {
+        final Query<R> query,
+        final PositionBound positionBound,
+        final QueryConfig config) {
         return StoreQueryUtils.handleBasicQueries(
             query,
             positionBound,
@@ -368,9 +368,9 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         final String taskName = stateStoreContext.taskId().toString();
 
         expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
-                threadId,
-                taskName,
-                metrics
+            threadId,
+            taskName,
+            metrics
         );
 
         metricsRecorder.init(ProcessorContextUtils.metricsImpl(stateStoreContext), stateStoreContext.taskId());
@@ -381,17 +381,17 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
         // register and possibly restore the state from the logs
         stateStoreContext.register(
-                root,
-                (RecordBatchingStateRestoreCallback) RocksDBVersionedStore.this::restoreBatch,
-                segmentStores::writePosition
+            root,
+            (RecordBatchingStateRestoreCallback) RocksDBVersionedStore.this::restoreBatch,
+            segmentStores::writePosition
         );
 
         open = true;
 
         consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-                stateStoreContext.appConfigs(),
-                IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
-                false
+            stateStoreContext.appConfigs(),
+            IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+            false
         );
     }
 
@@ -587,11 +587,11 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
      * putting records into the store which will have expired by the end of the restore.
      */
     private <T extends VersionedStoreSegment> long doPut(
-            final VersionedStoreClient<T> versionedStoreClient,
-            final long observedStreamTime,
-            final Bytes key,
-            final byte[] value,
-            final long timestamp
+        final VersionedStoreClient<T> versionedStoreClient,
+        final long observedStreamTime,
+        final Bytes key,
+        final byte[] value,
+        final long timestamp
     ) {
         segmentStores.cleanupExpiredSegments(observedStreamTime);
 
@@ -602,11 +602,11 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
         // check latest value store
         PutStatus status = maybePutToLatestValueStore(
-                versionedStoreClient,
-                observedStreamTime,
-                key,
-                value,
-                timestamp
+            versionedStoreClient,
+            observedStreamTime,
+            key,
+            value,
+            timestamp
         );
         if (status.isComplete) {
             return status.foundTs == SENTINEL_TIMESTAMP ? PUT_RETURN_CODE_VALID_TO_UNDEFINED : status.foundTs;
@@ -616,12 +616,12 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
         // continue search in segments
         status = maybePutToSegments(
-                versionedStoreClient,
-                observedStreamTime,
-                key,
-                value,
-                timestamp,
-                foundTs
+            versionedStoreClient,
+            observedStreamTime,
+            key,
+            value,
+            timestamp,
+            foundTs
         );
         if (status.isComplete) {
             return status.foundTs == SENTINEL_TIMESTAMP ? PUT_RETURN_CODE_VALID_TO_UNDEFINED : status.foundTs;
@@ -632,12 +632,12 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         // the record did not unconditionally belong in any specific store (latest value store
         // or segments store). insert based on foundTs here instead.
         foundTs = finishPut(
-                versionedStoreClient,
-                observedStreamTime,
-                key,
-                value,
-                timestamp,
-                foundTs
+            versionedStoreClient,
+            observedStreamTime,
+            key,
+            value,
+            timestamp,
+            foundTs
         );
         return foundTs == SENTINEL_TIMESTAMP ? PUT_RETURN_CODE_VALID_TO_UNDEFINED : foundTs;
     }
@@ -666,11 +666,11 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     }
 
     private <T extends VersionedStoreSegment> PutStatus maybePutToLatestValueStore(
-            final VersionedStoreClient<T> versionedStoreClient,
-            final long observedStreamTime,
-            final Bytes key,
-            final byte[] value,
-            final long timestamp
+        final VersionedStoreClient<T> versionedStoreClient,
+        final long observedStreamTime,
+        final Bytes key,
+        final byte[] value,
+        final long timestamp
     ) {
         // initialize with a starting "sentinel timestamp" which represents
         // that the segment should be inserted into the latest value store.
@@ -704,10 +704,10 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                         final byte[] rawSegmentValue = segment.get(key);
                         if (rawSegmentValue == null) {
                             segment.put(
-                                    key,
-                                    RocksDBVersionedStoreSegmentValueFormatter
-                                            .newSegmentValueWithRecord(rawValueToMove, latestValueStoreTimestamp, timestamp)
-                                            .serialize()
+                                key,
+                                RocksDBVersionedStoreSegmentValueFormatter
+                                    .newSegmentValueWithRecord(rawValueToMove, latestValueStoreTimestamp, timestamp)
+                                    .serialize()
                             );
                         } else {
                             final SegmentValue segmentValue = RocksDBVersionedStoreSegmentValueFormatter.deserialize(rawSegmentValue);
@@ -732,12 +732,12 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     }
 
     private <T extends VersionedStoreSegment> PutStatus maybePutToSegments(
-            final VersionedStoreClient<T> versionedStoreClient,
-            final long observedStreamTime,
-            final Bytes key,
-            final byte[] value,
-            final long timestamp,
-            final long prevFoundTs
+        final VersionedStoreClient<T> versionedStoreClient,
+        final long observedStreamTime,
+        final Bytes key,
+        final byte[] value,
+        final long timestamp,
+        final long prevFoundTs
     ) {
         // initialize with current foundTs value
         long foundTs = prevFoundTs;
@@ -759,13 +759,13 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                     // the record being inserted belongs in this segment.
                     // insert and conclude the procedure.
                     foundTs = putToSegment(
-                            versionedStoreClient,
-                            observedStreamTime,
-                            segment,
-                            rawSegmentValue,
-                            key,
-                            value,
-                            timestamp
+                        versionedStoreClient,
+                        observedStreamTime,
+                        segment,
+                        rawSegmentValue,
+                        key,
+                        value,
+                        timestamp
                     );
                     return new PutStatus(true, foundTs);
                 }
@@ -791,13 +791,13 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
      * @return updated {@code foundTs} value, i.e., the validTo timestamp of the record being put
      */
     private <T extends VersionedStoreSegment> long putToSegment(
-            final VersionedStoreClient<T> versionedStoreClient,
-            final long observedStreamTime,
-            final T segment,
-            final byte[] rawSegmentValue,
-            final Bytes key,
-            final byte[] value,
-            final long timestamp
+        final VersionedStoreClient<T> versionedStoreClient,
+        final long observedStreamTime,
+        final T segment,
+        final byte[] rawSegmentValue,
+        final Bytes key,
+        final byte[] value,
+        final long timestamp
     ) {
         final long segmentIdForTimestamp = versionedStoreClient.segmentIdForTimestamp(timestamp);
         // it's possible that putting the current record into a segment will require moving an
@@ -833,7 +833,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             // first means there will not be data loss. (rather, there will be
             // duplicated data which is fine as it can/will be reconciled later.)
             final T olderSegment = versionedStoreClient
-                    .getOrCreateSegmentIfLive(segmentIdForTimestamp, internalProcessorContext, observedStreamTime);
+                .getOrCreateSegmentIfLive(segmentIdForTimestamp, internalProcessorContext, observedStreamTime);
             // `olderSegment == null` implies that all data in the older segment is older than the
             // history retention of this store, and therefore does not need to tracked.
             // as a result, we only need to move the existing record from the newer segment
@@ -847,14 +847,14 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                 final byte[] rawOlderSegmentValue = olderSegment.get(key);
                 if (rawOlderSegmentValue == null) {
                     olderSegment.put(
-                            key,
-                            RocksDBVersionedStoreSegmentValueFormatter.newSegmentValueWithRecord(
-                                    searchResult.value(), searchResult.validFrom(), timestamp
-                            ).serialize()
+                        key,
+                        RocksDBVersionedStoreSegmentValueFormatter.newSegmentValueWithRecord(
+                            searchResult.value(), searchResult.validFrom(), timestamp
+                        ).serialize()
                     );
                 } else {
                     final SegmentValue olderSegmentValue
-                            = RocksDBVersionedStoreSegmentValueFormatter.deserialize(rawOlderSegmentValue);
+                        = RocksDBVersionedStoreSegmentValueFormatter.deserialize(rawOlderSegmentValue);
                     olderSegmentValue.insertAsLatest(searchResult.validFrom(), timestamp, searchResult.value());
                     olderSegment.put(key, olderSegmentValue.serialize());
                 }
@@ -876,12 +876,12 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
      * @return updated {@code foundTs} value, i.e., the validTo timestamp of the record being put
      */
     private <T extends VersionedStoreSegment> long finishPut(
-            final VersionedStoreClient<T> versionedStoreClient,
-            final long observedStreamTime,
-            final Bytes key,
-            final byte[] value,
-            final long timestamp,
-            final long foundTs
+        final VersionedStoreClient<T> versionedStoreClient,
+        final long observedStreamTime,
+        final Bytes key,
+        final byte[] value,
+        final long timestamp,
+        final long foundTs
     ) {
         if (foundTs == SENTINEL_TIMESTAMP) {
             // insert into latest value store
@@ -891,7 +891,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                 // tombstones are not inserted into the latest value store. insert into segment instead.
                 // the specific segment to insert to is determined based on the tombstone's timestamp
                 final T segment = versionedStoreClient.getOrCreateSegmentIfLive(
-                        versionedStoreClient.segmentIdForTimestamp(timestamp), internalProcessorContext, observedStreamTime);
+                    versionedStoreClient.segmentIdForTimestamp(timestamp), internalProcessorContext, observedStreamTime);
                 if (segment == null) {
                     // the record being inserted does not affect version history. discard and return.
                     // this can happen during restore because individual put calls are executed after
@@ -907,10 +907,10 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                     // record versions for this key, create a new "degenerate" segment with the
                     // tombstone's timestamp as both validFrom and validTo timestamps for the segment
                     segment.put(
-                            key,
-                            RocksDBVersionedStoreSegmentValueFormatter
-                                    .newSegmentValueWithRecord(null, timestamp, timestamp)
-                                    .serialize()
+                        key,
+                        RocksDBVersionedStoreSegmentValueFormatter
+                            .newSegmentValueWithRecord(null, timestamp, timestamp)
+                            .serialize()
                     );
                 } else {
                     // insert as latest, since foundTs = sentinel means nothing later exists
@@ -920,11 +920,11 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                         return foundTs;
                     }
                     final SegmentValue segmentValue
-                            = RocksDBVersionedStoreSegmentValueFormatter.deserialize(rawSegmentValue);
+                        = RocksDBVersionedStoreSegmentValueFormatter.deserialize(rawSegmentValue);
                     segmentValue.insertAsLatest(
-                            RocksDBVersionedStoreSegmentValueFormatter.nextTimestamp(rawSegmentValue),
-                            timestamp,
-                            null
+                        RocksDBVersionedStoreSegmentValueFormatter.nextTimestamp(rawSegmentValue),
+                        timestamp,
+                        null
                     );
                     segment.put(key, segmentValue.serialize());
                 }
@@ -938,7 +938,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             // minTimestamp <= timestamp < nextTimestamp, and putSegments would've completed the
             // put procedure without reaching this fall-through case.)
             final T segment = versionedStoreClient.getOrCreateSegmentIfLive(
-                    versionedStoreClient.segmentIdForTimestamp(foundTs), internalProcessorContext, observedStreamTime);
+                versionedStoreClient.segmentIdForTimestamp(foundTs), internalProcessorContext, observedStreamTime);
             if (segment == null) {
                 // the record being inserted does not affect version history. discard and return.
                 // this can happen during restore because individual put calls are executed after
@@ -950,10 +950,10 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             final byte[] rawSegmentValue = segment.get(key);
             if (rawSegmentValue == null) {
                 segment.put(
-                        key,
-                        RocksDBVersionedStoreSegmentValueFormatter
-                                .newSegmentValueWithRecord(value, timestamp, foundTs)
-                                .serialize()
+                    key,
+                    RocksDBVersionedStoreSegmentValueFormatter
+                        .newSegmentValueWithRecord(value, timestamp, foundTs)
+                        .serialize()
                 );
             } else {
                 final long foundNextTs = RocksDBVersionedStoreSegmentValueFormatter.nextTimestamp(rawSegmentValue);
@@ -1012,9 +1012,9 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             }
 
             return ByteBuffer.allocate(TIMESTAMP_SIZE + rawValue.length)
-                    .putLong(timestamp)
-                    .put(rawValue)
-                    .array();
+                .putLong(timestamp)
+                .put(rawValue)
+                .array();
         }
     }
 

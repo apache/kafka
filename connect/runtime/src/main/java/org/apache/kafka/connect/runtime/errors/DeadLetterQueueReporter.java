@@ -75,9 +75,9 @@ public class DeadLetterQueueReporter implements ErrorReporter<ConsumerRecord<byt
     private final KafkaProducer<byte[], byte[]> kafkaProducer;
 
     public static DeadLetterQueueReporter createAndSetup(Map<String, Object> adminProps,
-                                                         ConnectorTaskId id,
-                                                         SinkConnectorConfig sinkConfig, Map<String, Object> producerProps,
-                                                         ErrorHandlingMetrics errorHandlingMetrics) {
+            ConnectorTaskId id,
+            SinkConnectorConfig sinkConfig, Map<String, Object> producerProps,
+            ErrorHandlingMetrics errorHandlingMetrics) {
         String topic = sinkConfig.dlqTopicName();
 
         try (Admin admin = Admin.create(adminProps)) {
@@ -105,7 +105,7 @@ public class DeadLetterQueueReporter implements ErrorReporter<ConsumerRecord<byt
      */
     // Visible for testing
     DeadLetterQueueReporter(KafkaProducer<byte[], byte[]> kafkaProducer, SinkConnectorConfig connConfig,
-                            ConnectorTaskId id, ErrorHandlingMetrics errorHandlingMetrics) {
+            ConnectorTaskId id, ErrorHandlingMetrics errorHandlingMetrics) {
         Objects.requireNonNull(kafkaProducer);
         Objects.requireNonNull(connConfig);
         Objects.requireNonNull(id);

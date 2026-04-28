@@ -78,7 +78,7 @@ public final class PropertiesUtilsTest {
         assertEquals("Failed to find foo.bar",
             assertThrows(RuntimeException.class,
                 () -> PropertiesUtils.loadRequiredIntProp(props, "foo.bar")).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -88,6 +88,6 @@ public final class PropertiesUtilsTest {
         assertEquals("Unable to read foo.bar as a base-10 number.",
             assertThrows(RuntimeException.class,
                 () -> PropertiesUtils.loadRequiredIntProp(props, "foo.bar")).
-                    getMessage());
+                getMessage());
     }
 }

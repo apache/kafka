@@ -64,8 +64,8 @@ public class LogicalKeyValueSegment implements Segment, VersionedStoreSegment {
     final Set<KeyValueIterator<Bytes, byte[]>> openIterators = Collections.synchronizedSet(new HashSet<>());
 
     LogicalKeyValueSegment(final long id,
-                           final String name,
-                           final RocksDBStore physicalStore) {
+        final String name,
+        final RocksDBStore physicalStore) {
         this.id = id;
         this.name = name;
         this.physicalStore = Objects.requireNonNull(physicalStore);
@@ -316,13 +316,13 @@ public class LogicalKeyValueSegment implements Segment, VersionedStoreSegment {
         private final Function<Bytes, Boolean> prefixChecker;
 
         StrippedPrefixKeyValueIteratorAdapter(final KeyValueIterator<Bytes, byte[]> iteratorWithKeyPrefixes,
-                                              final Function<Bytes, Bytes> prefixRemover) {
+            final Function<Bytes, Bytes> prefixRemover) {
             this(iteratorWithKeyPrefixes, prefixRemover, bytes -> true);
         }
 
         StrippedPrefixKeyValueIteratorAdapter(final KeyValueIterator<Bytes, byte[]> iteratorWithKeyPrefixes,
-                                              final Function<Bytes, Bytes> prefixRemover,
-                                              final Function<Bytes, Boolean> prefixChecker) {
+            final Function<Bytes, Bytes> prefixRemover,
+            final Function<Bytes, Boolean> prefixChecker) {
             this.iteratorWithKeyPrefixes = iteratorWithKeyPrefixes;
             this.prefixRemover = prefixRemover;
             this.prefixChecker = prefixChecker;

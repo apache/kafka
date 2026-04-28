@@ -182,7 +182,7 @@ public final class RemoteLogSegmentFileset {
      * @return A new fileset instance.
      */
     public static RemoteLogSegmentFileset openExistingFileset(final RemoteTopicPartitionDirectory tpDirectory,
-                                                              final Uuid uuid) {
+            final Uuid uuid) {
         try {
             final Map<RemoteLogSegmentFileType, File> files =
                     Files.list(tpDirectory.getDirectory().toPath())
@@ -267,8 +267,8 @@ public final class RemoteLogSegmentFileset {
     }
 
     RemoteLogSegmentFileset(final RemoteTopicPartitionDirectory topicPartitionDirectory,
-                            final RemoteLogSegmentId remoteLogSegmentId,
-                            final Map<RemoteLogSegmentFileType, File> files) {
+            final RemoteLogSegmentId remoteLogSegmentId,
+            final Map<RemoteLogSegmentFileType, File> files) {
 
         this.partitionDirectory = requireNonNull(topicPartitionDirectory);
         this.remoteLogSegmentId = requireNonNull(remoteLogSegmentId);

@@ -85,18 +85,18 @@ class KStreamImplJoin {
     }
 
     KStreamImplJoin(final InternalStreamsBuilder builder,
-                    final boolean leftOuter,
-                    final boolean rightOuter) {
+        final boolean leftOuter,
+        final boolean rightOuter) {
         this.builder = builder;
         this.leftOuter = leftOuter;
         this.rightOuter = rightOuter;
     }
 
     public <K, V1, V2, VOut> KStream<K, VOut> join(final KStream<K, V1> lhs,
-                                                   final KStream<K, V2> other,
-                                                   final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VOut> joiner,
-                                                   final JoinWindows windows,
-                                                   final StreamJoined<K, V1, V2> streamJoined) {
+        final KStream<K, V2> other,
+        final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VOut> joiner,
+        final JoinWindows windows,
+        final StreamJoined<K, V1, V2> streamJoined) {
 
         final StreamJoinedInternal<K, V1, V2> streamJoinedInternal = new StreamJoinedInternal<>(streamJoined, builder);
         final NamedInternal renamed = new NamedInternal(streamJoinedInternal.name());
@@ -162,10 +162,10 @@ class KStreamImplJoin {
         Optional<StoreFactory> outerJoinWindowStore = Optional.empty();
         if (leftOuter) {
             outerJoinWindowStore = Optional.of(new OuterStreamJoinStoreFactory<>(
-                    joinThisGeneratedName,
-                    streamJoinedInternal,
-                    windows,
-                    rightOuter ? OuterStreamJoinStoreFactory.Type.RIGHT : OuterStreamJoinStoreFactory.Type.LEFT)
+                joinThisGeneratedName,
+                streamJoinedInternal,
+                windows,
+                rightOuter ? OuterStreamJoinStoreFactory.Type.RIGHT : OuterStreamJoinStoreFactory.Type.LEFT)
             );
         }
 
@@ -216,13 +216,13 @@ class KStreamImplJoin {
         final ProcessorParameters<K, V1, ?, ?> selfJoinProcessorParams = new ProcessorParameters<>(selfJoin, joinMergeName);
 
         joinBuilder.withJoinMergeProcessorParameters(joinMergeProcessorParams)
-                   .withJoinThisProcessorParameters(joinThisProcessorParams)
-                   .withJoinOtherProcessorParameters(joinOtherProcessorParams)
-                   .withSelfJoinProcessorParameters(selfJoinProcessorParams)
-                   .withThisWindowedStreamProcessorName(thisWindowStreamProcessorParams.processorName())
-                   .withOtherWindowedStreamProcessorName(otherWindowStreamProcessorParams.processorName())
-                   .withValueJoiner(joiner)
-                   .withNodeName(joinMergeName);
+            .withJoinThisProcessorParameters(joinThisProcessorParams)
+            .withJoinOtherProcessorParameters(joinOtherProcessorParams)
+            .withSelfJoinProcessorParameters(selfJoinProcessorParams)
+            .withThisWindowedStreamProcessorName(thisWindowStreamProcessorParams.processorName())
+            .withOtherWindowedStreamProcessorName(otherWindowStreamProcessorParams.processorName())
+            .withValueJoiner(joiner)
+            .withNodeName(joinMergeName);
 
         final GraphNode joinGraphNode = joinBuilder.build();
 
@@ -247,12 +247,12 @@ class KStreamImplJoin {
             supplier.windowSize() == joinWindows.size();
         if (!allMatch) {
             throw new StreamsException(String.format("Window settings mismatch. WindowBytesStoreSupplier settings %s must match JoinWindows settings %s" +
-                                                         " for the window size and retention period", supplier, joinWindows));
+                " for the window size and retention period", supplier, joinWindows));
         }
     }
 
     private void assertUniqueStoreNames(final WindowBytesStoreSupplier supplier,
-                                        final WindowBytesStoreSupplier otherSupplier) {
+        final WindowBytesStoreSupplier otherSupplier) {
 
         if (supplier != null
             && otherSupplier != null
@@ -262,8 +262,8 @@ class KStreamImplJoin {
     }
 
     private static <K, V> StoreFactory joinWindowStoreBuilderFromSupplier(final WindowBytesStoreSupplier storeSupplier,
-                                                                          final Serde<K> keySerde,
-                                                                          final Serde<V> valueSerde) {
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde) {
         return StoreBuilderWrapper.wrapStoreBuilder(Stores.timestampedWindowStoreWithHeadersBuilder(
             storeSupplier,
             keySerde,

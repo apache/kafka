@@ -55,12 +55,12 @@ public final class KafkaMetricHistogram implements CompoundStat {
      * Set list of percentiles we will provide metrics for.
      */
     private static final Map<Double, String> PERCENTILE_NAMES =
-        Utils.mkMap(
-            Utils.mkEntry(50.0, "p50"),
-            Utils.mkEntry(95.0, "p95"),
-            Utils.mkEntry(99.0, "p99"),
-            Utils.mkEntry(99.9, "p999")
-        );
+            Utils.mkMap(
+                    Utils.mkEntry(50.0, "p50"),
+                    Utils.mkEntry(95.0, "p95"),
+                    Utils.mkEntry(99.0, "p99"),
+                    Utils.mkEntry(99.9, "p999")
+            );
 
     /**
      * Factory for creating a {@link MetricName} based on a metric name with suffix.
@@ -78,12 +78,12 @@ public final class KafkaMetricHistogram implements CompoundStat {
      * @return A new {@link KafkaMetricHistogram} with the configured properties.
      */
     public static KafkaMetricHistogram newLatencyHistogram(
-        Function<String, MetricName> metricNameFactory
+            Function<String, MetricName> metricNameFactory
     ) {
         return new KafkaMetricHistogram(
-            metricNameFactory,
-            MAX_LATENCY_MS,
-            NUM_SIG_FIGS);
+                metricNameFactory,
+                MAX_LATENCY_MS,
+                NUM_SIG_FIGS);
     }
 
     /**
@@ -99,9 +99,9 @@ public final class KafkaMetricHistogram implements CompoundStat {
      * @param numberOfSignificantValueDigits The number of significant digits used.
      */
     private KafkaMetricHistogram(
-        Function<String, MetricName> metricNameFactory,
-        long highestTrackableValue,
-        int numberOfSignificantValueDigits
+            Function<String, MetricName> metricNameFactory,
+            long highestTrackableValue,
+            int numberOfSignificantValueDigits
     ) {
         this.metricNameFactory = metricNameFactory;
         this.hdrHistogram = new HdrHistogram(highestTrackableValue, numberOfSignificantValueDigits);
@@ -111,15 +111,15 @@ public final class KafkaMetricHistogram implements CompoundStat {
     public List<NamedMeasurable> stats() {
         List<NamedMeasurable> stats = new ArrayList<>();
         stats.add(new NamedMeasurable(
-            metricNameFactory.apply(MAX_NAME),
-            (config, now) -> hdrHistogram.max(now)));
+                metricNameFactory.apply(MAX_NAME),
+                (config, now) -> hdrHistogram.max(now)));
         PERCENTILE_NAMES
-            .entrySet()
-            .stream()
-            .map(e -> new NamedMeasurable(
-                metricNameFactory.apply(e.getValue()),
-                (config, now) -> hdrHistogram.measurePercentile(now, e.getKey())))
-            .forEachOrdered(stats::add);
+                .entrySet()
+                .stream()
+                .map(e -> new NamedMeasurable(
+                        metricNameFactory.apply(e.getValue()),
+                        (config, now) -> hdrHistogram.measurePercentile(now, e.getKey())))
+                .forEachOrdered(stats::add);
         return stats;
     }
 

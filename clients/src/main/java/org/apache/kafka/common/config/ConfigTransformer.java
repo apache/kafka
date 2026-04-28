@@ -107,7 +107,7 @@ public class ConfigTransformer {
                         ttls.put(path, ttl);
                     }
                     Map<String, Map<String, String>> keyValuesByPath =
-                            lookupsByProvider.computeIfAbsent(providerName, k -> new HashMap<>());
+                        lookupsByProvider.computeIfAbsent(providerName, k -> new HashMap<>());
                     keyValuesByPath.put(path, data);
                 }
             }
@@ -131,8 +131,8 @@ public class ConfigTransformer {
     }
 
     private static String replace(Map<String, Map<String, Map<String, String>>> lookupsByProvider,
-                                  String value,
-                                  Pattern pattern) {
+        String value,
+        Pattern pattern) {
         if (value == null) {
             return null;
         }

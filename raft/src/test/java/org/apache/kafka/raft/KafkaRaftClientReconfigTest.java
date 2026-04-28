@@ -118,13 +118,13 @@ public class KafkaRaftClientReconfigTest {
         // check the bootstrap snapshot exists and contains the expected records
         assertEquals(BOOTSTRAP_SNAPSHOT_ID, context.log.latestSnapshotId().get());
         try (SnapshotReader<?> reader = RecordsSnapshotReader.of(
-                context.log.latestSnapshot().get(),
-                context.serde,
-                BufferSupplier.NO_CACHING,
-                KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-                false,
-                new LogContext()
-            )
+                 context.log.latestSnapshot().get(),
+                 context.serde,
+                 BufferSupplier.NO_CACHING,
+                 KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+                 false,
+                 new LogContext()
+             )
         ) {
             SnapshotWriterReaderTest.assertControlSnapshot(expectedBootstrapRecords, reader);
         }
@@ -276,20 +276,20 @@ public class KafkaRaftClientReconfigTest {
         );
         ByteBuffer buffer = ByteBuffer.allocate(128);
         try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
-                buffer,
-                RecordBatch.CURRENT_MAGIC_VALUE,
-                Compression.NONE,
-                TimestampType.CREATE_TIME,
-                0, // baseOffset
-                0, // logAppendTime
-                RecordBatch.NO_PRODUCER_ID,
-                RecordBatch.NO_PRODUCER_EPOCH,
-                RecordBatch.NO_SEQUENCE,
-                false, // isTransactional
-                true, // isControlBatch
-                epoch,
-                buffer.capacity()
-            )
+                 buffer,
+                 RecordBatch.CURRENT_MAGIC_VALUE,
+                 Compression.NONE,
+                 TimestampType.CREATE_TIME,
+                 0, // baseOffset
+                 0, // logAppendTime
+                 RecordBatch.NO_PRODUCER_ID,
+                 RecordBatch.NO_PRODUCER_EPOCH,
+                 RecordBatch.NO_SEQUENCE,
+                 false, // isTransactional
+                 true, // isControlBatch
+                 epoch,
+                 buffer.capacity()
+             )
         ) {
             builder.appendLeaderChangeMessage(
                 0,
@@ -2410,7 +2410,7 @@ public class KafkaRaftClientReconfigTest {
     void testKRaftUpgradeVersion() throws Exception {
         var local = replicaKey(randomReplicaId(), true);
         var voter1 = replicaKey(local.id() + 1, true);
-        var voter2  = replicaKey(local.id() + 2, true);
+        var voter2 = replicaKey(local.id() + 2, true);
 
         VoterSet startingVoters = VoterSetTest.voterSet(
             VoterSetTest.voterMap(IntStream.of(local.id(), voter1.id(), voter2.id()), false)
@@ -2481,7 +2481,7 @@ public class KafkaRaftClientReconfigTest {
     void testUpdateVoterAfterKRaftVersionUpgrade() throws Exception {
         var local = replicaKey(randomReplicaId(), true);
         var voter1 = replicaKey(local.id() + 1, true);
-        var voter2  = replicaKey(local.id() + 2, true);
+        var voter2 = replicaKey(local.id() + 2, true);
 
         VoterSet startingVoters = VoterSetTest.voterSet(
             VoterSetTest.voterMap(IntStream.of(local.id(), voter1.id(), voter2.id()), false)
@@ -2588,7 +2588,7 @@ public class KafkaRaftClientReconfigTest {
     void testInvalidKRaftUpgradeVersion() throws Exception {
         var local = replicaKey(randomReplicaId(), true);
         var voter1 = replicaKey(local.id() + 1, true);
-        var voter2  = replicaKey(local.id() + 2, true);
+        var voter2 = replicaKey(local.id() + 2, true);
 
         VoterSet startingVoters = VoterSetTest.voterSet(
             VoterSetTest.voterMap(IntStream.of(local.id(), voter1.id(), voter2.id()), false)

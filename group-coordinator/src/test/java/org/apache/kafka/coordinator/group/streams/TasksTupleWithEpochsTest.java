@@ -258,12 +258,12 @@ public class TasksTupleWithEpochsTest {
         );
 
         String result = tuple.toString();
-        
+
         // Verify the exact toString format
         assertEquals(
             "(active=[1-1@10, 1-2@11, 2-3@20], " +
-            "standby=[2-4, 2-5], " +
-            "warmup=[3-6])",
+                "standby=[2-4, 2-5], " +
+                "warmup=[3-6])",
             result
         );
     }

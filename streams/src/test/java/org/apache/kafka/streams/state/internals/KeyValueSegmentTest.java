@@ -61,7 +61,7 @@ public class KeyValueSegmentTest {
 
     @Test
     public void shouldDeleteStateDirectoryOnDestroy() throws Exception {
-        final KeyValueSegment segment = new KeyValueSegment("segment", "window", 0L, Position.emptyPosition(),  metricsRecorder);
+        final KeyValueSegment segment = new KeyValueSegment("segment", "window", 0L, Position.emptyPosition(), metricsRecorder);
         final String directoryPath = TestUtils.tempDirectory().getAbsolutePath();
         final File directory = new File(directoryPath);
 

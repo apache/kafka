@@ -39,8 +39,8 @@ public class CounterConsumerRebalanceListener implements ConsumerRebalanceListen
     }
 
     public CounterConsumerRebalanceListener(Optional<RuntimeException> revokedError,
-                                            Optional<RuntimeException> assignedError,
-                                            Optional<RuntimeException> lostError) {
+        Optional<RuntimeException> assignedError,
+        Optional<RuntimeException> lostError) {
         this.revokedError = revokedError;
         this.assignedError = assignedError;
         this.lostError = lostError;

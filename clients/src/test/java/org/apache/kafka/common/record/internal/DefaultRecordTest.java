@@ -38,13 +38,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class DefaultRecordTest {
     @Test
     public void testBasicSerde() throws IOException {
-        Header[] headers = new Header[] {
+        Header[] headers = new Header[]{
             new RecordHeader("foo", "value".getBytes()),
             new RecordHeader("bar", null),
             new RecordHeader("\"A\\u00ea\\u00f1\\u00fcC\"", "value".getBytes())
         };
 
-        SimpleRecord[] records = new SimpleRecord[] {
+        SimpleRecord[] records = new SimpleRecord[]{
             new SimpleRecord("hi".getBytes(), "there".getBytes()),
             new SimpleRecord(null, "there".getBytes()),
             new SimpleRecord("hi".getBytes(), null),
@@ -61,7 +61,7 @@ public class DefaultRecordTest {
 
             ByteBufferOutputStream out = new ByteBufferOutputStream(1024);
             DefaultRecord.writeTo(new DataOutputStream(out), offsetDelta, timestampDelta, record.key(), record.value(),
-                    record.headers());
+                record.headers());
             ByteBuffer buffer = out.buffer();
             buffer.flip();
 
@@ -74,13 +74,13 @@ public class DefaultRecordTest {
             assertEquals(record.value(), logRecord.value());
             assertArrayEquals(record.headers(), logRecord.headers());
             assertEquals(DefaultRecord.sizeInBytes(offsetDelta, timestampDelta, record.key(), record.value(),
-                    record.headers()), logRecord.sizeInBytes());
+                record.headers()), logRecord.sizeInBytes());
         }
     }
 
     @Test
     public void testBasicSerdeInvalidHeaderCountTooHigh() throws IOException {
-        Header[] headers = new Header[] {
+        Header[] headers = new Header[]{
             new RecordHeader("foo", "value".getBytes()),
             new RecordHeader("bar", null),
             new RecordHeader("\"A\\u00ea\\u00f1\\u00fcC\"", "value".getBytes())
@@ -96,7 +96,7 @@ public class DefaultRecordTest {
 
         ByteBufferOutputStream out = new ByteBufferOutputStream(1024);
         DefaultRecord.writeTo(new DataOutputStream(out), offsetDelta, timestampDelta, record.key(), record.value(),
-                record.headers());
+            record.headers());
         ByteBuffer buffer = out.buffer();
         buffer.flip();
         buffer.put(14, (byte) 8);
@@ -112,7 +112,7 @@ public class DefaultRecordTest {
 
     @Test
     public void testBasicSerdeInvalidHeaderCountTooLow() throws IOException {
-        Header[] headers = new Header[] {
+        Header[] headers = new Header[]{
             new RecordHeader("foo", "value".getBytes()),
             new RecordHeader("bar", null),
             new RecordHeader("\"A\\u00ea\\u00f1\\u00fcC\"", "value".getBytes())
@@ -128,7 +128,7 @@ public class DefaultRecordTest {
 
         ByteBufferOutputStream out = new ByteBufferOutputStream(1024);
         DefaultRecord.writeTo(new DataOutputStream(out), offsetDelta, timestampDelta, record.key(), record.value(),
-                record.headers());
+            record.headers());
         ByteBuffer buffer = out.buffer();
         buffer.flip();
         buffer.put(14, (byte) 4);

@@ -119,7 +119,7 @@ public class MetricNameTemplate {
             return false;
         MetricNameTemplate other = (MetricNameTemplate) o;
         return Objects.equals(name, other.name) && Objects.equals(group, other.group) &&
-                Objects.equals(tags, other.tags);
+            Objects.equals(tags, other.tags);
     }
 
     @Override

@@ -105,7 +105,7 @@ public class ProcessorStateManager implements StateManager {
 
 
         private StateStoreMetadata(final StateStore stateStore,
-                                   final CommitCallback commitCallback) {
+            final CommitCallback commitCallback) {
             this.stateStore = stateStore;
             this.commitCallback = commitCallback;
             this.restoreCallback = null;
@@ -116,10 +116,10 @@ public class ProcessorStateManager implements StateManager {
         }
 
         private StateStoreMetadata(final StateStore stateStore,
-                                   final TopicPartition changelogPartition,
-                                   final StateRestoreCallback restoreCallback,
-                                   final CommitCallback commitCallback,
-                                   final RecordConverter recordConverter) {
+            final TopicPartition changelogPartition,
+            final StateRestoreCallback restoreCallback,
+            final CommitCallback commitCallback,
+            final RecordConverter recordConverter) {
             if (restoreCallback == null) {
                 throw new IllegalStateException("Log enabled store should always provide a restore callback upon registration");
             }
@@ -201,13 +201,13 @@ public class ProcessorStateManager implements StateManager {
      * @throws ProcessorStateException if the task directory does not exist and could not be created
      */
     public ProcessorStateManager(final TaskId taskId,
-                                 final TaskType taskType,
-                                 final boolean eosEnabled,
-                                 final LogContext logContext,
-                                 final StateDirectory stateDirectory,
-                                 final Map<String, String> storeToChangelogTopic,
-                                 final Collection<TopicPartition> sourcePartitions,
-                                 final UpgradeFromValues upgradeFrom) throws ProcessorStateException {
+        final TaskType taskType,
+        final boolean eosEnabled,
+        final LogContext logContext,
+        final StateDirectory stateDirectory,
+        final Map<String, String> storeToChangelogTopic,
+        final Collection<TopicPartition> sourcePartitions,
+        final UpgradeFromValues upgradeFrom) throws ProcessorStateException {
         this.storeToChangelogTopic = storeToChangelogTopic;
         this.log = logContext.logger(ProcessorStateManager.class);
         this.logPrefix = logContext.logPrefix();
@@ -229,12 +229,12 @@ public class ProcessorStateManager implements StateManager {
      * @throws ProcessorStateException if the task directory does not exist and could not be created
      */
     public ProcessorStateManager(final TaskId taskId,
-                                 final TaskType taskType,
-                                 final boolean eosEnabled,
-                                 final LogContext logContext,
-                                 final StateDirectory stateDirectory,
-                                 final Map<String, String> storeToChangelogTopic,
-                                 final Collection<TopicPartition> sourcePartitions) throws ProcessorStateException {
+        final TaskType taskType,
+        final boolean eosEnabled,
+        final LogContext logContext,
+        final StateDirectory stateDirectory,
+        final Map<String, String> storeToChangelogTopic,
+        final Collection<TopicPartition> sourcePartitions) throws ProcessorStateException {
         this(taskId, taskType, eosEnabled, logContext, stateDirectory, storeToChangelogTopic, sourcePartitions, null);
     }
 
@@ -244,11 +244,11 @@ public class ProcessorStateManager implements StateManager {
      * completed in {@link #assignToStreamThread(LogContext, Collection)}.
      */
     static ProcessorStateManager createStartupTaskStateManager(final TaskId taskId,
-                                                               final boolean eosEnabled,
-                                                               final LogContext logContext,
-                                                               final StateDirectory stateDirectory,
-                                                               final Map<String, String> storeToChangelogTopic,
-                                                               final Set<TopicPartition> sourcePartitions) {
+        final boolean eosEnabled,
+        final LogContext logContext,
+        final StateDirectory stateDirectory,
+        final Map<String, String> storeToChangelogTopic,
+        final Set<TopicPartition> sourcePartitions) {
         return new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, logContext, stateDirectory, storeToChangelogTopic, sourcePartitions);
     }
 
@@ -260,12 +260,12 @@ public class ProcessorStateManager implements StateManager {
                 if (isLoggingEnabled(store.name())) {
                     final TopicPartition changelogPartition = getStorePartition(store.name());
                     final StateStore maybeWrappedStore = LegacyCheckpointingStateStore.maybeWrapStore(
-                            store, eosEnabled, Set.of(changelogPartition), stateDirectory, taskId, logPrefix);
+                        store, eosEnabled, Set.of(changelogPartition), stateDirectory, taskId, logPrefix);
                     maybeWrappedStore.init(processorContext, maybeWrappedStore);
                     storesToMigrate.put(changelogPartition, maybeWrappedStore);
                 } else {
                     final StateStore maybeWrappedStore = LegacyCheckpointingStateStore.maybeWrapStore(
-                            store, eosEnabled, Set.of(), stateDirectory, taskId, logPrefix);
+                        store, eosEnabled, Set.of(), stateDirectory, taskId, logPrefix);
                     maybeWrappedStore.init(processorContext, maybeWrappedStore);
                 }
             }
@@ -294,8 +294,8 @@ public class ProcessorStateManager implements StateManager {
             if (store.corrupted) {
                 log.error("Tried to initialize store offsets for corrupted store {}", store);
                 throw new ProcessorStateException(
-                        "Error initializing offsets for store '" + store + "'",
-                        new IllegalStateException("Should not initialize offsets for a corrupted task")
+                    "Error initializing offsets for store '" + store + "'",
+                    new IllegalStateException("Should not initialize offsets for a corrupted task")
                 );
             }
 
@@ -303,29 +303,29 @@ public class ProcessorStateManager implements StateManager {
                 log.info("State store {} is not logged and hence would not be restored", store.stateStore.name());
             } else if (!store.stateStore.persistent()) {
                 log.info("Initializing to the starting offset for changelog {} of in-memory state store {}",
-                        store.changelogPartition, store.stateStore.name());
+                    store.changelogPartition, store.stateStore.name());
             } else if (store.offset() == null) {
                 final Long offset = store.stateStore.committedOffset(store.changelogPartition);
 
                 if (offset != null) {
                     store.setOffset(changelogOffsetFromCommittedOffset(offset));
                     log.info("State store {} initialized from checkpoint with offset {} at changelog {}",
-                            store.stateStore.name(), store.offset, store.changelogPartition);
+                        store.stateStore.name(), store.offset, store.changelogPartition);
                 } else {
                     // with EOS, if the previous run did not shutdown gracefully, we may lost the checkpoint file
                     // and hence we are uncertain that the current local state only contains committed data;
                     // in that case we need to treat it as a task-corrupted exception
                     if (eosEnabled && !storeDirIsEmpty) {
                         log.warn("State store {} did not find checkpoint offsets while stores are not empty, " +
-                                "since under EOS it has the risk of getting uncommitted data in stores we have to " +
-                                "treat it as a task corruption error and wipe out the local state of task {} " +
-                                "before re-bootstrapping", store.stateStore.name(), taskId);
+                            "since under EOS it has the risk of getting uncommitted data in stores we have to " +
+                            "treat it as a task corruption error and wipe out the local state of task {} " +
+                            "before re-bootstrapping", store.stateStore.name(), taskId);
 
                         throw new TaskCorruptedException(Collections.singleton(taskId));
                     } else {
                         log.info("State store {} did not find checkpoint offset, hence would " +
-                                        "default to the starting offset at changelog {}",
-                                store.stateStore.name(), store.changelogPartition);
+                            "default to the starting offset at changelog {}",
+                            store.stateStore.name(), store.changelogPartition);
                     }
                 }
             }
@@ -346,8 +346,8 @@ public class ProcessorStateManager implements StateManager {
 
     @Override
     public void registerStore(final StateStore store,
-                              final StateRestoreCallback stateRestoreCallback,
-                              final CommitCallback commitCallback) {
+        final StateRestoreCallback stateRestoreCallback,
+        final CommitCallback commitCallback) {
         final String storeName = store.name();
 
         // TODO (KAFKA-12887): we should not trigger user's exception handler for illegal-argument but always
@@ -365,7 +365,7 @@ public class ProcessorStateManager implements StateManager {
 
         if (stateRestoreCallback instanceof StateRestoreListener) {
             log.warn("The registered state restore callback is also implementing the state restore listener interface, " +
-                    "which is not expected and would be ignored");
+                "which is not expected and would be ignored");
         }
 
         final StateStoreMetadata storeMetadata = isLoggingEnabled(storeName) ?
@@ -522,9 +522,9 @@ public class ProcessorStateManager implements StateManager {
                             metadata.commitCallback.onCommit();
                         } catch (final IOException e) {
                             throw new ProcessorStateException(
-                                    format("%sException caught while trying to checkpoint store, " +
-                                            "changelog partition %s", logPrefix, metadata.changelogPartition),
-                                    e
+                                format("%sException caught while trying to checkpoint store, " +
+                                    "changelog partition %s", logPrefix, metadata.changelogPartition),
+                                e
                             );
                         }
                     }
@@ -534,13 +534,13 @@ public class ProcessorStateManager implements StateManager {
                         // In case of FailedProcessingException Do not keep the failed processing exception in the stack trace
                         if (exception instanceof FailedProcessingException)
                             firstException = new ProcessorStateException(
-                                    format("%sFailed to commit state store %s", logPrefix, store.name()),
-                                    exception.getCause());
+                                format("%sFailed to commit state store %s", logPrefix, store.name()),
+                                exception.getCause());
                         else if (exception instanceof StreamsException)
                             firstException = exception;
                         else
                             firstException = new ProcessorStateException(
-                                    format("%sFailed to commit state store %s", logPrefix, store.name()), exception);
+                                format("%sFailed to commit state store %s", logPrefix, store.name()), exception);
                         log.error("Failed to commit state store {}: ", store.name(), firstException);
                     } else {
                         log.error("Failed to commit state store {}: ", store.name(), exception);
@@ -696,7 +696,7 @@ public class ProcessorStateManager implements StateManager {
                 store.setOffset(entry.getValue());
 
                 log.debug("State store {} updated to written offset {} at changelog {}",
-                        store.stateStore.name(), store.offset, store.changelogPartition);
+                    store.stateStore.name(), store.offset, store.changelogPartition);
             }
         }
 
@@ -713,7 +713,7 @@ public class ProcessorStateManager implements StateManager {
         return offset != OFFSET_UNKNOWN ? offset : null;
     }
 
-    private  TopicPartition getStorePartition(final String storeName) {
+    private TopicPartition getStorePartition(final String storeName) {
         // NOTE we assume the partition of the topic can always be inferred from the task id;
         // if user ever use a custom partition grouper (deprecated in KIP-528) this would break and
         // it is not a regression (it would always break anyways)

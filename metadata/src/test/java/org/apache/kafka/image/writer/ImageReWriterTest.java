@@ -63,9 +63,9 @@ public class ImageReWriterTest {
         ImageReWriter writer = new ImageReWriter(delta);
         writer.close(true);
         assertThrows(ImageWriterClosedException.class, () ->
-                writer.write(0, new TopicRecord().
-                        setName("foo").
-                        setTopicId(Uuid.fromString("3B134hrsQgKtz8Sp6QBIfg"))));
+            writer.write(0, new TopicRecord().
+                setName("foo").
+                setTopicId(Uuid.fromString("3B134hrsQgKtz8Sp6QBIfg"))));
     }
 
     @Test
@@ -73,17 +73,17 @@ public class ImageReWriterTest {
         MetadataDelta delta = new MetadataDelta.Builder().build();
         ImageReWriter writer = new ImageReWriter(delta);
         writer.write(0, new TopicRecord().
-                setName("foo").
-                setTopicId(Uuid.fromString("3B134hrsQgKtz8Sp6QBIfg")));
+            setName("foo").
+            setTopicId(Uuid.fromString("3B134hrsQgKtz8Sp6QBIfg")));
         writer.close(true);
 
         MetadataDelta delta2 = new MetadataDelta.Builder().setImage(writer.image()).build();
         ImageReWriter writer2 = new ImageReWriter(delta2);
         writer2.write(0, new ConfigRecord().
-                setResourceName("").
-                setResourceType(BROKER.id()).
-                setName("num.io.threads").
-                setValue("12"));
+            setResourceName("").
+            setResourceType(BROKER.id()).
+            setName("num.io.threads").
+            setValue("12"));
         writer2.close(true);
         MetadataImage newImage = writer2.image();
 

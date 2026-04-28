@@ -70,7 +70,8 @@ public class GroupCoordinatorRecordHelpers {
 
     private static final short GROUP_METADATA_VALUE_VERSION = 3;
 
-    private GroupCoordinatorRecordHelpers() {}
+    private GroupCoordinatorRecordHelpers() {
+    }
 
     /**
      * Creates a ConsumerGroupMemberMetadata record.
@@ -498,7 +499,7 @@ public class GroupCoordinatorRecordHelpers {
         if (expireTimestampMs) {
             return 1;
         } else {
-            return  4;
+            return 4;
         }
     }
 
@@ -814,14 +815,14 @@ public class GroupCoordinatorRecordHelpers {
     ) {
         List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topics = new ArrayList<>(assignment.size());
         assignment.forEach((topicId, partitionEpochs) -> {
-            List<Integer> partitionList = new ArrayList<>(partitionEpochs.keySet());
-            List<Integer> epochList = partitionList.stream()
-                .map(partitionEpochs::get)
-                .toList();
-            topics.add(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
-                .setTopicId(topicId)
-                .setPartitions(partitionList)
-                .setAssignmentEpochs(epochList));
+                List<Integer> partitionList = new ArrayList<>(partitionEpochs.keySet());
+                List<Integer> epochList = partitionList.stream()
+                    .map(partitionEpochs::get)
+                    .toList();
+                topics.add(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
+                    .setTopicId(topicId)
+                    .setPartitions(partitionList)
+                    .setAssignmentEpochs(epochList));
             }
         );
         return topics;

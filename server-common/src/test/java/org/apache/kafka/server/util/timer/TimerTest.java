@@ -139,7 +139,8 @@ public class TimerTest {
         // randomly submit requests
         tasks.forEach(task -> timer.add(task));
 
-        while (timer.advanceClock(2000)) { }
+        while (timer.advanceClock(2000)) {
+        }
 
         latches.forEach(latch -> {
             try {

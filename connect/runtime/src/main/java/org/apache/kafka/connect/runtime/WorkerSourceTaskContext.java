@@ -33,10 +33,10 @@ public class WorkerSourceTaskContext implements SourceTaskContext {
     private final PluginMetrics pluginMetrics;
 
     public WorkerSourceTaskContext(OffsetStorageReader reader,
-                                   ConnectorTaskId id,
-                                   ClusterConfigState configState,
-                                   WorkerTransactionContext transactionContext,
-                                   PluginMetrics pluginMetrics) {
+            ConnectorTaskId id,
+            ClusterConfigState configState,
+            WorkerTransactionContext transactionContext,
+            PluginMetrics pluginMetrics) {
         this.reader = reader;
         this.id = id;
         this.configState = configState;

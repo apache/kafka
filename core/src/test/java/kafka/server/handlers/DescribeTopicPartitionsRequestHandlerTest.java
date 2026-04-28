@@ -228,7 +228,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
             .setTopics(List.of(
                 new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
                 new DescribeTopicPartitionsRequestData.TopicRequest().setName(unauthorizedTopic)
-                ))
+            ))
             .setCursor(new DescribeTopicPartitionsRequestData.Cursor().setTopicName(authorizedTopic).setPartitionIndex(1))
         );
 
@@ -290,7 +290,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
 
         // 3.5 Fetch all topics with limit
         describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(
-                new DescribeTopicPartitionsRequestData().setResponsePartitionLimit(1)
+            new DescribeTopicPartitionsRequestData().setResponsePartitionLimit(1)
         );
         try {
             request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
@@ -397,7 +397,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
             .setTopics(List.of(
                 new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
                 new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic2)
-                ))
+            ))
             .setCursor(new DescribeTopicPartitionsRequestData.Cursor().setTopicName(authorizedTopic).setPartitionIndex(1))
         );
 
@@ -428,7 +428,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
             .setTopics(List.of(
                 new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
                 new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic2)
-                ))
+            ))
             .setCursor(new DescribeTopicPartitionsRequestData.Cursor().setTopicName(authorizedTopic2).setPartitionIndex(0))
         );
 
@@ -452,7 +452,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
             .setTopics(List.of(
                 new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
                 new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic2)
-                ))
+            ))
             .setCursor(new DescribeTopicPartitionsRequestData.Cursor().setTopicName("Non-existing").setPartitionIndex(0))
         );
 
@@ -510,10 +510,10 @@ class DescribeTopicPartitionsRequestHandlerTest {
         // for forwarding because after forwarding the context will have a different context.
         // We validate the context authenticated failure case in other integration tests.
         RequestContext context = new RequestContext(header, "1", InetAddress.getLocalHost(), Optional.empty(), new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Alice"),
-                listenerName, SecurityProtocol.SSL, ClientInformation.EMPTY, false,
-                Optional.of(kafkaPrincipalSerde));
+            listenerName, SecurityProtocol.SSL, ClientInformation.EMPTY, false,
+            Optional.of(kafkaPrincipalSerde));
         return new RequestChannel.Request(1, context, 0, MemoryPool.NONE, buffer,
-                requestChannelMetrics, scala.Option.apply(null));
+            requestChannelMetrics, scala.Option.apply(null));
     }
 
     KafkaConfig createKafkaDefaultConfig() {

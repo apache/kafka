@@ -23,5 +23,5 @@ import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
 import jakarta.ws.rs.core.Configurable;
 
 public record ConnectRestExtensionContextImpl(Configurable<? extends Configurable<?>> configurable,
-                                              ConnectClusterState clusterState) implements ConnectRestExtensionContext {
+ConnectClusterState clusterState) implements ConnectRestExtensionContext {
 }

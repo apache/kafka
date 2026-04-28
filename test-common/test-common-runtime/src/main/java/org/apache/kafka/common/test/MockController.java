@@ -203,7 +203,7 @@ public class MockController implements Controller {
                             creatableTopicResult.
                                 setTopicConfigErrorCode(Errors.NONE.code()).
                                 setReplicationFactor((short)
-                                    topic.assignments().iterator().next().brokerIds().size()).
+                                topic.assignments().iterator().next().brokerIds().size()).
                                 setNumPartitions(topic.assignments().size());
                         } else {
                             creatableTopicResult.
@@ -369,7 +369,7 @@ public class MockController implements Controller {
     }
 
     private ApiError incrementalAlterResource(ConfigResource resource,
-            Map<String, Entry<AlterConfigOp.OpType, String>> ops, boolean validateOnly) {
+                                              Map<String, Entry<AlterConfigOp.OpType, String>> ops, boolean validateOnly) {
         for (Entry<String, Entry<AlterConfigOp.OpType, String>> entry : ops.entrySet()) {
             AlterConfigOp.OpType opType = entry.getValue().getKey();
             if (opType != SET && opType != DELETE) {

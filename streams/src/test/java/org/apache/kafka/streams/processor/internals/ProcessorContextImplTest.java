@@ -616,7 +616,8 @@ public class ProcessorContextImplTest {
         context = getStandbyContext();
         assertThrows(
             UnsupportedOperationException.class,
-            () -> context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, t -> { })
+            () -> context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, t -> {
+            })
         );
     }
 

@@ -247,9 +247,9 @@ public class ClientRebootstrapTest {
         clusterInstance.shutdownBroker(broker0);
 
         try (var consumer = clusterInstance.consumer(Map.of(
-            CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "none",
-            ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name)
-        )) {
+                 CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "none",
+                 ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name)
+             )) {
             // Only the server 1 is available for the consumer during the bootstrap.
             consumer.assign(List.of(tp));
             consumer.seekToBeginning(List.of(tp));

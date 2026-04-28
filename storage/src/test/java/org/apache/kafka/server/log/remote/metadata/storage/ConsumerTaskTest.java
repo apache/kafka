@@ -72,7 +72,7 @@ public class ConsumerTaskTest {
     private final RemoteLogMetadataTopicPartitioner partitioner = new RemoteLogMetadataTopicPartitioner(numMetadataTopicPartitions);
     private final DummyEventHandler handler = new DummyEventHandler();
     private final Set<TopicPartition> remoteLogPartitions = IntStream.range(0, numMetadataTopicPartitions).boxed()
-        .map(ConsumerTask::toRemoteLogPartition).collect(Collectors.toSet());
+            .map(ConsumerTask::toRemoteLogPartition).collect(Collectors.toSet());
     private final Uuid topicId = Uuid.randomUuid();
     private final RemoteLogMetadataSerde serde = new RemoteLogMetadataSerde();
 
@@ -82,7 +82,7 @@ public class ConsumerTaskTest {
     @BeforeEach
     public void beforeEach() {
         final Map<TopicPartition, Long> offsets = remoteLogPartitions.stream()
-            .collect(Collectors.toMap(Function.identity(), e -> 0L));
+                .collect(Collectors.toMap(Function.identity(), e -> 0L));
         consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
         consumer.updateBeginningOffsets(offsets);
         consumerTask = new ConsumerTask(handler, partitioner, consumer, 10L, 300_000L, Time.SYSTEM);
@@ -132,8 +132,8 @@ public class ConsumerTaskTest {
     public void testAddAssignmentsForPartitions() {
         final List<TopicIdPartition> idPartitions = getIdPartitions("sample", 3);
         final Map<TopicPartition, Long> endOffsets = idPartitions.stream()
-            .map(idp -> toRemoteLogPartition(partitioner.metadataPartition(idp)))
-            .collect(Collectors.toMap(Function.identity(), e -> 0L, (a, b) -> b));
+                .map(idp -> toRemoteLogPartition(partitioner.metadataPartition(idp)))
+                .collect(Collectors.toMap(Function.identity(), e -> 0L, (a, b) -> b));
         consumer.updateEndOffsets(endOffsets);
         consumerTask.addAssignmentsForPartitions(new HashSet<>(idPartitions));
         consumerTask.ingestRecords();
@@ -148,8 +148,8 @@ public class ConsumerTaskTest {
     public void testRemoveAssignmentsForPartitions() {
         final List<TopicIdPartition> allPartitions = getIdPartitions("sample", 3);
         final Map<TopicPartition, Long> endOffsets = allPartitions.stream()
-            .map(idp -> toRemoteLogPartition(partitioner.metadataPartition(idp)))
-            .collect(Collectors.toMap(Function.identity(), e -> 0L, (a, b) -> b));
+                .map(idp -> toRemoteLogPartition(partitioner.metadataPartition(idp)))
+                .collect(Collectors.toMap(Function.identity(), e -> 0L, (a, b) -> b));
         consumer.updateEndOffsets(endOffsets);
         consumerTask.addAssignmentsForPartitions(new HashSet<>(allPartitions));
         consumerTask.ingestRecords();
@@ -177,8 +177,8 @@ public class ConsumerTaskTest {
     public void testConcurrentPartitionAssignments() throws InterruptedException, ExecutionException {
         final List<TopicIdPartition> allPartitions = getIdPartitions("sample", 100);
         final Map<TopicPartition, Long> endOffsets = allPartitions.stream()
-            .map(idp -> toRemoteLogPartition(partitioner.metadataPartition(idp)))
-            .collect(Collectors.toMap(Function.identity(), e -> 0L, (a, b) -> b));
+                .map(idp -> toRemoteLogPartition(partitioner.metadataPartition(idp)))
+                .collect(Collectors.toMap(Function.identity(), e -> 0L, (a, b) -> b));
         consumer.updateEndOffsets(endOffsets);
 
         final AtomicBoolean isAllPartitionsAssigned = new AtomicBoolean(false);
@@ -420,9 +420,9 @@ public class ConsumerTaskTest {
     }
 
     private void addRecord(final MockConsumer<byte[], byte[]> consumer,
-                           final int metadataPartition,
-                           final TopicIdPartition idPartition,
-                           final long recordOffset) {
+            final int metadataPartition,
+            final TopicIdPartition idPartition,
+            final long recordOffset) {
         final RemoteLogSegmentId segmentId = new RemoteLogSegmentId(idPartition, Uuid.randomUuid());
         final RemoteLogMetadata metadata = new RemoteLogSegmentMetadata(segmentId, 0L, 1L, 0L, 0, 0L, 1, Map.of(0, 0L));
         final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME, metadataPartition, recordOffset, null, serde.serialize(metadata));

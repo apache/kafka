@@ -231,7 +231,7 @@ public enum ApiKeys {
 
     public List<Short> allVersions() {
         List<Short> versions = new ArrayList<>(latestVersion() - oldestVersion() + 1);
-        for (short version = oldestVersion(); version <= latestVersion(); version++) {
+        for (short version = oldestVersion();version <= latestVersion();version++) {
             versions.add(version);
         }
         return versions;
@@ -274,7 +274,7 @@ public enum ApiKeys {
      * See `PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION` for details.
      */
     public Optional<ApiVersionsResponseData.ApiVersion> toApiVersionForApiResponse(boolean enableUnstableLastVersion,
-                                                                                   ApiMessageType.ListenerType listenerType) {
+        ApiMessageType.ListenerType listenerType) {
         return toApiVersion(enableUnstableLastVersion, Optional.of(listenerType));
     }
 
@@ -283,7 +283,7 @@ public enum ApiKeys {
     }
 
     private Optional<ApiVersionsResponseData.ApiVersion> toApiVersion(boolean enableUnstableLastVersion,
-                                                                     Optional<ApiMessageType.ListenerType> listenerType) {
+        Optional<ApiMessageType.ListenerType> listenerType) {
         // see `PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION` for details on why we do this
         short oldestVersion = (this == PRODUCE && listenerType.map(l -> l == ApiMessageType.ListenerType.BROKER).orElse(false)) ?
             PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION : oldestVersion();
@@ -292,9 +292,9 @@ public enum ApiKeys {
         // API is entirely disabled if latestStableVersion is smaller than oldestVersion.
         if (latestVersion >= oldestVersion) {
             return Optional.of(new ApiVersionsResponseData.ApiVersion()
-               .setApiKey(messageType.apiKey())
-               .setMinVersion(oldestVersion)
-               .setMaxVersion(latestVersion));
+                .setApiKey(messageType.apiKey())
+                .setMinVersion(oldestVersion)
+                .setMaxVersion(latestVersion));
         } else {
             return Optional.empty();
         }

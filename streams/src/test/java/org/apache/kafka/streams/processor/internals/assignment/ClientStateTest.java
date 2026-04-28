@@ -348,8 +348,8 @@ public class ClientStateTest {
     @Test
     public void shouldReturnPreviousStatefulTasksForConsumer() {
         client.addPreviousTasksAndOffsetSums("c1", mkMap(
-                mkEntry(TASK_0_0, 100L),
-                mkEntry(TASK_0_1, Task.LATEST_OFFSET)
+            mkEntry(TASK_0_0, 100L),
+            mkEntry(TASK_0_1, Task.LATEST_OFFSET)
         ));
         client.addPreviousTasksAndOffsetSums("c2", Collections.singletonMap(TASK_0_2, 0L));
         client.addPreviousTasksAndOffsetSums("c3", Collections.emptyMap());
@@ -377,23 +377,23 @@ public class ClientStateTest {
         );
 
         client.addPreviousTasksAndOffsetSums("c1", mkMap(
-                mkEntry(TASK_0_1, Task.LATEST_OFFSET),
-                mkEntry(TASK_0_0, 10L)));
+            mkEntry(TASK_0_1, Task.LATEST_OFFSET),
+            mkEntry(TASK_0_0, 10L)));
         client.addPreviousTasksAndOffsetSums("c2", Collections.singletonMap(TASK_0_2, 0L));
 
         assertThat(client.prevOwnedStatefulTasksByConsumer("c1"), equalTo(Set.of(TASK_0_1, TASK_0_0)));
         assertThat(client.prevOwnedStatefulTasksByConsumer("c2"), equalTo(Set.of(TASK_0_2)));
         assertThat(client.prevOwnedActiveTasksByConsumer(), equalTo(
-                mkMap(
-                        mkEntry("c1", Collections.singleton(TASK_0_1)),
-                        mkEntry("c2", Collections.singleton(TASK_0_2))
-                ))
+            mkMap(
+                mkEntry("c1", Collections.singleton(TASK_0_1)),
+                mkEntry("c2", Collections.singleton(TASK_0_2))
+            ))
         );
         assertThat(client.prevOwnedStandbyByConsumer(), equalTo(
-                mkMap(
-                        mkEntry("c1", Collections.singleton(TASK_0_0)),
-                        mkEntry("c2", Collections.emptySet())
-                ))
+            mkMap(
+                mkEntry("c1", Collections.singleton(TASK_0_0)),
+                mkEntry("c2", Collections.emptySet())
+            ))
         );
     }
 
@@ -418,12 +418,12 @@ public class ClientStateTest {
         client.revokeActiveFromConsumer(TASK_0_1, "c1");
 
         assertThat(client.assignedActiveTasksByConsumer(), equalTo(mkMap(
-                mkEntry("c1", Set.of(TASK_0_0, TASK_0_1)),
-                mkEntry("c2", Set.of(TASK_0_2))
+            mkEntry("c1", Set.of(TASK_0_0, TASK_0_1)),
+            mkEntry("c2", Set.of(TASK_0_2))
         )));
         assertThat(client.assignedStandbyTasksByConsumer(), equalTo(mkMap(
-                mkEntry("c1", Set.of(TASK_0_2)),
-                mkEntry("c2", Set.of(TASK_0_0))
+            mkEntry("c1", Set.of(TASK_0_2)),
+            mkEntry("c2", Set.of(TASK_0_0))
         )));
         assertThat(client.revokingActiveTasksByConsumer(), equalTo(Collections.singletonMap("c1", Set.of(TASK_0_1))));
     }
@@ -463,7 +463,7 @@ public class ClientStateTest {
         final Map<TaskId, Long> clientReportedTaskEndOffsetSums = mkMap(
             mkEntry(NAMED_TASK_T0_0_0, 500L),
             mkEntry(NAMED_TASK_T1_0_0, 500L)
-            );
+        );
         final Map<TaskId, Long> allTaskEndOffsetSumsComputedByAssignor = Collections.singletonMap(NAMED_TASK_T0_0_0, 500L);
         client.addPreviousTasksAndOffsetSums("c1", clientReportedTaskEndOffsetSums);
         client.computeTaskLags(null, allTaskEndOffsetSumsComputedByAssignor);

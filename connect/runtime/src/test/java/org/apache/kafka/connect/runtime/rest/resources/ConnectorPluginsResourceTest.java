@@ -107,6 +107,7 @@ public class ConnectorPluginsResourceTest {
 
     private static final Map<String, String> PROPS;
     private static final Map<String, String> PARTIAL_PROPS = new HashMap<>();
+
     static {
         PARTIAL_PROPS.put("name", "test");
         PARTIAL_PROPS.put("test.string.config", "testString");
@@ -237,10 +238,10 @@ public class ConnectorPluginsResourceTest {
             configValues.addAll(connectorConfigValues);
 
             ConfigInfos configInfos = AbstractHerder.generateResult(
-                ConnectorPluginsResourceTestConnector.class.getName(),
-                resultConfigKeys,
-                configValues,
-                List.of("Test")
+                    ConnectorPluginsResourceTestConnector.class.getName(),
+                    resultConfigKeys,
+                    configValues,
+                    List.of("Test")
             );
             configInfosCallback.getValue().onCompletion(null, configInfos);
             return null;
@@ -249,15 +250,15 @@ public class ConnectorPluginsResourceTest {
         // This call to validateConfigs does not throw a BadRequestException because we've mocked
         // validateConnectorConfig.
         ConfigInfos configInfos = connectorPluginsResource.validateConfigs(
-            ConnectorPluginsResourceTestConnector.class.getSimpleName(),
-            PARTIAL_PROPS
+                ConnectorPluginsResourceTestConnector.class.getSimpleName(),
+                PARTIAL_PROPS
         );
         assertEquals(PARTIAL_CONFIG_INFOS.name(), configInfos.name());
         assertEquals(PARTIAL_CONFIG_INFOS.errorCount(), configInfos.errorCount());
         assertEquals(PARTIAL_CONFIG_INFOS.groups(), configInfos.groups());
         assertEquals(
-            new HashSet<>(PARTIAL_CONFIG_INFOS.configs()),
-            new HashSet<>(configInfos.configs())
+                new HashSet<>(PARTIAL_CONFIG_INFOS.configs()),
+                new HashSet<>(configInfos.configs())
         );
         verify(herder).validateConnectorConfig(eq(PARTIAL_PROPS), any(), anyBoolean());
     }
@@ -292,8 +293,8 @@ public class ConnectorPluginsResourceTest {
 
         // make a request to connector-plugins resource using just the simple class name.
         ConfigInfos configInfos = connectorPluginsResource.validateConfigs(
-            ConnectorPluginsResourceTestConnector.class.getSimpleName(),
-            PROPS
+                ConnectorPluginsResourceTestConnector.class.getSimpleName(),
+                PROPS
         );
         assertEquals(CONFIG_INFOS.name(), configInfos.name());
         assertEquals(0, configInfos.errorCount());
@@ -332,8 +333,8 @@ public class ConnectorPluginsResourceTest {
 
         // make a request to connector-plugins resource using a valid alias.
         ConfigInfos configInfos = connectorPluginsResource.validateConfigs(
-            "ConnectorPluginsResourceTest",
-            PROPS
+                "ConnectorPluginsResourceTest",
+                PROPS
         );
         assertEquals(CONFIG_INFOS.name(), configInfos.name());
         assertEquals(0, configInfos.errorCount());
@@ -347,7 +348,7 @@ public class ConnectorPluginsResourceTest {
         // make a request to connector-plugins resource using a non-loaded connector with the same
         // simple name but different package.
         String customClassname = "com.custom.package."
-            + ConnectorPluginsResourceTestConnector.class.getSimpleName();
+                + ConnectorPluginsResourceTestConnector.class.getSimpleName();
         assertThrows(BadRequestException.class, () -> connectorPluginsResource.validateConfigs(customClassname, PROPS));
     }
 
@@ -387,16 +388,16 @@ public class ConnectorPluginsResourceTest {
         assertTrue(serializedSource.contains("source"));
         assertTrue(serializedUnknown.contains("unknown"));
         assertEquals(
-            ConnectorType.SINK,
-            objectMapper.readValue(serializedSink, ConnectorType.class)
+                ConnectorType.SINK,
+                objectMapper.readValue(serializedSink, ConnectorType.class)
         );
         assertEquals(
-            ConnectorType.SOURCE,
-            objectMapper.readValue(serializedSource, ConnectorType.class)
+                ConnectorType.SOURCE,
+                objectMapper.readValue(serializedSource, ConnectorType.class)
         );
         assertEquals(
-            ConnectorType.UNKNOWN,
-            objectMapper.readValue(serializedUnknown, ConnectorType.class)
+                ConnectorType.UNKNOWN,
+                objectMapper.readValue(serializedUnknown, ConnectorType.class)
         );
     }
 
@@ -411,21 +412,21 @@ public class ConnectorPluginsResourceTest {
 
         // Verify the JSON contains lowercase type fields
         assertTrue(json.contains("\"type\":\"sink\""),
-            "Expected JSON to contain '\"type\":\"sink\"' but got: " + json);
+                "Expected JSON to contain '\"type\":\"sink\"' but got: " + json);
         assertTrue(json.contains("\"type\":\"source\""),
-            "Expected JSON to contain '\"type\":\"source\"' but got: " + json);
+                "Expected JSON to contain '\"type\":\"source\"' but got: " + json);
     }
 
     @Test
     public void testListAllPlugins() {
         List<PluginInfo> expectedConnectorPlugins = Stream.of(
-                        SINK_CONNECTOR_PLUGINS,
-                        SOURCE_CONNECTOR_PLUGINS,
-                        CONVERTER_PLUGINS,
-                        HEADER_CONVERTER_PLUGINS,
-                        TRANSFORMATION_PLUGINS,
-                        PREDICATE_PLUGINS
-                ).flatMap(Collection::stream)
+                SINK_CONNECTOR_PLUGINS,
+                SOURCE_CONNECTOR_PLUGINS,
+                CONVERTER_PLUGINS,
+                HEADER_CONVERTER_PLUGINS,
+                TRANSFORMATION_PLUGINS,
+                PREDICATE_PLUGINS
+        ).flatMap(Collection::stream)
                 .map(PluginInfo::new)
                 .distinct()
                 .collect(Collectors.toList());
@@ -467,10 +468,10 @@ public class ConnectorPluginsResourceTest {
         private static final String GROUP = "Test";
 
         private static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(TEST_STRING_CONFIG, Type.STRING, Importance.HIGH, "Test configuration for string type.")
-            .define(TEST_INT_CONFIG, Type.INT, Importance.MEDIUM, "Test configuration for integer type.", GROUP, 1, Width.MEDIUM, TEST_INT_CONFIG, new IntegerRecommender())
-            .define(TEST_STRING_CONFIG_DEFAULT, Type.STRING, "", Importance.LOW, "Test configuration with default value.")
-            .define(TEST_LIST_CONFIG, Type.LIST, Importance.HIGH, "Test configuration for list type.", GROUP, 2, Width.LONG, TEST_LIST_CONFIG, new ListRecommender());
+                .define(TEST_STRING_CONFIG, Type.STRING, Importance.HIGH, "Test configuration for string type.")
+                .define(TEST_INT_CONFIG, Type.INT, Importance.MEDIUM, "Test configuration for integer type.", GROUP, 1, Width.MEDIUM, TEST_INT_CONFIG, new IntegerRecommender())
+                .define(TEST_STRING_CONFIG_DEFAULT, Type.STRING, "", Importance.LOW, "Test configuration with default value.")
+                .define(TEST_LIST_CONFIG, Type.LIST, Importance.HIGH, "Test configuration for list type.", GROUP, 2, Width.LONG, TEST_LIST_CONFIG, new ListRecommender());
 
         @Override
         public String version() {

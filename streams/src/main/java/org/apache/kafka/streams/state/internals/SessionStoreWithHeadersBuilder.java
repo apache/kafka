@@ -43,9 +43,9 @@ public class SessionStoreWithHeadersBuilder<K, V>
     private final SessionBytesStoreSupplier storeSupplier;
 
     public SessionStoreWithHeadersBuilder(final SessionBytesStoreSupplier storeSupplier,
-                                          final Serde<K> keySerde,
-                                          final Serde<V> valueSerde,
-                                          final Time time) {
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde,
+        final Time time) {
         super(
             Objects.requireNonNull(storeSupplier, "storeSupplier cannot be null").name(),
             keySerde,
@@ -126,38 +126,38 @@ public class SessionStoreWithHeadersBuilder<K, V>
 
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes key,
-                                                                      final long earliestSessionEndTime,
-                                                                      final long latestSessionStartTime) {
+            final long earliestSessionEndTime,
+            final long latestSessionStartTime) {
             return wrapped().findSessions(key, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes key,
-                                                                              final long earliestSessionEndTime,
-                                                                              final long latestSessionStartTime) {
+            final long earliestSessionEndTime,
+            final long latestSessionStartTime) {
             return wrapped().backwardFindSessions(key, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes keyFrom,
-                                                                      final Bytes keyTo,
-                                                                      final long earliestSessionEndTime,
-                                                                      final long latestSessionStartTime) {
+            final Bytes keyTo,
+            final long earliestSessionEndTime,
+            final long latestSessionStartTime) {
             return wrapped().findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes keyFrom,
-                                                                              final Bytes keyTo,
-                                                                              final long earliestSessionEndTime,
-                                                                              final long latestSessionStartTime) {
+            final Bytes keyTo,
+            final long earliestSessionEndTime,
+            final long latestSessionStartTime) {
             return wrapped().backwardFindSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
         public byte[] fetchSession(final Bytes key,
-                                   final long earliestSessionEndTime,
-                                   final long latestSessionStartTime) {
+            final long earliestSessionEndTime,
+            final long latestSessionStartTime) {
             return wrapped().fetchSession(key, earliestSessionEndTime, latestSessionStartTime);
         }
 
@@ -168,38 +168,38 @@ public class SessionStoreWithHeadersBuilder<K, V>
 
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes key,
-                                                                      final Instant earliestSessionEndTime,
-                                                                      final Instant latestSessionStartTime) {
+            final Instant earliestSessionEndTime,
+            final Instant latestSessionStartTime) {
             return wrapped().findSessions(key, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes key,
-                                                                              final Instant earliestSessionEndTime,
-                                                                              final Instant latestSessionStartTime) {
+            final Instant earliestSessionEndTime,
+            final Instant latestSessionStartTime) {
             return wrapped().backwardFindSessions(key, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes keyFrom,
-                                                                      final Bytes keyTo,
-                                                                      final Instant earliestSessionEndTime,
-                                                                      final Instant latestSessionStartTime) {
+            final Bytes keyTo,
+            final Instant earliestSessionEndTime,
+            final Instant latestSessionStartTime) {
             return wrapped().findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes keyFrom,
-                                                                              final Bytes keyTo,
-                                                                              final Instant earliestSessionEndTime,
-                                                                              final Instant latestSessionStartTime) {
+            final Bytes keyTo,
+            final Instant earliestSessionEndTime,
+            final Instant latestSessionStartTime) {
             return wrapped().backwardFindSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
         public byte[] fetchSession(final Bytes key,
-                                   final Instant sessionStartTime,
-                                   final Instant sessionEndTime) {
+            final Instant sessionStartTime,
+            final Instant sessionEndTime) {
             return wrapped().fetchSession(key, sessionStartTime, sessionEndTime);
         }
 

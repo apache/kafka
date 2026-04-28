@@ -55,8 +55,8 @@ public class VerificationKeyResolverFactory {
     private static final Map<VerificationKeyResolverKey, CloseableVerificationKeyResolver> CACHE = new HashMap<>();
 
     public static synchronized CloseableVerificationKeyResolver get(Map<String, ?> configs,
-                                                                    String saslMechanism,
-                                                                    List<AppConfigurationEntry> jaasConfigEntries) {
+        String saslMechanism,
+        List<AppConfigurationEntry> jaasConfigEntries) {
         VerificationKeyResolverKey key = new VerificationKeyResolverKey(configs, saslMechanism, jaasConfigEntries);
 
         return CACHE.computeIfAbsent(key, k ->
@@ -71,8 +71,8 @@ public class VerificationKeyResolverFactory {
     }
 
     static CloseableVerificationKeyResolver create(Map<String, ?> configs,
-                                                   String saslMechanism,
-                                                   List<AppConfigurationEntry> jaasConfigEntries) {
+        String saslMechanism,
+        List<AppConfigurationEntry> jaasConfigEntries) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
         URL jwksEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
         CloseableVerificationKeyResolver resolver;
@@ -123,8 +123,8 @@ public class VerificationKeyResolverFactory {
         private final Map<String, Object> moduleOptions;
 
         public VerificationKeyResolverKey(Map<String, ?> configs,
-                                          String saslMechanism,
-                                          List<AppConfigurationEntry> jaasConfigEntries) {
+            String saslMechanism,
+            List<AppConfigurationEntry> jaasConfigEntries) {
             this.configs = configs;
             this.saslMechanism = saslMechanism;
             this.moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);

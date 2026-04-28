@@ -143,7 +143,6 @@ public class ActiveTaskCreatorTest {
     }
 
 
-
     // eos-v2 test
 
     // functional test

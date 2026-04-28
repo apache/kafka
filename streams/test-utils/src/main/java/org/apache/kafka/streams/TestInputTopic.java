@@ -57,11 +57,11 @@ public class TestInputTopic<K, V> {
     private final Duration advanceDuration;
 
     TestInputTopic(final TopologyTestDriver driver,
-                   final String topicName,
-                   final Serializer<K> keySerializer,
-                   final Serializer<V> valueSerializer,
-                   final Instant startTimestamp,
-                   final Duration autoAdvance) {
+        final String topicName,
+        final Serializer<K> keySerializer,
+        final Serializer<V> valueSerializer,
+        final Instant startTimestamp,
+        final Duration autoAdvance) {
         Objects.requireNonNull(driver, "TopologyTestDriver cannot be null");
         Objects.requireNonNull(topicName, "topicName cannot be null");
         Objects.requireNonNull(keySerializer, "keySerializer cannot be null");
@@ -133,7 +133,7 @@ public class TestInputTopic<K, V> {
      * @param value the record value
      */
     public void pipeInput(final K key,
-                          final V value) {
+        final V value) {
         pipeInput(new TestRecord<>(key, value));
     }
 
@@ -145,7 +145,7 @@ public class TestInputTopic<K, V> {
      * @param timestamp the record timestamp
      */
     public void pipeInput(final V value,
-                          final Instant timestamp) {
+        final Instant timestamp) {
         pipeInput(new TestRecord<>(null, value, timestamp));
     }
 
@@ -158,8 +158,8 @@ public class TestInputTopic<K, V> {
      * @param timestampMs the record timestamp
      */
     public void pipeInput(final K key,
-                          final V value,
-                          final long timestampMs) {
+        final V value,
+        final long timestampMs) {
         pipeInput(new TestRecord<>(key, value, null, timestampMs));
     }
 
@@ -172,8 +172,8 @@ public class TestInputTopic<K, V> {
      * @param timestamp the record timestamp
      */
     public void pipeInput(final K key,
-                          final V value,
-                          final Instant timestamp) {
+        final V value,
+        final Instant timestamp) {
         pipeInput(new TestRecord<>(key, value, timestamp));
     }
 
@@ -224,8 +224,8 @@ public class TestInputTopic<K, V> {
      * @param advance        the time difference between two consecutive generated records
      */
     public void pipeKeyValueList(final List<KeyValue<K, V>> keyValues,
-                                 final Instant startTimestamp,
-                                 final Duration advance) {
+        final Instant startTimestamp,
+        final Duration advance) {
         Instant recordTime = startTimestamp;
         for (final KeyValue<K, V> keyValue : keyValues) {
             pipeInput(keyValue.key, keyValue.value, recordTime);
@@ -243,8 +243,8 @@ public class TestInputTopic<K, V> {
      * @param advance        the time difference between two consecutive generated records
      */
     public void pipeValueList(final List<V> values,
-                              final Instant startTimestamp,
-                              final Duration advance) {
+        final Instant startTimestamp,
+        final Duration advance) {
         Instant recordTime = startTimestamp;
         for (final V value : values) {
             pipeInput(value, recordTime);
@@ -255,9 +255,9 @@ public class TestInputTopic<K, V> {
     @Override
     public String toString() {
         return new StringJoiner(", ", TestInputTopic.class.getSimpleName() + "[", "]")
-                .add("topic='" + topic + "'")
-                .add("keySerializer=" + keySerializer.getClass().getSimpleName())
-                .add("valueSerializer=" + valueSerializer.getClass().getSimpleName())
-                .toString();
+            .add("topic='" + topic + "'")
+            .add("keySerializer=" + keySerializer.getClass().getSimpleName())
+            .add("valueSerializer=" + valueSerializer.getClass().getSimpleName())
+            .toString();
     }
 }

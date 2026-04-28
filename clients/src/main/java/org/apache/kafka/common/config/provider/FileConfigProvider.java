@@ -44,7 +44,7 @@ public class FileConfigProvider implements ConfigProvider {
 
     public static final String ALLOWED_PATHS_CONFIG = "allowed.paths";
     public static final String ALLOWED_PATHS_DOC = "A comma separated list of paths that this config provider is " +
-            "allowed to access. If not set, all paths are allowed.";
+        "allowed to access. If not set, all paths are allowed.";
     private volatile AllowedPaths allowedPaths;
 
     public void configure(Map<String, ?> configs) {

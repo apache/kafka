@@ -115,7 +115,7 @@ public class ProducerIdControlManager {
         } else {
             log.info("Replaying ProducerIdsRecord {}", record);
             nextProducerBlock.set(new ProducerIdsBlock(record.brokerId(), record.nextProducerId(),
-                    ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE));
+                ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE));
             brokerEpoch.set(record.brokerEpoch());
         }
     }

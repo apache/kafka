@@ -42,7 +42,7 @@ public class ClientMetricsInstance {
     private TimerTask expirationTimerTask;
 
     public ClientMetricsInstance(Uuid clientInstanceId, ClientMetricsInstanceMetadata instanceMetadata,
-        int subscriptionId, int subscriptionVersion, Set<String> metrics, int pushIntervalMs) {
+                                 int subscriptionId, int subscriptionVersion, Set<String> metrics, int pushIntervalMs) {
         this.clientInstanceId = Objects.requireNonNull(clientInstanceId);
         this.instanceMetadata = Objects.requireNonNull(instanceMetadata);
         this.subscriptionId = subscriptionId;

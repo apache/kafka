@@ -159,7 +159,7 @@ public class BoundedList<E> implements List<E> {
     public void add(int index, E element) {
         if (underlying.size() >= maxLength) {
             throw new BoundedListTooLongException("Cannot add another element to the list " +
-                    "because it would exceed the maximum length of " + maxLength);
+                "because it would exceed the maximum length of " + maxLength);
         }
         underlying.add(index, element);
     }

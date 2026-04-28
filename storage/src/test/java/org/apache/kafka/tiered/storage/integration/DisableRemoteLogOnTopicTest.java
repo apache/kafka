@@ -85,8 +85,8 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
                         new KeyValueSpec("k2", "v2"))
                 // disable remote log copy
                 .updateTopicConfig(topicA,
-                    disableRemoteCopy,
-                    List.of())
+                        disableRemoteCopy,
+                        List.of())
 
                 // make sure we can still consume from the beginning of the topic to read data from local and remote storage
                 .expectFetchFromTieredStorage(broker0, topicA, p0, 2)
@@ -94,8 +94,8 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
 
                 // re-enable remote log copy
                 .updateTopicConfig(topicA,
-                    enableRemoteCopy,
-                    List.of())
+                        enableRemoteCopy,
+                        List.of())
 
                 // make sure the logs can be offloaded
                 .expectEarliestLocalOffsetInLogDirectory(topicA, p0, 3L)
@@ -103,8 +103,8 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
 
                 // disable remote log copy again
                 .updateTopicConfig(topicA,
-                    disableRemoteCopy,
-                    List.of())
+                        disableRemoteCopy,
+                        List.of())
                 // make sure we can still consume from the beginning of the topic to read data from local and remote storage
                 .expectFetchFromTieredStorage(broker0, topicA, p0, 3)
                 .consume(topicA, p0, 0L, 4, 3)
@@ -117,8 +117,8 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
 
                 // disabling remote log on topicA and enabling deleteOnDisable
                 .updateTopicConfig(topicA,
-                    deleteOnDisable,
-                    List.of())
+                        deleteOnDisable,
+                        List.of())
                 // make sure all remote data is deleted
                 .expectEmptyRemoteStorage(topicA, p0)
                 // verify the local log is still consumable

@@ -50,52 +50,52 @@ public class SocketServerConfigsTest {
     @Test
     public void testListenerListToEndPointsWithBlankString() {
         KafkaException exception = assertThrows(KafkaException.class, () ->
-                SocketServerConfigs.listenerListToEndPoints(List.of(" "), SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO));
+            SocketServerConfigs.listenerListToEndPoints(List.of(" "), SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO));
         assertEquals("Unable to parse   to a broker endpoint", exception.getMessage());
     }
 
     @Test
     public void testListenerListToEndPointsWithOneEndpoint() {
         assertEquals(List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "example.com", 8080)),
-                SocketServerConfigs.listenerListToEndPoints(List.of("PLAINTEXT://example.com:8080"),
-                    SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO));
+            SocketServerConfigs.listenerListToEndPoints(List.of("PLAINTEXT://example.com:8080"),
+                SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO));
     }
 
     // Regression test for KAFKA-3719
     @Test
     public void testListenerListToEndPointsWithUnderscores() {
         assertEquals(List.of(
-            new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "example.com", 8080),
-            new Endpoint("SSL", SecurityProtocol.SSL, "local_host", 8081)),
-                SocketServerConfigs.listenerListToEndPoints(List.of("PLAINTEXT://example.com:8080", "SSL://local_host:8081"),
-                    SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO));
+                new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "example.com", 8080),
+                new Endpoint("SSL", SecurityProtocol.SSL, "local_host", 8081)),
+            SocketServerConfigs.listenerListToEndPoints(List.of("PLAINTEXT://example.com:8080", "SSL://local_host:8081"),
+                SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO));
     }
 
     @Test
     public void testListenerListToEndPointsWithWildcard() {
         assertEquals(List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, null, 8080)),
-                SocketServerConfigs.listenerListToEndPoints(List.of("PLAINTEXT://:8080"),
-                    SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO));
+            SocketServerConfigs.listenerListToEndPoints(List.of("PLAINTEXT://:8080"),
+                SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO));
     }
 
     @Test
     public void testListenerListToEndPointsWithIpV6() {
         assertEquals(List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "::1", 9092)),
-                SocketServerConfigs.listenerListToEndPoints(List.of("PLAINTEXT://[::1]:9092"),
-                    SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO));
+            SocketServerConfigs.listenerListToEndPoints(List.of("PLAINTEXT://[::1]:9092"),
+                SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO));
     }
 
     @Test
     public void testAnotherListenerListToEndPointsWithIpV6() {
         assertEquals(List.of(new Endpoint("SASL_SSL", SecurityProtocol.SASL_SSL, "fe80::b1da:69ca:57f7:63d8%3", 9092)),
-                SocketServerConfigs.listenerListToEndPoints(List.of("SASL_SSL://[fe80::b1da:69ca:57f7:63d8%3]:9092"),
-                    SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO));
+            SocketServerConfigs.listenerListToEndPoints(List.of("SASL_SSL://[fe80::b1da:69ca:57f7:63d8%3]:9092"),
+                SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO));
     }
 
     @Test
     public void testAnotherListenerListToEndPointsWithNonDefaultProtoMap() {
         assertEquals(List.of(new Endpoint("CONTROLLER", SecurityProtocol.PLAINTEXT, "example.com", 9093)),
-                SocketServerConfigs.listenerListToEndPoints(List.of("CONTROLLER://example.com:9093"),
-                    Map.of(new ListenerName("CONTROLLER"), SecurityProtocol.PLAINTEXT)));
+            SocketServerConfigs.listenerListToEndPoints(List.of("CONTROLLER://example.com:9093"),
+                Map.of(new ListenerName("CONTROLLER"), SecurityProtocol.PLAINTEXT)));
     }
 }

@@ -65,13 +65,13 @@ final class RecordsSnapshotWriterTest {
         }
 
         try (RecordsSnapshotReader<String> reader = RecordsSnapshotReader.of(
-                new MockRawSnapshotReader(snapshotId, buffer.get()),
-                STRING_SERDE,
-                BufferSupplier.NO_CACHING,
-                maxBatchSizeBytes,
-                true,
-                new LogContext()
-            )
+                 new MockRawSnapshotReader(snapshotId, buffer.get()),
+                 STRING_SERDE,
+                 BufferSupplier.NO_CACHING,
+                 maxBatchSizeBytes,
+                 true,
+                 new LogContext()
+             )
         ) {
             // Consume the control record batch
             Batch<String> batch = reader.next();
@@ -138,13 +138,13 @@ final class RecordsSnapshotWriterTest {
         }
 
         try (RecordsSnapshotReader<String> reader = RecordsSnapshotReader.of(
-                new MockRawSnapshotReader(snapshotId, buffer.get()),
-                STRING_SERDE,
-                BufferSupplier.NO_CACHING,
-                maxBatchSizeBytes,
-                true,
-                new LogContext()
-            )
+                 new MockRawSnapshotReader(snapshotId, buffer.get()),
+                 STRING_SERDE,
+                 BufferSupplier.NO_CACHING,
+                 maxBatchSizeBytes,
+                 true,
+                 new LogContext()
+             )
         ) {
             // Consume the control record batch
             Batch<String> batch = reader.next();
@@ -196,13 +196,13 @@ final class RecordsSnapshotWriterTest {
         }
 
         try (RecordsSnapshotReader<String> reader = RecordsSnapshotReader.of(
-                new MockRawSnapshotReader(snapshotId, buffer.get()),
-                STRING_SERDE,
-                BufferSupplier.NO_CACHING,
-                maxBatchSizeBytes,
-                true,
-                new LogContext()
-            )
+                 new MockRawSnapshotReader(snapshotId, buffer.get()),
+                 STRING_SERDE,
+                 BufferSupplier.NO_CACHING,
+                 maxBatchSizeBytes,
+                 true,
+                 new LogContext()
+             )
         ) {
             // Consume the control record batch
             Batch<String> batch = reader.next();

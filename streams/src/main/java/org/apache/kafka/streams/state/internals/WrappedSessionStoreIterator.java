@@ -33,7 +33,7 @@ class WrappedSessionStoreIterator implements KeyValueIterator<Windowed<Bytes>, b
     }
 
     WrappedSessionStoreIterator(final KeyValueIterator<Bytes, byte[]> bytesIterator,
-                                final Function<Bytes, Windowed<Bytes>> windowConstructor) {
+        final Function<Bytes, Windowed<Bytes>> windowConstructor) {
         this.bytesIterator = bytesIterator;
         this.windowConstructor = windowConstructor;
     }

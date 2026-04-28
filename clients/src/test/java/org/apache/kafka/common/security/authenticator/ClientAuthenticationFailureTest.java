@@ -139,6 +139,6 @@ public class ClientAuthenticationFailureTest {
 
     private NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol) throws Exception {
         return NetworkTestUtils.createEchoServer(listenerName, securityProtocol,
-                new TestSecurityConfig(saslServerConfigs), new CredentialCache(), TIME);
+            new TestSecurityConfig(saslServerConfigs), new CredentialCache(), TIME);
     }
 }

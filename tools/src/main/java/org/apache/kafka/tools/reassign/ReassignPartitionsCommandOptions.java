@@ -67,43 +67,43 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
             .ofType(String.class);
 
         reassignmentJsonFileOpt = parser.accepts("reassignment-json-file", "The JSON file with the partition reassignment configuration" +
-                "The format to use is - \n" +
-                "{\"partitions\":\n\t[{\"topic\": \"foo\",\n\t  \"partition\": 1,\n\t  \"replicas\": [1,2,3],\n\t  \"log_dirs\": [\"dir1\",\"dir2\",\"dir3\"] }],\n\"version\":1\n}\n" +
-                "Note that \"log_dirs\" is optional. When it is specified, its length must equal the length of the replicas list. The value in this list " +
-                "can be either \"any\" or the absolution path of the log directory on the broker. If absolute log directory path is specified, the replica will be moved to the specified log directory on the broker.")
+            "The format to use is - \n" +
+            "{\"partitions\":\n\t[{\"topic\": \"foo\",\n\t  \"partition\": 1,\n\t  \"replicas\": [1,2,3],\n\t  \"log_dirs\": [\"dir1\",\"dir2\",\"dir3\"] }],\n\"version\":1\n}\n" +
+            "Note that \"log_dirs\" is optional. When it is specified, its length must equal the length of the replicas list. The value in this list " +
+            "can be either \"any\" or the absolution path of the log directory on the broker. If absolute log directory path is specified, the replica will be moved to the specified log directory on the broker.")
             .withRequiredArg()
             .describedAs("manual assignment json file path")
             .ofType(String.class);
         topicsToMoveJsonFileOpt = parser.accepts("topics-to-move-json-file", "Generate a reassignment configuration to move the partitions" +
-                " of the specified topics to the list of brokers specified by the --broker-list option. The format to use is - \n" +
-                "{\"topics\":\n\t[{\"topic\": \"foo\"},{\"topic\": \"foo1\"}],\n\"version\":1\n}")
+            " of the specified topics to the list of brokers specified by the --broker-list option. The format to use is - \n" +
+            "{\"topics\":\n\t[{\"topic\": \"foo\"},{\"topic\": \"foo1\"}],\n\"version\":1\n}")
             .withRequiredArg()
             .describedAs("topics to reassign json file path")
             .ofType(String.class);
         brokerListOpt = parser.accepts("broker-list", "The list of brokers to which the partitions need to be reassigned" +
-                " in the form \"0,1,2\". This is required if --topics-to-move-json-file is used to generate reassignment configuration")
+            " in the form \"0,1,2\". This is required if --topics-to-move-json-file is used to generate reassignment configuration")
             .withRequiredArg()
             .describedAs("brokerlist")
             .ofType(String.class);
 
         bootstrapControllerOpt = parser.accepts("bootstrap-controller", "The controller to use for reassignment. " +
-                        "By default, the tool will get the quorum controller. This option supports the actions --cancel and --list.")
+            "By default, the tool will get the quorum controller. This option supports the actions --cancel and --list.")
             .withOptionalArg()
             .describedAs("bootstrap controller to connect to")
             .ofType(String.class);
-        
+
         disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment");
         interBrokerThrottleOpt = parser.accepts("throttle", "The movement of partitions between brokers will be throttled to this value (bytes/sec). " +
-                "This option can be included with --execute when a reassignment is started, and it can be altered by resubmitting the current reassignment " +
-                "along with the --additional flag. The throttle rate should be at least 1 KB/s.")
+            "This option can be included with --execute when a reassignment is started, and it can be altered by resubmitting the current reassignment " +
+            "along with the --additional flag. The throttle rate should be at least 1 KB/s.")
             .withRequiredArg()
             .describedAs("throttle")
             .ofType(Long.class)
             .defaultsTo(-1L);
         replicaAlterLogDirsThrottleOpt = parser.accepts("replica-alter-log-dirs-throttle",
-                "The movement of replicas between log directories on the same broker will be throttled to this value (bytes/sec). " +
-                    "This option can be included with --execute when a reassignment is started, and it can be altered by resubmitting the current reassignment " +
-                    "along with the --additional flag. The throttle rate should be at least 1 KB/s.")
+            "The movement of replicas between log directories on the same broker will be throttled to this value (bytes/sec). " +
+                "This option can be included with --execute when a reassignment is started, and it can be altered by resubmitting the current reassignment " +
+                "along with the --additional flag. The throttle rate should be at least 1 KB/s.")
             .withRequiredArg()
             .describedAs("replicaAlterLogDirsThrottle")
             .ofType(Long.class)

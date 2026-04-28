@@ -109,7 +109,7 @@ class TxnPartitionMap {
             // reset due to a previous OutOfOrderSequenceException.
             return;
         log.debug("producerId: {}, send to partition {} failed fatally. Reducing future sequence numbers by {}",
-                batch.producerId(), batch.topicPartition, batch.recordCount);
+            batch.producerId(), batch.topicPartition, batch.recordCount);
 
         get(batch.topicPartition).adjustSequencesDueToFailedBatch(batch.baseSequence(), batch.recordCount);
     }

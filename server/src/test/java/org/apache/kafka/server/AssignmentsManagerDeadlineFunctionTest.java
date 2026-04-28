@@ -61,7 +61,7 @@ public class AssignmentsManagerDeadlineFunctionTest {
         assertEquals(OptionalLong.of(0),
             new AssignmentsManagerDeadlineFunction(BACKOFF, 0, 0, false,
                 MAX_ASSIGNMENTS_PER_REQUEST + 1).
-                    apply(OptionalLong.of(BACKOFF.initialInterval() / 2)));
+                apply(OptionalLong.of(BACKOFF.initialInterval() / 2)));
     }
 
     @Test
@@ -69,7 +69,7 @@ public class AssignmentsManagerDeadlineFunctionTest {
         assertEquals(OptionalLong.of(BACKOFF.initialInterval()),
             new AssignmentsManagerDeadlineFunction(BACKOFF, 0, 0, true,
                 MAX_ASSIGNMENTS_PER_REQUEST + 1).
-                    apply(OptionalLong.empty()));
+                apply(OptionalLong.empty()));
     }
 
     @Test
@@ -77,6 +77,6 @@ public class AssignmentsManagerDeadlineFunctionTest {
         assertEquals(OptionalLong.of(BACKOFF.initialInterval() * 2),
             new AssignmentsManagerDeadlineFunction(BACKOFF, 0, 1, false,
                 MAX_ASSIGNMENTS_PER_REQUEST + 1).
-                    apply(OptionalLong.empty()));
+                apply(OptionalLong.empty()));
     }
 }

@@ -53,8 +53,8 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
      * @param end Position in the file channel not to read past
      */
     FileLogInputStream(FileRecords records,
-                       int start,
-                       int end) {
+        int start,
+        int end) {
         this.fileRecords = records;
         this.position = start;
         this.end = end;
@@ -76,7 +76,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         // V0 has the smallest overhead, stricter checking is done later
         if (size < LegacyRecord.RECORD_OVERHEAD_V0)
             throw new CorruptRecordException(String.format("Found record size %d smaller than minimum record " +
-                            "overhead (%d) in file %s.", size, LegacyRecord.RECORD_OVERHEAD_V0, fileRecords.file()));
+                "overhead (%d) in file %s.", size, LegacyRecord.RECORD_OVERHEAD_V0, fileRecords.file()));
 
         if (position > end - LOG_OVERHEAD - size)
             return null;
@@ -109,10 +109,10 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         private RecordBatch batchHeader;
 
         FileChannelRecordBatch(long offset,
-                               byte magic,
-                               FileRecords fileRecords,
-                               int position,
-                               int batchSize) {
+            byte magic,
+            FileRecords fileRecords,
+            int position,
+            int batchSize) {
             this.offset = offset;
             this.magic = magic;
             this.fileRecords = fileRecords;
@@ -234,9 +234,9 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             FileChannel thatChannel = that.fileRecords == null ? null : that.fileRecords.channel();
 
             return offset == that.offset &&
-                    position == that.position &&
-                    batchSize == that.batchSize &&
-                    Objects.equals(channel, thatChannel);
+                position == that.position &&
+                batchSize == that.batchSize &&
+                Objects.equals(channel, thatChannel);
         }
 
         @Override
@@ -253,8 +253,8 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         @Override
         public String toString() {
             return "FileChannelRecordBatch(magic: " + magic +
-                    ", offset: " + offset +
-                    ", size: " + batchSize + ")";
+                ", offset: " + offset +
+                ", size: " + batchSize + ")";
         }
     }
 }

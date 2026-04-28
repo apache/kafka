@@ -34,9 +34,9 @@ public class DegradedNetworkFaultSpec extends TaskSpec {
         private final int rateLimitKbit;
 
         public NodeDegradeSpec(
-                @JsonProperty("networkDevice") String networkDevice,
-                @JsonProperty("latencyMs") Integer latencyMs,
-                @JsonProperty("rateLimitKbit") Integer rateLimitKbit) {
+            @JsonProperty("networkDevice") String networkDevice,
+            @JsonProperty("latencyMs") Integer latencyMs,
+            @JsonProperty("rateLimitKbit") Integer rateLimitKbit) {
             this.networkDevice = networkDevice == null ? "" : networkDevice;
             this.latencyMs = latencyMs == null ? 0 : latencyMs;
             this.rateLimitKbit = rateLimitKbit == null ? 0 : rateLimitKbit;
@@ -60,10 +60,10 @@ public class DegradedNetworkFaultSpec extends TaskSpec {
         @Override
         public String toString() {
             return "NodeDegradeSpec{" +
-                    "networkDevice='" + networkDevice + '\'' +
-                    ", latencyMs=" + latencyMs +
-                    ", rateLimitKbit=" + rateLimitKbit +
-                    '}';
+                "networkDevice='" + networkDevice + '\'' +
+                ", latencyMs=" + latencyMs +
+                ", rateLimitKbit=" + rateLimitKbit +
+                '}';
         }
     }
 
@@ -71,8 +71,8 @@ public class DegradedNetworkFaultSpec extends TaskSpec {
 
     @JsonCreator
     public DegradedNetworkFaultSpec(@JsonProperty("startMs") long startMs,
-                                    @JsonProperty("durationMs") long durationMs,
-                                    @JsonProperty("nodeSpecs") Map<String, NodeDegradeSpec> nodeSpecs) {
+        @JsonProperty("durationMs") long durationMs,
+        @JsonProperty("nodeSpecs") Map<String, NodeDegradeSpec> nodeSpecs) {
         super(startMs, durationMs);
         this.nodeSpecs = nodeSpecs == null ? Map.of() : Map.copyOf(nodeSpecs);
     }

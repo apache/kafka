@@ -62,16 +62,16 @@ public class StreamThreadTotalBlockedTimeTest {
     public void setup() {
         blockedTime = new StreamThreadTotalBlockedTime(consumer, restoreConsumer, producerBlocked);
         when(consumer.metrics()).thenAnswer(a -> new MetricsBuilder()
-            .addMetric("io-time-ns-total", IO_TIME_TOTAL)
-            .addMetric("io-wait-time-ns-total", IO_WAIT_TIME_TOTAL)
-            .addMetric("committed-time-ns-total", COMMITTED_TIME_TOTAL)
-            .addMetric("commit-sync-time-ns-total", COMMIT_SYNC_TIME_TOTAL)
-            .build()
+                .addMetric("io-time-ns-total", IO_TIME_TOTAL)
+                .addMetric("io-wait-time-ns-total", IO_WAIT_TIME_TOTAL)
+                .addMetric("committed-time-ns-total", COMMITTED_TIME_TOTAL)
+                .addMetric("commit-sync-time-ns-total", COMMIT_SYNC_TIME_TOTAL)
+                .build()
         );
         when(restoreConsumer.metrics()).thenAnswer(a -> new MetricsBuilder()
-            .addMetric("io-time-ns-total", RESTORE_IOTIME_TOTAL)
-            .addMetric("io-wait-time-ns-total", RESTORE_IO_WAITTIME_TOTAL)
-            .build()
+                .addMetric("io-time-ns-total", RESTORE_IOTIME_TOTAL)
+                .addMetric("io-wait-time-ns-total", RESTORE_IO_WAITTIME_TOTAL)
+                .build()
         );
         when(producerBlocked.get()).thenReturn(PRODUCER_BLOCKED_TIME);
     }

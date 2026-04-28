@@ -33,14 +33,14 @@ class WindowStoreIteratorWrapper {
     private final BiFunction<byte[], Long, Windowed<Bytes>> windowConstructor;
 
     WindowStoreIteratorWrapper(final KeyValueIterator<Bytes, byte[]> bytesIterator,
-                               final long windowSize) {
+        final long windowSize) {
         this(bytesIterator, windowSize, WindowKeySchema::extractStoreTimestamp, WindowKeySchema::fromStoreBytesKey);
     }
 
     WindowStoreIteratorWrapper(final KeyValueIterator<Bytes, byte[]> bytesIterator,
-                               final long windowSize,
-                               final Function<byte[], Long> timestampExtractor,
-                               final BiFunction<byte[], Long, Windowed<Bytes>> windowConstructor) {
+        final long windowSize,
+        final Function<byte[], Long> timestampExtractor,
+        final BiFunction<byte[], Long, Windowed<Bytes>> windowConstructor) {
         this.bytesIterator = bytesIterator;
         this.windowSize = windowSize;
         this.timestampExtractor = timestampExtractor;
@@ -95,8 +95,8 @@ class WindowStoreIteratorWrapper {
         final BiFunction<byte[], Long, Windowed<Bytes>> windowConstructor;
 
         WrappedKeyValueIterator(final KeyValueIterator<Bytes, byte[]> bytesIterator,
-                                final long windowSize,
-                                final BiFunction<byte[], Long, Windowed<Bytes>> windowConstructor) {
+            final long windowSize,
+            final BiFunction<byte[], Long, Windowed<Bytes>> windowConstructor) {
             this.bytesIterator = bytesIterator;
             this.windowSize = windowSize;
             this.windowConstructor = windowConstructor;

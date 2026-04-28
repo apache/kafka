@@ -31,7 +31,7 @@ import org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent;
  * @param eventCount     How many events are expected to interact with the second-tier storage.
  */
 public record RemoteDeleteSegmentSpec(int sourceBrokerId, TopicPartition topicPartition,
-                                      LocalTieredStorageEvent.EventType eventType, int eventCount) {
+LocalTieredStorageEvent.EventType eventType, int eventCount) {
 
     @Override
     public String toString() {

@@ -35,60 +35,60 @@ import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
  */
 public final class SamplingConverter implements SamplingTestPlugin, Converter {
 
-  private static final ClassLoader STATIC_CLASS_LOADER;
-  private static List<SamplingTestPlugin> instances;
-  private final ClassLoader classloader;
-  private Map<String, SamplingTestPlugin> samples;
+    private static final ClassLoader STATIC_CLASS_LOADER;
+    private static List<SamplingTestPlugin> instances;
+    private final ClassLoader classloader;
+    private Map<String, SamplingTestPlugin> samples;
 
-  static {
-    STATIC_CLASS_LOADER = Thread.currentThread().getContextClassLoader();
-    instances = Collections.synchronizedList(new ArrayList<>());
-  }
+    static {
+        STATIC_CLASS_LOADER = Thread.currentThread().getContextClassLoader();
+        instances = Collections.synchronizedList(new ArrayList<>());
+    }
 
-  {
-    samples = new HashMap<>();
-    classloader = Thread.currentThread().getContextClassLoader();
-  }
+    {
+        samples = new HashMap<>();
+        classloader = Thread.currentThread().getContextClassLoader();
+    }
 
-  public SamplingConverter() {
-    logMethodCall(samples);
-    instances.add(this);
-  }
+    public SamplingConverter() {
+        logMethodCall(samples);
+        instances.add(this);
+    }
 
-  @Override
-  public void configure(final Map<String, ?> configs, final boolean isKey) {
-    logMethodCall(samples);
-  }
+    @Override
+    public void configure(final Map<String, ?> configs, final boolean isKey) {
+        logMethodCall(samples);
+    }
 
-  @Override
-  public byte[] fromConnectData(final String topic, final Schema schema, final Object value) {
-    logMethodCall(samples);
-    return new byte[0];
-  }
+    @Override
+    public byte[] fromConnectData(final String topic, final Schema schema, final Object value) {
+        logMethodCall(samples);
+        return new byte[0];
+    }
 
-  @Override
-  public SchemaAndValue toConnectData(final String topic, final byte[] value) {
-    logMethodCall(samples);
-    return null;
-  }
+    @Override
+    public SchemaAndValue toConnectData(final String topic, final byte[] value) {
+        logMethodCall(samples);
+        return null;
+    }
 
-  @Override
-  public ClassLoader staticClassloader() {
-    return STATIC_CLASS_LOADER;
-  }
+    @Override
+    public ClassLoader staticClassloader() {
+        return STATIC_CLASS_LOADER;
+    }
 
-  @Override
-  public ClassLoader classloader() {
-    return classloader;
-  }
+    @Override
+    public ClassLoader classloader() {
+        return classloader;
+    }
 
-  @Override
-  public Map<String, SamplingTestPlugin> otherSamples() {
-    return samples;
-  }
+    @Override
+    public Map<String, SamplingTestPlugin> otherSamples() {
+        return samples;
+    }
 
-  @Override
-  public List<SamplingTestPlugin> allInstances() {
-    return instances;
-  }
+    @Override
+    public List<SamplingTestPlugin> allInstances() {
+        return instances;
+    }
 }

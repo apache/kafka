@@ -50,11 +50,11 @@ class GroupedStreamAggregateBuilder<K, V> {
     final Initializer<V> reduceInitializer = () -> null;
 
     GroupedStreamAggregateBuilder(final InternalStreamsBuilder builder,
-                                  final GroupedInternal<K, V> groupedInternal,
-                                  final boolean repartitionRequired,
-                                  final Set<String> subTopologySourceNodes,
-                                  final String name,
-                                  final GraphNode graphNode) {
+        final GroupedInternal<K, V> groupedInternal,
+        final boolean repartitionRequired,
+        final Set<String> subTopologySourceNodes,
+        final String name,
+        final GraphNode graphNode) {
 
         this.builder = builder;
         this.keySerde = groupedInternal.keySerde();
@@ -67,12 +67,12 @@ class GroupedStreamAggregateBuilder<K, V> {
     }
 
     <KR, VR> KTable<KR, VR> buildNonWindowed(final NamedInternal functionName,
-                                             final String storeName,
-                                             final KStreamAggProcessorSupplier<K, V, KR, VR> aggregateSupplier,
-                                             final String queryableStoreName,
-                                             final Serde<KR> keySerde,
-                                             final Serde<VR> valueSerde,
-                                             final boolean isOutputVersioned) {
+        final String storeName,
+        final KStreamAggProcessorSupplier<K, V, KR, VR> aggregateSupplier,
+        final String queryableStoreName,
+        final Serde<KR> keySerde,
+        final Serde<VR> valueSerde,
+        final boolean isOutputVersioned) {
         final String aggFunctionName = functionName.name();
 
         final ProcessorGraphNode<K, V> aggProcessorNode =
@@ -87,13 +87,13 @@ class GroupedStreamAggregateBuilder<K, V> {
     }
 
     <KR, VR> KTable<KR, VR> buildWindowed(final NamedInternal functionName,
-                                          final String storeName,
-                                          final long gracePeriod,
-                                          final KStreamAggProcessorSupplier<K, V, KR, VR> aggregateSupplier,
-                                          final String queryableStoreName,
-                                          final Serde<KR> keySerde,
-                                          final Serde<VR> valueSerde,
-                                          final boolean isOutputVersioned) {
+        final String storeName,
+        final long gracePeriod,
+        final KStreamAggProcessorSupplier<K, V, KR, VR> aggregateSupplier,
+        final String queryableStoreName,
+        final Serde<KR> keySerde,
+        final Serde<VR> valueSerde,
+        final boolean isOutputVersioned) {
         final String aggFunctionName = functionName.name();
 
         final GracePeriodGraphNode<K, V> gracePeriodAggProcessorNode =
@@ -109,16 +109,16 @@ class GroupedStreamAggregateBuilder<K, V> {
     }
 
     private <KR, VR> KTable<KR, VR> build(final String aggFunctionName,
-                                          final String storeName,
-                                          final KStreamAggProcessorSupplier<K, V, KR, VR> aggregateSupplier,
-                                          final ProcessorGraphNode<K, V> aggProcessorNode,
-                                          final String queryableStoreName,
-                                          final Serde<KR> keySerde,
-                                          final Serde<VR> valueSerde) {
+        final String storeName,
+        final KStreamAggProcessorSupplier<K, V, KR, VR> aggregateSupplier,
+        final ProcessorGraphNode<K, V> aggProcessorNode,
+        final String queryableStoreName,
+        final Serde<KR> keySerde,
+        final Serde<VR> valueSerde) {
         if (!(queryableStoreName == null || queryableStoreName.equals(storeName))) {
             throw new IllegalStateException(String.format("queryableStoreName should be null or equal to storeName"
-                                                              + " but got storeName='%s' and queryableStoreName='%s'",
-                                                          storeName, queryableStoreName));
+                + " but got storeName='%s' and queryableStoreName='%s'",
+                storeName, queryableStoreName));
         }
 
         String sourceName = this.name;
@@ -146,29 +146,29 @@ class GroupedStreamAggregateBuilder<K, V> {
         builder.addGraphNode(parentNode, aggProcessorNode);
 
         return new KTableImpl<>(aggFunctionName,
-                                keySerde,
-                                valueSerde,
-                                sourceName.equals(this.name) ? subTopologySourceNodes : Collections.singleton(sourceName),
-                                queryableStoreName,
-                                aggregateSupplier,
-                                aggProcessorNode,
-                                builder);
+            keySerde,
+            valueSerde,
+            sourceName.equals(this.name) ? subTopologySourceNodes : Collections.singleton(sourceName),
+            queryableStoreName,
+            aggregateSupplier,
+            aggProcessorNode,
+            builder);
     }
 
     /**
      * @return the new sourceName of the repartitioned source
      */
     private String createRepartitionSource(final String repartitionTopicNamePrefix,
-                                           final OptimizableRepartitionNodeBuilder<K, V> optimizableRepartitionNodeBuilder,
-                                           final boolean isRepartitionTopicNameProvidedByUser) {
+        final OptimizableRepartitionNodeBuilder<K, V> optimizableRepartitionNodeBuilder,
+        final boolean isRepartitionTopicNameProvidedByUser) {
 
         return KStreamImpl.createRepartitionedSource(builder,
-                                                     keySerde,
-                                                     valueSerde,
-                                                     repartitionTopicNamePrefix,
-                                                     null,
-                                                     optimizableRepartitionNodeBuilder,
-                                                     isRepartitionTopicNameProvidedByUser);
+            keySerde,
+            valueSerde,
+            repartitionTopicNamePrefix,
+            null,
+            optimizableRepartitionNodeBuilder,
+            isRepartitionTopicNameProvidedByUser);
 
     }
 }

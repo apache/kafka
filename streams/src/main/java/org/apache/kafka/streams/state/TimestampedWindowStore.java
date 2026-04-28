@@ -31,4 +31,5 @@ import org.apache.kafka.streams.kstream.Windowed;
  * @param <K> Type of keys
  * @param <V> Type of values
  */
-public interface TimestampedWindowStore<K, V> extends WindowStore<K, ValueAndTimestamp<V>> { }
+public interface TimestampedWindowStore<K, V> extends WindowStore<K, ValueAndTimestamp<V>> {
+}

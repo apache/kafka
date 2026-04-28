@@ -73,7 +73,7 @@ public class CreateAclsRequestTest {
     private static void assertRequestEquals(final CreateAclsRequest original, final CreateAclsRequest actual) {
         assertEquals(original.aclCreations().size(), actual.aclCreations().size(), "Number of Acls wrong");
 
-        for (int idx = 0; idx != original.aclCreations().size(); ++idx) {
+        for (int idx = 0;idx != original.aclCreations().size();++idx) {
             final AclBinding originalBinding = CreateAclsRequest.aclBinding(original.aclCreations().get(idx));
             final AclBinding actualBinding = CreateAclsRequest.aclBinding(actual.aclCreations().get(idx));
             assertEquals(originalBinding, actualBinding);

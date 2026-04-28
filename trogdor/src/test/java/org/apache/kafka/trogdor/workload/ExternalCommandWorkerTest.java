@@ -151,7 +151,7 @@ public class ExternalCommandWorkerTest {
         try {
             tempFile = TestUtils.tempFile();
             try (OutputStream stream = Files.newOutputStream(tempFile.toPath())) {
-                for (String line : new String[] {
+                for (String line : new String[]{
                     "echo hello world\n",
                     "# Test that the initial message is sent correctly.\n",
                     "read -r line\n",
@@ -171,7 +171,7 @@ public class ExternalCommandWorkerTest {
                 }
             }
             CompletableFuture<String> statusFuture = new CompletableFuture<>();
-            final WorkerStatusTracker statusTracker = status -> statusFuture .complete(status.textValue());
+            final WorkerStatusTracker statusTracker = status -> statusFuture.complete(status.textValue());
             ExternalCommandWorker worker = new ExternalCommandWorkerBuilder("testForceKillTask").
                 shutdownGracePeriodMs(1).
                 command("bash", tempFile.getAbsolutePath()).

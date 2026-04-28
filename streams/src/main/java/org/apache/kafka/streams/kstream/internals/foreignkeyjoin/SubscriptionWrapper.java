@@ -52,6 +52,7 @@ public class SubscriptionWrapper<KLeft> {
         PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE((byte) 0x03);
 
         private final byte value;
+
         Instruction(final byte value) {
             this.value = value;
         }
@@ -61,7 +62,7 @@ public class SubscriptionWrapper<KLeft> {
         }
 
         public static Instruction fromValue(final byte value) {
-            for (final Instruction i: values()) {
+            for (final Instruction i : values()) {
                 if (i.value == value) {
                     return i;
                 }

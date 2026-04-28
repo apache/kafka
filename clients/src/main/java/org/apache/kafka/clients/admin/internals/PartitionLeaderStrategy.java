@@ -86,7 +86,7 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
                 if (!tolerateUnknownTopics) {
                     log.error("Received unknown topic error for topic {}", topic, topicError.exception());
                     failAllPartitionsForTopic(topic, requestPartitions, failed, tp -> topicError.exception(
-                            "Failed to fetch metadata for partition " + tp + " because metadata for topic `" + topic + "` could not be found"));
+                        "Failed to fetch metadata for partition " + tp + " because metadata for topic `" + topic + "` could not be found"));
                     break;
                 }
             case LEADER_NOT_AVAILABLE:

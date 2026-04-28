@@ -74,6 +74,7 @@ public class TierStateMachine {
     private final LeaderEndPoint leader;
     private final ReplicaManager replicaMgr;
     private final boolean useFutureLog;
+
     public TierStateMachine(LeaderEndPoint leader,
                             ReplicaManager replicaMgr,
                             boolean useFutureLog) {
@@ -123,7 +124,7 @@ public class TierStateMachine {
         long initialLag = leaderEndOffset - offsetToFetch;
 
         return new PartitionFetchState(topicId, offsetToFetch, Optional.of(initialLag), currentLeaderEpoch,
-                ReplicaState.FETCHING, unifiedLog.latestEpoch());
+            ReplicaState.FETCHING, unifiedLog.latestEpoch());
 
     }
 
@@ -234,8 +235,8 @@ public class TierStateMachine {
         }
 
         RemoteLogSegmentMetadata remoteLogSegmentMetadata = rlm.fetchRemoteLogSegmentMetadata(topicPartition, targetEpoch, previousOffsetToLeaderLocalLogStartOffset)
-                .orElseThrow(() -> buildRemoteStorageException(topicPartition, targetEpoch, currentLeaderEpoch,
-                        leaderLocalLogStartOffset, leaderLogStartOffset));
+            .orElseThrow(() -> buildRemoteStorageException(topicPartition, targetEpoch, currentLeaderEpoch,
+                leaderLocalLogStartOffset, leaderLogStartOffset));
 
 
         // Build leader epoch cache, producer snapshots until remoteLogSegmentMetadata.endOffset() and start
@@ -259,8 +260,8 @@ public class TierStateMachine {
         buildProducerSnapshotFile(unifiedLog, nextOffset, remoteLogSegmentMetadata, rlm);
 
         log.debug("Built the leader epoch cache and producer snapshots from remote tier for {}, " +
-                        "with active producers size: {}, leaderLogStartOffset: {}, and logEndOffset: {}",
-                partition, unifiedLog.producerStateManager().activeProducers().size(), leaderLogStartOffset, nextOffset);
+            "with active producers size: {}, leaderLogStartOffset: {}, and logEndOffset: {}",
+            partition, unifiedLog.producerStateManager().activeProducers().size(), leaderLogStartOffset, nextOffset);
 
         return nextOffset;
     }
@@ -271,9 +272,9 @@ public class TierStateMachine {
                                                                long leaderLocalLogStartOffset,
                                                                long leaderLogStartOffset) {
         String message = String.format(
-                "Couldn't build the state from remote store for partition: %s, currentLeaderEpoch: %d, " +
-                        "leaderLocalLogStartOffset: %d, leaderLogStartOffset: %d, epoch: %d as the previous remote log segment metadata was not found",
-                topicPartition, currentLeaderEpoch, leaderLocalLogStartOffset, leaderLogStartOffset, targetEpoch
+            "Couldn't build the state from remote store for partition: %s, currentLeaderEpoch: %d, " +
+                "leaderLocalLogStartOffset: %d, leaderLogStartOffset: %d, epoch: %d as the previous remote log segment metadata was not found",
+            topicPartition, currentLeaderEpoch, leaderLocalLogStartOffset, leaderLogStartOffset, targetEpoch
         );
         return new RemoteStorageException(message);
     }

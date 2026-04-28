@@ -28,7 +28,8 @@ import java.nio.ByteBuffer;
 import static java.util.Objects.requireNonNull;
 
 final class TimeOrderedKeyValueBufferChangelogDeserializationHelper {
-    private TimeOrderedKeyValueBufferChangelogDeserializationHelper() {}
+    private TimeOrderedKeyValueBufferChangelogDeserializationHelper() {
+    }
 
     static final class DeserializationResult {
         private final long time;
@@ -55,8 +56,8 @@ final class TimeOrderedKeyValueBufferChangelogDeserializationHelper {
     }
 
     static DeserializationResult deserializeV0(final ConsumerRecord<byte[], byte[]> record,
-                                               final Bytes key,
-                                               final byte[] previousBufferedValue) {
+        final Bytes key,
+        final byte[] previousBufferedValue) {
 
         final ByteBuffer timeAndValue = ByteBuffer.wrap(record.value());
         final long time = timeAndValue.getLong();
@@ -86,8 +87,8 @@ final class TimeOrderedKeyValueBufferChangelogDeserializationHelper {
     }
 
     static DeserializationResult deserializeV1(final ConsumerRecord<byte[], byte[]> record,
-                                               final Bytes key,
-                                               final byte[] previousBufferedValue) {
+        final Bytes key,
+        final byte[] previousBufferedValue) {
         final ByteBuffer timeAndValue = ByteBuffer.wrap(record.value());
         final long time = timeAndValue.getLong();
         final byte[] changelogValue = new byte[record.value().length - 8];
@@ -131,7 +132,7 @@ final class TimeOrderedKeyValueBufferChangelogDeserializationHelper {
             // ok, it wasn't V3 either. Throw both exceptions:
             final RuntimeException exception =
                 new RuntimeException("Couldn't deserialize record as v2 or v3: " + record,
-                                     v2DeserializationException);
+                    v2DeserializationException);
             exception.addSuppressed(v3DeserializationException);
             throw exception;
         }
@@ -139,7 +140,7 @@ final class TimeOrderedKeyValueBufferChangelogDeserializationHelper {
     }
 
     private static DeserializationResult deserializeV2(final ConsumerRecord<byte[], byte[]> record,
-                                                       final Bytes key) {
+        final Bytes key) {
         final ByteBuffer valueAndTime = ByteBuffer.wrap(record.value());
         final ContextualRecord contextualRecord = ContextualRecord.deserialize(valueAndTime);
         final Change<byte[]> change = requireNonNull(FullChangeSerde.decomposeLegacyFormattedArrayIntoChangeArrays(contextualRecord.value()));

@@ -122,17 +122,17 @@ public class BrokersToElrs {
         TimelineHashMap<Uuid, int[]> topicMap = elrMembers.get(brokerId);
         if (topicMap == null) {
             throw new RuntimeException("Broker " + brokerId + " has no elrMembers " +
-                    "entry, so we can't remove " + topicId + ":" + removedPartition);
+                "entry, so we can't remove " + topicId + ":" + removedPartition);
         }
         int[] partitions = topicMap.get(topicId);
         if (partitions == null) {
             throw new RuntimeException("Broker " + brokerId + " has no " +
-                    "entry in elrMembers for topic " + topicId);
+                "entry in elrMembers for topic " + topicId);
         }
         if (partitions.length == 1) {
             if (partitions[0] != removedPartition) {
                 throw new RuntimeException("Broker " + brokerId + " has no " +
-                        "entry in elrMembers for " + topicId + ":" + removedPartition);
+                    "entry in elrMembers for " + topicId + ":" + removedPartition);
             }
             topicMap.remove(topicId);
             if (topicMap.isEmpty()) {

@@ -46,7 +46,7 @@ public class ProducerManager implements Closeable {
     private final TopicBasedRemoteLogMetadataManagerConfig rlmmConfig;
 
     public ProducerManager(TopicBasedRemoteLogMetadataManagerConfig rlmmConfig,
-                           RemoteLogMetadataTopicPartitioner rlmmTopicPartitioner) {
+            RemoteLogMetadataTopicPartitioner rlmmTopicPartitioner) {
         this.rlmmConfig = rlmmConfig;
         this.producer = new KafkaProducer<>(rlmmConfig.producerProperties());
         topicPartitioner = rlmmTopicPartitioner;
@@ -65,11 +65,11 @@ public class ProducerManager implements Closeable {
         TopicIdPartition topicIdPartition = remoteLogMetadata.topicIdPartition();
         int metadataPartitionNum = topicPartitioner.metadataPartition(topicIdPartition);
         log.debug("Publishing metadata message of partition:[{}] into metadata topic partition:[{}] with payload: [{}]",
-                  topicIdPartition, metadataPartitionNum, remoteLogMetadata);
+                topicIdPartition, metadataPartitionNum, remoteLogMetadata);
         if (metadataPartitionNum >= rlmmConfig.metadataTopicPartitionsCount()) {
             // This should never occur as long as metadata partitions always remain the same.
             throw new KafkaException("Chosen partition no " + metadataPartitionNum +
-                                             " must be less than the partition count: " + rlmmConfig.metadataTopicPartitionsCount());
+                    " must be less than the partition count: " + rlmmConfig.metadataTopicPartitionsCount());
         }
 
         try {
@@ -81,7 +81,7 @@ public class ProducerManager implements Closeable {
                 }
             };
             producer.send(new ProducerRecord<>(rlmmConfig.remoteLogMetadataTopicName(), metadataPartitionNum, null,
-                                               serde.serialize(remoteLogMetadata)), callback);
+                    serde.serialize(remoteLogMetadata)), callback);
         } catch (Exception ex) {
             future.completeExceptionally(ex);
         }

@@ -47,9 +47,9 @@ public class TransactionExceptionHierarchyTest {
     })
     void testRetriableExceptionHierarchy(Class<? extends Exception> exceptionClass) {
         assertTrue(RetriableException.class.isAssignableFrom(exceptionClass),
-                exceptionClass.getSimpleName() + " should extend RetriableException");
+            exceptionClass.getSimpleName() + " should extend RetriableException");
         assertFalse(RefreshRetriableException.class.isAssignableFrom(exceptionClass),
-                exceptionClass.getSimpleName() + " should NOT extend RefreshRetriableException");
+            exceptionClass.getSimpleName() + " should NOT extend RefreshRetriableException");
     }
 
     /**
@@ -58,7 +58,7 @@ public class TransactionExceptionHierarchyTest {
     @Test
     void testRefreshRetriableException() {
         assertTrue(RetriableException.class.isAssignableFrom(RefreshRetriableException.class),
-                "RefreshRetriableException should extend RetriableException");
+            "RefreshRetriableException should extend RetriableException");
     }
 
     /**
@@ -75,7 +75,7 @@ public class TransactionExceptionHierarchyTest {
     })
     void testRefreshRetriableExceptionHierarchy(Class<? extends Exception> exceptionClass) {
         assertTrue(RefreshRetriableException.class.isAssignableFrom(exceptionClass),
-                exceptionClass.getSimpleName() + " should extend RefreshRetriableException");
+            exceptionClass.getSimpleName() + " should extend RefreshRetriableException");
     }
 
     /**
@@ -94,7 +94,7 @@ public class TransactionExceptionHierarchyTest {
     })
     void testApplicationRecoverableExceptionHierarchy(Class<? extends Exception> exceptionClass) {
         assertTrue(ApplicationRecoverableException.class.isAssignableFrom(exceptionClass),
-                exceptionClass.getSimpleName() + " should extend ApplicationRecoverableException");
+            exceptionClass.getSimpleName() + " should extend ApplicationRecoverableException");
     }
 
     /**
@@ -119,6 +119,6 @@ public class TransactionExceptionHierarchyTest {
     })
     void testInvalidConfigurationExceptionHierarchy(Class<? extends Exception> exceptionClass) {
         assertTrue(InvalidConfigurationException.class.isAssignableFrom(exceptionClass),
-                exceptionClass.getSimpleName() + " should extend InvalidConfigurationException");
+            exceptionClass.getSimpleName() + " should extend InvalidConfigurationException");
     }
 }

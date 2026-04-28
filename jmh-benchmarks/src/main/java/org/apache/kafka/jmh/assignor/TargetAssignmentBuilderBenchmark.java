@@ -109,16 +109,16 @@ public class TargetAssignmentBuilderBenchmark {
         Map<String, Assignment> existingTargetAssignment = generateMockInitialTargetAssignmentAndUpdateInvertedTargetAssignment(members);
 
         ConsumerGroupMember newMember = new ConsumerGroupMember.Builder("newMember")
-            .setSubscribedTopicNames(allTopicNames)
-            .build();
+                .setSubscribedTopicNames(allTopicNames)
+                .build();
 
         targetAssignmentBuilder = new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(GROUP_ID, GROUP_EPOCH, partitionAssignor)
-            .withMembers(members)
-            .withSubscriptionType(subscriptionType)
-            .withTargetAssignment(existingTargetAssignment)
-            .withInvertedTargetAssignment(invertedTargetAssignment)
-            .withMetadataImage(metadataImage)
-            .addOrUpdateMember(newMember.memberId(), newMember);
+                .withMembers(members)
+                .withSubscriptionType(subscriptionType)
+                .withTargetAssignment(existingTargetAssignment)
+                .withInvertedTargetAssignment(invertedTargetAssignment)
+                .withMetadataImage(metadataImage)
+                .addOrUpdateMember(newMember.memberId(), newMember);
     }
 
     private void setupTopics() {
@@ -133,17 +133,17 @@ public class TargetAssignmentBuilderBenchmark {
     }
 
     private Map<String, Assignment> generateMockInitialTargetAssignmentAndUpdateInvertedTargetAssignment(
-        Map<String, ConsumerGroupMember> members
+            Map<String, ConsumerGroupMember> members
     ) {
         this.groupSpec = AssignorBenchmarkUtils.createConsumerGroupSpec(
-            members,
-            subscriptionType,
-            topicResolver
+                members,
+                subscriptionType,
+                topicResolver
         );
 
         GroupAssignment groupAssignment = partitionAssignor.assign(
-            groupSpec,
-            subscribedTopicDescriber
+                groupSpec,
+                subscribedTopicDescriber
         );
         invertedTargetAssignment = AssignorBenchmarkUtils.computeInvertedTargetAssignment(groupAssignment);
 
@@ -161,18 +161,18 @@ public class TargetAssignmentBuilderBenchmark {
     private Map<String, ConsumerGroupMember> createMembers() {
         if (subscriptionType == HOMOGENEOUS) {
             return AssignorBenchmarkUtils.createHomogeneousMembers(
-                memberCount - 1,
-                this::memberId,
-                this::rackId,
-                allTopicNames
+                    memberCount - 1,
+                    this::memberId,
+                    this::rackId,
+                    allTopicNames
             );
         } else {
             return AssignorBenchmarkUtils.createHeterogeneousBucketedMembers(
-                memberCount - 1,
-                MAX_BUCKET_COUNT,
-                this::memberId,
-                this::rackId,
-                allTopicNames
+                    memberCount - 1,
+                    MAX_BUCKET_COUNT,
+                    this::memberId,
+                    this::rackId,
+                    allTopicNames
             );
         }
     }

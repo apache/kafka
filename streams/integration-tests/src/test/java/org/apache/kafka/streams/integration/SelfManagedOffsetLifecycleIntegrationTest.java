@@ -508,24 +508,24 @@ public class SelfManagedOffsetLifecycleIntegrationTest {
 
         @Override
         public void onRestoreStart(final TopicPartition topicPartition,
-                                   final String storeName,
-                                   final long startingOffset,
-                                   final long endingOffset) {
+            final String storeName,
+            final long startingOffset,
+            final long endingOffset) {
             // no-op
         }
 
         @Override
         public void onBatchRestored(final TopicPartition topicPartition,
-                                    final String storeName,
-                                    final long batchEndOffset,
-                                    final long numRestored) {
+            final String storeName,
+            final long batchEndOffset,
+            final long numRestored) {
             totalRestored.addAndGet(numRestored);
         }
 
         @Override
         public void onRestoreEnd(final TopicPartition topicPartition,
-                                 final String storeName,
-                                 final long totalRestored) {
+            final String storeName,
+            final long totalRestored) {
             // no-op
         }
     }

@@ -73,8 +73,8 @@ public class KafkaShareConsumerMetricsTest {
     private final String topic = "test";
     private final Uuid topicId = Uuid.randomUuid();
     private final Map<String, Uuid> topicIds = Stream.of(
-                    new AbstractMap.SimpleEntry<>(topic, topicId))
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        new AbstractMap.SimpleEntry<>(topic, topicId))
+        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     private final Time time = new MockTime();
     private final SubscriptionState subscription = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
     private final String groupId = "mock-group";
@@ -294,50 +294,50 @@ public class KafkaShareConsumerMetricsTest {
 
     private ShareConsumerMetadata createMetadata(SubscriptionState subscription) {
         return new ShareConsumerMetadata(0, 0, Long.MAX_VALUE, false,
-                subscription, new LogContext(), new ClusterResourceListeners());
+            subscription, new LogContext(), new ClusterResourceListeners());
     }
 
     private KafkaShareConsumer<String, String> newShareConsumer(Time time,
-                                                                KafkaClient client,
-                                                                SubscriptionState subscription,
-                                                                ShareConsumerMetadata metadata) {
+        KafkaClient client,
+        SubscriptionState subscription,
+        ShareConsumerMetadata metadata) {
         return newShareConsumer(
-                time,
-                client,
-                subscription,
-                metadata,
-                groupId,
-                Optional.of(new StringDeserializer())
+            time,
+            client,
+            subscription,
+            metadata,
+            groupId,
+            Optional.of(new StringDeserializer())
         );
     }
 
     private KafkaShareConsumer<String, String> newShareConsumer(Time time,
-                                                                KafkaClient client,
-                                                                SubscriptionState subscriptions,
-                                                                ShareConsumerMetadata metadata,
-                                                                String groupId,
-                                                                Optional<Deserializer<String>> valueDeserializerOpt) {
+        KafkaClient client,
+        SubscriptionState subscriptions,
+        ShareConsumerMetadata metadata,
+        String groupId,
+        Optional<Deserializer<String>> valueDeserializerOpt) {
         String clientId = "mock-consumer";
         Deserializer<String> keyDeserializer = new StringDeserializer();
         Deserializer<String> valueDeserializer = valueDeserializerOpt.orElse(new StringDeserializer());
         LogContext logContext = new LogContext();
         ShareConsumerConfig config = newConsumerConfig(groupId, valueDeserializer);
         return new KafkaShareConsumer<>(
-                logContext,
-                clientId,
-                groupId,
-                config,
-                keyDeserializer,
-                valueDeserializer,
-                time,
-                client,
-                subscriptions,
-                metadata
+            logContext,
+            clientId,
+            groupId,
+            config,
+            keyDeserializer,
+            valueDeserializer,
+            time,
+            client,
+            subscriptions,
+            metadata
         );
     }
 
     private ShareConsumerConfig newConsumerConfig(String groupId,
-                                             Deserializer<String> valueDeserializer) {
+        Deserializer<String> valueDeserializer) {
         String clientId = "mock-consumer";
         long retryBackoffMs = 100;
         long retryBackoffMaxMs = 1000;
@@ -372,6 +372,7 @@ public class KafkaShareConsumerMetricsTest {
 
         return new ShareConsumerConfig(configs);
     }
+
     private void initMetadata(MockClient mockClient, Map<String, Integer> partitionCounts) {
         Map<String, Uuid> metadataIds = new HashMap<>();
         for (String name : partitionCounts.keySet()) {

@@ -55,9 +55,9 @@ public class TopicMetadataFetcher {
         this.log = logContext.logger(getClass());
         this.client = client;
         this.retryBackoff = new ExponentialBackoff(retryBackoffMs,
-                CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,
-                retryBackoffMaxMs,
-                CommonClientConfigs.RETRY_BACKOFF_JITTER);
+            CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,
+            retryBackoffMaxMs,
+            CommonClientConfigs.RETRY_BACKOFF_JITTER);
     }
 
     /**
@@ -134,7 +134,7 @@ public class TopicMetadataFetcher {
                             shouldRetry = true;
                         else
                             throw new KafkaException("Unexpected error fetching metadata for topic " + topic,
-                                    error.exception());
+                                error.exception());
                     }
                 }
 

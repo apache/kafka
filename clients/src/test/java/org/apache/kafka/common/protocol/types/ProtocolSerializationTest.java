@@ -41,47 +41,47 @@ public class ProtocolSerializationTest {
     @BeforeEach
     public void setup() {
         this.schema = new Schema(new Field("boolean", Type.BOOLEAN),
-                                 new Field("int8", Type.INT8),
-                                 new Field("int16", Type.INT16),
-                                 new Field("int32", Type.INT32),
-                                 new Field("int64", Type.INT64),
-                                 new Field("varint", Type.VARINT),
-                                 new Field("varlong", Type.VARLONG),
-                                 new Field("float64", Type.FLOAT64),
-                                 new Field("string", Type.STRING),
-                                 new Field("compact_string", Type.COMPACT_STRING),
-                                 new Field("nullable_string", Type.NULLABLE_STRING),
-                                 new Field("compact_nullable_string", Type.COMPACT_NULLABLE_STRING),
-                                 new Field("bytes", Type.BYTES),
-                                 new Field("compact_bytes", Type.COMPACT_BYTES),
-                                 new Field("nullable_bytes", Type.NULLABLE_BYTES),
-                                 new Field("compact_nullable_bytes", Type.COMPACT_NULLABLE_BYTES),
-                                 new Field("array", new ArrayOf(Type.INT32)),
-                                 new Field("compact_array", new CompactArrayOf(Type.INT32)),
-                                 new Field("null_array", ArrayOf.nullable(Type.INT32)),
-                                 new Field("compact_null_array", CompactArrayOf.nullable(Type.INT32)),
-                                 new Field("struct", new Schema(new Field("field", new ArrayOf(Type.INT32)))));
+            new Field("int8", Type.INT8),
+            new Field("int16", Type.INT16),
+            new Field("int32", Type.INT32),
+            new Field("int64", Type.INT64),
+            new Field("varint", Type.VARINT),
+            new Field("varlong", Type.VARLONG),
+            new Field("float64", Type.FLOAT64),
+            new Field("string", Type.STRING),
+            new Field("compact_string", Type.COMPACT_STRING),
+            new Field("nullable_string", Type.NULLABLE_STRING),
+            new Field("compact_nullable_string", Type.COMPACT_NULLABLE_STRING),
+            new Field("bytes", Type.BYTES),
+            new Field("compact_bytes", Type.COMPACT_BYTES),
+            new Field("nullable_bytes", Type.NULLABLE_BYTES),
+            new Field("compact_nullable_bytes", Type.COMPACT_NULLABLE_BYTES),
+            new Field("array", new ArrayOf(Type.INT32)),
+            new Field("compact_array", new CompactArrayOf(Type.INT32)),
+            new Field("null_array", ArrayOf.nullable(Type.INT32)),
+            new Field("compact_null_array", CompactArrayOf.nullable(Type.INT32)),
+            new Field("struct", new Schema(new Field("field", new ArrayOf(Type.INT32)))));
         this.struct = new Struct(this.schema).set("boolean", true)
-                                             .set("int8", (byte) 1)
-                                             .set("int16", (short) 1)
-                                             .set("int32", 1)
-                                             .set("int64", 1L)
-                                             .set("varint", 300)
-                                             .set("varlong", 500L)
-                                             .set("float64", 0.5D)
-                                             .set("string", "1")
-                                             .set("compact_string", "1")
-                                             .set("nullable_string", null)
-                                             .set("compact_nullable_string", null)
-                                             .set("bytes", ByteBuffer.wrap("1".getBytes()))
-                                             .set("compact_bytes", ByteBuffer.wrap("1".getBytes()))
-                                             .set("nullable_bytes", null)
-                                             .set("compact_nullable_bytes", null)
-                                             .set("array", new Object[] {1})
-                                             .set("compact_array", new Object[] {1})
-                                             .set("null_array", null)
-                                             .set("compact_null_array", null);
-        this.struct.set("struct", this.struct.instance("struct").set("field", new Object[] {1, 2, 3}));
+            .set("int8", (byte) 1)
+            .set("int16", (short) 1)
+            .set("int32", 1)
+            .set("int64", 1L)
+            .set("varint", 300)
+            .set("varlong", 500L)
+            .set("float64", 0.5D)
+            .set("string", "1")
+            .set("compact_string", "1")
+            .set("nullable_string", null)
+            .set("compact_nullable_string", null)
+            .set("bytes", ByteBuffer.wrap("1".getBytes()))
+            .set("compact_bytes", ByteBuffer.wrap("1".getBytes()))
+            .set("nullable_bytes", null)
+            .set("compact_nullable_bytes", null)
+            .set("array", new Object[]{1})
+            .set("compact_array", new Object[]{1})
+            .set("null_array", null)
+            .set("compact_null_array", null);
+        this.struct.set("struct", this.struct.instance("struct").set("field", new Object[]{1, 2, 3}));
     }
 
     @Test
@@ -124,25 +124,25 @@ public class ProtocolSerializationTest {
         check(Type.COMPACT_NULLABLE_BYTES, null, "COMPACT_NULLABLE_BYTES");
         check(Type.COMPACT_NULLABLE_BYTES, ByteBuffer.allocate(0), "COMPACT_NULLABLE_BYTES");
         check(Type.COMPACT_NULLABLE_BYTES, ByteBuffer.wrap("abcd".getBytes()),
-                "COMPACT_NULLABLE_BYTES");
+            "COMPACT_NULLABLE_BYTES");
         check(Type.VARINT, Integer.MAX_VALUE, "VARINT");
         check(Type.VARINT, Integer.MIN_VALUE, "VARINT");
         check(Type.VARLONG, Long.MAX_VALUE, "VARLONG");
         check(Type.VARLONG, Long.MIN_VALUE, "VARLONG");
-        check(new ArrayOf(Type.INT32), new Object[] {1, 2, 3, 4}, "ARRAY(INT32)");
-        check(new ArrayOf(Type.STRING), new Object[] {}, "ARRAY(STRING)");
-        check(new ArrayOf(Type.STRING), new Object[] {"hello", "there", "beautiful"},
-                "ARRAY(STRING)");
-        check(new CompactArrayOf(Type.INT32), new Object[] {1, 2, 3, 4},
-                "COMPACT_ARRAY(INT32)");
-        check(new CompactArrayOf(Type.COMPACT_STRING), new Object[] {},
-                "COMPACT_ARRAY(COMPACT_STRING)");
+        check(new ArrayOf(Type.INT32), new Object[]{1, 2, 3, 4}, "ARRAY(INT32)");
+        check(new ArrayOf(Type.STRING), new Object[]{}, "ARRAY(STRING)");
+        check(new ArrayOf(Type.STRING), new Object[]{"hello", "there", "beautiful"},
+            "ARRAY(STRING)");
+        check(new CompactArrayOf(Type.INT32), new Object[]{1, 2, 3, 4},
+            "COMPACT_ARRAY(INT32)");
+        check(new CompactArrayOf(Type.COMPACT_STRING), new Object[]{},
+            "COMPACT_ARRAY(COMPACT_STRING)");
         check(new CompactArrayOf(Type.COMPACT_STRING),
-                new Object[] {"hello", "there", "beautiful"},
-                "COMPACT_ARRAY(COMPACT_STRING)");
+            new Object[]{"hello", "there", "beautiful"},
+            "COMPACT_ARRAY(COMPACT_STRING)");
         check(ArrayOf.nullable(Type.STRING), null, "NULLABLE_ARRAY(STRING)");
         check(CompactArrayOf.nullable(Type.COMPACT_STRING), null,
-                "COMPACT_NULLABLE_ARRAY(COMPACT_STRING)");
+            "COMPACT_NULLABLE_ARRAY(COMPACT_STRING)");
     }
 
     @Test
@@ -192,7 +192,7 @@ public class ProtocolSerializationTest {
         int size = 10;
         ByteBuffer invalidBuffer = ByteBuffer.allocate(4 + size);
         invalidBuffer.putInt(Integer.MAX_VALUE);
-        for (int i = 0; i < size; i++)
+        for (int i = 0;i < size;i++)
             invalidBuffer.put((byte) i);
         invalidBuffer.rewind();
         assertThrows(SchemaException.class,
@@ -207,7 +207,7 @@ public class ProtocolSerializationTest {
         ByteBuffer invalidBuffer = ByteBuffer.allocate(
             ByteUtils.sizeOfUnsignedVarint(Integer.MAX_VALUE) + size);
         ByteUtils.writeUnsignedVarint(Integer.MAX_VALUE, invalidBuffer);
-        for (int i = 0; i < size; i++)
+        for (int i = 0;i < size;i++)
             invalidBuffer.put((byte) i);
         invalidBuffer.rewind();
         assertThrows(SchemaException.class,
@@ -243,7 +243,7 @@ public class ProtocolSerializationTest {
         int size = 10;
         ByteBuffer invalidBuffer = ByteBuffer.allocate(4 + size);
         invalidBuffer.putInt(-1);
-        for (int i = 0; i < size; i++)
+        for (int i = 0;i < size;i++)
             invalidBuffer.put((byte) i);
         invalidBuffer.rewind();
         assertThrows(SchemaException.class,
@@ -258,7 +258,7 @@ public class ProtocolSerializationTest {
         ByteBuffer invalidBuffer = ByteBuffer.allocate(
             ByteUtils.sizeOfUnsignedVarint(0) + size);
         ByteUtils.writeUnsignedVarint(0, invalidBuffer);
-        for (int i = 0; i < size; i++)
+        for (int i = 0;i < size;i++)
             invalidBuffer.put((byte) i);
         invalidBuffer.rewind();
         assertThrows(SchemaException.class,
@@ -382,12 +382,12 @@ public class ProtocolSerializationTest {
     public void testReadWhenOptionalDataMissingAtTheEndIsTolerated() {
         Schema oldSchema = new Schema(new Field("field1", Type.NULLABLE_STRING));
         Schema newSchema = new Schema(
-                true,
-                new Field("field1", Type.NULLABLE_STRING),
-                new Field("field2", Type.NULLABLE_STRING, "", true, "default"),
-                new Field("field3", Type.NULLABLE_STRING, "", true, null),
-                new Field("field4", Type.NULLABLE_BYTES, "", true, ByteBuffer.allocate(0)),
-                new Field("field5", Type.INT64, "doc", true, Long.MAX_VALUE));
+            true,
+            new Field("field1", Type.NULLABLE_STRING),
+            new Field("field2", Type.NULLABLE_STRING, "", true, "default"),
+            new Field("field3", Type.NULLABLE_STRING, "", true, null),
+            new Field("field4", Type.NULLABLE_BYTES, "", true, ByteBuffer.allocate(0)),
+            new Field("field5", Type.INT64, "doc", true, Long.MAX_VALUE));
         String value = "foo bar baz";
         Struct oldFormat = new Struct(oldSchema).set("field1", value);
         ByteBuffer buffer = ByteBuffer.allocate(oldSchema.sizeOf(oldFormat));
@@ -405,8 +405,8 @@ public class ProtocolSerializationTest {
     public void testReadWhenOptionalDataMissingAtTheEndIsNotTolerated() {
         Schema oldSchema = new Schema(new Field("field1", Type.NULLABLE_STRING));
         Schema newSchema = new Schema(
-                new Field("field1", Type.NULLABLE_STRING),
-                new Field("field2", Type.NULLABLE_STRING, "", true, "default"));
+            new Field("field1", Type.NULLABLE_STRING),
+            new Field("field2", Type.NULLABLE_STRING, "", true, "default"));
         String value = "foo bar baz";
         Struct oldFormat = new Struct(oldSchema).set("field1", value);
         ByteBuffer buffer = ByteBuffer.allocate(oldSchema.sizeOf(oldFormat));
@@ -420,9 +420,9 @@ public class ProtocolSerializationTest {
     public void testReadWithMissingNonOptionalExtraDataAtTheEnd() {
         Schema oldSchema = new Schema(new Field("field1", Type.NULLABLE_STRING));
         Schema newSchema = new Schema(
-                true,
-                new Field("field1", Type.NULLABLE_STRING),
-                new Field("field2", Type.NULLABLE_STRING));
+            true,
+            new Field("field1", Type.NULLABLE_STRING),
+            new Field("field2", Type.NULLABLE_STRING));
         String value = "foo bar baz";
         Struct oldFormat = new Struct(oldSchema).set("field1", value);
         ByteBuffer buffer = ByteBuffer.allocate(oldSchema.sizeOf(oldFormat));

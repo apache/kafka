@@ -55,7 +55,7 @@ public class DeadlineTest {
         assertEquals("Negative delays are not allowed.",
             assertThrows(RuntimeException.class,
                 () -> Deadline.fromDelay(monoTime(123456789L), -1L, MILLISECONDS)).
-                    getMessage());
+                getMessage());
     }
 
     @Test

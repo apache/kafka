@@ -47,14 +47,14 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
     private CompletableFuture<Void> pendingFetchRequestFuture;
 
     FetchRequestManager(final LogContext logContext,
-                        final Time time,
-                        final ConsumerMetadata metadata,
-                        final SubscriptionState subscriptions,
-                        final FetchConfig fetchConfig,
-                        final FetchBuffer fetchBuffer,
-                        final FetchMetricsManager metricsManager,
-                        final NetworkClientDelegate networkClientDelegate,
-                        final ApiVersions apiVersions) {
+        final Time time,
+        final ConsumerMetadata metadata,
+        final SubscriptionState subscriptions,
+        final FetchConfig fetchConfig,
+        final FetchBuffer fetchBuffer,
+        final FetchMetricsManager metricsManager,
+        final NetworkClientDelegate networkClientDelegate,
+        final ApiVersions apiVersions) {
         super(logContext, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, time, apiVersions);
         this.networkClientDelegate = networkClientDelegate;
     }
@@ -118,9 +118,9 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
 
         // TODO: move the logic to poll to handle signal close
         return pollInternal(
-                this::prepareCloseFetchSessionRequests,
-                this::handleCloseFetchSessionSuccess,
-                this::handleCloseFetchSessionFailure
+            this::prepareCloseFetchSessionRequests,
+            this::handleCloseFetchSessionSuccess,
+            this::handleCloseFetchSessionFailure
         );
     }
 
@@ -135,8 +135,8 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
      * @return {@link PollResult}
      */
     private PollResult pollInternal(FetchRequestPreparer fetchRequestPreparer,
-                                    ResponseHandler<ClientResponse> successHandler,
-                                    ResponseHandler<Throwable> errorHandler) {
+        ResponseHandler<ClientResponse> successHandler,
+        ResponseHandler<Throwable> errorHandler) {
         if (pendingFetchRequestFuture == null) {
             // If no explicit request for creating fetch requests was issued, just short-circuit.
             return PollResult.EMPTY;

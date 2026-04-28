@@ -130,11 +130,11 @@ public final class LegacyRecord {
     public void ensureValid() {
         if (sizeInBytes() < RECORD_OVERHEAD_V0)
             throw new CorruptRecordException("Record is corrupt (crc could not be retrieved as the record is too "
-                    + "small, size = " + sizeInBytes() + ")");
+                + "small, size = " + sizeInBytes() + ")");
 
         if (!isValid())
             throw new CorruptRecordException("Record is corrupt (stored crc = " + checksum()
-                    + ", computed crc = " + computeChecksum() + ")");
+                + ", computed crc = " + computeChecksum() + ")");
     }
 
     /**
@@ -275,22 +275,22 @@ public final class LegacyRecord {
     public String toString() {
         if (magic() > 0)
             return String.format("Record(magic=%d, attributes=%d, compression=%s, crc=%d, %s=%d, key=%d bytes, value=%d bytes)",
-                                 magic(),
-                                 attributes(),
-                                 compressionType(),
-                                 checksum(),
-                                 timestampType(),
-                                 timestamp(),
-                                 key() == null ? 0 : key().limit(),
-                                 value() == null ? 0 : value().limit());
+                magic(),
+                attributes(),
+                compressionType(),
+                checksum(),
+                timestampType(),
+                timestamp(),
+                key() == null ? 0 : key().limit(),
+                value() == null ? 0 : value().limit());
         else
             return String.format("Record(magic=%d, attributes=%d, compression=%s, crc=%d, key=%d bytes, value=%d bytes)",
-                                 magic(),
-                                 attributes(),
-                                 compressionType(),
-                                 checksum(),
-                                 key() == null ? 0 : key().limit(),
-                                 value() == null ? 0 : value().limit());
+                magic(),
+                attributes(),
+                compressionType(),
+                checksum(),
+                key() == null ? 0 : key().limit(),
+                value() == null ? 0 : value().limit());
     }
 
     public boolean equals(Object other) {
@@ -321,11 +321,11 @@ public final class LegacyRecord {
      * @param timestampType The timestamp type to be used for this record
      */
     public static LegacyRecord create(byte magic,
-                                      long timestamp,
-                                      byte[] key,
-                                      byte[] value,
-                                      CompressionType compressionType,
-                                      TimestampType timestampType) {
+        long timestamp,
+        byte[] key,
+        byte[] value,
+        CompressionType compressionType,
+        TimestampType timestampType) {
         int keySize = key == null ? 0 : key.length;
         int valueSize = value == null ? 0 : value.length;
         ByteBuffer buffer = ByteBuffer.allocate(recordSize(magic, keySize, valueSize));
@@ -351,11 +351,11 @@ public final class LegacyRecord {
      * @param timestampType The timestamp type of the wrapper record
      */
     public static void writeCompressedRecordHeader(ByteBuffer buffer,
-                                                   byte magic,
-                                                   int recordSize,
-                                                   long timestamp,
-                                                   CompressionType compressionType,
-                                                   TimestampType timestampType) {
+        byte magic,
+        int recordSize,
+        long timestamp,
+        CompressionType compressionType,
+        TimestampType timestampType) {
         int recordPosition = buffer.position();
         int valueSize = recordSize - recordOverhead(magic);
 
@@ -372,12 +372,12 @@ public final class LegacyRecord {
     }
 
     private static void write(ByteBuffer buffer,
-                              byte magic,
-                              long timestamp,
-                              ByteBuffer key,
-                              ByteBuffer value,
-                              CompressionType compressionType,
-                              TimestampType timestampType) {
+        byte magic,
+        long timestamp,
+        ByteBuffer key,
+        ByteBuffer value,
+        CompressionType compressionType,
+        TimestampType timestampType) {
         try (DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer))) {
             write(out, magic, timestamp, key, value, compressionType, timestampType);
         } catch (IOException e) {
@@ -399,22 +399,22 @@ public final class LegacyRecord {
      * @throws IOException for any IO errors writing to the output stream.
      */
     public static long write(DataOutputStream out,
-                             byte magic,
-                             long timestamp,
-                             byte[] key,
-                             byte[] value,
-                             CompressionType compressionType,
-                             TimestampType timestampType) throws IOException {
+        byte magic,
+        long timestamp,
+        byte[] key,
+        byte[] value,
+        CompressionType compressionType,
+        TimestampType timestampType) throws IOException {
         return write(out, magic, timestamp, wrapNullable(key), wrapNullable(value), compressionType, timestampType);
     }
 
     public static long write(DataOutputStream out,
-                             byte magic,
-                             long timestamp,
-                             ByteBuffer key,
-                             ByteBuffer value,
-                             CompressionType compressionType,
-                             TimestampType timestampType) throws IOException {
+        byte magic,
+        long timestamp,
+        ByteBuffer key,
+        ByteBuffer value,
+        CompressionType compressionType,
+        TimestampType timestampType) throws IOException {
         byte attributes = computeAttributes(magic, compressionType, timestampType);
         long crc = computeChecksum(magic, attributes, timestamp, key, value);
         write(out, magic, crc, attributes, timestamp, key, value);
@@ -425,24 +425,24 @@ public final class LegacyRecord {
      * Write a record using raw fields (without validation). This should only be used in testing.
      */
     public static void write(DataOutputStream out,
-                             byte magic,
-                             long crc,
-                             byte attributes,
-                             long timestamp,
-                             byte[] key,
-                             byte[] value) throws IOException {
+        byte magic,
+        long crc,
+        byte attributes,
+        long timestamp,
+        byte[] key,
+        byte[] value) throws IOException {
         write(out, magic, crc, attributes, timestamp, wrapNullable(key), wrapNullable(value));
     }
 
     // Write a record to the buffer, if the record's compression type is none, then
     // its value payload should be already compressed with the specified type
     private static void write(DataOutputStream out,
-                              byte magic,
-                              long crc,
-                              byte attributes,
-                              long timestamp,
-                              ByteBuffer key,
-                              ByteBuffer value) throws IOException {
+        byte magic,
+        long crc,
+        byte attributes,
+        long timestamp,
+        ByteBuffer key,
+        ByteBuffer value) throws IOException {
         if (magic != RecordBatch.MAGIC_VALUE_V0 && magic != RecordBatch.MAGIC_VALUE_V1)
             throw new IllegalArgumentException("Invalid magic value " + magic);
         if (timestamp < 0 && timestamp != RecordBatch.NO_TIMESTAMP)
@@ -493,7 +493,7 @@ public final class LegacyRecord {
         if (magic > RecordBatch.MAGIC_VALUE_V0) {
             if (timestampType == TimestampType.NO_TIMESTAMP_TYPE)
                 throw new IllegalArgumentException("Timestamp type must be provided to compute attributes for " +
-                        "message format v1");
+                    "message format v1");
             if (timestampType == TimestampType.LOG_APPEND_TIME)
                 attributes |= TIMESTAMP_TYPE_MASK;
         }

@@ -287,7 +287,7 @@ public class PluginDescTest {
         );
 
         assertTrue(configProviderDescPluginPath.compareTo(configProviderDescOtherPluginLoader) != 0,
-            "Different plugin loaders should have an ordering");
+                "Different plugin loaders should have an ordering");
 
 
         PluginDesc<Converter> jsonConverterPlugin = new PluginDesc<>(

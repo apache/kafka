@@ -42,11 +42,11 @@ public class RemoteLogReader implements Callable<Void> {
     private final Timer remoteReadTimer;
 
     public RemoteLogReader(RemoteStorageFetchInfo fetchInfo,
-                           RemoteLogManager rlm,
-                           Consumer<RemoteLogReadResult> callback,
-                           BrokerTopicStats brokerTopicStats,
-                           RLMQuotaManager quotaManager,
-                           Timer remoteReadTimer) {
+            RemoteLogManager rlm,
+            Consumer<RemoteLogReadResult> callback,
+            BrokerTopicStats brokerTopicStats,
+            RLMQuotaManager quotaManager,
+            Timer remoteReadTimer) {
         this.fetchInfo = fetchInfo;
         this.rlm = rlm;
         this.brokerTopicStats = brokerTopicStats;

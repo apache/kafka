@@ -39,57 +39,59 @@ public class AssignmentsHelperTest {
 
     @Test
     public void testBuildRequestData() {
-        Map<TopicIdPartition, Uuid> assignment = new HashMap<TopicIdPartition, Uuid>() {{
+        Map<TopicIdPartition, Uuid> assignment = new HashMap<TopicIdPartition, Uuid>() {
+            {
                 put(new TopicIdPartition(TOPIC_1, 1), DIR_1);
                 put(new TopicIdPartition(TOPIC_1, 2), DIR_2);
                 put(new TopicIdPartition(TOPIC_1, 3), DIR_3);
                 put(new TopicIdPartition(TOPIC_1, 4), DIR_1);
                 put(new TopicIdPartition(TOPIC_2, 5), DIR_2);
-            }};
+            }
+        };
         AssignReplicasToDirsRequestData built = AssignmentsHelper.buildRequestData(8, 100L, assignment);
         AssignReplicasToDirsRequestData expected = new AssignReplicasToDirsRequestData()
-                .setBrokerId(8)
-                .setBrokerEpoch(100L)
-                .setDirectories(List.of(
-                        new AssignReplicasToDirsRequestData.DirectoryData()
-                                .setId(DIR_2)
-                                .setTopics(List.of(
-                                        new AssignReplicasToDirsRequestData.TopicData()
-                                                .setTopicId(TOPIC_1)
-                                                .setPartitions(List.of(
-                                                        new AssignReplicasToDirsRequestData.PartitionData()
-                                                                .setPartitionIndex(2)
-                                                )),
-                                        new AssignReplicasToDirsRequestData.TopicData()
-                                                .setTopicId(TOPIC_2)
-                                                .setPartitions(List.of(
-                                                        new AssignReplicasToDirsRequestData.PartitionData()
-                                                                .setPartitionIndex(5)
-                                                ))
-                                )),
-                        new AssignReplicasToDirsRequestData.DirectoryData()
-                                .setId(DIR_3)
-                                .setTopics(List.of(
-                                        new AssignReplicasToDirsRequestData.TopicData()
-                                                .setTopicId(TOPIC_1)
-                                                .setPartitions(List.of(
-                                                        new AssignReplicasToDirsRequestData.PartitionData()
-                                                                .setPartitionIndex(3)
-                                                ))
-                                )),
-                        new AssignReplicasToDirsRequestData.DirectoryData()
-                                .setId(DIR_1)
-                                .setTopics(List.of(
-                                        new AssignReplicasToDirsRequestData.TopicData()
-                                                .setTopicId(TOPIC_1)
-                                                .setPartitions(List.of(
-                                                        new AssignReplicasToDirsRequestData.PartitionData()
-                                                                .setPartitionIndex(4),
-                                                        new AssignReplicasToDirsRequestData.PartitionData()
-                                                                .setPartitionIndex(1)
-                                                ))
-                                ))
-                ));
+            .setBrokerId(8)
+            .setBrokerEpoch(100L)
+            .setDirectories(List.of(
+                new AssignReplicasToDirsRequestData.DirectoryData()
+                    .setId(DIR_2)
+                    .setTopics(List.of(
+                        new AssignReplicasToDirsRequestData.TopicData()
+                            .setTopicId(TOPIC_1)
+                            .setPartitions(List.of(
+                                new AssignReplicasToDirsRequestData.PartitionData()
+                                    .setPartitionIndex(2)
+                            )),
+                        new AssignReplicasToDirsRequestData.TopicData()
+                            .setTopicId(TOPIC_2)
+                            .setPartitions(List.of(
+                                new AssignReplicasToDirsRequestData.PartitionData()
+                                    .setPartitionIndex(5)
+                            ))
+                    )),
+                new AssignReplicasToDirsRequestData.DirectoryData()
+                    .setId(DIR_3)
+                    .setTopics(List.of(
+                        new AssignReplicasToDirsRequestData.TopicData()
+                            .setTopicId(TOPIC_1)
+                            .setPartitions(List.of(
+                                new AssignReplicasToDirsRequestData.PartitionData()
+                                    .setPartitionIndex(3)
+                            ))
+                    )),
+                new AssignReplicasToDirsRequestData.DirectoryData()
+                    .setId(DIR_1)
+                    .setTopics(List.of(
+                        new AssignReplicasToDirsRequestData.TopicData()
+                            .setTopicId(TOPIC_1)
+                            .setPartitions(List.of(
+                                new AssignReplicasToDirsRequestData.PartitionData()
+                                    .setPartitionIndex(4),
+                                new AssignReplicasToDirsRequestData.PartitionData()
+                                    .setPartitionIndex(1)
+                            ))
+                    ))
+            ));
         assertEquals(AssignmentsHelper.normalize(expected), AssignmentsHelper.normalize(built));
     }
 }

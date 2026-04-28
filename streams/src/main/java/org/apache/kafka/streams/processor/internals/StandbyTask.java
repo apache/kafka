@@ -61,14 +61,14 @@ public class StandbyTask extends AbstractTask implements Task {
      * @param stateDirectory  the {@link StateDirectory} created by the thread
      */
     StandbyTask(final TaskId id,
-                final Set<TopicPartition> inputPartitions,
-                final ProcessorTopology topology,
-                final TaskConfig config,
-                final StreamsMetricsImpl streamsMetrics,
-                final ProcessorStateManager stateMgr,
-                final StateDirectory stateDirectory,
-                final ThreadCache cache,
-                final InternalProcessorContext<?, ?> processorContext) {
+        final Set<TopicPartition> inputPartitions,
+        final ProcessorTopology topology,
+        final TaskConfig config,
+        final StreamsMetricsImpl streamsMetrics,
+        final ProcessorStateManager stateMgr,
+        final StateDirectory stateDirectory,
+        final ThreadCache cache,
+        final InternalProcessorContext<?, ?> processorContext) {
         super(
             id,
             topology,

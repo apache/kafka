@@ -69,8 +69,8 @@ public class BrokerRegistrationTest {
             setIncarnationId(Uuid.fromString("eY7oaG1RREie5Kk9uy1l6g")).
             setListeners(List.of(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
             setSupportedFeatures(Stream.of(new SimpleEntry<>("foo", VersionRange.of((short) 2, (short) 3)),
-                new SimpleEntry<>("bar", VersionRange.of((short) 1, (short) 4))).collect(
-                        Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue))).
+            new SimpleEntry<>("bar", VersionRange.of((short) 1, (short) 4))).collect(
+            Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue))).
             setRack(Optional.of("myrack")).
             setFenced(false).
             setInControlledShutdown(true).build(),
@@ -80,7 +80,7 @@ public class BrokerRegistrationTest {
             setIncarnationId(Uuid.fromString("1t8VyWx2TCSTpUWuqj-FOw")).
             setListeners(List.of(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
             setSupportedFeatures(Stream.of(new SimpleEntry<>("metadata.version", VersionRange.of((short) 7, (short) 7)))
-                .collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue))).
+            .collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue))).
             setRack(Optional.empty()).
             setFenced(false).
             setInControlledShutdown(true).
@@ -173,50 +173,50 @@ public class BrokerRegistrationTest {
     @Test
     public void testDirectoriesAreSorted() {
         BrokerRegistration registration = new BrokerRegistration.Builder().
-                setId(0).
-                setEpoch(0).
-                setIncarnationId(Uuid.fromString("ik32HZbLTW6ulw1yyrC8jQ")).
-                setListeners(List.of(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
-                setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 2))).
-                setRack(Optional.empty()).
-                setFenced(false).
-                setInControlledShutdown(false).
-                setDirectories(List.of(
-                    Uuid.fromString("3MWIBL9NR4eXhtdfBVA7Bw"),
-                    Uuid.fromString("SZQIVeLMQGiNi68StNSNZA"),
-                    Uuid.fromString("LWZsWPBrQruOMMrnEBj7bw"),
-                    Uuid.fromString("OpIJIaO6RKaOGvHlNmOEhA"),
-                    Uuid.fromString("JhYia5HRTLihf2FFJVxopQ"),
-                    Uuid.fromString("VNetSHnySxSbvjwKrBzpkw"))
-                ).
-                build();
+            setId(0).
+            setEpoch(0).
+            setIncarnationId(Uuid.fromString("ik32HZbLTW6ulw1yyrC8jQ")).
+            setListeners(List.of(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
+            setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 2))).
+            setRack(Optional.empty()).
+            setFenced(false).
+            setInControlledShutdown(false).
+            setDirectories(List.of(
+            Uuid.fromString("3MWIBL9NR4eXhtdfBVA7Bw"),
+            Uuid.fromString("SZQIVeLMQGiNi68StNSNZA"),
+            Uuid.fromString("LWZsWPBrQruOMMrnEBj7bw"),
+            Uuid.fromString("OpIJIaO6RKaOGvHlNmOEhA"),
+            Uuid.fromString("JhYia5HRTLihf2FFJVxopQ"),
+            Uuid.fromString("VNetSHnySxSbvjwKrBzpkw"))
+        ).
+            build();
         assertEquals(List.of(
-                Uuid.fromString("3MWIBL9NR4eXhtdfBVA7Bw"),
-                Uuid.fromString("JhYia5HRTLihf2FFJVxopQ"),
-                Uuid.fromString("LWZsWPBrQruOMMrnEBj7bw"),
-                Uuid.fromString("OpIJIaO6RKaOGvHlNmOEhA"),
-                Uuid.fromString("SZQIVeLMQGiNi68StNSNZA"),
-                Uuid.fromString("VNetSHnySxSbvjwKrBzpkw")
+            Uuid.fromString("3MWIBL9NR4eXhtdfBVA7Bw"),
+            Uuid.fromString("JhYia5HRTLihf2FFJVxopQ"),
+            Uuid.fromString("LWZsWPBrQruOMMrnEBj7bw"),
+            Uuid.fromString("OpIJIaO6RKaOGvHlNmOEhA"),
+            Uuid.fromString("SZQIVeLMQGiNi68StNSNZA"),
+            Uuid.fromString("VNetSHnySxSbvjwKrBzpkw")
         ), registration.directories());
     }
 
     @Test
     void testHasOnlineDir() {
         BrokerRegistration registration = new BrokerRegistration.Builder().
-                setId(0).
-                setEpoch(0).
-                setIncarnationId(Uuid.fromString("m6CiJvfITZeKVC6UuhlZew")).
-                setListeners(List.of(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
-                setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 2))).
-                setRack(Optional.empty()).
-                setFenced(false).
-                setInControlledShutdown(false).
-                setDirectories(List.of(
-                    Uuid.fromString("dir1G6EtuR1OTdAzFw1AFQ"),
-                    Uuid.fromString("dir2gwpjTvKC7sMfcLNd8g"),
-                    Uuid.fromString("dir3Ir8mQ0mMxfv93RITDA")
-                )).
-                build();
+            setId(0).
+            setEpoch(0).
+            setIncarnationId(Uuid.fromString("m6CiJvfITZeKVC6UuhlZew")).
+            setListeners(List.of(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
+            setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 2))).
+            setRack(Optional.empty()).
+            setFenced(false).
+            setInControlledShutdown(false).
+            setDirectories(List.of(
+            Uuid.fromString("dir1G6EtuR1OTdAzFw1AFQ"),
+            Uuid.fromString("dir2gwpjTvKC7sMfcLNd8g"),
+            Uuid.fromString("dir3Ir8mQ0mMxfv93RITDA")
+        )).
+            build();
         assertTrue(registration.hasOnlineDir(Uuid.fromString("dir1G6EtuR1OTdAzFw1AFQ")));
         assertTrue(registration.hasOnlineDir(Uuid.fromString("dir2gwpjTvKC7sMfcLNd8g")));
         assertTrue(registration.hasOnlineDir(Uuid.fromString("dir3Ir8mQ0mMxfv93RITDA")));
@@ -229,35 +229,35 @@ public class BrokerRegistrationTest {
     @Test
     void testHasUncordonedDirs() {
         BrokerRegistration registration = new BrokerRegistration.Builder().
-                setId(0).
-                setEpoch(0).
-                setIncarnationId(Uuid.fromString("m6CiJvfITZeKVC6UuhlZew")).
-                setListeners(List.of(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
-                setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 2))).
-                setRack(Optional.empty()).
-                setFenced(false).
-                setInControlledShutdown(false).
-                setDirectories(List.of(
-                        Uuid.fromString("dir1G6EtuR1OTdAzFw1AFQ")
-                )).
-                build();
+            setId(0).
+            setEpoch(0).
+            setIncarnationId(Uuid.fromString("m6CiJvfITZeKVC6UuhlZew")).
+            setListeners(List.of(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
+            setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 2))).
+            setRack(Optional.empty()).
+            setFenced(false).
+            setInControlledShutdown(false).
+            setDirectories(List.of(
+            Uuid.fromString("dir1G6EtuR1OTdAzFw1AFQ")
+        )).
+            build();
         assertTrue(registration.hasUncordonedDirs());
         registration = new BrokerRegistration.Builder().
-                setId(0).
-                setEpoch(0).
-                setIncarnationId(Uuid.fromString("m6CiJvfITZeKVC6UuhlZew")).
-                setListeners(List.of(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
-                setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 2))).
-                setRack(Optional.empty()).
-                setFenced(false).
-                setInControlledShutdown(false).
-                setDirectories(List.of(
-                        Uuid.fromString("dir1G6EtuR1OTdAzFw1AFQ")
-                )).
-                setCordonedDirectories(List.of(
-                        Uuid.fromString("dir1G6EtuR1OTdAzFw1AFQ")
-                )).
-                build();
+            setId(0).
+            setEpoch(0).
+            setIncarnationId(Uuid.fromString("m6CiJvfITZeKVC6UuhlZew")).
+            setListeners(List.of(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
+            setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 2))).
+            setRack(Optional.empty()).
+            setFenced(false).
+            setInControlledShutdown(false).
+            setDirectories(List.of(
+            Uuid.fromString("dir1G6EtuR1OTdAzFw1AFQ")
+        )).
+            setCordonedDirectories(List.of(
+            Uuid.fromString("dir1G6EtuR1OTdAzFw1AFQ")
+        )).
+            build();
         assertFalse(registration.hasUncordonedDirs());
     }
 }

@@ -34,8 +34,8 @@ public final class EraseBrokerStorageAction implements TieredStorageTestAction {
     }
 
     public EraseBrokerStorageAction(int brokerId,
-                                    FilenameFilter filenameFilter,
-                                    boolean isStopped) {
+            FilenameFilter filenameFilter,
+            boolean isStopped) {
         this.brokerId = brokerId;
         this.filenameFilter = filenameFilter;
         this.isStopped = isStopped;

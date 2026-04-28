@@ -87,7 +87,7 @@ public class StreamsUpgradeTest {
     }
 
     private static void buildFKTable(final KStream<String, Integer> primaryTable,
-                                     final KTable<Integer, String> otherTable) {
+        final KTable<Integer, String> otherTable) {
         final KStream<String, String> kStream = primaryTable.toTable()
             .join(otherTable, v -> v, (k0, v0) -> v0)
             .toStream();
@@ -114,7 +114,8 @@ public class StreamsUpgradeTest {
             }
 
             @Override
-            public void close() {}
+            public void close() {
+            }
         };
     }
 }

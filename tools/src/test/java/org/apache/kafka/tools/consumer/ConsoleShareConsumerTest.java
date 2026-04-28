@@ -68,9 +68,9 @@ public class ConsoleShareConsumerTest {
         });
 
         ConsoleShareConsumer.ConsumerWrapper consumer = new ConsoleShareConsumer.ConsumerWrapper(
-                topic,
-                mockConsumer,
-                timeoutMs
+            topic,
+            mockConsumer,
+            timeoutMs
         );
 
         assertThrows(TimeoutException.class, consumer::receive);
@@ -149,8 +149,8 @@ public class ConsoleShareConsumerTest {
         short deliveryCount = 1;
         // Mock a ConsumerRecord with a delivery count
         ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
-                "test-topic", 0, 0, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, 0,
-                0, new byte[0], new byte[0], new RecordHeaders(), Optional.empty(), Optional.of(deliveryCount)
+            "test-topic", 0, 0, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, 0,
+            0, new byte[0], new byte[0], new RecordHeaders(), Optional.empty(), Optional.of(deliveryCount)
         );
 
         // Mock consumer behavior

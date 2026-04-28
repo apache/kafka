@@ -63,7 +63,7 @@ public class OffsetCommitResponse extends AbstractResponse {
     public OffsetCommitResponse(int requestThrottleMs, Map<TopicPartition, Errors> responseData) {
         super(ApiKeys.OFFSET_COMMIT);
         Map<String, OffsetCommitResponseTopic>
-                responseTopicDataMap = new HashMap<>();
+            responseTopicDataMap = new HashMap<>();
 
         for (Map.Entry<TopicPartition, Errors> entry : responseData.entrySet()) {
             TopicPartition topicPartition = entry.getKey();
@@ -73,14 +73,14 @@ public class OffsetCommitResponse extends AbstractResponse {
                 topicName, new OffsetCommitResponseTopic().setName(topicName));
 
             topic.partitions().add(new OffsetCommitResponsePartition()
-                                       .setErrorCode(entry.getValue().code())
-                                       .setPartitionIndex(topicPartition.partition()));
+                .setErrorCode(entry.getValue().code())
+                .setPartitionIndex(topicPartition.partition()));
             responseTopicDataMap.put(topicName, topic);
         }
 
         data = new OffsetCommitResponseData()
-                .setTopics(new ArrayList<>(responseTopicDataMap.values()))
-                .setThrottleTimeMs(requestThrottleMs);
+            .setTopics(new ArrayList<>(responseTopicDataMap.values()))
+            .setThrottleTimeMs(requestThrottleMs);
     }
 
     public OffsetCommitResponse(Map<TopicPartition, Errors> responseData) {
@@ -95,8 +95,8 @@ public class OffsetCommitResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         return errorCounts(data.topics().stream().flatMap(topicResult ->
-                topicResult.partitions().stream().map(partitionResult ->
-                        Errors.forCode(partitionResult.errorCode()))));
+            topicResult.partitions().stream().map(partitionResult ->
+                Errors.forCode(partitionResult.errorCode()))));
     }
 
     public static OffsetCommitResponse parse(Readable readable, short version) {

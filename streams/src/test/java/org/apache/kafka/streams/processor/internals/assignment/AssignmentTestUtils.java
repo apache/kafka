@@ -114,11 +114,11 @@ public final class AssignmentTestUtils {
     public static final Node NODE_4 = new Node(4, "node4", 1, RACK_4);
     public static final Node NO_RACK_NODE = new Node(3, "node3", 1);
 
-    public static final Node[] REPLICA_0 = new Node[] {NODE_0, NODE_1};
-    public static final Node[] REPLICA_1 = new Node[] {NODE_1, NODE_2};
-    public static final Node[] REPLICA_2 = new Node[] {NODE_0, NODE_2};
-    public static final Node[] REPLICA_3 = new Node[] {NODE_1, NODE_3};
-    public static final Node[] REPLICA_4 = new Node[] {NODE_3, NODE_4};
+    public static final Node[] REPLICA_0 = new Node[]{NODE_0, NODE_1};
+    public static final Node[] REPLICA_1 = new Node[]{NODE_1, NODE_2};
+    public static final Node[] REPLICA_2 = new Node[]{NODE_0, NODE_2};
+    public static final Node[] REPLICA_3 = new Node[]{NODE_1, NODE_3};
+    public static final Node[] REPLICA_4 = new Node[]{NODE_3, NODE_4};
 
     public static final String TP_0_NAME = "topic0";
     public static final String TP_1_NAME = "topic1";
@@ -231,7 +231,8 @@ public final class AssignmentTestUtils {
     public static final String CHANGELOG_TOPIC_PREFIX = "changelog-topic";
     public static final String RACK_PREFIX = "rack";
 
-    private AssignmentTestUtils() {}
+    private AssignmentTestUtils() {
+    }
 
     static Map<ProcessId, ClientState> getClientStatesMap(final ClientState... states) {
         final Map<ProcessId, ClientState> clientStates = new HashMap<>();
@@ -264,33 +265,33 @@ public final class AssignmentTestUtils {
     }
 
     public static SubscriptionInfo getInfo(final ProcessId processId,
-                                           final Set<TaskId> prevTasks,
-                                           final Set<TaskId> standbyTasks) {
+        final Set<TaskId> prevTasks,
+        final Set<TaskId> standbyTasks) {
         return new SubscriptionInfo(
             LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0, 0, EMPTY_CLIENT_TAGS);
     }
 
     public static SubscriptionInfo getInfo(final ProcessId processId,
-                                           final Set<TaskId> prevTasks,
-                                           final Set<TaskId> standbyTasks,
-                                           final String userEndPoint) {
+        final Set<TaskId> prevTasks,
+        final Set<TaskId> standbyTasks,
+        final String userEndPoint) {
         return new SubscriptionInfo(
             LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, userEndPoint, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0, 0, EMPTY_CLIENT_TAGS);
     }
 
     public static SubscriptionInfo getInfo(final ProcessId processId,
-                                           final Set<TaskId> prevTasks,
-                                           final Set<TaskId> standbyTasks,
-                                           final byte uniqueField) {
+        final Set<TaskId> prevTasks,
+        final Set<TaskId> standbyTasks,
+        final byte uniqueField) {
         return new SubscriptionInfo(
             LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), uniqueField, 0, EMPTY_CLIENT_TAGS);
     }
 
     public static SubscriptionInfo getInfo(final ProcessId processId,
-                                           final Set<TaskId> prevTasks,
-                                           final Set<TaskId> standbyTasks,
-                                           final byte uniqueField,
-                                           final Map<String, String> clientTags) {
+        final Set<TaskId> prevTasks,
+        final Set<TaskId> standbyTasks,
+        final byte uniqueField,
+        final Map<String, String> clientTags) {
         return new SubscriptionInfo(
             LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), uniqueField, 0, clientTags);
     }
@@ -311,10 +312,10 @@ public final class AssignmentTestUtils {
     }
 
     static void assertValidAssignment(final int numStandbyReplicas,
-                                      final Set<TaskId> statefulTasks,
-                                      final Set<TaskId> statelessTasks,
-                                      final Map<ProcessId, ClientState> assignedStates,
-                                      final StringBuilder failureContext) {
+        final Set<TaskId> statefulTasks,
+        final Set<TaskId> statelessTasks,
+        final Map<ProcessId, ClientState> assignedStates,
+        final StringBuilder failureContext) {
         assertValidAssignment(
             numStandbyReplicas,
             0,
@@ -326,11 +327,11 @@ public final class AssignmentTestUtils {
     }
 
     static void assertValidAssignment(final int numStandbyReplicas,
-                                      final int maxWarmupReplicas,
-                                      final Set<TaskId> statefulTasks,
-                                      final Set<TaskId> statelessTasks,
-                                      final Map<ProcessId, ClientState> assignedStates,
-                                      final StringBuilder failureContext) {
+        final int maxWarmupReplicas,
+        final Set<TaskId> statefulTasks,
+        final Set<TaskId> statelessTasks,
+        final Map<ProcessId, ClientState> assignedStates,
+        final StringBuilder failureContext) {
         final Map<TaskId, Set<ProcessId>> assignments = new TreeMap<>();
         for (final TaskId taskId : statefulTasks) {
             assignments.put(taskId, new TreeSet<>());
@@ -374,34 +375,34 @@ public final class AssignmentTestUtils {
 
         if (!misassigned.isEmpty()) {
             assertThat("Found some over- or under-assigned tasks in the final assignment with " + numStandbyReplicas +
-                    " and max warmups " + maxWarmupReplicas + " standby replicas, stateful tasks:" + statefulTasks +
-                    ", and stateless tasks:" + statelessTasks + failureContext, misassigned, is(emptyMap()));
+                " and max warmups " + maxWarmupReplicas + " standby replicas, stateful tasks:" + statefulTasks +
+                ", and stateless tasks:" + statelessTasks + failureContext, misassigned, is(emptyMap()));
         }
     }
 
     private static void validateAndAddStandbyAssignments(final Set<TaskId> statefulTasks,
-                                                         final Set<TaskId> statelessTasks,
-                                                         final StringBuilder failureContext,
-                                                         final Map<TaskId, Set<ProcessId>> assignments,
-                                                         final Map.Entry<ProcessId, ClientState> entry) {
+        final Set<TaskId> statelessTasks,
+        final StringBuilder failureContext,
+        final Map<TaskId, Set<ProcessId>> assignments,
+        final Map.Entry<ProcessId, ClientState> entry) {
         for (final TaskId standbyTask : entry.getValue().standbyTasks()) {
             if (statelessTasks.contains(standbyTask)) {
                 throw new AssertionError("Found a standby task for stateless task " + standbyTask + " on client " +
-                        entry + " stateless tasks:" + statelessTasks + failureContext);
+                    entry + " stateless tasks:" + statelessTasks + failureContext);
             } else if (assignments.containsKey(standbyTask)) {
                 assignments.get(standbyTask).add(entry.getKey());
             } else {
                 throw new AssertionError("Found an extra standby task " + standbyTask + " on client " +
-                        entry + " but expected stateful tasks:" + statefulTasks + failureContext);
+                    entry + " but expected stateful tasks:" + statefulTasks + failureContext);
             }
         }
     }
 
     private static void validateAndAddActiveAssignments(final Set<TaskId> statefulTasks,
-                                                        final Set<TaskId> statelessTasks,
-                                                        final StringBuilder failureContext,
-                                                        final Map<TaskId, Set<ProcessId>> assignments,
-                                                        final Map.Entry<ProcessId, ClientState> entry) {
+        final Set<TaskId> statelessTasks,
+        final StringBuilder failureContext,
+        final Map<TaskId, Set<ProcessId>> assignments,
+        final Map.Entry<ProcessId, ClientState> entry) {
         for (final TaskId activeTask : entry.getValue().activeTasks()) {
             if (assignments.containsKey(activeTask)) {
                 assignments.get(activeTask).add(entry.getKey());
@@ -412,8 +413,8 @@ public final class AssignmentTestUtils {
     }
 
     static void assertBalancedStatefulAssignment(final Set<TaskId> allStatefulTasks,
-                                                 final Map<ProcessId, ClientState> clientStates,
-                                                 final StringBuilder failureContext) {
+        final Map<ProcessId, ClientState> clientStates,
+        final StringBuilder failureContext) {
         double maxStateful = Double.MIN_VALUE;
         double minStateful = Double.MAX_VALUE;
         for (final ClientState clientState : clientStates.values()) {
@@ -438,7 +439,7 @@ public final class AssignmentTestUtils {
     }
 
     static void assertBalancedActiveAssignment(final Map<ProcessId, ClientState> clientStates,
-                                               final StringBuilder failureContext) {
+        final StringBuilder failureContext) {
         double maxActive = Double.MIN_VALUE;
         double minActive = Double.MAX_VALUE;
         for (final ClientState clientState : clientStates.values()) {
@@ -521,8 +522,8 @@ public final class AssignmentTestUtils {
     }
 
     static <V> Matcher<ClientState> hasProperty(final String propertyName,
-                                                final Function<ClientState, V> propertyExtractor,
-                                                final V propertyValue) {
+        final Function<ClientState, V> propertyExtractor,
+        final V propertyValue) {
         return new BaseMatcher<>() {
             @Override
             public void describeTo(final Description description) {
@@ -541,7 +542,7 @@ public final class AssignmentTestUtils {
     }
 
     static void appendClientStates(final StringBuilder stringBuilder,
-                                   final Map<ProcessId, ClientState> clientStates) {
+        final Map<ProcessId, ClientState> clientStates) {
         stringBuilder.append('{').append('\n');
         for (final Map.Entry<ProcessId, ClientState> entry : clientStates.entrySet()) {
             stringBuilder.append("  ").append(entry.getKey()).append(": ").append(entry.getValue()).append('\n');
@@ -555,8 +556,8 @@ public final class AssignmentTestUtils {
         private final Map<Integer, Map<ProcessId, AtomicInteger>> subtopologyToClientsWithPartition;
 
         private TaskSkewReport(final int maxTaskSkew,
-                               final Set<Integer> skewedSubtopologies,
-                               final Map<Integer, Map<ProcessId, AtomicInteger>> subtopologyToClientsWithPartition) {
+            final Set<Integer> skewedSubtopologies,
+            final Map<Integer, Map<ProcessId, AtomicInteger>> subtopologyToClientsWithPartition) {
             this.maxTaskSkew = maxTaskSkew;
             this.skewedSubtopologies = skewedSubtopologies;
             this.subtopologyToClientsWithPartition = subtopologyToClientsWithPartition;
@@ -593,7 +594,7 @@ public final class AssignmentTestUtils {
     static Node[] getRandomReplica(final List<Node> nodeList, final int index, final int partition) {
         final Node firstNode = nodeList.get((index * partition) % nodeList.size());
         final Node secondNode = nodeList.get((index * partition + 1) % nodeList.size());
-        return new Node[] {firstNode, secondNode};
+        return new Node[]{firstNode, secondNode};
     }
 
     static Cluster getRandomCluster(final int nodeSize, final int tpSize, final int partitionSize) {
@@ -872,37 +873,37 @@ public final class AssignmentTestUtils {
             mkMap(
                 mkEntry(
                     CHANGELOG_TP_0_NAME, Arrays.asList(
-                        new TopicPartitionInfo(0, NODE_0, Arrays.asList(REPLICA_0), Collections.emptyList()),
-                        new TopicPartitionInfo(1, NODE_1, Arrays.asList(REPLICA_1), Collections.emptyList()),
-                        new TopicPartitionInfo(2, NODE_1, Arrays.asList(REPLICA_1), Collections.emptyList()),
-                        new TopicPartitionInfo(3, NODE_2, Arrays.asList(REPLICA_2), Collections.emptyList()),
-                        new TopicPartitionInfo(4, NODE_3, Arrays.asList(REPLICA_3), Collections.emptyList()),
-                        new TopicPartitionInfo(5, NODE_4, Arrays.asList(REPLICA_4), Collections.emptyList()),
-                        new TopicPartitionInfo(6, NODE_0, Arrays.asList(REPLICA_0), Collections.emptyList())
-                    )
+                    new TopicPartitionInfo(0, NODE_0, Arrays.asList(REPLICA_0), Collections.emptyList()),
+                    new TopicPartitionInfo(1, NODE_1, Arrays.asList(REPLICA_1), Collections.emptyList()),
+                    new TopicPartitionInfo(2, NODE_1, Arrays.asList(REPLICA_1), Collections.emptyList()),
+                    new TopicPartitionInfo(3, NODE_2, Arrays.asList(REPLICA_2), Collections.emptyList()),
+                    new TopicPartitionInfo(4, NODE_3, Arrays.asList(REPLICA_3), Collections.emptyList()),
+                    new TopicPartitionInfo(5, NODE_4, Arrays.asList(REPLICA_4), Collections.emptyList()),
+                    new TopicPartitionInfo(6, NODE_0, Arrays.asList(REPLICA_0), Collections.emptyList())
+                )
                 ),
                 mkEntry(
                     CHANGELOG_TP_1_NAME, Arrays.asList(
-                        new TopicPartitionInfo(0, NODE_2, Arrays.asList(REPLICA_2), Collections.emptyList()),
-                        new TopicPartitionInfo(1, NODE_3, Arrays.asList(REPLICA_3), Collections.emptyList()),
-                        new TopicPartitionInfo(2, NODE_0, Arrays.asList(REPLICA_0), Collections.emptyList()),
-                        new TopicPartitionInfo(3, NODE_4, Arrays.asList(REPLICA_4), Collections.emptyList())
-                    )
+                    new TopicPartitionInfo(0, NODE_2, Arrays.asList(REPLICA_2), Collections.emptyList()),
+                    new TopicPartitionInfo(1, NODE_3, Arrays.asList(REPLICA_3), Collections.emptyList()),
+                    new TopicPartitionInfo(2, NODE_0, Arrays.asList(REPLICA_0), Collections.emptyList()),
+                    new TopicPartitionInfo(3, NODE_4, Arrays.asList(REPLICA_4), Collections.emptyList())
+                )
                 ),
                 mkEntry(
                     CHANGELOG_TP_2_NAME, Arrays.asList(
-                        new TopicPartitionInfo(0, NODE_1, Arrays.asList(REPLICA_1), Collections.emptyList()),
-                        new TopicPartitionInfo(1, NODE_2, Arrays.asList(REPLICA_2), Collections.emptyList()),
-                        new TopicPartitionInfo(2, NODE_4, Arrays.asList(REPLICA_4), Collections.emptyList()),
-                        new TopicPartitionInfo(3, NODE_3, Arrays.asList(REPLICA_3), Collections.emptyList())
-                    )
+                    new TopicPartitionInfo(0, NODE_1, Arrays.asList(REPLICA_1), Collections.emptyList()),
+                    new TopicPartitionInfo(1, NODE_2, Arrays.asList(REPLICA_2), Collections.emptyList()),
+                    new TopicPartitionInfo(2, NODE_4, Arrays.asList(REPLICA_4), Collections.emptyList()),
+                    new TopicPartitionInfo(3, NODE_3, Arrays.asList(REPLICA_3), Collections.emptyList())
+                )
                 ),
                 mkEntry(
                     CHANGELOG_TP_3_NAME, Arrays.asList(
-                        new TopicPartitionInfo(0, NODE_4, Arrays.asList(REPLICA_4), Collections.emptyList()),
-                        new TopicPartitionInfo(1, NODE_3, Arrays.asList(REPLICA_3), Collections.emptyList()),
-                        new TopicPartitionInfo(2, NODE_1, Arrays.asList(REPLICA_1), Collections.emptyList())
-                    )
+                    new TopicPartitionInfo(0, NODE_4, Arrays.asList(REPLICA_4), Collections.emptyList()),
+                    new TopicPartitionInfo(1, NODE_3, Arrays.asList(REPLICA_3), Collections.emptyList()),
+                    new TopicPartitionInfo(2, NODE_1, Arrays.asList(REPLICA_1), Collections.emptyList())
+                )
                 )
             )
         ).when(spyTopicManager).getTopicPartitionInfo(anySet());
@@ -1001,10 +1002,10 @@ public final class AssignmentTestUtils {
     }
 
     static void verifyTaskPlacementWithRackAwareAssignor(final RackAwareTaskAssignor rackAwareTaskAssignor,
-                                                         final Set<TaskId> allTaskIds,
-                                                         final Map<ProcessId, ClientState> clientStates,
-                                                         final boolean hasStandby,
-                                                         final boolean enableRackAwareTaskAssignor) {
+        final Set<TaskId> allTaskIds,
+        final Map<ProcessId, ClientState> clientStates,
+        final boolean hasStandby,
+        final boolean enableRackAwareTaskAssignor) {
         // Verifies active and standby are in different clients
         verifyStandbySatisfyRackReplica(allTaskIds, rackAwareTaskAssignor.racksForProcess(), clientStates, null, true, null);
 

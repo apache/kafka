@@ -31,7 +31,7 @@ import java.util.Properties;
 public class KafkaStreamsWrapper extends KafkaStreams {
 
     public KafkaStreamsWrapper(final Topology topology,
-                               final Properties props) {
+        final Properties props) {
         super(topology, props);
     }
 

@@ -28,7 +28,8 @@ public abstract class ContextualProcessor<KIn, VIn, KOut, VOut> implements Proce
 
     private ProcessorContext<KOut, VOut> context;
 
-    protected ContextualProcessor() {}
+    protected ContextualProcessor() {
+    }
 
     @Override
     public void init(final ProcessorContext<KOut, VOut> context) {

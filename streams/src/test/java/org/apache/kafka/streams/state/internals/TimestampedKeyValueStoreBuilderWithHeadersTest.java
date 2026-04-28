@@ -542,7 +542,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             Serdes.String(),
             new MockTime()
         );
-        
+
         final TimestampedKeyValueStoreWithHeaders<String, String> store;
         if (cachingEnabled) {
             store = builder.withLoggingDisabled()

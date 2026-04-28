@@ -89,12 +89,12 @@ public class AcknowledgementsTest {
     @Test
     public void testSingleAcknowledgeTypeExceedingLimit() {
         int i = 0;
-        for (; i < maxRecordsWithSameAcknowledgeType; i++) {
+        for (;i < maxRecordsWithSameAcknowledgeType;i++) {
             acks.add(i, AcknowledgeType.ACCEPT);
         }
         acks.add(i++, AcknowledgeType.ACCEPT);
         acks.add(i++, AcknowledgeType.ACCEPT);
-        for (int j = 0; j <= maxRecordsWithSameAcknowledgeType; j++) {
+        for (int j = 0;j <= maxRecordsWithSameAcknowledgeType;j++) {
             acks.add(i + j, AcknowledgeType.REJECT);
         }
 
@@ -124,7 +124,7 @@ public class AcknowledgementsTest {
 
     @Test
     public void testSingleAcknowledgeTypeWithGap() {
-        for (int i = 0; i < maxRecordsWithSameAcknowledgeType; i++) {
+        for (int i = 0;i < maxRecordsWithSameAcknowledgeType;i++) {
             acks.add(i, null);
         }
         acks.add(maxRecordsWithSameAcknowledgeType, null);
@@ -148,7 +148,7 @@ public class AcknowledgementsTest {
     @Test
     public void testOptimiseBatches() {
         int offset = 0;
-        for (; offset < maxRecordsWithSameAcknowledgeType; offset++) {
+        for (;offset < maxRecordsWithSameAcknowledgeType;offset++) {
             acks.add(offset, AcknowledgeType.ACCEPT);
         }
         acks.add(offset++, AcknowledgeType.REJECT);
@@ -157,7 +157,7 @@ public class AcknowledgementsTest {
         acks.add(offset++, null);
 
         // Adding more than the max records
-        for (int j = 0; j <= maxRecordsWithSameAcknowledgeType; j++) {
+        for (int j = 0;j <= maxRecordsWithSameAcknowledgeType;j++) {
             acks.add(offset + j, AcknowledgeType.ACCEPT);
         }
         offset += maxRecordsWithSameAcknowledgeType + 1;

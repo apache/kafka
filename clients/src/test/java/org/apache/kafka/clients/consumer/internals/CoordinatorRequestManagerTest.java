@@ -253,7 +253,7 @@ public class CoordinatorRequestManagerTest {
     }
 
     private void expectFindCoordinatorRequest(
-        CoordinatorRequestManager  coordinatorManager,
+        CoordinatorRequestManager coordinatorManager,
         Errors error
     ) {
         NetworkClientDelegate.PollResult res = coordinatorManager.poll(time.milliseconds());

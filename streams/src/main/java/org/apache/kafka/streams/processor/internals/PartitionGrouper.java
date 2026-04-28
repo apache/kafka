@@ -66,9 +66,9 @@ public class PartitionGrouper {
      * @return The map from generated task ids to the assigned partitions
      */
     public Map<TaskId, Set<TopicPartition>> partitionGroups(final Map<Subtopology, Set<String>> sourceTopicGroups,
-                                                            final Map<Subtopology, Set<String>> changelogTopicGroups,
-                                                            final Map<TaskId, Set<TopicPartition>> changelogPartitionGroups,
-                                                            final Cluster metadata) {
+        final Map<Subtopology, Set<String>> changelogTopicGroups,
+        final Map<TaskId, Set<TopicPartition>> changelogPartitionGroups,
+        final Cluster metadata) {
         final Map<TaskId, Set<TopicPartition>> sourcePartitionGroups = new HashMap<>();
 
         for (final Map.Entry<Subtopology, Set<String>> entry : sourceTopicGroups.entrySet()) {

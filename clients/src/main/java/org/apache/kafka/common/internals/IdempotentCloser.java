@@ -168,7 +168,7 @@ public class IdempotentCloser implements AutoCloseable {
     @Override
     public String toString() {
         return "IdempotentCloser{" +
-                "isClosed=" + isClosed +
-                '}';
+            "isClosed=" + isClosed +
+            '}';
     }
 }

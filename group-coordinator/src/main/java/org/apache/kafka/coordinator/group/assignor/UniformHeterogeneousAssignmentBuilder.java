@@ -437,7 +437,7 @@ public class UniformHeterogeneousAssignmentBuilder {
             nextMostLoadedMember = sortedMembers.size() - 1;
 
             return memberTargetAssignmentSizes[sortedMembers.get(sortedMembers.size() - 1)] -
-                   memberTargetAssignmentSizes[sortedMembers.get(0)];
+                memberTargetAssignmentSizes[sortedMembers.get(0)];
         }
 
         /**

@@ -147,6 +147,7 @@ public final class Endpoints {
     }
 
     private static final Endpoints EMPTY = new Endpoints(Map.of());
+
     public static Endpoints empty() {
         return EMPTY;
     }

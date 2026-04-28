@@ -276,10 +276,10 @@ public class TransactionIndexTest {
 
         // Serialize using the generated class
         AbortedTxn abortedTxn = new AbortedTxn()
-            .setProducerId(producerId)
-            .setFirstOffset(firstOffset)
-            .setLastOffset(lastOffset)
-            .setLastStableOffset(lastStableOffset);
+                .setProducerId(producerId)
+                .setFirstOffset(firstOffset)
+                .setLastOffset(lastOffset)
+                .setLastStableOffset(lastStableOffset);
         ByteBuffer actual = MessageUtil.toVersionPrefixedByteBuffer(AbortedTxn.HIGHEST_SUPPORTED_VERSION, abortedTxn);
 
         assertEquals(expected, actual);

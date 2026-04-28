@@ -100,11 +100,11 @@ public class ConsistencyVectorIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.table(INPUT_TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()),
-                      Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as(TABLE_NAME)
-                                  .withCachingDisabled()
-               )
-               .toStream()
-               .peek((k, v) -> semaphore.release());
+            Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as(TABLE_NAME)
+                .withCachingDisabled()
+        )
+        .toStream()
+            .peek((k, v) -> semaphore.release());
 
         final String safeTestName = safeUniqueTestName(testInfo);
         final KafkaStreams kafkaStreams1 = createKafkaStreams(builder, streamsConfiguration(safeTestName));
@@ -138,7 +138,7 @@ public class ConsistencyVectorIntegrationTest {
     }
 
     private void checkPosition(final StateQueryRequest<Integer> request,
-                               final KafkaStreams kafkaStreams1) throws InterruptedException {
+        final KafkaStreams kafkaStreams1) throws InterruptedException {
         final long maxWaitMs = TestUtils.DEFAULT_MAX_WAIT_MS;
         final long expectedEnd = System.currentTimeMillis() + maxWaitMs;
 
@@ -157,7 +157,7 @@ public class ConsistencyVectorIntegrationTest {
                     queryResult.getPosition(),
                     is(
                         Position.emptyPosition()
-                                .withComponent(INPUT_TOPIC_NAME, 0, queryResult.getResult())
+                            .withComponent(INPUT_TOPIC_NAME, 0, queryResult.getResult())
                     )
                 );
 
@@ -193,8 +193,8 @@ public class ConsistencyVectorIntegrationTest {
         IntegrationTestUtils.produceKeyValuesSynchronously(
             INPUT_TOPIC_NAME,
             IntStream.range(0, NUMBER_OF_MESSAGES)
-                     .mapToObj(i -> KeyValue.pair(KEY, i))
-                     .collect(Collectors.toList()),
+                .mapToObj(i -> KeyValue.pair(KEY, i))
+                .collect(Collectors.toList()),
             producerProps,
             mockTime
         );

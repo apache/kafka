@@ -289,8 +289,8 @@ public final class KafkaEventQueue implements EventQueue {
                         }
                     } catch (InterruptedException e) {
                         log.warn(
-                                "Interrupted while waiting for a {} event. Shutting down event queue",
-                                (awaitNs == Long.MAX_VALUE) ? "new" : "deferred"
+                            "Interrupted while waiting for a {} event. Shutting down event queue",
+                            (awaitNs == Long.MAX_VALUE) ? "new" : "deferred"
                         );
                         interrupted = true;
                     } finally {
@@ -456,7 +456,8 @@ public final class KafkaEventQueue implements EventQueue {
         LogContext logContext,
         String threadNamePrefix
     ) {
-        this(time, logContext, threadNamePrefix, VoidEvent.INSTANCE, (__, ___) -> { });
+        this(time, logContext, threadNamePrefix, VoidEvent.INSTANCE, (__, ___) -> {
+        });
     }
 
     public KafkaEventQueue(
@@ -465,7 +466,8 @@ public final class KafkaEventQueue implements EventQueue {
         String threadNamePrefix,
         Event cleanupEvent
     ) {
-        this(time, logContext, threadNamePrefix, cleanupEvent, (__, ___) -> { });
+        this(time, logContext, threadNamePrefix, cleanupEvent, (__, ___) -> {
+        });
     }
 
     public KafkaEventQueue(

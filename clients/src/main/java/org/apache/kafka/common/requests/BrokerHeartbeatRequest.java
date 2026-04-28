@@ -59,12 +59,12 @@ public class BrokerHeartbeatRequest extends AbstractRequest {
     public BrokerHeartbeatResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
         return new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData()
-                .setThrottleTimeMs(throttleTimeMs)
-                .setErrorCode(error.code()));
+            .setThrottleTimeMs(throttleTimeMs)
+            .setErrorCode(error.code()));
     }
 
     public static BrokerHeartbeatRequest parse(Readable readable, short version) {
         return new BrokerHeartbeatRequest(new BrokerHeartbeatRequestData(readable, version),
-                version);
+            version);
     }
 }

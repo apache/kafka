@@ -142,15 +142,15 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
 
         // By default, no URL is allowed
         assertThrowsWithMessage(ConfigException.class, () -> cu.throwIfURLIsNotAllowed(URL_CONFIG_NAME, url),
-                ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
+            ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
         assertThrowsWithMessage(ConfigException.class, () -> cu.throwIfURLIsNotAllowed(FILE_CONFIG_NAME, fileUrl),
-                ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
+            ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
 
         // add one url into allowed list
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, url);
         assertDoesNotThrow(() -> cu.throwIfURLIsNotAllowed(URL_CONFIG_NAME, url));
         assertThrowsWithMessage(ConfigException.class, () -> cu.throwIfURLIsNotAllowed(FILE_CONFIG_NAME, fileUrl),
-                ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
+            ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
 
         // add all urls into allowed list
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, url + "," + fileUrl);

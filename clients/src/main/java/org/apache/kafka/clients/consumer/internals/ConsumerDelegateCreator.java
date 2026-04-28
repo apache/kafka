@@ -55,8 +55,8 @@ import java.util.Optional;
 public class ConsumerDelegateCreator {
 
     public <K, V> ConsumerDelegate<K, V> create(ConsumerConfig config,
-                                                Deserializer<K> keyDeserializer,
-                                                Deserializer<V> valueDeserializer) {
+        Deserializer<K> keyDeserializer,
+        Deserializer<V> valueDeserializer) {
         try {
             GroupProtocol groupProtocol = GroupProtocol.valueOf(config.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG).toUpperCase(Locale.ROOT));
 
@@ -72,14 +72,14 @@ public class ConsumerDelegateCreator {
     }
 
     public <K, V> ConsumerDelegate<K, V> create(LogContext logContext,
-                                                Time time,
-                                                ConsumerConfig config,
-                                                Deserializer<K> keyDeserializer,
-                                                Deserializer<V> valueDeserializer,
-                                                KafkaClient client,
-                                                SubscriptionState subscriptions,
-                                                ConsumerMetadata metadata,
-                                                List<ConsumerPartitionAssignor> assignors) {
+        Time time,
+        ConsumerConfig config,
+        Deserializer<K> keyDeserializer,
+        Deserializer<V> valueDeserializer,
+        KafkaClient client,
+        SubscriptionState subscriptions,
+        ConsumerMetadata metadata,
+        List<ConsumerPartitionAssignor> assignors) {
         try {
             GroupProtocol groupProtocol = GroupProtocol.valueOf(config.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG).toUpperCase(Locale.ROOT));
 

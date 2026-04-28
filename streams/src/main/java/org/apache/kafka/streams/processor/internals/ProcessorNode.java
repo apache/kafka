@@ -69,8 +69,8 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
     }
 
     public ProcessorNode(final String name,
-                         final Processor<KIn, VIn, KOut, VOut> processor,
-                         final Set<String> stateStores) {
+        final Processor<KIn, VIn, KOut, VOut> processor,
+        final Set<String> stateStores) {
 
         this.name = name;
         this.processor = processor;
@@ -81,8 +81,8 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
     }
 
     public ProcessorNode(final String name,
-                         final FixedKeyProcessor<KIn, VIn, VOut> processor,
-                         final Set<String> stateStores) {
+        final FixedKeyProcessor<KIn, VIn, VOut> processor,
+        final Set<String> stateStores) {
 
         this.name = name;
         this.processor = null;
@@ -254,17 +254,17 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
             if (!deadLetterQueueRecords.isEmpty()) {
                 if (!(internalProcessorContext instanceof RecordCollector.Supplier)) {
                     log.warn("Dead letter queue records cannot be sent for global store/KTable processors. " +
-                            "DLQ support for global store/KTable will be added in a future release. " + "Record context: {}",
-                            errorHandlerContext);
+                        "DLQ support for global store/KTable will be added in a future release. " + "Record context: {}",
+                        errorHandlerContext);
                 } else {
                     final RecordCollector collector = ((RecordCollector.Supplier) internalProcessorContext).recordCollector();
                     for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
                         collector.send(
-                                deadLetterQueueRecord.key(),
-                                deadLetterQueueRecord.value(),
-                                name(),
-                                internalProcessorContext,
-                                deadLetterQueueRecord
+                            deadLetterQueueRecord.key(),
+                            deadLetterQueueRecord.value(),
+                            name(),
+                            internalProcessorContext,
+                            deadLetterQueueRecord
                         );
                     }
                 }
@@ -272,9 +272,9 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
 
             if (response.result() == ProcessingExceptionHandler.Result.FAIL) {
                 log.error("Processing exception handler is set to fail upon" +
-                        " a processing error. If you would rather have the streaming pipeline" +
-                        " continue after a processing error, please set the " +
-                        PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.");
+                    " a processing error. If you would rather have the streaming pipeline" +
+                    " continue after a processing error, please set the " +
+                    PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.");
                 throw new FailedProcessingException(internalProcessorContext.currentNode().name(), processingException);
             } else {
                 droppedRecordsSensor.record();

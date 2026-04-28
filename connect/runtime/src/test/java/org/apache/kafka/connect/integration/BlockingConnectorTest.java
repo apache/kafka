@@ -336,12 +336,12 @@ public class BlockingConnectorTest {
 
     private void waitForConnectorStart(String connector) throws InterruptedException {
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(
-            connector,
-            0,
-            String.format(
-                "Failed to observe transition to 'RUNNING' state for connector '%s' in time",
-                connector
-            )
+                connector,
+                0,
+                String.format(
+                        "Failed to observe transition to 'RUNNING' state for connector '%s' in time",
+                        connector
+                )
         );
     }
 
@@ -391,14 +391,14 @@ public class BlockingConnectorTest {
 
         public static ConfigDef config() {
             return new ConfigDef()
-                .define(
-                    BLOCK_CONFIG,
-                    ConfigDef.Type.STRING,
-                    "",
-                    ConfigDef.Importance.MEDIUM,
-                    "Where to block indefinitely, e.g., 'Connector::start', 'Connector::initialize', " 
-                        + "'Connector::taskConfigs', 'Task::version', 'SinkTask::put', 'SourceTask::poll'"
-                );
+                    .define(
+                            BLOCK_CONFIG,
+                            ConfigDef.Type.STRING,
+                            "",
+                            ConfigDef.Importance.MEDIUM,
+                            "Where to block indefinitely, e.g., 'Connector::start', 'Connector::initialize', "
+                                    + "'Connector::taskConfigs', 'Task::version', 'SinkTask::put', 'SourceTask::poll'"
+                    );
         }
 
         /**
@@ -670,8 +670,8 @@ public class BlockingConnectorTest {
         @Override
         public List<Map<String, String>> taskConfigs(int maxTasks) {
             return IntStream.range(0, maxTasks)
-                .mapToObj(i -> new HashMap<>(props))
-                .collect(Collectors.toList());
+                    .mapToObj(i -> new HashMap<>(props))
+                    .collect(Collectors.toList());
         }
 
         @Override
@@ -787,8 +787,8 @@ public class BlockingConnectorTest {
         @Override
         public List<Map<String, String>> taskConfigs(int maxTasks) {
             return IntStream.range(0, maxTasks)
-                .mapToObj(i -> new HashMap<>(props))
-                .collect(Collectors.toList());
+                    .mapToObj(i -> new HashMap<>(props))
+                    .collect(Collectors.toList());
         }
 
         @Override

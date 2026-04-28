@@ -27,10 +27,10 @@ package org.apache.kafka.streams.state.internals;
 public class RocksDBTimestampedSegmentedBytesStoreWithHeaders extends AbstractRocksDBSegmentedBytesStore<TimestampedSegmentWithHeaders> {
 
     RocksDBTimestampedSegmentedBytesStoreWithHeaders(final String name,
-                                                     final String metricsScope,
-                                                     final long retention,
-                                                     final long segmentInterval,
-                                                     final KeySchema keySchema) {
+        final String metricsScope,
+        final long retention,
+        final long segmentInterval,
+        final KeySchema keySchema) {
         super(name, retention, keySchema, new TimestampedSegmentsWithHeaders(name, metricsScope, retention, segmentInterval));
     }
 }

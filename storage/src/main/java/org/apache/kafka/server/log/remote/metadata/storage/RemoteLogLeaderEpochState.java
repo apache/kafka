@@ -82,8 +82,8 @@ class RemoteLogLeaderEpochState {
     }
 
     private void collectConvertedIdToMetadata(Collection<RemoteLogSegmentId> segmentIds,
-                                              Map<RemoteLogSegmentId, RemoteLogSegmentMetadata> idToSegmentMetadata,
-                                              Collection<RemoteLogSegmentMetadata> result) throws RemoteResourceNotFoundException {
+            Map<RemoteLogSegmentId, RemoteLogSegmentMetadata> idToSegmentMetadata,
+            Collection<RemoteLogSegmentMetadata> result) throws RemoteResourceNotFoundException {
         for (RemoteLogSegmentId id : segmentIds) {
             RemoteLogSegmentMetadata metadata = idToSegmentMetadata.get(id);
             if (metadata == null) {
@@ -99,7 +99,7 @@ class RemoteLogLeaderEpochState {
     }
 
     void handleSegmentWithCopySegmentFinishedState(Long startOffset, RemoteLogSegmentId remoteLogSegmentId,
-                                                   Long leaderEpochEndOffset) {
+            Long leaderEpochEndOffset) {
         // If there are duplicate segments uploaded due to leader-election, then mark them as unreferenced.
         // Duplicate segments can be uploaded when the previous leader had tier-lags and the next leader uploads the
         // segment for the same leader-epoch which is a super-set of previously uploaded segments.
@@ -182,9 +182,9 @@ class RemoteLogLeaderEpochState {
          * @param segmentId                 segment id.
          */
         void accept(int leaderEpoch,
-                    RemoteLogLeaderEpochState remoteLogLeaderEpochState,
-                    long startOffset,
-                    RemoteLogSegmentId segmentId);
+                RemoteLogLeaderEpochState remoteLogLeaderEpochState,
+                long startOffset,
+                RemoteLogSegmentId segmentId);
     }
 
 }

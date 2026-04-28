@@ -39,9 +39,9 @@ public class TopicNameMatches<R extends ConnectRecord<R>> implements Predicate<R
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(PATTERN_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE,
-            ConfigDef.CompositeValidator.of(new ConfigDef.NonEmptyString(), new RegexValidator()),
-            ConfigDef.Importance.MEDIUM,
-            "A Java regular expression for matching against the name of a record's topic.");
+                    ConfigDef.CompositeValidator.of(new ConfigDef.NonEmptyString(), new RegexValidator()),
+                    ConfigDef.Importance.MEDIUM,
+                    "A Java regular expression for matching against the name of a record's topic.");
     private Pattern pattern;
 
     @Override

@@ -72,8 +72,8 @@ public class KafkaFutureTest {
     }
 
     private <T> void awaitAndAssertResult(KafkaFuture<T> future,
-                                          T expectedResult,
-                                          T alternativeValue) {
+        T expectedResult,
+        T alternativeValue) {
         assertNotEquals(expectedResult, alternativeValue);
         try {
             assertEquals(expectedResult, future.get(5, TimeUnit.MINUTES));
@@ -93,8 +93,8 @@ public class KafkaFutureTest {
     }
 
     private Throwable awaitAndAssertFailure(KafkaFuture<?> future,
-                                            Class<? extends Throwable> expectedException,
-                                            String expectedMessage) {
+        Class<? extends Throwable> expectedException,
+        String expectedMessage) {
         ExecutionException executionException = assertThrows(ExecutionException.class, () -> future.get(5, TimeUnit.MINUTES));
         assertEquals(expectedException, executionException.getCause().getClass());
         assertEquals(expectedMessage, executionException.getCause().getMessage());
@@ -215,7 +215,7 @@ public class KafkaFutureTest {
     public void testCompletingFuturesExceptionally() throws Exception {
         final KafkaFutureImpl<String> future = new KafkaFutureImpl<>();
         CompleterThread<String> myThread = new CompleterThread<>(future, null,
-                new RuntimeException("Ultimate efficiency achieved."));
+            new RuntimeException("Ultimate efficiency achieved."));
         assertIsNotCompleted(future);
         assertEquals("I am ready", future.getNow("I am ready"));
         myThread.start();
@@ -229,7 +229,7 @@ public class KafkaFutureTest {
     public void testCompletingFuturesViaCancellation() throws Exception {
         final KafkaFutureImpl<String> future = new KafkaFutureImpl<>();
         CompleterThread<String> myThread = new CompleterThread<>(future, null,
-                new CancellationException("Ultimate efficiency achieved."));
+            new CancellationException("Ultimate efficiency achieved."));
         assertIsNotCompleted(future);
         assertEquals("I am ready", future.getNow("I am ready"));
         myThread.start();
@@ -505,31 +505,31 @@ public class KafkaFutureTest {
     public void testAllOfFutures() throws Exception {
         final int numThreads = 5;
         final List<KafkaFutureImpl<Integer>> futures = new ArrayList<>();
-        for (int i = 0; i < numThreads; i++) {
+        for (int i = 0;i < numThreads;i++) {
             futures.add(new KafkaFutureImpl<>());
         }
         KafkaFuture<Void> allFuture = KafkaFuture.allOf(futures.toArray(new KafkaFuture[0]));
         final List<CompleterThread<Integer>> completerThreads = new ArrayList<>();
         final List<WaiterThread<Integer>> waiterThreads = new ArrayList<>();
-        for (int i = 0; i < numThreads; i++) {
+        for (int i = 0;i < numThreads;i++) {
             completerThreads.add(new CompleterThread<>(futures.get(i), i));
             waiterThreads.add(new WaiterThread<>(futures.get(i), i));
         }
         assertFalse(allFuture.isDone());
-        for (int i = 0; i < numThreads; i++) {
+        for (int i = 0;i < numThreads;i++) {
             waiterThreads.get(i).start();
         }
-        for (int i = 0; i < numThreads - 1; i++) {
+        for (int i = 0;i < numThreads - 1;i++) {
             completerThreads.get(i).start();
         }
         assertFalse(allFuture.isDone());
         completerThreads.get(numThreads - 1).start();
         allFuture.get();
         assertIsSuccessful(allFuture);
-        for (int i = 0; i < numThreads; i++) {
+        for (int i = 0;i < numThreads;i++) {
             assertEquals(Integer.valueOf(i), futures.get(i).get());
         }
-        for (int i = 0; i < numThreads; i++) {
+        for (int i = 0;i < numThreads;i++) {
             completerThreads.get(i).join();
             waiterThreads.get(i).join();
             assertNull(completerThreads.get(i).testException);
@@ -541,35 +541,35 @@ public class KafkaFutureTest {
     public void testAllOfFuturesWithFailure() throws Exception {
         final int numThreads = 5;
         final List<KafkaFutureImpl<Integer>> futures = new ArrayList<>();
-        for (int i = 0; i < numThreads; i++) {
+        for (int i = 0;i < numThreads;i++) {
             futures.add(new KafkaFutureImpl<>());
         }
         KafkaFuture<Void> allFuture = KafkaFuture.allOf(futures.toArray(new KafkaFuture[0]));
         final List<CompleterThread<Integer>> completerThreads = new ArrayList<>();
         final List<WaiterThread<Integer>> waiterThreads = new ArrayList<>();
         int lastIndex = numThreads - 1;
-        for (int i = 0; i < lastIndex; i++) {
+        for (int i = 0;i < lastIndex;i++) {
             completerThreads.add(new CompleterThread<>(futures.get(i), i));
             waiterThreads.add(new WaiterThread<>(futures.get(i), i));
         }
         completerThreads.add(new CompleterThread<>(futures.get(lastIndex), null, new RuntimeException("Last one failed")));
         waiterThreads.add(new WaiterThread<>(futures.get(lastIndex), lastIndex));
         assertFalse(allFuture.isDone());
-        for (int i = 0; i < numThreads; i++) {
+        for (int i = 0;i < numThreads;i++) {
             waiterThreads.get(i).start();
         }
-        for (int i = 0; i < lastIndex; i++) {
+        for (int i = 0;i < lastIndex;i++) {
             completerThreads.get(i).start();
         }
         assertFalse(allFuture.isDone());
         completerThreads.get(lastIndex).start();
         awaitAndAssertFailure(allFuture, RuntimeException.class, "Last one failed");
         assertIsFailed(allFuture);
-        for (int i = 0; i < lastIndex; i++) {
+        for (int i = 0;i < lastIndex;i++) {
             assertEquals(Integer.valueOf(i), futures.get(i).get());
         }
         assertIsFailed(futures.get(lastIndex));
-        for (int i = 0; i < numThreads; i++) {
+        for (int i = 0;i < numThreads;i++) {
             completerThreads.get(i).join();
             waiterThreads.get(i).join();
             assertNull(completerThreads.get(i).testException);

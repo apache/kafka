@@ -33,7 +33,7 @@ public class ConsumerGroupDescribeResponseTest {
         Errors e = Errors.INVALID_GROUP_ID;
         int errorCount = 2;
         ConsumerGroupDescribeResponseData data = new ConsumerGroupDescribeResponseData();
-        for (int i = 0; i < errorCount; i++) {
+        for (int i = 0;i < errorCount;i++) {
             data.groups().add(
                 new ConsumerGroupDescribeResponseData.DescribedGroup()
                     .setErrorCode(e.code())

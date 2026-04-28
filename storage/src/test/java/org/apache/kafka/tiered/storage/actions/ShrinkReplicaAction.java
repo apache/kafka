@@ -40,7 +40,7 @@ public final class ShrinkReplicaAction implements TieredStorageTestAction {
     private final List<Integer> replicaIds;
 
     public ShrinkReplicaAction(TopicPartition topicPartition,
-                               List<Integer> replicaIds) {
+            List<Integer> replicaIds) {
         this.topicPartition = topicPartition;
         this.replicaIds = replicaIds;
     }

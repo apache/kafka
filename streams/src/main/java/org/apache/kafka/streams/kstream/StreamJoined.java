@@ -60,15 +60,15 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
     }
 
     private StreamJoined(final Serde<K> keySerde,
-                         final Serde<V1> valueSerde,
-                         final Serde<V2> otherValueSerde,
-                         final DslStoreSuppliers dslStoreSuppliers,
-                         final WindowBytesStoreSupplier thisStoreSupplier,
-                         final WindowBytesStoreSupplier otherStoreSupplier,
-                         final String name,
-                         final String storeName,
-                         final boolean loggingEnabled,
-                         final Map<String, String> topicConfig) {
+        final Serde<V1> valueSerde,
+        final Serde<V2> otherValueSerde,
+        final DslStoreSuppliers dslStoreSuppliers,
+        final WindowBytesStoreSupplier thisStoreSupplier,
+        final WindowBytesStoreSupplier otherStoreSupplier,
+        final String name,
+        final String storeName,
+        final boolean loggingEnabled,
+        final Map<String, String> topicConfig) {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.otherValueSerde = otherValueSerde;
@@ -94,7 +94,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
      * @return                    {@link StreamJoined} instance
      */
     public static <K, V1, V2> StreamJoined<K, V1, V2> with(final WindowBytesStoreSupplier storeSupplier,
-                                                           final WindowBytesStoreSupplier otherStoreSupplier) {
+        final WindowBytesStoreSupplier otherStoreSupplier) {
         return new StreamJoined<>(
             null,
             null,
@@ -122,16 +122,16 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
      */
     public static <K, V1, V2> StreamJoined<K, V1, V2> with(final DslStoreSuppliers storeSuppliers) {
         return new StreamJoined<>(
-                null,
-                null,
-                null,
-                storeSuppliers,
-                null,
-                null,
-                null,
-                null,
-                true,
-                new HashMap<>()
+            null,
+            null,
+            null,
+            storeSuppliers,
+            null,
+            null,
+            null,
+            null,
+            true,
+            new HashMap<>()
         );
     }
 
@@ -180,8 +180,8 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
      * @return                  {@link StreamJoined} instance
      */
     public static <K, V1, V2> StreamJoined<K, V1, V2> with(final Serde<K> keySerde,
-                                                           final Serde<V1> valueSerde,
-                                                           final Serde<V2> otherValueSerde
+        final Serde<V1> valueSerde,
+        final Serde<V2> otherValueSerde
     ) {
         return new StreamJoined<>(
             keySerde,
@@ -311,16 +311,16 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
      */
     public StreamJoined<K, V1, V2> withDslStoreSuppliers(final DslStoreSuppliers dslStoreSuppliers) {
         return new StreamJoined<>(
-                keySerde,
-                valueSerde,
-                otherValueSerde,
-                dslStoreSuppliers,
-                thisStoreSupplier,
-                otherStoreSupplier,
-                name,
-                storeName,
-                loggingEnabled,
-                topicConfig
+            keySerde,
+            valueSerde,
+            otherValueSerde,
+            dslStoreSuppliers,
+            thisStoreSupplier,
+            otherStoreSupplier,
+            name,
+            storeName,
+            loggingEnabled,
+            topicConfig
         );
     }
 

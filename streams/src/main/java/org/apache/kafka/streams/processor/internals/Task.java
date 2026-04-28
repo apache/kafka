@@ -209,7 +209,7 @@ public interface Task {
      * @throws StreamsException if {@code currentWallClockMs > task-timeout-deadline}
      */
     void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
-                                     final Exception cause);
+        final Exception cause);
 
     void clearTaskTimeout();
 

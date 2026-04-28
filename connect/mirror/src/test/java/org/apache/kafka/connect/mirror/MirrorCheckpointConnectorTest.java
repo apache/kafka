@@ -58,7 +58,7 @@ public class MirrorCheckpointConnectorTest {
     public void testMirrorCheckpointConnectorDisabled() {
         // disable the checkpoint emission
         MirrorCheckpointConfig config = new MirrorCheckpointConfig(
-            makeProps("emit.checkpoints.enabled", "false"));
+                makeProps("emit.checkpoints.enabled", "false"));
 
         Set<String> knownConsumerGroups = new HashSet<>();
         knownConsumerGroups.add(CONSUMER_GROUP);

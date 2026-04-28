@@ -239,9 +239,9 @@ public class PartitionRegistration {
         int[] newReplicas = (record.replicas() == null) ?
             replicas : Replicas.toArray(record.replicas());
         Uuid[] newDirectories = defaultToMigrating(
-                (record.directories() == null) ?
-                        directories : Uuid.toArray(checkDirectories(record)),
-                newReplicas.length
+            (record.directories() == null) ?
+                directories : Uuid.toArray(checkDirectories(record)),
+            newReplicas.length
         );
         int[] newIsr = (record.isr() == null) ? isr : Replicas.toArray(record.isr());
         int[] newRemovingReplicas = (record.removingReplicas() == null) ?
@@ -287,8 +287,8 @@ public class PartitionRegistration {
         }
         if (!Arrays.equals(directories, prev.directories)) {
             builder.append(prefix).append("directories: ").
-                    append(Arrays.toString(prev.directories)).
-                    append(" -> ").append(Arrays.toString(directories));
+                append(Arrays.toString(prev.directories)).
+                append(" -> ").append(Arrays.toString(directories));
             prefix = ", ";
         }
         if (!Arrays.equals(isr, prev.isr)) {
@@ -434,16 +434,16 @@ public class PartitionRegistration {
     @Override
     public String toString() {
         return "PartitionRegistration(" + "replicas=" + Arrays.toString(replicas) +
-                ", directories=" + Arrays.toString(directories) +
-                ", isr=" + Arrays.toString(isr) +
-                ", removingReplicas=" + Arrays.toString(removingReplicas) +
-                ", addingReplicas=" + Arrays.toString(addingReplicas) +
-                ", elr=" + Arrays.toString(elr) +
-                ", lastKnownElr=" + Arrays.toString(lastKnownElr) +
-                ", leader=" + leader +
-                ", leaderRecoveryState=" + leaderRecoveryState +
-                ", leaderEpoch=" + leaderEpoch +
-                ", partitionEpoch=" + partitionEpoch +
-                ")";
+            ", directories=" + Arrays.toString(directories) +
+            ", isr=" + Arrays.toString(isr) +
+            ", removingReplicas=" + Arrays.toString(removingReplicas) +
+            ", addingReplicas=" + Arrays.toString(addingReplicas) +
+            ", elr=" + Arrays.toString(elr) +
+            ", lastKnownElr=" + Arrays.toString(lastKnownElr) +
+            ", leader=" + leader +
+            ", leaderRecoveryState=" + leaderRecoveryState +
+            ", leaderEpoch=" + leaderEpoch +
+            ", partitionEpoch=" + partitionEpoch +
+            ")";
     }
 }

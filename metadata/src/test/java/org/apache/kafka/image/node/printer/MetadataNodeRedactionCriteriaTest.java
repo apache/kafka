@@ -42,10 +42,10 @@ public class MetadataNodeRedactionCriteriaTest {
     static {
         Map<ConfigResource.Type, ConfigDef> configs = new HashMap<>();
         configs.put(BROKER, new ConfigDef().
-                define("non.secret", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "baz").
-                define("secret.config", ConfigDef.Type.PASSWORD, ConfigDef.Importance.HIGH, "baz"));
+            define("non.secret", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "baz").
+            define("secret.config", ConfigDef.Type.PASSWORD, ConfigDef.Importance.HIGH, "baz"));
         configs.put(TOPIC, new ConfigDef().
-                define("topic.secret.config", ConfigDef.Type.PASSWORD, ConfigDef.Importance.HIGH, "abc"));
+            define("topic.secret.config", ConfigDef.Type.PASSWORD, ConfigDef.Importance.HIGH, "abc"));
         KafkaConfigSchema schema = new KafkaConfigSchema(configs, Map.of());
         STRICT = MetadataNodeRedactionCriteria.Strict.INSTANCE;
         NORMAL = new MetadataNodeRedactionCriteria.Normal(schema);

@@ -63,10 +63,10 @@ public class ControllerRegistrationsPublisher implements MetadataPublisher {
             Endpoint endpoint = registration.listeners().get(endpointName);
             if (endpoint != null) {
                 results.add(new DescribeClusterBroker().
-                        setBrokerId(registration.id()).
-                        setHost(endpoint.host()).
-                        setPort(endpoint.port()).
-                        setRack(null));
+                    setBrokerId(registration.id()).
+                    setHost(endpoint.host()).
+                    setPort(endpoint.port()).
+                    setRack(null));
             }
         }
         return results;

@@ -41,7 +41,7 @@ public class CheckpointFileWithFailureHandler<T> {
     private final CheckpointFile<T> checkpointFile;
 
     public CheckpointFileWithFailureHandler(File file, int version, CheckpointFile.EntryFormatter<T> formatter,
-                                            LogDirFailureChannel logDirFailureChannel, String logDir) throws IOException {
+            LogDirFailureChannel logDirFailureChannel, String logDir) throws IOException {
         this.file = file;
         this.logDirFailureChannel = logDirFailureChannel;
         this.logDir = logDir;

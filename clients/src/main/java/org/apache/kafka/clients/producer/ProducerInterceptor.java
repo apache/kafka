@@ -89,7 +89,8 @@ public interface ProducerInterceptor<K, V> extends Configurable, AutoCloseable {
      *                 {@link org.apache.kafka.clients.producer.KafkaProducer#send(ProducerRecord)}.
      * @param exception The exception thrown during processing of this record. Null if no error occurred.
      */
-    default void onAcknowledgement(RecordMetadata metadata, Exception exception) {}
+    default void onAcknowledgement(RecordMetadata metadata, Exception exception) {
+    }
 
     /**
      * This method is called when the record sent to the server has been acknowledged, or when sending the record fails before

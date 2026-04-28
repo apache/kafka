@@ -61,9 +61,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ConnectMetricsTest {
 
     private static final Map<String, String> DEFAULT_WORKER_CONFIG = Map.of(
-        WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter",
-        WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter",
-        WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092"
+            WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter",
+            WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter",
+            WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092"
     );
     private static final ConnectorTaskId CONNECTOR_TASK_ID = new ConnectorTaskId("connector", 0);
     private static final LinkedHashMap<String, String> TAGS = new LinkedHashMap<>();
@@ -92,7 +92,7 @@ public class ConnectMetricsTest {
     @Test
     public void testGettingGroupWithOddNumberOfTags() {
         assertThrows(IllegalArgumentException.class,
-            () -> metrics.group("name", "k1", "v1", "k2", "v2", "extra"));
+                () -> metrics.group("name", "k1", "v1", "k2", "v2", "extra"));
     }
 
     @Test
@@ -229,7 +229,8 @@ public class ConnectMetricsTest {
         }
 
         @Override
-        public void configure(Map<String, ?> configs, boolean isKey) { }
+        public void configure(Map<String, ?> configs, boolean isKey) {
+        }
 
         @Override
         public byte[] fromConnectData(String topic, Schema schema, Object value) {
@@ -254,7 +255,8 @@ public class ConnectMetricsTest {
         }
 
         @Override
-        public void configure(Map<String, ?> configs) { }
+        public void configure(Map<String, ?> configs) {
+        }
 
         @Override
         public SchemaAndValue toConnectHeader(String topic, String headerKey, byte[] value) {
@@ -326,7 +328,8 @@ public class ConnectMetricsTest {
         }
 
         @Override
-        public void configure(Map<String, ?> configs) { }
+        public void configure(Map<String, ?> configs) {
+        }
 
         @Override
         public SourceRecord apply(SourceRecord record) {
@@ -345,7 +348,8 @@ public class ConnectMetricsTest {
         }
 
         @Override
-        public void close() { }
+        public void close() {
+        }
     }
 
     @Test
@@ -381,7 +385,8 @@ public class ConnectMetricsTest {
         }
 
         @Override
-        public void configure(Map<String, ?> configs) { }
+        public void configure(Map<String, ?> configs) {
+        }
 
         @Override
         public String version() {
@@ -400,7 +405,8 @@ public class ConnectMetricsTest {
         }
 
         @Override
-        public void close() { }
+        public void close() {
+        }
     }
 
     @Test

@@ -71,7 +71,7 @@ public enum RemoteLogSegmentState {
     DELETE_SEGMENT_FINISHED((byte) 3);
 
     private static final Map<Byte, RemoteLogSegmentState> STATE_TYPES = Collections.unmodifiableMap(
-            Arrays.stream(values()).collect(Collectors.toMap(RemoteLogSegmentState::id, Function.identity())));
+           Arrays.stream(values()).collect(Collectors.toMap(RemoteLogSegmentState::id, Function.identity())));
 
     private final byte id;
 

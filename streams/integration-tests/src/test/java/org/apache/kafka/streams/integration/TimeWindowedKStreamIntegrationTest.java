@@ -181,19 +181,19 @@ public class TimeWindowedKStreamIntegrationTest {
 
         final boolean emitFinal = type == StrategyType.ON_WINDOW_CLOSE;
         final List<KeyValueTimestamp<Windowed<String>, String>> windowedMessages = receiveMessagesWithTimestamp(
-                new TimeWindowedDeserializer<>(new StringDeserializer(), 10L),
-                new StringDeserializer(),
-                10L,
-                String.class,
-                emitFinal ? 4 : 12);
+            new TimeWindowedDeserializer<>(new StringDeserializer(), 10L),
+            new StringDeserializer(),
+            10L,
+            String.class,
+            emitFinal ? 4 : 12);
 
         final List<KeyValueTimestamp<Windowed<String>, String>> expectResult;
         if (emitFinal) {
             expectResult = asList(
-                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0L, 10L)), "0+1+2", 5),
-                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5L, 15L)), "0+2+3", 10),
-                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5L, 15L)), "0+4+5", 11),
-                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(15L, 25L)), "0+6", 15)
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0L, 10L)), "0+1+2", 5),
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5L, 15L)), "0+2+3", 10),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5L, 15L)), "0+4+5", 11),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(15L, 25L)), "0+6", 15)
             );
         } else {
             expectResult = asList(
@@ -407,11 +407,11 @@ public class TimeWindowedKStreamIntegrationTest {
 
         if (emitFinal) {
             windowedMessages = receiveMessagesWithTimestamp(
-                    new TimeWindowedDeserializer<>(new StringDeserializer(), 10L),
-                    new StringDeserializer(),
-                    10L,
-                    String.class,
-                    1);
+                new TimeWindowedDeserializer<>(new StringDeserializer(), 10L),
+                new StringDeserializer(),
+                10L,
+                String.class,
+                1);
 
             // Output just new/unexpired closed window for C
             expectResult = Collections.singletonList(
@@ -420,11 +420,11 @@ public class TimeWindowedKStreamIntegrationTest {
             );
         } else {
             windowedMessages = receiveMessagesWithTimestamp(
-                    new TimeWindowedDeserializer<>(new StringDeserializer(), 10L),
-                    new StringDeserializer(),
-                    10L,
-                    String.class,
-                    2);
+                new TimeWindowedDeserializer<>(new StringDeserializer(), 10L),
+                new StringDeserializer(),
+                10L,
+                String.class,
+                2);
 
             expectResult = asList(
                 new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(30L, 40L)),
@@ -443,8 +443,8 @@ public class TimeWindowedKStreamIntegrationTest {
         final TimeWindowedKStream<String, String> windowedStream = builder.stream(streamOneInput, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
             .windowedBy(
-            UnlimitedWindows.of().startOn(ofEpochMilli(0))
-        );
+                UnlimitedWindows.of().startOn(ofEpochMilli(0))
+            );
 
         final boolean emitFinal = type == StrategyType.ON_WINDOW_CLOSE;
         if (emitFinal) {
@@ -490,10 +490,10 @@ public class TimeWindowedKStreamIntegrationTest {
     }
 
     private <K, V> List<KeyValueTimestamp<K, V>> receiveMessagesWithTimestamp(final Deserializer<K> keyDeserializer,
-                                                                              final Deserializer<V> valueDeserializer,
-                                                                              final long windowSize,
-                                                                              final Class innerClass,
-                                                                              final int numMessages) throws Exception {
+        final Deserializer<V> valueDeserializer,
+        final long windowSize,
+        final Class innerClass,
+        final int numMessages) throws Exception {
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group-" + safeTestName);

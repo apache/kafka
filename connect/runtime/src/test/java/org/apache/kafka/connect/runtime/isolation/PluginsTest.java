@@ -106,15 +106,15 @@ public class PluginsTest {
         SortedSet<PluginDesc<SinkConnector>> sinkConnectors = (SortedSet<PluginDesc<SinkConnector>>) plugins.sinkConnectors();
         missingPluginClass = sinkConnectors.first().className();
         nonEmpty = new PluginScanResult(
-            sinkConnectors,
-            new TreeSet<>(),
-            new TreeSet<>(),
-            new TreeSet<>(),
-            new TreeSet<>(),
-            new TreeSet<>(),
-            new TreeSet<>(),
-            new TreeSet<>(),
-            new TreeSet<>()
+                sinkConnectors,
+                new TreeSet<>(),
+                new TreeSet<>(),
+                new TreeSet<>(),
+                new TreeSet<>(),
+                new TreeSet<>(),
+                new TreeSet<>(),
+                new TreeSet<>(),
+                new TreeSet<>()
         );
         empty = new PluginScanResult(List.of());
 
@@ -149,8 +149,8 @@ public class PluginsTest {
     public void shouldInstantiateAndConfigureExplicitlySetHeaderConverterWithCurrentClassLoader() {
         assertNotNull(props.get(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG));
         HeaderConverter headerConverter = plugins.newHeaderConverter(config,
-                                                                     WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
-                                                                     ClassLoaderUsage.CURRENT_CLASSLOADER);
+                WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
+                ClassLoaderUsage.CURRENT_CLASSLOADER);
         assertNotNull(headerConverter);
         assertInstanceOf(TestHeaderConverter.class, headerConverter);
         this.headerConverter = (TestHeaderConverter) headerConverter;
@@ -160,8 +160,8 @@ public class PluginsTest {
         assertEquals("baz", this.headerConverter.configs.get("extra.config"));
 
         headerConverter = plugins.newHeaderConverter(config,
-                                                     WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
-                                                     ClassLoaderUsage.PLUGINS);
+                WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
+                ClassLoaderUsage.PLUGINS);
         assertNotNull(headerConverter);
         assertInstanceOf(TestHeaderConverter.class, headerConverter);
         this.headerConverter = (TestHeaderConverter) headerConverter;
@@ -175,20 +175,20 @@ public class PluginsTest {
     public void shouldInstantiateAndConfigureConnectRestExtension() {
         props.clear();
         props.put(RestServerConfig.REST_EXTENSION_CLASSES_CONFIG,
-                  TestConnectRestExtension.class.getName());
+                TestConnectRestExtension.class.getName());
         config = RestServerConfig.forPublic(null, props);
 
         List<ConnectRestExtension> connectRestExtensions =
-            plugins.newPlugins(config.getList(RestServerConfig.REST_EXTENSION_CLASSES_CONFIG),
-                               config,
-                               ConnectRestExtension.class);
+                plugins.newPlugins(config.getList(RestServerConfig.REST_EXTENSION_CLASSES_CONFIG),
+                        config,
+                        ConnectRestExtension.class);
         assertNotNull(connectRestExtensions);
         assertEquals(1, connectRestExtensions.size(), "One Rest Extension expected");
         assertNotNull(connectRestExtensions.get(0));
         assertInstanceOf(TestConnectRestExtension.class, connectRestExtensions.get(0), "Should be instance of TestConnectRestExtension");
         assertNotNull(((TestConnectRestExtension) connectRestExtensions.get(0)).configs);
         assertEquals(config.originals(),
-                     ((TestConnectRestExtension) connectRestExtensions.get(0)).configs);
+                ((TestConnectRestExtension) connectRestExtensions.get(0)).configs);
     }
 
     @Test
@@ -197,8 +197,8 @@ public class PluginsTest {
         createConfig();
 
         HeaderConverter headerConverter = plugins.newHeaderConverter(config,
-                                                     WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
-                                                     ClassLoaderUsage.CURRENT_CLASSLOADER);
+                WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
+                ClassLoaderUsage.CURRENT_CLASSLOADER);
         assertNotNull(headerConverter);
         assertInstanceOf(SimpleHeaderConverter.class, headerConverter);
     }
@@ -206,9 +206,9 @@ public class PluginsTest {
     @Test
     public void shouldThrowIfPluginThrows() {
         assertThrows(ConnectException.class, () -> plugins.newPlugin(
-            TestPlugin.ALWAYS_THROW_EXCEPTION.className(),
-            new AbstractConfig(new ConfigDef(), Map.of()),
-            Converter.class
+                TestPlugin.ALWAYS_THROW_EXCEPTION.className(),
+                new AbstractConfig(new ConfigDef(), Map.of()),
+                Converter.class
         ));
     }
 
@@ -299,32 +299,32 @@ public class PluginsTest {
     public void shouldShareStaticValuesBetweenSamePlugin() {
         // Plugins are not isolated from other instances of their own class.
         Converter firstPlugin = plugins.newPlugin(
-            TestPlugin.ALIASED_STATIC_FIELD.className(),
-            new AbstractConfig(new ConfigDef(), Map.of()),
-            Converter.class
+                TestPlugin.ALIASED_STATIC_FIELD.className(),
+                new AbstractConfig(new ConfigDef(), Map.of()),
+                Converter.class
         );
 
         assertInstanceOf(SamplingTestPlugin.class, firstPlugin, "Cannot collect samples");
 
         Converter secondPlugin = plugins.newPlugin(
-            TestPlugin.ALIASED_STATIC_FIELD.className(),
-            new AbstractConfig(new ConfigDef(), Map.of()),
-            Converter.class
+                TestPlugin.ALIASED_STATIC_FIELD.className(),
+                new AbstractConfig(new ConfigDef(), Map.of()),
+                Converter.class
         );
 
         assertInstanceOf(SamplingTestPlugin.class, secondPlugin, "Cannot collect samples");
         assertSame(
-            ((SamplingTestPlugin) firstPlugin).otherSamples(),
-            ((SamplingTestPlugin) secondPlugin).otherSamples()
+                ((SamplingTestPlugin) firstPlugin).otherSamples(),
+                ((SamplingTestPlugin) secondPlugin).otherSamples()
         );
     }
 
     @Test
     public void newPluginShouldServiceLoadWithPluginClassLoader() {
         Converter plugin = plugins.newPlugin(
-            TestPlugin.SERVICE_LOADER.className(),
-            new AbstractConfig(new ConfigDef(), Map.of()),
-            Converter.class
+                TestPlugin.SERVICE_LOADER.className(),
+                new AbstractConfig(new ConfigDef(), Map.of()),
+                Converter.class
         );
 
         assertInstanceOf(SamplingTestPlugin.class, plugin, "Cannot collect samples");
@@ -338,9 +338,9 @@ public class PluginsTest {
     @Test
     public void newPluginShouldInstantiateWithPluginClassLoader() {
         Converter plugin = plugins.newPlugin(
-            TestPlugin.ALIASED_STATIC_FIELD.className(),
-            new AbstractConfig(new ConfigDef(), Map.of()),
-            Converter.class
+                TestPlugin.ALIASED_STATIC_FIELD.className(),
+                new AbstractConfig(new ConfigDef(), Map.of()),
+                Converter.class
         );
 
         assertPluginClassLoaderAlwaysActive(plugin);
@@ -361,9 +361,9 @@ public class PluginsTest {
         }
 
         Converter plugin = plugins.newConverter(
-            config,
-            WorkerConfig.KEY_CONVERTER_CLASS_CONFIG,
-            ClassLoaderUsage.PLUGINS
+                config,
+                WorkerConfig.KEY_CONVERTER_CLASS_CONFIG,
+                ClassLoaderUsage.PLUGINS
         );
 
         assertInstanceOf(SamplingTestPlugin.class, plugin, "Cannot collect samples");
@@ -384,9 +384,9 @@ public class PluginsTest {
         }
 
         ConfigProvider plugin = plugins.newConfigProvider(
-            config,
-            providerPrefix,
-            ClassLoaderUsage.PLUGINS
+                config,
+                providerPrefix,
+                ClassLoaderUsage.PLUGINS
         );
 
         assertInstanceOf(SamplingTestPlugin.class, plugin, "Cannot collect samples");
@@ -404,9 +404,9 @@ public class PluginsTest {
         }
 
         HeaderConverter plugin = plugins.newHeaderConverter(
-            config,
-            WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
-            ClassLoaderUsage.PLUGINS
+                config,
+                WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
+                ClassLoaderUsage.PLUGINS
         );
 
         assertInstanceOf(SamplingTestPlugin.class, plugin, "Cannot collect samples");
@@ -428,9 +428,9 @@ public class PluginsTest {
     @Test
     public void newPluginsShouldConfigureWithPluginClassLoader() {
         List<Configurable> configurables = plugins.newPlugins(
-            List.of(TestPlugin.SAMPLING_CONFIGURABLE.className()),
-            config,
-            Configurable.class
+                List.of(TestPlugin.SAMPLING_CONFIGURABLE.className()),
+                config,
+                Configurable.class
         );
         assertEquals(1, configurables.size());
         Configurable plugin = configurables.get(0);
@@ -632,9 +632,9 @@ public class PluginsTest {
         plugins = new Plugins(pluginProps, parent, new ClassLoaderFactory());
 
         assertTrue(plugins.converters().stream().anyMatch(desc -> desc.loader() instanceof PluginClassLoader),
-            "Should find plugin in plugin classloader");
+                "Should find plugin in plugin classloader");
         assertTrue(plugins.converters().stream().anyMatch(desc -> parent.equals(desc.loader())),
-            "Should find plugin in parent classloader");
+                "Should find plugin in parent classloader");
 
         Converter converter = plugins.newPlugin(
                 className,

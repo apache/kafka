@@ -282,7 +282,7 @@ public class Materialized<K, V, S extends StateStore> {
      * @return a new {@link Materialized} instance with the given key and value serdes
      */
     public static <K, V, S extends StateStore> Materialized<K, V, S> with(final Serde<K> keySerde,
-                                                                          final Serde<V> valueSerde) {
+        final Serde<V> valueSerde) {
         return new Materialized<K, V, S>((String) null).withKeySerde(keySerde).withValueSerde(valueSerde);
     }
 

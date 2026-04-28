@@ -53,6 +53,7 @@ public class JoinGroupRequestTest {
                 "InvalidConfigurationException expected as instance id is invalid.");
         }
     }
+
     @Test
     public void testRequestVersionCompatibilityFailBuild() {
         assertThrows(UnsupportedVersionException.class, () -> new JoinGroupRequest.Builder(
@@ -70,10 +71,10 @@ public class JoinGroupRequestTest {
         short version = 0;
 
         var buffer = MessageUtil.toByteBufferAccessor(new JoinGroupRequestData()
-                .setGroupId("groupId")
-                .setMemberId("consumerId")
-                .setProtocolType("consumer")
-                .setSessionTimeoutMs(sessionTimeoutMs), version);
+            .setGroupId("groupId")
+            .setMemberId("consumerId")
+            .setProtocolType("consumer")
+            .setSessionTimeoutMs(sessionTimeoutMs), version);
 
         JoinGroupRequest request = JoinGroupRequest.parse(buffer, version);
         assertEquals(sessionTimeoutMs, request.data().sessionTimeoutMs());

@@ -88,6 +88,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
     };
 
     private static final String[] TOPICS = new String[NUMERIC_VALUE_TOPICS.length + STRING_VALUE_TOPICS.length];
+
     static {
         System.arraycopy(NUMERIC_VALUE_TOPICS, 0, TOPICS, 0, NUMERIC_VALUE_TOPICS.length);
         System.arraycopy(STRING_VALUE_TOPICS, 0, TOPICS, NUMERIC_VALUE_TOPICS.length, STRING_VALUE_TOPICS.length);
@@ -126,8 +127,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     static void generatePerpetually(final String kafka,
-                                    final int numKeys,
-                                    final int maxRecordsPerKey) {
+        final int numKeys,
+        final int maxRecordsPerKey) {
         final Properties producerProps = generatorProperties(kafka);
 
         int numRecordsProduced = 0;
@@ -176,9 +177,9 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     public static Map<String, Set<Integer>> generate(final String kafka,
-                                                     final int numKeys,
-                                                     final int maxRecordsPerKey,
-                                                     final Duration timeToSpend) {
+        final int numKeys,
+        final int maxRecordsPerKey,
+        final Duration timeToSpend) {
         final Properties producerProps = generatorProperties(kafka);
 
 
@@ -261,8 +262,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     private static void retry(final KafkaProducer<byte[], byte[]> producer,
-                              List<ProducerRecord<byte[], byte[]>> needRetry,
-                              final Serde<?> keySerde) {
+        List<ProducerRecord<byte[], byte[]>> needRetry,
+        final Serde<?> keySerde) {
         int remainingRetries = 5;
         while (!needRetry.isEmpty()) {
             final List<ProducerRecord<byte[], byte[]>> needRetry2 = new ArrayList<>();
@@ -281,9 +282,9 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     private static void flush(final KafkaProducer<byte[], byte[]> producer,
-                              final String topic,
-                              final byte[] keyBytes,
-                              final byte[] valBytes) {
+        final String topic,
+        final byte[] keyBytes,
+        final byte[] valBytes) {
         // now that we've sent everything, we'll send some final records with a timestamp high enough to flush out
         // all suppressed records.
         final List<PartitionInfo> partitions = producer.partitionsFor(topic);
@@ -313,7 +314,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         private final List<ProducerRecord<byte[], byte[]>> needRetry;
 
         TestCallback(final ProducerRecord<byte[], byte[]> originalRecord,
-                     final List<ProducerRecord<byte[], byte[]>> needRetry) {
+            final List<ProducerRecord<byte[], byte[]>> needRetry) {
             this.originalRecord = originalRecord;
             this.needRetry = needRetry;
         }
@@ -381,8 +382,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
         final VerificationResult verificationResult;
 
         PollResult(final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events,
-                   final int recordsProcessed,
-                   final VerificationResult verificationResult) {
+            final int recordsProcessed,
+            final VerificationResult verificationResult) {
             this.events = events;
             this.recordsProcessed = recordsProcessed;
             this.verificationResult = verificationResult;
@@ -403,10 +404,10 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     private static PollResult pollAndCollect(
-            final KafkaConsumer<String, Number> consumer,
-            final Map<String, Set<Integer>> inputs,
-            final int maxRecordsPerKey,
-            final boolean eosEnabled) {
+        final KafkaConsumer<String, Number> consumer,
+        final Map<String, Set<Integer>> inputs,
+        final int maxRecordsPerKey,
+        final boolean eosEnabled) {
         final int recordsGenerated = inputs.size() * maxRecordsPerKey;
         final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events = new HashMap<>();
         VerificationResult verificationResult = new VerificationResult(false, "no results yet");
@@ -418,7 +419,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         consumer.seekToBeginning(partitions);
         final Map<String, AtomicInteger> processed =
             Stream.of(NUMERIC_VALUE_TOPICS)
-                  .collect(Collectors.toMap(t -> t, t -> new AtomicInteger(0)));
+                .collect(Collectors.toMap(t -> t, t -> new AtomicInteger(0)));
 
         int retry = 0;
         while (System.currentTimeMillis() - start < TimeUnit.MINUTES.toMillis(6)) {
@@ -451,8 +452,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
                     }
 
                     events.computeIfAbsent(topic, t -> new HashMap<>())
-                          .computeIfAbsent(key, k -> new LinkedList<>())
-                          .add(record);
+                        .computeIfAbsent(key, k -> new LinkedList<>())
+                        .add(record);
                 }
 
                 System.out.println(processed);
@@ -463,11 +464,11 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     private static VerificationResult reportAndFinalize(
-            final Map<String, Set<Integer>> inputs,
-            final int maxRecordsPerKey,
-            final long startTime,
-            final boolean eosEnabled,
-            final PollResult pollResult) {
+        final Map<String, Set<Integer>> inputs,
+        final int maxRecordsPerKey,
+        final long startTime,
+        final boolean eosEnabled,
+        final PollResult pollResult) {
         final int recordsGenerated = inputs.size() * maxRecordsPerKey;
         final long finished = System.currentTimeMillis() - startTime;
         System.out.println("Verification time=" + finished);
@@ -511,9 +512,9 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     public static VerificationResult verify(final String kafka,
-                                            final Map<String, Set<Integer>> inputs,
-                                            final int maxRecordsPerKey,
-                                            final boolean eosEnabled) {
+        final Map<String, Set<Integer>> inputs,
+        final int maxRecordsPerKey,
+        final boolean eosEnabled) {
         final VerificationResult txnResult = preVerifyTransactions(kafka, eosEnabled);
         if (!txnResult.passed()) {
             return txnResult;
@@ -540,16 +541,16 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 .entrySet()
                 .stream()
                 .map(entry -> mkEntry(
-                    entry.getKey(),
-                    entry.getValue().stream().map(ConsumerRecord::value).collect(Collectors.toSet()))
+                        entry.getKey(),
+                        entry.getValue().stream().map(ConsumerRecord::value).collect(Collectors.toSet()))
                 )
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)) : Collections.emptyMap();
     }
 
     private static VerificationResult verifyAll(final Map<String, Set<Integer>> inputs,
-                                                final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events,
-                                                final boolean printResults,
-                                                final boolean eosEnabled) {
+        final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events,
+        final boolean printResults,
+        final boolean eosEnabled) {
         final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         final BiPredicate<Number, Number> validationPredicate;
         if (eosEnabled) {
@@ -584,13 +585,13 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     private static boolean verify(final PrintStream resultStream,
-                                  final String topic,
-                                  final Map<String, Set<Integer>> inputData,
-                                  final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events,
-                                  final Function<String, Number> keyToExpectation,
-                                  final BiPredicate<Number, Number> validationPredicate,
-                                  final boolean printResults,
-                                  final boolean eosEnabled) {
+        final String topic,
+        final Map<String, Set<Integer>> inputData,
+        final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events,
+        final Function<String, Number> keyToExpectation,
+        final BiPredicate<Number, Number> validationPredicate,
+        final boolean printResults,
+        final boolean eosEnabled) {
         resultStream.printf("verifying topic '%s'%n", topic);
         final Map<String, LinkedList<ConsumerRecord<String, Number>>> observedInputEvents = events.get("data");
         final Map<String, LinkedList<ConsumerRecord<String, Number>>> outputEvents = events.getOrDefault(topic, emptyMap());
@@ -623,7 +624,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
                     if (printResults) {
                         resultStream.printf("\t inputEvents=%n%s%n\t" +
-                                "echoEvents=%n%s%n\tmaxEvents=%n%s%n\tminEvents=%n%s%n\tdifEvents=%n%s%n\tcntEvents=%n%s%n\ttaggEvents=%n%s%n",
+                            "echoEvents=%n%s%n\tmaxEvents=%n%s%n\tminEvents=%n%s%n\tdifEvents=%n%s%n\tcntEvents=%n%s%n\ttaggEvents=%n%s%n",
                             indent("\t\t", observedInputEvents.getOrDefault(key, new LinkedList<>())),
                             indent("\t\t", events.getOrDefault("echo", emptyMap()).getOrDefault(key, new LinkedList<>())),
                             indent("\t\t", events.getOrDefault("max", emptyMap()).getOrDefault(key, new LinkedList<>())),
@@ -656,9 +657,9 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     private static boolean verifySuppressed(final PrintStream resultStream,
-                                            @SuppressWarnings("SameParameterValue") final String topic,
-                                            final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events,
-                                            final boolean printResults) {
+        @SuppressWarnings("SameParameterValue") final String topic,
+        final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events,
+        final boolean printResults) {
         resultStream.println("verifying suppressed " + topic);
         final Map<String, LinkedList<ConsumerRecord<String, Number>>> topicEvents = events.getOrDefault(topic, emptyMap());
         for (final Map.Entry<String, LinkedList<ConsumerRecord<String, Number>>> entry : topicEvents.entrySet()) {
@@ -667,8 +668,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 final String key = entry.getKey();
                 final String unwindowedKey = key.substring(1, key.length() - 1).replaceAll("@.*", "");
                 resultStream.printf("fail: key=%s%n\tnon-unique result:%n%s%n",
-                                    key,
-                                    indent("\t\t", entry.getValue()));
+                    key,
+                    indent("\t\t", entry.getValue()));
 
                 if (printResults)
                     resultStream.printf("\tresultEvents:%n%s%n\tinputEvents:%n%s%n",
@@ -682,7 +683,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     private static String indent(@SuppressWarnings("SameParameterValue") final String prefix,
-                                 final Iterable<ConsumerRecord<String, Number>> list) {
+        final Iterable<ConsumerRecord<String, Number>> list) {
         final StringBuilder stringBuilder = new StringBuilder();
         for (final ConsumerRecord<String, Number> record : list) {
             stringBuilder.append(prefix).append(record).append('\n');
@@ -704,9 +705,9 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
 
     private static boolean verifyTAgg(final PrintStream resultStream,
-                                      final Map<String, Set<Integer>> allData,
-                                      final Map<String, LinkedList<ConsumerRecord<String, Number>>> taggEvents,
-                                      final boolean printResults) {
+        final Map<String, Set<Integer>> allData,
+        final Map<String, LinkedList<ConsumerRecord<String, Number>>> taggEvents,
+        final boolean printResults) {
         resultStream.println("verifying topic tagg");
         if (taggEvents == null) {
             resultStream.println("fail: missing result data; tagg is missing, expected: " + allData.size() + " keys");
@@ -784,8 +785,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
         try (final KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(txnProps)) {
             // Get all output topics except "data" (which is the input topic)
             final String[] outputTopics = Arrays.stream(NUMERIC_VALUE_TOPICS)
-                    .filter(topic -> !topic.equals("data"))
-                    .toArray(String[]::new);
+                .filter(topic -> !topic.equals("data"))
+                .toArray(String[]::new);
 
             final List<TopicPartition> partitions = getAllPartitions(consumer, outputTopics);
             consumer.assign(partitions);

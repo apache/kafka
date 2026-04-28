@@ -53,8 +53,8 @@ public class EagerAssignor implements ConnectAssignor {
 
     @Override
     public Map<String, ByteBuffer> performAssignment(String leaderId, ConnectProtocolCompatibility protocol,
-                                                     List<JoinGroupResponseMember> allMemberMetadata,
-                                                     WorkerCoordinator coordinator) {
+            List<JoinGroupResponseMember> allMemberMetadata,
+            WorkerCoordinator coordinator) {
         log.debug("Performing task assignment");
         Map<String, ExtendedWorkerState> memberConfigs = new HashMap<>();
         for (JoinGroupResponseMember member : allMemberMetadata)
@@ -89,8 +89,8 @@ public class EagerAssignor implements ConnectAssignor {
     }
 
     private Map<String, ByteBuffer> performTaskAssignment(String leaderId, long maxOffset,
-                                                          Map<String, ExtendedWorkerState> memberConfigs,
-                                                          WorkerCoordinator coordinator) {
+            Map<String, ExtendedWorkerState> memberConfigs,
+            WorkerCoordinator coordinator) {
         Map<String, Collection<String>> connectorAssignments = new HashMap<>();
         Map<String, Collection<ConnectorTaskId>> taskAssignments = new HashMap<>();
 
@@ -123,12 +123,12 @@ public class EagerAssignor implements ConnectAssignor {
     }
 
     private Map<String, ByteBuffer> fillAssignmentsAndSerialize(Collection<String> members,
-                                                                short error,
-                                                                String leaderId,
-                                                                String leaderUrl,
-                                                                long maxOffset,
-                                                                Map<String, Collection<String>> connectorAssignments,
-                                                                Map<String, Collection<ConnectorTaskId>> taskAssignments) {
+            short error,
+            String leaderId,
+            String leaderUrl,
+            long maxOffset,
+            Map<String, Collection<String>> connectorAssignments,
+            Map<String, Collection<ConnectorTaskId>> taskAssignments) {
 
         Map<String, ByteBuffer> groupAssignment = new HashMap<>();
         for (String member : members) {
@@ -149,7 +149,7 @@ public class EagerAssignor implements ConnectAssignor {
     }
 
     private long findMaxMemberConfigOffset(Map<String, ExtendedWorkerState> memberConfigs,
-                                           WorkerCoordinator coordinator) {
+            WorkerCoordinator coordinator) {
         // The new config offset is the maximum seen by any member. We always perform assignment using this offset,
         // even if some members have fallen behind. The config offset used to generate the assignment is included in
         // the response so members that have fallen behind will not use the assignment until they have caught up.
@@ -163,7 +163,7 @@ public class EagerAssignor implements ConnectAssignor {
         }
 
         log.debug("Max config offset root: {}, local snapshot config offsets root: {}",
-                  maxOffset, coordinator.configSnapshot().offset());
+                maxOffset, coordinator.configSnapshot().offset());
         return maxOffset;
     }
 

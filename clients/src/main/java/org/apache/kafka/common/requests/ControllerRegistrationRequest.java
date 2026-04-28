@@ -58,9 +58,9 @@ public class ControllerRegistrationRequest extends AbstractRequest {
     public ControllerRegistrationResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
         return new ControllerRegistrationResponse(new ControllerRegistrationResponseData()
-                .setThrottleTimeMs(throttleTimeMs)
-                .setErrorCode(error.code())
-                .setErrorMessage(error.message()));
+            .setThrottleTimeMs(throttleTimeMs)
+            .setErrorCode(error.code())
+            .setErrorMessage(error.message()));
     }
 
     public static ControllerRegistrationRequest parse(Readable readable, short version) {

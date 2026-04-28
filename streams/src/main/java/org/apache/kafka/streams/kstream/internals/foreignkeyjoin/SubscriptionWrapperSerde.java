@@ -35,12 +35,12 @@ import java.util.function.Supplier;
 public class SubscriptionWrapperSerde<KLeft> extends WrappingNullableSerde<SubscriptionWrapper<KLeft>, KLeft, Void> {
 
     public SubscriptionWrapperSerde(final Supplier<String> primaryKeySerializationPseudoTopicSupplier,
-                                    final Serde<KLeft> primaryKeySerde) {
+        final Serde<KLeft> primaryKeySerde) {
         super(
             new SubscriptionWrapperSerializer<>(primaryKeySerializationPseudoTopicSupplier,
-                                                primaryKeySerde == null ? null : primaryKeySerde.serializer()),
+                primaryKeySerde == null ? null : primaryKeySerde.serializer()),
             new SubscriptionWrapperDeserializer<>(primaryKeySerializationPseudoTopicSupplier,
-                                                  primaryKeySerde == null ? null : primaryKeySerde.deserializer())
+                primaryKeySerde == null ? null : primaryKeySerde.deserializer())
         );
     }
 
@@ -53,7 +53,7 @@ public class SubscriptionWrapperSerde<KLeft> extends WrappingNullableSerde<Subsc
         private boolean upgradeFromV0 = false;
 
         SubscriptionWrapperSerializer(final Supplier<String> primaryKeySerializationPseudoTopicSupplier,
-                                      final Serializer<KLeft> primaryKeySerializer) {
+            final Serializer<KLeft> primaryKeySerializer) {
             this.primaryKeySerializationPseudoTopicSupplier = primaryKeySerializationPseudoTopicSupplier;
             this.primaryKeySerializer = primaryKeySerializer;
         }
@@ -122,7 +122,7 @@ public class SubscriptionWrapperSerde<KLeft> extends WrappingNullableSerde<Subsc
                 primaryKeySerializationPseudoTopic = primaryKeySerializationPseudoTopicSupplier.get();
             }
 
-            return  primaryKeySerializer.serialize(
+            return primaryKeySerializer.serialize(
                 primaryKeySerializationPseudoTopic,
                 headers,
                 data.primaryKey()
@@ -171,7 +171,7 @@ public class SubscriptionWrapperSerde<KLeft> extends WrappingNullableSerde<Subsc
         private Deserializer<KLeft> primaryKeyDeserializer;
 
         SubscriptionWrapperDeserializer(final Supplier<String> primaryKeySerializationPseudoTopicSupplier,
-                                        final Deserializer<KLeft> primaryKeyDeserializer) {
+            final Deserializer<KLeft> primaryKeyDeserializer) {
             this.primaryKeySerializationPseudoTopicSupplier = primaryKeySerializationPseudoTopicSupplier;
             this.primaryKeyDeserializer = primaryKeyDeserializer;
         }

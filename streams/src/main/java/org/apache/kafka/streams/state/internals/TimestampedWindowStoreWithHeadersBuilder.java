@@ -53,9 +53,9 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
     private final WindowBytesStoreSupplier storeSupplier;
 
     public TimestampedWindowStoreWithHeadersBuilder(final WindowBytesStoreSupplier storeSupplier,
-                                                    final Serde<K> keySerde,
-                                                    final Serde<V> valueSerde,
-                                                    final Time time) {
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde,
+        final Time time) {
         super(storeSupplier.name(), keySerde, valueSerde == null ? null : new ValueTimestampHeadersSerde<>(valueSerde), time);
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
         Objects.requireNonNull(storeSupplier.metricsScope(), "storeSupplier's metricsScope can't be null");
@@ -156,56 +156,56 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
 
         @Override
         public void put(final Bytes key,
-                        final byte[] value,
-                        final long windowStartTimestamp) {
+            final byte[] value,
+            final long windowStartTimestamp) {
             wrapped().put(key, value, windowStartTimestamp);
         }
 
         @Override
         public byte[] fetch(final Bytes key,
-                            final long time) {
+            final long time) {
             return wrapped().fetch(key, time);
         }
 
         @Override
         public WindowStoreIterator<byte[]> fetch(final Bytes key,
-                                                 final long timeFrom,
-                                                 final long timeTo) {
+            final long timeFrom,
+            final long timeTo) {
             return wrapped().fetch(key, timeFrom, timeTo);
         }
 
         @Override
         public WindowStoreIterator<byte[]> backwardFetch(final Bytes key,
-                                                         final long timeFrom,
-                                                         final long timeTo) {
+            final long timeFrom,
+            final long timeTo) {
             return wrapped().backwardFetch(key, timeFrom, timeTo);
         }
 
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
-                                                               final Bytes keyTo,
-                                                               final long timeFrom,
-                                                               final long timeTo) {
+            final Bytes keyTo,
+            final long timeFrom,
+            final long timeTo) {
             return wrapped().fetch(keyFrom, keyTo, timeFrom, timeTo);
         }
 
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom,
-                                                                       final Bytes keyTo,
-                                                                       final long timeFrom,
-                                                                       final long timeTo) {
+            final Bytes keyTo,
+            final long timeFrom,
+            final long timeTo) {
             return wrapped().backwardFetch(keyFrom, keyTo, timeFrom, timeTo);
         }
 
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom,
-                                                                  final long timeTo) {
+            final long timeTo) {
             return wrapped().fetchAll(timeFrom, timeTo);
         }
 
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final long timeFrom,
-                                                                          final long timeTo) {
+            final long timeTo) {
             return wrapped().backwardFetchAll(timeFrom, timeTo);
         }
 

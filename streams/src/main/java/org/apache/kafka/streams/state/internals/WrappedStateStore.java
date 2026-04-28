@@ -80,7 +80,7 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
     @SuppressWarnings("unchecked")
     @Override
     public boolean setFlushListener(final CacheFlushListener<K, V> listener,
-                                    final boolean sendOldValues) {
+        final boolean sendOldValues) {
         if (wrapped instanceof CachedStateStore) {
             return ((CachedStateStore<K, V>) wrapped).setFlushListener(listener, sendOldValues);
         }

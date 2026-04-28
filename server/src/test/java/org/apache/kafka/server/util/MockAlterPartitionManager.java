@@ -53,8 +53,8 @@ public class MockAlterPartitionManager implements AlterPartitionManager {
             isrUpdates.add(new AlterPartitionItem(topicIdPartition, leaderAndIsr, future));
         } else {
             future.completeExceptionally(new OperationNotAttemptedException(
-                    String.format("Failed to enqueue AlterIsr request for %s since there is already an inflight request",
-                            topicIdPartition)
+                String.format("Failed to enqueue AlterIsr request for %s since there is already an inflight request",
+                    topicIdPartition)
             ));
         }
         return future;

@@ -37,10 +37,10 @@ public interface CoordinatorPlayback<U> {
      * @throws RuntimeException if the record can not be applied.
      */
     void replay(
-        long offset,
-        long producerId,
-        short producerEpoch,
-        U record
+            long offset,
+            long producerId,
+            short producerEpoch,
+            U record
     ) throws RuntimeException;
 
     /**
@@ -52,9 +52,9 @@ public interface CoordinatorPlayback<U> {
      * @throws RuntimeException if the transaction can not be completed.
      */
     void replayEndTransactionMarker(
-        long producerId,
-        short producerEpoch,
-        TransactionResult result
+            long producerId,
+            short producerEpoch,
+            TransactionResult result
     ) throws RuntimeException;
 
     /**

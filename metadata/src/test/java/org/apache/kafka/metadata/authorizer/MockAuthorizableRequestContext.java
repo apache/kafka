@@ -102,13 +102,13 @@ public class MockAuthorizableRequestContext implements AuthorizableRequestContex
     private final int correlationId;
 
     private MockAuthorizableRequestContext(String listenerName,
-            SecurityProtocol securityProtocol,
-            KafkaPrincipal principal,
-            InetAddress clientAddress,
-            ApiKeys requestType,
-            short requestVersion,
-            String clientId,
-            int correlationId) {
+                                           SecurityProtocol securityProtocol,
+                                           KafkaPrincipal principal,
+                                           InetAddress clientAddress,
+                                           ApiKeys requestType,
+                                           short requestVersion,
+                                           String clientId,
+                                           int correlationId) {
         this.listenerName = listenerName;
         this.securityProtocol = securityProtocol;
         this.principal = principal;

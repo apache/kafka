@@ -470,9 +470,9 @@ public class DistributedConfigTest {
     public void testOsDefaultSocketBufferSizes() {
         Map<String, String> configs = configs();
         configs.put(CommonClientConfigs.SEND_BUFFER_CONFIG,
-            Integer.toString(CommonClientConfigs.SEND_BUFFER_LOWER_BOUND));
+                Integer.toString(CommonClientConfigs.SEND_BUFFER_LOWER_BOUND));
         configs.put(CommonClientConfigs.RECEIVE_BUFFER_CONFIG,
-            Integer.toString(CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND));
+                Integer.toString(CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND));
         new DistributedConfig(configs);
     }
 

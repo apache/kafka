@@ -53,7 +53,7 @@ public class TransformationChain<T, R extends ConnectRecord<R>> implements AutoC
             final R current = record;
 
             log.trace("Applying transformation {} to {}",
-                transformationStage.transformClass().getName(), record);
+                    transformationStage.transformClass().getName(), record);
             // execute the operation
             record = retryWithToleranceOperator.execute(context, () -> transformationStage.apply(current), Stage.TRANSFORMATION, transformationStage.transformClass());
 

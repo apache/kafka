@@ -106,12 +106,12 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     private int consumedMessages = 0;
 
     public VerifiableConsumer(KafkaConsumer<String, String> consumer,
-                              PrintStream out,
-                              String topic,
-                              int maxMessages,
-                              boolean useAutoCommit,
-                              boolean useAsyncCommit,
-                              boolean verbose) {
+        PrintStream out,
+        String topic,
+        int maxMessages,
+        boolean useAutoCommit,
+        boolean useAsyncCommit,
+        boolean verbose) {
         this.consumer = consumer;
         this.out = out;
         this.topic = topic;
@@ -162,7 +162,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
 
             offsets.put(tp, new OffsetAndMetadata(maxOffset + 1));
             summaries.add(new RecordSetSummary(tp.topic(), tp.partition(),
-                    partitionRecords.size(), minOffset, maxOffset));
+                partitionRecords.size(), minOffset, maxOffset));
 
             if (verbose) {
                 for (ConsumerRecord<String, String> record : partitionRecords) {
@@ -277,7 +277,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         }
     }
 
-    @JsonPropertyOrder({ "timestamp", "name" })
+    @JsonPropertyOrder({"timestamp", "name"})
     private abstract static class ConsumerEvent {
         private final long timestamp = System.currentTimeMillis();
 
@@ -375,7 +375,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         }
     }
 
-    @JsonPropertyOrder({ "timestamp", "name", "key", "value", "topic", "partition", "offset" })
+    @JsonPropertyOrder({"timestamp", "name", "key", "value", "topic", "partition", "offset"})
     public static class RecordData extends ConsumerEvent {
 
         private final ConsumerRecord<String, String> record;
@@ -545,7 +545,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             .dest("groupProtocol")
             .metavar("GROUP-PROTOCOL")
             .help(String.format("Group protocol (must be one of %s)", Arrays.stream(GroupProtocol.values())
-                    .map(Object::toString).collect(Collectors.joining(", "))));
+                .map(Object::toString).collect(Collectors.joining(", "))));
 
         parser.addArgument("--group-remote-assignor")
             .action(store())
@@ -626,7 +626,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             .type(String.class)
             .metavar("CONFIG-FILE")
             .help("(DEPRECATED) Consumer config properties file. " +
-                    "This option will be removed in a future version. Use --command-config instead");
+                "This option will be removed in a future version. Use --command-config instead");
 
         parser.addArgument("--command-config")
             .action(store())
@@ -710,13 +710,13 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         boolean verbose = res.getBoolean("verbose");
 
         return new VerifiableConsumer(
-                consumer,
-                System.out,
-                topic,
-                maxMessages,
-                useAutoCommit,
-                false,
-                verbose);
+            consumer,
+            System.out,
+            topic,
+            maxMessages,
+            useAutoCommit,
+            false,
+            verbose);
     }
 
     public static void main(String[] args) {

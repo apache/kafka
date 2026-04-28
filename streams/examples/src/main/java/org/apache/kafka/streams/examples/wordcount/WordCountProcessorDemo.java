@@ -126,7 +126,7 @@ public final class WordCountProcessorDemo {
                 Stores.inMemoryKeyValueStore("Counts"),
                 Serdes.String(),
                 Serdes.Integer()),
-                "Process");
+            "Process");
 
         builder.addSink("Sink", "streams-wordcount-processor-output", "Process");
 

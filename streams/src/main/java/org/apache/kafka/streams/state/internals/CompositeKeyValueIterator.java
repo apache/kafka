@@ -30,7 +30,7 @@ class CompositeKeyValueIterator<K, V, StoreType> implements KeyValueIterator<K, 
     private KeyValueIterator<K, V> current;
 
     CompositeKeyValueIterator(final Iterator<StoreType> underlying,
-                              final NextIteratorFunction<K, V, StoreType> nextIteratorFunction) {
+        final NextIteratorFunction<K, V, StoreType> nextIteratorFunction) {
         this.storeIterator = underlying;
         this.nextIteratorFunction = nextIteratorFunction;
     }

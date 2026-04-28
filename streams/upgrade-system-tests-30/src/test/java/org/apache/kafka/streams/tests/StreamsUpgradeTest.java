@@ -114,7 +114,8 @@ public class StreamsUpgradeTest {
             }
 
             @Override
-            public void close() {}
+            public void close() {
+            }
         };
     }
 }

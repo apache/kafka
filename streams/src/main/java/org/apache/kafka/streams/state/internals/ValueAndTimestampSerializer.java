@@ -62,21 +62,21 @@ public class ValueAndTimestampSerializer<V> implements WrappingNullableSerialize
 
     @Override
     public void configure(final Map<String, ?> configs,
-                          final boolean isKey) {
+        final boolean isKey) {
         valueSerializer.configure(configs, isKey);
         timestampSerializer.configure(configs, isKey);
     }
 
     @Override
     public byte[] serialize(final String topic,
-                            final ValueAndTimestamp<V> data) {
+        final ValueAndTimestamp<V> data) {
         return serialize(topic, new RecordHeaders(), data);
     }
 
     @Override
     public byte[] serialize(final String topic,
-                            final Headers headers,
-                            final ValueAndTimestamp<V> data) {
+        final Headers headers,
+        final ValueAndTimestamp<V> data) {
         if (data == null) {
             return null;
         }
@@ -84,9 +84,9 @@ public class ValueAndTimestampSerializer<V> implements WrappingNullableSerialize
     }
 
     public byte[] serialize(final String topic,
-                            final Headers headers,
-                            final V data,
-                            final long timestamp) {
+        final Headers headers,
+        final V data,
+        final long timestamp) {
         if (data == null) {
             return null;
         }

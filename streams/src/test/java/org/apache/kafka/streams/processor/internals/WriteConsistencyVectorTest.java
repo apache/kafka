@@ -89,29 +89,29 @@ public class WriteConsistencyVectorTest {
         when(stateManager.registeredChangelogPartitionFor(REGISTERED_STORE_NAME)).thenReturn(CHANGELOG_PARTITION);
 
         context = new ProcessorContextImpl(
-                taskId,
-                streamsConfig,
-                stateManager,
-                streamsMetrics,
-                threadCache
+            taskId,
+            streamsConfig,
+            stateManager,
+            streamsMetrics,
+            threadCache
         );
 
         context.transitionToActive(task, null, null);
 
         context.setCurrentNode(
-                new ProcessorNode<>(
-                        "fake",
-                        (org.apache.kafka.streams.processor.api.Processor<String, Long, Object, Object>) null,
-                        new HashSet<>(
-                                asList(
-                                        "LocalKeyValueStore",
-                                        "LocalTimestampedKeyValueStore",
-                                        "LocalWindowStore",
-                                        "LocalTimestampedWindowStore",
-                                        "LocalSessionStore"
-                                )
-                        )
+            new ProcessorNode<>(
+                "fake",
+                (org.apache.kafka.streams.processor.api.Processor<String, Long, Object, Object>) null,
+                new HashSet<>(
+                    asList(
+                        "LocalKeyValueStore",
+                        "LocalTimestampedKeyValueStore",
+                        "LocalWindowStore",
+                        "LocalTimestampedWindowStore",
+                        "LocalSessionStore"
+                    )
                 )
+            )
         );
     }
 
@@ -123,23 +123,23 @@ public class WriteConsistencyVectorTest {
         final Headers headers = new RecordHeaders();
         headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
         headers.add(new RecordHeader(
-                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
-                PositionSerde.serialize(position).array()));
+            ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+            PositionSerde.serialize(position).array()));
 
         context.transitionToActive(task, recordCollector, null);
 
         context.logChange(REGISTERED_STORE_NAME, KEY_BYTES, VALUE_BYTES, TIMESTAMP, headers, position);
 
         verify(recordCollector).send(
-                CHANGELOG_PARTITION.topic(),
-                KEY_BYTES,
-                VALUE_BYTES,
-                headers,
-                CHANGELOG_PARTITION.partition(),
-                TIMESTAMP,
-                BYTES_KEY_SERIALIZER,
-                BYTEARRAY_VALUE_SERIALIZER,
-                null,
-                null);
+            CHANGELOG_PARTITION.topic(),
+            KEY_BYTES,
+            VALUE_BYTES,
+            headers,
+            CHANGELOG_PARTITION.partition(),
+            TIMESTAMP,
+            BYTES_KEY_SERIALIZER,
+            BYTEARRAY_VALUE_SERIALIZER,
+            null,
+            null);
     }
 }

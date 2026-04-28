@@ -200,7 +200,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
      *
      * <p>If not configured to use a connector-specific offset store, only the values contained in the worker-global
      * offset store are returned.
-
+     
      * @param keys list of keys to look up
      * @return future for the resulting map from key to value
      */
@@ -275,11 +275,11 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
      *
      * <p>If not configured to use a connector-specific offset store, the returned {@link Future} corresponds to a
      * write to the worker-global offset store, and the passed-in {@link Callback} is invoked once that write completes.
-
+     
      * @param values map from key to value
      * @param callback callback to invoke on completion of the primary write
      * @return void future for the primary write
-    *
+     *
      * @see <a href="https://issues.apache.org/jira/browse/KAFKA-15018">KAFKA-15018</a> for context on the three-step
      * write sequence
      *
@@ -312,12 +312,12 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
 
         if (secondaryStore != null && !tombstoneOffsets.isEmpty()) {
             return new ChainedOffsetWriteFuture(
-                primaryStore,
-                secondaryStore,
-                values,
-                regularOffsets,
-                tombstoneOffsets,
-                callback
+                    primaryStore,
+                    secondaryStore,
+                    values,
+                    regularOffsets,
+                    tombstoneOffsets,
+                    callback
             );
         } else {
             return setPrimaryThenSecondary(primaryStore, secondaryStore, values, regularOffsets, callback);
@@ -325,11 +325,11 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
     }
 
     private Future<Void> setPrimaryThenSecondary(
-        OffsetBackingStore primaryStore,
-        OffsetBackingStore secondaryStore,
-        Map<ByteBuffer, ByteBuffer> completeOffsets,
-        Map<ByteBuffer, ByteBuffer> nonTombstoneOffsets,
-        Callback<Void> callback
+            OffsetBackingStore primaryStore,
+            OffsetBackingStore secondaryStore,
+            Map<ByteBuffer, ByteBuffer> completeOffsets,
+            Map<ByteBuffer, ByteBuffer> nonTombstoneOffsets,
+            Callback<Void> callback
     ) {
         return primaryStore.set(completeOffsets, (primaryWriteError, ignored) -> {
             if (secondaryStore != null) {
@@ -411,12 +411,12 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
         private final CountDownLatch completed;
 
         public ChainedOffsetWriteFuture(
-            OffsetBackingStore primaryStore,
-            OffsetBackingStore secondaryStore,
-            Map<ByteBuffer, ByteBuffer> completeOffsets,
-            Map<ByteBuffer, ByteBuffer> regularOffsets,
-            Map<ByteBuffer, ByteBuffer> tombstoneOffsets,
-            Callback<Void> callback
+                OffsetBackingStore primaryStore,
+                OffsetBackingStore secondaryStore,
+                Map<ByteBuffer, ByteBuffer> completeOffsets,
+                Map<ByteBuffer, ByteBuffer> regularOffsets,
+                Map<ByteBuffer, ByteBuffer> tombstoneOffsets,
+                Callback<Void> callback
         ) {
             this.primaryStore = primaryStore;
             this.secondaryStore = secondaryStore;

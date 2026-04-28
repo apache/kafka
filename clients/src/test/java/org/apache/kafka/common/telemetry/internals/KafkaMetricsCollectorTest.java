@@ -235,20 +235,20 @@ public class KafkaMetricsCollectorTest {
         result.stream()
             .flatMap(metrics -> Stream.of(metrics.builder().build()))
             .filter(metric -> metric.getName().equals("test.domain.group1.(float|double)")).forEach(
-                doubleGauge -> {
-                    assertTrue(doubleGauge.hasGauge());
-                    assertEquals(tags, getTags(doubleGauge.getGauge().getDataPoints(0).getAttributesList()));
-                    assertEquals(99d, doubleGauge.getGauge().getDataPoints(0).getAsDouble(), 0.0);
-                });
+            doubleGauge -> {
+                assertTrue(doubleGauge.hasGauge());
+                assertEquals(tags, getTags(doubleGauge.getGauge().getDataPoints(0).getAttributesList()));
+                assertEquals(99d, doubleGauge.getGauge().getDataPoints(0).getAsDouble(), 0.0);
+            });
 
         result.stream()
             .flatMap(metrics -> Stream.of(metrics.builder().build()))
             .filter(metric -> metric.getName().equals("test.domain.group1.(int|long)")).forEach(
-                intGauge -> {
-                    assertTrue(intGauge.hasGauge());
-                    assertEquals(tags, getTags(intGauge.getGauge().getDataPoints(0).getAttributesList()));
-                    assertEquals(100, intGauge.getGauge().getDataPoints(0).getAsDouble(), 0.0);
-                });
+            intGauge -> {
+                assertTrue(intGauge.hasGauge());
+                assertEquals(tags, getTags(intGauge.getGauge().getDataPoints(0).getAttributesList()));
+                assertEquals(100, intGauge.getGauge().getDataPoints(0).getAsDouble(), 0.0);
+            });
     }
 
     @Test

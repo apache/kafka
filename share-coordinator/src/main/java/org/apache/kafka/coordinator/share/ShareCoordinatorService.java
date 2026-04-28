@@ -447,19 +447,19 @@ public class ShareCoordinatorService implements ShareCoordinator {
             topicData.partitions().forEach(
                 partitionData -> {
                     CompletableFuture<WriteShareGroupStateResponseData> future = runtime.scheduleWriteOperation(
-                            "write-share-group-state",
-                            topicPartitionFor(SharePartitionKey.getInstance(groupId, topicData.topicId(), partitionData.partition())),
-                            coordinator -> coordinator.writeState(new WriteShareGroupStateRequestData()
-                                .setGroupId(groupId)
-                                .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
-                                    .setTopicId(topicData.topicId())
-                                    .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
-                                        .setPartition(partitionData.partition())
-                                        .setStartOffset(partitionData.startOffset())
-                                        .setDeliveryCompleteCount(partitionData.deliveryCompleteCount())
-                                        .setLeaderEpoch(partitionData.leaderEpoch())
-                                        .setStateEpoch(partitionData.stateEpoch())
-                                        .setStateBatches(partitionData.stateBatches())))))))
+                        "write-share-group-state",
+                        topicPartitionFor(SharePartitionKey.getInstance(groupId, topicData.topicId(), partitionData.partition())),
+                        coordinator -> coordinator.writeState(new WriteShareGroupStateRequestData()
+                            .setGroupId(groupId)
+                            .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
+                                .setTopicId(topicData.topicId())
+                                .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
+                                    .setPartition(partitionData.partition())
+                                    .setStartOffset(partitionData.startOffset())
+                                    .setDeliveryCompleteCount(partitionData.deliveryCompleteCount())
+                                    .setLeaderEpoch(partitionData.leaderEpoch())
+                                    .setStateEpoch(partitionData.stateEpoch())
+                                    .setStateBatches(partitionData.stateBatches())))))))
                         .exceptionally(exception -> handleOperationException(
                             "write-share-group-state",
                             request,

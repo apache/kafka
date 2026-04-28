@@ -140,6 +140,6 @@ public class StoreBuilderWrapper implements StoreFactory {
     @Override
     public boolean isCompatibleWith(final StoreFactory storeFactory) {
         return storeFactory instanceof StoreBuilderWrapper
-                && builder.equals(((StoreBuilderWrapper) storeFactory).builder);
+            && builder.equals(((StoreBuilderWrapper) storeFactory).builder);
     }
 }

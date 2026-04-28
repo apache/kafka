@@ -77,7 +77,7 @@ public final class Coordinator {
      * @param resource      The AgentRestResource to use.
      */
     public Coordinator(Platform platform, Scheduler scheduler, JsonRestServer restServer,
-                       CoordinatorRestResource resource, long firstWorkerId) {
+        CoordinatorRestResource resource, long firstWorkerId) {
         this.time = scheduler.time();
         this.startTimeMs = time.milliseconds();
         this.taskManager = new TaskManager(platform, scheduler, firstWorkerId);

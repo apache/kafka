@@ -35,14 +35,14 @@ public abstract class BaseRepartitionNode<K, V> extends GraphNode {
     protected ProcessorParameters<K, V, K, V> processorParameters;
 
     BaseRepartitionNode(final String nodeName,
-                        final String sourceName,
-                        final ProcessorParameters<K, V, K, V> processorParameters,
-                        final Serde<K> keySerde,
-                        final Serde<V> valueSerde,
-                        final String sinkName,
-                        final String repartitionTopic,
-                        final StreamPartitioner<K, V> partitioner,
-                        final InternalTopicProperties internalTopicProperties) {
+        final String sourceName,
+        final ProcessorParameters<K, V, K, V> processorParameters,
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde,
+        final String sinkName,
+        final String repartitionTopic,
+        final StreamPartitioner<K, V> partitioner,
+        final InternalTopicProperties internalTopicProperties) {
         super(nodeName);
 
         this.keySerde = keySerde;
@@ -82,15 +82,15 @@ public abstract class BaseRepartitionNode<K, V> extends GraphNode {
     @Override
     public String toString() {
         return "BaseRepartitionNode{" +
-               "keySerde=" + keySerde +
-               ", valueSerde=" + valueSerde +
-               ", sinkName='" + sinkName + '\'' +
-               ", sourceName='" + sourceName + '\'' +
-               ", repartitionTopic='" + repartitionTopic + '\'' +
-               ", processorParameters=" + processorParameters + '\'' +
-               ", partitioner=" + partitioner +
-               ", internalTopicProperties=" + internalTopicProperties +
-               "} " + super.toString();
+            "keySerde=" + keySerde +
+            ", valueSerde=" + valueSerde +
+            ", sinkName='" + sinkName + '\'' +
+            ", sourceName='" + sourceName + '\'' +
+            ", repartitionTopic='" + repartitionTopic + '\'' +
+            ", processorParameters=" + processorParameters + '\'' +
+            ", partitioner=" + partitioner +
+            ", internalTopicProperties=" + internalTopicProperties +
+            "} " + super.toString();
     }
 
     public abstract static class BaseRepartitionNodeBuilder<K, V, RepartitionNode extends BaseRepartitionNode<K, V>> {

@@ -34,7 +34,7 @@ public class NonEmptyListValidatorTest {
     @Test
     public void testEmptyList() {
         assertThrows(ConfigException.class,
-            () -> new NonEmptyListValidator().ensureValid("foo", List.of()));
+                () -> new NonEmptyListValidator().ensureValid("foo", List.of()));
     }
 
     @Test

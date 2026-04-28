@@ -34,8 +34,8 @@ public class TaskRunning extends TaskState {
 
     @JsonCreator
     public TaskRunning(@JsonProperty("spec") TaskSpec spec,
-            @JsonProperty("startedMs") long startedMs,
-            @JsonProperty("status") JsonNode status) {
+        @JsonProperty("startedMs") long startedMs,
+        @JsonProperty("status") JsonNode status) {
         super(spec, status);
         this.startedMs = startedMs;
     }

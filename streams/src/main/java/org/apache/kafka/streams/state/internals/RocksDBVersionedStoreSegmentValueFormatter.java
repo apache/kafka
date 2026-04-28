@@ -227,7 +227,7 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             }
 
             SegmentSearchResult(final int index, final long validFrom, final long validTo,
-                                final byte[] value) {
+                final byte[] value) {
                 this.index = index;
                 this.validFrom = validFrom;
                 this.validTo = validTo;
@@ -569,9 +569,9 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
                 final int totalRecords = find(minTimestamp, false).index() + 1;
                 if (!((timestamp == minTimestamp) && (totalRecords == 1))) {
                     LOG.warn("The versioned store inconsistency affects more than "
-                            + "one record version, even though under normal replay operations only one "
-                            + "record should be affected. Full records affected: {} (expected: 1). "
-                            + "New record timestamp: {} (expected: {}).",
+                        + "one record version, even though under normal replay operations only one "
+                        + "record should be affected. Full records affected: {} (expected: 1). "
+                        + "New record timestamp: {} (expected: {}).",
                         totalRecords,
                         timestamp,
                         unpackedReversedTimestampAndValueSizes.get(0).timestamp);

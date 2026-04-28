@@ -19,7 +19,7 @@ package org.apache.kafka.connect.runtime.rest.entities;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public record ConfigInfo(
-    @JsonProperty("definition") ConfigKeyInfo configKey,
-    @JsonProperty("value") ConfigValueInfo configValue
+@JsonProperty("definition") ConfigKeyInfo configKey,
+@JsonProperty("value") ConfigValueInfo configValue
 ) {
 }

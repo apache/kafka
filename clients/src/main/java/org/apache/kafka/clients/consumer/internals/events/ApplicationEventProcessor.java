@@ -69,9 +69,9 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private int metadataVersionSnapshot;
 
     public ApplicationEventProcessor(final LogContext logContext,
-                                     final RequestManagers requestManagers,
-                                     final Metadata metadata,
-                                     final SubscriptionState subscriptions) {
+        final RequestManagers requestManagers,
+        final Metadata metadata,
+        final SubscriptionState subscriptions) {
         this.log = logContext.logger(ApplicationEventProcessor.class);
         this.requestManagers = requestManagers;
         this.metadata = metadata;
@@ -289,7 +289,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private void process(final FetchCommittedOffsetsEvent event) {
         if (requestManagers.commitRequestManager.isEmpty()) {
             event.future().completeExceptionally(new KafkaException("Unable to fetch committed " +
-                    "offset because the CommitRequestManager is not available. Check if group.id was set correctly"));
+                "offset because the CommitRequestManager is not available. Check if group.id was set correctly"));
             return;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
@@ -445,7 +445,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private void process(final ResetOffsetEvent event) {
         try {
             Collection<TopicPartition> parts = event.topicPartitions().isEmpty() ?
-                    subscriptions.assignedPartitions() : event.topicPartitions();
+                subscriptions.assignedPartitions() : event.topicPartitions();
             subscriptions.requestOffsetReset(parts, event.offsetResetStrategy());
             event.future().complete(null);
         } catch (Exception e) {
@@ -464,13 +464,13 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
     private void process(final TopicMetadataEvent event) {
         final CompletableFuture<Map<String, List<PartitionInfo>>> future =
-                requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), event.deadlineMs());
+            requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), event.deadlineMs());
         future.whenComplete(complete(event.future()));
     }
 
     private void process(final AllTopicsMetadataEvent event) {
         final CompletableFuture<Map<String, List<PartitionInfo>>> future =
-                requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(event.deadlineMs());
+            requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(event.deadlineMs());
         future.whenComplete(complete(event.future()));
     }
 
@@ -528,7 +528,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
         ShareConsumeRequestManager manager = requestManagers.shareConsumeRequestManager.get();
         CompletableFuture<Map<TopicIdPartition, Acknowledgements>> future =
-                manager.commitSync(event.acknowledgementsMap(), event.deadlineMs());
+            manager.commitSync(event.acknowledgementsMap(), event.deadlineMs());
         future.whenComplete(complete(event.future()));
     }
 
@@ -835,18 +835,18 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * {@link ConsumerNetworkThread}.
      */
     public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
-                                                               final Metadata metadata,
-                                                               final SubscriptionState subscriptions,
-                                                               final Supplier<RequestManagers> requestManagersSupplier) {
+        final Metadata metadata,
+        final SubscriptionState subscriptions,
+        final Supplier<RequestManagers> requestManagersSupplier) {
         return new CachedSupplier<>() {
             @Override
             protected ApplicationEventProcessor create() {
                 RequestManagers requestManagers = requestManagersSupplier.get();
                 return new ApplicationEventProcessor(
-                        logContext,
-                        requestManagers,
-                        metadata,
-                        subscriptions
+                    logContext,
+                    requestManagers,
+                    metadata,
+                    subscriptions
                 );
             }
         };

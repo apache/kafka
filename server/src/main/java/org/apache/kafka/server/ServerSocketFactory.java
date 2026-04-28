@@ -28,6 +28,7 @@ import java.nio.channels.ServerSocketChannel;
 
 public interface ServerSocketFactory {
     ServerSocketFactory INSTANCE = new KafkaServerSocketFactory();
+
     ServerSocketChannel openServerSocket(
         String listenerName,
         InetSocketAddress socketAddress,
@@ -39,10 +40,10 @@ public interface ServerSocketFactory {
 
         @Override
         public ServerSocketChannel openServerSocket(
-                String listenerName,
-                InetSocketAddress socketAddress,
-                int listenBacklogSize,
-                int recvBufferSize
+            String listenerName,
+            InetSocketAddress socketAddress,
+            int listenBacklogSize,
+            int recvBufferSize
         ) throws IOException {
             ServerSocketChannel socketChannel = ServerSocketChannel.open();
             try {

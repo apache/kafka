@@ -67,7 +67,7 @@ public final class Kibosh {
 
         @JsonCreator
         public KiboshFilesUnreadableFaultSpec(@JsonProperty("prefix") String prefix,
-                                              @JsonProperty("errorCode") int errorCode) {
+            @JsonProperty("errorCode") int errorCode) {
             this.prefix = prefix;
             this.errorCode = errorCode;
         }

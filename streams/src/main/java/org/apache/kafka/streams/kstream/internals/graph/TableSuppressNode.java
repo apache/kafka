@@ -21,7 +21,7 @@ package org.apache.kafka.streams.kstream.internals.graph;
  */
 public class TableSuppressNode<K, V> extends ProcessorGraphNode<K, V> {
     public TableSuppressNode(final String nodeName,
-                             final ProcessorParameters<K, V, ?, ?> processorParameters) {
+        final ProcessorParameters<K, V, ?, ?> processorParameters) {
         super(nodeName, processorParameters);
     }
 }

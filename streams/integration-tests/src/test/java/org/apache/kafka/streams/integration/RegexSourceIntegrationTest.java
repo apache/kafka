@@ -93,14 +93,14 @@ public class RegexSourceIntegrationTest {
     public static void startCluster() throws IOException, InterruptedException {
         CLUSTER.start();
         CLUSTER.createTopics(
-                TOPIC_1,
-                TOPIC_2,
-                TOPIC_A,
-                TOPIC_C,
-                TOPIC_Y,
-                TOPIC_Z,
-                FA_TOPIC,
-                FOO_TOPIC);
+            TOPIC_1,
+            TOPIC_2,
+            TOPIC_A,
+            TOPIC_C,
+            TOPIC_Y,
+            TOPIC_Z,
+            FA_TOPIC,
+            FOO_TOPIC);
         CLUSTER.createTopic(PARTITIONED_TOPIC_1, 2, 1);
         CLUSTER.createTopic(PARTITIONED_TOPIC_2, 2, 1);
     }

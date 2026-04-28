@@ -76,7 +76,7 @@ public class MetadataRequest extends AbstractRequest {
         }
 
         public Builder(List<String> topics, boolean allowAutoTopicCreation) {
-            this(topics, allowAutoTopicCreation, ApiKeys.METADATA.oldestVersion(),  ApiKeys.METADATA.latestVersion());
+            this(topics, allowAutoTopicCreation, ApiKeys.METADATA.oldestVersion(), ApiKeys.METADATA.latestVersion());
         }
 
         public static Builder allTopics() {
@@ -127,12 +127,12 @@ public class MetadataRequest extends AbstractRequest {
                 throw new UnsupportedVersionException("MetadataRequest versions older than 1 are not supported.");
             if (!data.allowAutoTopicCreation() && version < 4)
                 throw new UnsupportedVersionException("MetadataRequest versions older than 4 don't support the " +
-                        "allowAutoTopicCreation field");
+                    "allowAutoTopicCreation field");
             if (data.topics() != null) {
                 data.topics().forEach(topic -> {
                     if (topic.name() == null && version < 12)
                         throw new UnsupportedVersionException("MetadataRequest version " + version +
-                                " does not support null topic names.");
+                            " does not support null topic names.");
                     if (!Uuid.ZERO_UUID.equals(topic.topicId()) && version < 12)
                         throw new UnsupportedVersionException("MetadataRequest version " + version +
                             " does not support non-zero topic IDs.");
@@ -184,7 +184,7 @@ public class MetadataRequest extends AbstractRequest {
     public boolean isAllTopics() {
         return (data.topics() == null) ||
             (data.topics().isEmpty() && version() == 0); // In version 0, an empty topic list indicates
-                                                         // "request metadata for all topics."
+        // "request metadata for all topics."
     }
 
     public List<String> topics() {
@@ -204,9 +204,9 @@ public class MetadataRequest extends AbstractRequest {
             return List.of();
         else
             return data.topics()
-                    .stream()
-                    .map(MetadataRequestTopic::topicId)
-                    .collect(Collectors.toList());
+                .stream()
+                .map(MetadataRequestTopic::topicId)
+                .collect(Collectors.toList());
     }
 
     public boolean allowAutoTopicCreation() {
@@ -225,7 +225,7 @@ public class MetadataRequest extends AbstractRequest {
 
     public static List<MetadataRequestTopic> convertTopicIdsToMetadataRequestTopic(final Collection<Uuid> topicIds) {
         return topicIds.stream().map(topicId -> new MetadataRequestTopic()
-                .setTopicId(topicId))
-                .collect(Collectors.toList());
+            .setTopicId(topicId))
+            .collect(Collectors.toList());
     }
 }

@@ -52,9 +52,9 @@ public class RemoteLogSegmentMetadataUpdate extends RemoteLogMetadata {
      * @param brokerId           Broker id from which this event is generated.
      */
     public RemoteLogSegmentMetadataUpdate(RemoteLogSegmentId remoteLogSegmentId, long eventTimestampMs,
-                                          Optional<CustomMetadata> customMetadata,
-                                          RemoteLogSegmentState state,
-                                          int brokerId) {
+           Optional<CustomMetadata> customMetadata,
+           RemoteLogSegmentState state,
+           int brokerId) {
         super(brokerId, eventTimestampMs);
         this.remoteLogSegmentId = Objects.requireNonNull(remoteLogSegmentId, "remoteLogSegmentId can not be null");
         this.customMetadata = Objects.requireNonNull(customMetadata, "customMetadata can not be null");

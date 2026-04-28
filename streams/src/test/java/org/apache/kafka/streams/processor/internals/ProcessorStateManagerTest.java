@@ -120,12 +120,13 @@ public class ProcessorStateManagerTest {
     private final TopicPartition irrelevantPartition = new TopicPartition("other-topic", 1);
     private final Integer key = 1;
     private final String value = "the-value";
-    private final byte[] keyBytes = new byte[] {0x0, 0x0, 0x0, 0x1};
+    private final byte[] keyBytes = new byte[]{0x0, 0x0, 0x0, 0x1};
     private final byte[] valueBytes = value.getBytes(StandardCharsets.UTF_8);
     private final ConsumerRecord<byte[], byte[]> consumerRecord =
         new ConsumerRecord<>(persistentStoreTopicName, 1, 100L, keyBytes, valueBytes);
     private final LogContext logContext = new LogContext("process-state-manager-test ");
-    private final StateRestoreCallback noopStateRestoreCallback = (k, v) -> { };
+    private final StateRestoreCallback noopStateRestoreCallback = (k, v) -> {
+    };
 
     private File baseDir;
     private File checkpointFile;
@@ -435,9 +436,9 @@ public class ProcessorStateManagerTest {
             stateMgr.initializeStoreOffsets(true);
 
             assertEquals(Set.of(
-                persistentStorePartition,
-                persistentStoreTwoPartition,
-                nonPersistentStorePartition),
+                    persistentStorePartition,
+                    persistentStoreTwoPartition,
+                    nonPersistentStorePartition),
                 stateMgr.changelogPartitions());
             assertEquals(mkMap(
                 mkEntry(persistentStorePartition, checkpointOffset + 1L),
@@ -460,9 +461,9 @@ public class ProcessorStateManagerTest {
         final long checkpointOffset = 10L;
 
         final Map<TopicPartition, Long> offsets = mkMap(
-                mkEntry(persistentStorePartition, checkpointOffset),
-                mkEntry(nonPersistentStorePartition, checkpointOffset),
-                mkEntry(irrelevantPartition, 999L)
+            mkEntry(persistentStorePartition, checkpointOffset),
+            mkEntry(nonPersistentStorePartition, checkpointOffset),
+            mkEntry(irrelevantPartition, 999L)
         );
         checkpoint.write(offsets);
 
@@ -478,12 +479,12 @@ public class ProcessorStateManagerTest {
                     persistentStorePartition,
                     persistentStoreTwoPartition,
                     nonPersistentStorePartition),
-                    stateMgr.changelogPartitions());
+                stateMgr.changelogPartitions());
             assertEquals(mkMap(
-                    mkEntry(persistentStorePartition, checkpointOffset + 1L),
-                    mkEntry(persistentStoreTwoPartition, 0L),
-                    mkEntry(nonPersistentStorePartition, 0L)),
-                    stateMgr.changelogOffsets()
+                mkEntry(persistentStorePartition, checkpointOffset + 1L),
+                mkEntry(persistentStoreTwoPartition, 0L),
+                mkEntry(nonPersistentStorePartition, 0L)),
+                stateMgr.changelogOffsets()
             );
 
             assertNull(stateMgr.storeMetadata(irrelevantPartition));
@@ -528,8 +529,8 @@ public class ProcessorStateManagerTest {
         assertThrows(IllegalStateException.class,
             () -> stateMgr.registeredChangelogPartitionFor(persistentStoreName),
             "State store " + persistentStoreName
-            + " for which the registered changelog partition should be"
-            + " retrieved has not been registered"
+                + " for which the registered changelog partition should be"
+                + " retrieved has not been registered"
         );
     }
 
@@ -865,9 +866,9 @@ public class ProcessorStateManagerTest {
                 if ("WARN".equals(event.getLevel())
                     && event.getMessage().startsWith("process-state-manager-test Failed to write offset checkpoint file to [")
                     && event.getMessage().endsWith(".checkpoint_" + persistentStoreName + "]." +
-                        " This may occur if OS cleaned the state.dir in case when it located in ${java.io.tmpdir} directory." +
-                        " This may also occur due to running multiple instances on the same machine using the same state dir." +
-                        " Changing the location of state.dir may resolve the problem.")
+                    " This may occur if OS cleaned the state.dir in case when it located in ${java.io.tmpdir} directory." +
+                    " This may also occur due to running multiple instances on the same machine using the same state dir." +
+                    " Changing the location of state.dir may resolve the problem.")
                     && event.getThrowableInfo().get().startsWith("java.io.FileNotFoundException: ")) {
 
                     foundExpectedLogMessage = true;
@@ -942,7 +943,8 @@ public class ProcessorStateManagerTest {
 
         try {
             stateManager.commit();
-        } catch (final ProcessorStateException expected) { /* ignore */ }
+        } catch (final ProcessorStateException expected) { /* ignore */
+        }
 
         assertTrue(committedStore.get());
     }
@@ -970,7 +972,8 @@ public class ProcessorStateManagerTest {
 
         try {
             stateManager.close();
-        } catch (final ProcessorStateException expected) { /* ignore */ }
+        } catch (final ProcessorStateException expected) { /* ignore */
+        }
 
         assertTrue(closedStore.get());
     }
@@ -1108,7 +1111,7 @@ public class ProcessorStateManagerTest {
 
         // the checkpoint file should contain an offset from the persistent store only.
         final Map<TopicPartition, Long> persistentOffsets = persistentCheckpoint.getOffsetCheckpoint()
-                                                                                .read();
+            .read();
         assertThat(
             persistentOffsets,
             is(singletonMap(new TopicPartition(persistentStoreTopicName, 1), 123L))
@@ -1283,7 +1286,8 @@ public class ProcessorStateManagerTest {
 
     private void contextRegistersStateStore(final StateManager stateManager) {
         Mockito.doAnswer(a -> {
-            stateManager.registerStore(a.getArgument(0), a.getArgument(1), () -> { });
+            stateManager.registerStore(a.getArgument(0), a.getArgument(1), () -> {
+            });
             return null;
         }).when(context).register(any(), any());
     }
@@ -1298,5 +1302,6 @@ public class ProcessorStateManagerTest {
         }
     }
 
-    interface CachingStore extends CachedStateStore<Object, Object>, StateStore { }
+    interface CachingStore extends CachedStateStore<Object, Object>, StateStore {
+    }
 }

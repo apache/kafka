@@ -123,7 +123,7 @@ public class KRaftMetadataRequestBenchmark {
     private final GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
     private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
     private final KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
-    @Param({"500", "1000",  "5000"})
+    @Param({"500", "1000", "5000"})
     private int topicCount;
     @Param({"10", "20", "50"})
     private int partitionCount;
@@ -139,32 +139,32 @@ public class KRaftMetadataRequestBenchmark {
 
     private void initializeMetadataCache() {
         MetadataDelta buildupMetadataDelta = new MetadataDelta.Builder()
-            .setImage(MetadataImage.EMPTY)
-            .build();
+                .setImage(MetadataImage.EMPTY)
+                .build();
         IntStream.range(0, 5).forEach(brokerId -> {
             RegisterBrokerRecord.BrokerEndpointCollection endpoints = new RegisterBrokerRecord.BrokerEndpointCollection();
             endpoints.addAll(endpoints(brokerId));
             buildupMetadataDelta.replay(new RegisterBrokerRecord().
-                setBrokerId(brokerId).
-                setBrokerEpoch(100L).
-                setFenced(false).
-                setRack(null).
-                setEndPoints(endpoints).
-                setIncarnationId(Uuid.fromString(Uuid.randomUuid().toString())));
+                    setBrokerId(brokerId).
+                    setBrokerEpoch(100L).
+                    setFenced(false).
+                    setRack(null).
+                    setEndPoints(endpoints).
+                    setIncarnationId(Uuid.fromString(Uuid.randomUuid().toString())));
         });
         IntStream.range(0, topicCount).forEach(topicNum -> {
             Uuid topicId = Uuid.randomUuid();
             buildupMetadataDelta.replay(new TopicRecord().setName("topic-" + topicNum).setTopicId(topicId));
             IntStream.range(0, partitionCount).forEach(partitionId ->
-                buildupMetadataDelta.replay(new PartitionRecord().
-                    setPartitionId(partitionId).
-                    setTopicId(topicId).
-                    setReplicas(List.of(0, 1, 3)).
-                    setIsr(List.of(0, 1, 3)).
-                    setRemovingReplicas(List.of()).
-                    setAddingReplicas(List.of()).
-                    setLeader(partitionCount % 5).
-                    setLeaderEpoch(0)));
+                    buildupMetadataDelta.replay(new PartitionRecord().
+                            setPartitionId(partitionId).
+                            setTopicId(topicId).
+                            setReplicas(List.of(0, 1, 3)).
+                            setIsr(List.of(0, 1, 3)).
+                            setRemovingReplicas(List.of()).
+                            setAddingReplicas(List.of()).
+                            setLeader(partitionCount % 5).
+                            setLeaderEpoch(0)));
         });
         metadataCache.setImage(buildupMetadataDelta.apply(MetadataProvenance.EMPTY));
     }
@@ -179,7 +179,7 @@ public class KRaftMetadataRequestBenchmark {
     }
 
     private KafkaApis createKafkaApis() {
-        Properties kafkaProps =  new Properties();
+        Properties kafkaProps = new Properties();
         kafkaProps.put(KRaftConfigs.NODE_ID_CONFIG, brokerId + "");
         kafkaProps.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker");
         kafkaProps.put(QuorumConfig.QUORUM_VOTERS_CONFIG, "9000@foo:8092");
@@ -208,9 +208,9 @@ public class KRaftMetadataRequestBenchmark {
                 setTime(Time.SYSTEM).
                 setTokenManager(null).
                 setApiVersionManager(new SimpleApiVersionManager(
-                        ApiMessageType.ListenerType.BROKER,
-                        false,
-                        () -> FinalizedFeatures.fromKRaftVersion(MetadataVersion.latestTesting()))).
+                ApiMessageType.ListenerType.BROKER,
+                false,
+                () -> FinalizedFeatures.fromKRaftVersion(MetadataVersion.latestTesting()))).
                 setGroupConfigManager(groupConfigManager).
                 build();
     }

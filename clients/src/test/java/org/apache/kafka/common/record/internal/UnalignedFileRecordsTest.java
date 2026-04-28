@@ -33,9 +33,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class UnalignedFileRecordsTest {
 
-    private final byte[][] values = new byte[][] {
-            "foo".getBytes(),
-            "bar".getBytes()
+    private final byte[][] values = new byte[][]{
+        "foo".getBytes(),
+        "bar".getBytes()
     };
     private FileRecords fileRecords;
 

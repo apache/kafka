@@ -45,14 +45,14 @@ public class ShareFetchConfig {
      * the hassle of constructing a {@link ConsumerConfig}.
      */
     public ShareFetchConfig(int minBytes,
-                       int maxBytes,
-                       int maxWaitMs,
-                       int fetchSize,
-                       int maxPollRecords,
-                       boolean checkCrcs,
-                       String clientRackId,
-                       IsolationLevel isolationLevel,
-                       ShareAcquireMode shareAcquireMode) {
+        int maxBytes,
+        int maxWaitMs,
+        int fetchSize,
+        int maxPollRecords,
+        boolean checkCrcs,
+        String clientRackId,
+        IsolationLevel isolationLevel,
+        ShareAcquireMode shareAcquireMode) {
         this.minBytes = minBytes;
         this.maxBytes = maxBytes;
         this.maxWaitMs = maxWaitMs;
@@ -97,15 +97,15 @@ public class ShareFetchConfig {
     @Override
     public String toString() {
         return "ShareFetchConfig{" +
-                "minBytes=" + minBytes +
-                ", maxBytes=" + maxBytes +
-                ", maxWaitMs=" + maxWaitMs +
-                ", fetchSize=" + fetchSize +
-                ", maxPollRecords=" + maxPollRecords +
-                ", checkCrcs=" + checkCrcs +
-                ", clientRackId='" + clientRackId + '\'' +
-                ", isolationLevel=" + isolationLevel +
-                ", shareAcquireMode=" + shareAcquireMode +
-                '}';
+            "minBytes=" + minBytes +
+            ", maxBytes=" + maxBytes +
+            ", maxWaitMs=" + maxWaitMs +
+            ", fetchSize=" + fetchSize +
+            ", maxPollRecords=" + maxPollRecords +
+            ", checkCrcs=" + checkCrcs +
+            ", clientRackId='" + clientRackId + '\'' +
+            ", isolationLevel=" + isolationLevel +
+            ", shareAcquireMode=" + shareAcquireMode +
+            '}';
     }
 }

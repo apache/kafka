@@ -51,7 +51,7 @@ import java.util.Objects;
  * @see ConnectorsResource#alterConnectorOffsets
  */
 public record ConnectorOffsets(
-    @JsonProperty("offsets") List<ConnectorOffset> offsets
+@JsonProperty("offsets") List<ConnectorOffset> offsets
 ) {
     public Map<Map<String, ?>, Map<String, ?>> toMap() {
         Map<Map<String, ?>, Map<String, ?>> partitionOffsetMap = new HashMap<>();

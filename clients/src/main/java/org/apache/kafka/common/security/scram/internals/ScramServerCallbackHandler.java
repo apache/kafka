@@ -39,7 +39,7 @@ public class ScramServerCallbackHandler implements AuthenticateCallbackHandler {
     private String saslMechanism;
 
     public ScramServerCallbackHandler(CredentialCache.Cache<ScramCredential> credentialCache,
-                                      DelegationTokenCache tokenCache) {
+        DelegationTokenCache tokenCache) {
         this.credentialCache = credentialCache;
         this.tokenCache = tokenCache;
     }

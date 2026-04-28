@@ -47,7 +47,7 @@ public class BufferValueTest {
 
     @Test
     public void shouldDeduplicateEqualValues() {
-        final BufferValue bufferValue = new BufferValue(new byte[] {(byte) 0}, new byte[] {(byte) 0}, null, null);
+        final BufferValue bufferValue = new BufferValue(new byte[]{(byte) 0}, new byte[]{(byte) 0}, null, null);
         assertSame(bufferValue.priorValue(), bufferValue.oldValue());
     }
 
@@ -85,13 +85,13 @@ public class BufferValueTest {
     public void shouldAccountForDeduplicationInSizeEstimate() {
         final ProcessorRecordContext context = new ProcessorRecordContext(0L, 0L, 0, "topic", new RecordHeaders());
         assertEquals(25L, new BufferValue(null, null, null, context).residentMemorySizeEstimate());
-        assertEquals(26L, new BufferValue(new byte[] {(byte) 0}, null, null, context).residentMemorySizeEstimate());
-        assertEquals(26L, new BufferValue(null, new byte[] {(byte) 0}, null, context).residentMemorySizeEstimate());
-        assertEquals(26L, new BufferValue(new byte[] {(byte) 0}, new byte[] {(byte) 0}, null, context).residentMemorySizeEstimate());
-        assertEquals(27L, new BufferValue(new byte[] {(byte) 0}, new byte[] {(byte) 1}, null, context).residentMemorySizeEstimate());
+        assertEquals(26L, new BufferValue(new byte[]{(byte) 0}, null, null, context).residentMemorySizeEstimate());
+        assertEquals(26L, new BufferValue(null, new byte[]{(byte) 0}, null, context).residentMemorySizeEstimate());
+        assertEquals(26L, new BufferValue(new byte[]{(byte) 0}, new byte[]{(byte) 0}, null, context).residentMemorySizeEstimate());
+        assertEquals(27L, new BufferValue(new byte[]{(byte) 0}, new byte[]{(byte) 1}, null, context).residentMemorySizeEstimate());
 
         // new value should get counted, but doesn't get deduplicated
-        assertEquals(28L, new BufferValue(new byte[] {(byte) 0}, new byte[] {(byte) 1}, new byte[] {(byte) 0}, context).residentMemorySizeEstimate());
+        assertEquals(28L, new BufferValue(new byte[]{(byte) 0}, new byte[]{(byte) 1}, new byte[]{(byte) 0}, context).residentMemorySizeEstimate());
     }
 
     @Test

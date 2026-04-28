@@ -81,7 +81,7 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
 
     @Override
     public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {
+        final StateRestoreCallback stateRestoreCallback) {
         delegate.register(store, stateRestoreCallback);
     }
 
@@ -92,16 +92,16 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
 
     @Override
     public Cancellable schedule(final Duration interval,
-                                final PunctuationType type,
-                                final Punctuator callback) throws IllegalArgumentException {
+        final PunctuationType type,
+        final Punctuator callback) throws IllegalArgumentException {
         return delegate.schedule(interval, type, callback);
     }
 
     @Override
     public Cancellable schedule(final Instant startTime,
-                                final Duration interval,
-                                final PunctuationType type,
-                                final Punctuator callback) {
+        final Duration interval,
+        final PunctuationType type,
+        final Punctuator callback) {
         return delegate.schedule(startTime, interval, type, callback);
     }
 

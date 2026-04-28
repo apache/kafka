@@ -60,7 +60,7 @@ public class ProducerBatchTest {
     private final long now = 1488748346917L;
 
     private final MemoryRecordsBuilder memoryRecordsBuilder = MemoryRecords.builder(ByteBuffer.allocate(512),
-            Compression.NONE, TimestampType.CREATE_TIME, 128);
+        Compression.NONE, TimestampType.CREATE_TIME, 128);
 
     @Test
     public void testBatchAbort() throws Exception {
@@ -136,18 +136,18 @@ public class ProducerBatchTest {
     public void testSplitPreservesHeaders() {
         for (CompressionType compressionType : CompressionType.values()) {
             MemoryRecordsBuilder builder = MemoryRecords.builder(
-                    ByteBuffer.allocate(1024),
-                    MAGIC_VALUE_V2,
-                    Compression.of(compressionType).build(),
-                    TimestampType.CREATE_TIME,
-                    0L);
+                ByteBuffer.allocate(1024),
+                MAGIC_VALUE_V2,
+                Compression.of(compressionType).build(),
+                TimestampType.CREATE_TIME,
+                0L);
             ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), builder, now);
             Header header = new RecordHeader("header-key", "header-value".getBytes());
 
             while (true) {
                 FutureRecordMetadata future = batch.tryAppend(
-                        now, "hi".getBytes(), "there".getBytes(),
-                        new Header[]{header}, null, now);
+                    now, "hi".getBytes(), "there".getBytes(),
+                    new Header[]{header}, null, now);
                 if (future == null) {
                     break;
                 }
@@ -178,12 +178,12 @@ public class ProducerBatchTest {
                     continue;
 
                 MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), magic,
-                        Compression.of(compressionType).build(), TimestampType.CREATE_TIME, 0L);
+                    Compression.of(compressionType).build(), TimestampType.CREATE_TIME, 0L);
 
                 ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), builder, now);
                 while (true) {
                     FutureRecordMetadata future = batch.tryAppend(now, "hi".getBytes(), "there".getBytes(),
-                            Record.EMPTY_HEADERS, null, now);
+                        Record.EMPTY_HEADERS, null, now);
                     if (future == null)
                         break;
                 }
@@ -342,7 +342,7 @@ public class ProducerBatchTest {
         );
 
         List<FutureRecordMetadata> futures = new ArrayList<>(recordCount);
-        for (int i = 0; i < recordCount; i++) {
+        for (int i = 0;i < recordCount;i++) {
             futures.add(batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, null, now));
         }
         assertEquals(recordCount, batch.recordCount);
@@ -350,7 +350,7 @@ public class ProducerBatchTest {
         batch.completeExceptionally(topLevelException, recordExceptions);
         assertTrue(batch.isDone());
 
-        for (int i = 0; i < futures.size(); i++) {
+        for (int i = 0;i < futures.size();i++) {
             FutureRecordMetadata future = futures.get(i);
             RuntimeException caughtException = TestUtils.assertFutureThrows(RuntimeException.class, future);
             RuntimeException expectedException = recordExceptions.apply(i);

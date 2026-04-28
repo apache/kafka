@@ -39,7 +39,7 @@ public class DescribeTopicPartitionsRequest extends AbstractRequest {
                 ApiKeys.DESCRIBE_TOPIC_PARTITIONS.latestVersion());
             DescribeTopicPartitionsRequestData data = new DescribeTopicPartitionsRequestData();
             topics.forEach(topicName -> data.topics().add(
-                new DescribeTopicPartitionsRequestData.TopicRequest().setName(topicName))
+                    new DescribeTopicPartitionsRequestData.TopicRequest().setName(topicName))
             );
             this.data = data;
         }

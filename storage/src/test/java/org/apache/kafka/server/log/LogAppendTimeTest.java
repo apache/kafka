@@ -54,10 +54,10 @@ public class LogAppendTimeTest {
     private static final short NUM_REPLICAS = 1;
 
     @ClusterTest(
-        types = {Type.KRAFT},
-        serverProperties = {
-            @ClusterConfigProperty(key = "log.message.timestamp.type", value = "LogAppendTime"),
-            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+            types = {Type.KRAFT},
+            serverProperties = {
+                    @ClusterConfigProperty(key = "log.message.timestamp.type", value = "LogAppendTime"),
+                    @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
         }
     )
     public void testProduceConsumeWithConfigOnBroker(ClusterInstance clusterInstance) throws InterruptedException {
@@ -67,16 +67,16 @@ public class LogAppendTimeTest {
     }
 
     @ClusterTest(
-        types = {Type.KRAFT},
-        serverProperties = {
-            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+            types = {Type.KRAFT},
+            serverProperties = {
+                    @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
         }
     )
     public void testProduceConsumeWithConfigOnTopic(ClusterInstance clusterInstance) throws InterruptedException {
         try (Admin admin = clusterInstance.admin()) {
             admin.createTopics(List.of(
-                new NewTopic(TOPIC, NUM_PARTITION, NUM_REPLICAS).
-                    configs(Map.of(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime"))));
+                    new NewTopic(TOPIC, NUM_PARTITION, NUM_REPLICAS).
+                            configs(Map.of(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime"))));
             clusterInstance.waitTopicCreation(TOPIC, NUM_PARTITION);
         }
 
@@ -88,15 +88,15 @@ public class LogAppendTimeTest {
         long createTime = now - TimeUnit.DAYS.toMillis(1);
         int recordCount = 10;
         List<ProducerRecord<byte[], byte[]>> producerRecords = IntStream.range(0, recordCount)
-            .mapToObj(i -> new ProducerRecord<>(TOPIC, null, createTime, "key".getBytes(), "value".getBytes()))
-            .toList();
+                .mapToObj(i -> new ProducerRecord<>(TOPIC, null, createTime, "key".getBytes(), "value".getBytes()))
+                .toList();
 
         List<RecordMetadata> recordMetadatas = new ArrayList<>();
         try (Producer<byte[], byte[]> producer = clusterInstance.producer()) {
             producerRecords.stream()
-                .map(record ->
-                    assertDoesNotThrow(() -> producer.send(record).get(10, TimeUnit.SECONDS)))
-                .forEach(recordMetadatas::add);
+                    .map(record ->
+                            assertDoesNotThrow(() -> producer.send(record).get(10, TimeUnit.SECONDS)))
+                    .forEach(recordMetadatas::add);
         }
         assertEquals(recordCount, recordMetadatas.size());
         recordMetadatas.forEach(recordMetadata -> {
@@ -106,8 +106,8 @@ public class LogAppendTimeTest {
 
         for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
             try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(
-                Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name())
-            )) {
+                         Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name())
+                 )) {
                 consumer.subscribe(Set.of(TOPIC));
                 ArrayList<ConsumerRecord<byte[], byte[]>> consumerRecords = new ArrayList<>();
                 TestUtils.waitForCondition(() -> {

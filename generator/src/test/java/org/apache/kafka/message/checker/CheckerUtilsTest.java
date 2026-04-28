@@ -84,7 +84,7 @@ public class CheckerUtilsTest {
     public void testReadMessageSpecFromFile() throws Exception {
         CheckerUtils.readMessageSpecFromFile(messageSpecStringToTempFile(
             "{'apiKey':62, 'type': 'request', 'name': 'BrokerRegistrationRequest', " +
-            "'validVersions': '0-2', 'flexibleVersions': '0+', " +
-            "'fields': [{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}]}"));
+                "'validVersions': '0-2', 'flexibleVersions': '0+', " +
+                "'fields': [{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}]}"));
     }
 }

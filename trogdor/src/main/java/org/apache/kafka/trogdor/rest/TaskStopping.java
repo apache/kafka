@@ -34,8 +34,8 @@ public class TaskStopping extends TaskState {
 
     @JsonCreator
     public TaskStopping(@JsonProperty("spec") TaskSpec spec,
-            @JsonProperty("startedMs") long startedMs,
-            @JsonProperty("status") JsonNode status) {
+        @JsonProperty("startedMs") long startedMs,
+        @JsonProperty("status") JsonNode status) {
         super(spec, status);
         this.startedMs = startedMs;
     }

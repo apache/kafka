@@ -69,8 +69,8 @@ class MetadataRecordSerdeTest {
 
         MetadataRecordSerde serde = new MetadataRecordSerde();
         assertStartsWith("Could not deserialize metadata record due to unknown frame version",
-                assertThrows(MetadataParseException.class,
-                        () -> serde.read(new ByteBufferAccessor(buffer), 16)).getMessage());
+            assertThrows(MetadataParseException.class,
+                () -> serde.read(new ByteBufferAccessor(buffer), 16)).getMessage());
     }
 
     /**
@@ -90,8 +90,8 @@ class MetadataRecordSerdeTest {
         buffer.position(0);
         buffer.limit(64);
         assertStartsWith("Error while reading frame version",
-                assertThrows(MetadataParseException.class,
-                        () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
+            assertThrows(MetadataParseException.class,
+                () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
     }
 
     /**
@@ -112,8 +112,8 @@ class MetadataRecordSerdeTest {
         buffer.position(0);
         buffer.limit(64);
         assertStartsWith("Error while reading type",
-                assertThrows(MetadataParseException.class,
-                        () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
+            assertThrows(MetadataParseException.class,
+                () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
     }
 
     /**
@@ -134,8 +134,8 @@ class MetadataRecordSerdeTest {
         buffer.position(0);
         buffer.limit(64);
         assertStartsWith("Error while reading version",
-                assertThrows(MetadataParseException.class,
-                        () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
+            assertThrows(MetadataParseException.class,
+                () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
     }
 
     /**
@@ -156,8 +156,8 @@ class MetadataRecordSerdeTest {
         buffer.position(0);
         buffer.limit(64);
         assertStartsWith("Value for version was too large",
-                assertThrows(MetadataParseException.class,
-                        () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
+            assertThrows(MetadataParseException.class,
+                () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
     }
 
     /**
@@ -175,8 +175,8 @@ class MetadataRecordSerdeTest {
         buffer.position(0);
         buffer.limit(64);
         assertStartsWith("Unknown metadata id ",
-                assertThrows(MetadataParseException.class,
-                        () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getCause().getMessage());
+            assertThrows(MetadataParseException.class,
+                () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getCause().getMessage());
     }
 
     /**
@@ -193,8 +193,8 @@ class MetadataRecordSerdeTest {
         buffer.position(0);
         buffer.limit(4);
         assertStartsWith("Failed to deserialize record with type",
-                assertThrows(MetadataParseException.class,
-                        () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
+            assertThrows(MetadataParseException.class,
+                () -> serde.read(new ByteBufferAccessor(buffer), buffer.remaining())).getMessage());
     }
 
     /**
@@ -213,13 +213,13 @@ class MetadataRecordSerdeTest {
         serde.write(messageAndVersion, cache, new ByteBufferAccessor(buffer));
         buffer.clear();
         assertStartsWith("Found 1 byte(s) of garbage after",
-                assertThrows(MetadataParseException.class,
-                        () -> serde.read(new ByteBufferAccessor(buffer), size + 1)).getMessage());
+            assertThrows(MetadataParseException.class,
+                () -> serde.read(new ByteBufferAccessor(buffer), size + 1)).getMessage());
     }
 
     private static void assertStartsWith(String prefix, String str) {
         assertTrue(str.startsWith(prefix),
-                "Expected string '" + str + "' to start with '" + prefix + "'");
+            "Expected string '" + str + "' to start with '" + prefix + "'");
     }
 
 }

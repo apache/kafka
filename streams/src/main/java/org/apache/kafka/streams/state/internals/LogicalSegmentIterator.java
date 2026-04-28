@@ -43,12 +43,11 @@ public class LogicalSegmentIterator implements VersionedRecordIterator<byte[]> {
     private Snapshot snapshot = null;
 
 
-
     public LogicalSegmentIterator(final ListIterator<LogicalKeyValueSegment> segmentIterator,
-                                  final Bytes key,
-                                  final Long fromTime,
-                                  final Long toTime,
-                                  final ResultOrder order) {
+        final Bytes key,
+        final Long fromTime,
+        final Long toTime,
+        final ResultOrder order) {
 
         this.segmentIterator = segmentIterator;
         this.key = key;
@@ -109,7 +108,7 @@ public class LogicalSegmentIterator implements VersionedRecordIterator<byte[]> {
                 } else {
                     // this segment contains records with the specified key and time range
                     final List<RocksDBVersionedStoreSegmentValueFormatter.SegmentValue.SegmentSearchResult> searchResults =
-                            RocksDBVersionedStoreSegmentValueFormatter.deserialize(rawSegmentValue).findAll(fromTime, toTime);
+                        RocksDBVersionedStoreSegmentValueFormatter.deserialize(rawSegmentValue).findAll(fromTime, toTime);
                     for (final RocksDBVersionedStoreSegmentValueFormatter.SegmentValue.SegmentSearchResult searchResult : searchResults) {
                         queryResults.add(new VersionedRecord<>(searchResult.value(), searchResult.validFrom(), searchResult.validTo()));
                     }

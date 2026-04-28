@@ -28,7 +28,7 @@ import java.util.Optional;
  */
 public class CreateDelegationTokenOptions extends AbstractOptions<CreateDelegationTokenOptions> {
     private long maxLifetimeMs = -1;
-    private List<KafkaPrincipal> renewers =  new LinkedList<>();
+    private List<KafkaPrincipal> renewers = new LinkedList<>();
     private KafkaPrincipal owner = null;
 
     public CreateDelegationTokenOptions renewers(List<KafkaPrincipal> renewers) {

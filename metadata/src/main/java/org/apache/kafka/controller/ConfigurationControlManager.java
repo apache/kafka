@@ -85,7 +85,8 @@ public class ConfigurationControlManager {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
         private KafkaConfigSchema configSchema = null;
-        private Consumer<ConfigResource> existenceChecker = __ -> { };
+        private Consumer<ConfigResource> existenceChecker = __ -> {
+        };
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
         private ConfigurationValidator validator = ConfigurationValidator.NO_OP;
         private Map<String, Object> staticConfig = Map.of();
@@ -167,15 +168,15 @@ public class ConfigurationControlManager {
     }
 
     private ConfigurationControlManager(LogContext logContext,
-            SnapshotRegistry snapshotRegistry,
-            KafkaConfigSchema configSchema,
-            Consumer<ConfigResource> existenceChecker,
-            Optional<AlterConfigPolicy> alterConfigPolicy,
-            ConfigurationValidator validator,
-            Map<String, Object> staticConfig,
-            int nodeId,
-            FeatureControlManager featureControl,
-            SupportedConfigChecker supportedConfigChecker
+                                        SnapshotRegistry snapshotRegistry,
+                                        KafkaConfigSchema configSchema,
+                                        Consumer<ConfigResource> existenceChecker,
+                                        Optional<AlterConfigPolicy> alterConfigPolicy,
+                                        ConfigurationValidator validator,
+                                        Map<String, Object> staticConfig,
+                                        int nodeId,
+                                        FeatureControlManager featureControl,
+                                        SupportedConfigChecker supportedConfigChecker
     ) {
         this.log = logContext.logger(ConfigurationControlManager.class);
         this.snapshotRegistry = snapshotRegistry;
@@ -213,7 +214,7 @@ public class ConfigurationControlManager {
         boolean newlyCreatedResource
     ) {
         List<ApiMessageAndVersion> outputRecords =
-                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+            BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         Map<ConfigResource, ApiError> outputResults = new HashMap<>();
         for (Entry<ConfigResource, Map<String, Entry<OpType, String>>> resourceEntry :
                 configChanges.entrySet()) {
@@ -255,7 +256,7 @@ public class ConfigurationControlManager {
         boolean newlyCreatedResource
     ) {
         List<ApiMessageAndVersion> outputRecords =
-                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+            BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         ApiError apiError = incrementalAlterConfigResource(configResource,
             keyToOps,
             newlyCreatedResource,
@@ -408,13 +409,13 @@ public class ConfigurationControlManager {
             "it exceeds the maximum value size of " + Short.MAX_VALUE + " bytes.");
 
     static final ApiError DISALLOWED_CORDONED_LOG_DIRS_ERROR =
-            new ApiError(INVALID_CONFIG, "The " + CORDONED_LOG_DIRS_CONFIG + " configuration value cannot be " +
-                    "set because it requires metadata.version >= " + MetadataVersion.IBP_4_3_IV0);
+        new ApiError(INVALID_CONFIG, "The " + CORDONED_LOG_DIRS_CONFIG + " configuration value cannot be " +
+            "set because it requires metadata.version >= " + MetadataVersion.IBP_4_3_IV0);
 
     boolean isDisallowedBrokerMinIsrTransition(ConfigRecord configRecord) {
         if (configRecord.name().equals(MIN_IN_SYNC_REPLICAS_CONFIG) &&
-                configRecord.resourceType() == BROKER.id() &&
-                !configRecord.resourceName().isEmpty()) {
+            configRecord.resourceType() == BROKER.id() &&
+            !configRecord.resourceName().isEmpty()) {
             if (featureControl.isElrFeatureEnabled()) {
                 return true;
             }
@@ -424,7 +425,7 @@ public class ConfigurationControlManager {
 
     boolean isCordonedLogDirsDisallowed(ConfigRecord configRecord) {
         if (configRecord.name().equals(CORDONED_LOG_DIRS_CONFIG) &&
-                configRecord.resourceType() == BROKER.id()) {
+            configRecord.resourceType() == BROKER.id()) {
             return !featureControl.metadataVersionOrThrow().isCordonedLogDirsSupported();
         }
         return false;
@@ -432,9 +433,9 @@ public class ConfigurationControlManager {
 
     boolean isDisallowedClusterMinIsrTransition(ConfigRecord configRecord) {
         if (configRecord.name().equals(MIN_IN_SYNC_REPLICAS_CONFIG) &&
-                configRecord.resourceType() == BROKER.id() &&
-                configRecord.resourceName().isEmpty() &&
-                configRecord.value() == null) {
+            configRecord.resourceType() == BROKER.id() &&
+            configRecord.resourceName().isEmpty() &&
+            configRecord.value() == null) {
             if (featureControl.isElrFeatureEnabled()) {
                 return true;
             }
@@ -456,7 +457,7 @@ public class ConfigurationControlManager {
         boolean newlyCreatedResource
     ) {
         List<ApiMessageAndVersion> outputRecords =
-                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+            BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         Map<ConfigResource, ApiError> outputResults = new HashMap<>();
         for (Entry<ConfigResource, Map<String, String>> resourceEntry :
             newConfigs.entrySet()) {
@@ -566,10 +567,10 @@ public class ConfigurationControlManager {
         }
         if (configSchema.isSensitive(record)) {
             log.info("Replayed ConfigRecord for {} which set configuration {} to {}",
-                    configResource, record.name(), Password.HIDDEN);
+                configResource, record.name(), Password.HIDDEN);
         } else {
             log.info("Replayed ConfigRecord for {} which set configuration {} to {}",
-                    configResource, record.name(), record.value());
+                configResource, record.name(), record.value());
         }
     }
 
@@ -604,7 +605,7 @@ public class ConfigurationControlManager {
     }
 
     public Map<ConfigResource, ResultOrError<Map<String, String>>> describeConfigs(
-            long lastCommittedOffset, Map<ConfigResource, Collection<String>> resources) {
+        long lastCommittedOffset, Map<ConfigResource, Collection<String>> resources) {
         Map<ConfigResource, ResultOrError<Map<String, String>>> results = new HashMap<>();
         for (Entry<ConfigResource, Collection<String>> resourceEntry : resources.entrySet()) {
             ConfigResource resource = resourceEntry.getKey();

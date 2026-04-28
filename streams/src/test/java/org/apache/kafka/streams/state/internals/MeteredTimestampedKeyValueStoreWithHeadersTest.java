@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 package org.apache.kafka.streams.state.internals;
+
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.JmxReporter;
@@ -296,7 +297,8 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
         assertTrue((Double) commitMetric.metricValue() > 0);
     }
 
-    private interface CachedKeyValueStore extends KeyValueStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> { }
+    private interface CachedKeyValueStore extends KeyValueStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> {
+    }
 
     @SuppressWarnings("unchecked")
     @Test

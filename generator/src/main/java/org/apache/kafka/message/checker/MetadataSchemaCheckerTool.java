@@ -69,7 +69,7 @@ public class MetadataSchemaCheckerTool {
             .help("Optional Git reference to be used for testing. Defaults to 'refs/heads/trunk' if not specified.");
         Namespace namespace;
         if (args.length == 0) {
-            namespace = argumentParser.parseArgs(new String[] {"--help"});
+            namespace = argumentParser.parseArgs(new String[]{"--help"});
         } else {
             namespace = argumentParser.parseArgs(args);
         }
@@ -89,7 +89,7 @@ public class MetadataSchemaCheckerTool {
                     CheckerUtils.readMessageSpecFromFile(child));
                 verifier.verify();
                 writer.println("Successfully verified evolution of path: " + child +
-                        " from parent: " + parent);
+                    " from parent: " + parent);
                 break;
             }
             case "verify-evolution-git": {

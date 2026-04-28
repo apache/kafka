@@ -38,7 +38,7 @@ public final class AlterLogDirAction implements TieredStorageTestAction {
     private final int brokerId;
 
     public AlterLogDirAction(TopicPartition topicPartition,
-                             int brokerId) {
+            int brokerId) {
         this.topicPartition = topicPartition;
         this.brokerId = brokerId;
     }
@@ -68,7 +68,7 @@ public final class AlterLogDirAction implements TieredStorageTestAction {
 
         // wait until the topic partition folder disappears from source dir and appears in the target dir
         TestUtils.waitForCondition(() -> localStorage.get().dirContainsTopicPartition(topicPartition, targetDir.get()) &&
-                    !localStorage.get().dirContainsTopicPartition(topicPartition, sourceDir.get()),
+                        !localStorage.get().dirContainsTopicPartition(topicPartition, sourceDir.get()),
                 "Failed to alter dir:" + logDirs);
     }
 

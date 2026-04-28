@@ -43,7 +43,7 @@ import java.util.List;
  * This multiset does not allow null elements.  It does not have internal synchronization.
  */
 public class ImplicitLinkedHashMultiCollection<E extends ImplicitLinkedHashCollection.Element>
-        extends ImplicitLinkedHashCollection<E> {
+    extends ImplicitLinkedHashCollection<E> {
     public ImplicitLinkedHashMultiCollection() {
         super(0);
     }
@@ -68,7 +68,7 @@ public class ImplicitLinkedHashMultiCollection<E extends ImplicitLinkedHashColle
     @Override
     int addInternal(Element newElement, Element[] addElements) {
         int slot = slot(addElements, newElement);
-        for (int seen = 0; seen < addElements.length; seen++) {
+        for (int seen = 0;seen < addElements.length;seen++) {
             Element element = addElements[slot];
             if (element == null) {
                 addElements[slot] = newElement;
@@ -96,7 +96,7 @@ public class ImplicitLinkedHashMultiCollection<E extends ImplicitLinkedHashColle
         }
         int slot = slot(elements, key);
         int bestSlot = INVALID_INDEX;
-        for (int seen = 0; seen < elements.length; seen++) {
+        for (int seen = 0;seen < elements.length;seen++) {
             Element element = elements[slot];
             if (element == null) {
                 return bestSlot;
@@ -125,7 +125,7 @@ public class ImplicitLinkedHashMultiCollection<E extends ImplicitLinkedHashColle
         }
         ArrayList<E> results = new ArrayList<>();
         int slot = slot(elements, key);
-        for (int seen = 0; seen < elements.length; seen++) {
+        for (int seen = 0;seen < elements.length;seen++) {
             Element element = elements[slot];
             if (element == null) {
                 break;

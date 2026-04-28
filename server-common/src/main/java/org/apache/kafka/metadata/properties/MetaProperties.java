@@ -110,7 +110,7 @@ public final class MetaProperties {
                     this.directoryId = Optional.of(Uuid.fromString(props.getProperty(DIRECTORY_ID_PROP)));
                 } catch (Exception e) {
                     throw new RuntimeException("Unable to read " + DIRECTORY_ID_PROP + " as a Uuid: " +
-                            e.getMessage(), e);
+                        e.getMessage(), e);
                 }
             } else {
                 this.directoryId = Optional.empty();

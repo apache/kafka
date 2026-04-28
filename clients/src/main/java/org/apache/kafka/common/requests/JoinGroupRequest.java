@@ -43,7 +43,7 @@ public class JoinGroupRequest extends AbstractRequest {
         public JoinGroupRequest build(short version) {
             if (data.groupInstanceId() != null && version < 5) {
                 throw new UnsupportedVersionException("The broker join group protocol version " +
-                        version + " does not support usage of config group.instance.id.");
+                    version + " does not support usage of config group.instance.id.");
             }
             return new JoinGroupRequest(data, version);
         }

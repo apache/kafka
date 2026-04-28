@@ -84,8 +84,8 @@ public abstract class AbstractState {
             return false;
         AbstractState that = (AbstractState) o;
         return state.equals(that.state)
-            && Objects.equals(traceMessage, that.traceMessage)
-            && workerId.equals(that.workerId);
+                && Objects.equals(traceMessage, that.traceMessage)
+                && workerId.equals(that.workerId);
     }
 
     @Override

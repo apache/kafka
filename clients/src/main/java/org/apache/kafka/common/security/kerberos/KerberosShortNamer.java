@@ -60,14 +60,14 @@ public class KerberosShortNamer {
                 result.add(new KerberosRule(defaultRealm));
             } else {
                 result.add(new KerberosRule(defaultRealm,
-                        Integer.parseInt(matcher.group(5)),
-                        matcher.group(6),
-                        matcher.group(8),
-                        matcher.group(10),
-                        matcher.group(11),
-                        "g".equals(matcher.group(12)),
-                        "L".equals(matcher.group(13)),
-                        "U".equals(matcher.group(13))));
+                    Integer.parseInt(matcher.group(5)),
+                    matcher.group(6),
+                    matcher.group(8),
+                    matcher.group(10),
+                    matcher.group(11),
+                    "g".equals(matcher.group(12)),
+                    "L".equals(matcher.group(13)),
+                    "U".equals(matcher.group(13))));
 
             }
         }

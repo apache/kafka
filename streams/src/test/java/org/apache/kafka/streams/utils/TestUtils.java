@@ -62,8 +62,8 @@ public class TestUtils {
      * @throws InterruptedException if the streams doesn't change to the expected state in time.
      */
     public static void waitForApplicationState(final List<KafkaStreams> streamsList,
-                                               final KafkaStreams.State state,
-                                               final Duration timeout) throws InterruptedException {
+        final KafkaStreams.State state,
+        final Duration timeout) throws InterruptedException {
         retryOnExceptionWithTimeout(timeout.toMillis(), () -> {
             final Map<KafkaStreams, KafkaStreams.State> streamsToStates = streamsList
                 .stream()
@@ -191,14 +191,14 @@ public class TestUtils {
 
         @Override
         public <KIn, VIn, KOut, VOut> WrappedProcessorSupplier<KIn, VIn, KOut, VOut> wrapProcessorSupplier(final String processorName,
-                                                                                                           final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier) {
+            final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier) {
 
             return new CountingDelegatingProcessorSupplier<>(recorder, processorName, processorSupplier);
         }
 
         @Override
         public <KIn, VIn, VOut> WrappedFixedKeyProcessorSupplier<KIn, VIn, VOut> wrapFixedKeyProcessorSupplier(final String processorName,
-                                                                                                               final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier) {
+            final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier) {
             return new CountingDelegatingFixedKeyProcessorSupplier<>(recorder, processorName, processorSupplier);
         }
     }
@@ -211,8 +211,8 @@ public class TestUtils {
         private final ProcessorSupplier<KIn, VIn, KOut, VOut> delegate;
 
         public CountingDelegatingProcessorSupplier(final WrapperRecorder counter,
-                                                   final String processorName,
-                                                   final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier) {
+            final String processorName,
+            final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier) {
             this.counter = counter;
             this.processorName = processorName;
             this.delegate = processorSupplier;
@@ -245,8 +245,8 @@ public class TestUtils {
         private final FixedKeyProcessorSupplier<KIn, VIn, VOut> delegate;
 
         public CountingDelegatingFixedKeyProcessorSupplier(final WrapperRecorder counter,
-                                                           final String processorName,
-                                                           final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier) {
+            final String processorName,
+            final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier) {
             this.counter = counter;
             this.processorName = processorName;
             this.delegate = processorSupplier;

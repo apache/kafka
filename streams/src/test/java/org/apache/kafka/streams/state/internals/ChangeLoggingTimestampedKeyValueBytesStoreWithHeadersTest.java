@@ -126,7 +126,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeadersTest {
     @Test
     public void shouldWriteAllKeyValueToInnerStoreOnPutAll() {
         store.putAll(Arrays.asList(KeyValue.pair(hi, rawThere),
-                                   KeyValue.pair(hello, rawWorld)));
+            KeyValue.pair(hello, rawWorld)));
         assertEquals(rawThere, root.get(hi));
         assertEquals(rawWorld, root.get(hello));
     }
@@ -134,7 +134,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeadersTest {
     @Test
     public void shouldLogChangesOnPutAll() {
         store.putAll(Arrays.asList(KeyValue.pair(hi, rawThere),
-                                   KeyValue.pair(hello, rawWorld)));
+            KeyValue.pair(hello, rawWorld)));
 
         assertEquals(2, collector.collected().size());
 

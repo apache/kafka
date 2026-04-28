@@ -78,7 +78,7 @@ public abstract class RaftRequest implements RaftMessage {
         public String toString() {
             return String.format(
                 "InboundRequest(listenerName=%s, correlationId=%d, apiVersion=%d, data=%s, " +
-                "createdTimeMs=%d)",
+                    "createdTimeMs=%d)",
                 listenerName,
                 correlationId(),
                 apiVersion,

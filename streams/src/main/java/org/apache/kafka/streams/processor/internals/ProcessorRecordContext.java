@@ -42,10 +42,10 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
     private byte[] sourceRawValue;
 
     public ProcessorRecordContext(final long timestamp,
-                                  final long offset,
-                                  final int partition,
-                                  final String topic,
-                                  final Headers headers) {
+        final long offset,
+        final int partition,
+        final String topic,
+        final Headers headers) {
         this.timestamp = timestamp;
         this.offset = offset;
         this.topic = topic;
@@ -56,12 +56,12 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
     }
 
     public ProcessorRecordContext(final long timestamp,
-                                  final long offset,
-                                  final int partition,
-                                  final String topic,
-                                  final Headers headers,
-                                  final byte[] sourceRawKey,
-                                  final byte[] sourceRawValue) {
+        final long offset,
+        final int partition,
+        final String topic,
+        final Headers headers,
+        final byte[] sourceRawKey,
+        final byte[] sourceRawValue) {
         this.timestamp = timestamp;
         this.offset = offset;
         this.topic = topic;
@@ -238,7 +238,7 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
     @Override
     public int hashCode() {
         throw new UnsupportedOperationException("ProcessorRecordContext is unsafe for use in Hash collections "
-                                                    + "due to the mutable Headers field");
+            + "due to the mutable Headers field");
     }
 
     @Override

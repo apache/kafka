@@ -152,7 +152,7 @@ public class MockAdminClient extends AdminClient {
                 brokers = brokers.subList(0, numBrokers);
                 brokerLogDirs = brokerLogDirs.subList(0, numBrokers);
             } else {
-                for (int id = brokers.size(); id < numBrokers; id++) {
+                for (int id = brokers.size();id < numBrokers;id++) {
                     brokers.add(new Node(id, "localhost", 1000 + id));
                     brokerLogDirs.add(DEFAULT_LOG_DIRS);
                 }
@@ -261,7 +261,7 @@ public class MockAdminClient extends AdminClient {
         this.clientMetricsConfigs = new HashMap<>();
         this.groupConfigs = new HashMap<>();
         this.defaultGroupConfigs = new HashMap<>(defaultGroupConfigs);
-        for (int i = 0; i < brokers.size(); i++) {
+        for (int i = 0;i < brokers.size();i++) {
             final Map<String, String> config = new HashMap<>();
             config.put("default.replication.factor", String.valueOf(defaultReplicationFactor));
             this.brokerConfigs.add(config);
@@ -282,17 +282,17 @@ public class MockAdminClient extends AdminClient {
     }
 
     public void addTopic(boolean internal,
-                         String name,
-                         List<TopicPartitionInfo> partitions,
-                         Map<String, String> configs) {
+        String name,
+        List<TopicPartitionInfo> partitions,
+        Map<String, String> configs) {
         addTopic(internal, name, partitions, configs, true);
     }
 
     public synchronized void addTopic(boolean internal,
-                                      String name,
-                                      List<TopicPartitionInfo> partitions,
-                                      Map<String, String> configs,
-                                      boolean usesTopicId) {
+        String name,
+        List<TopicPartitionInfo> partitions,
+        Map<String, String> configs,
+        boolean usesTopicId) {
         if (allTopics.containsKey(name)) {
             throw new IllegalArgumentException(String.format("Topic %s was already added.", name));
         }
@@ -391,13 +391,13 @@ public class MockAdminClient extends AdminClient {
             }
             if (replicationFactor > brokers.size()) {
                 future.completeExceptionally(new InvalidReplicationFactorException(
-                        String.format("Replication factor: %d is larger than brokers: %d", newTopic.replicationFactor(), brokers.size())));
+                    String.format("Replication factor: %d is larger than brokers: %d", newTopic.replicationFactor(), brokers.size())));
                 createTopicResult.put(topicName, future);
                 continue;
             }
 
             List<Node> replicas = new ArrayList<>(replicationFactor);
-            for (int i = 0; i < replicationFactor; ++i) {
+            for (int i = 0;i < replicationFactor;++i) {
                 replicas.add(brokers.get(i));
             }
 
@@ -408,7 +408,7 @@ public class MockAdminClient extends AdminClient {
             List<TopicPartitionInfo> partitions = new ArrayList<>(numberOfPartitions);
             // Partitions start off on the first log directory of each broker, for now.
             List<String> logDirs = new ArrayList<>(numberOfPartitions);
-            for (int i = 0; i < numberOfPartitions; i++) {
+            for (int i = 0;i < numberOfPartitions;i++) {
                 partitions.add(new TopicPartitionInfo(i, brokers.get(0), replicas, Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
                 logDirs.add(brokerLogDirs.get(partitions.get(i).leader().id()).get(0));
             }
@@ -698,7 +698,7 @@ public class MockAdminClient extends AdminClient {
         if (tokenFound) {
             allTokens.removeAll(tokensToRemove);
             future.complete(expiryTimestamp);
-        }   else {
+        } else {
             future.completeExceptionally(new DelegationTokenNotFoundException(""));
         }
 
@@ -754,8 +754,8 @@ public class MockAdminClient extends AdminClient {
         Collection<TopicPartition> topicPartitions = groupSpecs.get(group).topicPartitions();
         final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> future = new KafkaFutureImpl<>();
         future.complete(committedOffsets.entrySet().stream()
-                .filter(entry -> topicPartitions.isEmpty() || topicPartitions.contains(entry.getKey()))
-                .collect(Collectors.toMap(Map.Entry::getKey, entry -> new OffsetAndMetadata(entry.getValue()))));
+            .filter(entry -> topicPartitions.isEmpty() || topicPartitions.contains(entry.getKey()))
+            .collect(Collectors.toMap(Map.Entry::getKey, entry -> new OffsetAndMetadata(entry.getValue()))));
         return new ListConsumerGroupOffsetsResult(Collections.singletonMap(CoordinatorKey.byGroupId(group), future));
     }
 
@@ -791,9 +791,9 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public synchronized ElectLeadersResult electLeaders(
-            ElectionType electionType,
-            Set<TopicPartition> partitions,
-            ElectLeadersOptions options) {
+        ElectionType electionType,
+        Set<TopicPartition> partitions,
+        ElectLeadersOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
@@ -896,8 +896,8 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public synchronized AlterConfigsResult incrementalAlterConfigs(
-            Map<ConfigResource, Collection<AlterConfigOp>> configs,
-            AlterConfigsOptions options) {
+        Map<ConfigResource, Collection<AlterConfigOp>> configs,
+        AlterConfigsOptions options) {
         Map<ConfigResource, KafkaFuture<Void>> futures = new HashMap<>();
         for (Map.Entry<ConfigResource, Collection<AlterConfigOp>> entry :
                 configs.entrySet()) {
@@ -916,7 +916,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     private synchronized Throwable handleIncrementalResourceAlteration(
-            ConfigResource resource, Collection<AlterConfigOp> ops) {
+        ConfigResource resource, Collection<AlterConfigOp> ops) {
         switch (resource.type()) {
             case BROKER: {
                 int brokerId;
@@ -1030,8 +1030,8 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public synchronized AlterReplicaLogDirsResult alterReplicaLogDirs(
-            Map<TopicPartitionReplica, String> replicaAssignment,
-            AlterReplicaLogDirsOptions options) {
+        Map<TopicPartitionReplica, String> replicaAssignment,
+        AlterReplicaLogDirsOptions options) {
         Map<TopicPartitionReplica, KafkaFuture<Void>> results = new HashMap<>();
         for (Map.Entry<TopicPartitionReplica, String> entry : replicaAssignment.entrySet()) {
             TopicPartitionReplica replica = entry.getKey();
@@ -1063,7 +1063,7 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public synchronized DescribeLogDirsResult describeLogDirs(Collection<Integer> brokers,
-                                                              DescribeLogDirsOptions options) {
+        DescribeLogDirsOptions options) {
         Map<Integer, Map<String, LogDirDescription>> unwrappedResults = new HashMap<>();
 
         for (Integer broker : brokers) {
@@ -1106,7 +1106,7 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public synchronized DescribeReplicaLogDirsResult describeReplicaLogDirs(
-            Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirsOptions options) {
+        Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirsOptions options) {
         Map<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>> results = new HashMap<>();
         for (TopicPartitionReplica replica : replicas) {
             TopicMetadata topicMetadata = allTopics.get(replica.topic());
@@ -1141,8 +1141,8 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public synchronized AlterPartitionReassignmentsResult alterPartitionReassignments(
-            Map<TopicPartition, Optional<NewPartitionReassignment>> newReassignments,
-            AlterPartitionReassignmentsOptions options) {
+        Map<TopicPartition, Optional<NewPartitionReassignment>> newReassignments,
+        AlterPartitionReassignmentsOptions options) {
         Map<TopicPartition, KafkaFuture<Void>> futures = new HashMap<>();
         for (Map.Entry<TopicPartition, Optional<NewPartitionReassignment>> entry :
                 newReassignments.entrySet()) {
@@ -1152,8 +1152,8 @@ public class MockAdminClient extends AdminClient {
             futures.put(partition, future);
             TopicMetadata topicMetadata = allTopics.get(partition.topic());
             if (partition.partition() < 0 ||
-                    topicMetadata == null ||
-                    topicMetadata.partitions.size() <= partition.partition()) {
+                topicMetadata == null ||
+                topicMetadata.partitions.size() <= partition.partition()) {
                 future.completeExceptionally(new UnknownTopicOrPartitionException());
             } else if (newReassignment.isPresent()) {
                 reassignments.put(partition, newReassignment.get());
@@ -1168,8 +1168,8 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public synchronized ListPartitionReassignmentsResult listPartitionReassignments(
-            Optional<Set<TopicPartition>> partitions,
-            ListPartitionReassignmentsOptions options) {
+        Optional<Set<TopicPartition>> partitions,
+        ListPartitionReassignmentsOptions options) {
         Map<TopicPartition, PartitionReassignment> map = new HashMap<>();
         for (TopicPartition partition : partitions.orElseGet(reassignments::keySet)) {
             PartitionReassignment reassignment = findPartitionReassignment(partition);
@@ -1271,15 +1271,15 @@ public class MockAdminClient extends AdminClient {
         Map<String, SupportedVersionRange> supportedFeatures = new HashMap<>();
         for (Map.Entry<String, Short> entry : featureLevels.entrySet()) {
             finalizedFeatures.put(entry.getKey(), new FinalizedVersionRange(
-                    entry.getValue(), entry.getValue()));
+                entry.getValue(), entry.getValue()));
             supportedFeatures.put(entry.getKey(), new SupportedVersionRange(
-                    minSupportedFeatureLevels.get(entry.getKey()),
-                    maxSupportedFeatureLevels.get(entry.getKey())));
+                minSupportedFeatureLevels.get(entry.getKey()),
+                maxSupportedFeatureLevels.get(entry.getKey())));
         }
         return new DescribeFeaturesResult(KafkaFuture.completedFuture(
-                new FeatureMetadata(finalizedFeatures,
-                    Optional.of(123L),
-                    supportedFeatures)));
+            new FeatureMetadata(finalizedFeatures,
+                Optional.of(123L),
+                supportedFeatures)));
     }
 
     @Override
@@ -1405,13 +1405,13 @@ public class MockAdminClient extends AdminClient {
         }
 
         if (configResourceTypes.isEmpty() || configResourceTypes.contains(ConfigResource.Type.BROKER)) {
-            for (int i = 0; i < brokers.size(); i++) {
+            for (int i = 0;i < brokers.size();i++) {
                 configResources.add(new ConfigResource(ConfigResource.Type.BROKER, String.valueOf(i)));
             }
         }
 
         if (configResourceTypes.isEmpty() || configResourceTypes.contains(ConfigResource.Type.BROKER_LOGGER)) {
-            for (int i = 0; i < brokers.size(); i++) {
+            for (int i = 0;i < brokers.size();i++) {
                 configResources.add(new ConfigResource(ConfigResource.Type.BROKER_LOGGER, String.valueOf(i)));
             }
         }
@@ -1474,14 +1474,15 @@ public class MockAdminClient extends AdminClient {
     public synchronized DescribeStreamsGroupsResult describeStreamsGroups(Collection<String> groupIds, DescribeStreamsGroupsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
-    
+
     @Override
     public synchronized DescribeClassicGroupsResult describeClassicGroups(Collection<String> groupIds, DescribeClassicGroupsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    public synchronized void close(Duration timeout) {}
+    public synchronized void close(Duration timeout) {
+    }
 
     public synchronized void updateBeginningOffsets(Map<TopicPartition, Long> newOffsets) {
         beginningOffsets.putAll(newOffsets);
@@ -1506,10 +1507,10 @@ public class MockAdminClient extends AdminClient {
         public boolean markedForDeletion;
 
         TopicMetadata(Uuid topicId,
-                      boolean isInternalTopic,
-                      List<TopicPartitionInfo> partitions,
-                      List<String> partitionLogDirs,
-                      Map<String, String> configs) {
+            boolean isInternalTopic,
+            List<TopicPartitionInfo> partitions,
+            List<String> partitionLogDirs,
+            Map<String, String> configs) {
             this.topicId = topicId;
             this.isInternalTopic = isInternalTopic;
             this.partitions = partitions;

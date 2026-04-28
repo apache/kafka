@@ -160,8 +160,8 @@ public class FormatterTest {
             testEnv.newFormatter().formatter.run();
             assertEquals("Log directory " + testEnv.directory(0) + " is already formatted. " +
                 "Use --ignore-formatted to ignore this directory and format the others.",
-                    assertThrows(FormatterException.class,
-                        () -> testEnv.newFormatter().formatter.run()).getMessage());
+                assertThrows(FormatterException.class,
+                    () -> testEnv.newFormatter().formatter.run()).getMessage());
         }
     }
 
@@ -174,7 +174,7 @@ public class FormatterTest {
             assertEquals(expectedPrefix,
                 assertThrows(FormatterException.class,
                     formatter1.formatter::run).
-                        getMessage().substring(0, expectedPrefix.length()));
+                    getMessage().substring(0, expectedPrefix.length()));
         }
     }
 
@@ -184,8 +184,8 @@ public class FormatterTest {
             FormatterContext formatter1 = testEnv.newFormatter();
             formatter1.formatter.run();
             assertEquals("Bootstrap metadata: " + formatter1.formatter.bootstrapMetadata() +
-                    "\nFormatting metadata directory " + testEnv.directory(0) +
-                    " with metadata.version " + MetadataVersion.latestProduction() + ".",
+                "\nFormatting metadata directory " + testEnv.directory(0) +
+                " with metadata.version " + MetadataVersion.latestProduction() + ".",
                 formatter1.output().trim());
 
             FormatterContext formatter2 = testEnv.newFormatter();
@@ -206,8 +206,8 @@ public class FormatterTest {
                 .setHasDynamicQuorum(true)
                 .run();
             assertEquals("Bootstrap metadata: " + formatter1.formatter.bootstrapMetadata() +
-                    "\nFormatting dynamic metadata voter directory " + testEnv.directory(0) +
-                    " with metadata.version " + MetadataVersion.latestProduction() + ".",
+                "\nFormatting dynamic metadata voter directory " + testEnv.directory(0) +
+                " with metadata.version " + MetadataVersion.latestProduction() + ".",
                 formatter1.output().trim());
             assertMetadataDirectoryId(testEnv, Uuid.fromString(originalDirectoryId));
 
@@ -236,8 +236,8 @@ public class FormatterTest {
             testEnv.newFormatter().formatter.setDirectories(List.of(testEnv.directory(0))).run();
             assertEquals("Log directory " + testEnv.directory(0) + " is already formatted. " +
                 "Use --ignore-formatted to ignore this directory and format the others.",
-                    assertThrows(FormatterException.class,
-                        () -> testEnv.newFormatter().formatter.run()).getMessage());
+                assertThrows(FormatterException.class,
+                    () -> testEnv.newFormatter().formatter.run()).getMessage());
         }
     }
 
@@ -250,8 +250,8 @@ public class FormatterTest {
             formatter2.formatter.setIgnoreFormatted(true);
             formatter2.formatter.run();
             assertEquals("Bootstrap metadata: " + formatter2.formatter.bootstrapMetadata() +
-                    "\nFormatting data directory " + testEnv.directory(1) + " with metadata.version " +
-                    MetadataVersion.latestProduction() + ".",
+                "\nFormatting data directory " + testEnv.directory(1) + " with metadata.version " +
+                MetadataVersion.latestProduction() + ".",
                 formatter2.output().trim());
         }
     }
@@ -263,8 +263,8 @@ public class FormatterTest {
             formatter1.formatter.setReleaseVersion(MetadataVersion.IBP_3_5_IV0);
             formatter1.formatter.run();
             assertEquals("Bootstrap metadata: " + formatter1.formatter.bootstrapMetadata() +
-                    "\nFormatting metadata directory " + testEnv.directory(0) +
-                    " with metadata.version " + MetadataVersion.IBP_3_5_IV0 + ".",
+                "\nFormatting metadata directory " + testEnv.directory(0) +
+                " with metadata.version " + MetadataVersion.IBP_3_5_IV0 + ".",
                 formatter1.output().trim());
             BootstrapMetadata bootstrapMetadata =
                 new BootstrapDirectory(testEnv.directory(0)).read();
@@ -291,11 +291,11 @@ public class FormatterTest {
             formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
             formatter1.formatter.run();
             assertEquals("Bootstrap metadata: " + formatter1.formatter.bootstrapMetadata() +
-                    "\nFormatting metadata directory " + testEnv.directory(0) +
-                    " with metadata.version " + MetadataVersion.latestTesting() + ".",
+                "\nFormatting metadata directory " + testEnv.directory(0) +
+                " with metadata.version " + MetadataVersion.latestTesting() + ".",
                 formatter1.output().trim());
             BootstrapMetadata bootstrapMetadata =
-                    new BootstrapDirectory(testEnv.directory(0)).read();
+                new BootstrapDirectory(testEnv.directory(0)).read();
             assertEquals(MetadataVersion.latestTesting(), bootstrapMetadata.metadataVersion());
         }
     }
@@ -342,32 +342,32 @@ public class FormatterTest {
                     "saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\"]"));
             formatter1.formatter.run();
             assertEquals("Bootstrap metadata: " + formatter1.formatter.bootstrapMetadata() +
-                    "\nFormatting metadata directory " + testEnv.directory(0) +
-                    " with metadata.version " + MetadataVersion.IBP_3_8_IV0 + ".",
+                "\nFormatting metadata directory " + testEnv.directory(0) +
+                " with metadata.version " + MetadataVersion.IBP_3_8_IV0 + ".",
                 formatter1.output().trim());
             BootstrapMetadata bootstrapMetadata =
                 new BootstrapDirectory(testEnv.directory(0)).read();
             assertEquals(MetadataVersion.IBP_3_8_IV0, bootstrapMetadata.metadataVersion());
             List<ApiMessageAndVersion> scramRecords = bootstrapMetadata.records().stream().
                 filter(r -> r.message() instanceof UserScramCredentialRecord).
-                    toList();
+                toList();
             ScramFormatter scram256 = new ScramFormatter(ScramMechanism.SCRAM_SHA_256);
             ScramFormatter scram512 = new ScramFormatter(ScramMechanism.SCRAM_SHA_512);
             assertEquals(List.of(
-                new ApiMessageAndVersion(new UserScramCredentialRecord().
-                    setName("alice").
-                    setMechanism(ScramMechanism.SCRAM_SHA_256.type()).
-                    setSalt(TEST_SALT).
-                    setStoredKey(scram256.storedKey(scram256.clientKey(TEST_SALTED_PASSWORD))).
-                    setServerKey(scram256.serverKey(TEST_SALTED_PASSWORD)).
-                    setIterations(4096), (short) 0),
-                new ApiMessageAndVersion(new UserScramCredentialRecord().
-                    setName("alice").
-                    setMechanism(ScramMechanism.SCRAM_SHA_512.type()).
-                    setSalt(TEST_SALT).
-                    setStoredKey(scram512.storedKey(scram512.clientKey(TEST_SALTED_PASSWORD))).
-                    setServerKey(scram512.serverKey(TEST_SALTED_PASSWORD)).
-                    setIterations(4096), (short) 0)),
+                    new ApiMessageAndVersion(new UserScramCredentialRecord().
+                        setName("alice").
+                        setMechanism(ScramMechanism.SCRAM_SHA_256.type()).
+                        setSalt(TEST_SALT).
+                        setStoredKey(scram256.storedKey(scram256.clientKey(TEST_SALTED_PASSWORD))).
+                        setServerKey(scram256.serverKey(TEST_SALTED_PASSWORD)).
+                        setIterations(4096), (short) 0),
+                    new ApiMessageAndVersion(new UserScramCredentialRecord().
+                        setName("alice").
+                        setMechanism(ScramMechanism.SCRAM_SHA_512.type()).
+                        setSalt(TEST_SALT).
+                        setStoredKey(scram512.storedKey(scram512.clientKey(TEST_SALTED_PASSWORD))).
+                        setServerKey(scram512.serverKey(TEST_SALTED_PASSWORD)).
+                        setIterations(4096), (short) 0)),
                 scramRecords);
         }
     }
@@ -384,9 +384,9 @@ public class FormatterTest {
                 new BootstrapDirectory(testEnv.directory(0)).read();
             List<ApiMessageAndVersion> expected = new ArrayList<>();
             expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
-                setName(MetadataVersion.FEATURE_NAME).
-                setFeatureLevel(MetadataVersion.latestProduction().featureLevel()),
-                    (short) 0));
+                    setName(MetadataVersion.FEATURE_NAME).
+                    setFeatureLevel(MetadataVersion.latestProduction().featureLevel()),
+                (short) 0));
             expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(EligibleLeaderReplicasVersion.FEATURE_NAME).
                 setFeatureLevel(EligibleLeaderReplicasVersion.ELRV_1.featureLevel()), (short) 0));
@@ -418,11 +418,11 @@ public class FormatterTest {
             formatter1.formatter.setSupportedFeatures(Feature.TEST_AND_PRODUCTION_FEATURES);
             formatter1.formatter.setFeatureLevel("nonexistent.feature", (short) 1);
             assertEquals("Unsupported feature: nonexistent.feature. Supported features " +
-                    "are: eligible.leader.replicas.version, group.version, kraft.version, " +
-                    "share.version, streams.version, test.feature.version, transaction.version",
+                "are: eligible.leader.replicas.version, group.version, kraft.version, " +
+                "share.version, streams.version, test.feature.version, transaction.version",
                 assertThrows(FormatterException.class,
                     formatter1.formatter::run).
-                        getMessage());
+                    getMessage());
         }
     }
 
@@ -441,15 +441,15 @@ public class FormatterTest {
             formatter1.formatter.run();
             assertEquals((short) 1, formatter1.formatter.featureLevels.get(KRaftVersion.FEATURE_NAME));
             assertEquals(List.of(
-                "Bootstrap metadata: " + formatter1.formatter.bootstrapMetadata(),
-                String.format("Formatting data directory %s with %s %s.",
-                    testEnv.directory(1),
-                    MetadataVersion.FEATURE_NAME,
-                    MetadataVersion.latestTesting()),
-                String.format("Formatting dynamic metadata voter directory %s with %s %s.",
-                    testEnv.directory(0),
-                    MetadataVersion.FEATURE_NAME,
-                    MetadataVersion.latestTesting())),
+                    "Bootstrap metadata: " + formatter1.formatter.bootstrapMetadata(),
+                    String.format("Formatting data directory %s with %s %s.",
+                        testEnv.directory(1),
+                        MetadataVersion.FEATURE_NAME,
+                        MetadataVersion.latestTesting()),
+                    String.format("Formatting dynamic metadata voter directory %s with %s %s.",
+                        testEnv.directory(0),
+                        MetadataVersion.FEATURE_NAME,
+                        MetadataVersion.latestTesting())),
                 formatter1.outputLines().stream().sorted().toList());
             MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble.Loader().
                 addLogDirs(testEnv.directories).
@@ -470,13 +470,13 @@ public class FormatterTest {
             formatter1.formatter.setFeatureLevel(KRaftVersion.FEATURE_NAME, (short) 0);
             formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
             formatter1.formatter.setInitialControllers(DynamicVoters.
-                    parse("1@localhost:8020:4znU-ou9Taa06bmEJxsjnw"));
+                parse("1@localhost:8020:4znU-ou9Taa06bmEJxsjnw"));
             formatter1.formatter.setHasDynamicQuorum(true);
             assertTrue(formatter1.formatter.hasDynamicQuorum());
             assertEquals(
                 "Cannot set kraft.version to 0 if controller.quorum.voters is empty " +
-                "and one of the flags --standalone, --initial-controllers, or --no-initial-controllers is used. " +
-                "For dynamic controllers support, try removing the --feature flag for kraft.version.",
+                    "and one of the flags --standalone, --initial-controllers, or --no-initial-controllers is used. " +
+                    "For dynamic controllers support, try removing the --feature flag for kraft.version.",
                 assertThrows(FormatterException.class, formatter1.formatter::run).getMessage()
             );
         }
@@ -491,9 +491,9 @@ public class FormatterTest {
             assertFalse(formatter1.formatter.hasDynamicQuorum());
             assertEquals(
                 "Cannot set kraft.version to 1 unless controller.quorum.voters is empty and " +
-                "one of the flags --standalone, --initial-controllers, or --no-initial-controllers is used. " +
-                "For dynamic controllers support, try using one of --standalone, --initial-controllers, " +
-                "or --no-initial-controllers and removing controller.quorum.voters.",
+                    "one of the flags --standalone, --initial-controllers, or --no-initial-controllers is used. " +
+                    "For dynamic controllers support, try using one of --standalone, --initial-controllers, " +
+                    "or --no-initial-controllers and removing controller.quorum.voters.",
                 assertThrows(FormatterException.class, formatter1.formatter::run).getMessage()
             );
         }
@@ -506,7 +506,7 @@ public class FormatterTest {
             formatter1.formatter.setReleaseVersion(MetadataVersion.IBP_3_8_IV0);
             formatter1.formatter.setFeatureLevel(KRaftVersion.FEATURE_NAME, (short) 1);
             formatter1.formatter.setInitialControllers(DynamicVoters.
-                    parse("1@localhost:8020:4znU-ou9Taa06bmEJxsjnw"));
+                parse("1@localhost:8020:4znU-ou9Taa06bmEJxsjnw"));
             formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
             formatter1.formatter.setHasDynamicQuorum(true);
             formatter1.formatter.run();

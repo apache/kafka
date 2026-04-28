@@ -162,12 +162,12 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String CONFIG_RELOAD_ACTION_CONFIG = "config.action.reload";
     private static final String CONFIG_RELOAD_ACTION_DOC =
             "The action that Connect should take on the connector when changes in external " +
-            "configuration providers result in a change in the connector's configuration properties. " +
-            "A value of 'none' indicates that Connect will do nothing. " +
-            "A value of 'restart' indicates that Connect should restart/reload the connector with the " +
-            "updated configuration properties." +
-            "The restart may actually be scheduled in the future if the external configuration provider " +
-            "indicates that a configuration value will expire in the future.";
+                    "configuration providers result in a change in the connector's configuration properties. " +
+                    "A value of 'none' indicates that Connect will do nothing. " +
+                    "A value of 'restart' indicates that Connect should restart/reload the connector with the " +
+                    "updated configuration properties." +
+                    "The restart may actually be scheduled in the future if the external configuration provider " +
+                    "indicates that a configuration value will expire in the future.";
 
     private static final String CONFIG_RELOAD_ACTION_DISPLAY = "Reload Action";
     public static final String CONFIG_RELOAD_ACTION_NONE = Herder.ConfigReloadAction.NONE.name().toLowerCase(Locale.ROOT);
@@ -291,14 +291,14 @@ public class ConnectorConfig extends AbstractConfig {
 
     private static ConfigDef.CompositeValidator aliasValidator(String kind) {
         return ConfigDef.CompositeValidator.of(new ConfigDef.NonNullValidator(), ConfigDef.LambdaValidator.with(
-            (name, value) -> {
-                @SuppressWarnings("unchecked")
-                final List<String> aliases = (List<String>) value;
-                if (aliases.size() > new HashSet<>(aliases).size()) {
-                    throw new ConfigException(name, value, "Duplicate alias provided.");
-                }
-            },
-            () -> "unique " + kind + " aliases"));
+                (name, value) -> {
+                    @SuppressWarnings("unchecked")
+                    final List<String> aliases = (List<String>) value;
+                    if (aliases.size() > new HashSet<>(aliases).size()) {
+                        throw new ConfigException(name, value, "Duplicate alias provided.");
+                    }
+                },
+                () -> "unique " + kind + " aliases"));
     }
 
     public ConnectorConfig(Plugins plugins) {
@@ -385,21 +385,21 @@ public class ConnectorConfig extends AbstractConfig {
                     predicate.configure(originalsWithPrefix(predicatePrefix));
                     Plugin<Predicate<R>> predicatePlugin = metrics.wrap(predicate, connectorTaskId, predicateAlias);
                     transformations.add(new TransformationStage<>(
-                        predicatePlugin,
-                        predicateAlias,
-                        plugins.pluginVersion(predicate.getClass().getName(), predicate.getClass().getClassLoader(), PluginType.PREDICATE),
-                        negate != null && Boolean.parseBoolean(negate.toString()),
-                        transformationPlugin,
-                        alias,
-                        plugins.pluginVersion(transformation.getClass().getName(), transformation.getClass().getClassLoader(), PluginType.TRANSFORMATION),
-                        plugins.safeLoaderSwapper())
+                            predicatePlugin,
+                            predicateAlias,
+                            plugins.pluginVersion(predicate.getClass().getName(), predicate.getClass().getClassLoader(), PluginType.PREDICATE),
+                            negate != null && Boolean.parseBoolean(negate.toString()),
+                            transformationPlugin,
+                            alias,
+                            plugins.pluginVersion(transformation.getClass().getName(), transformation.getClass().getClassLoader(), PluginType.TRANSFORMATION),
+                            plugins.safeLoaderSwapper())
                     );
                 } else {
                     transformations.add(new TransformationStage<>(
-                        transformationPlugin,
-                        alias,
-                        plugins.pluginVersion(transformation.getClass().getName(), transformation.getClass().getClassLoader(), PluginType.TRANSFORMATION),
-                        plugins.safeLoaderSwapper())
+                            transformationPlugin,
+                            alias,
+                            plugins.pluginVersion(transformation.getClass().getName(), transformation.getClass().getClassLoader(), PluginType.TRANSFORMATION),
+                            plugins.safeLoaderSwapper())
                     );
                 }
             } catch (Exception e) {
@@ -416,8 +416,8 @@ public class ConnectorConfig extends AbstractConfig {
             VersionRange range = PluginUtils.connectorVersionRequirement(getString(versionConfig));
             VersionRange connectorRange = PluginUtils.connectorVersionRequirement(getString(CONNECTOR_VERSION));
             return (T) plugins.newPlugin(getClass(classConfig).getName(),
-                                         range,
-                                         plugins.connectorLoader(getString(CONNECTOR_CLASS_CONFIG), connectorRange));
+                    range,
+                    plugins.connectorLoader(getString(CONNECTOR_CLASS_CONFIG), connectorRange));
         } catch (Exception e) {
             throw new ConnectException(e);
         }

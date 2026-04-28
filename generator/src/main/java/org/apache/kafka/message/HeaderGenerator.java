@@ -24,7 +24,7 @@ import java.util.TreeSet;
  * The Kafka header generator.
  */
 public final class HeaderGenerator {
-    private static final String[] HEADER = new String[] {
+    private static final String[] HEADER = new String[]{
         "/*",
         " * Licensed to the Apache Software Foundation (ASF) under one or more",
         " * contributor license agreements. See the NOTICE file distributed with",

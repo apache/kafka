@@ -89,7 +89,7 @@ public class OffsetMapTest {
         }
         assertEquals(i - 1, map.latestOffset());
     }
-    
+
     @Test
     public void testUtilization() throws Exception {
         SkimpyOffsetMap map = new SkimpyOffsetMap(MEMORY_SIZE);

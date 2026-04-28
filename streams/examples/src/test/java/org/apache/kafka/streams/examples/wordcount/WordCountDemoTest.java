@@ -88,9 +88,9 @@ public class WordCountDemoTest {
     @Test
     public void testCountListOfWords() {
         final List<String> inputValues = Arrays.asList(
-                "Apache   Kafka Streams   Example",
-                "Using  \t\t Kafka   Streams\tTest Utils",
-                "Reading and Writing Kafka Topic"
+            "Apache   Kafka Streams   Example",
+            "Using  \t\t Kafka   Streams\tTest Utils",
+            "Reading and Writing Kafka Topic"
         );
         final Map<String, Long> expectedWordCounts = new HashMap<>();
         expectedWordCounts.put("apache", 1L);
@@ -114,10 +114,10 @@ public class WordCountDemoTest {
     public void testStreamsConfig() throws IOException {
         final File tmp = TestUtils.tempFile("bootstrap.servers=localhost:1234");
         try {
-            Properties config = WordCountDemo.streamsConfig(new String[] {tmp.getPath()});
+            Properties config = WordCountDemo.streamsConfig(new String[]{tmp.getPath()});
             assertThat("localhost:1234", equalTo(config.getProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)));
 
-            config = WordCountDemo.streamsConfig(new String[] {tmp.getPath(), "extra", "args"});
+            config = WordCountDemo.streamsConfig(new String[]{tmp.getPath(), "extra", "args"});
             assertThat("localhost:1234", equalTo(config.getProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)));
         } finally {
             Files.deleteIfExists(tmp.toPath());

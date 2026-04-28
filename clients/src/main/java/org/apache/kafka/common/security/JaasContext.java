@@ -89,7 +89,7 @@ public class JaasContext {
     }
 
     static JaasContext load(JaasContext.Type contextType, String listenerContextName,
-                            String globalContextName, Password dynamicJaasConfig) {
+        String globalContextName, Password dynamicJaasConfig) {
         if (dynamicJaasConfig != null) {
             JaasConfig jaasConfig = new JaasConfig(globalContextName, dynamicJaasConfig.value());
             AppConfigurationEntry[] contextModules = jaasConfig.getAppConfigurationEntry(globalContextName);
@@ -106,21 +106,21 @@ public class JaasContext {
 
     @SuppressWarnings("deprecation")
     // Visible for testing
-     static void throwIfLoginModuleIsNotAllowed(AppConfigurationEntry appConfigurationEntry) {
+    static void throwIfLoginModuleIsNotAllowed(AppConfigurationEntry appConfigurationEntry) {
         String disallowedProperty = System.getProperty(DISALLOWED_LOGIN_MODULES_CONFIG);
         if (disallowedProperty != null) {
             LOG.warn("System property '{}' is deprecated and will be removed in a future release. Use '{}' instead.",
-                    DISALLOWED_LOGIN_MODULES_CONFIG, ALLOWED_LOGIN_MODULES_CONFIG);
+                DISALLOWED_LOGIN_MODULES_CONFIG, ALLOWED_LOGIN_MODULES_CONFIG);
         }
         String loginModuleName = appConfigurationEntry.getLoginModuleName().trim();
         String allowedProperty = System.getProperty(ALLOWED_LOGIN_MODULES_CONFIG);
         if (allowedProperty != null) {
             Set<String> allowedLoginModuleList = Arrays.stream(allowedProperty.split(","))
-                    .map(String::trim)
-                    .collect(Collectors.toSet());
+                .map(String::trim)
+                .collect(Collectors.toSet());
             if (!allowedLoginModuleList.contains(loginModuleName)) {
                 throw new IllegalArgumentException(loginModuleName + " is not allowed. Update System property '"
-                        + ALLOWED_LOGIN_MODULES_CONFIG + "' to allow " + loginModuleName);
+                    + ALLOWED_LOGIN_MODULES_CONFIG + "' to allow " + loginModuleName);
             }
             return;
         }
@@ -128,8 +128,8 @@ public class JaasContext {
             disallowedProperty = DISALLOWED_LOGIN_MODULES_DEFAULT;
         }
         Set<String> disallowedLoginModuleList = Arrays.stream(disallowedProperty.split(","))
-                .map(String::trim)
-                .collect(Collectors.toSet());
+            .map(String::trim)
+            .collect(Collectors.toSet());
         if (disallowedLoginModuleList.contains(loginModuleName)) {
             throw new IllegalArgumentException(loginModuleName + " is not allowed. "
                 + "The system property '" + DISALLOWED_LOGIN_MODULES_CONFIG + "' is deprecated. "
@@ -139,15 +139,15 @@ public class JaasContext {
     }
 
     private static JaasContext defaultContext(JaasContext.Type contextType, String listenerContextName,
-                                              String globalContextName) {
+        String globalContextName) {
         String jaasConfigFile = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM);
         if (jaasConfigFile == null) {
             if (contextType == Type.CLIENT) {
                 LOG.debug("System property '" + JaasUtils.JAVA_LOGIN_CONFIG_PARAM + "' and Kafka SASL property '" +
-                        SaslConfigs.SASL_JAAS_CONFIG + "' are not set, using default JAAS configuration.");
+                    SaslConfigs.SASL_JAAS_CONFIG + "' are not set, using default JAAS configuration.");
             } else {
                 LOG.debug("System property '" + JaasUtils.JAVA_LOGIN_CONFIG_PARAM + "' is not set, using default JAAS " +
-                        "configuration.");
+                    "configuration.");
             }
         }
 
@@ -168,8 +168,8 @@ public class JaasContext {
         if (configEntries == null) {
             String listenerNameText = listenerContextName == null ? "" : " or '" + listenerContextName + "'";
             String errorMessage = "Could not find a '" + globalContextName + "'" + listenerNameText + " entry in the JAAS " +
-                    "configuration. System property '" + JaasUtils.JAVA_LOGIN_CONFIG_PARAM + "' is " +
-                    (jaasConfigFile == null ? "not set" : jaasConfigFile);
+                "configuration. System property '" + JaasUtils.JAVA_LOGIN_CONFIG_PARAM + "' is " +
+                (jaasConfigFile == null ? "not set" : jaasConfigFile);
             throw new IllegalArgumentException(errorMessage);
         }
 
@@ -183,7 +183,7 @@ public class JaasContext {
      * The type of the SASL login context, it should be SERVER for the broker and CLIENT for the clients (consumer, producer,
      * etc.). This is used to validate behaviour (e.g. some functionality is only available in the broker or clients).
      */
-    public enum Type { CLIENT, SERVER }
+    public enum Type {CLIENT, SERVER}
 
     private final String name;
     private final Type type;

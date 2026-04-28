@@ -27,7 +27,8 @@ import java.nio.ByteBuffer;
 
 public class NoCompression implements Compression {
 
-    private NoCompression() {}
+    private NoCompression() {
+    }
 
     @Override
     public CompressionType type() {

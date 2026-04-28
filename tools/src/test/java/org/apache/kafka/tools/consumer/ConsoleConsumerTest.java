@@ -225,7 +225,7 @@ public class ConsoleConsumerTest {
             "--bootstrap-server", "localhost:9092",
             "--topic", tp0.topic(),
             "--partition", String.valueOf(tp0.partition())
-            //"--timeout-ms", "1000"
+        //"--timeout-ms", "1000"
         };
 
         ConsoleConsumer.ConsumerWrapper consumer = new ConsoleConsumer.ConsumerWrapper(
@@ -297,28 +297,28 @@ public class ConsoleConsumerTest {
             admin.createTopics(Set.of(newTopic));
             produceMessagesWithTxn(cluster);
 
-            String[] transactionLogMessageFormatter = createConsoleConsumerArgs(cluster, 
-                    Topic.TRANSACTION_STATE_TOPIC_NAME, 
-                    "org.apache.kafka.tools.consumer.TransactionLogMessageFormatter");
+            String[] transactionLogMessageFormatter = createConsoleConsumerArgs(cluster,
+                Topic.TRANSACTION_STATE_TOPIC_NAME,
+                "org.apache.kafka.tools.consumer.TransactionLogMessageFormatter");
 
             ConsoleConsumerOptions options = new ConsoleConsumerOptions(transactionLogMessageFormatter);
             ConsoleConsumer.ConsumerWrapper consumerWrapper = new ConsoleConsumer.ConsumerWrapper(options, createTxnConsumer(cluster));
-            
+
             try (ByteArrayOutputStream out = new ByteArrayOutputStream();
                  PrintStream output = new PrintStream(out)) {
                 ConsoleConsumer.process(1, options.formatter(), consumerWrapper, output, true);
-                
+
                 JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
                 JsonNode keyNode = jsonNode.get("key");
 
                 TransactionLogKey logKey =
-                        TransactionLogKeyJsonConverter.read(keyNode.get("data"), TransactionLogKey.HIGHEST_SUPPORTED_VERSION);
+                    TransactionLogKeyJsonConverter.read(keyNode.get("data"), TransactionLogKey.HIGHEST_SUPPORTED_VERSION);
                 assertNotNull(logKey);
                 assertEquals(transactionId, logKey.transactionalId());
 
                 JsonNode valueNode = jsonNode.get("value");
                 TransactionLogValue logValue =
-                        TransactionLogValueJsonConverter.read(valueNode.get("data"), TransactionLogValue.HIGHEST_SUPPORTED_VERSION);
+                    TransactionLogValueJsonConverter.read(valueNode.get("data"), TransactionLogValue.HIGHEST_SUPPORTED_VERSION);
                 assertNotNull(logValue);
                 assertEquals(0, logValue.producerId());
                 assertEquals(0, logValue.transactionStatus());
@@ -336,14 +336,14 @@ public class ConsoleConsumerTest {
             admin.createTopics(Set.of(newTopic));
             produceMessages(cluster);
 
-            String[] offsetsMessageFormatter = createConsoleConsumerArgs(cluster, 
-                    Topic.GROUP_METADATA_TOPIC_NAME, 
-                    "org.apache.kafka.tools.consumer.OffsetsMessageFormatter");
+            String[] offsetsMessageFormatter = createConsoleConsumerArgs(cluster,
+                Topic.GROUP_METADATA_TOPIC_NAME,
+                "org.apache.kafka.tools.consumer.OffsetsMessageFormatter");
 
             ConsoleConsumerOptions options = new ConsoleConsumerOptions(offsetsMessageFormatter);
             ConsoleConsumer.ConsumerWrapper consumerWrapper = new ConsoleConsumer.ConsumerWrapper(options, createOffsetConsumer(cluster));
 
-            try (ByteArrayOutputStream out = new ByteArrayOutputStream(); 
+            try (ByteArrayOutputStream out = new ByteArrayOutputStream();
                  PrintStream output = new PrintStream(out)) {
                 ConsoleConsumer.process(1, options.formatter(), consumerWrapper, output, true);
 
@@ -351,14 +351,14 @@ public class ConsoleConsumerTest {
                 JsonNode keyNode = jsonNode.get("key");
 
                 OffsetCommitKey offsetCommitKey =
-                        OffsetCommitKeyJsonConverter.read(keyNode.get("data"), OffsetCommitKey.HIGHEST_SUPPORTED_VERSION);
+                    OffsetCommitKeyJsonConverter.read(keyNode.get("data"), OffsetCommitKey.HIGHEST_SUPPORTED_VERSION);
                 assertNotNull(offsetCommitKey);
                 assertEquals(Topic.GROUP_METADATA_TOPIC_NAME, offsetCommitKey.topic());
                 assertEquals(groupId, offsetCommitKey.group());
 
                 JsonNode valueNode = jsonNode.get("value");
                 OffsetCommitValue offsetCommitValue =
-                        OffsetCommitValueJsonConverter.read(valueNode.get("data"), OffsetCommitValue.HIGHEST_SUPPORTED_VERSION);
+                    OffsetCommitValueJsonConverter.read(valueNode.get("data"), OffsetCommitValue.HIGHEST_SUPPORTED_VERSION);
                 assertNotNull(offsetCommitValue);
                 assertEquals(0, offsetCommitValue.offset());
                 assertEquals(-1, offsetCommitValue.leaderEpoch());
@@ -378,13 +378,13 @@ public class ConsoleConsumerTest {
             admin.createTopics(Set.of(newTopic));
             produceMessages(cluster);
 
-            String[] groupMetadataMessageFormatter = createConsoleConsumerArgs(cluster, 
-                    Topic.GROUP_METADATA_TOPIC_NAME, 
-                    "org.apache.kafka.tools.consumer.GroupMetadataMessageFormatter");
+            String[] groupMetadataMessageFormatter = createConsoleConsumerArgs(cluster,
+                Topic.GROUP_METADATA_TOPIC_NAME,
+                "org.apache.kafka.tools.consumer.GroupMetadataMessageFormatter");
 
             ConsoleConsumerOptions options = new ConsoleConsumerOptions(groupMetadataMessageFormatter);
-            ConsoleConsumer.ConsumerWrapper consumerWrapper = 
-                    new ConsoleConsumer.ConsumerWrapper(options, createGroupMetaDataConsumer(cluster));
+            ConsoleConsumer.ConsumerWrapper consumerWrapper =
+                new ConsoleConsumer.ConsumerWrapper(options, createGroupMetaDataConsumer(cluster));
 
             try (ByteArrayOutputStream out = new ByteArrayOutputStream();
                  PrintStream output = new PrintStream(out)) {
@@ -428,7 +428,7 @@ public class ConsoleConsumerTest {
             producer.send(new ProducerRecord<>(topic, new byte[1_000 * 100]));
         }
     }
-    
+
     private String[] createConsoleConsumerArgs(ClusterInstance cluster, String topic, String formatter) {
         return new String[]{
             "--bootstrap-server", cluster.bootstrapServers(),
@@ -463,7 +463,7 @@ public class ConsoleConsumerTest {
         props.put(AUTO_OFFSET_RESET_CONFIG, "earliest");
         return new KafkaConsumer<>(props);
     }
-    
+
     private Properties producerProps(ClusterInstance cluster) {
         Properties props = new Properties();
         props.put(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
@@ -471,7 +471,7 @@ public class ConsoleConsumerTest {
         props.put(VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         return props;
     }
-    
+
     private Properties consumerProps(ClusterInstance cluster) {
         Properties props = new Properties();
         props.put(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());

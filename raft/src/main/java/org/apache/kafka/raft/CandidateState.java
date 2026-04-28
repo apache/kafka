@@ -162,7 +162,7 @@ public class CandidateState implements NomineeState {
     public String toString() {
         return String.format(
             "CandidateState(localId=%d, localDirectoryId=%s, epoch=%d, epochElection=%s, " +
-            "highWatermark=%s, electionTimeoutMs=%d)",
+                "highWatermark=%s, electionTimeoutMs=%d)",
             localId,
             localDirectoryId,
             epoch,
@@ -178,5 +178,6 @@ public class CandidateState implements NomineeState {
     }
 
     @Override
-    public void close() {}
+    public void close() {
+    }
 }

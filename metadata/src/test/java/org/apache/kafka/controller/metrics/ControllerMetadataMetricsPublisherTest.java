@@ -54,11 +54,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class ControllerMetadataMetricsPublisherTest {
     static class TestEnv implements AutoCloseable {
         MockFaultHandler faultHandler =
-                new MockFaultHandler("ControllerMetadataMetricsPublisher");
+            new MockFaultHandler("ControllerMetadataMetricsPublisher");
         ControllerMetadataMetrics metrics =
-                new ControllerMetadataMetrics(Optional.empty());
+            new ControllerMetadataMetrics(Optional.empty());
         ControllerMetadataMetricsPublisher publisher =
-                new ControllerMetadataMetricsPublisher(metrics, faultHandler);
+            new ControllerMetadataMetricsPublisher(metrics, faultHandler);
 
         @Override
         public void close() {
@@ -101,17 +101,17 @@ public class ControllerMetadataMetricsPublisherTest {
         TOPICS_IMAGE1 = fakeTopicsImage(
             fakeTopicImage("foo",
                 Uuid.fromString("JKNp6fQaT-icHxh654ok-w"),
-                    fakePartitionRegistration(NORMAL)),
+                fakePartitionRegistration(NORMAL)),
             fakeTopicImage("bar",
                 Uuid.fromString("pEMSdUVWTXaFQUzLTznFSw"),
-                    fakePartitionRegistration(NORMAL),
-                    fakePartitionRegistration(NORMAL),
-                    fakePartitionRegistration(NON_PREFERRED_LEADER)),
+                fakePartitionRegistration(NORMAL),
+                fakePartitionRegistration(NORMAL),
+                fakePartitionRegistration(NON_PREFERRED_LEADER)),
             fakeTopicImage("quux",
-                    Uuid.fromString("zkUT4lyyRke6VIaTw6RQWg"),
-                    fakePartitionRegistration(OFFLINE),
-                    fakePartitionRegistration(OFFLINE),
-                    fakePartitionRegistration(OFFLINE))
+                Uuid.fromString("zkUT4lyyRke6VIaTw6RQWg"),
+                fakePartitionRegistration(OFFLINE),
+                fakePartitionRegistration(OFFLINE),
+                fakePartitionRegistration(OFFLINE))
         );
         IMAGE1 = fakeImageFromTopicsImage(TOPICS_IMAGE1);
     }

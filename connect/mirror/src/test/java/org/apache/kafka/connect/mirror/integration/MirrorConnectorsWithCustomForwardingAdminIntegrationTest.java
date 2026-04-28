@@ -149,9 +149,11 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
         additionalBackupClusterClientsConfigs.putAll(superUserConfig());
         backupWorkerProps.putAll(superUserConfig());
 
-        Map<String, String> additionalConfig = new HashMap<>(superUserConfig()) {{
+        Map<String, String> additionalConfig = new HashMap<>(superUserConfig()) {
+            {
                 put(FORWARDING_ADMIN_CLASS, FakeForwardingAdminWithLocalMetadata.class.getName());
-            }};
+            }
+        };
 
         superUserConfig().forEach((property, value) -> {
             additionalConfig.put(CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + property, value);
@@ -283,7 +285,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
 
         // make sure the topic config is synced into the other cluster
         assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, getTopicConfig(backup.kafka(), "primary.test-topic-1", TopicConfig.CLEANUP_POLICY_CONFIG),
-            "topic config was synced");
+                "topic config was synced");
 
         // expect to use FakeForwardingAdminWithLocalMetadata to create remote topics into local store
         waitForTopicToPersistInFakeLocalMetadataStore("backup.test-topic-1");
@@ -345,13 +347,13 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
 
     void waitForTopicToPersistInFakeLocalMetadataStore(String topicName) throws InterruptedException {
         waitForCondition(() -> FakeLocalMetadataStore.containsTopic(topicName), FAKE_LOCAL_METADATA_STORE_SYNC_DURATION_MS,
-            "Topic: " + topicName + " didn't get created in the FakeLocalMetadataStore"
+                "Topic: " + topicName + " didn't get created in the FakeLocalMetadataStore"
         );
     }
 
     void waitForTopicConfigPersistInFakeLocalMetaDataStore(String topicName, String configName, String expectedConfigValue) throws InterruptedException {
         waitForCondition(() -> FakeLocalMetadataStore.topicConfig(topicName).getOrDefault(configName, "").equals(expectedConfigValue), FAKE_LOCAL_METADATA_STORE_SYNC_DURATION_MS,
-            "Topic: " + topicName + "'s configs don't have " + configName + ":" + expectedConfigValue
+                "Topic: " + topicName + "'s configs don't have " + configName + ":" + expectedConfigValue
         );
     }
 }

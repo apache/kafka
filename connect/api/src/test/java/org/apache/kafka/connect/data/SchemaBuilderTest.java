@@ -247,7 +247,7 @@ public class SchemaBuilderTest {
     public void testArrayBuilderInvalidDefault() {
         // Array, but wrong embedded type
         assertThrows(SchemaBuilderException.class,
-            () -> SchemaBuilder.array(Schema.INT8_SCHEMA).defaultValue(List.of("string")).build());
+                () -> SchemaBuilder.array(Schema.INT8_SCHEMA).defaultValue(List.of("string")).build());
     }
 
     @Test
@@ -297,10 +297,10 @@ public class SchemaBuilderTest {
     @Test
     public void testDuplicateFields() {
         assertThrows(SchemaBuilderException.class, () -> SchemaBuilder.struct()
-            .name("testing")
-            .field("id", SchemaBuilder.string().doc("").build())
-            .field("id", SchemaBuilder.string().doc("").build())
-            .build());
+                .name("testing")
+                .field("id", SchemaBuilder.string().doc("").build())
+                .field("id", SchemaBuilder.string().doc("").build())
+                .build());
     }
 
     @Test
@@ -324,13 +324,13 @@ public class SchemaBuilderTest {
     @Test
     public void testFieldNameNull() {
         assertThrows(SchemaBuilderException.class,
-            () -> SchemaBuilder.struct().field(null, Schema.STRING_SCHEMA).build());
+                () -> SchemaBuilder.struct().field(null, Schema.STRING_SCHEMA).build());
     }
 
     @Test
     public void testFieldSchemaNull() {
         assertThrows(SchemaBuilderException.class,
-            () -> SchemaBuilder.struct().field("fieldName", null).build());
+                () -> SchemaBuilder.struct().field("fieldName", null).build());
     }
 
     @Test

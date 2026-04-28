@@ -228,10 +228,10 @@ public class ShareCompletedFetchTest {
     public void testRecordDeserializationException() {
         // Create one good record and then two records which do not deserialize and then another good record.
         try (final MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024),
-                Compression.NONE,
-                TimestampType.CREATE_TIME,
-                0);
-            final UUIDSerializer serializer = new UUIDSerializer()) {
+                 Compression.NONE,
+                 TimestampType.CREATE_TIME,
+                 0);
+             final UUIDSerializer serializer = new UUIDSerializer()) {
             builder.append(new SimpleRecord(serializer.serialize(TOPIC_NAME, UUID.randomUUID())));
             builder.append(0L, "key".getBytes(), "value".getBytes());
             Headers headers = new RecordHeaders();
@@ -374,7 +374,7 @@ public class ShareCompletedFetchTest {
         acquiredRecords.add(acquiredRecords(10L, 5).get(0));
 
         ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
-            .setRecords(newRecords(startingOffset,  10))
+            .setRecords(newRecords(startingOffset, 10))
             .setAcquiredRecords(acquiredRecords); // Acquire only records 0-4 and 10-14
 
         Deserializers<String, String> deserializers = newStringDeserializers();
@@ -386,7 +386,7 @@ public class ShareCompletedFetchTest {
 
         // Should get 5 actual records (0-4)
         assertEquals(5, records.size());
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0;i < 5;i++) {
             assertEquals(i, records.get(i).offset());
         }
 
@@ -395,7 +395,7 @@ public class ShareCompletedFetchTest {
         assertEquals(5, acknowledgements.size());
 
         // Verify GAP acknowledgements for offsets 10-14
-        for (long offset = 10L; offset <= 14L; offset++) {
+        for (long offset = 10L;offset <= 14L;offset++) {
             assertNull(acknowledgements.get(offset), "Offset " + offset + " should be a GAP (null)");
         }
     }
@@ -425,7 +425,7 @@ public class ShareCompletedFetchTest {
         assertEquals(5, acknowledgements.size());
 
         // Verify all are GAP acknowledgements
-        for (long offset = 15L; offset <= 19L; offset++) {
+        for (long offset = 15L;offset <= 19L;offset++) {
             assertNull(acknowledgements.get(offset), "Offset " + offset + " should be a GAP (null)");
         }
     }
@@ -441,17 +441,17 @@ public class ShareCompletedFetchTest {
 
         // Write data records 1-5
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer,
-                RecordBatch.CURRENT_MAGIC_VALUE,
-                Compression.NONE,
-                TimestampType.CREATE_TIME,
-                1,
-                time.milliseconds(),
-                PRODUCER_ID,
-                PRODUCER_EPOCH,
-                0,
-                true,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH)) {
-            for (int i = 0; i < 5; i++)
+                 RecordBatch.CURRENT_MAGIC_VALUE,
+                 Compression.NONE,
+                 TimestampType.CREATE_TIME,
+                 1,
+                 time.milliseconds(),
+                 PRODUCER_ID,
+                 PRODUCER_EPOCH,
+                 0,
+                 true,
+                 RecordBatch.NO_PARTITION_LEADER_EPOCH)) {
+            for (int i = 0;i < 5;i++)
                 builder.append(new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
             builder.build();
         }
@@ -492,7 +492,7 @@ public class ShareCompletedFetchTest {
 
         // Acquiring all odd Records
         List<ShareFetchResponseData.AcquiredRecords> acquiredRecords = new ArrayList<>();
-        for (long i = 1; i <= 9; i += 2) {
+        for (long i = 1;i <= 9;i += 2) {
             acquiredRecords.add(acquiredRecords(i, 1).get(0));
         }
 
@@ -547,11 +547,11 @@ public class ShareCompletedFetchTest {
         // Fetch records and verify that only 15 unique records are returned (0-14)
         ShareInFlightBatch<String, String> batch = completedFetch.fetchRecords(deserializers, 20, true);
         List<ConsumerRecord<String, String>> records = batch.getInFlightRecords();
-        
+
         // Should get 15 unique records: 0-9 from first range (with deliveryCount=1)
         // and 10-14 from second range (with deliveryCount=2)
         assertEquals(15, records.size());
-        
+
         // Verify first occurrence (offset 5 should have deliveryCount=1 from first range)
         ConsumerRecord<String, String> record5 = records.stream()
             .filter(r -> r.offset() == 5L)
@@ -559,7 +559,7 @@ public class ShareCompletedFetchTest {
             .orElse(null);
         assertNotNull(record5);
         assertEquals(Optional.of((short) 1), record5.deliveryCount());
-        
+
         // Verify offset 10 has deliveryCount=2 from second range
         ConsumerRecord<String, String> record10 = records.stream()
             .filter(r -> r.offset() == 10L)
@@ -567,7 +567,7 @@ public class ShareCompletedFetchTest {
             .orElse(null);
         assertNotNull(record10);
         assertEquals(Optional.of((short) 2), record10.deliveryCount());
-        
+
         // Verify all offsets are unique
         Set<Long> offsetSet = new HashSet<>();
         for (ConsumerRecord<String, String> record : records) {
@@ -601,7 +601,7 @@ public class ShareCompletedFetchTest {
         // Verify all 10 records from first batch are rejected
         Acknowledgements acks1 = batch1.getAcknowledgements();
         assertEquals(10, acks1.size(), "All records in corrupted batch should be rejected");
-        for (long offset = 0; offset < 10; offset++) {
+        for (long offset = 0;offset < 10;offset++) {
             assertEquals(AcknowledgeType.REJECT, acks1.get(offset),
                 "Record at offset " + offset + " should be REJECT");
         }
@@ -632,7 +632,7 @@ public class ShareCompletedFetchTest {
 
         // Only acquire odd offsets: 1, 3, 5, 7, 9
         List<ShareFetchResponseData.AcquiredRecords> acquiredRecords = new ArrayList<>();
-        for (long offset = 1; offset < 10; offset += 2) {
+        for (long offset = 1;offset < 10;offset += 2) {
             acquiredRecords.add(acquiredRecords(offset, 1).get(0));
         }
 
@@ -681,7 +681,7 @@ public class ShareCompletedFetchTest {
         // Only the acquired records (10-19) should be rejected
         Acknowledgements acks = batch.getAcknowledgements();
         assertEquals(10, acks.size());
-        for (long offset = 10; offset < 20; offset++) {
+        for (long offset = 10;offset < 20;offset++) {
             assertEquals(AcknowledgeType.REJECT, acks.get(offset));
         }
     }
@@ -743,7 +743,7 @@ public class ShareCompletedFetchTest {
         // Verify all 10 records from second batch are rejected
         Acknowledgements acks2 = batch2.getAcknowledgements();
         assertEquals(10, acks2.size());
-        for (long offset = 5; offset < 15; offset++) {
+        for (long offset = 5;offset < 15;offset++) {
             assertEquals(AcknowledgeType.REJECT, acks2.get(offset));
         }
 
@@ -820,10 +820,10 @@ public class ShareCompletedFetchTest {
 
     private Records newRecords(long baseOffset, int count) {
         try (final MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024),
-                Compression.NONE,
-                TimestampType.CREATE_TIME,
-                baseOffset)) {
-            for (int i = 0; i < count; i++)
+                 Compression.NONE,
+                 TimestampType.CREATE_TIME,
+                 baseOffset)) {
+            for (int i = 0;i < count;i++)
                 builder.append(0L, "key".getBytes(), "value-".getBytes());
             return builder.build();
         }
@@ -833,19 +833,19 @@ public class ShareCompletedFetchTest {
         Time time = new MockTime();
         ByteBuffer buffer = ByteBuffer.allocate(1024);
 
-        for (long b = 0; b < batchCount; b++) {
+        for (long b = 0;b < batchCount;b++) {
             try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer,
-                    RecordBatch.CURRENT_MAGIC_VALUE,
-                    Compression.NONE,
-                    TimestampType.CREATE_TIME,
-                    baseOffset + b * numRecordsPerBatch,
-                    time.milliseconds(),
-                    PRODUCER_ID,
-                    PRODUCER_EPOCH,
-                    0,
-                    true,
-                    RecordBatch.NO_PARTITION_LEADER_EPOCH)) {
-                for (int i = 0; i < numRecordsPerBatch; i++)
+                     RecordBatch.CURRENT_MAGIC_VALUE,
+                     Compression.NONE,
+                     TimestampType.CREATE_TIME,
+                     baseOffset + b * numRecordsPerBatch,
+                     time.milliseconds(),
+                     PRODUCER_ID,
+                     PRODUCER_EPOCH,
+                     0,
+                     true,
+                     RecordBatch.NO_PARTITION_LEADER_EPOCH)) {
+                for (int i = 0;i < numRecordsPerBatch;i++)
                     builder.append(new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
 
                 builder.build();
@@ -870,17 +870,17 @@ public class ShareCompletedFetchTest {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
 
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer,
-                RecordBatch.CURRENT_MAGIC_VALUE,
-                Compression.NONE,
-                TimestampType.CREATE_TIME,
-                0,
-                time.milliseconds(),
-                PRODUCER_ID,
-                PRODUCER_EPOCH,
-                0,
-                true,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH)) {
-            for (int i = 0; i < numRecords; i++)
+                 RecordBatch.CURRENT_MAGIC_VALUE,
+                 Compression.NONE,
+                 TimestampType.CREATE_TIME,
+                 0,
+                 time.milliseconds(),
+                 PRODUCER_ID,
+                 PRODUCER_EPOCH,
+                 0,
+                 true,
+                 RecordBatch.NO_PARTITION_LEADER_EPOCH)) {
+            for (int i = 0;i < numRecords;i++)
                 builder.append(new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
 
             builder.build();
@@ -893,8 +893,8 @@ public class ShareCompletedFetchTest {
     }
 
     private void writeTransactionMarker(ByteBuffer buffer,
-                                        int offset,
-                                        Time time) {
+        int offset,
+        Time time) {
         MemoryRecords.writeEndTransactionalMarker(buffer,
             offset,
             time.milliseconds(),
@@ -906,17 +906,17 @@ public class ShareCompletedFetchTest {
 
     private void createBatch(ByteBuffer buffer, long baseOffset, int numRecords, Time time) {
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer,
-                RecordBatch.CURRENT_MAGIC_VALUE,
-                Compression.NONE,
-                TimestampType.CREATE_TIME,
-                baseOffset,
-                time.milliseconds(),
-                PRODUCER_ID,
-                PRODUCER_EPOCH,
-                0,
-                false,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH)) {
-            for (int i = 0; i < numRecords; i++) {
+                 RecordBatch.CURRENT_MAGIC_VALUE,
+                 Compression.NONE,
+                 TimestampType.CREATE_TIME,
+                 baseOffset,
+                 time.milliseconds(),
+                 PRODUCER_ID,
+                 PRODUCER_EPOCH,
+                 0,
+                 false,
+                 RecordBatch.NO_PARTITION_LEADER_EPOCH)) {
+            for (int i = 0;i < numRecords;i++) {
                 builder.append(new SimpleRecord(time.milliseconds(), "key".getBytes(), ("value-" + (baseOffset + i)).getBytes()));
             }
             builder.build();

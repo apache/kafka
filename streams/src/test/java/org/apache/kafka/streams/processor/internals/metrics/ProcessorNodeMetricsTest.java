@@ -119,8 +119,8 @@ public class ProcessorNodeMetricsTest {
     }
 
     private void setUpThroughputSensor(final String metricNamePrefix,
-                                       final RecordingLevel recordingLevel,
-                                       final Sensor... parentSensors) {
+        final RecordingLevel recordingLevel,
+        final Sensor... parentSensors) {
         when(streamsMetrics.nodeLevelSensor(
             THREAD_ID,
             TASK_ID,
@@ -133,9 +133,9 @@ public class ProcessorNodeMetricsTest {
     }
 
     private void getAndVerifySensor(final Supplier<Sensor> sensorSupplier,
-                                    final String metricNamePrefix,
-                                    final String descriptionOfRate,
-                                    final String descriptionOfCount) {
+        final String metricNamePrefix,
+        final String descriptionOfRate,
+        final String descriptionOfCount) {
         try (final MockedStatic<StreamsMetricsImpl> streamsMetricsStaticMock = mockStatic(StreamsMetricsImpl.class)) {
             final Sensor sensor = sensorSupplier.get();
             streamsMetricsStaticMock.verify(

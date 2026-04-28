@@ -378,11 +378,11 @@ public class StandardAuthorizerData {
     }
 
     private void checkSection(
-            AclCache aclCacheSnapshot, Action action,
-            StandardAcl exemplar,
-            Set<KafkaPrincipal> matchingPrincipals,
-            String host,
-            MatchingRuleBuilder matchingRuleBuilder
+        AclCache aclCacheSnapshot, Action action,
+        StandardAcl exemplar,
+        Set<KafkaPrincipal> matchingPrincipals,
+        String host,
+        MatchingRuleBuilder matchingRuleBuilder
     ) {
         String resourceName = action.resourcePattern().name();
         NavigableSet<StandardAcl> tailSet = aclCacheSnapshot.aclsByResource().tailSet(exemplar, true);

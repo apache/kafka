@@ -98,7 +98,7 @@ public abstract class SaslAuthenticatorFailureDelayTest {
 
         server = createEchoServer(securityProtocol);
         createAndCheckClientAuthenticationFailure(securityProtocol, node, "PLAIN",
-                "Authentication failed: Invalid username or password");
+            "Authentication failed: Invalid username or password");
         server.verifyAuthenticationMetrics(0, 1);
     }
 
@@ -165,13 +165,13 @@ public abstract class SaslAuthenticatorFailureDelayTest {
         // Now that client connection is closed, wait until server notices the disconnection and removes it from the
         // list of connected channels and from delayed response for auth failure
         TestUtils.waitForCondition(() -> failedAuthenticationDelayMs == 0 || delayedClosingChannels.isEmpty(),
-                "Timeout waiting for delayed response remove");
+            "Timeout waiting for delayed response remove");
         TestUtils.waitForCondition(() -> server.selector().channels().isEmpty(),
-                "Timeout waiting for connection close");
+            "Timeout waiting for connection close");
 
         // Try forcing completion of delayed channel close
         TestUtils.waitForCondition(() -> time.milliseconds() > startTimeMs + failedAuthenticationDelayMs + 1,
-                "Timeout when waiting for auth failure response timeout to elapse");
+            "Timeout when waiting for auth failure response timeout to elapse");
         NetworkTestUtils.completeDelayedChannelClose(server.selector(), time.nanoseconds());
     }
 
@@ -188,7 +188,7 @@ public abstract class SaslAuthenticatorFailureDelayTest {
         saslServerConfigs.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, serverMechanisms);
         if (serverMechanisms.contains("DIGEST-MD5")) {
             saslServerConfigs.put("digest-md5." + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG,
-                    TestDigestLoginModule.DigestServerCallbackHandler.class.getName());
+                TestDigestLoginModule.DigestServerCallbackHandler.class.getName());
         }
         return TestJaasConfig.createConfiguration(clientMechanism, serverMechanisms);
     }
@@ -201,7 +201,7 @@ public abstract class SaslAuthenticatorFailureDelayTest {
 
         String saslMechanism = (String) saslClientConfigs.get(SaslConfigs.SASL_MECHANISM);
         ChannelBuilder channelBuilder = ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT,
-                new TestSecurityConfig(clientConfigs), null, saslMechanism, time, new LogContext());
+            new TestSecurityConfig(clientConfigs), null, saslMechanism, time, new LogContext());
         this.selector = NetworkTestUtils.createSelector(channelBuilder, time);
     }
 
@@ -211,7 +211,7 @@ public abstract class SaslAuthenticatorFailureDelayTest {
 
     private NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol) throws Exception {
         return NetworkTestUtils.createEchoServer(listenerName, securityProtocol,
-                new TestSecurityConfig(saslServerConfigs), credentialCache, time);
+            new TestSecurityConfig(saslServerConfigs), credentialCache, time);
     }
 
     private void createClientConnection(SecurityProtocol securityProtocol, String node) throws Exception {
@@ -221,7 +221,7 @@ public abstract class SaslAuthenticatorFailureDelayTest {
     }
 
     private void createAndCheckClientAuthenticationFailure(SecurityProtocol securityProtocol, String node,
-                                                           String mechanism, String expectedErrorMessage) throws Exception {
+        String mechanism, String expectedErrorMessage) throws Exception {
         ChannelState finalState = createAndCheckClientConnectionFailure(securityProtocol, node);
         Exception exception = finalState.exception();
         assertInstanceOf(SaslAuthenticationException.class, exception, "Invalid exception class " + exception.getClass());
@@ -231,10 +231,10 @@ public abstract class SaslAuthenticatorFailureDelayTest {
     }
 
     private ChannelState createAndCheckClientConnectionFailure(SecurityProtocol securityProtocol, String node)
-            throws Exception {
+        throws Exception {
         createClientConnection(securityProtocol, node);
         ChannelState finalState = NetworkTestUtils.waitForChannelClose(selector, node,
-                ChannelState.State.AUTHENTICATION_FAILED);
+            ChannelState.State.AUTHENTICATION_FAILED);
         selector.close();
         selector = null;
         return finalState;

@@ -37,8 +37,8 @@ class KTableKTableRightJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K,
     private static final Logger LOG = LoggerFactory.getLogger(KTableKTableRightJoin.class);
 
     KTableKTableRightJoin(final KTableImpl<K, ?, V1> table1,
-                          final KTableImpl<K, ?, V2> table2,
-                          final ValueJoiner<? super V1, ? super V2, ? extends VOut> joiner) {
+        final KTableImpl<K, ?, V2> table2,
+        final ValueJoiner<? super V1, ? super V2, ? extends VOut> joiner) {
         super(table1, table2, joiner);
     }
 
@@ -55,7 +55,7 @@ class KTableKTableRightJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K,
     private class KTableKTableRightJoinValueGetterSupplier extends KTableKTableAbstractJoinValueGetterSupplier<K, VOut, V1, V2> {
 
         KTableKTableRightJoinValueGetterSupplier(final KTableValueGetterSupplier<K, V1> valueGetterSupplier1,
-                                                 final KTableValueGetterSupplier<K, V2> valueGetterSupplier2) {
+            final KTableValueGetterSupplier<K, V2> valueGetterSupplier2) {
             super(valueGetterSupplier1, valueGetterSupplier2);
         }
 
@@ -146,7 +146,7 @@ class KTableKTableRightJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K,
         private final KTableValueGetter<K, V2> valueGetter2;
 
         KTableKTableRightJoinValueGetter(final KTableValueGetter<K, V1> valueGetter1,
-                                         final KTableValueGetter<K, V2> valueGetter2) {
+            final KTableValueGetter<K, V2> valueGetter2) {
             this.valueGetter1 = valueGetter1;
             this.valueGetter2 = valueGetter2;
         }

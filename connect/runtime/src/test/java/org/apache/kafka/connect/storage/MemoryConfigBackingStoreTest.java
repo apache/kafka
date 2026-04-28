@@ -53,9 +53,9 @@ public class MemoryConfigBackingStoreTest {
 
     // Actual values are irrelevant here and can be used as either connector or task configurations
     private static final List<Map<String, String>> SAMPLE_CONFIGS = List.of(
-        Map.of("config-key-one", "config-value-one"),
-        Map.of("config-key-two", "config-value-two"),
-        Map.of("config-key-three", "config-value-three")
+            Map.of("config-key-one", "config-value-one"),
+            Map.of("config-key-two", "config-value-two"),
+            Map.of("config-key-three", "config-value-three")
     );
 
     @Mock
@@ -140,7 +140,7 @@ public class MemoryConfigBackingStoreTest {
     public void testPutTaskConfigs() {
         // Can't write task configs for non-existent connector
         assertThrows(IllegalArgumentException.class,
-            () -> configStore.putTaskConfigs(CONNECTOR_IDS.get(0), List.of(SAMPLE_CONFIGS.get(1))));
+                () -> configStore.putTaskConfigs(CONNECTOR_IDS.get(0), List.of(SAMPLE_CONFIGS.get(1))));
 
         configStore.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), null);
         configStore.putTaskConfigs(CONNECTOR_IDS.get(0), List.of(SAMPLE_CONFIGS.get(1)));
@@ -158,7 +158,7 @@ public class MemoryConfigBackingStoreTest {
     public void testRemoveTaskConfigs() {
         // Can't remove task configs for non-existent connector
         assertThrows(IllegalArgumentException.class,
-            () -> configStore.removeTaskConfigs(CONNECTOR_IDS.get(0)));
+                () -> configStore.removeTaskConfigs(CONNECTOR_IDS.get(0)));
 
         // This workaround is required to verify the arguments passed to ConfigBackingStore.UpdateListener::onTaskConfigUpdate because Mockito
         // records references to the collection instead of a copy and the argument passed to the method the first time in

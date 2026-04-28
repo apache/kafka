@@ -47,14 +47,14 @@ public final class FeaturesImage {
     private final Optional<MetadataVersion> metadataVersion;
 
     public FeaturesImage(
-            Map<String, Short> finalizedVersions,
-            MetadataVersion metadataVersion) {
+        Map<String, Short> finalizedVersions,
+        MetadataVersion metadataVersion) {
         this(finalizedVersions, Optional.of(metadataVersion));
     }
 
     FeaturesImage(
-            Map<String, Short> finalizedVersions,
-            Optional<MetadataVersion> metadataVersion) {
+        Map<String, Short> finalizedVersions,
+        Optional<MetadataVersion> metadataVersion) {
         this.finalizedVersions = Collections.unmodifiableMap(finalizedVersions);
         this.metadataVersion = metadataVersion;
     }
@@ -70,7 +70,7 @@ public final class FeaturesImage {
 
     public MetadataVersion metadataVersionOrThrow() {
         return metadataVersion.orElseThrow(() ->
-                new IllegalStateException("Unknown metadata version for FeaturesImage: " + this));
+            new IllegalStateException("Unknown metadata version for FeaturesImage: " + this));
     }
 
     public Map<String, Short> finalizedVersions() {
@@ -93,15 +93,15 @@ public final class FeaturesImage {
         // Note: it's important that this initial FeatureLevelRecord be written with version 0 and
         // not any later version, so that any modern reader can process it.
         writer.write(0, new FeatureLevelRecord().
-                setName(MetadataVersion.FEATURE_NAME).
-                setFeatureLevel(options.metadataVersion().featureLevel()));
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(options.metadataVersion().featureLevel()));
 
         // Write out the metadata versions for other features.
         for (Entry<String, Short> entry : finalizedVersions.entrySet()) {
             if (!entry.getKey().equals(MetadataVersion.FEATURE_NAME)) {
                 writer.write(0, new FeatureLevelRecord().
-                        setName(entry.getKey()).
-                        setFeatureLevel(entry.getValue()));
+                    setName(entry.getKey()).
+                    setFeatureLevel(entry.getValue()));
             }
         }
     }

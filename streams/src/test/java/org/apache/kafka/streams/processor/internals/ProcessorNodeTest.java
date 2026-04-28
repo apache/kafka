@@ -158,8 +158,8 @@ public class ProcessorNodeTest {
         "TaskMigratedException,java.lang.RuntimeException,Task migrated cause"
     })
     public void shouldNotHandleInternalExceptionsThrownDuringProcessing(final String ignoredExceptionName,
-                                                                        final Class<?> ignoredExceptionCause,
-                                                                        final String ignoredExceptionCauseMessage) {
+        final Class<?> ignoredExceptionCause,
+        final String ignoredExceptionCauseMessage) {
         final ProcessingExceptionHandler processingExceptionHandler = mock(ProcessingExceptionHandler.class);
 
         final ProcessorNode<Object, Object, Object, Object> node =
@@ -179,7 +179,7 @@ public class ProcessorNodeTest {
     @Test
     public void shouldThrowFailedProcessingExceptionWhenProcessingExceptionHandlerThrowsAnException() {
         final ProcessorNode<Object, Object, Object, Object> node =
-                new ProcessorNode<>(NAME, new IgnoredInternalExceptionsProcessor(), Collections.emptySet());
+            new ProcessorNode<>(NAME, new IgnoredInternalExceptionsProcessor(), Collections.emptySet());
 
         final InternalProcessorContext<Object, Object> internalProcessorContext = mockInternalProcessorContext();
         node.init(internalProcessorContext, new ProcessingExceptionHandlerMock(ProcessingExceptionHandler.Response.resume(), internalProcessorContext, true));
@@ -196,22 +196,22 @@ public class ProcessorNodeTest {
     @Test
     public void shouldBuildDeadLetterQueueRecordsInDefaultProcessingExceptionHandler() {
         final ProcessorNode<Object, Object, Object, Object> node = new ProcessorNode<>("processor",
-                (Processor<Object, Object, Object, Object>) record -> {
-                    throw new NullPointerException("Oopsie!");
-                }, Collections.emptySet());
+            (Processor<Object, Object, Object, Object>) record -> {
+                throw new NullPointerException("Oopsie!");
+            }, Collections.emptySet());
 
         final MockRecordCollector collector = new MockRecordCollector();
         final InternalProcessorContext<Object, Object> internalProcessorContext =
-                new InternalMockProcessorContext<>(
-                        new StateSerdes<>("sink", Serdes.ByteArray(), Serdes.ByteArray()),
-                        collector
-                );
+            new InternalMockProcessorContext<>(
+                new StateSerdes<>("sink", Serdes.ByteArray(), Serdes.ByteArray()),
+                collector
+            );
         final ProcessingExceptionHandler processingExceptionHandler = new LogAndFailProcessingExceptionHandler();
         processingExceptionHandler.configure(Collections.singletonMap(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG, "dlq"));
         node.init(internalProcessorContext, processingExceptionHandler);
 
         assertThrows(RuntimeException.class,
-                () -> node.process(new Record<>("hello", "world", 1L)));
+            () -> node.process(new Record<>("hello", "world", 1L)));
 
         assertEquals(1, collector.collected().size());
         assertEquals("dlq", collector.collected().get(0).topic());
@@ -222,16 +222,16 @@ public class ProcessorNodeTest {
     @Test
     public void shouldBuildDeadLetterQueueRecordsInLogAndContinueProcessingExceptionHandler() {
         final ProcessorNode<Object, Object, Object, Object> node = new ProcessorNode<>("processor",
-                (Processor<Object, Object, Object, Object>) record -> {
-                    throw new NullPointerException("Oopsie!");
-                }, Collections.emptySet());
+            (Processor<Object, Object, Object, Object>) record -> {
+                throw new NullPointerException("Oopsie!");
+            }, Collections.emptySet());
 
         final MockRecordCollector collector = new MockRecordCollector();
         final InternalProcessorContext<Object, Object> internalProcessorContext =
-                new InternalMockProcessorContext<>(
-                        new StateSerdes<>("sink", Serdes.ByteArray(), Serdes.ByteArray()),
-                        collector
-                );
+            new InternalMockProcessorContext<>(
+                new StateSerdes<>("sink", Serdes.ByteArray(), Serdes.ByteArray()),
+                collector
+            );
         final ProcessingExceptionHandler processingExceptionHandler = new LogAndContinueProcessingExceptionHandler();
         processingExceptionHandler.configure(Collections.singletonMap(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG, "dlq"));
         node.init(internalProcessorContext, processingExceptionHandler);
@@ -484,8 +484,8 @@ public class ProcessorNodeTest {
         private final boolean shouldThrowException;
 
         public ProcessingExceptionHandlerMock(final Response response,
-                                              final InternalProcessorContext<Object, Object> internalProcessorContext,
-                                              final boolean shouldThrowException) {
+            final InternalProcessorContext<Object, Object> internalProcessorContext,
+            final boolean shouldThrowException) {
             this.response = response;
             this.internalProcessorContext = internalProcessorContext;
             this.shouldThrowException = shouldThrowException;

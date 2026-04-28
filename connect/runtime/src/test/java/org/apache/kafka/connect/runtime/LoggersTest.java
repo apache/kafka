@@ -49,7 +49,7 @@ public class LoggersTest {
         time = new MockTime(0, INITIAL_TIME, 0);
         loggers = (Loggers.Log4jLoggers) Loggers.newInstance(time);
     }
-    
+
     @AfterEach
     public void tearDown() {
         // Reset LoggerContext to its initial configuration.
@@ -66,9 +66,9 @@ public class LoggersTest {
     @Test
     public void testLevelWithValidRootLoggerNames() {
         assertEquals(
-            loggers.level(""),
-            loggers.level("root"),
-            "Root logger level should be the same whether accessed via empty string or 'root' name"
+                loggers.level(""),
+                loggers.level("root"),
+                "Root logger level should be the same whether accessed via empty string or 'root' name"
         );
     }
 
@@ -76,7 +76,7 @@ public class LoggersTest {
     public void testLevelWithExistLoggerName() {
         loggers.setLevel("foo", DEBUG.name());
         assertEquals(new LoggerLevel(DEBUG.name(), INITIAL_TIME),
-            loggers.level("foo")
+                loggers.level("foo")
         );
     }
 
@@ -89,9 +89,9 @@ public class LoggersTest {
     public void testLevelWithNewlyCreatedLogger() {
         loggers.setLevel("dummy", ERROR.name());
         assertEquals(
-            new LoggerLevel(ERROR.name(), time.milliseconds()),
-            loggers.level("dummy"),
-            "Newly created logger should have the level we just set"
+                new LoggerLevel(ERROR.name(), time.milliseconds()),
+                loggers.level("dummy"),
+                "Newly created logger should have the level we just set"
         );
     }
 
@@ -101,8 +101,8 @@ public class LoggersTest {
         loggers.setLevel("bar", ERROR.name());
         Map<String, LoggerLevel> loggerToLevel = loggers.allLevels();
         Map<String, LoggerLevel> expectedLevels = Map.of(
-            "foo", new LoggerLevel(WARN.name(), INITIAL_TIME),
-            "bar", new LoggerLevel(ERROR.name(), INITIAL_TIME)
+                "foo", new LoggerLevel(WARN.name(), INITIAL_TIME),
+                "bar", new LoggerLevel(ERROR.name(), INITIAL_TIME)
         );
 
         assertTrue(loggerToLevel.entrySet().containsAll(expectedLevels.entrySet()));
@@ -122,8 +122,8 @@ public class LoggersTest {
         loggers.setLevel("", ERROR.name());
         List<String> setLevelResultWithRoot = loggers.setLevel("root", ERROR.name());
         assertTrue(setLevelResultWithRoot.isEmpty(),
-            "Setting level with empty string ('') and 'root' should affect the same set of loggers - " +
-            "when setting the same level twice, second call should return empty list indicating no loggers were affected");
+                "Setting level with empty string ('') and 'root' should affect the same set of loggers - " +
+                        "when setting the same level twice, second call should return empty list indicating no loggers were affected");
     }
 
     @Test
@@ -132,9 +132,9 @@ public class LoggersTest {
         loggers.setLevel("a.b", ERROR.name());
         loggers.setLevel("a", WARN.name());
         Map<String, LoggerLevel> expected = Map.of(
-            "a", new LoggerLevel(WARN.name(), INITIAL_TIME),
-            "a.b", new LoggerLevel(WARN.name(), INITIAL_TIME),
-            "a.b.c", new LoggerLevel(WARN.name(), INITIAL_TIME)
+                "a", new LoggerLevel(WARN.name(), INITIAL_TIME),
+                "a.b", new LoggerLevel(WARN.name(), INITIAL_TIME),
+                "a.b.c", new LoggerLevel(WARN.name(), INITIAL_TIME)
         );
         assertTrue(loggers.allLevels().entrySet().containsAll(expected.entrySet()));
     }
@@ -154,9 +154,9 @@ public class LoggersTest {
         time.sleep(100);
         loggers.setLevel(loggerName, DEBUG.name());
         assertEquals(
-            new LoggerLevel(DEBUG.name(), INITIAL_TIME),
-            loggers.allLevels().get(loggerName),
-            "Setting same log level should not update the lastModified timestamp"
+                new LoggerLevel(DEBUG.name(), INITIAL_TIME),
+                loggers.allLevels().get(loggerName),
+                "Setting same log level should not update the lastModified timestamp"
         );
     }
 
@@ -167,24 +167,24 @@ public class LoggersTest {
         time.sleep(100);
         loggers.setLevel(loggerName, WARN.name());
         assertEquals(
-            new LoggerLevel(WARN.name(), INITIAL_TIME + 100),
-            loggers.allLevels().get(loggerName),
-            "Setting different log level should update the lastModified timestamp"
+                new LoggerLevel(WARN.name(), INITIAL_TIME + 100),
+                loggers.allLevels().get(loggerName),
+                "Setting different log level should update the lastModified timestamp"
         );
     }
 
     @Test
     public void testLookupLoggerWithValidRootLoggerNames() {
         assertEquals(
-            loggers.lookupLogger("root"),
-            loggers.lookupLogger(""),
-            "Both 'root' and empty string should retrieve the root logger"
+                loggers.lookupLogger("root"),
+                loggers.lookupLogger(""),
+                "Both 'root' and empty string should retrieve the root logger"
         );
 
         assertEquals(
-            loggers.lookupLogger(""),
-            loggers.rootLogger(),
-            "Empty string lookup should match direct root logger access"
+                loggers.lookupLogger(""),
+                loggers.rootLogger(),
+                "Empty string lookup should match direct root logger access"
         );
     }
 }

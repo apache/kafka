@@ -59,7 +59,7 @@ public class MockRaftClientTest {
     public void testClaimsLeadership() throws Exception {
         try (
             MockRaftClientTestEnv env = new MockRaftClientTestEnv.Builder(1).
-                    buildWithMockListeners()
+                buildWithMockListeners()
         ) {
             assertEquals(new LeaderAndEpoch(OptionalInt.of(0), 1), env.waitForLeader());
             env.close();
@@ -74,7 +74,7 @@ public class MockRaftClientTest {
     public void testPassLeadership() throws Exception {
         try (
             MockRaftClientTestEnv env = new MockRaftClientTestEnv.Builder(3).
-                    buildWithMockListeners()
+                buildWithMockListeners()
         ) {
             LeaderAndEpoch first = env.waitForLeader();
             LeaderAndEpoch cur = first;
@@ -100,7 +100,7 @@ public class MockRaftClientTest {
     }
 
     private static void waitForLastCommittedOffset(long targetOffset,
-                MockRaftClient raftClient) throws InterruptedException {
+                                                   MockRaftClient raftClient) throws InterruptedException {
         TestUtils.retryOnExceptionWithTimeout(20000, 3, () -> {
             MockRaftClientListener listener = (MockRaftClientListener) raftClient.listeners().get(0);
             long highestOffset = -1;
@@ -129,7 +129,7 @@ public class MockRaftClientTest {
     public void testCommits() throws Exception {
         try (
             MockRaftClientTestEnv env = new MockRaftClientTestEnv.Builder(3).
-                    buildWithMockListeners()
+                buildWithMockListeners()
         ) {
             LeaderAndEpoch leaderInfo = env.waitForLeader();
             int leaderId = leaderInfo.leaderId().orElseThrow(() ->

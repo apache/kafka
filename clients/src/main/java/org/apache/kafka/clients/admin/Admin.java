@@ -565,7 +565,7 @@ public interface Admin extends AutoCloseable {
      * @return                      The AlterReplicaLogDirsResult
      */
     AlterReplicaLogDirsResult alterReplicaLogDirs(Map<TopicPartitionReplica, String> replicaAssignment,
-                                                  AlterReplicaLogDirsOptions options);
+        AlterReplicaLogDirsOptions options);
 
     /**
      * Query the information of all log directories on the given set of brokers
@@ -675,7 +675,7 @@ public interface Admin extends AutoCloseable {
      * @return The CreatePartitionsResult.
      */
     CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions,
-                                            CreatePartitionsOptions options);
+        CreatePartitionsOptions options);
 
     /**
      * Delete records whose offset is smaller than the given offset of the corresponding partition.
@@ -702,7 +702,7 @@ public interface Admin extends AutoCloseable {
      * @return The DeleteRecordsResult.
      */
     DeleteRecordsResult deleteRecords(Map<TopicPartition, RecordsToDelete> recordsToDelete,
-                                      DeleteRecordsOptions options);
+        DeleteRecordsOptions options);
 
     /**
      * Create a Delegation Token.
@@ -864,7 +864,7 @@ public interface Admin extends AutoCloseable {
      * @return The DescribeConsumerGroupsResult.
      */
     DescribeConsumerGroupsResult describeConsumerGroups(Collection<String> groupIds,
-                                                        DescribeConsumerGroupsOptions options);
+        DescribeConsumerGroupsOptions options);
 
     /**
      * Describe some consumer groups in the cluster, with the default options.
@@ -1047,8 +1047,8 @@ public interface Admin extends AutoCloseable {
      * @return The DeleteStreamsGroupOffsetsResult.
      */
     DeleteStreamsGroupOffsetsResult deleteStreamsGroupOffsets(String groupId,
-                                                                Set<TopicPartition> partitions,
-                                                                DeleteStreamsGroupOffsetsOptions options);
+        Set<TopicPartition> partitions,
+        DeleteStreamsGroupOffsetsOptions options);
 
     /**
      * Delete committed offsets for a set of partitions in a streams group with the default
@@ -1255,7 +1255,7 @@ public interface Admin extends AutoCloseable {
      * @return                The result.
      */
     ListPartitionReassignmentsResult listPartitionReassignments(Optional<Set<TopicPartition>> partitions,
-                                                                ListPartitionReassignmentsOptions options);
+        ListPartitionReassignmentsOptions options);
 
     /**
      * Remove members from the consumer group by given member identities.
@@ -1513,7 +1513,8 @@ public interface Admin extends AutoCloseable {
      * @return The AlterUserScramCredentialsResult.
      */
     AlterUserScramCredentialsResult alterUserScramCredentials(List<UserScramCredentialAlteration> alterations,
-                                                              AlterUserScramCredentialsOptions options);
+        AlterUserScramCredentialsOptions options);
+
     /**
      * Describes finalized as well as supported features.
      * <p>
@@ -1605,7 +1606,7 @@ public interface Admin extends AutoCloseable {
      * </ul>
      * <p>
      * This operation is supported by brokers with version 2.7.0 or higher.
-
+     
      * @param featureUpdates the map of finalized feature name to {@link FeatureUpdate}
      * @param options the options to use
      * @return the {@link UpdateFeaturesResult} containing the result
@@ -1789,7 +1790,7 @@ public interface Admin extends AutoCloseable {
      * @return The FenceProducersResult.
      */
     FenceProducersResult fenceProducers(Collection<String> transactionalIds,
-                                        FenceProducersOptions options);
+        FenceProducersOptions options);
 
     /**
      * List the configuration resources available in the cluster which matches config resource type.
@@ -1946,7 +1947,7 @@ public interface Admin extends AutoCloseable {
      * @return The DescribeShareGroupsResult.
      */
     DescribeShareGroupsResult describeShareGroups(Collection<String> groupIds,
-                                                  DescribeShareGroupsOptions options);
+        DescribeShareGroupsOptions options);
 
     /**
      * Describe some share groups in the cluster, with the default options.
@@ -2061,7 +2062,7 @@ public interface Admin extends AutoCloseable {
      * @return The DescribeStreamsGroupsResult.
      */
     DescribeStreamsGroupsResult describeStreamsGroups(Collection<String> groupIds,
-                                                      DescribeStreamsGroupsOptions options);
+        DescribeStreamsGroupsOptions options);
 
     /**
      * Describe streams groups in the cluster, with the default options.
@@ -2084,7 +2085,7 @@ public interface Admin extends AutoCloseable {
      * @return The DescribeClassicGroupsResult.
      */
     DescribeClassicGroupsResult describeClassicGroups(Collection<String> groupIds,
-                                                      DescribeClassicGroupsOptions options);
+        DescribeClassicGroupsOptions options);
 
     /**
      * Describe some classic groups in the cluster, with the default options.
@@ -2161,6 +2162,6 @@ public interface Admin extends AutoCloseable {
      * @param options               The options to use when terminating the transaction.
      * @return The TerminateTransactionResult.
      */
-    TerminateTransactionResult forceTerminateTransaction(String transactionalId, 
-                                                         TerminateTransactionOptions options);
+    TerminateTransactionResult forceTerminateTransaction(String transactionalId,
+        TerminateTransactionOptions options);
 }

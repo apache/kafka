@@ -130,8 +130,8 @@ public class ShareGroupCommandTest {
         Admin adminClient = mock(KafkaAdminClient.class);
         ListGroupsResult result = mock(ListGroupsResult.class);
         when(result.all()).thenReturn(KafkaFuture.completedFuture(List.of(
-                new GroupListing(firstGroup, Optional.of(GroupType.SHARE), "share", Optional.of(GroupState.STABLE)),
-                new GroupListing(secondGroup, Optional.of(GroupType.SHARE), "share", Optional.of(GroupState.EMPTY))
+            new GroupListing(firstGroup, Optional.of(GroupType.SHARE), "share", Optional.of(GroupState.STABLE)),
+            new GroupListing(secondGroup, Optional.of(GroupType.SHARE), "share", Optional.of(GroupState.EMPTY))
         )));
 
         when(adminClient.listGroups(any(ListGroupsOptions.class))).thenReturn(result);
@@ -209,7 +209,7 @@ public class ShareGroupCommandTest {
                 Map.of(
                     firstGroup,
                     KafkaFuture.completedFuture(
-                            Map.of(new TopicPartition("topic1", 0), new SharePartitionOffsetInfo(0L, Optional.of(1), Optional.of(0L))))
+                        Map.of(new TopicPartition("topic1", 0), new SharePartitionOffsetInfo(0L, Optional.of(1), Optional.of(0L))))
                 )
             );
 
@@ -805,14 +805,14 @@ public class ShareGroupCommandTest {
                 List<String> error = Stream.concat(
                     Stream.of("Error:"),
                     Arrays.stream(errorMessage.trim().split("\\s+"))
-                    ).toList();
+                ).toList();
 
                 List<String> errorLine = new ArrayList<>(error);
                 List<String> expectedResultHeader = List.of("TOPIC", "STATUS");
-                List<String> expectedResultValue1 =  new ArrayList<>();
+                List<String> expectedResultValue1 = new ArrayList<>();
                 expectedResultValue1.add(firstTopic);
                 expectedResultValue1.addAll(error);
-                List<String> expectedResultValue2 =  new ArrayList<>();
+                List<String> expectedResultValue2 = new ArrayList<>();
                 expectedResultValue2.add(secondTopic);
                 expectedResultValue2.addAll(error);
 
@@ -860,8 +860,8 @@ public class ShareGroupCommandTest {
                 ).toList();
 
                 List<String> expectedResultHeader = List.of("TOPIC", "STATUS");
-                List<String> expectedResultValue1 =  List.of(firstTopic, "Successful");
-                List<String> expectedResultValue2 =  new ArrayList<>();
+                List<String> expectedResultValue1 = List.of(firstTopic, "Successful");
+                List<String> expectedResultValue2 = new ArrayList<>();
                 expectedResultValue2.add(secondTopic);
                 expectedResultValue2.addAll(error);
 
@@ -1110,7 +1110,7 @@ public class ShareGroupCommandTest {
             assertEquals(expectedResults, service.deleteShareGroups());
         }
     }
-    
+
     @Test
     public void testAlterShareGroupMultipleTopicsSuccess() {
         String group = "share-group";
@@ -1130,7 +1130,7 @@ public class ShareGroupCommandTest {
             )
         );
         when(adminClient.listShareGroupOffsets(any(), any(ListShareGroupOffsetsOptions.class))).thenReturn(listShareGroupOffsetsResult);
-        
+
         AlterShareGroupOffsetsResult alterShareGroupOffsetsResult = mockAlterShareGroupOffsets(adminClient, group);
         TopicPartition tp0 = new TopicPartition(topic1, 0);
         TopicPartition tp1 = new TopicPartition(topic1, 1);
@@ -1155,7 +1155,7 @@ public class ShareGroupCommandTest {
             ),
             topic2, new TopicDescription(topic2, false, List.of(
                 new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of())
-        )));
+            )));
         DescribeTopicsResult topicsResult = mock(DescribeTopicsResult.class);
         when(topicsResult.allTopicNames()).thenReturn(completedFuture(descriptions));
         when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class))).thenReturn(topicsResult);
@@ -1190,7 +1190,7 @@ public class ShareGroupCommandTest {
             topic, new TopicDescription(topic, false, List.of(
                 new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of()),
                 new TopicPartitionInfo(1, new Node(0, "localhost", 9092), List.of(), List.of()))
-        ));
+            ));
         DescribeTopicsResult describeTopicResult = mock(DescribeTopicsResult.class);
         when(describeTopicResult.allTopicNames()).thenReturn(completedFuture(descriptions));
         when(adminClient.describeTopics(anyCollection())).thenReturn(describeTopicResult);
@@ -1267,8 +1267,8 @@ public class ShareGroupCommandTest {
             )),
             topic3, new TopicDescription(topic3, false, List.of(
                 new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of()
-            ))
-        ));
+                ))
+            ));
         DescribeTopicsResult describeTopicResult = mock(DescribeTopicsResult.class);
         when(describeTopicResult.allTopicNames()).thenReturn(completedFuture(descriptions));
         when(adminClient.describeTopics(anyCollection())).thenReturn(describeTopicResult);
@@ -1320,7 +1320,7 @@ public class ShareGroupCommandTest {
         Map<String, TopicDescription> descriptions = Map.of(
             topic, new TopicDescription(topic, false, List.of(
                 new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of())
-        )));
+            )));
         DescribeTopicsResult describeTopicResult = mock(DescribeTopicsResult.class);
         when(describeTopicResult.allTopicNames()).thenReturn(completedFuture(descriptions));
         when(adminClient.describeTopics(anyCollection())).thenReturn(describeTopicResult);
@@ -1419,7 +1419,7 @@ public class ShareGroupCommandTest {
             assertTrue(exited.get());
         }
     }
-    
+
     @Test
     public void testAlterShareGroupUnsubscribedTopicSuccess() {
         String group = "share-group";
@@ -1453,7 +1453,7 @@ public class ShareGroupCommandTest {
         Map<String, TopicDescription> descriptions = Map.of(
             topic, new TopicDescription(topic, false, List.of(
                 new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of())
-        )));
+            )));
         DescribeTopicsResult describeTopicResult = mock(DescribeTopicsResult.class);
         when(describeTopicResult.allTopicNames()).thenReturn(completedFuture(descriptions));
         when(adminClient.describeTopics(anyCollection())).thenReturn(describeTopicResult);

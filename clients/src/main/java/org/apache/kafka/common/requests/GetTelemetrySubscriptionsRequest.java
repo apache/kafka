@@ -59,8 +59,8 @@ public class GetTelemetrySubscriptionsRequest extends AbstractRequest {
     @Override
     public GetTelemetrySubscriptionsResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         GetTelemetrySubscriptionsResponseData responseData = new GetTelemetrySubscriptionsResponseData()
-                .setErrorCode(Errors.forException(e).code())
-                .setThrottleTimeMs(throttleTimeMs);
+            .setErrorCode(Errors.forException(e).code())
+            .setThrottleTimeMs(throttleTimeMs);
         return new GetTelemetrySubscriptionsResponse(responseData);
     }
 
@@ -71,6 +71,6 @@ public class GetTelemetrySubscriptionsRequest extends AbstractRequest {
 
     public static GetTelemetrySubscriptionsRequest parse(Readable readable, short version) {
         return new GetTelemetrySubscriptionsRequest(new GetTelemetrySubscriptionsRequestData(
-                readable, version), version);
+            readable, version), version);
     }
 }

@@ -30,7 +30,7 @@ public abstract class WrappingNullableSerde<T, InnerK, InnerV> implements Serde<
     private final WrappingNullableDeserializer<T, InnerK, InnerV> deserializer;
 
     protected WrappingNullableSerde(final WrappingNullableSerializer<T, InnerK, InnerV> serializer,
-                                    final WrappingNullableDeserializer<T, InnerK, InnerV> deserializer) {
+        final WrappingNullableDeserializer<T, InnerK, InnerV> deserializer) {
         Objects.requireNonNull(serializer, "serializer can't be null");
         Objects.requireNonNull(deserializer, "deserializer can't be null");
         this.serializer = serializer;
@@ -49,7 +49,7 @@ public abstract class WrappingNullableSerde<T, InnerK, InnerV> implements Serde<
 
     @Override
     public void configure(final Map<String, ?> configs,
-                          final boolean isKey) {
+        final boolean isKey) {
         serializer.configure(configs, isKey);
         deserializer.configure(configs, isKey);
     }

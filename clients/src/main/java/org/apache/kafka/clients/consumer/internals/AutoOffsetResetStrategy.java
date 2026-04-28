@@ -150,9 +150,9 @@ public class AutoOffsetResetStrategy {
     @Override
     public String toString() {
         return "AutoOffsetResetStrategy{" +
-                "type=" + type +
-                (duration.map(value -> ", duration=" + value).orElse("")) +
-                '}';
+            "type=" + type +
+            (duration.map(value -> ", duration=" + value).orElse("")) +
+            '}';
     }
 
     public static class Validator implements ConfigDef.Validator {
@@ -163,7 +163,7 @@ public class AutoOffsetResetStrategy {
                 fromString(offsetStrategy);
             } catch (Exception e) {
                 throw new ConfigException(name, value, "Invalid value `" + offsetStrategy + "` for configuration " +
-                        name + ". The value must be either 'earliest', 'latest', 'none' or of the format 'by_duration:<PnDTnHnMn.nS.>'.");
+                    name + ". The value must be either 'earliest', 'latest', 'none' or of the format 'by_duration:<PnDTnHnMn.nS.>'.");
             }
         }
 

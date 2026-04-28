@@ -165,7 +165,7 @@ public class ReplicaVerificationTool {
 
                 List<TopicPartition> topicPartitions = filteredTopicMetadata.stream()
                     .flatMap(topicMetadata -> topicMetadata.partitions().stream()
-                        .map(partitionMetadata -> new TopicPartition(topicMetadata.name(), partitionMetadata.partition()))
+                            .map(partitionMetadata -> new TopicPartition(topicMetadata.name(), partitionMetadata.partition()))
                     )
                     .collect(Collectors.toList());
 
@@ -362,9 +362,9 @@ public class ReplicaVerificationTool {
         private TopicPartition maxLagTopicAndPartition;
 
         ReplicaBuffer(Map<TopicPartition, Integer> expectedReplicasPerTopicPartition,
-                      Map<TopicPartition, Long> initialOffsets,
-                      int expectedNumFetchers,
-                      long reportInterval) {
+            Map<TopicPartition, Long> initialOffsets,
+            int expectedNumFetchers,
+            long reportInterval) {
             this.expectedReplicasPerTopicPartition = expectedReplicasPerTopicPartition;
             this.expectedNumFetchers = expectedNumFetchers;
             this.reportInterval = reportInterval;
@@ -404,8 +404,8 @@ public class ReplicaVerificationTool {
         }
 
         void addFetchedData(TopicPartition topicPartition,
-                            int replicaId,
-                            FetchResponseData.PartitionData partitionData) {
+            int replicaId,
+            FetchResponseData.PartitionData partitionData) {
             recordsCache.get(topicPartition).put(replicaId, partitionData);
         }
 
@@ -534,16 +534,16 @@ public class ReplicaVerificationTool {
         private final Map<Uuid, String> topicNames;
 
         public ReplicaFetcher(String name,
-                              Node sourceBroker,
-                              Iterable<TopicPartition> topicPartitions,
-                              Map<String, Uuid> topicIds,
-                              ReplicaBuffer replicaBuffer,
-                              int fetchSize,
-                              int maxWait,
-                              int minBytes,
-                              boolean doVerification,
-                              Properties consumerConfig,
-                              int fetcherId) {
+            Node sourceBroker,
+            Iterable<TopicPartition> topicPartitions,
+            Map<String, Uuid> topicIds,
+            ReplicaBuffer replicaBuffer,
+            int fetchSize,
+            int maxWait,
+            int minBytes,
+            boolean doVerification,
+            Properties consumerConfig,
+            int fetcherId) {
             super(name);
             this.sourceBroker = sourceBroker;
             this.topicPartitions = topicPartitions;
@@ -647,11 +647,11 @@ public class ReplicaVerificationTool {
         private final NetworkClient networkClient;
 
         ReplicaFetcherBlockingSend(Node sourceNode,
-                                   ConsumerConfig consumerConfig,
-                                   Metrics metrics,
-                                   Time time,
-                                   int fetcherId,
-                                   String clientId) {
+            ConsumerConfig consumerConfig,
+            Metrics metrics,
+            Time time,
+            int fetcherId,
+            String clientId) {
             this.sourceNode = sourceNode;
             this.time = time;
             this.socketTimeout = consumerConfig.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
@@ -664,10 +664,12 @@ public class ReplicaVerificationTool {
                 metrics,
                 time,
                 "replica-fetcher",
-                new HashMap<String, String>() {{
+                new HashMap<String, String>() {
+                    {
                         put("broker-id", sourceNode.idString());
                         put("fetcher-id", String.valueOf(fetcherId));
-                    }},
+                    }
+                },
                 false,
                 channelBuilder,
                 logContext

@@ -40,25 +40,25 @@ public class CreateDelegationTokenResponse extends AbstractResponse {
     }
 
     public static CreateDelegationTokenResponse prepareResponse(int version,
-            int throttleTimeMs,
-            Errors error,
-            KafkaPrincipal owner,
-            KafkaPrincipal tokenRequester,
-            long issueTimestamp,
-            long expiryTimestamp,
-            long maxTimestamp,
-            String tokenId,
-            ByteBuffer hmac) {
+        int throttleTimeMs,
+        Errors error,
+        KafkaPrincipal owner,
+        KafkaPrincipal tokenRequester,
+        long issueTimestamp,
+        long expiryTimestamp,
+        long maxTimestamp,
+        String tokenId,
+        ByteBuffer hmac) {
         CreateDelegationTokenResponseData data = new CreateDelegationTokenResponseData()
-                .setThrottleTimeMs(throttleTimeMs)
-                .setErrorCode(error.code())
-                .setPrincipalType(owner.getPrincipalType())
-                .setPrincipalName(owner.getName())
-                .setIssueTimestampMs(issueTimestamp)
-                .setExpiryTimestampMs(expiryTimestamp)
-                .setMaxTimestampMs(maxTimestamp)
-                .setTokenId(tokenId)
-                .setHmac(hmac.array());
+            .setThrottleTimeMs(throttleTimeMs)
+            .setErrorCode(error.code())
+            .setPrincipalType(owner.getPrincipalType())
+            .setPrincipalName(owner.getName())
+            .setIssueTimestampMs(issueTimestamp)
+            .setExpiryTimestampMs(expiryTimestamp)
+            .setMaxTimestampMs(maxTimestamp)
+            .setTokenId(tokenId)
+            .setHmac(hmac.array());
         if (version > 2) {
             data.setTokenRequesterPrincipalType(tokenRequester.getPrincipalType())
                 .setTokenRequesterPrincipalName(tokenRequester.getName());
@@ -67,8 +67,8 @@ public class CreateDelegationTokenResponse extends AbstractResponse {
     }
 
     public static CreateDelegationTokenResponse prepareResponse(int version, int throttleTimeMs, Errors error,
-                                                                KafkaPrincipal owner, KafkaPrincipal requester) {
-        return prepareResponse(version, throttleTimeMs, error, owner, requester, -1, -1, -1, "", ByteBuffer.wrap(new byte[] {}));
+        KafkaPrincipal owner, KafkaPrincipal requester) {
+        return prepareResponse(version, throttleTimeMs, error, owner, requester, -1, -1, -1, "", ByteBuffer.wrap(new byte[]{}));
     }
 
     @Override

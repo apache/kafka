@@ -54,14 +54,14 @@ public class Producer extends Thread {
     private volatile boolean closed;
 
     public Producer(String threadName,
-                    String bootstrapServers,
-                    String topic,
-                    boolean isAsync,
-                    String transactionalId,
-                    boolean enableIdempotency,
-                    int numRecords,
-                    int transactionTimeoutMs,
-                    CountDownLatch latch) {
+            String bootstrapServers,
+            String topic,
+            boolean isAsync,
+            String transactionalId,
+            boolean enableIdempotency,
+            int numRecords,
+            int transactionTimeoutMs,
+            CountDownLatch latch) {
         super(threadName);
         this.bootstrapServers = bootstrapServers;
         this.topic = topic;
@@ -135,14 +135,14 @@ public class Producer extends Thread {
     }
 
     private RecordMetadata syncSend(KafkaProducer<Integer, String> producer, int key, String value)
-        throws ExecutionException, InterruptedException {
+            throws ExecutionException, InterruptedException {
         try {
             // send the record and then call get, which blocks waiting for the ack from the broker
             RecordMetadata metadata = producer.send(new ProducerRecord<>(topic, key, value)).get();
             Utils.maybePrintRecord(numRecords, key, value, metadata);
             return metadata;
         } catch (AuthorizationException | UnsupportedVersionException | ProducerFencedException
-                 | FencedInstanceIdException | OutOfOrderSequenceException | SerializationException e) {
+                | FencedInstanceIdException | OutOfOrderSequenceException | SerializationException e) {
             Utils.printErr(e.getMessage());
             // we can't recover from these exceptions
             shutdown();

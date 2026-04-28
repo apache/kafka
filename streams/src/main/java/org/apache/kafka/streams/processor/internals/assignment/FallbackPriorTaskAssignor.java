@@ -40,10 +40,10 @@ public class FallbackPriorTaskAssignor implements LegacyTaskAssignor {
 
     @Override
     public boolean assign(final Map<ProcessId, ClientState> clients,
-                          final Set<TaskId> allTaskIds,
-                          final Set<TaskId> statefulTaskIds,
-                          final RackAwareTaskAssignor rackAwareTaskAssignor,
-                          final AssignmentConfigs configs) {
+        final Set<TaskId> allTaskIds,
+        final Set<TaskId> statefulTaskIds,
+        final RackAwareTaskAssignor rackAwareTaskAssignor,
+        final AssignmentConfigs configs) {
         // Pass null for RackAwareTaskAssignor to disable it if we fallback
         delegate.assign(clients, allTaskIds, statefulTaskIds, null, configs);
         return true;

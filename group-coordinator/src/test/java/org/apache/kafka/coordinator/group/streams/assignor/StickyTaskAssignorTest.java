@@ -844,7 +844,7 @@ public class StickyTaskAssignorTest {
         final int numTasks = 100;
         final int numClients = 5;
         final int numStandbyReplicas = 2;
-        
+
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
         for (int i = 0; i < numClients; i++) {
             members.put("member" + i, createAssignmentMemberSpec("process" + i));
@@ -873,7 +873,7 @@ public class StickyTaskAssignorTest {
         assertTrue(allStandbyTasks.size() > 0, "Should have some standby tasks assigned");
         // Maximum possible = numTasks * min(numStandbyReplicas, numClients - 1) = 100 * 2 = 200
         int maxPossibleStandbyTasks = numTasks * Math.min(numStandbyReplicas, numClients - 1);
-        assertTrue(allStandbyTasks.size() <= maxPossibleStandbyTasks, 
+        assertTrue(allStandbyTasks.size() <= maxPossibleStandbyTasks,
             "Should not exceed maximum possible standby tasks: " + maxPossibleStandbyTasks);
 
         // Verify no client has both active and standby for the same task
@@ -895,7 +895,7 @@ public class StickyTaskAssignorTest {
         // With 100 tasks and 5 clients, each should have 20 tasks
         assertEquals(20, minActiveTasks);
         assertEquals(20, maxActiveTasks);
-        
+
         // Verify standby task distribution is reasonable
         int minStandbyTasks = Integer.MAX_VALUE;
         int maxStandbyTasks = 0;
@@ -915,7 +915,7 @@ public class StickyTaskAssignorTest {
         final int numTasks = 14;
         final int numClients = 7;
         final int numStandbyReplicas = 1;
-        
+
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
         for (int i = 0; i < numClients; i++) {
             members.put("member" + i, createAssignmentMemberSpec("process" + i));
@@ -966,7 +966,7 @@ public class StickyTaskAssignorTest {
         final int numTasks = 6;
         final int numClients = 3;
         final int numStandbyReplicas = 5;
-        
+
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
         for (int i = 0; i < numClients; i++) {
             members.put("member" + i, createAssignmentMemberSpec("process" + i));
@@ -992,7 +992,7 @@ public class StickyTaskAssignorTest {
             List<Integer> memberStandbyTasks = getAllStandbyTaskIds(result, memberId);
             allStandbyTasks.addAll(memberStandbyTasks);
         }
-        
+
         // Maximum possible = numTasks * min(numStandbyReplicas, numClients - 1) = 6 * 2 = 12
         int maxPossibleStandbyTasks = numTasks * Math.min(numStandbyReplicas, numClients - 1);
         assertTrue(allStandbyTasks.size() <= maxPossibleStandbyTasks);
@@ -1005,12 +1005,12 @@ public class StickyTaskAssignorTest {
         final int numSubtopologies = 10;
         final int numClients = 4;
         final int numStandbyReplicas = 1;
-        
+
         List<String> subtopologies = new ArrayList<>();
         for (int i = 0; i < numSubtopologies; i++) {
             subtopologies.add("subtopology-" + i);
         }
-        
+
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
         for (int i = 0; i < numClients; i++) {
             members.put("member" + i, createAssignmentMemberSpec("process" + i));
@@ -1043,7 +1043,7 @@ public class StickyTaskAssignorTest {
         // Test edge case: single client with multiple standby replicas
         final int numTasks = 10;
         final int numStandbyReplicas = 3;
-        
+
         Map<String, AssignmentMemberSpec> members = mkMap(
             mkEntry("member1", createAssignmentMemberSpec("process1"))
         );
@@ -1055,7 +1055,7 @@ public class StickyTaskAssignorTest {
 
         // Single client should get all active tasks
         assertEquals(numTasks, getAllActiveTaskCount(result, "member1"));
-        
+
         // No standby tasks should be assigned since there's only one client
         // (standby tasks can't be assigned to the same client as active tasks)
         assertTrue(getAllStandbyTaskIds(result, "member1").isEmpty());
@@ -1092,7 +1092,7 @@ public class StickyTaskAssignorTest {
             List<Integer> memberStandbyTasks = getAllStandbyTaskIds(result, memberId);
             allStandbyTasks.addAll(memberStandbyTasks);
         }
-        
+
         // Maximum possible = numTasks * 1 = 4
         assertEquals(numTasks, allStandbyTasks.size());
     }
@@ -1166,18 +1166,18 @@ public class StickyTaskAssignorTest {
         assertNotNull(testMember1);
         assertEquals(1, testMember1.activeTasks().get("test-subtopology1").size());
         assertEquals(1, testMember1.activeTasks().get("test-subtopology2").size());
-        
+
         final MemberAssignment testMember2 = result.members().get("member2");
         assertNotNull(testMember2);
         assertEquals(1, testMember2.activeTasks().get("test-subtopology1").size());
         assertEquals(1, testMember2.activeTasks().get("test-subtopology2").size());
-        
+
         // Verify all tasks are assigned exactly once
         final Set<Integer> allSubtopology1Tasks = new HashSet<>();
         allSubtopology1Tasks.addAll(testMember1.activeTasks().get("test-subtopology1"));
         allSubtopology1Tasks.addAll(testMember2.activeTasks().get("test-subtopology1"));
         assertEquals(Sets.newSet(0, 1), allSubtopology1Tasks);
-        
+
         final Set<Integer> allSubtopology2Tasks = new HashSet<>();
         allSubtopology2Tasks.addAll(testMember1.activeTasks().get("test-subtopology2"));
         allSubtopology2Tasks.addAll(testMember2.activeTasks().get("test-subtopology2"));
@@ -1257,17 +1257,17 @@ public class StickyTaskAssignorTest {
         // Process1: active=[0], standby=[1] (previously had both active and standby tasks)
         // Process2: active=[1] (had the active task that process1 had as standby)
         // Process3: no previous tasks
-        final AssignmentMemberSpec memberSpec1 = createAssignmentMemberSpec("process1", 
-            mkMap(mkEntry("test-subtopology", Sets.newSet(0))), 
+        final AssignmentMemberSpec memberSpec1 = createAssignmentMemberSpec("process1",
+            mkMap(mkEntry("test-subtopology", Sets.newSet(0))),
             mkMap(mkEntry("test-subtopology", Sets.newSet(1))));
         final AssignmentMemberSpec memberSpec2 = createAssignmentMemberSpec("process2",
-            mkMap(mkEntry("test-subtopology", Sets.newSet(1))), 
+            mkMap(mkEntry("test-subtopology", Sets.newSet(1))),
             Map.of());
         final AssignmentMemberSpec memberSpec3 = createAssignmentMemberSpec("process3");
 
         final Map<String, AssignmentMemberSpec> members = mkMap(
-            mkEntry("member1", memberSpec1), 
-            mkEntry("member2", memberSpec2), 
+            mkEntry("member1", memberSpec1),
+            mkEntry("member2", memberSpec2),
             mkEntry("member3", memberSpec3));
 
         // We have 2 active tasks + 1 standby replica = 4 total tasks
@@ -1282,18 +1282,18 @@ public class StickyTaskAssignorTest {
         // which is below the quota of 2 tasks per process
         final MemberAssignment member1 = result.members().get("member1");
         assertNotNull(member1);
-        
+
         // Member1 should retain its active task 0
         assertTrue(member1.activeTasks().get("test-subtopology").contains(0));
-        
+
         // Member1 should get standby task 1 because it previously owned it and is below quota
         assertNotNull(member1.standbyTasks().get("test-subtopology"), "Member1 should have standby tasks assigned");
-        assertTrue(member1.standbyTasks().get("test-subtopology").contains(1), 
+        assertTrue(member1.standbyTasks().get("test-subtopology").contains(1),
             "Member1 should have standby task 1, but has: " + member1.standbyTasks().get("test-subtopology"));
-        
+
         // Verify that member1 doesn't have active task 1 (standby can't be same as active)
         assertFalse(member1.activeTasks().get("test-subtopology").contains(1));
-        
+
         // Verify the process1's total task count is at or below quota
         int member1ActiveCount = member1.activeTasks().get("test-subtopology").size();
         int member1StandbyCount = member1.standbyTasks().get("test-subtopology").size();

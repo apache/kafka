@@ -125,14 +125,16 @@ public class MetricsDuringTopicCreationDeletionTest {
                 if (!running) return;
                 try {
                     clusterInstance.createTopic(topic, PARTITION_NUM, REPLICATION_FACTOR);
-                } catch (Exception ignored) { }
+                } catch (Exception ignored) {
+                }
             }
 
             for (String topic : topics) {
                 if (!running) return;
                 try {
                     clusterInstance.deleteTopic(topic);
-                } catch (Exception ignored) { }
+                } catch (Exception ignored) {
+                }
             }
         }
     }

@@ -113,87 +113,87 @@ public class PluginUtilsTest {
     @Test
     public void testConnectApiClasses() {
         List<String> apiClasses = List.of(
-            // Enumerate all packages and classes
-            "org.apache.kafka.connect.",
-            "org.apache.kafka.connect.components.",
-            "org.apache.kafka.connect.components.Versioned",
-            //"org.apache.kafka.connect.connector.policy.", isolated by default
-            "org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy",
-            "org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest",
-            "org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest$ClientType",
-            "org.apache.kafka.connect.connector.",
-            "org.apache.kafka.connect.connector.Connector",
-            "org.apache.kafka.connect.connector.ConnectorContext",
-            "org.apache.kafka.connect.connector.ConnectRecord",
-            "org.apache.kafka.connect.connector.Task",
-            "org.apache.kafka.connect.data.",
-            "org.apache.kafka.connect.data.ConnectSchema",
-            "org.apache.kafka.connect.data.Date",
-            "org.apache.kafka.connect.data.Decimal",
-            "org.apache.kafka.connect.data.Field",
-            "org.apache.kafka.connect.data.Schema",
-            "org.apache.kafka.connect.data.SchemaAndValue",
-            "org.apache.kafka.connect.data.SchemaBuilder",
-            "org.apache.kafka.connect.data.SchemaProjector",
-            "org.apache.kafka.connect.data.Struct",
-            "org.apache.kafka.connect.data.Time",
-            "org.apache.kafka.connect.data.Timestamp",
-            "org.apache.kafka.connect.data.Values",
-            "org.apache.kafka.connect.errors.",
-            "org.apache.kafka.connect.errors.AlreadyExistsException",
-            "org.apache.kafka.connect.errors.ConnectException",
-            "org.apache.kafka.connect.errors.DataException",
-            "org.apache.kafka.connect.errors.IllegalWorkerStateException",
-            "org.apache.kafka.connect.errors.NotFoundException",
-            "org.apache.kafka.connect.errors.RetriableException",
-            "org.apache.kafka.connect.errors.SchemaBuilderException",
-            "org.apache.kafka.connect.errors.SchemaProjectorException",
-            "org.apache.kafka.connect.header.",
-            "org.apache.kafka.connect.header.ConnectHeader",
-            "org.apache.kafka.connect.header.ConnectHeaders",
-            "org.apache.kafka.connect.header.Header",
-            "org.apache.kafka.connect.header.Headers",
-            "org.apache.kafka.connect.health.",
-            "org.apache.kafka.connect.health.AbstractState",
-            "org.apache.kafka.connect.health.ConnectClusterDetails",
-            "org.apache.kafka.connect.health.ConnectClusterState",
-            "org.apache.kafka.connect.health.ConnectorHealth",
-            "org.apache.kafka.connect.health.ConnectorState",
-            "org.apache.kafka.connect.health.ConnectorType",
-            "org.apache.kafka.connect.health.TaskState",
-            "org.apache.kafka.connect.rest.",
-            "org.apache.kafka.connect.rest.ConnectRestExtension",
-            "org.apache.kafka.connect.rest.ConnectRestExtensionContext",
-            "org.apache.kafka.connect.sink.",
-            "org.apache.kafka.connect.sink.SinkConnector",
-            "org.apache.kafka.connect.sink.SinkRecord",
-            "org.apache.kafka.connect.sink.SinkTask",
-            "org.apache.kafka.connect.sink.SinkTaskContext",
-            "org.apache.kafka.connect.sink.ErrantRecordReporter",
-            "org.apache.kafka.connect.source.",
-            "org.apache.kafka.connect.source.SourceConnector",
-            "org.apache.kafka.connect.source.SourceRecord",
-            "org.apache.kafka.connect.source.SourceTask",
-            "org.apache.kafka.connect.source.SourceTaskContext",
-            "org.apache.kafka.connect.storage.",
-            "org.apache.kafka.connect.storage.Converter",
-            "org.apache.kafka.connect.storage.ConverterConfig",
-            "org.apache.kafka.connect.storage.ConverterType",
-            "org.apache.kafka.connect.storage.HeaderConverter",
-            "org.apache.kafka.connect.storage.OffsetStorageReader",
-            //"org.apache.kafka.connect.storage.SimpleHeaderConverter", explicitly isolated
-            //"org.apache.kafka.connect.storage.StringConverter", explicitly isolated
-            "org.apache.kafka.connect.storage.StringConverterConfig",
-            //"org.apache.kafka.connect.transforms.", isolated by default
-            "org.apache.kafka.connect.transforms.Transformation",
-            "org.apache.kafka.connect.transforms.predicates.Predicate",
-            "org.apache.kafka.connect.util.",
-            "org.apache.kafka.connect.util.ConnectorUtils"
+                // Enumerate all packages and classes
+                "org.apache.kafka.connect.",
+                "org.apache.kafka.connect.components.",
+                "org.apache.kafka.connect.components.Versioned",
+                //"org.apache.kafka.connect.connector.policy.", isolated by default
+                "org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy",
+                "org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest",
+                "org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest$ClientType",
+                "org.apache.kafka.connect.connector.",
+                "org.apache.kafka.connect.connector.Connector",
+                "org.apache.kafka.connect.connector.ConnectorContext",
+                "org.apache.kafka.connect.connector.ConnectRecord",
+                "org.apache.kafka.connect.connector.Task",
+                "org.apache.kafka.connect.data.",
+                "org.apache.kafka.connect.data.ConnectSchema",
+                "org.apache.kafka.connect.data.Date",
+                "org.apache.kafka.connect.data.Decimal",
+                "org.apache.kafka.connect.data.Field",
+                "org.apache.kafka.connect.data.Schema",
+                "org.apache.kafka.connect.data.SchemaAndValue",
+                "org.apache.kafka.connect.data.SchemaBuilder",
+                "org.apache.kafka.connect.data.SchemaProjector",
+                "org.apache.kafka.connect.data.Struct",
+                "org.apache.kafka.connect.data.Time",
+                "org.apache.kafka.connect.data.Timestamp",
+                "org.apache.kafka.connect.data.Values",
+                "org.apache.kafka.connect.errors.",
+                "org.apache.kafka.connect.errors.AlreadyExistsException",
+                "org.apache.kafka.connect.errors.ConnectException",
+                "org.apache.kafka.connect.errors.DataException",
+                "org.apache.kafka.connect.errors.IllegalWorkerStateException",
+                "org.apache.kafka.connect.errors.NotFoundException",
+                "org.apache.kafka.connect.errors.RetriableException",
+                "org.apache.kafka.connect.errors.SchemaBuilderException",
+                "org.apache.kafka.connect.errors.SchemaProjectorException",
+                "org.apache.kafka.connect.header.",
+                "org.apache.kafka.connect.header.ConnectHeader",
+                "org.apache.kafka.connect.header.ConnectHeaders",
+                "org.apache.kafka.connect.header.Header",
+                "org.apache.kafka.connect.header.Headers",
+                "org.apache.kafka.connect.health.",
+                "org.apache.kafka.connect.health.AbstractState",
+                "org.apache.kafka.connect.health.ConnectClusterDetails",
+                "org.apache.kafka.connect.health.ConnectClusterState",
+                "org.apache.kafka.connect.health.ConnectorHealth",
+                "org.apache.kafka.connect.health.ConnectorState",
+                "org.apache.kafka.connect.health.ConnectorType",
+                "org.apache.kafka.connect.health.TaskState",
+                "org.apache.kafka.connect.rest.",
+                "org.apache.kafka.connect.rest.ConnectRestExtension",
+                "org.apache.kafka.connect.rest.ConnectRestExtensionContext",
+                "org.apache.kafka.connect.sink.",
+                "org.apache.kafka.connect.sink.SinkConnector",
+                "org.apache.kafka.connect.sink.SinkRecord",
+                "org.apache.kafka.connect.sink.SinkTask",
+                "org.apache.kafka.connect.sink.SinkTaskContext",
+                "org.apache.kafka.connect.sink.ErrantRecordReporter",
+                "org.apache.kafka.connect.source.",
+                "org.apache.kafka.connect.source.SourceConnector",
+                "org.apache.kafka.connect.source.SourceRecord",
+                "org.apache.kafka.connect.source.SourceTask",
+                "org.apache.kafka.connect.source.SourceTaskContext",
+                "org.apache.kafka.connect.storage.",
+                "org.apache.kafka.connect.storage.Converter",
+                "org.apache.kafka.connect.storage.ConverterConfig",
+                "org.apache.kafka.connect.storage.ConverterType",
+                "org.apache.kafka.connect.storage.HeaderConverter",
+                "org.apache.kafka.connect.storage.OffsetStorageReader",
+                //"org.apache.kafka.connect.storage.SimpleHeaderConverter", explicitly isolated
+                //"org.apache.kafka.connect.storage.StringConverter", explicitly isolated
+                "org.apache.kafka.connect.storage.StringConverterConfig",
+                //"org.apache.kafka.connect.transforms.", isolated by default
+                "org.apache.kafka.connect.transforms.Transformation",
+                "org.apache.kafka.connect.transforms.predicates.Predicate",
+                "org.apache.kafka.connect.util.",
+                "org.apache.kafka.connect.util.ConnectorUtils"
         );
         // Classes in the API should never be loaded in isolation.
         for (String clazz : apiClasses) {
             assertFalse(PluginUtils.shouldLoadInIsolation(clazz),
-                clazz + " from 'api' is loaded in isolation but should not be");
+                    clazz + " from 'api' is loaded in isolation but should not be");
         }
     }
 
@@ -201,153 +201,153 @@ public class PluginUtilsTest {
     public void testConnectRuntimeClasses() {
         // Only list packages, because there are too many classes.
         List<String> runtimeClasses = List.of(
-            "org.apache.kafka.connect.cli.",
-            //"org.apache.kafka.connect.connector.policy.", isolated by default
-            //"org.apache.kafka.connect.converters.", isolated by default
-            "org.apache.kafka.connect.runtime.",
-            "org.apache.kafka.connect.runtime.distributed",
-            "org.apache.kafka.connect.runtime.errors",
-            "org.apache.kafka.connect.runtime.health",
-            "org.apache.kafka.connect.runtime.isolation",
-            "org.apache.kafka.connect.runtime.rest.",
-            "org.apache.kafka.connect.runtime.rest.entities.",
-            "org.apache.kafka.connect.runtime.rest.errors.",
-            "org.apache.kafka.connect.runtime.rest.resources.",
-            "org.apache.kafka.connect.runtime.rest.util.",
-            "org.apache.kafka.connect.runtime.standalone.",
-            "org.apache.kafka.connect.runtime.rest.",
-            "org.apache.kafka.connect.storage.",
-            "org.apache.kafka.connect.tools.",
-            "org.apache.kafka.connect.util."
+                "org.apache.kafka.connect.cli.",
+                //"org.apache.kafka.connect.connector.policy.", isolated by default
+                //"org.apache.kafka.connect.converters.", isolated by default
+                "org.apache.kafka.connect.runtime.",
+                "org.apache.kafka.connect.runtime.distributed",
+                "org.apache.kafka.connect.runtime.errors",
+                "org.apache.kafka.connect.runtime.health",
+                "org.apache.kafka.connect.runtime.isolation",
+                "org.apache.kafka.connect.runtime.rest.",
+                "org.apache.kafka.connect.runtime.rest.entities.",
+                "org.apache.kafka.connect.runtime.rest.errors.",
+                "org.apache.kafka.connect.runtime.rest.resources.",
+                "org.apache.kafka.connect.runtime.rest.util.",
+                "org.apache.kafka.connect.runtime.standalone.",
+                "org.apache.kafka.connect.runtime.rest.",
+                "org.apache.kafka.connect.storage.",
+                "org.apache.kafka.connect.tools.",
+                "org.apache.kafka.connect.util."
         );
         for (String clazz : runtimeClasses) {
             assertFalse(PluginUtils.shouldLoadInIsolation(clazz),
-                clazz + " from 'runtime' is loaded in isolation but should not be");
+                    clazz + " from 'runtime' is loaded in isolation but should not be");
         }
     }
 
     @Test
     public void testAllowedRuntimeClasses() {
         List<String> jsonConverterClasses = List.of(
-            "org.apache.kafka.connect.connector.policy.",
-            "org.apache.kafka.connect.connector.policy.AbstractConnectorClientConfigOverridePolicy",
-            "org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy",
-            "org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy",
-            "org.apache.kafka.connect.connector.policy.PrincipalConnectorClientConfigOverridePolicy",
-            "org.apache.kafka.connect.converters.",
-            "org.apache.kafka.connect.converters.ByteArrayConverter",
-            "org.apache.kafka.connect.converters.DoubleConverter",
-            "org.apache.kafka.connect.converters.FloatConverter",
-            "org.apache.kafka.connect.converters.IntegerConverter",
-            "org.apache.kafka.connect.converters.LongConverter",
-            "org.apache.kafka.connect.converters.NumberConverter",
-            "org.apache.kafka.connect.converters.NumberConverterConfig",
-            "org.apache.kafka.connect.converters.ShortConverter",
-            //"org.apache.kafka.connect.storage.", not isolated by default
-            "org.apache.kafka.connect.storage.StringConverter",
-            "org.apache.kafka.connect.storage.SimpleHeaderConverter"
+                "org.apache.kafka.connect.connector.policy.",
+                "org.apache.kafka.connect.connector.policy.AbstractConnectorClientConfigOverridePolicy",
+                "org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy",
+                "org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy",
+                "org.apache.kafka.connect.connector.policy.PrincipalConnectorClientConfigOverridePolicy",
+                "org.apache.kafka.connect.converters.",
+                "org.apache.kafka.connect.converters.ByteArrayConverter",
+                "org.apache.kafka.connect.converters.DoubleConverter",
+                "org.apache.kafka.connect.converters.FloatConverter",
+                "org.apache.kafka.connect.converters.IntegerConverter",
+                "org.apache.kafka.connect.converters.LongConverter",
+                "org.apache.kafka.connect.converters.NumberConverter",
+                "org.apache.kafka.connect.converters.NumberConverterConfig",
+                "org.apache.kafka.connect.converters.ShortConverter",
+                //"org.apache.kafka.connect.storage.", not isolated by default
+                "org.apache.kafka.connect.storage.StringConverter",
+                "org.apache.kafka.connect.storage.SimpleHeaderConverter"
         );
         for (String clazz : jsonConverterClasses) {
             assertTrue(PluginUtils.shouldLoadInIsolation(clazz),
-                clazz + " from 'runtime' is not loaded in isolation but should be");
+                    clazz + " from 'runtime' is not loaded in isolation but should be");
         }
     }
 
     @Test
     public void testTransformsClasses() {
         List<String> transformsClasses = List.of(
-            "org.apache.kafka.connect.transforms.",
-            "org.apache.kafka.connect.transforms.util.",
-            "org.apache.kafka.connect.transforms.util.NonEmptyListValidator",
-            "org.apache.kafka.connect.transforms.util.RegexValidator",
-            "org.apache.kafka.connect.transforms.util.Requirements",
-            "org.apache.kafka.connect.transforms.util.SchemaUtil",
-            "org.apache.kafka.connect.transforms.util.SimpleConfig",
-            "org.apache.kafka.connect.transforms.Cast",
-            "org.apache.kafka.connect.transforms.Cast$Key",
-            "org.apache.kafka.connect.transforms.Cast$Value",
-            "org.apache.kafka.connect.transforms.ExtractField",
-            "org.apache.kafka.connect.transforms.ExtractField$Key",
-            "org.apache.kafka.connect.transforms.ExtractField$Value",
-            "org.apache.kafka.connect.transforms.Flatten",
-            "org.apache.kafka.connect.transforms.Flatten$Key",
-            "org.apache.kafka.connect.transforms.Flatten$Value",
-            "org.apache.kafka.connect.transforms.HoistField",
-            "org.apache.kafka.connect.transforms.HoistField$Key",
-            "org.apache.kafka.connect.transforms.HoistField$Key",
-            "org.apache.kafka.connect.transforms.InsertField",
-            "org.apache.kafka.connect.transforms.InsertField$Key",
-            "org.apache.kafka.connect.transforms.InsertField$Value",
-            "org.apache.kafka.connect.transforms.MaskField",
-            "org.apache.kafka.connect.transforms.MaskField$Key",
-            "org.apache.kafka.connect.transforms.MaskField$Value",
-            "org.apache.kafka.connect.transforms.RegexRouter",
-            "org.apache.kafka.connect.transforms.ReplaceField",
-            "org.apache.kafka.connect.transforms.ReplaceField$Key",
-            "org.apache.kafka.connect.transforms.ReplaceField$Value",
-            "org.apache.kafka.connect.transforms.SetSchemaMetadata",
-            "org.apache.kafka.connect.transforms.SetSchemaMetadata$Key",
-            "org.apache.kafka.connect.transforms.SetSchemaMetadata$Value",
-            "org.apache.kafka.connect.transforms.TimestampConverter",
-            "org.apache.kafka.connect.transforms.TimestampConverter$Key",
-            "org.apache.kafka.connect.transforms.TimestampConverter$Value",
-            "org.apache.kafka.connect.transforms.TimestampRouter",
-            "org.apache.kafka.connect.transforms.TimestampRouter$Key",
-            "org.apache.kafka.connect.transforms.TimestampRouter$Value",
-            "org.apache.kafka.connect.transforms.ValueToKey",
-            "org.apache.kafka.connect.transforms.predicates.",
-            "org.apache.kafka.connect.transforms.predicates.HasHeaderKey",
-            "org.apache.kafka.connect.transforms.predicates.RecordIsTombstone",
-            "org.apache.kafka.connect.transforms.predicates.TopicNameMatches"
+                "org.apache.kafka.connect.transforms.",
+                "org.apache.kafka.connect.transforms.util.",
+                "org.apache.kafka.connect.transforms.util.NonEmptyListValidator",
+                "org.apache.kafka.connect.transforms.util.RegexValidator",
+                "org.apache.kafka.connect.transforms.util.Requirements",
+                "org.apache.kafka.connect.transforms.util.SchemaUtil",
+                "org.apache.kafka.connect.transforms.util.SimpleConfig",
+                "org.apache.kafka.connect.transforms.Cast",
+                "org.apache.kafka.connect.transforms.Cast$Key",
+                "org.apache.kafka.connect.transforms.Cast$Value",
+                "org.apache.kafka.connect.transforms.ExtractField",
+                "org.apache.kafka.connect.transforms.ExtractField$Key",
+                "org.apache.kafka.connect.transforms.ExtractField$Value",
+                "org.apache.kafka.connect.transforms.Flatten",
+                "org.apache.kafka.connect.transforms.Flatten$Key",
+                "org.apache.kafka.connect.transforms.Flatten$Value",
+                "org.apache.kafka.connect.transforms.HoistField",
+                "org.apache.kafka.connect.transforms.HoistField$Key",
+                "org.apache.kafka.connect.transforms.HoistField$Key",
+                "org.apache.kafka.connect.transforms.InsertField",
+                "org.apache.kafka.connect.transforms.InsertField$Key",
+                "org.apache.kafka.connect.transforms.InsertField$Value",
+                "org.apache.kafka.connect.transforms.MaskField",
+                "org.apache.kafka.connect.transforms.MaskField$Key",
+                "org.apache.kafka.connect.transforms.MaskField$Value",
+                "org.apache.kafka.connect.transforms.RegexRouter",
+                "org.apache.kafka.connect.transforms.ReplaceField",
+                "org.apache.kafka.connect.transforms.ReplaceField$Key",
+                "org.apache.kafka.connect.transforms.ReplaceField$Value",
+                "org.apache.kafka.connect.transforms.SetSchemaMetadata",
+                "org.apache.kafka.connect.transforms.SetSchemaMetadata$Key",
+                "org.apache.kafka.connect.transforms.SetSchemaMetadata$Value",
+                "org.apache.kafka.connect.transforms.TimestampConverter",
+                "org.apache.kafka.connect.transforms.TimestampConverter$Key",
+                "org.apache.kafka.connect.transforms.TimestampConverter$Value",
+                "org.apache.kafka.connect.transforms.TimestampRouter",
+                "org.apache.kafka.connect.transforms.TimestampRouter$Key",
+                "org.apache.kafka.connect.transforms.TimestampRouter$Value",
+                "org.apache.kafka.connect.transforms.ValueToKey",
+                "org.apache.kafka.connect.transforms.predicates.",
+                "org.apache.kafka.connect.transforms.predicates.HasHeaderKey",
+                "org.apache.kafka.connect.transforms.predicates.RecordIsTombstone",
+                "org.apache.kafka.connect.transforms.predicates.TopicNameMatches"
         );
         for (String clazz : transformsClasses) {
             assertTrue(PluginUtils.shouldLoadInIsolation(clazz),
-                clazz + " from 'transforms' is not loaded in isolation but should be");
+                    clazz + " from 'transforms' is not loaded in isolation but should be");
         }
     }
 
     @Test
     public void testAllowedJsonConverterClasses() {
         List<String> jsonConverterClasses = List.of(
-            "org.apache.kafka.connect.json.",
-            "org.apache.kafka.connect.json.DecimalFormat",
-            "org.apache.kafka.connect.json.JsonConverter",
-            "org.apache.kafka.connect.json.JsonConverterConfig",
-            "org.apache.kafka.connect.json.JsonDeserializer",
-            "org.apache.kafka.connect.json.JsonSchema",
-            "org.apache.kafka.connect.json.JsonSerializer"
+                "org.apache.kafka.connect.json.",
+                "org.apache.kafka.connect.json.DecimalFormat",
+                "org.apache.kafka.connect.json.JsonConverter",
+                "org.apache.kafka.connect.json.JsonConverterConfig",
+                "org.apache.kafka.connect.json.JsonDeserializer",
+                "org.apache.kafka.connect.json.JsonSchema",
+                "org.apache.kafka.connect.json.JsonSerializer"
         );
         for (String clazz : jsonConverterClasses) {
             assertTrue(PluginUtils.shouldLoadInIsolation(clazz),
-                clazz + " from 'json' is not loaded in isolation but should be");
+                    clazz + " from 'json' is not loaded in isolation but should be");
         }
     }
 
     @Test
     public void testAllowedFileConnectors() {
         List<String> jsonConverterClasses = List.of(
-            "org.apache.kafka.connect.file.",
-            "org.apache.kafka.connect.file.FileStreamSinkConnector",
-            "org.apache.kafka.connect.file.FileStreamSinkTask",
-            "org.apache.kafka.connect.file.FileStreamSourceConnector",
-            "org.apache.kafka.connect.file.FileStreamSourceTask"
+                "org.apache.kafka.connect.file.",
+                "org.apache.kafka.connect.file.FileStreamSinkConnector",
+                "org.apache.kafka.connect.file.FileStreamSinkTask",
+                "org.apache.kafka.connect.file.FileStreamSourceConnector",
+                "org.apache.kafka.connect.file.FileStreamSourceTask"
         );
         for (String clazz : jsonConverterClasses) {
             assertTrue(PluginUtils.shouldLoadInIsolation(clazz),
-                clazz + " from 'file' is not loaded in isolation but should be");
+                    clazz + " from 'file' is not loaded in isolation but should be");
         }
     }
 
     @Test
     public void testAllowedBasicAuthExtensionClasses() {
         List<String> basicAuthExtensionClasses = List.of(
-            "org.apache.kafka.connect.rest.basic.auth.extension.BasicAuthSecurityRestExtension"
-            //"org.apache.kafka.connect.rest.basic.auth.extension.JaasBasicAuthFilter", TODO fix?
-            //"org.apache.kafka.connect.rest.basic.auth.extension.PropertyFileLoginModule" TODO fix?
+                "org.apache.kafka.connect.rest.basic.auth.extension.BasicAuthSecurityRestExtension"
+        //"org.apache.kafka.connect.rest.basic.auth.extension.JaasBasicAuthFilter", TODO fix?
+        //"org.apache.kafka.connect.rest.basic.auth.extension.PropertyFileLoginModule" TODO fix?
         );
         for (String clazz : basicAuthExtensionClasses) {
             assertTrue(PluginUtils.shouldLoadInIsolation(clazz),
-                clazz + " from 'basic-auth-extension' is not loaded in isolation but should be");
+                    clazz + " from 'basic-auth-extension' is not loaded in isolation but should be");
         }
     }
 

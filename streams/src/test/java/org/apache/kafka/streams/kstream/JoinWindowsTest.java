@@ -40,16 +40,16 @@ public class JoinWindowsTest {
     @Test
     public void validWindows() {
         JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(ANY_OTHER_SIZE))   // [ -anyOtherSize ; anyOtherSize ]
-                   .before(ofMillis(ANY_SIZE))                              // [ -anySize ; anyOtherSize ]
-                   .before(ofMillis(0))                                     // [ 0 ; anyOtherSize ]
-                   .before(ofMillis(-ANY_SIZE))                             // [ anySize ; anyOtherSize ]
-                   .before(ofMillis(-ANY_OTHER_SIZE));                      // [ anyOtherSize ; anyOtherSize ]
+            .before(ofMillis(ANY_SIZE))                              // [ -anySize ; anyOtherSize ]
+            .before(ofMillis(0))                                     // [ 0 ; anyOtherSize ]
+            .before(ofMillis(-ANY_SIZE))                             // [ anySize ; anyOtherSize ]
+            .before(ofMillis(-ANY_OTHER_SIZE));                      // [ anyOtherSize ; anyOtherSize ]
 
         JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(ANY_OTHER_SIZE))   // [ -anyOtherSize ; anyOtherSize ]
-                   .after(ofMillis(ANY_SIZE))                               // [ -anyOtherSize ; anySize ]
-                   .after(ofMillis(0))                                      // [ -anyOtherSize ; 0 ]
-                   .after(ofMillis(-ANY_SIZE))                              // [ -anyOtherSize ; -anySize ]
-                   .after(ofMillis(-ANY_OTHER_SIZE));                       // [ -anyOtherSize ; -anyOtherSize ]
+            .after(ofMillis(ANY_SIZE))                               // [ -anyOtherSize ; anySize ]
+            .after(ofMillis(0))                                      // [ -anyOtherSize ; 0 ]
+            .after(ofMillis(-ANY_SIZE))                              // [ -anyOtherSize ; -anySize ]
+            .after(ofMillis(-ANY_OTHER_SIZE));                       // [ -anyOtherSize ; -anyOtherSize ]
     }
 
     @Test

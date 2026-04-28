@@ -303,7 +303,7 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             metrics.metricName("share-group-rebalance-count",
                 METRICS_GROUP,
                 "The total number of share group rebalances")));
-        
+
         Sensor streamsGroupRebalanceSensor = metrics.sensor(STREAMS_GROUP_REBALANCES_SENSOR_NAME);
         streamsGroupRebalanceSensor.add(new Meter(
             metrics.metricName("streams-group-rebalance-rate",
@@ -351,7 +351,7 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     private long numStreamsGroups(StreamsGroupState state) {
         return shards.values().stream().mapToLong(shard -> shard.numStreamsGroups(state)).sum();
     }
-    
+
     private long numShareGroups() {
         return shards.values().stream().mapToLong(GroupCoordinatorMetricsShard::numShareGroups).sum();
     }

@@ -39,8 +39,8 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
     private final String storeName;
 
     public CompositeReadOnlyKeyValueStore(final StateStoreProvider storeProvider,
-                                          final QueryableStoreType<ReadOnlyKeyValueStore<K, V>> storeType,
-                                          final String storeName) {
+        final QueryableStoreType<ReadOnlyKeyValueStore<K, V>> storeType,
+        final String storeName) {
         this.storeProvider = storeProvider;
         this.storeType = storeType;
         this.storeName = storeName;

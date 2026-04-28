@@ -193,9 +193,9 @@ public class ProducerIntegrationTest {
 
         try (var admin = cluster.admin()) {
             TestUtils.waitForCondition(() ->
-                admin.listTransactions().all().get().stream()
-                    .filter(txn -> txn.transactionalId().equals(txnId))
-                    .anyMatch(txn -> txn.state() == TransactionState.COMPLETE_COMMIT),
+                    admin.listTransactions().all().get().stream()
+                        .filter(txn -> txn.transactionalId().equals(txnId))
+                        .anyMatch(txn -> txn.state() == TransactionState.COMPLETE_COMMIT),
                 "transaction is not in COMPLETE_COMMIT state");
         }
     }

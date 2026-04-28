@@ -61,10 +61,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ClientTelemetryTest {
 
     @ClusterTest(
-            types = Type.KRAFT,
-            brokers = 3,
-            serverProperties = {
-                @ClusterConfigProperty(key = METRIC_REPORTER_CLASSES_CONFIG, value = "org.apache.kafka.clients.admin.ClientTelemetryTest$TelemetryExporter"),
+        types = Type.KRAFT,
+        brokers = 3,
+        serverProperties = {
+            @ClusterConfigProperty(key = METRIC_REPORTER_CLASSES_CONFIG, value = "org.apache.kafka.clients.admin.ClientTelemetryTest$TelemetryExporter"),
             })
     public void testClientInstanceId(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
         Map<String, Object> configs = new HashMap<>();
@@ -122,14 +122,14 @@ public class ClientTelemetryTest {
         Map<String, Object> configs = new HashMap<>();
         configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
         List<String> expectedMetricsName = Arrays.asList("request-size-max", "io-wait-ratio", "response-total",
-                "version", "io-time-ns-avg", "network-io-rate");
+            "version", "io-time-ns-avg", "network-io-rate");
         try (Admin admin = Admin.create(configs)) {
             Set<String> actualMetricsName = admin.metrics().keySet().stream()
-                    .map(MetricName::name)
-                    .collect(Collectors.toSet());
+                .map(MetricName::name)
+                .collect(Collectors.toSet());
             expectedMetricsName.forEach(expectedName -> assertTrue(actualMetricsName.contains(expectedName),
-                    String.format("actual metrics name: %s dont contains expected: %s", actualMetricsName,
-                            expectedName)));
+                String.format("actual metrics name: %s dont contains expected: %s", actualMetricsName,
+                    expectedName)));
             assertTrue(actualMetricsName.containsAll(expectedMetricsName));
         }
     }

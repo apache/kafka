@@ -62,16 +62,16 @@ public class SubscriptionStateBenchmark {
     public void setup() {
         Set<TopicPartition> assignment = new HashSet<>(topicCount * partitionCount);
         IntStream.range(0, topicCount).forEach(topicId ->
-            IntStream.range(0, partitionCount).forEach(partitionId ->
-                assignment.add(new TopicPartition(String.format("topic-%04d", topicId), partitionId))
-            )
+                IntStream.range(0, partitionCount).forEach(partitionId ->
+                        assignment.add(new TopicPartition(String.format("topic-%04d", topicId), partitionId))
+                )
         );
         subscriptionState = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
         subscriptionState.assignFromUser(assignment);
         SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
-            0L,
-            Optional.of(0),
-            new Metadata.LeaderAndEpoch(Optional.of(new Node(0, "host", 9092)), Optional.of(10))
+                0L,
+                Optional.of(0),
+                new Metadata.LeaderAndEpoch(Optional.of(new Node(0, "host", 9092)), Optional.of(10))
         );
         assignment.forEach(topicPartition -> {
             subscriptionState.seekUnvalidated(topicPartition, position);

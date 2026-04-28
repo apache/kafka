@@ -83,10 +83,10 @@ public class ThreadCacheTest {
     }
 
     private void checkOverheads(final double entryFactor,
-                                final double systemFactor,
-                                final long desiredCacheSize,
-                                final int keySizeBytes,
-                                final int valueSizeBytes) {
+        final double systemFactor,
+        final long desiredCacheSize,
+        final int keySizeBytes,
+        final int valueSizeBytes) {
         final Runtime runtime = Runtime.getRuntime();
         final long numElements = desiredCacheSize / memoryCacheEntrySize(new byte[keySizeBytes], new byte[valueSizeBytes], "");
 
@@ -110,7 +110,7 @@ public class ThreadCacheTest {
         assertTrue((double) cache.sizeBytes() <= ceiling);
 
         assertTrue(cache.sizeBytes() * systemFactor >= usedRuntimeMemory,
-                "Used memory size " + usedRuntimeMemory + " greater than expected " + cache.sizeBytes() * systemFactor);
+            "Used memory size " + usedRuntimeMemory + " greater than expected " + cache.sizeBytes() * systemFactor);
     }
 
     @Test
@@ -243,7 +243,8 @@ public class ThreadCacheTest {
 
     private ThreadCache setupThreadCache(final int first, final int last, final long entrySize, final boolean reverse) {
         final ThreadCache cache = new ThreadCache(logContext, entrySize, new MockStreamsMetrics(new Metrics()));
-        cache.addDirtyEntryFlushListener(namespace, dirty -> { });
+        cache.addDirtyEntryFlushListener(namespace, dirty -> {
+        });
         int index = first;
         while ((!reverse && index < last) || (reverse && index >= last)) {
             cache.put(namespace, Bytes.wrap(bytes[index]), dirtyEntry(bytes[index]));
@@ -467,7 +468,7 @@ public class ThreadCacheTest {
                 received.add(dirtyEntry.key().get());
             }
         });
-        final List<byte[]> toInsert =  Arrays.asList(new byte[]{0}, new byte[]{1}, new byte[]{2});
+        final List<byte[]> toInsert = Arrays.asList(new byte[]{0}, new byte[]{1}, new byte[]{2});
         for (final byte[] bytes : toInsert) {
             cache.put(namespace1, Bytes.wrap(bytes), cleanEntry(bytes));
         }
@@ -534,6 +535,7 @@ public class ThreadCacheTest {
         cache.put(namespace, Bytes.wrap(new byte[]{1}), cleanEntry(new byte[]{0}));
         assertEquals(0, received.size());
     }
+
     @Test
     public void shouldPutIfAbsent() {
         final ThreadCache cache = new ThreadCache(logContext, 100000, new MockStreamsMetrics(new Metrics()));
@@ -568,8 +570,10 @@ public class ThreadCacheTest {
             // is already > than maxCacheSizeBytes
             threadCache.put(namespace1, Bytes.wrap(new byte[]{0}), dirtyEntry(new byte[2]));
         });
-        threadCache.addDirtyEntryFlushListener(namespace1, dirty -> { });
-        threadCache.addDirtyEntryFlushListener(namespace2, dirty -> { });
+        threadCache.addDirtyEntryFlushListener(namespace1, dirty -> {
+        });
+        threadCache.addDirtyEntryFlushListener(namespace2, dirty -> {
+        });
 
         threadCache.put(namespace2, Bytes.wrap(new byte[]{1}), dirtyEntry(new byte[1]));
         threadCache.put(namespace, Bytes.wrap(new byte[]{1}), dirtyEntry(new byte[1]));
@@ -582,8 +586,8 @@ public class ThreadCacheTest {
     @Test
     public void shouldCleanupNamedCacheOnClose() {
         final ThreadCache cache = new ThreadCache(logContext, 100000, new MockStreamsMetrics(new Metrics()));
-        cache.put(namespace1, Bytes.wrap(new byte[]{1}), cleanEntry(new byte[] {1}));
-        cache.put(namespace2, Bytes.wrap(new byte[]{1}), cleanEntry(new byte[] {1}));
+        cache.put(namespace1, Bytes.wrap(new byte[]{1}), cleanEntry(new byte[]{1}));
+        cache.put(namespace2, Bytes.wrap(new byte[]{1}), cleanEntry(new byte[]{1}));
         assertEquals(2, cache.size());
         cache.close(namespace2);
         assertEquals(1, cache.size());
@@ -593,7 +597,7 @@ public class ThreadCacheTest {
     @Test
     public void shouldReturnNullIfKeyIsNull() {
         final ThreadCache threadCache = new ThreadCache(logContext, 10, new MockStreamsMetrics(new Metrics()));
-        threadCache.put(namespace, Bytes.wrap(new byte[]{1}), cleanEntry(new byte[] {1}));
+        threadCache.put(namespace, Bytes.wrap(new byte[]{1}), cleanEntry(new byte[]{1}));
         assertNull(threadCache.get(namespace, null));
     }
 

@@ -93,8 +93,8 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
             .anyMatch(key -> offsetTimestampsByPartition.get(key) == ListOffsetsRequest.MAX_TIMESTAMP);
 
         boolean requireEarliestLocalTimestamp = keys
-                .stream()
-                .anyMatch(key -> offsetTimestampsByPartition.get(key) == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP);
+            .stream()
+            .anyMatch(key -> offsetTimestampsByPartition.get(key) == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP);
 
         boolean requireTieredStorageTimestamp = keys
             .stream()
@@ -106,13 +106,13 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
 
         int timeoutMs = options.timeoutMs() != null ? options.timeoutMs() : defaultApiTimeoutMs;
         return ListOffsetsRequest.Builder.forConsumer(true,
-                        options.isolationLevel(),
-                        supportsMaxTimestamp,
-                        requireEarliestLocalTimestamp,
-                        requireTieredStorageTimestamp,
-                        requireEarliestPendingUploadTimestamp)
-                .setTargetTimes(new ArrayList<>(topicsByName.values()))
-                .setTimeoutMs(timeoutMs);
+            options.isolationLevel(),
+            supportsMaxTimestamp,
+            requireEarliestLocalTimestamp,
+            requireTieredStorageTimestamp,
+            requireEarliestPendingUploadTimestamp)
+            .setTargetTimes(new ArrayList<>(topicsByName.values()))
+            .setTimeoutMs(timeoutMs);
     }
 
     @Override

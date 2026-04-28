@@ -34,9 +34,9 @@ public class SaslAuthenticationContext implements AuthenticationContext {
     }
 
     public SaslAuthenticationContext(SaslServer server, SecurityProtocol securityProtocol,
-                                     InetAddress clientAddress,
-                                     String listenerName,
-                                     Optional<SSLSession> sslSession) {
+        InetAddress clientAddress,
+        String listenerName,
+        Optional<SSLSession> sslSession) {
         this.server = server;
         this.securityProtocol = securityProtocol;
         this.clientAddress = clientAddress;

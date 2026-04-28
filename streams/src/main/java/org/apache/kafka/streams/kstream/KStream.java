@@ -147,7 +147,7 @@ public interface KStream<K, V> {
      * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
     <KOut> KStream<KOut, V> selectKey(final KeyValueMapper<? super K, ? super V, ? extends KOut> mapper,
-                                      final Named named);
+        final Named named);
 
     /**
      * Create a new {@code KStream} that consists of all records of this stream but with a modified value.
@@ -193,7 +193,7 @@ public interface KStream<K, V> {
      * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
     <VOut> KStream<K, VOut> mapValues(final ValueMapper<? super V, ? extends VOut> mapper,
-                                      final Named named);
+        final Named named);
 
     /**
      * See {@link #mapValues(ValueMapper)}.
@@ -209,7 +209,7 @@ public interface KStream<K, V> {
      * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
     <VOut> KStream<K, VOut> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VOut> mapper,
-                                      final Named named);
+        final Named named);
 
     /**
      * Create a new {@code KStream} that consists of a modified record for each record in this stream.
@@ -255,7 +255,7 @@ public interface KStream<K, V> {
      * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
     <KOut, VOut> KStream<KOut, VOut> map(final KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends KOut, ? extends VOut>> mapper,
-                                         final Named named);
+        final Named named);
 
     /**
      * Create a new {@code KStream} that consists of zero or more records for each record in this stream.
@@ -311,7 +311,7 @@ public interface KStream<K, V> {
      * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
     <KR, VOut> KStream<KR, VOut> flatMap(final KeyValueMapper<? super K, ? super V, ? extends Iterable<? extends KeyValue<? extends KR, ? extends VOut>>> mapper,
-                                         final Named named);
+        final Named named);
 
     /**
      * Create a new {@code KStream} that consists of zero or more records with modified value for each record
@@ -360,7 +360,7 @@ public interface KStream<K, V> {
      * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
     <VOut> KStream<K, VOut> flatMapValues(final ValueMapper<? super V, ? extends Iterable<? extends VOut>> mapper,
-                                          final Named named);
+        final Named named);
 
     /**
      * See {@link #flatMapValues(ValueMapper)}.
@@ -376,7 +376,7 @@ public interface KStream<K, V> {
      * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
     <VOut> KStream<K, VOut> flatMapValues(final ValueMapperWithKey<? super K, ? super V, ? extends Iterable<? extends VOut>> mapper,
-                                          final Named named);
+        final Named named);
 
     /**
      * Print the records of this {@code KStream} using the options provided by {@link Printed}.
@@ -544,7 +544,7 @@ public interface KStream<K, V> {
      * See {@link #to(String)}.
      */
     void to(final String topic,
-            final Produced<K, V> produced);
+        final Produced<K, V> produced);
 
     /**
      * Materialize the record of this stream to different topics.
@@ -564,7 +564,7 @@ public interface KStream<K, V> {
      * See {@link #to(TopicNameExtractor)}.
      */
     void to(final TopicNameExtractor<K, V> topicExtractor,
-            final Produced<K, V> produced);
+        final Produced<K, V> produced);
 
     /**
      * Convert this stream to a {@link KTable}.
@@ -608,7 +608,7 @@ public interface KStream<K, V> {
      */
     KTable<K, V> toTable(final Named named);
 
-     /**
+    /**
      * See {@link #toTable()}.
      */
     KTable<K, V> toTable(final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
@@ -617,7 +617,7 @@ public interface KStream<K, V> {
      * See {@link #toTable()}.
      */
     KTable<K, V> toTable(final Named named,
-                         final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
+        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Group the records by their current key into a {@link KGroupedStream} while preserving the original values.
@@ -680,7 +680,7 @@ public interface KStream<K, V> {
      * the name of the created internal repartition topic.
      */
     <KOut> KGroupedStream<KOut, V> groupBy(final KeyValueMapper<? super K, ? super V, KOut> keySelector,
-                                           final Grouped<KOut, V> grouped);
+        final Grouped<KOut, V> grouped);
 
     /**
      * Join records of this (left) stream with another (right) {@code KStream}'s records using a windowed inner equi-join.
@@ -776,8 +776,8 @@ public interface KStream<K, V> {
      * @see #outerJoin(KStream, ValueJoiner, JoinWindows)
      */
     <VRight, VOut> KStream<K, VOut> join(final KStream<K, VRight> rightStream,
-                                         final ValueJoiner<? super V, ? super VRight, ? extends VOut> joiner,
-                                         final JoinWindows windows);
+        final ValueJoiner<? super V, ? super VRight, ? extends VOut> joiner,
+        final JoinWindows windows);
 
     /**
      * See {@link #join(KStream, ValueJoiner, JoinWindows)}.
@@ -786,16 +786,16 @@ public interface KStream<K, V> {
      * incorrect results.
      */
     <VRight, VOut> KStream<K, VOut> join(final KStream<K, VRight> rightStream,
-                                         final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
-                                         final JoinWindows windows);
+        final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
+        final JoinWindows windows);
 
     /**
      * See {@link #join(KStream, ValueJoiner, JoinWindows)}.
      */
     <VRight, VOut> KStream<K, VOut> join(final KStream<K, VRight> rightStream,
-                                         final ValueJoiner<? super V, ? super VRight, ? extends VOut> joiner,
-                                         final JoinWindows windows,
-                                         final StreamJoined<K, V, VRight> streamJoined);
+        final ValueJoiner<? super V, ? super VRight, ? extends VOut> joiner,
+        final JoinWindows windows,
+        final StreamJoined<K, V, VRight> streamJoined);
 
     /**
      * See {@link #join(KStream, ValueJoiner, JoinWindows)}.
@@ -804,9 +804,9 @@ public interface KStream<K, V> {
      * incorrect results.
      */
     <VRight, VOut> KStream<K, VOut> join(final KStream<K, VRight> rightStream,
-                                         final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
-                                         final JoinWindows windows,
-                                         final StreamJoined<K, V, VRight> streamJoined);
+        final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
+        final JoinWindows windows,
+        final StreamJoined<K, V, VRight> streamJoined);
 
     /**
      * Join records of this (left) stream with another (right) {@code KStream}'s records using a windowed left equi-join.
@@ -877,8 +877,8 @@ public interface KStream<K, V> {
      * @see #outerJoin(KStream, ValueJoiner, JoinWindows)
      */
     <VRight, VOut> KStream<K, VOut> leftJoin(final KStream<K, VRight> rightStream,
-                                             final ValueJoiner<? super V, ? super VRight, ? extends VOut> joiner,
-                                             final JoinWindows windows);
+        final ValueJoiner<? super V, ? super VRight, ? extends VOut> joiner,
+        final JoinWindows windows);
 
     /**
      * See {@link #leftJoin(KStream, ValueJoiner, JoinWindows)}.
@@ -887,16 +887,16 @@ public interface KStream<K, V> {
      * incorrect results.
      */
     <VRight, VOut> KStream<K, VOut> leftJoin(final KStream<K, VRight> rightStream,
-                                             final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
-                                             final JoinWindows windows);
+        final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
+        final JoinWindows windows);
 
     /**
      * See {@link #leftJoin(KStream, ValueJoiner, JoinWindows)}.
      */
     <VRight, VOut> KStream<K, VOut> leftJoin(final KStream<K, VRight> rightStream,
-                                             final ValueJoiner<? super V, ? super VRight, ? extends VOut> joiner,
-                                             final JoinWindows windows,
-                                             final StreamJoined<K, V, VRight> streamJoined);
+        final ValueJoiner<? super V, ? super VRight, ? extends VOut> joiner,
+        final JoinWindows windows,
+        final StreamJoined<K, V, VRight> streamJoined);
 
     /**
      * See {@link #leftJoin(KStream, ValueJoiner, JoinWindows)}.
@@ -905,9 +905,9 @@ public interface KStream<K, V> {
      * incorrect results.
      */
     <VRight, VOut> KStream<K, VOut> leftJoin(final KStream<K, VRight> rightStream,
-                                             final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
-                                             final JoinWindows windows,
-                                             final StreamJoined<K, V, VRight> streamJoined);
+        final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
+        final JoinWindows windows,
+        final StreamJoined<K, V, VRight> streamJoined);
 
     /**
      * Join records of this (left) stream with another (right) {@code KStream}'s records using a windowed outer equi-join.
@@ -976,8 +976,8 @@ public interface KStream<K, V> {
      * @see #leftJoin(KStream, ValueJoiner, JoinWindows)
      */
     <VRight, VOut> KStream<K, VOut> outerJoin(final KStream<K, VRight> otherStream,
-                                              final ValueJoiner<? super V, ? super VRight, ? extends VOut> joiner,
-                                              final JoinWindows windows);
+        final ValueJoiner<? super V, ? super VRight, ? extends VOut> joiner,
+        final JoinWindows windows);
 
     /**
      * See {@link #outerJoin(KStream, ValueJoiner, JoinWindows)}.
@@ -985,17 +985,17 @@ public interface KStream<K, V> {
      * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning.
      */
     <VRight, VOut> KStream<K, VOut> outerJoin(final KStream<K, VRight> otherStream,
-                                              final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
-                                              final JoinWindows windows);
+        final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
+        final JoinWindows windows);
 
     /**
      * See {@link #outerJoin(KStream, ValueJoiner, JoinWindows)}.
      */
 
     <VRight, VOut> KStream<K, VOut> outerJoin(final KStream<K, VRight> otherStream,
-                                              final ValueJoiner<? super V, ? super VRight, ? extends VOut> joiner,
-                                              final JoinWindows windows,
-                                              final StreamJoined<K, V, VRight> streamJoined);
+        final ValueJoiner<? super V, ? super VRight, ? extends VOut> joiner,
+        final JoinWindows windows,
+        final StreamJoined<K, V, VRight> streamJoined);
 
     /**
      * See {@link #outerJoin(KStream, ValueJoiner, JoinWindows)}.
@@ -1003,9 +1003,9 @@ public interface KStream<K, V> {
      * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning.
      */
     <VRight, VOut> KStream<K, VOut> outerJoin(final KStream<K, VRight> otherStream,
-                                              final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
-                                              final JoinWindows windows,
-                                              final StreamJoined<K, V, VRight> streamJoined);
+        final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
+        final JoinWindows windows,
+        final StreamJoined<K, V, VRight> streamJoined);
 
     /**
      * Join records of this stream with {@link KTable}'s records using non-windowed inner equi-join.
@@ -1103,7 +1103,7 @@ public interface KStream<K, V> {
      * @see #leftJoin(KTable, ValueJoiner)
      */
     <TableValue, VOut> KStream<K, VOut> join(final KTable<K, TableValue> table,
-                                             final ValueJoiner<? super V, ? super TableValue, ? extends VOut> joiner);
+        final ValueJoiner<? super V, ? super TableValue, ? extends VOut> joiner);
 
     /**
      * See {@link #join(KTable, ValueJoiner)}.
@@ -1112,7 +1112,7 @@ public interface KStream<K, V> {
      * incorrect results.
      */
     <TableValue, VOut> KStream<K, VOut> join(final KTable<K, TableValue> table,
-                                             final ValueJoinerWithKey<? super K, ? super V, ? super TableValue, ? extends VOut> joiner);
+        final ValueJoinerWithKey<? super K, ? super V, ? super TableValue, ? extends VOut> joiner);
 
     /**
      * Join records of this stream with {@link KTable}'s records using non-windowed inner equi-join.
@@ -1151,8 +1151,8 @@ public interface KStream<K, V> {
      * To customize the name of the changelog topic, use {@link Joined} input parameter.
      */
     <TableValue, VOut> KStream<K, VOut> join(final KTable<K, TableValue> table,
-                                             final ValueJoiner<? super V, ? super TableValue, ? extends VOut> joiner,
-                                             final Joined<K, V, TableValue> joined);
+        final ValueJoiner<? super V, ? super TableValue, ? extends VOut> joiner,
+        final Joined<K, V, TableValue> joined);
 
     /**
      * See {@link #join(KTable, ValueJoiner, Joined)}.
@@ -1161,8 +1161,8 @@ public interface KStream<K, V> {
      * incorrect results.
      */
     <TableValue, VOut> KStream<K, VOut> join(final KTable<K, TableValue> table,
-                                             final ValueJoinerWithKey<? super K, ? super V, ? super TableValue, ? extends VOut> joiner,
-                                             final Joined<K, V, TableValue> joined);
+        final ValueJoinerWithKey<? super K, ? super V, ? super TableValue, ? extends VOut> joiner,
+        final Joined<K, V, TableValue> joined);
 
     /**
      * Join records of this stream with {@link KTable}'s records using non-windowed left equi-join.
@@ -1232,7 +1232,7 @@ public interface KStream<K, V> {
      * @see #join(KTable, ValueJoiner)
      */
     <VTable, VOut> KStream<K, VOut> leftJoin(final KTable<K, VTable> table,
-                                             final ValueJoiner<? super V, ? super VTable, ? extends VOut> joiner);
+        final ValueJoiner<? super V, ? super VTable, ? extends VOut> joiner);
 
     /**
      * See {@link #leftJoin(KTable, ValueJoiner)}.
@@ -1241,7 +1241,7 @@ public interface KStream<K, V> {
      * incorrect results.
      */
     <VTable, VOut> KStream<K, VOut> leftJoin(final KTable<K, VTable> table,
-                                             final ValueJoinerWithKey<? super K, ? super V, ? super VTable, ? extends VOut> joiner);
+        final ValueJoinerWithKey<? super K, ? super V, ? super VTable, ? extends VOut> joiner);
 
     /**
      * Join records of this stream with {@link KTable}'s records using non-windowed left equi-join.
@@ -1254,8 +1254,8 @@ public interface KStream<K, V> {
      * If you specify a grace-period to handle out-of-order data, see {@link #join(KTable, ValueJoiner, Joined)}.
      */
     <VTable, VOut> KStream<K, VOut> leftJoin(final KTable<K, VTable> table,
-                                             final ValueJoiner<? super V, ? super VTable, ? extends VOut> joiner,
-                                             final Joined<K, V, VTable> joined);
+        final ValueJoiner<? super V, ? super VTable, ? extends VOut> joiner,
+        final Joined<K, V, VTable> joined);
 
     /**
      * See {@link #leftJoin(KTable, ValueJoiner, Joined)}.
@@ -1264,8 +1264,8 @@ public interface KStream<K, V> {
      * incorrect results.
      */
     <VTable, VOut> KStream<K, VOut> leftJoin(final KTable<K, VTable> table,
-                                             final ValueJoinerWithKey<? super K, ? super V, ? super VTable, ? extends VOut> joiner,
-                                             final Joined<K, V, VTable> joined);
+        final ValueJoinerWithKey<? super K, ? super V, ? super VTable, ? extends VOut> joiner,
+        final Joined<K, V, VTable> joined);
 
     /**
      * Join records of this stream with {@link GlobalKTable}'s records using non-windowed inner equi-join.
@@ -1339,8 +1339,8 @@ public interface KStream<K, V> {
      * @see #leftJoin(GlobalKTable, KeyValueMapper, ValueJoiner)
      */
     <GlobalKey, GlobalValue, VOut> KStream<K, VOut> join(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
-                                                         final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
-                                                         final ValueJoiner<? super V, ? super GlobalValue, ? extends VOut> joiner);
+        final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+        final ValueJoiner<? super V, ? super GlobalValue, ? extends VOut> joiner);
 
     /**
      * See {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}.
@@ -1349,8 +1349,8 @@ public interface KStream<K, V> {
      * partitioning and incorrect results.
      */
     <GlobalKey, GlobalValue, VOut> KStream<K, VOut> join(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
-                                                         final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
-                                                         final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner);
+        final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+        final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner);
 
     /**
      * See {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}.
@@ -1358,9 +1358,9 @@ public interface KStream<K, V> {
      * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
     <GlobalKey, GlobalValue, VOut> KStream<K, VOut> join(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
-                                                         final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
-                                                         final ValueJoiner<? super V, ? super GlobalValue, ? extends VOut> joiner,
-                                                         final Named named);
+        final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+        final ValueJoiner<? super V, ? super GlobalValue, ? extends VOut> joiner,
+        final Named named);
 
     /**
      * See {@link #join(GlobalKTable, KeyValueMapper, ValueJoinerWithKey)}.
@@ -1368,9 +1368,9 @@ public interface KStream<K, V> {
      * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
     <GlobalKey, GlobalValue, VOut> KStream<K, VOut> join(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
-                                                         final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
-                                                         final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner,
-                                                         final Named named);
+        final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+        final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner,
+        final Named named);
 
     /**
      * Join records of this stream with {@link GlobalKTable}'s records using non-windowed left equi-join.
@@ -1452,8 +1452,8 @@ public interface KStream<K, V> {
      * @see #join(GlobalKTable, KeyValueMapper, ValueJoiner)
      */
     <GlobalKey, GlobalValue, VOut> KStream<K, VOut> leftJoin(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
-                                                             final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
-                                                             final ValueJoiner<? super V, ? super GlobalValue, ? extends VOut> joiner);
+        final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+        final ValueJoiner<? super V, ? super GlobalValue, ? extends VOut> joiner);
 
     /**
      * See {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoiner)}.
@@ -1462,8 +1462,8 @@ public interface KStream<K, V> {
      * incorrect results.
      */
     <GlobalKey, GlobalValue, VOut> KStream<K, VOut> leftJoin(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
-                                                             final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
-                                                             final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner);
+        final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+        final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner);
 
     /**
      * See {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoiner)}.
@@ -1471,9 +1471,9 @@ public interface KStream<K, V> {
      * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
     <GlobalKey, GlobalValue, VOut> KStream<K, VOut> leftJoin(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
-                                                             final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
-                                                             final ValueJoiner<? super V, ? super GlobalValue, ? extends VOut> joiner,
-                                                             final Named named);
+        final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+        final ValueJoiner<? super V, ? super GlobalValue, ? extends VOut> joiner,
+        final Named named);
 
     /**
      * See {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithKey)}.
@@ -1481,9 +1481,9 @@ public interface KStream<K, V> {
      * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
     <GlobalKey, GlobalValue, VOut> KStream<K, VOut> leftJoin(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
-                                                             final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
-                                                             final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner,
-                                                             final Named named);
+        final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+        final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner,
+        final Named named);
 
     /**
      * Process all records in this stream, one record at a time, by applying a {@link Processor} (provided by the given

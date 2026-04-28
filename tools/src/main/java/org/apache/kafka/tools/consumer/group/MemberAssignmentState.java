@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.Optional;
 
 record MemberAssignmentState(String group, String consumerId, String host, String clientId, String groupInstanceId,
-                             int numPartitions, List<TopicPartition> assignment, List<TopicPartition> targetAssignment,
-                             Optional<Integer> currentEpoch, Optional<Integer> targetEpoch,
-                             Optional<Boolean> upgraded) {
+int numPartitions, List<TopicPartition> assignment, List<TopicPartition> targetAssignment,
+Optional<Integer> currentEpoch, Optional<Integer> targetEpoch,
+Optional<Boolean> upgraded) {
 }

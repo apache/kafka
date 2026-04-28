@@ -84,11 +84,11 @@ public abstract class DeleteGroupsHandlerTest {
 
     private DeleteGroupsResponse buildResponse(Errors error) {
         return new DeleteGroupsResponse(
-                new DeleteGroupsResponseData()
-                    .setResults(new DeletableGroupResultCollection(singletonList(
-                            new DeletableGroupResult()
-                                .setErrorCode(error.code())
-                                .setGroupId(groupId1)))));
+            new DeleteGroupsResponseData()
+                .setResults(new DeletableGroupResultCollection(singletonList(
+                    new DeletableGroupResult()
+                        .setErrorCode(error.code())
+                        .setGroupId(groupId1)))));
     }
 
     private AdminApiHandler.ApiResult<CoordinatorKey, Void> handleWithError(

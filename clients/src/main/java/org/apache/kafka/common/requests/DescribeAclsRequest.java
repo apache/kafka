@@ -80,9 +80,9 @@ public class DescribeAclsRequest extends AbstractRequest {
         }
 
         if (data.patternTypeFilter() == PatternType.UNKNOWN.code()
-                || data.resourceTypeFilter() == ResourceType.UNKNOWN.code()
-                || data.permissionType() == AclPermissionType.UNKNOWN.code()
-                || data.operation() == AclOperation.UNKNOWN.code()) {
+            || data.resourceTypeFilter() == ResourceType.UNKNOWN.code()
+            || data.permissionType() == AclPermissionType.UNKNOWN.code()
+            || data.operation() == AclOperation.UNKNOWN.code()) {
             throw new IllegalArgumentException("DescribeAclsRequest contains UNKNOWN elements: " + data);
         }
     }
@@ -108,14 +108,14 @@ public class DescribeAclsRequest extends AbstractRequest {
 
     public AclBindingFilter filter() {
         ResourcePatternFilter rpf = new ResourcePatternFilter(
-                ResourceType.fromCode(data.resourceTypeFilter()),
-                data.resourceNameFilter(),
-                PatternType.fromCode(data.patternTypeFilter()));
-        AccessControlEntryFilter acef =  new AccessControlEntryFilter(
-                data.principalFilter(),
-                data.hostFilter(),
-                AclOperation.fromCode(data.operation()),
-                AclPermissionType.fromCode(data.permissionType()));
+            ResourceType.fromCode(data.resourceTypeFilter()),
+            data.resourceNameFilter(),
+            PatternType.fromCode(data.patternTypeFilter()));
+        AccessControlEntryFilter acef = new AccessControlEntryFilter(
+            data.principalFilter(),
+            data.hostFilter(),
+            AclOperation.fromCode(data.operation()),
+            AclPermissionType.fromCode(data.permissionType()));
         return new AclBindingFilter(rpf, acef);
     }
 

@@ -55,26 +55,26 @@ public class ReconfigurableQuorumIntegrationTest {
             assertTrue(featureMetadata.finalizedFeatures().containsKey(KRaftVersion.FEATURE_NAME),
                 "finalizedFeatures does not contain " + KRaftVersion.FEATURE_NAME + ", finalizedFeatures: " + featureMetadata.finalizedFeatures());
             assertEquals(finalized, featureMetadata.finalizedFeatures().
-                    get(KRaftVersion.FEATURE_NAME).minVersionLevel());
+                get(KRaftVersion.FEATURE_NAME).minVersionLevel());
             assertEquals(finalized, featureMetadata.finalizedFeatures().
-                    get(KRaftVersion.FEATURE_NAME).maxVersionLevel());
+                get(KRaftVersion.FEATURE_NAME).maxVersionLevel());
         } else {
             assertFalse(featureMetadata.finalizedFeatures().containsKey(KRaftVersion.FEATURE_NAME));
         }
         assertEquals((short) 0, featureMetadata.supportedFeatures().
-                get(KRaftVersion.FEATURE_NAME).minVersion());
+            get(KRaftVersion.FEATURE_NAME).minVersion());
         assertEquals((short) 1, featureMetadata.supportedFeatures().
-                get(KRaftVersion.FEATURE_NAME).maxVersion());
+            get(KRaftVersion.FEATURE_NAME).maxVersion());
     }
 
     @Test
     public void testCreateAndDestroyNonReconfigurableCluster() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder().
-                setNumBrokerNodes(1).
-                setNumControllerNodes(1).
-                build()
-        ).build()) {
+                 new TestKitNodes.Builder().
+                     setNumBrokerNodes(1).
+                     setNumControllerNodes(1).
+                     build()
+             ).build()) {
             cluster.format();
             cluster.startup();
             try (var admin = cluster.admin()) {
@@ -87,11 +87,11 @@ public class ReconfigurableQuorumIntegrationTest {
     @Test
     public void testCreateAndDestroyReconfigurableCluster() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder().
-                setNumBrokerNodes(1).
-                setNumControllerNodes(1).
-                build()
-        ).setStandalone(true).build()) {
+                 new TestKitNodes.Builder().
+                     setNumBrokerNodes(1).
+                     setNumControllerNodes(1).
+                     build()
+             ).setStandalone(true).build()) {
             cluster.format();
             cluster.startup();
             try (var admin = cluster.admin()) {
@@ -124,8 +124,8 @@ public class ReconfigurableQuorumIntegrationTest {
         }
 
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).
-            setInitialVoterSet(initialVoters).
-            build()
+                 setInitialVoterSet(initialVoters).
+                 build()
         ) {
             cluster.format();
             cluster.startup();
@@ -133,7 +133,7 @@ public class ReconfigurableQuorumIntegrationTest {
                 retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
                     assertEquals(Set.of(3000, 3001, 3002), voters.keySet());
-                    for (int replicaId : new int[] {3000, 3001, 3002}) {
+                    for (int replicaId : new int[]{3000, 3001, 3002}) {
                         assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
                     }
                 });
@@ -159,8 +159,8 @@ public class ReconfigurableQuorumIntegrationTest {
         }
 
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).
-            setInitialVoterSet(initialVoters).
-            build()
+                 setInitialVoterSet(initialVoters).
+                 build()
         ) {
             cluster.format();
             cluster.startup();
@@ -168,7 +168,7 @@ public class ReconfigurableQuorumIntegrationTest {
                 retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
                     assertEquals(Set.of(3000, 3001, 3002, 3003), voters.keySet());
-                    for (int replicaId : new int[] {3000, 3001, 3002, 3003}) {
+                    for (int replicaId : new int[]{3000, 3001, 3002, 3003}) {
                         assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
                     }
                 });
@@ -178,7 +178,7 @@ public class ReconfigurableQuorumIntegrationTest {
                 retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
                     assertEquals(Set.of(3001, 3002, 3003), voters.keySet());
-                    for (int replicaId : new int[] {3001, 3002, 3003}) {
+                    for (int replicaId : new int[]{3001, 3002, 3003}) {
                         assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
                     }
                 });
@@ -196,9 +196,9 @@ public class ReconfigurableQuorumIntegrationTest {
             setNumControllerNodes(3).
             build();
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).
-            setConfigProp(QuorumConfig.QUORUM_AUTO_JOIN_ENABLE_CONFIG, true).
-            setStandalone(true).
-            build()
+                 setConfigProp(QuorumConfig.QUORUM_AUTO_JOIN_ENABLE_CONFIG, true).
+                 setStandalone(true).
+                 build()
         ) {
             cluster.format();
             cluster.startup();
@@ -206,7 +206,7 @@ public class ReconfigurableQuorumIntegrationTest {
                 retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
                     assertEquals(Set.of(3000, 3001, 3002), voters.keySet());
-                    for (int replicaId : new int[] {3000, 3001, 3002}) {
+                    for (int replicaId : new int[]{3000, 3001, 3002}) {
                         assertEquals(nodes.controllerNodes().get(replicaId).metadataDirectoryId(), voters.get(replicaId));
                     }
                 });
@@ -234,9 +234,9 @@ public class ReconfigurableQuorumIntegrationTest {
         }
 
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).
-            setConfigProp(QuorumConfig.QUORUM_AUTO_JOIN_ENABLE_CONFIG, true).
-            setInitialVoterSet(initialVoters).
-            build()
+                 setConfigProp(QuorumConfig.QUORUM_AUTO_JOIN_ENABLE_CONFIG, true).
+                 setInitialVoterSet(initialVoters).
+                 build()
         ) {
             cluster.format();
             cluster.startup();
@@ -244,7 +244,7 @@ public class ReconfigurableQuorumIntegrationTest {
                 retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
                     assertEquals(Set.of(3000, 3001, 3002), voters.keySet());
-                    for (int replicaId : new int[] {3000, 3001, 3002}) {
+                    for (int replicaId : new int[]{3000, 3001, 3002}) {
                         assertEquals(nodes.controllerNodes().get(replicaId).metadataDirectoryId(), voters.get(replicaId));
                     }
                 });
@@ -275,7 +275,7 @@ public class ReconfigurableQuorumIntegrationTest {
                 retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
                     assertEquals(Set.of(3000, 3001, 3002), voters.keySet());
-                    for (int replicaId : new int[] {3000, 3001, 3002}) {
+                    for (int replicaId : new int[]{3000, 3001, 3002}) {
                         assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
                     }
                 });
@@ -290,7 +290,7 @@ public class ReconfigurableQuorumIntegrationTest {
                 retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
                     assertEquals(Set.of(3001, 3002), voters.keySet());
-                    for (int replicaId : new int[] {3001, 3002}) {
+                    for (int replicaId : new int[]{3001, 3002}) {
                         assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
                     }
                 });

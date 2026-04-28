@@ -98,7 +98,7 @@ public class MockLog implements RaftLog {
         latestSnapshotId().ifPresent(snapshotId -> {
             if (snapshotId.epoch() > logLastFetchedEpoch().orElse(0) ||
                 (snapshotId.epoch() == logLastFetchedEpoch().orElse(0) &&
-                 snapshotId.offset() > endOffset().offset())) {
+                    snapshotId.offset() > endOffset().offset())) {
 
                 logger.debug("Truncating to the latest snapshot at {}", snapshotId);
 
@@ -531,7 +531,7 @@ public class MockLog implements RaftLog {
             throw new IllegalArgumentException(
                 String.format(
                     "Cannot create snapshot at offset (%s) because it is not batch aligned. " +
-                    "The batch containing the requested offset has a base offset of (%s)",
+                        "The batch containing the requested offset has a base offset of (%s)",
                     snapshotId.offset(),
                     baseOffset
                 )
@@ -577,7 +577,8 @@ public class MockLog implements RaftLog {
     }
 
     @Override
-    public void onSnapshotFrozen(OffsetAndEpoch snapshotId) {}
+    public void onSnapshotFrozen(OffsetAndEpoch snapshotId) {
+    }
 
     @Override
     public boolean deleteBeforeSnapshot(OffsetAndEpoch snapshotId) {

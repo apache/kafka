@@ -45,16 +45,16 @@ public class WindowedStreamPartitionerTest {
     private final StringSerializer stringSerializer = new StringSerializer();
 
     private final List<PartitionInfo> infos = Arrays.asList(
-            new PartitionInfo(topicName, 0, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo(topicName, 1, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo(topicName, 2, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo(topicName, 3, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo(topicName, 4, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo(topicName, 5, Node.noNode(), new Node[0], new Node[0])
+        new PartitionInfo(topicName, 0, Node.noNode(), new Node[0], new Node[0]),
+        new PartitionInfo(topicName, 1, Node.noNode(), new Node[0], new Node[0]),
+        new PartitionInfo(topicName, 2, Node.noNode(), new Node[0], new Node[0]),
+        new PartitionInfo(topicName, 3, Node.noNode(), new Node[0], new Node[0]),
+        new PartitionInfo(topicName, 4, Node.noNode(), new Node[0], new Node[0]),
+        new PartitionInfo(topicName, 5, Node.noNode(), new Node[0], new Node[0])
     );
 
     private final Cluster cluster = new Cluster("cluster", Collections.singletonList(Node.noNode()), infos,
-            Collections.emptySet(), Collections.emptySet());
+        Collections.emptySet(), Collections.emptySet());
 
     @Test
     public void testCopartitioning() {

@@ -367,7 +367,7 @@ public record StreamsGroupMember(String memberId,
                     endpoint -> new StreamsGroupDescribeResponseData.Endpoint()
                         .setHost(endpoint.host())
                         .setPort(endpoint.port())
-                    ).orElse(null)
+                ).orElse(null)
             );
     }
 

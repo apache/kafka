@@ -316,7 +316,7 @@ public class ClientMetricsManager implements AutoCloseable {
     }
 
     private ClientMetricsInstance createClientInstanceAndUpdateCache(Uuid clientInstanceId,
-        ClientMetricsInstanceMetadata instanceMetadata, String connectionId) {
+                                                                     ClientMetricsInstanceMetadata instanceMetadata, String connectionId) {
 
         ClientMetricsInstance clientInstance = createClientInstance(clientInstanceId, instanceMetadata);
         // Maybe add client metrics, if metrics not already added. Metrics might be already added
@@ -372,7 +372,7 @@ public class ClientMetricsManager implements AutoCloseable {
     }
 
     private GetTelemetrySubscriptionsResponse createGetSubscriptionResponse(Uuid clientInstanceId,
-        ClientMetricsInstance clientInstance) {
+                                                                            ClientMetricsInstance clientInstance) {
 
         GetTelemetrySubscriptionsResponseData data = new GetTelemetrySubscriptionsResponseData()
             .setClientInstanceId(clientInstanceId)
@@ -388,7 +388,7 @@ public class ClientMetricsManager implements AutoCloseable {
     }
 
     private void validateGetRequest(GetTelemetrySubscriptionsRequest request,
-        ClientMetricsInstance clientInstance, long timestamp) {
+                                    ClientMetricsInstance clientInstance, long timestamp) {
 
         if (!clientInstance.maybeUpdateGetRequestTimestamp(timestamp) && (clientInstance.lastKnownError() != Errors.UNKNOWN_SUBSCRIPTION_ID
             && clientInstance.lastKnownError() != Errors.UNSUPPORTED_COMPRESSION_TYPE)) {
@@ -505,7 +505,7 @@ public class ClientMetricsManager implements AutoCloseable {
         private final Map<String, Pattern> matchPattern;
 
         public SubscriptionInfo(String name, List<String> metrics, int intervalMs,
-            Map<String, Pattern> matchPattern) {
+                                Map<String, Pattern> matchPattern) {
             this.name = name;
             this.metrics = new HashSet<>(metrics);
             this.intervalMs = intervalMs;
@@ -558,8 +558,8 @@ public class ClientMetricsManager implements AutoCloseable {
                 if (time.milliseconds() - lastErrorMs > CACHE_ERROR_LOG_INTERVAL_MS &&
                     lastCacheErrorLogMs.compareAndSet(lastErrorMs, time.milliseconds())) {
                     log.warn("Client metrics instance cache cannot find the client instance id: {}. The cache"
-                            + " must be at capacity, size: {}. Connection map size: {}",
-                            clientInstanceId, clientInstanceCache.size(), clientConnectionIdMap.size());
+                        + " must be at capacity, size: {}. Connection map size: {}",
+                        clientInstanceId, clientInstanceCache.size(), clientConnectionIdMap.size());
                 }
             }
         }

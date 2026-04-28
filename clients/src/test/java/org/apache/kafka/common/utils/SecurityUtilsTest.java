@@ -77,7 +77,7 @@ public class SecurityUtilsTest {
     }
 
     private int getProviderIndexFromName(String providerName, Provider[] providers) {
-        for (int index = 0; index < providers.length; index++) {
+        for (int index = 0;index < providers.length;index++) {
             if (providers[index].getName().equals(providerName)) {
                 return index;
             }
@@ -90,7 +90,7 @@ public class SecurityUtilsTest {
     @Test
     public void testAddCustomSecurityProvider() {
         String customProviderClasses = testScramSaslServerProviderCreator.getClass().getName() + "," +
-                testPlainSaslServerProviderCreator.getClass().getName();
+            testPlainSaslServerProviderCreator.getClass().getName();
         Map<String, String> configs = new HashMap<>();
         configs.put(SecurityConfig.SECURITY_PROVIDERS_CONFIG, customProviderClasses);
         SecurityUtils.addConfiguredSecurityProviders(configs);

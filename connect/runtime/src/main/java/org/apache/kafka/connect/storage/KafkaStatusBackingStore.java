@@ -154,7 +154,7 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
 
     // visible for testing
     KafkaStatusBackingStore(Time time, Converter converter, String statusTopic, Supplier<TopicAdmin> topicAdminSupplier,
-        KafkaBasedLog<String, byte[]> kafkaLog) {
+            KafkaBasedLog<String, byte[]> kafkaLog) {
         this(time, converter, null, "connect-distributed-");
         this.kafkaLog = kafkaLog;
         this.statusTopic = statusTopic;
@@ -197,8 +197,8 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
 
         Map<String, Object> topicSettings = config instanceof DistributedConfig
-                                            ? ((DistributedConfig) config).statusStorageTopicSettings()
-                                            : Map.of();
+                ? ((DistributedConfig) config).statusStorageTopicSettings()
+                : Map.of();
         NewTopic topicDescription = TopicAdmin.defineTopic(statusTopic)
                 .config(topicSettings) // first so that we override user-supplied settings as needed
                 .compacted()
@@ -291,9 +291,9 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
     }
 
     private <V extends AbstractStatus<?>> void send(final String key,
-                                                 final V status,
-                                                 final CacheEntry<V> entry,
-                                                 final boolean safeWrite) {
+            final V status,
+            final CacheEntry<V> entry,
+            final boolean safeWrite) {
         final int sequence;
         synchronized (this) {
             this.generation = status.generation();
@@ -311,8 +311,8 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
                 if (exception instanceof RetriableException) {
                     synchronized (KafkaStatusBackingStore.this) {
                         if (entry.isDeleted()
-                            || status.generation() != generation
-                            || (safeWrite && !entry.canWriteSafely(status, sequence)))
+                                || status.generation() != generation
+                                || (safeWrite && !entry.canWriteSafely(status, sequence)))
                             return;
                     }
 
@@ -401,8 +401,8 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
     public Collection<TopicStatus> getAllTopics(String connector) {
         ConcurrentMap<String, TopicStatus> activeTopics = topics.get(Objects.requireNonNull(connector));
         return activeTopics != null
-               ? Set.copyOf(Objects.requireNonNull(activeTopics.values()))
-               : Set.of();
+                ? Set.copyOf(Objects.requireNonNull(activeTopics.values()))
+                : Set.of();
     }
 
     @Override

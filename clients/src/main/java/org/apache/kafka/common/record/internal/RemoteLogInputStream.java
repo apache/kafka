@@ -51,7 +51,7 @@ public class RemoteLogInputStream implements LogInputStream<RecordBatch> {
         // V0 has the smallest overhead, stricter checking is done later
         if (size < LegacyRecord.RECORD_OVERHEAD_V0)
             throw new CorruptRecordException(String.format("Found record size %d smaller than minimum record " +
-                                                                   "overhead (%d).", size, LegacyRecord.RECORD_OVERHEAD_V0));
+                "overhead (%d).", size, LegacyRecord.RECORD_OVERHEAD_V0));
 
         // Total size is: "LOG_OVERHEAD + the size of the rest of the content"
         int bufferSize = LOG_OVERHEAD + size;

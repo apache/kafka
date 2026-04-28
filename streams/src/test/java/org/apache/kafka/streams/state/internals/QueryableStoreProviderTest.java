@@ -107,10 +107,10 @@ public class QueryableStoreProviderTest {
     public void shouldThrowExceptionWhenKVStoreWithPartitionDoesntExists() {
         final int partition = numStateStorePartitions + 1;
         final InvalidStateStoreException thrown = assertThrows(InvalidStateStoreException.class, () ->
-                storeProvider.store(
-                        StoreQueryParameters
-                                .fromNameAndType(keyValueStore, QueryableStoreTypes.keyValueStore())
-                                .withPartition(partition)).get("1")
+            storeProvider.store(
+                StoreQueryParameters
+                    .fromNameAndType(keyValueStore, QueryableStoreTypes.keyValueStore())
+                    .withPartition(partition)).get("1")
         );
         assertThat(thrown.getMessage(), equalTo(String.format("The specified partition %d for store %s does not exist.", partition, keyValueStore)));
     }
@@ -124,10 +124,10 @@ public class QueryableStoreProviderTest {
     public void shouldThrowExceptionWhenWindowStoreWithPartitionDoesntExists() {
         final int partition = numStateStorePartitions + 1;
         final InvalidStateStoreException thrown = assertThrows(InvalidStateStoreException.class, () ->
-                storeProvider.store(
-                        StoreQueryParameters
-                                .fromNameAndType(windowStore, QueryableStoreTypes.windowStore())
-                                .withPartition(partition)).fetch("1", System.currentTimeMillis())
+            storeProvider.store(
+                StoreQueryParameters
+                    .fromNameAndType(windowStore, QueryableStoreTypes.windowStore())
+                    .withPartition(partition)).fetch("1", System.currentTimeMillis())
         );
         assertThat(thrown.getMessage(), equalTo(String.format("The specified partition %d for store %s does not exist.", partition, windowStore)));
     }

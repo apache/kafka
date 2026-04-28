@@ -44,32 +44,33 @@ public final class OffsetsForLeaderEpochUtils {
 
     private static final Logger LOG = LoggerFactory.getLogger(OffsetsForLeaderEpochUtils.class);
 
-    private OffsetsForLeaderEpochUtils() {}
+    private OffsetsForLeaderEpochUtils() {
+    }
 
     static AbstractRequest.Builder<OffsetsForLeaderEpochRequest> prepareRequest(
-            Map<TopicPartition, SubscriptionState.FetchPosition> requestData) {
+        Map<TopicPartition, SubscriptionState.FetchPosition> requestData) {
         OffsetForLeaderTopicCollection topics = new OffsetForLeaderTopicCollection(requestData.size());
         requestData.forEach((topicPartition, fetchPosition) ->
-                fetchPosition.offsetEpoch.ifPresent(fetchEpoch -> {
-                    OffsetForLeaderTopic topic = topics.find(topicPartition.topic());
-                    if (topic == null) {
-                        topic = new OffsetForLeaderTopic().setTopic(topicPartition.topic());
-                        topics.add(topic);
-                    }
-                    topic.partitions().add(new OffsetForLeaderPartition()
-                            .setPartition(topicPartition.partition())
-                            .setLeaderEpoch(fetchEpoch)
-                            .setCurrentLeaderEpoch(fetchPosition.currentLeader.epoch
-                                    .orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
-                    );
-                })
+            fetchPosition.offsetEpoch.ifPresent(fetchEpoch -> {
+                OffsetForLeaderTopic topic = topics.find(topicPartition.topic());
+                if (topic == null) {
+                    topic = new OffsetForLeaderTopic().setTopic(topicPartition.topic());
+                    topics.add(topic);
+                }
+                topic.partitions().add(new OffsetForLeaderPartition()
+                    .setPartition(topicPartition.partition())
+                    .setLeaderEpoch(fetchEpoch)
+                    .setCurrentLeaderEpoch(fetchPosition.currentLeader.epoch
+                        .orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
+                );
+            })
         );
         return OffsetsForLeaderEpochRequest.Builder.forConsumer(topics);
     }
 
     public static OffsetForEpochResult handleResponse(
-            Map<TopicPartition, SubscriptionState.FetchPosition> requestData,
-            OffsetsForLeaderEpochResponse response) {
+        Map<TopicPartition, SubscriptionState.FetchPosition> requestData,
+        OffsetsForLeaderEpochResponse response) {
 
         Set<TopicPartition> partitionsToRetry = new HashSet<>(requestData.keySet());
         Set<String> unauthorizedTopics = new HashSet<>();
@@ -88,7 +89,7 @@ public final class OffsetsForLeaderEpochUtils {
                 switch (error) {
                     case NONE:
                         LOG.debug("Handling OffsetsForLeaderEpoch response for {}. Got offset {} for epoch {}.",
-                                topicPartition, partition.endOffset(), partition.leaderEpoch());
+                            topicPartition, partition.endOffset(), partition.leaderEpoch());
                         endOffsets.put(topicPartition, partition);
                         partitionsToRetry.remove(topicPartition);
                         break;
@@ -100,11 +101,11 @@ public final class OffsetsForLeaderEpochUtils {
                     case FENCED_LEADER_EPOCH:
                     case UNKNOWN_LEADER_EPOCH:
                         LOG.debug("Attempt to fetch offsets for partition {} failed due to {}, retrying.",
-                                topicPartition, error);
+                            topicPartition, error);
                         break;
                     case UNKNOWN_TOPIC_OR_PARTITION:
                         LOG.warn("Received unknown topic or partition error in OffsetsForLeaderEpoch request for partition {}.",
-                                topicPartition);
+                            topicPartition);
                         break;
                     case TOPIC_AUTHORIZATION_FAILED:
                         unauthorizedTopics.add(topicPartition.topic());
@@ -112,7 +113,7 @@ public final class OffsetsForLeaderEpochUtils {
                         break;
                     default:
                         LOG.warn("Attempt to fetch offsets for partition {} failed due to: {}, retrying.",
-                                topicPartition, error.message());
+                            topicPartition, error.message());
                 }
             }
         }

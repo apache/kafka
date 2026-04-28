@@ -36,8 +36,8 @@ public class LogAndContinueExceptionHandler implements DeserializationExceptionH
 
     @Override
     public Response handleError(final ErrorHandlerContext context,
-                                final ConsumerRecord<byte[], byte[]> record,
-                                final Exception exception) {
+        final ConsumerRecord<byte[], byte[]> record,
+        final Exception exception) {
         log.warn(
             "Exception caught during Deserialization, taskId: {}, topic: {}, partition: {}, offset: {}",
             context.taskId(),

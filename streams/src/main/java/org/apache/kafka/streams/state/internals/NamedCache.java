@@ -70,9 +70,9 @@ class NamedCache {
             storeName
         );
         totalCacheSizeSensor = TaskMetrics.totalCacheSizeBytesSensor(
-                Thread.currentThread().getName(),
-                taskName,
-                streamsMetrics
+            Thread.currentThread().getName(),
+            taskName,
+            streamsMetrics
         );
     }
 

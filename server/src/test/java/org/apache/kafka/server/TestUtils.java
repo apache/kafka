@@ -64,15 +64,15 @@ public class TestUtils {
             throw new IllegalArgumentException("Empty broker list");
         }
         waitForCondition(
-                () -> brokers.stream().allMatch(broker -> {
-                    Optional<LeaderAndIsr> leaderAndIsr = broker.metadataCache().getLeaderAndIsr(topic, partition);
-                    return leaderAndIsr.filter(andIsr -> FetchRequest.isValidBrokerId(andIsr.leader())).isPresent();
-                }),
-                DEFAULT_MAX_WAIT_MS,
-                "Partition [" + topic + "," + partition + "] metadata not propagated after " + DEFAULT_MAX_WAIT_MS + " ms");
+            () -> brokers.stream().allMatch(broker -> {
+                Optional<LeaderAndIsr> leaderAndIsr = broker.metadataCache().getLeaderAndIsr(topic, partition);
+                return leaderAndIsr.filter(andIsr -> FetchRequest.isValidBrokerId(andIsr.leader())).isPresent();
+            }),
+            DEFAULT_MAX_WAIT_MS,
+            "Partition [" + topic + "," + partition + "] metadata not propagated after " + DEFAULT_MAX_WAIT_MS + " ms");
 
         return brokers.iterator().next().metadataCache().getLeaderAndIsr(topic, partition).orElseThrow(() ->
-                new IllegalStateException("Cannot get topic: " + topic + ", partition: " + partition + " in server metadata cache"));
+            new IllegalStateException("Cannot get topic: " + topic + ", partition: " + partition + " in server metadata cache"));
     }
 
     private static <K, V> List<ConsumerRecord<K, V>> pollUntilAtLeastNumRecords(Consumer<K, V> consumer, int numRecords) throws Exception {
@@ -84,7 +84,7 @@ public class TestUtils {
             return records.size() >= numRecords;
         };
         pollRecordsUntilTrue(consumer, pollAction,
-                () -> "Consumed " + records.size() + " records before timeout instead of the expected " + numRecords + " records");
+            () -> "Consumed " + records.size() + " records before timeout instead of the expected " + numRecords + " records");
         return records;
     }
 
@@ -102,7 +102,7 @@ public class TestUtils {
         return records;
     }
 
-    private static <K, V>  void pollRecordsUntilTrue(Consumer<K, V> consumer, Function<ConsumerRecords<K, V>, Boolean> action, Supplier<String> msg) throws Exception {
+    private static <K, V> void pollRecordsUntilTrue(Consumer<K, V> consumer, Function<ConsumerRecords<K, V>, Boolean> action, Supplier<String> msg) throws Exception {
         waitForCondition(() -> action.apply(consumer.poll(Duration.ofMillis(100L))), DEFAULT_MAX_WAIT_MS, msg.get());
     }
 
@@ -118,12 +118,12 @@ public class TestUtils {
      */
     public static void produceMessage(ClusterInstance cluster, String topic, String message, int deliveryTimeoutMs, int requestTimeoutMs) throws Exception {
         try (Producer<String, String> producer = cluster.producer(Map.of(
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
-                ProducerConfig.LINGER_MS_CONFIG, 0,
-                ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs,
-                ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs
-        ))) {
+                 ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
+                 ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
+                 ProducerConfig.LINGER_MS_CONFIG, 0,
+                 ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs,
+                 ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs
+             ))) {
             producer.send(new ProducerRecord<>(topic, topic, message)).get();
         }
     }
@@ -171,13 +171,13 @@ public class TestUtils {
         }
 
         Supplier<Optional<Integer>> newLeaderExists = () -> cluster.brokers().values().stream()
-                .filter(broker -> expectedLeaderOpt.isEmpty() || broker.config().brokerId() == expectedLeaderOpt.get())
-                .filter(broker -> broker.replicaManager().onlinePartition(tp).exists(partition -> partition.leaderLogIfLocal().isDefined()))
-                .map(broker -> broker.config().brokerId())
-                .findFirst();
+            .filter(broker -> expectedLeaderOpt.isEmpty() || broker.config().brokerId() == expectedLeaderOpt.get())
+            .filter(broker -> broker.replicaManager().onlinePartition(tp).exists(partition -> partition.leaderLogIfLocal().isDefined()))
+            .map(broker -> broker.config().brokerId())
+            .findFirst();
 
         waitForCondition(() -> newLeaderExists.get().isPresent(),
-                timeout, "Did not observe leader change for partition " + tp + " after " + timeout + " ms");
+            timeout, "Did not observe leader change for partition " + tp + " after " + timeout + " ms");
 
         return newLeaderExists.get().get();
     }

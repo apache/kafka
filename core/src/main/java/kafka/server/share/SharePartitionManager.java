@@ -219,20 +219,20 @@ public class SharePartitionManager implements AutoCloseable {
     // Visible for testing.
     @SuppressWarnings("ParameterNumber")
     SharePartitionManager(
-            ReplicaManager replicaManager,
-            Time time,
-            ShareSessionCache cache,
-            SharePartitionCache partitionCache,
-            int defaultRecordLockDurationMs,
-            Timer timer,
-            int maxDeliveryCount,
-            int maxInFlightRecords,
-            long remoteFetchMaxWaitMs,
-            Persister persister,
-            ShareGroupConfigProvider configProvider,
-            ShareGroupMetrics shareGroupMetrics,
-            BrokerTopicStats brokerTopicStats,
-            Supplier<Boolean> shareGroupDlqEnableSupplier
+        ReplicaManager replicaManager,
+        Time time,
+        ShareSessionCache cache,
+        SharePartitionCache partitionCache,
+        int defaultRecordLockDurationMs,
+        Timer timer,
+        int maxDeliveryCount,
+        int maxInFlightRecords,
+        long remoteFetchMaxWaitMs,
+        Persister persister,
+        ShareGroupConfigProvider configProvider,
+        ShareGroupMetrics shareGroupMetrics,
+        BrokerTopicStats brokerTopicStats,
+        Supplier<Boolean> shareGroupDlqEnableSupplier
     ) {
         this.replicaManager = replicaManager;
         this.time = time;
@@ -494,7 +494,7 @@ public class SharePartitionManager implements AutoCloseable {
                     log.debug("Removed share session with key {}", key);
                 }
                 ImplicitLinkedHashCollection<CachedSharePartition> cachedSharePartitions = new
-                        ImplicitLinkedHashCollection<>(shareFetchData.size());
+                    ImplicitLinkedHashCollection<>(shareFetchData.size());
                 shareFetchData.forEach(topicIdPartition ->
                     cachedSharePartitions.mustAdd(new CachedSharePartition(topicIdPartition, false)));
                 ShareSessionKey responseShareSessionKey = cache.maybeCreateSession(groupId, memberId,
@@ -506,8 +506,8 @@ public class SharePartitionManager implements AutoCloseable {
 
                 context = new ShareSessionContext(shareSessionEpoch, shareFetchData);
                 log.debug("Created a new ShareSessionContext with key {} isSubsequent {} returning {}. A new share " +
-                        "session will be started.", responseShareSessionKey, false,
-                        partitionsToLogString(shareFetchData));
+                    "session will be started.", responseShareSessionKey, false,
+                    partitionsToLogString(shareFetchData));
             }
         } else {
             // We update the already existing share session.
@@ -520,7 +520,7 @@ public class SharePartitionManager implements AutoCloseable {
                 }
                 if (shareSession.epoch != shareSessionEpoch) {
                     log.debug("Share session error for {}: expected epoch {}, but got {} instead", key,
-                            shareSession.epoch, shareSessionEpoch);
+                        shareSession.epoch, shareSessionEpoch);
                     throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
                 }
                 Map<ShareSession.ModifiedTopicIdPartitionType, List<TopicIdPartition>> modifiedTopicIdPartitions = shareSession.update(
@@ -528,11 +528,11 @@ public class SharePartitionManager implements AutoCloseable {
                 cache.updateNumPartitions(shareSession);
                 shareSession.epoch = ShareRequestMetadata.nextEpoch(shareSession.epoch);
                 log.debug("Created a new ShareSessionContext for session key {}, epoch {}: " +
-                                "added {}, updated {}, removed {}", shareSession.key(), shareSession.epoch,
-                        partitionsToLogString(modifiedTopicIdPartitions.get(
-                                ShareSession.ModifiedTopicIdPartitionType.ADDED)),
-                        partitionsToLogString(modifiedTopicIdPartitions.get(ShareSession.ModifiedTopicIdPartitionType.UPDATED)),
-                        partitionsToLogString(modifiedTopicIdPartitions.get(ShareSession.ModifiedTopicIdPartitionType.REMOVED))
+                    "added {}, updated {}, removed {}", shareSession.key(), shareSession.epoch,
+                    partitionsToLogString(modifiedTopicIdPartitions.get(
+                        ShareSession.ModifiedTopicIdPartitionType.ADDED)),
+                    partitionsToLogString(modifiedTopicIdPartitions.get(ShareSession.ModifiedTopicIdPartitionType.UPDATED)),
+                    partitionsToLogString(modifiedTopicIdPartitions.get(ShareSession.ModifiedTopicIdPartitionType.REMOVED))
                 );
                 context = new ShareSessionContext(shareSessionEpoch, shareSession);
             }
@@ -564,7 +564,7 @@ public class SharePartitionManager implements AutoCloseable {
                     return;
                 } else if (shareSession.epoch != shareSessionEpoch) {
                     log.debug("Share session error for {}: expected epoch {}, but got {} instead", key,
-                            shareSession.epoch, shareSessionEpoch);
+                        shareSession.epoch, shareSessionEpoch);
                     throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
                 }
                 cache.updateNumPartitions(shareSession);
@@ -712,36 +712,36 @@ public class SharePartitionManager implements AutoCloseable {
 
     private SharePartition getOrCreateSharePartition(SharePartitionKey sharePartitionKey) {
         return partitionCache.computeIfAbsent(sharePartitionKey,
-                k -> {
-                    int leaderEpoch = ShareFetchUtils.leaderEpoch(replicaManager, sharePartitionKey.topicIdPartition().topicPartition());
-                    // Attach listener to Partition which shall invoke partition change handlers.
-                    // However, as there could be multiple share partitions (per group name) for a single topic-partition,
-                    // hence create separate listeners per share partition which holds the share partition key
-                    // to identify the respective share partition.
-                    SharePartitionListener listener = new SharePartitionListener(sharePartitionKey, replicaManager, partitionCache);
-                    replicaManager.maybeAddListener(sharePartitionKey.topicIdPartition().topicPartition(), listener);
-                    return new SharePartition(
-                            sharePartitionKey.groupId(),
-                            sharePartitionKey.topicIdPartition(),
-                            leaderEpoch,
-                            maxInFlightRecords,
-                            maxDeliveryCount,
-                            defaultRecordLockDurationMs,
-                            timer,
-                            time,
-                            persister,
-                            replicaManager,
-                            configProvider,
-                            listener,
-                            shareGroupDlqEnableSupplier
-                    );
-                });
+            k -> {
+                int leaderEpoch = ShareFetchUtils.leaderEpoch(replicaManager, sharePartitionKey.topicIdPartition().topicPartition());
+                // Attach listener to Partition which shall invoke partition change handlers.
+                // However, as there could be multiple share partitions (per group name) for a single topic-partition,
+                // hence create separate listeners per share partition which holds the share partition key
+                // to identify the respective share partition.
+                SharePartitionListener listener = new SharePartitionListener(sharePartitionKey, replicaManager, partitionCache);
+                replicaManager.maybeAddListener(sharePartitionKey.topicIdPartition().topicPartition(), listener);
+                return new SharePartition(
+                    sharePartitionKey.groupId(),
+                    sharePartitionKey.topicIdPartition(),
+                    leaderEpoch,
+                    maxInFlightRecords,
+                    maxDeliveryCount,
+                    defaultRecordLockDurationMs,
+                    timer,
+                    time,
+                    persister,
+                    replicaManager,
+                    configProvider,
+                    listener,
+                    shareGroupDlqEnableSupplier
+                );
+            });
     }
 
     private void handleInitializationException(
-            SharePartitionKey sharePartitionKey,
-            ShareFetch shareFetch,
-            Throwable throwable) {
+        SharePartitionKey sharePartitionKey,
+        ShareFetch shareFetch,
+        Throwable throwable) {
         if (throwable instanceof LeaderNotAvailableException) {
             log.debug("The share partition with key {} is not initialized yet", sharePartitionKey);
             // Skip any handling for this error as the share partition is still loading. The request

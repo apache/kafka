@@ -69,9 +69,9 @@ public class DeleteRecordsRequest extends AbstractRequest {
             result.topics().add(topicResult);
             for (DeleteRecordsRequestData.DeleteRecordsPartition partition : topic.partitions()) {
                 topicResult.partitions().add(new DeleteRecordsResponseData.DeleteRecordsPartitionResult()
-                        .setPartitionIndex(partition.partitionIndex())
-                        .setErrorCode(errorCode)
-                        .setLowWatermark(DeleteRecordsResponse.INVALID_LOW_WATERMARK));
+                    .setPartitionIndex(partition.partitionIndex())
+                    .setErrorCode(errorCode)
+                    .setLowWatermark(DeleteRecordsResponse.INVALID_LOW_WATERMARK));
             }
         }
         return new DeleteRecordsResponse(result);

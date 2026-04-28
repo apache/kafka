@@ -67,9 +67,9 @@ public class KStreamImplValueJoinerWithKeyTest {
         (key, lv, rv) -> key + ":" + (lv + (rv == null ? 0 : rv));
     private final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100), ofHours(24L));
     private final StreamJoined<String, Integer, Integer> streamJoined =
-            StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer());
+        StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer());
     private final Joined<String, Integer, Integer> joined =
-            Joined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer());
+        Joined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer());
     private final KeyValueMapper<String, Integer, String> keyValueMapper =
         (k, v) -> k;
 
@@ -191,7 +191,7 @@ public class KStreamImplValueJoinerWithKeyTest {
         leftStream.leftJoin(
             globalKTable,
             keyValueMapper,
-           valueJoinerWithKey
+            valueJoinerWithKey
         ).to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
         // Left KV A, 3, GlobalTable KV A, 5
         runJoinTopology(
@@ -204,19 +204,19 @@ public class KStreamImplValueJoinerWithKeyTest {
 
 
     private void runJoinTopology(final StreamsBuilder builder,
-                                 final List<KeyValue<String, String>> expectedResults,
-                                 final boolean isTableJoin,
-                                 final String rightTopic) {
+        final List<KeyValue<String, String>> expectedResults,
+        final boolean isTableJoin,
+        final String rightTopic) {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
             final TestInputTopic<String, Integer> rightInputTopic =
-                    driver.createInputTopic(rightTopic, new StringSerializer(), new IntegerSerializer());
+                driver.createInputTopic(rightTopic, new StringSerializer(), new IntegerSerializer());
 
             final TestInputTopic<String, Integer> leftInputTopic =
-                    driver.createInputTopic(leftTopic, new StringSerializer(), new IntegerSerializer());
+                driver.createInputTopic(leftTopic, new StringSerializer(), new IntegerSerializer());
 
             final TestOutputTopic<String, String> joinResultTopic =
-                    driver.createOutputTopic(outputTopic, new StringDeserializer(), new StringDeserializer());
+                driver.createOutputTopic(outputTopic, new StringDeserializer(), new StringDeserializer());
 
             // with stream table joins need to make sure records hit
             // the table first, joins only triggered from streams side

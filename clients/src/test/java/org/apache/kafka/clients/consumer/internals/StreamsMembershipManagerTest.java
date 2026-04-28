@@ -137,8 +137,8 @@ public class StreamsMembershipManagerTest {
     @Test
     public void testAssignedPartitionCountMetricRegistered() {
         MetricName metricName = metrics.metricName(
-                "assigned-partitions",
-                CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX
+            "assigned-partitions",
+            CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX
         );
         assertNotNull(metrics.metric(metricName), "Metric assigned-partitions should have been registered");
     }
@@ -180,8 +180,8 @@ public class StreamsMembershipManagerTest {
     }
 
     private void testTasksAreNullInHeartbeatResponse(final List<StreamsGroupHeartbeatResponseData.TaskIds> activeTasks,
-                                                     final List<StreamsGroupHeartbeatResponseData.TaskIds> standbyTasks,
-                                                     final List<StreamsGroupHeartbeatResponseData.TaskIds> warmupTasks) {
+        final List<StreamsGroupHeartbeatResponseData.TaskIds> standbyTasks,
+        final List<StreamsGroupHeartbeatResponseData.TaskIds> warmupTasks) {
         joining();
         final StreamsGroupHeartbeatResponse response = makeHeartbeatResponse(activeTasks, standbyTasks, warmupTasks);
 
@@ -2266,15 +2266,15 @@ public class StreamsMembershipManagerTest {
     }
 
     private void verifyInStateReconcilingBeforeOnTaskRevokedCallbackExecuted(Set<TopicPartition> expectedPartitionsToRevoke,
-                                                                             Set<TopicPartition> expectedAllPartitionsToAssign,
-                                                                             Set<TopicPartition> expectedNewPartitionsToAssign) {
+        Set<TopicPartition> expectedAllPartitionsToAssign,
+        Set<TopicPartition> expectedNewPartitionsToAssign) {
         verify(subscriptionState).markPendingRevocation(expectedPartitionsToRevoke);
         verify(subscriptionState, never()).assignFromSubscribedAwaitingCallback(expectedAllPartitionsToAssign, expectedNewPartitionsToAssign);
         verifyInStateReconciling(membershipManager);
     }
 
     private void verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(Set<TopicPartition> expectedAllPartitionsToAssign,
-                                                                              Set<TopicPartition> expectedNewPartitionsToAssign) {
+        Set<TopicPartition> expectedNewPartitionsToAssign) {
         // Assignment is now deferred to app thread via StreamsTasksAssignedEvent,
         // so assignFromSubscribedAwaitingCallback should NOT be called directly from background thread
         verify(subscriptionState, never()).assignFromSubscribedAwaitingCallback(expectedAllPartitionsToAssign, expectedNewPartitionsToAssign);
@@ -2359,15 +2359,15 @@ public class StreamsMembershipManagerTest {
     }
 
     private StreamsTasksAssignedEvent verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(final Set<StreamsRebalanceData.TaskId> activeTasks,
-                                                                                                            final Set<StreamsRebalanceData.TaskId> standbyTasks,
-                                                                                                            final Set<StreamsRebalanceData.TaskId> warmupTasks) {
+        final Set<StreamsRebalanceData.TaskId> standbyTasks,
+        final Set<StreamsRebalanceData.TaskId> warmupTasks) {
         return verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, standbyTasks, warmupTasks, true);
     }
 
     private StreamsTasksAssignedEvent verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(final Set<StreamsRebalanceData.TaskId> activeTasks,
-                                                                                                            final Set<StreamsRebalanceData.TaskId> standbyTasks,
-                                                                                                            final Set<StreamsRebalanceData.TaskId> warmupTasks,
-                                                                                                            final boolean isGroupReady) {
+        final Set<StreamsRebalanceData.TaskId> standbyTasks,
+        final Set<StreamsRebalanceData.TaskId> warmupTasks,
+        final boolean isGroupReady) {
         verify(backgroundEventHandler, times(++tasksAssignedAddCount)).add(tasksAssignedEventCaptor.capture());
         final StreamsTasksAssignedEvent streamsTasksAssignedEvent = tasksAssignedEventCaptor.getValue();
         assertEquals(makeTaskAssignment(activeTasks, standbyTasks, warmupTasks, isGroupReady), streamsTasksAssignedEvent.assignment());
@@ -2401,8 +2401,8 @@ public class StreamsMembershipManagerTest {
     }
 
     private void verifyTasksNotAssigned(final Set<StreamsRebalanceData.TaskId> activeTasks,
-                                        final Set<StreamsRebalanceData.TaskId> standbyTasks,
-                                        final Set<StreamsRebalanceData.TaskId> warmupTasks) {
+        final Set<StreamsRebalanceData.TaskId> standbyTasks,
+        final Set<StreamsRebalanceData.TaskId> warmupTasks) {
         verify(backgroundEventHandler, never()).add(argThat(a -> {
             if (a instanceof StreamsTasksAssignedEvent) {
                 return ((StreamsTasksAssignedEvent) a).assignment()
@@ -2413,7 +2413,7 @@ public class StreamsMembershipManagerTest {
     }
 
     private void setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(final String subtopologyId,
-                                                                           final String topicName) {
+        final String topicName) {
         lenient().when(streamsRebalanceData.subtopologies()).thenReturn(
             Map.of(
                 subtopologyId,
@@ -2429,9 +2429,9 @@ public class StreamsMembershipManagerTest {
     }
 
     private void setupStreamsReabalanceDataWithTwoSubtopologies(final String subtopologyId1,
-                                                                final String topicName1,
-                                                                final String subtopologyId2,
-                                                                final String topicName2) {
+        final String topicName1,
+        final String subtopologyId2,
+        final String topicName2) {
         lenient().when(streamsRebalanceData.subtopologies()).thenReturn(
             Map.of(
                 subtopologyId1,
@@ -2455,30 +2455,30 @@ public class StreamsMembershipManagerTest {
     }
 
     private StreamsGroupHeartbeatResponse makeHeartbeatResponseWithActiveTasks(final String subtopologyId,
-                                                                               final List<Integer> partitions) {
+        final List<Integer> partitions) {
         return makeHeartbeatResponseWithActiveTasks(List.of(
-            new StreamsGroupHeartbeatResponseData.TaskIds()
-                .setSubtopologyId(subtopologyId)
-                .setPartitions(partitions)
+                new StreamsGroupHeartbeatResponseData.TaskIds()
+                    .setSubtopologyId(subtopologyId)
+                    .setPartitions(partitions)
             ),
             MEMBER_EPOCH
         );
     }
 
     private StreamsGroupHeartbeatResponse makeHeartbeatResponseWithActiveTasks(final String subtopologyId,
-                                                                               final List<Integer> partitions,
-                                                                               final int memberEpoch) {
+        final List<Integer> partitions,
+        final int memberEpoch) {
         return makeHeartbeatResponseWithActiveTasks(List.of(
-            new StreamsGroupHeartbeatResponseData.TaskIds()
-                .setSubtopologyId(subtopologyId)
-                .setPartitions(partitions)
+                new StreamsGroupHeartbeatResponseData.TaskIds()
+                    .setSubtopologyId(subtopologyId)
+                    .setPartitions(partitions)
             ),
             memberEpoch
         );
     }
 
     private StreamsGroupHeartbeatResponse makeHeartbeatResponseWithStandbyTasks(final String subtopologyId,
-                                                                                final List<Integer> partitions) {
+        final List<Integer> partitions) {
         return makeHeartbeatResponse(
             List.of(),
             List.of(
@@ -2492,7 +2492,7 @@ public class StreamsMembershipManagerTest {
     }
 
     private StreamsGroupHeartbeatResponse makeHeartbeatResponseWithWarmupTasks(final String subtopologyId,
-                                                                               final List<Integer> partitions) {
+        final List<Integer> partitions) {
         return makeHeartbeatResponse(
             List.of(),
             List.of(),
@@ -2506,43 +2506,43 @@ public class StreamsMembershipManagerTest {
     }
 
     private StreamsGroupHeartbeatResponse makeHeartbeatResponseWithActiveTasks(final String subtopologyId0,
-                                                                               final List<Integer> partitions0,
-                                                                               final String subtopologyId1,
-                                                                               final List<Integer> partitions1) {
+        final List<Integer> partitions0,
+        final String subtopologyId1,
+        final List<Integer> partitions1) {
         return makeHeartbeatResponseWithActiveTasks(List.of(
-            new StreamsGroupHeartbeatResponseData.TaskIds()
-                .setSubtopologyId(subtopologyId0)
-                .setPartitions(partitions0),
-            new StreamsGroupHeartbeatResponseData.TaskIds()
-                .setSubtopologyId(subtopologyId1)
-                .setPartitions(partitions1)),
+                new StreamsGroupHeartbeatResponseData.TaskIds()
+                    .setSubtopologyId(subtopologyId0)
+                    .setPartitions(partitions0),
+                new StreamsGroupHeartbeatResponseData.TaskIds()
+                    .setSubtopologyId(subtopologyId1)
+                    .setPartitions(partitions1)),
             MEMBER_EPOCH
         );
     }
 
     private StreamsGroupHeartbeatResponse makeHeartbeatResponseWithActiveTasks(final List<StreamsGroupHeartbeatResponseData.TaskIds> activeTasks,
-                                                                               final int memberEpoch) {
+        final int memberEpoch) {
         return makeHeartbeatResponse(activeTasks, List.of(), List.of(), memberEpoch);
     }
 
     private StreamsGroupHeartbeatResponse makeHeartbeatResponse(final List<StreamsGroupHeartbeatResponseData.TaskIds> activeTasks,
-                                                                final List<StreamsGroupHeartbeatResponseData.TaskIds> standbyTasks,
-                                                                final List<StreamsGroupHeartbeatResponseData.TaskIds> warmupTasks) {
+        final List<StreamsGroupHeartbeatResponseData.TaskIds> standbyTasks,
+        final List<StreamsGroupHeartbeatResponseData.TaskIds> warmupTasks) {
         return makeHeartbeatResponse(activeTasks, standbyTasks, warmupTasks, MEMBER_EPOCH);
     }
 
     private StreamsGroupHeartbeatResponse makeHeartbeatResponse(final List<StreamsGroupHeartbeatResponseData.TaskIds> activeTasks,
-                                                                final List<StreamsGroupHeartbeatResponseData.TaskIds> standbyTasks,
-                                                                final List<StreamsGroupHeartbeatResponseData.TaskIds> warmupTasks,
-                                                                final int memberEpoch) {
+        final List<StreamsGroupHeartbeatResponseData.TaskIds> standbyTasks,
+        final List<StreamsGroupHeartbeatResponseData.TaskIds> warmupTasks,
+        final int memberEpoch) {
         return makeHeartbeatResponse(activeTasks, standbyTasks, warmupTasks, memberEpoch, null);
     }
 
     private StreamsGroupHeartbeatResponse makeHeartbeatResponse(final List<StreamsGroupHeartbeatResponseData.TaskIds> activeTasks,
-                                                                final List<StreamsGroupHeartbeatResponseData.TaskIds> standbyTasks,
-                                                                final List<StreamsGroupHeartbeatResponseData.TaskIds> warmupTasks,
-                                                                final int memberEpoch,
-                                                                final List<StreamsGroupHeartbeatResponseData.Status> statuses) {
+        final List<StreamsGroupHeartbeatResponseData.TaskIds> standbyTasks,
+        final List<StreamsGroupHeartbeatResponseData.TaskIds> warmupTasks,
+        final int memberEpoch,
+        final List<StreamsGroupHeartbeatResponseData.Status> statuses) {
         final StreamsGroupHeartbeatResponseData responseData = new StreamsGroupHeartbeatResponseData()
             .setErrorCode(Errors.NONE.code())
             .setMemberId(membershipManager.memberId())
@@ -2557,15 +2557,15 @@ public class StreamsMembershipManagerTest {
     }
 
     private StreamsRebalanceData.Assignment makeTaskAssignment(final Set<StreamsRebalanceData.TaskId> activeTasks,
-                                                               final Set<StreamsRebalanceData.TaskId> standbyTasks,
-                                                               final Set<StreamsRebalanceData.TaskId> warmupTasks) {
+        final Set<StreamsRebalanceData.TaskId> standbyTasks,
+        final Set<StreamsRebalanceData.TaskId> warmupTasks) {
         return makeTaskAssignment(activeTasks, standbyTasks, warmupTasks, true);
     }
 
     private StreamsRebalanceData.Assignment makeTaskAssignment(final Set<StreamsRebalanceData.TaskId> activeTasks,
-                                                               final Set<StreamsRebalanceData.TaskId> standbyTasks,
-                                                               final Set<StreamsRebalanceData.TaskId> warmupTasks,
-                                                               final boolean isGroupReady) {
+        final Set<StreamsRebalanceData.TaskId> standbyTasks,
+        final Set<StreamsRebalanceData.TaskId> warmupTasks,
+        final boolean isGroupReady) {
         return new StreamsRebalanceData.Assignment(
             activeTasks,
             standbyTasks,

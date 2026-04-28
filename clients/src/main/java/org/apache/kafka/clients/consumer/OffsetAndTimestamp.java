@@ -89,8 +89,8 @@ public final class OffsetAndTimestamp {
     @Override
     public String toString() {
         return "(timestamp=" + timestamp +
-                ", leaderEpoch=" + leaderEpoch.orElse(null) +
-                ", offset=" + offset + ")";
+            ", leaderEpoch=" + leaderEpoch.orElse(null) +
+            ", offset=" + offset + ")";
     }
 
     @Override
@@ -99,8 +99,8 @@ public final class OffsetAndTimestamp {
         if (o == null || getClass() != o.getClass()) return false;
         OffsetAndTimestamp that = (OffsetAndTimestamp) o;
         return timestamp == that.timestamp &&
-                offset == that.offset &&
-                Objects.equals(leaderEpoch, that.leaderEpoch);
+            offset == that.offset &&
+            Objects.equals(leaderEpoch, that.leaderEpoch);
     }
 
     @Override

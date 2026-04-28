@@ -42,7 +42,7 @@ public class DeleteTopicsRequestTest {
             String topic2 = "topic2";
             List<String> topics = Arrays.asList(topic1, topic2);
             DeleteTopicsRequest requestWithNames = new DeleteTopicsRequest.Builder(
-                    new DeleteTopicsRequestData().setTopicNames(topics)).build(version);
+                new DeleteTopicsRequestData().setTopicNames(topics)).build(version);
             DeleteTopicsRequest requestWithNamesSerialized = DeleteTopicsRequest.parse(requestWithNames.serialize(), version);
 
             assertEquals(topics, requestWithNames.topicNames());
@@ -66,9 +66,9 @@ public class DeleteTopicsRequestTest {
             String topic2 = "topic2";
             List<String> topics = Arrays.asList(topic1, topic2);
             DeleteTopicsRequest requestWithNames = new DeleteTopicsRequest.Builder(
-                    new DeleteTopicsRequestData().setTopics(Arrays.asList(
-                            new DeleteTopicsRequestData.DeleteTopicState().setName(topic1),
-                            new DeleteTopicsRequestData.DeleteTopicState().setName(topic2)))).build(version);
+                new DeleteTopicsRequestData().setTopics(Arrays.asList(
+                    new DeleteTopicsRequestData.DeleteTopicState().setName(topic1),
+                    new DeleteTopicsRequestData.DeleteTopicState().setName(topic2)))).build(version);
             // Ensure we only use new topics field on versions 6+.
             if (version >= 6) {
                 DeleteTopicsRequest requestWithNamesSerialized = DeleteTopicsRequest.parse(requestWithNames.serialize(), version);
@@ -91,9 +91,9 @@ public class DeleteTopicsRequestTest {
             Uuid topicId2 = Uuid.randomUuid();
             List<Uuid> topicIds = Arrays.asList(topicId1, topicId2);
             DeleteTopicsRequest requestWithIds = new DeleteTopicsRequest.Builder(
-                    new DeleteTopicsRequestData().setTopics(Arrays.asList(
-                            new DeleteTopicsRequestData.DeleteTopicState().setTopicId(topicId1),
-                            new DeleteTopicsRequestData.DeleteTopicState().setTopicId(topicId2)))).build(version);
+                new DeleteTopicsRequestData().setTopics(Arrays.asList(
+                    new DeleteTopicsRequestData.DeleteTopicState().setTopicId(topicId1),
+                    new DeleteTopicsRequestData.DeleteTopicState().setTopicId(topicId2)))).build(version);
 
             if (version >= 6) {
                 DeleteTopicsRequest requestWithIdsSerialized = DeleteTopicsRequest.parse(requestWithIds.serialize(), version);
@@ -115,8 +115,8 @@ public class DeleteTopicsRequestTest {
     public void testDeleteTopicsRequestNumTopics() {
         for (short version : DELETE_TOPICS.allVersions()) {
             DeleteTopicsRequest request = new DeleteTopicsRequest.Builder(new DeleteTopicsRequestData()
-                    .setTopicNames(Arrays.asList("topic1", "topic2"))
-                    .setTimeoutMs(1000)).build(version);
+                .setTopicNames(Arrays.asList("topic1", "topic2"))
+                .setTimeoutMs(1000)).build(version);
             DeleteTopicsRequest serializedRequest = DeleteTopicsRequest.parse(request.serialize(), version);
             // createDeleteTopicsRequest sets 2 topics
             assertEquals(2, request.numberOfTopics());
@@ -125,9 +125,9 @@ public class DeleteTopicsRequestTest {
             // Test using IDs
             if (version >= 6) {
                 DeleteTopicsRequest requestWithIds = new DeleteTopicsRequest.Builder(
-                        new DeleteTopicsRequestData().setTopics(Arrays.asList(
-                                new DeleteTopicsRequestData.DeleteTopicState().setTopicId(Uuid.randomUuid()),
-                                new DeleteTopicsRequestData.DeleteTopicState().setTopicId(Uuid.randomUuid())))).build(version);
+                    new DeleteTopicsRequestData().setTopics(Arrays.asList(
+                        new DeleteTopicsRequestData.DeleteTopicState().setTopicId(Uuid.randomUuid()),
+                        new DeleteTopicsRequestData.DeleteTopicState().setTopicId(Uuid.randomUuid())))).build(version);
                 DeleteTopicsRequest serializedRequestWithIds = DeleteTopicsRequest.parse(requestWithIds.serialize(), version);
                 assertEquals(2, requestWithIds.numberOfTopics());
                 assertEquals(2, serializedRequestWithIds.numberOfTopics());

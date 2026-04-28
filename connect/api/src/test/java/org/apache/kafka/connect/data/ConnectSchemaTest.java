@@ -72,7 +72,7 @@ public class ConnectSchemaTest {
     @Test
     public void testFieldsOnlyValidForStructs() {
         assertThrows(DataException.class,
-            Schema.INT8_SCHEMA::fields);
+                Schema.INT8_SCHEMA::fields);
     }
 
     @Test
@@ -116,43 +116,43 @@ public class ConnectSchemaTest {
     @Test
     public void testValidateValueMismatchInt8() {
         assertThrows(DataException.class,
-            () -> ConnectSchema.validateValue(Schema.INT8_SCHEMA, 1));
+                () -> ConnectSchema.validateValue(Schema.INT8_SCHEMA, 1));
     }
 
     @Test
     public void testValidateValueMismatchInt16() {
         assertThrows(DataException.class,
-            () -> ConnectSchema.validateValue(Schema.INT16_SCHEMA, 1));
+                () -> ConnectSchema.validateValue(Schema.INT16_SCHEMA, 1));
     }
 
     @Test
     public void testValidateValueMismatchInt32() {
         assertThrows(DataException.class,
-            () -> ConnectSchema.validateValue(Schema.INT32_SCHEMA, (long) 1));
+                () -> ConnectSchema.validateValue(Schema.INT32_SCHEMA, (long) 1));
     }
 
     @Test
     public void testValidateValueMismatchInt64() {
         assertThrows(DataException.class,
-            () -> ConnectSchema.validateValue(Schema.INT64_SCHEMA, 1));
+                () -> ConnectSchema.validateValue(Schema.INT64_SCHEMA, 1));
     }
 
     @Test
     public void testValidateValueMismatchFloat() {
         assertThrows(DataException.class,
-            () -> ConnectSchema.validateValue(Schema.FLOAT32_SCHEMA, 1.0));
+                () -> ConnectSchema.validateValue(Schema.FLOAT32_SCHEMA, 1.0));
     }
 
     @Test
     public void testValidateValueMismatchDouble() {
         assertThrows(DataException.class,
-            () -> ConnectSchema.validateValue(Schema.FLOAT64_SCHEMA, 1.f));
+                () -> ConnectSchema.validateValue(Schema.FLOAT64_SCHEMA, 1.f));
     }
 
     @Test
     public void testValidateValueMismatchBoolean() {
         assertThrows(DataException.class,
-            () -> ConnectSchema.validateValue(Schema.BOOLEAN_SCHEMA, 1.f));
+                () -> ConnectSchema.validateValue(Schema.BOOLEAN_SCHEMA, 1.f));
     }
 
     @Test
@@ -160,19 +160,19 @@ public class ConnectSchemaTest {
         // CharSequence is a similar type (supertype of String), but we restrict to String.
         CharBuffer cbuf = CharBuffer.wrap("abc");
         assertThrows(DataException.class,
-            () -> ConnectSchema.validateValue(Schema.STRING_SCHEMA, cbuf));
+                () -> ConnectSchema.validateValue(Schema.STRING_SCHEMA, cbuf));
     }
 
     @Test
     public void testValidateValueMismatchBytes() {
         assertThrows(DataException.class,
-            () -> ConnectSchema.validateValue(Schema.BYTES_SCHEMA, new Object[]{1, "foo"}));
+                () -> ConnectSchema.validateValue(Schema.BYTES_SCHEMA, new Object[]{1, "foo"}));
     }
 
     @Test
     public void testValidateValueMismatchArray() {
         assertThrows(DataException.class,
-            () -> ConnectSchema.validateValue(SchemaBuilder.array(Schema.INT32_SCHEMA).build(), List.of("a", "b", "c")));
+                () -> ConnectSchema.validateValue(SchemaBuilder.array(Schema.INT32_SCHEMA).build(), List.of("a", "b", "c")));
     }
 
     @Test
@@ -180,19 +180,19 @@ public class ConnectSchemaTest {
         // Even if some match the right type, this should fail if any mismatch. In this case, type erasure loses
         // the fact that the list is actually List<Object>, but we couldn't tell if only checking the first element
         assertThrows(DataException.class,
-            () -> ConnectSchema.validateValue(SchemaBuilder.array(Schema.INT32_SCHEMA).build(), List.of(1, 2, "c")));
+                () -> ConnectSchema.validateValue(SchemaBuilder.array(Schema.INT32_SCHEMA).build(), List.of(1, 2, "c")));
     }
 
     @Test
     public void testValidateValueMismatchMapKey() {
         assertThrows(DataException.class,
-            () -> ConnectSchema.validateValue(MAP_INT_STRING_SCHEMA, Map.of("wrong key type", "value")));
+                () -> ConnectSchema.validateValue(MAP_INT_STRING_SCHEMA, Map.of("wrong key type", "value")));
     }
 
     @Test
     public void testValidateValueMismatchMapValue() {
         assertThrows(DataException.class,
-            () -> ConnectSchema.validateValue(MAP_INT_STRING_SCHEMA, Map.of(1, 2)));
+                () -> ConnectSchema.validateValue(MAP_INT_STRING_SCHEMA, Map.of(1, 2)));
     }
 
     @Test
@@ -201,7 +201,7 @@ public class ConnectSchemaTest {
         data.put(1, "abc");
         data.put("wrong", "it's as easy as one two three");
         assertThrows(DataException.class,
-            () -> ConnectSchema.validateValue(MAP_INT_STRING_SCHEMA, data));
+                () -> ConnectSchema.validateValue(MAP_INT_STRING_SCHEMA, data));
     }
 
     @Test
@@ -210,23 +210,23 @@ public class ConnectSchemaTest {
         data.put(1, "abc");
         data.put(2, "wrong".getBytes());
         assertThrows(DataException.class,
-            () -> ConnectSchema.validateValue(MAP_INT_STRING_SCHEMA, data));
+                () -> ConnectSchema.validateValue(MAP_INT_STRING_SCHEMA, data));
     }
 
     @Test
     public void testValidateValueMismatchStructWrongSchema() {
         // Completely mismatching schemas
         assertThrows(DataException.class, () -> ConnectSchema.validateValue(FLAT_STRUCT_SCHEMA,
-            new Struct(SchemaBuilder.struct().field("x", Schema.INT32_SCHEMA).build()).put("x", 1)));
+                new Struct(SchemaBuilder.struct().field("x", Schema.INT32_SCHEMA).build()).put("x", 1)));
     }
 
     @Test
     public void testValidateValueMismatchStructWrongNestedSchema() {
         // Top-level schema  matches, but nested does not.
         assertThrows(DataException.class, () -> ConnectSchema.validateValue(PARENT_STRUCT_SCHEMA,
-            new Struct(PARENT_STRUCT_SCHEMA)
-                .put("nested", new Struct(SchemaBuilder.struct()
-                    .field("x", Schema.INT32_SCHEMA).build()).put("x", 1))));
+                new Struct(PARENT_STRUCT_SCHEMA)
+                        .put("nested", new Struct(SchemaBuilder.struct()
+                                .field("x", Schema.INT32_SCHEMA).build()).put("x", 1))));
     }
 
     @Test
@@ -286,9 +286,9 @@ public class ConnectSchemaTest {
 
     @Test
     public void testArrayDefaultValueEquality() {
-        ConnectSchema s1 = new ConnectSchema(Schema.Type.ARRAY, false, new String[] {"a", "b"}, null, null, null, null, null, null, SchemaBuilder.int8().build());
-        ConnectSchema s2 = new ConnectSchema(Schema.Type.ARRAY, false, new String[] {"a", "b"}, null, null, null, null, null, null, SchemaBuilder.int8().build());
-        ConnectSchema differentValueSchema = new ConnectSchema(Schema.Type.ARRAY, false, new String[] {"b", "c"}, null, null, null, null, null, null, SchemaBuilder.int8().build());
+        ConnectSchema s1 = new ConnectSchema(Schema.Type.ARRAY, false, new String[]{"a", "b"}, null, null, null, null, null, null, SchemaBuilder.int8().build());
+        ConnectSchema s2 = new ConnectSchema(Schema.Type.ARRAY, false, new String[]{"a", "b"}, null, null, null, null, null, null, SchemaBuilder.int8().build());
+        ConnectSchema differentValueSchema = new ConnectSchema(Schema.Type.ARRAY, false, new String[]{"b", "c"}, null, null, null, null, null, null, SchemaBuilder.int8().build());
 
         assertEquals(s1, s2);
         assertNotEquals(s1, differentValueSchema);

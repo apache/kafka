@@ -83,9 +83,9 @@ public final class LeaderEpochFileCache {
      * @param scheduler the scheduler to use for async I/O operations
      */
     private LeaderEpochFileCache(List<EpochEntry> epochEntries,
-                                 TopicPartition topicPartition,
-                                 LeaderEpochCheckpointFile checkpoint,
-                                 Scheduler scheduler) {
+            TopicPartition topicPartition,
+            LeaderEpochCheckpointFile checkpoint,
+            Scheduler scheduler) {
         this.checkpoint = checkpoint;
         this.topicPartition = topicPartition;
         this.scheduler = scheduler;
@@ -441,9 +441,9 @@ public final class LeaderEpochFileCache {
         lock.readLock().lock();
         try {
             return new LeaderEpochFileCache(epochEntries(),
-                                            topicPartition,
-                                            leaderEpochCheckpoint,
-                                            scheduler);
+                    topicPartition,
+                    leaderEpochCheckpoint,
+                    scheduler);
         } finally {
             lock.readLock().unlock();
         }

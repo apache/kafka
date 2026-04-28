@@ -58,8 +58,8 @@ public interface ReadOnlySessionStore<K, AGG> {
      * @throws NullPointerException If null is used for key.
      */
     default KeyValueIterator<Windowed<K>, AGG> findSessions(final K key,
-                                                            final long earliestSessionEndTime,
-                                                            final long latestSessionStartTime) {
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime) {
         throw new UnsupportedOperationException(
             "This API is not supported by this implementation of ReadOnlySessionStore.");
     }
@@ -92,8 +92,8 @@ public interface ReadOnlySessionStore<K, AGG> {
      * @throws NullPointerException If null is used for key.
      */
     default KeyValueIterator<Windowed<K>, AGG> findSessions(final K key,
-                                                            final Instant earliestSessionEndTime,
-                                                            final Instant latestSessionStartTime) {
+        final Instant earliestSessionEndTime,
+        final Instant latestSessionStartTime) {
         throw new UnsupportedOperationException(
             "This API is not supported by this implementation of ReadOnlySessionStore.");
     }
@@ -126,8 +126,8 @@ public interface ReadOnlySessionStore<K, AGG> {
      * @throws NullPointerException If null is used for key.
      */
     default KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K key,
-                                                                    final long earliestSessionEndTime,
-                                                                    final long latestSessionStartTime) {
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime) {
         throw new UnsupportedOperationException(
             "This API is not supported by this implementation of ReadOnlySessionStore.");
     }
@@ -160,8 +160,8 @@ public interface ReadOnlySessionStore<K, AGG> {
      * @throws NullPointerException If null is used for key.
      */
     default KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K key,
-                                                                    final Instant earliestSessionEndTime,
-                                                                    final Instant latestSessionStartTime) {
+        final Instant earliestSessionEndTime,
+        final Instant latestSessionStartTime) {
         throw new UnsupportedOperationException(
             "This API is not supported by this implementation of ReadOnlySessionStore.");
     }
@@ -197,9 +197,9 @@ public interface ReadOnlySessionStore<K, AGG> {
      * latest session time.
      */
     default KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom,
-                                                            final K keyTo,
-                                                            final long earliestSessionEndTime,
-                                                            final long latestSessionStartTime) {
+        final K keyTo,
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime) {
         throw new UnsupportedOperationException(
             "This API is not supported by this implementation of ReadOnlySessionStore.");
     }
@@ -235,9 +235,9 @@ public interface ReadOnlySessionStore<K, AGG> {
      * latest session time.
      */
     default KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom,
-                                                            final K keyTo,
-                                                            final Instant earliestSessionEndTime,
-                                                            final Instant latestSessionStartTime) {
+        final K keyTo,
+        final Instant earliestSessionEndTime,
+        final Instant latestSessionStartTime) {
         throw new UnsupportedOperationException(
             "This API is not supported by this implementation of ReadOnlySessionStore.");
     }
@@ -273,9 +273,9 @@ public interface ReadOnlySessionStore<K, AGG> {
      * latest to earliest session time.
      */
     default KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K keyFrom,
-                                                                    final K keyTo,
-                                                                    final long earliestSessionEndTime,
-                                                                    final long latestSessionStartTime) {
+        final K keyTo,
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime) {
         throw new UnsupportedOperationException(
             "This API is not supported by this implementation of ReadOnlySessionStore.");
     }
@@ -311,9 +311,9 @@ public interface ReadOnlySessionStore<K, AGG> {
      * latest to earliest session time.
      */
     default KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K keyFrom,
-                                                                    final K keyTo,
-                                                                    final Instant earliestSessionEndTime,
-                                                                    final Instant latestSessionStartTime) {
+        final K keyTo,
+        final Instant earliestSessionEndTime,
+        final Instant latestSessionStartTime) {
         throw new UnsupportedOperationException(
             "This API is not supported by this implementation of ReadOnlySessionStore.");
     }
@@ -329,8 +329,8 @@ public interface ReadOnlySessionStore<K, AGG> {
      * @throws NullPointerException If {@code null} is used for any key.
      */
     default AGG fetchSession(final K key,
-                             final long sessionStartTime,
-                             final long sessionEndTime) {
+        final long sessionStartTime,
+        final long sessionEndTime) {
         throw new UnsupportedOperationException(
             "This API is not supported by this implementation of ReadOnlySessionStore.");
     }
@@ -346,8 +346,8 @@ public interface ReadOnlySessionStore<K, AGG> {
      * @throws NullPointerException If {@code null} is used for any key.
      */
     default AGG fetchSession(final K key,
-                             final Instant sessionStartTime,
-                             final Instant sessionEndTime) {
+        final Instant sessionStartTime,
+        final Instant sessionEndTime) {
         throw new UnsupportedOperationException(
             "This API is not supported by this implementation of ReadOnlySessionStore.");
     }

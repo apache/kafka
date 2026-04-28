@@ -43,60 +43,60 @@ import java.util.List;
 
 public class TestUtil {
     public static MemoryRecords records(
-        long timestamp,
-        Compression compression,
-        String... records
+            long timestamp,
+            Compression compression,
+            String... records
     ) {
         return records(timestamp, compression, Arrays.stream(records).toList());
     }
 
 
     public static MemoryRecords records(
-        long timestamp,
-        String... records
+            long timestamp,
+            String... records
     ) {
         return records(timestamp, Compression.NONE, Arrays.stream(records).toList());
     }
 
     public static MemoryRecords records(
-        long timestamp,
-        List<String> records
+            long timestamp,
+            List<String> records
     ) {
         return records(timestamp, Compression.NONE, records);
     }
 
     public static MemoryRecords records(
-        long timestamp,
-        Compression compression,
-        List<String> records
+            long timestamp,
+            Compression compression,
+            List<String> records
     ) {
         if (records.isEmpty())
             return MemoryRecords.EMPTY;
 
         List<SimpleRecord> simpleRecords = records.stream().map(record ->
-            new SimpleRecord(timestamp, record.getBytes(Charset.defaultCharset()))
+                new SimpleRecord(timestamp, record.getBytes(Charset.defaultCharset()))
         ).toList();
 
         int sizeEstimate = AbstractRecords.estimateSizeInBytes(
-            RecordVersion.current().value,
-            compression.type(),
-            simpleRecords
+                RecordVersion.current().value,
+                compression.type(),
+                simpleRecords
         );
 
         ByteBuffer buffer = ByteBuffer.allocate(sizeEstimate);
 
         MemoryRecordsBuilder builder = MemoryRecords.builder(
-            buffer,
-            RecordVersion.current().value,
-            compression,
-            TimestampType.CREATE_TIME,
-            0L,
-            timestamp,
-            RecordBatch.NO_PRODUCER_ID,
-            RecordBatch.NO_PRODUCER_EPOCH,
-            0,
-            false,
-            RecordBatch.NO_PARTITION_LEADER_EPOCH
+                buffer,
+                RecordVersion.current().value,
+                compression,
+                TimestampType.CREATE_TIME,
+                0L,
+                timestamp,
+                RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH,
+                0,
+                false,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH
         );
 
         simpleRecords.forEach(builder::append);
@@ -105,52 +105,52 @@ public class TestUtil {
     }
 
     public static MemoryRecords transactionalRecords(
-        long producerId,
-        short producerEpoch,
-        long timestamp,
-        String... records
+            long producerId,
+            short producerEpoch,
+            long timestamp,
+            String... records
     ) {
         return transactionalRecords(
-            producerId,
-            producerEpoch,
-            timestamp,
-            Arrays.stream(records).toList()
+                producerId,
+                producerEpoch,
+                timestamp,
+                Arrays.stream(records).toList()
         );
     }
 
     public static MemoryRecords transactionalRecords(
-        long producerId,
-        short producerEpoch,
-        long timestamp,
-        List<String> records
+            long producerId,
+            short producerEpoch,
+            long timestamp,
+            List<String> records
     ) {
         if (records.isEmpty())
             return MemoryRecords.EMPTY;
 
         List<SimpleRecord> simpleRecords = records.stream().map(record ->
-            new SimpleRecord(timestamp, record.getBytes(Charset.defaultCharset()))
+                new SimpleRecord(timestamp, record.getBytes(Charset.defaultCharset()))
         ).toList();
 
         int sizeEstimate = AbstractRecords.estimateSizeInBytes(
-            RecordVersion.current().value,
-            CompressionType.NONE,
-            simpleRecords
+                RecordVersion.current().value,
+                CompressionType.NONE,
+                simpleRecords
         );
 
         ByteBuffer buffer = ByteBuffer.allocate(sizeEstimate);
 
         MemoryRecordsBuilder builder = MemoryRecords.builder(
-            buffer,
-            RecordVersion.current().value,
-            Compression.NONE,
-            TimestampType.CREATE_TIME,
-            0L,
-            timestamp,
-            producerId,
-            producerEpoch,
-            0,
-            true,
-            RecordBatch.NO_PARTITION_LEADER_EPOCH
+                buffer,
+                RecordVersion.current().value,
+                Compression.NONE,
+                TimestampType.CREATE_TIME,
+                0L,
+                timestamp,
+                producerId,
+                producerEpoch,
+                0,
+                true,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH
         );
 
         simpleRecords.forEach(builder::append);
@@ -159,40 +159,40 @@ public class TestUtil {
     }
 
     public static MemoryRecords endTransactionMarker(
-        long producerId,
-        short producerEpoch,
-        long timestamp,
-        int coordinatorEpoch,
-        ControlRecordType result
+            long producerId,
+            short producerEpoch,
+            long timestamp,
+            int coordinatorEpoch,
+            ControlRecordType result
     ) {
         return MemoryRecords.withEndTransactionMarker(
-            timestamp,
-            producerId,
-            producerEpoch,
-            new EndTransactionMarker(
-                result,
-                coordinatorEpoch
-            )
+                timestamp,
+                producerId,
+                producerEpoch,
+                new EndTransactionMarker(
+                        result,
+                        coordinatorEpoch
+                )
         );
     }
 
     public static RequestContext requestContext(
-        ApiKeys apiKey
+            ApiKeys apiKey
     ) {
         return new RequestContext(
-            new RequestHeader(
-                apiKey,
-                apiKey.latestVersion(),
-                "client",
-                0
-            ),
-            "1",
-            InetAddress.getLoopbackAddress(),
-            KafkaPrincipal.ANONYMOUS,
-            ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
-            SecurityProtocol.PLAINTEXT,
-            ClientInformation.EMPTY,
-            false
+                new RequestHeader(
+                        apiKey,
+                        apiKey.latestVersion(),
+                        "client",
+                        0
+                ),
+                "1",
+                InetAddress.getLoopbackAddress(),
+                KafkaPrincipal.ANONYMOUS,
+                ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+                SecurityProtocol.PLAINTEXT,
+                ClientInformation.EMPTY,
+                false
         );
     }
 
@@ -201,19 +201,19 @@ public class TestUtil {
             Short version
     ) {
         return new RequestContext(
-            new RequestHeader(
-                apiKey,
-                version,
-                "client",
-                0
-            ),
-            "1",
-            InetAddress.getLoopbackAddress(),
-            KafkaPrincipal.ANONYMOUS,
-            ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
-            SecurityProtocol.PLAINTEXT,
-            ClientInformation.EMPTY,
-            false
+                new RequestHeader(
+                        apiKey,
+                        version,
+                        "client",
+                        0
+                ),
+                "1",
+                InetAddress.getLoopbackAddress(),
+                KafkaPrincipal.ANONYMOUS,
+                ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+                SecurityProtocol.PLAINTEXT,
+                ClientInformation.EMPTY,
+                false
         );
     }
 }

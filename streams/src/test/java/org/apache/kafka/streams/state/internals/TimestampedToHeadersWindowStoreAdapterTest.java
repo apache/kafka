@@ -70,24 +70,24 @@ public class TimestampedToHeadersWindowStoreAdapterTest {
         final Properties props = StreamsTestUtils.getStreamsConfig();
         baseDir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext<>(
-                baseDir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsConfig(props)
+            baseDir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsConfig(props)
         );
 
         final SegmentedBytesStore segmentedBytesStore = new RocksDBSegmentedBytesStore(
-                "iqv2-test-store",
-                "test-metrics-scope",
-                RETENTION_PERIOD,
-                SEGMENT_INTERVAL,
-                new WindowKeySchema()
+            "iqv2-test-store",
+            "test-metrics-scope",
+            RETENTION_PERIOD,
+            SEGMENT_INTERVAL,
+            new WindowKeySchema()
         );
 
         underlyingStore = new RocksDBTimestampedWindowStore(
-                segmentedBytesStore,
-                false,
-                WINDOW_SIZE
+            segmentedBytesStore,
+            false,
+            WINDOW_SIZE
         );
 
         adapter = new TimestampedToHeadersWindowStoreAdapter(underlyingStore);
@@ -130,7 +130,7 @@ public class TimestampedToHeadersWindowStoreAdapterTest {
             // Verify adapter is used for legacy timestamped window store
             final StateStore wrapped = ((WrappedStateStore) store).wrapped();
             assertInstanceOf(TimestampedToHeadersWindowStoreAdapter.class, wrapped,
-                    "Expected TimestampedToHeadersWindowStoreAdapter for legacy timestamped window store");
+                "Expected TimestampedToHeadersWindowStoreAdapter for legacy timestamped window store");
 
             // Query at typed level - WindowKeyQuery should return windowed values with timestamps
             final WindowKeyQuery<String, ValueAndTimestamp<String>> query = WindowKeyQuery.withKeyAndWindowStartRange(
@@ -144,7 +144,7 @@ public class TimestampedToHeadersWindowStoreAdapterTest {
             // Verify IQv2 query result
             // Adapter delegates to RocksDBTimestampedWindowStore which supports IQv2
             assertTrue(result.isSuccess(),
-                    "Expected query to succeed since RocksDBTimestampedWindowStore supports IQv2");
+                "Expected query to succeed since RocksDBTimestampedWindowStore supports IQv2");
             assertNotNull(result.getPosition(), "Expected position to be set");
             assertNotNull(result.getResult(), "Expected non-null result");
 
@@ -204,7 +204,7 @@ public class TimestampedToHeadersWindowStoreAdapterTest {
             // Verify adapter is used for legacy timestamped window store
             final StateStore wrapped = ((WrappedStateStore) store).wrapped();
             assertInstanceOf(TimestampedToHeadersWindowStoreAdapter.class, wrapped,
-                    "Expected TimestampedToHeadersWindowStoreAdapter for legacy timestamped window store");
+                "Expected TimestampedToHeadersWindowStoreAdapter for legacy timestamped window store");
 
             // Query at typed level - WindowRangeQuery should return all windowed key-values with timestamps
             final WindowRangeQuery<String, ValueAndTimestamp<String>> query = WindowRangeQuery.withWindowStartRange(
@@ -217,7 +217,7 @@ public class TimestampedToHeadersWindowStoreAdapterTest {
             // Verify IQv2 query result
             // Adapter delegates to RocksDBTimestampedWindowStore which supports IQv2
             assertTrue(result.isSuccess(),
-                    "Expected query to succeed since RocksDBTimestampedWindowStore supports IQv2");
+                "Expected query to succeed since RocksDBTimestampedWindowStore supports IQv2");
             assertNotNull(result.getResult(), "Expected result iterator to be present");
             assertNotNull(result.getPosition(), "Expected position to be set");
 
@@ -254,9 +254,9 @@ public class TimestampedToHeadersWindowStoreAdapterTest {
     @Test
     public void shouldCollectExecutionInfoForWindowKeyQueryWhenRequested() {
         final WindowKeyQuery<Bytes, byte[]> query = WindowKeyQuery.withKeyAndWindowStartRange(
-                new Bytes("test-key".getBytes()),
-                Instant.ofEpochMilli(0),
-                Instant.ofEpochMilli(Long.MAX_VALUE)
+            new Bytes("test-key".getBytes()),
+            Instant.ofEpochMilli(0),
+            Instant.ofEpochMilli(Long.MAX_VALUE)
         );
         final PositionBound positionBound = PositionBound.unbounded();
         final QueryConfig config = new QueryConfig(true); // Enable execution info
@@ -277,14 +277,14 @@ public class TimestampedToHeadersWindowStoreAdapterTest {
     @Test
     public void shouldCollectExecutionInfoForWindowRangeQueryWhenRequested() {
         final WindowRangeQuery<Bytes, byte[]> query = WindowRangeQuery.withWindowStartRange(
-                Instant.ofEpochMilli(0),
-                Instant.ofEpochMilli(Long.MAX_VALUE)
+            Instant.ofEpochMilli(0),
+            Instant.ofEpochMilli(Long.MAX_VALUE)
         );
         final PositionBound positionBound = PositionBound.unbounded();
         final QueryConfig config = new QueryConfig(true); // Enable execution info
 
         final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> result =
-                adapter.query(query, positionBound, config);
+            adapter.query(query, positionBound, config);
 
         assertFalse(result.getExecutionInfo().isEmpty(), "Expected execution info to be collected");
         boolean foundAdapterInfo = false;
@@ -300,9 +300,9 @@ public class TimestampedToHeadersWindowStoreAdapterTest {
     @Test
     public void shouldNotCollectExecutionInfoWhenNotRequested() {
         final WindowKeyQuery<Bytes, byte[]> query = WindowKeyQuery.withKeyAndWindowStartRange(
-                new Bytes("test-key".getBytes()),
-                Instant.ofEpochMilli(0),
-                Instant.ofEpochMilli(Long.MAX_VALUE)
+            new Bytes("test-key".getBytes()),
+            Instant.ofEpochMilli(0),
+            Instant.ofEpochMilli(Long.MAX_VALUE)
         );
         final PositionBound positionBound = PositionBound.unbounded();
         final QueryConfig config = new QueryConfig(false); // Disable execution info

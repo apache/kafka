@@ -56,10 +56,10 @@ public class Throttler {
      * @param time               The time implementation to use
      */
     public Throttler(double desiredRatePerSec,
-                     long checkIntervalMs,
-                     String metricName,
-                     String units,
-                     Time time) {
+            long checkIntervalMs,
+            String metricName,
+            String units,
+            Time time) {
         this.desiredRatePerSec = desiredRatePerSec;
         this.checkIntervalNs = TimeUnit.MILLISECONDS.toNanos(checkIntervalMs);
         // For compatibility - this metrics group was previously defined within a Scala class named `kafka.utils.Throttler`

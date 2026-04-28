@@ -111,12 +111,12 @@ public class MaterializedInternalTest {
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
 
         final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
-                new TopologyConfig("my-topology", config, topologyOverrides));
+            new TopologyConfig("my-topology", config, topologyOverrides));
 
         final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(topologyBuilder, false);
 
         final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized =
-                new MaterializedInternal<>(Materialized.as(supplier), internalStreamsBuilder, prefix);
+            new MaterializedInternal<>(Materialized.as(supplier), internalStreamsBuilder, prefix);
         assertThat(materialized.dslStoreSuppliers().isPresent(), is(true));
         assertThat(materialized.dslStoreSuppliers().get(), instanceOf(TestStoreSupplier.class));
     }
@@ -127,12 +127,12 @@ public class MaterializedInternalTest {
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
 
         final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
-                new TopologyConfig("my-topology", config, topologyOverrides));
+            new TopologyConfig("my-topology", config, topologyOverrides));
 
         final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(topologyBuilder, false);
 
         final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized =
-                new MaterializedInternal<>(Materialized.as(supplier), internalStreamsBuilder, prefix);
+            new MaterializedInternal<>(Materialized.as(supplier), internalStreamsBuilder, prefix);
         assertThat(materialized.dslStoreSuppliers().isPresent(), is(false));
     }
 

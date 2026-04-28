@@ -22,5 +22,5 @@ package org.apache.kafka.storage.internals.log;
  * to each other. See {@link UnifiedLog#fetchOffsetSnapshot()}.
  */
 public record LogOffsetSnapshot(long logStartOffset, LogOffsetMetadata logEndOffset, LogOffsetMetadata highWatermark,
-                                LogOffsetMetadata lastStableOffset) {
+LogOffsetMetadata lastStableOffset) {
 }

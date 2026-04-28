@@ -60,11 +60,11 @@ public class WorkerConfig extends AbstractConfig {
 
     public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
     public static final String BOOTSTRAP_SERVERS_DOC =
-                "A list of host/port pairs used to establish the initial connection to the Kafka cluster. "
-                        + "Clients use this list to bootstrap and discover the full set of Kafka brokers. "
-                        + "While the order of servers in the list does not matter, we recommend including more than one server to ensure resilience if any servers are down. "
-                        + "This list does not need to contain the entire set of brokers, as Kafka clients automatically manage and update connections to the cluster efficiently. "
-                        + "This list must be in the form <code>host1:port1,host2:port2,...</code>.";
+            "A list of host/port pairs used to establish the initial connection to the Kafka cluster. "
+                    + "Clients use this list to bootstrap and discover the full set of Kafka brokers. "
+                    + "While the order of servers in the list does not matter, we recommend including more than one server to ensure resilience if any servers are down. "
+                    + "This list does not need to contain the entire set of brokers, as Kafka clients automatically manage and update connections to the cluster efficiently. "
+                    + "This list must be in the form <code>host1:port1,host2:port2,...</code>.";
 
     public static final String CLIENT_DNS_LOOKUP_CONFIG = CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG;
     public static final String CLIENT_DNS_LOOKUP_DOC = CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC;
@@ -158,11 +158,11 @@ public class WorkerConfig extends AbstractConfig {
 
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_CONFIG = "connector.client.config.override.policy";
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_DOC =
-        "Class name or alias of implementation of <code>ConnectorClientConfigOverridePolicy</code>. Defines what client configurations can be "
-        + "overridden by the connector. The default policy is <code>All</code>, meaning connector configurations can override all client properties. "
-        + "The other possible policies in the framework include <code>Allowlist</code> to specify allowed configurations via "
-        + "<code>" + AllowlistConnectorClientConfigOverridePolicy.ALLOWLIST_CONFIG + "</code>, <code>None</code> to disallow connectors from overriding "
-        + "client properties, and <code>Principal</code> (now deprecated) to allow connectors to override only client principals.";
+            "Class name or alias of implementation of <code>ConnectorClientConfigOverridePolicy</code>. Defines what client configurations can be "
+                    + "overridden by the connector. The default policy is <code>All</code>, meaning connector configurations can override all client properties. "
+                    + "The other possible policies in the framework include <code>Allowlist</code> to specify allowed configurations via "
+                    + "<code>" + AllowlistConnectorClientConfigOverridePolicy.ALLOWLIST_CONFIG + "</code>, <code>None</code> to disallow connectors from overriding "
+                    + "client properties, and <code>Principal</code> (now deprecated) to allow connectors to override only client principals.";
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_DEFAULT = "All";
 
 
@@ -206,7 +206,7 @@ public class WorkerConfig extends AbstractConfig {
                         Type.STRING,
                         ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
                         in(ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
-                           ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
+                                ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
                         Importance.MEDIUM,
                         CLIENT_DNS_LOOKUP_DOC)
                 .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS,
@@ -316,7 +316,7 @@ public class WorkerConfig extends AbstractConfig {
             throw new ConnectException("Unexpectedly interrupted when looking up Kafka cluster info", e);
         } catch (ExecutionException e) {
             throw new ConnectException("Failed to connect to and describe Kafka cluster. "
-                                       + "Check worker's broker connection and security properties.", e);
+                    + "Check worker's broker connection and security properties.", e);
         }
     }
 
@@ -331,7 +331,7 @@ public class WorkerConfig extends AbstractConfig {
         if (!removedProperties.isEmpty()) {
             log.warn(
                     "The worker has been configured with one or more internal converter properties ({}). "
-                     + "These properties have been removed since version 3.0 and an instance of the JsonConverter with schemas.enable set to false will be used instead.",
+                            + "These properties have been removed since version 3.0 and an instance of the JsonConverter with schemas.enable set to false will be used instead.",
                     removedProperties);
         }
     }
@@ -343,12 +343,12 @@ public class WorkerConfig extends AbstractConfig {
         String transformedPluginPath = Objects.toString(originals().get(PLUGIN_PATH_CONFIG), null);
         if (!Objects.equals(rawPluginPath, transformedPluginPath)) {
             log.warn(
-                "Variables cannot be used in the 'plugin.path' property, since the property is "
-                + "used by plugin scanning before the config providers that replace the "
-                + "variables are initialized. The raw value '{}' was used for plugin scanning, as "
-                + "opposed to the transformed value '{}', and this may cause unexpected results.",
-                rawPluginPath,
-                transformedPluginPath
+                    "Variables cannot be used in the 'plugin.path' property, since the property is "
+                            + "used by plugin scanning before the config providers that replace the "
+                            + "variables are initialized. The raw value '{}' was used for plugin scanning, as "
+                            + "opposed to the transformed value '{}', and this may cause unexpected results.",
+                    rawPluginPath,
+                    transformedPluginPath
             );
         }
     }

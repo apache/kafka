@@ -72,10 +72,10 @@ public final class KafkaRaftClientFetchTest {
             local.id(),
             local.directoryId().get()
         )
-            .withStartingVoters(
-                VoterSetTest.voterSet(Stream.of(local, electedLeader)), KRaftVersion.KRAFT_VERSION_1
-            )
-            .withElectedLeader(epoch, electedLeader.id())
+        .withStartingVoters(
+            VoterSetTest.voterSet(Stream.of(local, electedLeader)), KRaftVersion.KRAFT_VERSION_1
+        )
+        .withElectedLeader(epoch, electedLeader.id())
             .withRaftProtocol(RaftClientTestContext.RaftProtocol.KIP_996_PROTOCOL)
             .build();
 
@@ -108,11 +108,11 @@ public final class KafkaRaftClientFetchTest {
             local.id(),
             local.directoryId().get()
         )
-            .withStartingVoters(
-                VoterSetTest.voterSet(Stream.of(local, electedLeader)),
-                KRaftVersion.KRAFT_VERSION_1
-            )
-            .withElectedLeader(epoch, electedLeader.id())
+        .withStartingVoters(
+            VoterSetTest.voterSet(Stream.of(local, electedLeader)),
+            KRaftVersion.KRAFT_VERSION_1
+        )
+        .withElectedLeader(epoch, electedLeader.id())
             // Explicitly change the configuration here.
             .withFetchMaxBytes(expectedFetchMaxBytes)
             .build();
@@ -138,7 +138,7 @@ public final class KafkaRaftClientFetchTest {
             localKey.id(),
             localKey.directoryId().get()
         )
-            .appendToLog(epoch, List.of("a", "a", "a"))
+        .appendToLog(epoch, List.of("a", "a", "a"))
             .appendToLog(epoch, List.of("b", "b", "b"))
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(localKey, remoteKey)),
@@ -193,7 +193,7 @@ public final class KafkaRaftClientFetchTest {
             localKey.id(),
             localKey.directoryId().get()
         )
-            .appendToLog(epoch, List.of("a", "a", "a"))
+        .appendToLog(epoch, List.of("a", "a", "a"))
             .appendToLog(epoch, List.of("b", "b", "b"))
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(localKey, remoteKey)),
@@ -246,7 +246,7 @@ public final class KafkaRaftClientFetchTest {
             localKey.id(),
             localKey.directoryId().get()
         )
-            .appendToLog(epoch, List.of("a", "a", "a"))
+        .appendToLog(epoch, List.of("a", "a", "a"))
             .appendToLog(epoch, List.of("b", "b", "b"))
             .appendToLog(epoch, List.of("c", "c", "c"))
             .withStartingVoters(
@@ -315,7 +315,7 @@ public final class KafkaRaftClientFetchTest {
             localKey.id(),
             localKey.directoryId().get()
         )
-            .appendToLog(epoch, List.of("a", "a", "a"))
+        .appendToLog(epoch, List.of("a", "a", "a"))
             .appendToLog(epoch, List.of("b", "b", "b"))
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(localKey, remoteKey)),
@@ -390,11 +390,11 @@ public final class KafkaRaftClientFetchTest {
             local.id(),
             local.directoryId().get()
         )
-            .withStartingVoters(
-                VoterSetTest.voterSet(Stream.of(local, electedLeader)),
-                KRaftVersion.KRAFT_VERSION_1
-            )
-            .withElectedLeader(epoch, electedLeader.id())
+        .withStartingVoters(
+            VoterSetTest.voterSet(Stream.of(local, electedLeader)),
+            KRaftVersion.KRAFT_VERSION_1
+        )
+        .withElectedLeader(epoch, electedLeader.id())
             .withRaftProtocol(RaftClientTestContext.RaftProtocol.KIP_996_PROTOCOL)
             .build();
 
@@ -454,7 +454,7 @@ public final class KafkaRaftClientFetchTest {
             local.id(),
             local.directoryId().get()
         )
-            .appendToLog(epoch, List.of("a", "b", "c"))
+        .appendToLog(epoch, List.of("a", "b", "c"))
             .appendToLog(epoch, List.of("d", "e", "f"))
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(local, electedLeader)), KRaftVersion.KRAFT_VERSION_1
@@ -513,7 +513,7 @@ public final class KafkaRaftClientFetchTest {
             local.id(),
             local.directoryId().get()
         )
-            .appendToLog(epoch, List.of("a", "b", "c"))
+        .appendToLog(epoch, List.of("a", "b", "c"))
             .appendToLog(epoch, List.of("d", "e", "f"))
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(local, voter)), KRaftVersion.KRAFT_VERSION_1
@@ -560,7 +560,7 @@ public final class KafkaRaftClientFetchTest {
             local.id(),
             local.directoryId().get()
         )
-            .appendToLog(epoch, List.of("a", "b", "c"))
+        .appendToLog(epoch, List.of("a", "b", "c"))
             .appendToLog(epoch, List.of("d", "e", "f"))
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(local, voter)), KRaftVersion.KRAFT_VERSION_1
@@ -606,7 +606,7 @@ public final class KafkaRaftClientFetchTest {
             local.id(),
             local.directoryId().get()
         )
-            .appendToLog(epoch, List.of("a", "b", "c"))
+        .appendToLog(epoch, List.of("a", "b", "c"))
             .appendToLog(epoch, List.of("d", "e", "f"))
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(local, voter)), KRaftVersion.KRAFT_VERSION_1
@@ -666,7 +666,7 @@ public final class KafkaRaftClientFetchTest {
             local.id(),
             local.directoryId().get()
         )
-            .appendToLog(epoch, List.of("a", "b", "c"))
+        .appendToLog(epoch, List.of("a", "b", "c"))
             .appendToLog(epoch, List.of("d", "e", "f"))
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(local, voter)), KRaftVersion.KRAFT_VERSION_1
@@ -714,7 +714,7 @@ public final class KafkaRaftClientFetchTest {
             local.id(),
             local.directoryId().get()
         )
-            .appendToLog(epoch, List.of("a", "b", "c"))
+        .appendToLog(epoch, List.of("a", "b", "c"))
             .appendToLog(epoch, List.of("d", "e", "f"))
             .withStartingVoters(
                 VoterSetTest.voterSet(Stream.of(local, voter)), KRaftVersion.KRAFT_VERSION_1

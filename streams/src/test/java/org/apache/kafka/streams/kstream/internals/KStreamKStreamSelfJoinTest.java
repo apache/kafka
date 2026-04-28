@@ -70,7 +70,7 @@ public class KStreamKStreamSelfJoinTest {
         );
         innerJoin.process(innerJoinSupplier);
 
-        final Topology innerJoinTopology =  streamsBuilder.build();
+        final Topology innerJoinTopology = streamsBuilder.build();
         try (final TopologyTestDriver driver = new TopologyTestDriver(innerJoinTopology)) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic2, new StringSerializer(), new StringSerializer());
@@ -97,7 +97,7 @@ public class KStreamKStreamSelfJoinTest {
         );
         selfJoin.process(selfJoinSupplier);
 
-        final Topology selfJoinTopology =  streamsBuilder.build(props);
+        final Topology selfJoinTopology = streamsBuilder.build(props);
         try (final TopologyTestDriver driver = new TopologyTestDriver(selfJoinTopology, props)) {
 
             final TestInputTopic<String, String> inputTopic =
@@ -141,7 +141,7 @@ public class KStreamKStreamSelfJoinTest {
         );
         innerJoin.process(innerJoinSupplier);
 
-        final Topology innerJoinTopology =  streamsBuilder.build();
+        final Topology innerJoinTopology = streamsBuilder.build();
         try (final TopologyTestDriver driver = new TopologyTestDriver(innerJoinTopology)) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic2, new StringSerializer(), new StringSerializer());
@@ -170,7 +170,7 @@ public class KStreamKStreamSelfJoinTest {
         );
         selfJoin.process(selfJoinSupplier);
 
-        final Topology topology1 =  streamsBuilder.build(props);
+        final Topology topology1 = streamsBuilder.build(props);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology1, props)) {
 
             final TestInputTopic<String, String> inputTopic =
@@ -213,7 +213,7 @@ public class KStreamKStreamSelfJoinTest {
         );
         innerJoin.process(innerJoinSupplier);
 
-        final Topology innerJoinTopology =  streamsBuilder.build();
+        final Topology innerJoinTopology = streamsBuilder.build();
         try (final TopologyTestDriver driver = new TopologyTestDriver(innerJoinTopology)) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic2, new StringSerializer(), new StringSerializer());
@@ -244,7 +244,7 @@ public class KStreamKStreamSelfJoinTest {
             StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String())
         );
         selfJoin.process(selfJoinSupplier);
-        final Topology selfJoinTopology =  streamsBuilder.build(props);
+        final Topology selfJoinTopology = streamsBuilder.build(props);
         try (final TopologyTestDriver driver = new TopologyTestDriver(selfJoinTopology, props)) {
 
             final TestInputTopic<String, String> inputTopic =
@@ -290,7 +290,7 @@ public class KStreamKStreamSelfJoinTest {
         );
         innerJoin.process(innerJoinSupplier);
 
-        final Topology topology2 =  streamsBuilder.build();
+        final Topology topology2 = streamsBuilder.build();
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology2)) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic2, new StringSerializer(), new StringSerializer());
@@ -324,7 +324,7 @@ public class KStreamKStreamSelfJoinTest {
         );
         selfJoin.process(selfJoinSupplier);
 
-        final Topology selfJoinTopology =  streamsBuilder.build(props);
+        final Topology selfJoinTopology = streamsBuilder.build(props);
         try (final TopologyTestDriver driver = new TopologyTestDriver(selfJoinTopology, props)) {
 
             final TestInputTopic<String, String> inputTopic =

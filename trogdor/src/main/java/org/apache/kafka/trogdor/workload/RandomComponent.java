@@ -27,7 +27,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public record RandomComponent(int percent, PayloadGenerator component) {
     @JsonCreator
     public RandomComponent(@JsonProperty("percent") int percent,
-                           @JsonProperty("component") PayloadGenerator component) {
+        @JsonProperty("component") PayloadGenerator component) {
         this.percent = percent;
         this.component = component;
     }

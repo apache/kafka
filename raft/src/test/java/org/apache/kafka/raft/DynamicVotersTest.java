@@ -33,42 +33,42 @@ public class DynamicVotersTest {
         assertEquals("No voters given.",
             assertThrows(IllegalArgumentException.class,
                 () -> DynamicVoters.parse("")).
-                    getMessage());
+                getMessage());
     }
 
     @Test
     public void testParsingSingleDynamicVoter() {
         assertEquals(new DynamicVoters(List.of(
-            new DynamicVoter(
-                Uuid.fromString("K90IZ-0DRNazJ49kCZ1EMQ"),
-                2,
-                "localhost",
-                (short) 8020))),
+                new DynamicVoter(
+                    Uuid.fromString("K90IZ-0DRNazJ49kCZ1EMQ"),
+                    2,
+                    "localhost",
+                    (short) 8020))),
             DynamicVoters.parse("2@localhost:8020:K90IZ-0DRNazJ49kCZ1EMQ"));
     }
 
     @Test
     public void testParsingThreeDynamicVoters() {
         assertEquals(new DynamicVoters(List.of(
-            new DynamicVoter(
-                Uuid.fromString("K90IZ-0DRNazJ49kCZ1EMQ"),
-                0,
-                "localhost",
-                (short) 8020),
-            new DynamicVoter(
-                Uuid.fromString("aUARLskQTCW4qCZDtS_cwA"),
-                1,
-                "localhost",
-                (short) 8030),
-            new DynamicVoter(
-                Uuid.fromString("2ggvsS4kQb-fSJ_-zC_Ang"),
-                2,
-                "localhost",
-                (short) 8040))),
+                new DynamicVoter(
+                    Uuid.fromString("K90IZ-0DRNazJ49kCZ1EMQ"),
+                    0,
+                    "localhost",
+                    (short) 8020),
+                new DynamicVoter(
+                    Uuid.fromString("aUARLskQTCW4qCZDtS_cwA"),
+                    1,
+                    "localhost",
+                    (short) 8030),
+                new DynamicVoter(
+                    Uuid.fromString("2ggvsS4kQb-fSJ_-zC_Ang"),
+                    2,
+                    "localhost",
+                    (short) 8040))),
             DynamicVoters.parse(
                 "0@localhost:8020:K90IZ-0DRNazJ49kCZ1EMQ," +
-                "1@localhost:8030:aUARLskQTCW4qCZDtS_cwA," +
-                "2@localhost:8040:2ggvsS4kQb-fSJ_-zC_Ang"));
+                    "1@localhost:8030:aUARLskQTCW4qCZDtS_cwA," +
+                    "2@localhost:8040:2ggvsS4kQb-fSJ_-zC_Ang"));
     }
 
     @Test
@@ -77,9 +77,9 @@ public class DynamicVotersTest {
             assertThrows(IllegalArgumentException.class,
                 () -> DynamicVoters.parse(
                     "0@localhost:8020:K90IZ-0DRNazJ49kCZ1EMQ," +
-                    "1@localhost:8030:aUARLskQTCW4qCZDtS_cwA," +
-                    "1@localhost:8040:2ggvsS4kQb-fSJ_-zC_Ang")).
-                        getMessage());
+                        "1@localhost:8030:aUARLskQTCW4qCZDtS_cwA," +
+                        "1@localhost:8040:2ggvsS4kQb-fSJ_-zC_Ang")).
+                getMessage());
     }
 
     private static void testRoundTrip(String input) {
@@ -96,8 +96,8 @@ public class DynamicVotersTest {
     public void testRoundTripThreeVoters() {
         testRoundTrip(
             "0@localhost:8020:K90IZ-0DRNazJ49kCZ1EMQ," +
-            "1@localhost:8030:aUARLskQTCW4qCZDtS_cwA," +
-            "2@localhost:8040:2ggvsS4kQb-fSJ_-zC_Ang");
+                "1@localhost:8030:aUARLskQTCW4qCZDtS_cwA," +
+                "2@localhost:8040:2ggvsS4kQb-fSJ_-zC_Ang");
     }
 
     @Test
@@ -112,7 +112,7 @@ public class DynamicVotersTest {
         assertEquals(VoterSet.fromMap(voterMap),
             DynamicVoters.parse(
                 "0@localhost:8020:K90IZ-0DRNazJ49kCZ1EMQ," +
-                "1@localhost:8030:aUARLskQTCW4qCZDtS_cwA," +
-                "2@localhost:8040:2ggvsS4kQb-fSJ_-zC_Ang").toVoterSet("CONTROLLER2"));
+                    "1@localhost:8030:aUARLskQTCW4qCZDtS_cwA," +
+                    "2@localhost:8040:2ggvsS4kQb-fSJ_-zC_Ang").toVoterSet("CONTROLLER2"));
     }
 }

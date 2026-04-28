@@ -128,7 +128,7 @@ public class InternalTopologyBuilderTest {
 
         builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.none()), "source0", null, null, null, Pattern.compile(noneTopicPattern));
         builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.earliest()), "source1", null, null, null, Pattern.compile(earliestTopicPattern));
-        builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.latest()), "source2", null, null, null,  Pattern.compile(latestTopicPattern));
+        builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.latest()), "source2", null, null, null, Pattern.compile(latestTopicPattern));
         builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.byDuration(Duration.ofSeconds(42))), "source3", null, null, null, Pattern.compile(durationTopicPattern));
 
         builder.initializeSubscription();
@@ -174,7 +174,8 @@ public class InternalTopologyBuilderTest {
         try {
             builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.latest()), "source", null, stringSerde.deserializer(), stringSerde.deserializer(), "topic-2");
             fail("Should throw TopologyException for duplicate source name");
-        } catch (final TopologyException expected) { /* ok */ }
+        } catch (final TopologyException expected) { /* ok */
+        }
     }
 
     @Test
@@ -183,7 +184,8 @@ public class InternalTopologyBuilderTest {
         try {
             builder.addSource(null, "source", null, null, null, "topic-2");
             fail("Should throw TopologyException with source name conflict");
-        } catch (final TopologyException expected) { /* ok */ }
+        } catch (final TopologyException expected) { /* ok */
+        }
     }
 
     @Test
@@ -192,7 +194,8 @@ public class InternalTopologyBuilderTest {
         try {
             builder.addSource(null, "source-2", null, null, null, "topic-1");
             fail("Should throw TopologyException with topic conflict");
-        } catch (final TopologyException expected) { /* ok */ }
+        } catch (final TopologyException expected) { /* ok */
+        }
     }
 
     @Test
@@ -202,7 +205,8 @@ public class InternalTopologyBuilderTest {
         try {
             builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
             fail("Should throw TopologyException with processor name conflict");
-        } catch (final TopologyException expected) { /* ok */ }
+        } catch (final TopologyException expected) { /* ok */
+        }
     }
 
     @Test
@@ -230,7 +234,7 @@ public class InternalTopologyBuilderTest {
     public void testAddProcessorWithBadSupplier() {
         final Processor<Object, Object, Object, Object> processor = new MockApiProcessor<>();
         final IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
+            IllegalArgumentException.class,
             () -> builder.addProcessor("processor", () -> processor, (String) null)
         );
         assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
@@ -240,14 +244,14 @@ public class InternalTopologyBuilderTest {
     public void testAddGlobalStoreWithBadSupplier() {
         final org.apache.kafka.streams.processor.api.Processor<?, ?, Void, Void> processor = new MockApiProcessorSupplier<Object, Object, Void, Void>().get();
         final IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
+            IllegalArgumentException.class,
             () -> builder.addGlobalStore(
-                        "globalSource",
-                        null,
-                        null,
-                        null,
-                        "globalTopic",
-                        "global-processor",
+                "globalSource",
+                null,
+                null,
+                null,
+                "globalTopic",
+                "global-processor",
                 () -> processor,
                 false
             )
@@ -262,7 +266,8 @@ public class InternalTopologyBuilderTest {
         try {
             builder.addSink("sink", "topic-3", null, null, null, "source");
             fail("Should throw TopologyException with sink name conflict");
-        } catch (final TopologyException expected) { /* ok */ }
+        } catch (final TopologyException expected) { /* ok */
+        }
     }
 
     @Test
@@ -348,8 +353,8 @@ public class InternalTopologyBuilderTest {
     @Test
     public void testPatternSourceTopicsWithGlobalTopics() {
         final StoreBuilder<?> storeBuilder =
-                new MockKeyValueStoreBuilder("global-store", false)
-                        .withLoggingDisabled();
+            new MockKeyValueStoreBuilder("global-store", false)
+                .withLoggingDisabled();
         builder.setApplicationId("X");
         builder.addSource(null, "source-1", null, null, null, Pattern.compile("topic-1"));
         builder.addSource(null, "source-2", null, null, null, Pattern.compile("topic-2"));
@@ -375,8 +380,8 @@ public class InternalTopologyBuilderTest {
     @Test
     public void testNameSourceTopicsWithGlobalTopics() {
         final StoreBuilder<?> storeBuilder =
-                new MockKeyValueStoreBuilder("global-store", false)
-                        .withLoggingDisabled();
+            new MockKeyValueStoreBuilder("global-store", false)
+                .withLoggingDisabled();
         builder.setApplicationId("X");
         builder.addSource(null, "source-1", null, null, null, "topic-1");
         builder.addSource(null, "source-2", null, null, null, "topic-2");
@@ -433,7 +438,8 @@ public class InternalTopologyBuilderTest {
         try {
             builder.addSource(null, "source-2", null, null, null, Pattern.compile("f.*"));
             fail("Should throw TopologyException with topic name/pattern conflict");
-        } catch (final TopologyException expected) { /* ok */ }
+        } catch (final TopologyException expected) { /* ok */
+        }
     }
 
     @Test
@@ -442,7 +448,8 @@ public class InternalTopologyBuilderTest {
         try {
             builder.addSource(null, "source-2", null, null, null, "foo");
             fail("Should throw TopologyException with topic name/pattern conflict");
-        } catch (final TopologyException expected) { /* ok */ }
+        } catch (final TopologyException expected) { /* ok */
+        }
     }
 
     @Test
@@ -456,7 +463,8 @@ public class InternalTopologyBuilderTest {
         try {
             builder.addStateStore(storeFactory, "source-1");
             fail("Should throw TopologyException with store cannot be added to source");
-        } catch (final TopologyException expected) { /* ok */ }
+        } catch (final TopologyException expected) { /* ok */
+        }
     }
 
     @Test
@@ -466,7 +474,8 @@ public class InternalTopologyBuilderTest {
         try {
             builder.addStateStore(storeFactory, "sink-1");
             fail("Should throw TopologyException with store cannot be added to sink");
-        } catch (final TopologyException expected) { /* ok */ }
+        } catch (final TopologyException expected) { /* ok */
+        }
     }
 
     @Test
@@ -938,10 +947,10 @@ public class InternalTopologyBuilderTest {
             "processor"
         );
         builder.addStateStore(
-                Stores.sessionStoreBuilder(
-                        Stores.persistentSessionStore("store2", ofSeconds(30)), Serdes.String(), Serdes.String()
-                ),
-                "processor"
+            Stores.sessionStoreBuilder(
+                Stores.persistentSessionStore("store2", ofSeconds(30)), Serdes.String(), Serdes.String()
+            ),
+            "processor"
         );
         builder.buildTopology();
         final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.subtopologyToTopicsInfo();
@@ -1368,7 +1377,7 @@ public class InternalTopologyBuilderTest {
         final String globalStoreName = "global-store";
         final String globalTopic = "global-topic";
         final StoreBuilder<?> storeBuilder =
-                new MockKeyValueStoreBuilder(globalStoreName, false).withLoggingDisabled();
+            new MockKeyValueStoreBuilder(globalStoreName, false).withLoggingDisabled();
         builder.setApplicationId("X");
         builder.addGlobalStore(
             "globalSource",
@@ -1456,7 +1465,7 @@ public class InternalTopologyBuilderTest {
 
         @Override
         public <KIn, VIn, KOut, VOut> WrappedProcessorSupplier<KIn, VIn, KOut, VOut> wrapProcessorSupplier(final String processorName,
-                                                                                                           final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier) {
+            final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier) {
             return () -> (Processor<KIn, VIn, KOut, VOut>) record -> {
                 // do nothing
             };
@@ -1464,7 +1473,7 @@ public class InternalTopologyBuilderTest {
 
         @Override
         public <KIn, VIn, VOut> WrappedFixedKeyProcessorSupplier<KIn, VIn, VOut> wrapFixedKeyProcessorSupplier(final String processorName,
-                                                                                                               final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier) {
+            final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier) {
             return () -> (FixedKeyProcessor<KIn, VIn, VOut>) record -> {
                 // do nothing
             };

@@ -29,8 +29,8 @@ public class DescribeTopicsResultTest {
     @Test
     public void testNullAllTopicNames() {
         DescribeTopicsResult result = DescribeTopicsResult.ofTopicIds(Collections.singletonMap(
-                Uuid.randomUuid(), KafkaFuture.completedFuture(
-                        new TopicDescription("foo", false, Collections.emptyList()))));
+            Uuid.randomUuid(), KafkaFuture.completedFuture(
+                new TopicDescription("foo", false, Collections.emptyList()))));
 
         Assertions.assertNull(result.allTopicNames());
     }
@@ -38,8 +38,8 @@ public class DescribeTopicsResultTest {
     @Test
     public void testNullAllTopicIds() {
         DescribeTopicsResult result = DescribeTopicsResult.ofTopicNames(Collections.singletonMap(
-                "foo", KafkaFuture.completedFuture(
-                        new TopicDescription("foo", false, Collections.emptyList()))));
+            "foo", KafkaFuture.completedFuture(
+                new TopicDescription("foo", false, Collections.emptyList()))));
 
         Assertions.assertNull(result.allTopicIds());
     }

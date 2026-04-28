@@ -31,15 +31,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class OAuthBearerValidationUtilsTest {
     private static final String QUOTE = "\"";
     private static final String HEADER_COMPACT_SERIALIZATION = Base64.getUrlEncoder().withoutPadding()
-            .encodeToString("{\"alg\":\"none\"}".getBytes(StandardCharsets.UTF_8)) + ".";
+        .encodeToString("{\"alg\":\"none\"}".getBytes(StandardCharsets.UTF_8)) + ".";
     private static final Time TIME = Time.SYSTEM;
 
     @Test
     public void validateClaimForExistenceAndType() throws OAuthBearerIllegalTokenException {
         String claimName = "foo";
-        for (Boolean exists : new Boolean[] {null, Boolean.TRUE, Boolean.FALSE}) {
+        for (Boolean exists : new Boolean[]{null, Boolean.TRUE, Boolean.FALSE}) {
             boolean useErrorValue = exists == null;
-            for (Boolean required : new boolean[] {true, false}) {
+            for (Boolean required : new boolean[]{true, false}) {
                 StringBuilder sb = new StringBuilder("{");
                 appendJsonText(sb, "exp", 100);
                 appendCommaJsonText(sb, "sub", "principalName");
@@ -49,10 +49,10 @@ public class OAuthBearerValidationUtilsTest {
                     appendCommaJsonText(sb, claimName, claimName);
                 sb.append("}");
                 String compactSerialization = HEADER_COMPACT_SERIALIZATION + Base64.getUrlEncoder().withoutPadding()
-                        .encodeToString(sb.toString().getBytes(StandardCharsets.UTF_8)) + ".";
+                    .encodeToString(sb.toString().getBytes(StandardCharsets.UTF_8)) + ".";
                 OAuthBearerUnsecuredJws testJwt = new OAuthBearerUnsecuredJws(compactSerialization, "sub", "scope");
                 OAuthBearerValidationResult result = OAuthBearerValidationUtils
-                        .validateClaimForExistenceAndType(testJwt, required, claimName, String.class);
+                    .validateClaimForExistenceAndType(testJwt, required, claimName, String.class);
                 if (useErrorValue || required && !exists)
                     assertTrue(isFailureWithMessageAndNoFailureScope(result));
                 else
@@ -65,7 +65,7 @@ public class OAuthBearerValidationUtilsTest {
     public void validateIssuedAt() {
         long nowMs = TIME.milliseconds();
         double nowClaimValue = ((double) nowMs) / 1000;
-        for (boolean exists : new boolean[] {true, false}) {
+        for (boolean exists : new boolean[]{true, false}) {
             StringBuilder sb = new StringBuilder("{");
             appendJsonText(sb, "exp", nowClaimValue);
             appendCommaJsonText(sb, "sub", "principalName");
@@ -73,14 +73,14 @@ public class OAuthBearerValidationUtilsTest {
                 appendCommaJsonText(sb, "iat", nowClaimValue);
             sb.append("}");
             String compactSerialization = HEADER_COMPACT_SERIALIZATION + Base64.getUrlEncoder().withoutPadding()
-                    .encodeToString(sb.toString().getBytes(StandardCharsets.UTF_8)) + ".";
+                .encodeToString(sb.toString().getBytes(StandardCharsets.UTF_8)) + ".";
             OAuthBearerUnsecuredJws testJwt = new OAuthBearerUnsecuredJws(compactSerialization, "sub", "scope");
-            for (boolean required : new boolean[] {true, false}) {
-                for (int allowableClockSkewMs : new int[] {0, 5, 10, 20}) {
-                    for (long whenCheckOffsetMs : new long[] {-10, 0, 10}) {
+            for (boolean required : new boolean[]{true, false}) {
+                for (int allowableClockSkewMs : new int[]{0, 5, 10, 20}) {
+                    for (long whenCheckOffsetMs : new long[]{-10, 0, 10}) {
                         long whenCheckMs = nowMs + whenCheckOffsetMs;
                         OAuthBearerValidationResult result = OAuthBearerValidationUtils.validateIssuedAt(testJwt,
-                                required, whenCheckMs, allowableClockSkewMs);
+                            required, whenCheckMs, allowableClockSkewMs);
                         if (required && !exists)
                             assertTrue(isFailureWithMessageAndNoFailureScope(result), "useErrorValue || required && !exists");
                         else if (!required && !exists)
@@ -106,14 +106,14 @@ public class OAuthBearerValidationUtilsTest {
         appendCommaJsonText(sb, "sub", "principalName");
         sb.append("}");
         String compactSerialization = HEADER_COMPACT_SERIALIZATION
-                + Base64.getUrlEncoder().withoutPadding().encodeToString(sb.toString().getBytes(StandardCharsets.UTF_8))
-                + ".";
+            + Base64.getUrlEncoder().withoutPadding().encodeToString(sb.toString().getBytes(StandardCharsets.UTF_8))
+            + ".";
         OAuthBearerUnsecuredJws testJwt = new OAuthBearerUnsecuredJws(compactSerialization, "sub", "scope");
-        for (int allowableClockSkewMs : new int[] {0, 5, 10, 20}) {
-            for (long whenCheckOffsetMs : new long[] {-10, 0, 10}) {
+        for (int allowableClockSkewMs : new int[]{0, 5, 10, 20}) {
+            for (long whenCheckOffsetMs : new long[]{-10, 0, 10}) {
                 long whenCheckMs = nowMs + whenCheckOffsetMs;
                 OAuthBearerValidationResult result = OAuthBearerValidationUtils.validateExpirationTime(testJwt,
-                        whenCheckMs, allowableClockSkewMs);
+                    whenCheckMs, allowableClockSkewMs);
                 if (whenCheckMs - allowableClockSkewMs >= nowClaimValue * 1000) // expired
                     assertTrue(isFailureWithMessageAndNoFailureScope(result),
                         assertionFailureMessage(nowClaimValue, allowableClockSkewMs, whenCheckMs));
@@ -127,25 +127,25 @@ public class OAuthBearerValidationUtilsTest {
     public void validateExpirationTimeAndIssuedAtConsistency() throws OAuthBearerIllegalTokenException {
         long nowMs = TIME.milliseconds();
         double nowClaimValue = ((double) nowMs) / 1000;
-        for (boolean issuedAtExists : new boolean[] {true, false}) {
+        for (boolean issuedAtExists : new boolean[]{true, false}) {
             if (!issuedAtExists) {
                 StringBuilder sb = new StringBuilder("{");
                 appendJsonText(sb, "exp", nowClaimValue);
                 appendCommaJsonText(sb, "sub", "principalName");
                 sb.append("}");
                 String compactSerialization = HEADER_COMPACT_SERIALIZATION + Base64.getUrlEncoder().withoutPadding()
-                        .encodeToString(sb.toString().getBytes(StandardCharsets.UTF_8)) + ".";
+                    .encodeToString(sb.toString().getBytes(StandardCharsets.UTF_8)) + ".";
                 OAuthBearerUnsecuredJws testJwt = new OAuthBearerUnsecuredJws(compactSerialization, "sub", "scope");
                 assertTrue(isSuccess(OAuthBearerValidationUtils.validateTimeConsistency(testJwt)));
             } else
-                for (int expirationTimeOffset = -1; expirationTimeOffset <= 1; ++expirationTimeOffset) {
+                for (int expirationTimeOffset = -1;expirationTimeOffset <= 1;++expirationTimeOffset) {
                     StringBuilder sb = new StringBuilder("{");
                     appendJsonText(sb, "iat", nowClaimValue);
                     appendCommaJsonText(sb, "exp", nowClaimValue + expirationTimeOffset);
                     appendCommaJsonText(sb, "sub", "principalName");
                     sb.append("}");
                     String compactSerialization = HEADER_COMPACT_SERIALIZATION + Base64.getUrlEncoder().withoutPadding()
-                            .encodeToString(sb.toString().getBytes(StandardCharsets.UTF_8)) + ".";
+                        .encodeToString(sb.toString().getBytes(StandardCharsets.UTF_8)) + ".";
                     OAuthBearerUnsecuredJws testJwt = new OAuthBearerUnsecuredJws(compactSerialization, "sub", "scope");
                     OAuthBearerValidationResult result = OAuthBearerValidationUtils.validateTimeConsistency(testJwt);
                     if (expirationTimeOffset <= 0)
@@ -164,13 +164,13 @@ public class OAuthBearerValidationUtilsTest {
         final List<String> noScope = Collections.emptyList();
         final List<String> scope1 = Collections.singletonList("scope1");
         final List<String> scope1And2 = Arrays.asList("scope1", "scope2");
-        for (boolean actualScopeExists : new boolean[] {true, false}) {
+        for (boolean actualScopeExists : new boolean[]{true, false}) {
             List<? extends List> scopes = !actualScopeExists ? Collections.singletonList((List) null)
-                    : Arrays.asList(noScope, scope1, scope1And2);
+                : Arrays.asList(noScope, scope1, scope1And2);
             for (List<String> actualScope : scopes) {
-                for (boolean requiredScopeExists : new boolean[] {true, false}) {
+                for (boolean requiredScopeExists : new boolean[]{true, false}) {
                     List<? extends List> requiredScopes = !requiredScopeExists ? Collections.singletonList((List) null)
-                            : Arrays.asList(noScope, scope1, scope1And2);
+                        : Arrays.asList(noScope, scope1, scope1And2);
                     for (List<String> requiredScope : requiredScopes) {
                         StringBuilder sb = new StringBuilder("{");
                         appendJsonText(sb, "exp", nowClaimValue);
@@ -179,11 +179,11 @@ public class OAuthBearerValidationUtilsTest {
                             sb.append(',').append(scopeJson(actualScope));
                         sb.append("}");
                         String compactSerialization = HEADER_COMPACT_SERIALIZATION + Base64.getUrlEncoder()
-                                .withoutPadding().encodeToString(sb.toString().getBytes(StandardCharsets.UTF_8)) + ".";
+                            .withoutPadding().encodeToString(sb.toString().getBytes(StandardCharsets.UTF_8)) + ".";
                         OAuthBearerUnsecuredJws testJwt = new OAuthBearerUnsecuredJws(compactSerialization, "sub",
-                                "scope");
+                            "scope");
                         OAuthBearerValidationResult result = OAuthBearerValidationUtils.validateScope(testJwt,
-                                requiredScope);
+                            requiredScope);
                         if (!requiredScopeExists || requiredScope.isEmpty())
                             assertTrue(isSuccess(result));
                         else if (!actualScopeExists || actualScope.size() < requiredScope.size())
@@ -198,7 +198,7 @@ public class OAuthBearerValidationUtilsTest {
 
     private static String assertionFailureMessage(double claimValue, int allowableClockSkewMs, long whenCheckMs) {
         return String.format("time=%f seconds, whenCheck = %d ms, allowableClockSkew=%d ms", claimValue, whenCheckMs,
-                allowableClockSkewMs);
+            allowableClockSkewMs);
     }
 
     private static boolean isSuccess(OAuthBearerValidationResult result) {
@@ -207,12 +207,12 @@ public class OAuthBearerValidationUtilsTest {
 
     private static boolean isFailureWithMessageAndNoFailureScope(OAuthBearerValidationResult result) {
         return !result.success() && !result.failureDescription().isEmpty() && result.failureScope() == null
-                && result.failureOpenIdConfig() == null;
+            && result.failureOpenIdConfig() == null;
     }
 
     private static boolean isFailureWithMessageAndFailureScope(OAuthBearerValidationResult result) {
         return !result.success() && !result.failureDescription().isEmpty() && !result.failureScope().isEmpty()
-                && result.failureOpenIdConfig() == null;
+            && result.failureOpenIdConfig() == null;
     }
 
     private static void appendCommaJsonText(StringBuilder sb, String claimName, Number claimValue) {
@@ -221,7 +221,7 @@ public class OAuthBearerValidationUtilsTest {
 
     private static void appendCommaJsonText(StringBuilder sb, String claimName, String claimValue) {
         sb.append(',').append(QUOTE).append(escape(claimName)).append(QUOTE).append(":").append(QUOTE)
-                .append(escape(claimValue)).append(QUOTE);
+            .append(escape(claimValue)).append(QUOTE);
     }
 
     private static void appendJsonText(StringBuilder sb, String claimName, Number claimValue) {

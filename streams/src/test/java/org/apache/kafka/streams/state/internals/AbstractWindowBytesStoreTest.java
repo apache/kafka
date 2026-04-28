@@ -95,13 +95,14 @@ public abstract class AbstractWindowBytesStoreTest {
     private final StateSerdes<Integer, String> serdes = new StateSerdes<>("", Serdes.Integer(), Serdes.String());
 
     abstract <K, V> WindowStore<K, V> buildWindowStore(final long retentionPeriod,
-                                                       final long windowSize,
-                                                       final boolean retainDuplicates,
-                                                       final Serde<K> keySerde,
-                                                       final Serde<V> valueSerde);
+        final long windowSize,
+        final boolean retainDuplicates,
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde);
+
     @BeforeEach
     protected void setup() {
-        
+
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, false, Serdes.Integer(), Serdes.String());
 
         recordCollector = new MockRecordCollector();
@@ -258,7 +259,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldGetAll() {
-        
+
         putFirstBatch(windowStore, defaultStartTime, context);
 
         assertEquals(
@@ -463,7 +464,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void testBackwardFetchRange() {
-        
+
         putFirstBatch(windowStore, defaultStartTime, context);
 
         assertEquals(
@@ -821,7 +822,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldCloseOpenIteratorsWhenStoreIsClosedAndNotThrowInvalidStateStoreExceptionOnHasNext() {
-        
+
         windowStore.put(1, "one", 1L);
         windowStore.put(1, "two", 2L);
         windowStore.put(1, "three", 3L);
@@ -921,9 +922,9 @@ public abstract class AbstractWindowBytesStoreTest {
             Serdes.String());
         windowStore.init(context, windowStore);
 
-        final Bytes key1 = Bytes.wrap(new byte[] {0});
-        final Bytes key2 = Bytes.wrap(new byte[] {0, 0});
-        final Bytes key3 = Bytes.wrap(new byte[] {0, 0, 0});
+        final Bytes key1 = Bytes.wrap(new byte[]{0});
+        final Bytes key2 = Bytes.wrap(new byte[]{0, 0});
+        final Bytes key3 = Bytes.wrap(new byte[]{0, 0, 0});
         windowStore.put(key1, "1", 0);
         windowStore.put(key2, "2", 0);
         windowStore.put(key3, "3", 0);
@@ -1136,8 +1137,8 @@ public abstract class AbstractWindowBytesStoreTest {
 
 
     private void putFirstBatch(final WindowStore<Integer, String> store,
-                               @SuppressWarnings("SameParameterValue") final long startTime,
-                               final InternalMockProcessorContext<?, ?> context) {
+        @SuppressWarnings("SameParameterValue") final long startTime,
+        final InternalMockProcessorContext<?, ?> context) {
         context.setRecordContext(createRecordContext(startTime));
         store.put(0, "zero", startTime);
         store.put(1, "one", startTime + 1L);
@@ -1148,7 +1149,7 @@ public abstract class AbstractWindowBytesStoreTest {
     }
 
     private void putSecondBatch(final WindowStore<Integer, String> store,
-                                @SuppressWarnings("SameParameterValue") final long startTime) {
+        @SuppressWarnings("SameParameterValue") final long startTime) {
         store.put(2, "two+1", startTime + 3L);
         store.put(2, "two+2", startTime + 4L);
         store.put(2, "two+3", startTime + 5L);
@@ -1162,12 +1163,12 @@ public abstract class AbstractWindowBytesStoreTest {
     }
 
     <K> K extractStoreKey(final byte[] binaryKey,
-                          final StateSerdes<K, ?> serdes) {
+        final StateSerdes<K, ?> serdes) {
         return WindowKeySchema.extractStoreKey(binaryKey, new RecordHeaders(), serdes);
     }
 
     private Map<Integer, Set<String>> entriesByKey(final List<KeyValue<byte[], byte[]>> changeLog,
-                                                   @SuppressWarnings("SameParameterValue") final long startTime) {
+        @SuppressWarnings("SameParameterValue") final long startTime) {
         final HashMap<Integer, Set<String>> entriesByKey = new HashMap<>();
 
         for (final KeyValue<byte[], byte[]> entry : changeLog) {

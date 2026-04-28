@@ -159,15 +159,15 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
     public Map<ListenerName, SecurityProtocol> effectiveListenerSecurityProtocolMap() {
         Map<ListenerName, SecurityProtocol> mapValue =
-                getMap(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,
-                        getString(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG))
-                        .entrySet()
-                        .stream()
-                        .collect(Collectors.toMap(
-                                e -> ListenerName.normalised(e.getKey()),
-                                e -> securityProtocol(
-                                        e.getValue(),
-                                        SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG)));
+            getMap(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,
+                getString(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG))
+                .entrySet()
+                .stream()
+                .collect(Collectors.toMap(
+                    e -> ListenerName.normalised(e.getKey()),
+                    e -> securityProtocol(
+                        e.getValue(),
+                        SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG)));
 
         if (!originals().containsKey(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG)) {
             // Using the default configuration since listener.security.protocol.map is not explicitly set.
@@ -176,14 +176,14 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
             // 2. No SSL or SASL protocols are used in regular listeners (Note: controller listeners
             //    are not included in 'listeners' config when process.roles=broker)
             if (controllerListenerNames().stream().anyMatch(AbstractKafkaConfig::isSslOrSasl) ||
-                    getList(SocketServerConfigs.LISTENERS_CONFIG).stream()
-                            .anyMatch(listenerName -> isSslOrSasl(parseListenerName(listenerName)))) {
+                getList(SocketServerConfigs.LISTENERS_CONFIG).stream()
+                    .anyMatch(listenerName -> isSslOrSasl(parseListenerName(listenerName)))) {
                 return mapValue;
             } else {
                 // Add the PLAINTEXT mappings for all controller listener names that are not explicitly PLAINTEXT
                 mapValue.putAll(controllerListenerNames().stream()
-                        .filter(listenerName -> !SecurityProtocol.PLAINTEXT.name.equals(listenerName))
-                        .collect(Collectors.toMap(ListenerName::new, ignored -> SecurityProtocol.PLAINTEXT)));
+                    .filter(listenerName -> !SecurityProtocol.PLAINTEXT.name.equals(listenerName))
+                    .collect(Collectors.toMap(ListenerName::new, ignored -> SecurityProtocol.PLAINTEXT)));
                 return mapValue;
             }
         } else {
@@ -196,7 +196,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
             return Csv.parseCsvMap(propValue);
         } catch (Exception e) {
             throw new IllegalArgumentException(
-                    String.format("Error parsing configuration property '%s': %s", propName, e.getMessage()));
+                String.format("Error parsing configuration property '%s': %s", propName, e.getMessage()));
         }
     }
 
@@ -248,7 +248,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
                 List<Endpoint> eps = entry.getValue();
                 // Exception case, let's allow duplicate ports if one host is on IPv4 and the other one is on IPv6
                 Map<Boolean, List<Endpoint>> partitionedByValidIp = eps.stream()
-                        .collect(Collectors.partitioningBy(ep -> ep.host() != null && INET_ADDRESS_VALIDATOR.isValid(ep.host())));
+                    .collect(Collectors.partitioningBy(ep -> ep.host() != null && INET_ADDRESS_VALIDATOR.isValid(ep.host())));
 
                 List<Endpoint> duplicatesWithIpHosts = partitionedByValidIp.get(true);
                 List<Endpoint> duplicatesWithoutIpHosts = partitionedByValidIp.get(false);
@@ -280,7 +280,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
     private static boolean validateOneIsIpv4AndOtherIpv6(String first, String second) {
         return (INET_ADDRESS_VALIDATOR.isValidInet4Address(first) && INET_ADDRESS_VALIDATOR.isValidInet6Address(second)) ||
-                (INET_ADDRESS_VALIDATOR.isValidInet6Address(first) && INET_ADDRESS_VALIDATOR.isValidInet4Address(second));
+            (INET_ADDRESS_VALIDATOR.isValidInet6Address(first) && INET_ADDRESS_VALIDATOR.isValidInet4Address(second));
     }
 
     private static void checkDuplicateListenerPorts(List<Endpoint> endpoints, List<String> listeners) {
@@ -295,7 +295,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
             return SecurityProtocol.forName(protocolName);
         } catch (IllegalArgumentException e) {
             throw new ConfigException(
-                    String.format("Invalid security protocol `%s` defined in %s", protocolName, configName));
+                String.format("Invalid security protocol `%s` defined in %s", protocolName, configName));
         }
     }
 
@@ -304,28 +304,28 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         if (interBrokerListenerName != null) {
             if (originals().containsKey(ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG)) {
                 throw new ConfigException(String.format("Only one of %s and %s should be set.",
-                        ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG,
-                        ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG));
+                    ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG,
+                    ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG));
             }
             ListenerName listenerName = ListenerName.normalised(interBrokerListenerName);
             SecurityProtocol securityProtocol = effectiveListenerSecurityProtocolMap().get(listenerName);
             if (securityProtocol == null) {
                 throw new ConfigException("Listener with name " + listenerName.value() + " defined in " +
-                        ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG + " not found in " +
-                        SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG + ".");
+                    ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG + " not found in " +
+                    SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG + ".");
             }
             return Map.entry(listenerName, securityProtocol);
         } else {
             SecurityProtocol securityProtocol = securityProtocol(
-                    getString(ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG),
-                    ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG);
+                getString(ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG),
+                ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG);
             return Map.entry(ListenerName.forSecurityProtocol(securityProtocol), securityProtocol);
         }
     }
 
     private static boolean isSslOrSasl(String name) {
         return name.equals(SecurityProtocol.SSL.name) || name.equals(SecurityProtocol.SASL_SSL.name) ||
-                name.equals(SecurityProtocol.SASL_PLAINTEXT.name);
+            name.equals(SecurityProtocol.SASL_PLAINTEXT.name);
     }
 
     private static String parseListenerName(String connectionString) {
@@ -366,7 +366,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
      */
     public static boolean maybeSensitive(Optional<ConfigDef.Type> configType) {
         return configType.isEmpty()
-                || configType.get() == ConfigDef.Type.PASSWORD;
+            || configType.get() == ConfigDef.Type.PASSWORD;
     }
 
     /**
@@ -378,7 +378,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
      */
     public static Optional<ConfigDef.Type> configDefTypeOf(String name) {
         return Optional.ofNullable(CONFIG_DEF.configKeys().get(name))
-                .map(key -> key.type);
+            .map(key -> key.type);
     }
 
     /**
@@ -391,13 +391,13 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
      */
     public static Optional<ConfigDef.Type> configType(String configName) {
         return configDefTypeOf(configName)
-                .or(() -> Optional.ofNullable(DynamicConfig.Broker.configKeys().get(configName))
-                        .map(key -> key.type))
-                .or(() -> DynamicBrokerConfig.brokerConfigSynonyms(configName, true)
-                        .stream()
-                        .map(AbstractKafkaConfig::configDefTypeOf)
-                        .flatMap(Optional::stream)
-                        .findFirst());
+            .or(() -> Optional.ofNullable(DynamicConfig.Broker.configKeys().get(configName))
+                .map(key -> key.type))
+            .or(() -> DynamicBrokerConfig.brokerConfigSynonyms(configName, true)
+                .stream()
+                .map(AbstractKafkaConfig::configDefTypeOf)
+                .flatMap(Optional::stream)
+                .findFirst());
     }
 
     /**
@@ -446,10 +446,10 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
     public Map<String, Integer> maxConnectionsPerIpOverrides() {
         return getMap(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG,
-                getString(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG))
-                .entrySet()
-                .stream()
-                .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, e -> Integer.parseInt(e.getValue())));
+            getString(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG))
+            .entrySet()
+            .stream()
+            .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, e -> Integer.parseInt(e.getValue())));
     }
 
     public int maxConnections() {

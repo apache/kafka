@@ -102,7 +102,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     @SuppressWarnings("unchecked")
     @Override
     protected Serde<ValueTimestampHeaders<V>> prepareValueSerdeForStore(final Serde<ValueTimestampHeaders<V>> valueSerde,
-                                                                        final SerdeGetter getter) {
+        final SerdeGetter getter) {
         if (valueSerde == null) {
             return new ValueTimestampHeadersSerde<>((Serde<V>) getter.valueSerde());
         } else {
@@ -123,7 +123,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
 
     @Override
     public void put(final K key,
-                    final ValueTimestampHeaders<V> value) {
+        final ValueTimestampHeaders<V> value) {
         Objects.requireNonNull(key, "key cannot be null");
         try {
             maybeMeasureLatency(
@@ -169,7 +169,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
 
     @Override
     public ValueTimestampHeaders<V> putIfAbsent(final K key,
-                                                final ValueTimestampHeaders<V> value) {
+        final ValueTimestampHeaders<V> value) {
         Objects.requireNonNull(key, "key cannot be null");
         final ValueTimestampHeaders<V> currentValue = maybeMeasureLatency(
             () -> {
@@ -464,7 +464,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
 
     @Override
     public <PS extends Serializer<P>, P> KeyValueIterator<K, ValueTimestampHeaders<V>> prefixScan(final P prefix,
-                                                                                                  final PS prefixKeySerializer) {
+        final PS prefixKeySerializer) {
         Objects.requireNonNull(prefix, "prefix cannot be null");
         Objects.requireNonNull(prefixKeySerializer, "prefixKeySerializer cannot be null");
         return new MeteredTimestampedKeyValueStoreWithHeadersIterator(
@@ -475,7 +475,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
 
     @Override
     public KeyValueIterator<K, ValueTimestampHeaders<V>> range(final K from,
-                                                               final K to) {
+        final K to) {
         return new MeteredTimestampedKeyValueStoreWithHeadersIterator(
             wrapped().range(
                 serializeKey(from, internalContext.headers()),
@@ -487,7 +487,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
 
     @Override
     public KeyValueIterator<K, ValueTimestampHeaders<V>> reverseRange(final K from,
-                                                                      final K to) {
+        final K to) {
         return new MeteredTimestampedKeyValueStoreWithHeadersIterator(
             wrapped().reverseRange(
                 serializeKey(from, internalContext.headers()),

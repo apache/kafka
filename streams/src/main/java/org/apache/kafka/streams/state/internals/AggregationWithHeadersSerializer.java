@@ -31,7 +31,7 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
 
 /**
  * Serializer for AggregationWithHeaders.
- <p>
+  <p>
  * Serialization format (per KIP-1271):
  * [headersSize(varint)][headersBytes][aggregation]
  * <p>

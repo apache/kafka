@@ -111,7 +111,7 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * the latest (rolling) aggregate for each key within a window
      */
     KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
-                                     final Named named);
+        final Named named);
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined windows.
@@ -168,7 +168,7 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * the latest (rolling) aggregate for each key within a window
      */
     KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
-                                     final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized);
+        final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized);
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined windows.
@@ -227,6 +227,6 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * the latest (rolling) aggregate for each key within a window
      */
     KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
-                                     final Named named,
-                                     final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized);
+        final Named named,
+        final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized);
 }

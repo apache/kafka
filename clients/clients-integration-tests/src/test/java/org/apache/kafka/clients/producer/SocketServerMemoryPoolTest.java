@@ -53,11 +53,11 @@ public class SocketServerMemoryPoolTest {
     public void testProduceRequestWithUnsupportedVersion(ClusterInstance clusterInstance) throws Exception {
         short unsupportedVersion = Short.MAX_VALUE;
         byte[] rawRequestBytes = buildRawRequest(
-                ApiKeys.PRODUCE.id,
-                unsupportedVersion,
-                /* correlationId */ 1,
-                /* clientId     */ "test-unsupported-version",
-                new byte[10000]
+            ApiKeys.PRODUCE.id,
+            unsupportedVersion,
+            /* correlationId */ 1,
+            /* clientId     */ "test-unsupported-version",
+            new byte[10000]
         );
 
         sendAndAssert(clusterInstance, rawRequestBytes);
@@ -72,11 +72,11 @@ public class SocketServerMemoryPoolTest {
         }
 
         byte[] rawRequestBytes = buildRawRequest(
-                ApiKeys.PRODUCE.id,
-                validVersion,
-                /* correlationId */ 2,
-                /* clientId     */ "test-corrupt-body",
-                corruptBody
+            ApiKeys.PRODUCE.id,
+            validVersion,
+            /* correlationId */ 2,
+            /* clientId     */ "test-corrupt-body",
+            corruptBody
         );
 
         sendAndAssert(clusterInstance, rawRequestBytes);

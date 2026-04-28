@@ -88,8 +88,8 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
 
     @Override
     default WindowStoreIterator<V> fetch(final K key,
-                                         final Instant timeFrom,
-                                         final Instant timeTo) throws IllegalArgumentException {
+        final Instant timeFrom,
+        final Instant timeTo) throws IllegalArgumentException {
         return fetch(
             key,
             ApiUtils.validateMillisecondInstant(timeFrom, prepareMillisCheckFailMsgPrefix(timeFrom, "timeFrom")),
@@ -97,15 +97,15 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
     }
 
     default WindowStoreIterator<V> backwardFetch(final K key,
-                                                 final long timeFrom,
-                                                 final long timeTo) {
+        final long timeFrom,
+        final long timeTo) {
         throw new UnsupportedOperationException();
     }
 
     @Override
     default WindowStoreIterator<V> backwardFetch(final K key,
-                                                 final Instant timeFrom,
-                                                 final Instant timeTo) throws IllegalArgumentException {
+        final Instant timeFrom,
+        final Instant timeTo) throws IllegalArgumentException {
         return backwardFetch(
             key,
             ApiUtils.validateMillisecondInstant(timeFrom, prepareMillisCheckFailMsgPrefix(timeFrom, "timeFrom")),
@@ -132,9 +132,9 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
 
     @Override
     default KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom,
-                                                   final K keyTo,
-                                                   final Instant timeFrom,
-                                                   final Instant timeTo) throws IllegalArgumentException {
+        final K keyTo,
+        final Instant timeFrom,
+        final Instant timeTo) throws IllegalArgumentException {
         return fetch(
             keyFrom,
             keyTo,
@@ -143,17 +143,17 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
     }
 
     default KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
-                                                           final K keyTo,
-                                                           final long timeFrom,
-                                                           final long timeTo) {
+        final K keyTo,
+        final long timeFrom,
+        final long timeTo) {
         throw new UnsupportedOperationException();
     }
 
     @Override
     default KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
-                                                          final K keyTo,
-                                                          final Instant timeFrom,
-                                                          final Instant timeTo) throws IllegalArgumentException {
+        final K keyTo,
+        final Instant timeFrom,
+        final Instant timeTo) throws IllegalArgumentException {
         return backwardFetch(
             keyFrom,
             keyTo,

@@ -183,10 +183,11 @@ public class LogConfig extends AbstractConfig {
             .defineInternal(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, LONG, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT, atLeast(0), LOW, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DOC);
 
     private static final LogConfigDef CONFIG = new LogConfigDef();
+
     static {
         CONFIG.
                 define(TopicConfig.SEGMENT_BYTES_CONFIG, INT, DEFAULT_SEGMENT_BYTES, atLeast(1024 * 1024), MEDIUM,
-                        TopicConfig.SEGMENT_BYTES_DOC)
+                TopicConfig.SEGMENT_BYTES_DOC)
                 .define(TopicConfig.SEGMENT_MS_CONFIG, LONG, DEFAULT_SEGMENT_MS, atLeast(1), MEDIUM, TopicConfig.SEGMENT_MS_DOC)
                 .define(TopicConfig.SEGMENT_JITTER_MS_CONFIG, LONG, DEFAULT_SEGMENT_JITTER_MS, atLeast(0), MEDIUM,
                         TopicConfig.SEGMENT_JITTER_MS_DOC)
@@ -485,7 +486,7 @@ public class LogConfig extends AbstractConfig {
      * @param props The properties to be validated
      */
     public static void validateBrokerLogConfigValues(Map<String, ?> props,
-                                                     boolean isRemoteLogStorageSystemEnabled) {
+            boolean isRemoteLogStorageSystemEnabled) {
         validateValues(props);
         if (isRemoteLogStorageSystemEnabled) {
             validateRemoteStorageRetentionSize(props);
@@ -502,8 +503,8 @@ public class LogConfig extends AbstractConfig {
      * @param isRemoteLogStorageSystemEnabled   true if system wise remote log storage is enabled
      */
     private static void validateTopicLogConfigValues(Map<String, String> existingConfigs,
-                                                     Map<String, ?> newConfigs,
-                                                     boolean isRemoteLogStorageSystemEnabled) {
+            Map<String, ?> newConfigs,
+            boolean isRemoteLogStorageSystemEnabled) {
         validateValues(newConfigs);
 
         boolean isRemoteLogStorageEnabled = (Boolean) newConfigs.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
@@ -609,9 +610,9 @@ public class LogConfig extends AbstractConfig {
     }
 
     public static void validate(Map<String, String> existingConfigs,
-                                Map<String, String> props,
-                                Map<String, ?> configuredProps,
-                                boolean isRemoteLogStorageSystemEnabled) {
+            Map<String, String> props,
+            Map<String, ?> configuredProps,
+            boolean isRemoteLogStorageSystemEnabled) {
         validateNames(props);
         if (configuredProps == null || configuredProps.isEmpty()) {
             Map<String, ?> valueMaps = CONFIG.parse(props);

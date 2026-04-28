@@ -82,7 +82,7 @@ public class OffsetStorageWriter {
     private long currentFlushId = 0;
 
     public OffsetStorageWriter(OffsetBackingStore backingStore,
-                               String namespace, Converter keyConverter, Converter valueConverter) {
+            String namespace, Converter keyConverter, Converter valueConverter) {
         this.backingStore = backingStore;
         this.namespace = namespace;
         this.keyConverter = keyConverter;

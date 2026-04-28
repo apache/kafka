@@ -75,11 +75,11 @@ class PartitionGroup extends AbstractPartitionGroup {
     private final Map<TopicPartition, Long> fetchedLags = new HashMap<>();
 
     PartitionGroup(final LogContext logContext,
-                   final Map<TopicPartition, RecordQueue> partitionQueues,
-                   final Function<TopicPartition, OptionalLong> lagProvider,
-                   final Sensor recordLatenessSensor,
-                   final Sensor enforcedProcessingSensor,
-                   final long maxTaskIdleMs) {
+        final Map<TopicPartition, RecordQueue> partitionQueues,
+        final Function<TopicPartition, OptionalLong> lagProvider,
+        final Sensor recordLatenessSensor,
+        final Sensor enforcedProcessingSensor,
+        final long maxTaskIdleMs) {
         this.logger = logContext.logger(PartitionGroup.class);
         nonEmptyQueuesByTime = new PriorityQueue<>(partitionQueues.size(), Comparator.comparingLong(RecordQueue::headRecordTimestamp));
         this.partitionQueues = partitionQueues;
@@ -106,11 +106,11 @@ class PartitionGroup extends AbstractPartitionGroup {
                     }
                 }
                 logger.trace("Ready for processing because max.task.idle.ms is disabled." +
-                                "\n\tThere may be out-of-order processing for this task as a result." +
-                                "\n\tBuffered partitions: {}" +
-                                "\n\tNon-buffered partitions: {}",
-                        bufferedPartitions,
-                        emptyPartitions);
+                    "\n\tThere may be out-of-order processing for this task as a result." +
+                    "\n\tBuffered partitions: {}" +
+                    "\n\tNon-buffered partitions: {}",
+                    bufferedPartitions,
+                    emptyPartitions);
             }
             return new ReadyToProcessResult(true, Optional.empty());
         }
@@ -131,7 +131,7 @@ class PartitionGroup extends AbstractPartitionGroup {
             } else {
                 final Long fetchedLag = fetchedLags.getOrDefault(partition, -1L);
                 appendLog(logMessageBuilder, String.format("Partition %s has fetched lag of %d", partition, fetchedLag));
-                
+
                 if (fetchedLag == -1L) {
                     // must wait to fetch metadata for the partition
                     idlePartitionDeadlines.remove(partition);
@@ -143,7 +143,7 @@ class PartitionGroup extends AbstractPartitionGroup {
                     idlePartitionDeadlines.remove(partition);
                     appendLog(logMessageBuilder,
                         String.format("Partition %s has current lag %d, but no data is buffered locally. Waiting to buffer some records.",
-                        partition, fetchedLag));
+                            partition, fetchedLag));
 
                     return new ReadyToProcessResult(false, Optional.of(logMessageBuilder.toString()));
                 } else {
@@ -182,15 +182,15 @@ class PartitionGroup extends AbstractPartitionGroup {
         } else {
             enforcedProcessingSensor.record(1.0d, wallClockTime);
             logger.trace("Continuing to process although some partitions are empty on the broker." +
-                            "\n\tThere may be out-of-order processing for this task as a result." +
-                            "\n\tPartitions with local data: {}." +
-                            "\n\tPartitions we gave up waiting for, with their corresponding deadlines: {}." +
-                            "\n\tConfigured max.task.idle.ms: {}." +
-                            "\n\tCurrent wall-clock time: {}.",
-                    queued,
-                    enforced,
-                    maxTaskIdleMs,
-                    wallClockTime);
+                "\n\tThere may be out-of-order processing for this task as a result." +
+                "\n\tPartitions with local data: {}." +
+                "\n\tPartitions we gave up waiting for, with their corresponding deadlines: {}." +
+                "\n\tConfigured max.task.idle.ms: {}." +
+                "\n\tCurrent wall-clock time: {}.",
+                queued,
+                enforced,
+                maxTaskIdleMs,
+                wallClockTime);
             return new ReadyToProcessResult(true, Optional.empty());
         }
     }

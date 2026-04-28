@@ -47,15 +47,15 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
     @Override
     public StoreBuilder<?> builder() {
         final KeyValueBytesStoreSupplier supplier = materialized.storeSupplier() == null
-                ? dslStoreSuppliers().keyValueStore(new DslKeyValueParams(materialized.storeName(), dslStoreFormat()))
-                : (KeyValueBytesStoreSupplier) materialized.storeSupplier();
+            ? dslStoreSuppliers().keyValueStore(new DslKeyValueParams(materialized.storeName(), dslStoreFormat()))
+            : (KeyValueBytesStoreSupplier) materialized.storeSupplier();
 
         final StoreBuilder<?> builder;
         if (supplier instanceof VersionedBytesStoreSupplier) {
             builder = Stores.versionedKeyValueStoreBuilder(
-                    (VersionedBytesStoreSupplier) supplier,
-                    materialized.keySerde(),
-                    materialized.valueSerde());
+                (VersionedBytesStoreSupplier) supplier,
+                materialized.keySerde(),
+                materialized.valueSerde());
         } else if (supplier instanceof HeadersBytesStoreSupplier) {
             builder = Stores.timestampedKeyValueStoreWithHeadersBuilder(
                 supplier,
@@ -89,14 +89,14 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
     @Override
     public long retentionPeriod() {
         throw new IllegalStateException(
-                "retentionPeriod is not supported when not a window store");
+            "retentionPeriod is not supported when not a window store");
     }
 
     @Override
     public long historyRetention() {
         if (!(materialized.storeSupplier() instanceof VersionedBytesStoreSupplier)) {
             throw new IllegalStateException(
-                    "historyRetention is not supported when not a versioned store");
+                "historyRetention is not supported when not a versioned store");
         }
         return ((VersionedBytesStoreSupplier) materialized.storeSupplier()).historyRetentionMs();
     }

@@ -204,10 +204,10 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
      * Package-visible for testing.
      */
     void configure(Map<String, ?> configs,
-                   String saslMechanism,
-                   List<AppConfigurationEntry> jaasConfigEntries,
-                   JwtRetriever jwtRetriever,
-                   JwtValidator jwtValidator) {
+        String saslMechanism,
+        List<AppConfigurationEntry> jaasConfigEntries,
+        JwtRetriever jwtRetriever,
+        JwtValidator jwtValidator) {
         this.moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
 
         this.jwtRetriever = jwtRetriever;

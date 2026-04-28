@@ -70,6 +70,7 @@ public class GlobalKTableEOSIntegrationTest {
 
     private static final int NUM_BROKERS = 1;
     private static final Properties BROKER_CONFIG;
+
     static {
         BROKER_CONFIG = new Properties();
         BROKER_CONFIG.put("transaction.state.log.replication.factor", (short) 1);
@@ -77,7 +78,7 @@ public class GlobalKTableEOSIntegrationTest {
     }
 
     public static final EmbeddedKafkaCluster CLUSTER =
-            new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG);
+        new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG);
 
     @BeforeAll
     public static void startCluster() throws IOException {
@@ -322,7 +323,7 @@ public class GlobalKTableEOSIntegrationTest {
         produceAbortedMessages();
 
         startStreams(withHeaders);
-        
+
         final Map<Long, String> expected = new HashMap<>();
         expected.put(1L, "A");
         expected.put(2L, "B");
@@ -355,7 +356,7 @@ public class GlobalKTableEOSIntegrationTest {
         CLUSTER.createTopics(streamTopic);
         CLUSTER.createTopic(globalTableTopic, 2, 1);
     }
-    
+
     private void startStreams(final boolean withHeaders) {
         StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
         startStreams(null);

@@ -249,8 +249,8 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
 
 
     private MergedSortedCacheWindowStoreKeyValueIterator createIterator(final Iterator<KeyValue<Windowed<Bytes>, byte[]>> storeKvs,
-                                                                        final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs,
-                                                                        final boolean forward) {
+        final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs,
+        final boolean forward) {
         final DelegatingPeekingKeyValueIterator<Windowed<Bytes>, byte[]> storeIterator =
             new DelegatingPeekingKeyValueIterator<>("store", new KeyValueIteratorStub<>(storeKvs));
 

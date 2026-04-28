@@ -86,8 +86,8 @@ public class LeaderElectionCommandTest {
             TestUtils.assertLeader(client, topicPartition, broker2);
             cluster.shutdownBroker(broker3);
             TestUtils.waitForBrokersOutOfIsr(client,
-                    CollectionConverters.asScala(List.of(topicPartition)).toSet(),
-                    CollectionConverters.asScala(List.of(broker3)).toSet()
+                CollectionConverters.asScala(List.of(topicPartition)).toSet(),
+                CollectionConverters.asScala(List.of(broker3)).toSet()
             );
             cluster.shutdownBroker(broker2);
             TestUtils.assertNoLeader(client, topicPartition);
@@ -95,9 +95,9 @@ public class LeaderElectionCommandTest {
             TestUtils.waitForOnlineBroker(client, broker3);
 
             assertEquals(0, LeaderElectionCommand.mainNoExit(
-                    "--bootstrap-server", cluster.bootstrapServers(),
-                    "--election-type", "unclean",
-                    "--all-topic-partitions"
+                "--bootstrap-server", cluster.bootstrapServers(),
+                "--election-type", "unclean",
+                "--all-topic-partitions"
             ));
 
             TestUtils.assertLeader(client, topicPartition, broker3);
@@ -193,8 +193,8 @@ public class LeaderElectionCommandTest {
 
             cluster.shutdownBroker(broker3);
             TestUtils.waitForBrokersOutOfIsr(client,
-                    CollectionConverters.asScala(List.of(topicPartition)).toSet(),
-                    CollectionConverters.asScala(List.of(broker3)).toSet()
+                CollectionConverters.asScala(List.of(topicPartition)).toSet(),
+                CollectionConverters.asScala(List.of(broker3)).toSet()
             );
             cluster.shutdownBroker(broker2);
             TestUtils.assertNoLeader(client, topicPartition);
@@ -202,10 +202,10 @@ public class LeaderElectionCommandTest {
             TestUtils.waitForOnlineBroker(client, broker3);
 
             assertEquals(0, LeaderElectionCommand.mainNoExit(
-                    "--bootstrap-server", cluster.bootstrapServers(),
-                    "--election-type", "unclean",
-                    "--topic", topic,
-                    "--partition", Integer.toString(partition)
+                "--bootstrap-server", cluster.bootstrapServers(),
+                "--election-type", "unclean",
+                "--topic", topic,
+                "--partition", Integer.toString(partition)
             ));
 
             TestUtils.assertLeader(client, topicPartition, broker3);
@@ -231,8 +231,8 @@ public class LeaderElectionCommandTest {
 
             cluster.shutdownBroker(broker3);
             TestUtils.waitForBrokersOutOfIsr(client,
-                    CollectionConverters.asScala(List.of(topicPartition)).toSet(),
-                    CollectionConverters.asScala(List.of(broker3)).toSet()
+                CollectionConverters.asScala(List.of(topicPartition)).toSet(),
+                CollectionConverters.asScala(List.of(broker3)).toSet()
             );
             cluster.shutdownBroker(broker2);
             TestUtils.assertNoLeader(client, topicPartition);
@@ -242,9 +242,9 @@ public class LeaderElectionCommandTest {
             Path topicPartitionPath = tempTopicPartitionFile(List.of(topicPartition));
 
             assertEquals(0, LeaderElectionCommand.mainNoExit(
-                    "--bootstrap-server", cluster.bootstrapServers(),
-                    "--election-type", "unclean",
-                    "--path-to-json-file", topicPartitionPath.toString()
+                "--bootstrap-server", cluster.bootstrapServers(),
+                "--election-type", "unclean",
+                "--path-to-json-file", topicPartitionPath.toString()
             ));
 
             TestUtils.assertLeader(client, topicPartition, broker3);
@@ -272,14 +272,14 @@ public class LeaderElectionCommandTest {
             TestUtils.assertLeader(client, topicPartition, broker3);
             cluster.startBroker(broker2);
             TestUtils.waitForBrokersInIsr(client, topicPartition,
-                    CollectionConverters.asScala(List.of(broker2)).toSet()
+                CollectionConverters.asScala(List.of(broker2)).toSet()
             );
 
             assertEquals(0, LeaderElectionCommand.mainNoExit(
-                    "--bootstrap-server", cluster.bootstrapServers(),
-                    "--election-type", "preferred",
-                    "--topic", topic,
-                    "--partition", Integer.toString(partition)
+                "--bootstrap-server", cluster.bootstrapServers(),
+                "--election-type", "preferred",
+                "--topic", topic,
+                "--partition", Integer.toString(partition)
             ));
 
             TestUtils.assertLeader(client, topicPartition, broker2);
@@ -326,10 +326,10 @@ public class LeaderElectionCommandTest {
             TestUtils.assertLeader(client, topicPartition0, broker3);
             cluster.startBroker(broker2);
             TestUtils.waitForBrokersInIsr(client, topicPartition0,
-                    CollectionConverters.asScala(List.of(broker2)).toSet()
+                CollectionConverters.asScala(List.of(broker2)).toSet()
             );
             TestUtils.waitForBrokersInIsr(client, topicPartition1,
-                    CollectionConverters.asScala(List.of(broker2)).toSet()
+                CollectionConverters.asScala(List.of(broker2)).toSet()
             );
         }
 
@@ -346,7 +346,7 @@ public class LeaderElectionCommandTest {
         assertTrue(electionResultOutputIter.hasNext());
         String firstLine = electionResultOutputIter.next();
         assertTrue(firstLine.contains(String.format(
-            "Successfully completed leader election (PREFERRED) for partitions %s", topicPartition0)),
+                "Successfully completed leader election (PREFERRED) for partitions %s", topicPartition0)),
             String.format("Unexpected output: %s", firstLine));
 
         assertTrue(electionResultOutputIter.hasNext());
@@ -386,9 +386,9 @@ public class LeaderElectionCommandTest {
         while (iterator.hasNext()) {
             TopicPartition topicPartition = iterator.next();
             sb.append("{\"topic\":\"")
-                    .append(topicPartition.topic())
-                    .append("\",\"partition\":")
-                    .append(topicPartition.partition()).append("}");
+                .append(topicPartition.topic())
+                .append("\",\"partition\":")
+                .append(topicPartition.partition()).append("}");
             if (iterator.hasNext()) {
                 sb.append(",");
             }

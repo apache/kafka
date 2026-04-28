@@ -342,9 +342,9 @@ public class DeleteTopicTest {
 
     private Map<Integer, KafkaBroker> findPartitionHostingBrokers(Map<Integer, KafkaBroker> brokers) {
         return brokers.entrySet()
-                .stream()
-                .filter(broker -> expectedReplicaAssignment.get(0).contains(broker.getValue().config().brokerId()))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+            .stream()
+            .filter(broker -> expectedReplicaAssignment.get(0).contains(broker.getValue().config().brokerId()))
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     private List<int[]> writeDups(int numKeys, int numDups, UnifiedLog log) {
@@ -369,7 +369,7 @@ public class DeleteTopicTest {
                     (short) 0
                 );
                 counter++;
-                result.add(new int[] {key, count});
+                result.add(new int[]{key, count});
             }
         }
         return result;

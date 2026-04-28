@@ -61,18 +61,18 @@ public class DefaultTopicFilter implements TopicFilter {
     static class TopicFilterConfig extends AbstractConfig {
 
         static final ConfigDef DEF = new ConfigDef()
-            .define(TOPICS_INCLUDE_CONFIG,
-                    Type.LIST,
-                    TOPICS_INCLUDE_DEFAULT,
-                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                    Importance.HIGH,
-                    TOPICS_INCLUDE_DOC)
-            .define(TOPICS_EXCLUDE_CONFIG,
-                    Type.LIST,
-                    TOPICS_EXCLUDE_DEFAULT,
-                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                    Importance.HIGH,
-                    TOPICS_EXCLUDE_DOC);
+                .define(TOPICS_INCLUDE_CONFIG,
+                        Type.LIST,
+                        TOPICS_INCLUDE_DEFAULT,
+                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                        Importance.HIGH,
+                        TOPICS_INCLUDE_DOC)
+                .define(TOPICS_EXCLUDE_CONFIG,
+                        Type.LIST,
+                        TOPICS_EXCLUDE_DEFAULT,
+                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                        Importance.HIGH,
+                        TOPICS_EXCLUDE_DOC);
 
         TopicFilterConfig(Map<String, ?> props) {
             super(DEF, props, false);

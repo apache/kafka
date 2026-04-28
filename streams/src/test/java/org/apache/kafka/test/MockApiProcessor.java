@@ -54,15 +54,15 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
     private ProcessorContext<KOut, VOut> context;
 
     public MockApiProcessor(final PunctuationType punctuationType,
-                            final long scheduleInterval) {
+        final long scheduleInterval) {
         this.punctuationType = punctuationType;
         this.startTime = null;  // unanchored schedule so start time is undefined
         this.scheduleInterval = scheduleInterval;
     }
 
     public MockApiProcessor(final PunctuationType punctuationType,
-                            final Instant startTime,
-                            final long scheduleInterval) {
+        final Instant startTime,
+        final long scheduleInterval) {
         this.punctuationType = punctuationType;
         this.startTime = startTime;
         this.scheduleInterval = scheduleInterval;
@@ -77,16 +77,16 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
         this.context = context;
         if (scheduleInterval > 0L) {
             scheduleCancellable = (startTime == null)
-                    ? context.schedule(
-                    Duration.ofMillis(scheduleInterval),
-                    punctuationType,
-                    (punctuationType == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime)::add
+                ? context.schedule(
+                Duration.ofMillis(scheduleInterval),
+                punctuationType,
+                (punctuationType == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime)::add
             )
-                    : context.schedule(
-                    startTime,
-                    Duration.ofMillis(scheduleInterval),
-                    punctuationType,
-                    (punctuationType == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime)::add
+                : context.schedule(
+                startTime,
+                Duration.ofMillis(scheduleInterval),
+                punctuationType,
+                (punctuationType == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime)::add
             );
         }
     }

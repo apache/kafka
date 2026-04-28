@@ -145,12 +145,12 @@ public class ConnectorClientPolicyIntegrationTest {
 
         // build a Connect cluster backed by a Kafka KRaft cluster
         EmbeddedConnectCluster connect = new EmbeddedConnectCluster.Builder()
-            .name("connect-cluster")
-            .numWorkers(NUM_WORKERS)
-            .numBrokers(1)
-            .workerProps(workerProps)
-            .brokerProps(exampleBrokerProps)
-            .build();
+                .name("connect-cluster")
+                .numWorkers(NUM_WORKERS)
+                .numBrokers(1)
+                .workerProps(workerProps)
+                .brokerProps(exampleBrokerProps)
+                .build();
 
         // start the clusters
         connect.start();

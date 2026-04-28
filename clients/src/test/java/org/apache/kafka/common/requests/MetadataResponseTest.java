@@ -35,30 +35,30 @@ public class MetadataResponseTest {
         Uuid zeroUuid = new Uuid(0L, 0L);
         Uuid randomUuid = Uuid.randomUuid();
         MetadataResponseData.MetadataResponseTopic topicMetadata1 = new MetadataResponseData.MetadataResponseTopic()
-                .setName("topic1")
-                .setErrorCode(Errors.NONE.code())
-                .setPartitions(emptyList())
-                .setIsInternal(false);
+            .setName("topic1")
+            .setErrorCode(Errors.NONE.code())
+            .setPartitions(emptyList())
+            .setIsInternal(false);
         MetadataResponseData.MetadataResponseTopic topicMetadata2 = new MetadataResponseData.MetadataResponseTopic()
-                .setName("topic2")
-                .setErrorCode(Errors.NONE.code())
-                .setTopicId(zeroUuid)
-                .setPartitions(emptyList())
-                .setIsInternal(false);
+            .setName("topic2")
+            .setErrorCode(Errors.NONE.code())
+            .setTopicId(zeroUuid)
+            .setPartitions(emptyList())
+            .setIsInternal(false);
         MetadataResponseData.MetadataResponseTopic topicMetadata3 = new MetadataResponseData.MetadataResponseTopic()
-                .setName("topic3")
-                .setErrorCode(Errors.NONE.code())
-                .setTopicId(randomUuid)
-                .setPartitions(emptyList())
-                .setIsInternal(false);
+            .setName("topic3")
+            .setErrorCode(Errors.NONE.code())
+            .setTopicId(randomUuid)
+            .setPartitions(emptyList())
+            .setIsInternal(false);
 
         MetadataResponseData.MetadataResponseTopicCollection topics =
-                new MetadataResponseData.MetadataResponseTopicCollection();
+            new MetadataResponseData.MetadataResponseTopicCollection();
         topics.add(topicMetadata1);
         topics.add(topicMetadata2);
         topics.add(topicMetadata3);
         MetadataResponse metadataResponse = new MetadataResponse(new MetadataResponseData().setTopics(topics),
-                ApiKeys.METADATA.latestVersion());
+            ApiKeys.METADATA.latestVersion());
         Cluster cluster = metadataResponse.buildCluster();
         assertNull(cluster.topicName(Uuid.ZERO_UUID));
         assertNull(cluster.topicName(zeroUuid));

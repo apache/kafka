@@ -21,7 +21,7 @@ public class ShortSerializer implements Serializer<Short> {
         if (data == null)
             return null;
 
-        return new byte[] {
+        return new byte[]{
             (byte) (data >>> 8),
             data.byteValue()
         };

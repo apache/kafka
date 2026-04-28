@@ -90,11 +90,11 @@ class LocalLogTest {
 
         static KeyValue fromRecord(Record record) {
             String key = record.hasKey()
-                ? StandardCharsets.UTF_8.decode(record.key()).toString()
-                : "";
+                    ? StandardCharsets.UTF_8.decode(record.key()).toString()
+                    : "";
             String value = record.hasValue()
-                ? StandardCharsets.UTF_8.decode(record.value()).toString()
-                : "";
+                    ? StandardCharsets.UTF_8.decode(record.value()).toString()
+                    : "";
             return new KeyValue(key, value);
         }
     }
@@ -141,9 +141,9 @@ class LocalLogTest {
     }
 
     private FetchDataInfo readRecords(
-                            long startOffset,
-                            int maxLength,
-                            LogOffsetMetadata maxOffsetMetadata) throws IOException {
+            long startOffset,
+            int maxLength,
+            LogOffsetMetadata maxOffsetMetadata) throws IOException {
         return log.read(startOffset,
                 maxLength,
                 false,
@@ -651,8 +651,8 @@ class LocalLogTest {
         // make sure we can append more records
         List<KeyValue> keyValues2 = List.of(new KeyValue("k2", "v2"));
         appendRecords(keyValues2.stream()
-                .map(kv -> kv.toRecord(MOCK_TIME.milliseconds() + 10))
-                .toList(),
+                        .map(kv -> kv.toRecord(MOCK_TIME.milliseconds() + 10))
+                        .toList(),
                 1L);
         assertEquals(2, log.logEndOffset(), "Expect two records in the log");
         FetchDataInfo readResult = readRecords(0L);

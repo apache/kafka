@@ -177,9 +177,9 @@ public class LoggingContextTest {
         String context = MDC.get(LoggingContext.CONNECTOR_CONTEXT);
         if (context != null) {
             assertEquals(
-                connectorName != null,
-                context.startsWith("[" + connectorName),
-                "Context should begin with connector name when the connector name is non-null"
+                    connectorName != null,
+                    context.startsWith("[" + connectorName),
+                    "Context should begin with connector name when the connector name is non-null"
             );
             if (scope != null) {
                 assertTrue(context.contains(scope.toString()), "Context should contain the scope");

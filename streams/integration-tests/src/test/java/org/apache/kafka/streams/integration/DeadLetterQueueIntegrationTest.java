@@ -207,7 +207,7 @@ public class DeadLetterQueueIntegrationTest {
             // Consume the output records
             final List<ConsumerRecord<String, String>> outputRecords = readResult(OUTPUT_TOPIC, 1, StringDeserializer.class, StringDeserializer.class, 30000L);
 
-           // Only the first record is available
+            // Only the first record is available
             assertEquals(1, outputRecords.size(), "Only one record should be available in the output topic");
             assertEquals("value-1", outputRecords.get(0).value(), "Output record should be the first one");
 
@@ -287,7 +287,7 @@ public class DeadLetterQueueIntegrationTest {
             // Consume the output records
             // No records of the same batch should be available in the output topic due to deserialization error
             final AssertionError error = assertThrows(AssertionError.class,
-                                   () -> readResult(OUTPUT_TOPIC, 1, StringDeserializer.class, StringDeserializer.class, 10000L)
+                () -> readResult(OUTPUT_TOPIC, 1, StringDeserializer.class, StringDeserializer.class, 10000L)
             );
             assertEquals("""
                 Did not receive all 1 records from topic outputTopic within 10000 ms
@@ -357,12 +357,12 @@ public class DeadLetterQueueIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.String(), Serdes.String()))
             .mapValues((k, v) -> {
-                if ("KABOOM".equals(v)) {
-                    // Simulate a processing error
-                    throw new RuntimeException("KABOOM");
+                    if ("KABOOM".equals(v)) {
+                        // Simulate a processing error
+                        throw new RuntimeException("KABOOM");
+                    }
+                    return v;
                 }
-                return v;
-            }
             )
             .to(OUTPUT_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
 
@@ -445,10 +445,10 @@ public class DeadLetterQueueIntegrationTest {
     }
 
     private <K, V> List<ConsumerRecord<K, V>> readResult(final String topic,
-                                                         final int numberOfRecords,
-                                                         final Class<? extends Deserializer<K>> keyDeserializer,
-                                                         final Class<? extends Deserializer<V>> valueDeserializer,
-                                                         final long timeout) throws Exception {
+        final int numberOfRecords,
+        final Class<? extends Deserializer<K>> keyDeserializer,
+        final Class<? extends Deserializer<V>> valueDeserializer,
+        final long timeout) throws Exception {
         return IntegrationTestUtils.waitUntilMinRecordsReceived(
             TestUtils.consumerConfig(cluster.bootstrapServers(), keyDeserializer, valueDeserializer),
             topic,

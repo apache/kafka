@@ -57,15 +57,15 @@ public class ShareGroupDescribeRequest extends AbstractRequest {
     @Override
     public ShareGroupDescribeResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         ShareGroupDescribeResponseData data = new ShareGroupDescribeResponseData()
-                .setThrottleTimeMs(throttleTimeMs);
+            .setThrottleTimeMs(throttleTimeMs);
         // Set error for each group
         short errorCode = Errors.forException(e).code();
         this.data.groupIds().forEach(
-                groupId -> data.groups().add(
-                        new ShareGroupDescribeResponseData.DescribedGroup()
-                                .setGroupId(groupId)
-                                .setErrorCode(errorCode)
-                )
+            groupId -> data.groups().add(
+                new ShareGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId(groupId)
+                    .setErrorCode(errorCode)
+            )
         );
         return new ShareGroupDescribeResponse(data);
     }
@@ -77,20 +77,20 @@ public class ShareGroupDescribeRequest extends AbstractRequest {
 
     public static ShareGroupDescribeRequest parse(Readable readable, short version) {
         return new ShareGroupDescribeRequest(
-                new ShareGroupDescribeRequestData(readable, version),
-                version
+            new ShareGroupDescribeRequestData(readable, version),
+            version
         );
     }
 
     public static List<ShareGroupDescribeResponseData.DescribedGroup> getErrorDescribedGroupList(
-            List<String> groupIds,
-            Errors error
+        List<String> groupIds,
+        Errors error
     ) {
         return groupIds.stream()
-                .map(groupId -> new ShareGroupDescribeResponseData.DescribedGroup()
-                        .setGroupId(groupId)
-                        .setErrorCode(error.code())
-                        .setErrorMessage(error.message())
-                ).collect(Collectors.toList());
+            .map(groupId -> new ShareGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId(groupId)
+                    .setErrorCode(error.code())
+                    .setErrorMessage(error.message())
+            ).collect(Collectors.toList());
     }
 }

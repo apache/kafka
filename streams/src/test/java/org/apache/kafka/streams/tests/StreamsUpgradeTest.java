@@ -136,7 +136,7 @@ public class StreamsUpgradeTest {
     }
 
     private static void buildFKTable(final KStream<String, Integer> primaryTable,
-                                     final KTable<Integer, String> otherTable) {
+        final KTable<Integer, String> otherTable) {
         final KStream<String, String> kStream = primaryTable.toTable()
             .join(otherTable, v -> v, (k0, v0) -> v0)
             .toStream();
@@ -212,7 +212,7 @@ public class StreamsUpgradeTest {
 
         @Override
         public void onAssignment(final ConsumerPartitionAssignor.Assignment assignment,
-                                 final ConsumerGroupMetadata metadata) {
+            final ConsumerGroupMetadata metadata) {
             try {
                 super.onAssignment(assignment, metadata);
                 usedSubscriptionMetadataVersionPeek.set(usedSubscriptionMetadataVersion);
@@ -233,7 +233,7 @@ public class StreamsUpgradeTest {
 
             if (usedVersion > LATEST_SUPPORTED_VERSION + 1) {
                 throw new IllegalStateException("Unknown metadata version: " + usedVersion
-                                                    + "; latest supported version: " + LATEST_SUPPORTED_VERSION + 1);
+                    + "; latest supported version: " + LATEST_SUPPORTED_VERSION + 1);
             }
 
             final AssignmentInfo info = AssignmentInfo.decode(
@@ -336,10 +336,10 @@ public class StreamsUpgradeTest {
 
         // for testing only; don't apply version checks
         FutureSubscriptionInfo(final int version,
-                               final UUID processId,
-                               final Set<TaskId> activeTasks,
-                               final Set<TaskId> standbyTasks,
-                               final String userEndPoint) {
+            final UUID processId,
+            final Set<TaskId> activeTasks,
+            final Set<TaskId> standbyTasks,
+            final String userEndPoint) {
             this.version = version;
             this.processId = processId;
             this.activeTasks = activeTasks;
@@ -355,13 +355,13 @@ public class StreamsUpgradeTest {
 
             final ByteBuffer buf = ByteBuffer.allocate(
                 4 + // used version
-                4 + // latest supported version version
-                16 + // client ID
-                4 + activeTasks.size() * 8 +   // length + active tasks
-                4 + standbyTasks.size() * 8 +  // length + standby tasks
-                4 + endPointBytes.length +      // length + endpoint
-                4 + //uniqueField
-                4 //assignment error code
+                    4 + // latest supported version version
+                    16 + // client ID
+                    4 + activeTasks.size() * 8 +   // length + active tasks
+                    4 + standbyTasks.size() * 8 +  // length + standby tasks
+                    4 + endPointBytes.length +      // length + endpoint
+                    4 + //uniqueField
+                    4 //assignment error code
             );
 
             buf.putInt(version); // used version
@@ -383,8 +383,8 @@ public class StreamsUpgradeTest {
         final ByteBuffer originalUserMetadata;
 
         private FutureAssignmentInfo(final boolean bumpUsedVersion,
-                                     final boolean bumpSupportedVersion,
-                                     final ByteBuffer bytes) {
+            final boolean bumpSupportedVersion,
+            final ByteBuffer bytes) {
             super(LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION);
             this.bumpUsedVersion = bumpUsedVersion;
             this.bumpSupportedVersion = bumpSupportedVersion;
@@ -413,7 +413,8 @@ public class StreamsUpgradeTest {
                     while (true) {
                         out.write(originalUserMetadata.get());
                     }
-                } catch (final BufferUnderflowException expectedWhenAllDataCopied) { }
+                } catch (final BufferUnderflowException expectedWhenAllDataCopied) {
+                }
 
                 out.flush();
                 out.close();

@@ -50,24 +50,24 @@ public class KafkaShareConsumerMetrics extends AbstractConsumerMetricsManager {
                 return TimeUnit.SECONDS.convert(now - lastPollMs, TimeUnit.MILLISECONDS);
         };
         this.lastPollMetricName = metrics.metricName("last-poll-seconds-ago",
-                metricGroupName, "The number of seconds since the last poll() invocation.");
+            metricGroupName, "The number of seconds since the last poll() invocation.");
         metrics.addMetric(lastPollMetricName, lastPoll);
 
         this.timeBetweenPollSensor = metrics.sensor("time-between-poll");
         this.timeBetweenPollSensor.add(metrics.metricName("time-between-poll-avg",
-                        metricGroupName,
-                        "The average delay between invocations of poll() in milliseconds."),
-                new Avg());
+                metricGroupName,
+                "The average delay between invocations of poll() in milliseconds."),
+            new Avg());
         this.timeBetweenPollSensor.add(metrics.metricName("time-between-poll-max",
-                        metricGroupName,
-                        "The max delay between invocations of poll() in milliseconds."),
-                new Max());
+                metricGroupName,
+                "The max delay between invocations of poll() in milliseconds."),
+            new Max());
 
         this.pollIdleSensor = metrics.sensor("poll-idle-ratio-avg");
         this.pollIdleSensor.add(metrics.metricName("poll-idle-ratio-avg",
-                        metricGroupName,
-                        "The average fraction of time the consumer's poll() is idle as opposed to waiting for the user code to process records."),
-                new Avg());
+                metricGroupName,
+                "The average fraction of time the consumer's poll() is idle as opposed to waiting for the user code to process records."),
+            new Avg());
     }
 
     public void recordPollStart(long pollStartMs) {

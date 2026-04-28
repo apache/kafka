@@ -47,5 +47,5 @@ public interface QueryableStoreType<T> {
      *        (cf. {@link QueryableStoreTypes.KeyValueStoreType})
      */
     T create(final StateStoreProvider storeProvider,
-             final String storeName);
+        final String storeName);
 }

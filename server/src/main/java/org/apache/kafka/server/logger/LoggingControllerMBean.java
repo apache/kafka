@@ -20,6 +20,8 @@ import java.util.List;
 
 public interface LoggingControllerMBean {
     List<String> getLoggers();
+
     String getLogLevel(String logger);
+
     boolean setLogLevel(String logger, String level);
 }

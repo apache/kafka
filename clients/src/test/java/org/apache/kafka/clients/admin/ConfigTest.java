@@ -81,7 +81,7 @@ public class ConfigTest {
     }
 
     public static ConfigEntry newConfigEntry(String name, String value, ConfigEntry.ConfigSource source, boolean isSensitive,
-                                             boolean isReadOnly, List<ConfigEntry.ConfigSynonym> synonyms) {
+        boolean isReadOnly, List<ConfigEntry.ConfigSynonym> synonyms) {
         return new ConfigEntry(name, value, source, isSensitive, isReadOnly, synonyms, ConfigType.UNKNOWN, null);
     }
 

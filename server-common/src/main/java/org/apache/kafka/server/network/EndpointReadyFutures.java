@@ -102,7 +102,7 @@ public class EndpointReadyFutures {
         ) {
             if (logContext == null) logContext = new LogContext();
             Map<Endpoint, CompletionStage<?>> effectiveStartFutures =
-                    new HashMap<>(authorizerStartFutures);
+                new HashMap<>(authorizerStartFutures);
             for (Endpoint endpoint : info.endpoints()) {
                 if (!effectiveStartFutures.containsKey(endpoint)) {
                     CompletableFuture<Void> completedFuture = CompletableFuture.completedFuture(null);
@@ -117,7 +117,7 @@ public class EndpointReadyFutures {
                     }
                 }
                 throw new RuntimeException("Found authorizer futures that weren't included " +
-                        "in AuthorizerServerInfo: " + notInInfo);
+                    "in AuthorizerServerInfo: " + notInInfo);
             }
             addReadinessFutures("authorizerStart", effectiveStartFutures);
             stages.forEach(stage -> {
@@ -126,7 +126,7 @@ public class EndpointReadyFutures {
                 addReadinessFutures(stage.name, newReadinessFutures);
             });
             return new EndpointReadyFutures(logContext,
-                    endpointStages);
+                endpointStages);
         }
     }
 
@@ -159,14 +159,14 @@ public class EndpointReadyFutures {
                         done = true;
                     } else {
                         log.info("{} completed for endpoint {}. Still waiting for {}.",
-                                stageName, endpointName, incomplete);
+                            stageName, endpointName, incomplete);
                     }
                 }
             }
             if (done) {
                 if (future.complete(null)) {
                     log.info("{} completed for endpoint {}. Endpoint is now READY.",
-                            stageName, endpointName);
+                        stageName, endpointName);
                 }
             }
         }
@@ -177,7 +177,7 @@ public class EndpointReadyFutures {
                     incomplete.clear();
                 }
                 log.warn("Endpoint {} will never become ready because we encountered an {} exception",
-                        endpointName, what, exception);
+                    endpointName, what, exception);
             }
         }
     }

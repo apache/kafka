@@ -148,7 +148,7 @@ public class RemoteLogMetadataManagerTest {
                     createRemotePartitionDeleteMetadata(DELETE_PARTITION_FINISHED)).get());
 
             assertThrows(RemoteResourceNotFoundException.class,
-                () -> remoteLogMetadataManager.remoteLogSegmentMetadata(TP0, 1, 30L));
+                    () -> remoteLogMetadataManager.remoteLogSegmentMetadata(TP0, 1, 30L));
         }
     }
 

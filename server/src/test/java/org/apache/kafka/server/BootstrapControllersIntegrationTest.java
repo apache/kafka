@@ -93,8 +93,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class BootstrapControllersIntegrationTest {
     private Map<String, Object> adminConfig(ClusterInstance clusterInstance, boolean usingBootstrapControllers) {
         return usingBootstrapControllers ?
-                Map.of(BOOTSTRAP_CONTROLLERS_CONFIG, clusterInstance.bootstrapControllers()) :
-                Map.of(BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
+            Map.of(BOOTSTRAP_CONTROLLERS_CONFIG, clusterInstance.bootstrapControllers()) :
+            Map.of(BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
     }
 
     @ClusterTest
@@ -115,7 +115,7 @@ public class BootstrapControllersIntegrationTest {
         Map<String, Object> config = Map.of(BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapControllers());
         try (Admin admin = Admin.create(config)) {
             ExecutionException exception = assertThrows(ExecutionException.class,
-                    () -> admin.describeCluster().clusterId().get(1, TimeUnit.MINUTES));
+                () -> admin.describeCluster().clusterId().get(1, TimeUnit.MINUTES));
             assertNotNull(exception.getCause());
             assertEquals(UnsupportedVersionException.class, exception.getCause().getClass());
             assertEquals("The node does not support METADATA", exception.getCause().getMessage());
@@ -157,8 +157,8 @@ public class BootstrapControllersIntegrationTest {
             DescribeFeaturesResult result = admin.describeFeatures();
             short metadataVersion = clusterInstance.config().metadataVersion().featureLevel();
             assertEquals(new FinalizedVersionRange(metadataVersion, metadataVersion),
-                    result.featureMetadata().get(1, TimeUnit.MINUTES).finalizedFeatures().
-                            get(MetadataVersion.FEATURE_NAME));
+                result.featureMetadata().get(1, TimeUnit.MINUTES).finalizedFeatures().
+                    get(MetadataVersion.FEATURE_NAME));
         }
     }
 
@@ -175,15 +175,15 @@ public class BootstrapControllersIntegrationTest {
     private void testUpdateFeatures(ClusterInstance clusterInstance, boolean usingBootstrapControllers) {
         try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             UpdateFeaturesResult result = admin.updateFeatures(Map.of("foo.bar.feature",
-                            new FeatureUpdate((short) 1, FeatureUpdate.UpgradeType.UPGRADE)));
+                new FeatureUpdate((short) 1, FeatureUpdate.UpgradeType.UPGRADE)));
             ExecutionException exception =
-                    assertThrows(ExecutionException.class,
-                            () -> result.all().get(1, TimeUnit.MINUTES));
+                assertThrows(ExecutionException.class,
+                    () -> result.all().get(1, TimeUnit.MINUTES));
             assertNotNull(exception.getCause());
             assertEquals(InvalidUpdateVersionException.class, exception.getCause().getClass());
             assertTrue(exception.getCause().getMessage().endsWith("does not support this feature."),
-                    "expected message to end with 'does not support this feature', but it was: " +
-                            exception.getCause().getMessage());
+                "expected message to end with 'does not support this feature', but it was: " +
+                    exception.getCause().getMessage());
         }
     }
 
@@ -201,7 +201,7 @@ public class BootstrapControllersIntegrationTest {
         try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             DescribeMetadataQuorumResult result = admin.describeMetadataQuorum();
             assertTrue(clusterInstance.controllerIds().contains(
-                    result.quorumInfo().get(1, TimeUnit.MINUTES).leaderId()));
+                result.quorumInfo().get(1, TimeUnit.MINUTES).leaderId()));
         }
     }
 
@@ -231,7 +231,7 @@ public class BootstrapControllersIntegrationTest {
 
     private void testIncrementalAlterConfigs(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
         Collection<Integer> nodeIds = usingBootstrapControllers ?
-                clusterInstance.controllerIds() : clusterInstance.brokers().keySet();
+            clusterInstance.controllerIds() : clusterInstance.brokers().keySet();
         try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             for (int nodeId : nodeIds) {
                 ConfigResource nodeResource = new ConfigResource(BROKER, "" + nodeId);
@@ -242,27 +242,27 @@ public class BootstrapControllersIntegrationTest {
 
                 // Set configs: MAX_CONNECTIONS_CONFIG for per-broker, both configs for default
                 Map<ConfigResource, Collection<AlterConfigOp>> alterations = Map.of(
-                        nodeResource, List.of(
-                                new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, nodeMaxConnectionsValue), AlterConfigOp.OpType.SET)
-                        ),
-                        defaultResource, List.of(
-                                new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, defaultMaxConnectionsValue), AlterConfigOp.OpType.SET),
-                                new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG, defaultConnectionRateValue), AlterConfigOp.OpType.SET)
-                        )
+                    nodeResource, List.of(
+                        new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, nodeMaxConnectionsValue), AlterConfigOp.OpType.SET)
+                    ),
+                    defaultResource, List.of(
+                    new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, defaultMaxConnectionsValue), AlterConfigOp.OpType.SET),
+                    new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG, defaultConnectionRateValue), AlterConfigOp.OpType.SET)
+                )
                 );
                 admin.incrementalAlterConfigs(alterations).all().get(1, TimeUnit.MINUTES);
-                
+
                 // Verify per-broker configs: MAX_CONNECTIONS_CONFIG and MAX_CONNECTION_CREATION_RATE_CONFIG
                 verifyConfigValue(admin, nodeResource, SocketServerConfigs.MAX_CONNECTIONS_CONFIG,
-                        DYNAMIC_BROKER_CONFIG, nodeMaxConnectionsValue);
+                    DYNAMIC_BROKER_CONFIG, nodeMaxConnectionsValue);
                 verifyConfigValue(admin, nodeResource, SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG,
-                        DYNAMIC_DEFAULT_BROKER_CONFIG, defaultConnectionRateValue);
-                
+                    DYNAMIC_DEFAULT_BROKER_CONFIG, defaultConnectionRateValue);
+
                 // Verify default broker configs: MAX_CONNECTIONS_CONFIG and MAX_CONNECTION_CREATION_RATE_CONFIG
                 verifyConfigValue(admin, defaultResource, SocketServerConfigs.MAX_CONNECTIONS_CONFIG,
-                        DYNAMIC_DEFAULT_BROKER_CONFIG, defaultMaxConnectionsValue);
+                    DYNAMIC_DEFAULT_BROKER_CONFIG, defaultMaxConnectionsValue);
                 verifyConfigValue(admin, defaultResource, SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG,
-                        DYNAMIC_DEFAULT_BROKER_CONFIG, defaultConnectionRateValue);
+                    DYNAMIC_DEFAULT_BROKER_CONFIG, defaultConnectionRateValue);
 
                 Object node = (usingBootstrapControllers ? clusterInstance.controllers() : clusterInstance.brokers()).get(nodeId);
                 // Verify that SocketServer has actually updated the max connection limit in ConnectionQuotas
@@ -282,35 +282,35 @@ public class BootstrapControllersIntegrationTest {
         field.setAccessible(true);
         int actualMaxConnections = ((Number) field.get(connectionQuotas)).intValue();
         assertEquals(expectedMaxConnections, actualMaxConnections,
-                "SocketServer ConnectionQuotas.brokerMaxConnections should be " + expectedMaxConnections +
+            "SocketServer ConnectionQuotas.brokerMaxConnections should be " + expectedMaxConnections +
                 " but was " + actualMaxConnections);
     }
-    
+
     private void verifySocketServerMaxConnectionCreationRateUpdated(Object node, int expectedMaxConnectionCreationRate) throws Exception {
         Metrics metrics = (Metrics) node.getClass().getMethod("metrics").invoke(node);
         KafkaMetric metric = metrics.metrics().entrySet().stream()
-                .filter(entry -> "broker-connection-accept-rate".equals(entry.getKey().name()))
-                .map(java.util.Map.Entry::getValue)
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("Broker connection rate metric not found"));
+            .filter(entry -> "broker-connection-accept-rate".equals(entry.getKey().name()))
+            .map(java.util.Map.Entry::getValue)
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("Broker connection rate metric not found"));
         double actualBound = metric.config().quota().bound();
         assertEquals(expectedMaxConnectionCreationRate, actualBound,
-                "Connection creation rate quota should be " + expectedMaxConnectionCreationRate + " but was " + actualBound);
+            "Connection creation rate quota should be " + expectedMaxConnectionCreationRate + " but was " + actualBound);
     }
-    
+
     private void verifyConfigValue(Admin admin, ConfigResource resource, String configName,
                                    org.apache.kafka.clients.admin.ConfigEntry.ConfigSource expectedSource,
                                    String expectedValue) throws Exception {
         TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
             Config config = admin.describeConfigs(List.of(resource)).all().get(1, TimeUnit.MINUTES).get(resource);
             ConfigEntry entry = config.entries().stream()
-                    .filter(e -> e.name().equals(configName))
-                    .findFirst().orElseThrow();
+                .filter(e -> e.name().equals(configName))
+                .findFirst().orElseThrow();
             assertEquals(expectedSource, entry.source(),
-                    "Expected entry for " + configName + " to come from " + expectedSource +
+                "Expected entry for " + configName + " to come from " + expectedSource +
                     ". Instead, the entry was: " + entry);
             assertEquals(expectedValue, entry.value(),
-                    "Expected value for " + configName + " to be " + expectedValue +
+                "Expected value for " + configName + " to be " + expectedValue +
                     ". Instead, the value was: " + entry.value());
         });
     }
@@ -320,9 +320,9 @@ public class BootstrapControllersIntegrationTest {
         String topicName = "foo";
         try (Admin admin = Admin.create(adminConfig(clusterInstance, false))) {
             Map<Integer, List<Integer>> assignments = Map.of(
-                    0, List.of(0, 1, 2),
-                    1, List.of(1, 2, 0),
-                    2, List.of(2, 1, 0)
+                0, List.of(0, 1, 2),
+                1, List.of(1, 2, 0),
+                2, List.of(2, 1, 0)
             );
             CreateTopicsResult createTopicResult = admin.createTopics(List.of(new NewTopic(topicName, assignments)));
             createTopicResult.all().get();
@@ -332,16 +332,16 @@ public class BootstrapControllersIntegrationTest {
             List<Integer> part1Reassignment = List.of(0, 1, 2);
             List<Integer> part2Reassignment = List.of(1, 2);
             Map<TopicPartition, Optional<NewPartitionReassignment>> reassignments = Map.of(
-                    new TopicPartition(topicName, 0), Optional.of(new NewPartitionReassignment(part0Reassignment)),
-                    new TopicPartition(topicName, 1), Optional.of(new NewPartitionReassignment(part1Reassignment)),
-                    new TopicPartition(topicName, 2), Optional.of(new NewPartitionReassignment(part2Reassignment))
+                new TopicPartition(topicName, 0), Optional.of(new NewPartitionReassignment(part0Reassignment)),
+                new TopicPartition(topicName, 1), Optional.of(new NewPartitionReassignment(part1Reassignment)),
+                new TopicPartition(topicName, 2), Optional.of(new NewPartitionReassignment(part2Reassignment))
             );
 
             try (Admin adminWithBootstrapControllers = Admin.create(adminConfig(clusterInstance, true))) {
                 adminWithBootstrapControllers.alterPartitionReassignments(reassignments).all().get();
                 TestUtils.waitForCondition(
-                        () -> adminWithBootstrapControllers.listPartitionReassignments().reassignments().get().isEmpty(),
-                        "The reassignment never completed.");
+                    () -> adminWithBootstrapControllers.listPartitionReassignments().reassignments().get().isEmpty(),
+                    "The reassignment never completed.");
             }
 
             List<List<Integer>> expectedMapping = List.of(part0Reassignment, part1Reassignment, part2Reassignment);
@@ -359,13 +359,13 @@ public class BootstrapControllersIntegrationTest {
 
     private static void waitForTopics(Admin admin, Set<String> expectedTopics) throws InterruptedException {
         TestUtils.waitForCondition(() -> admin.listTopics().names().get().containsAll(expectedTopics),
-                "timed out waiting for topics");
+            "timed out waiting for topics");
     }
 
     private static List<List<Integer>> translatePartitionInfoToNodeIdList(List<TopicPartitionInfo> partitions) {
         return partitions.stream()
-                .map(partition -> partition.replicas().stream().map(Node::id).toList())
-                .toList();
+            .map(partition -> partition.replicas().stream().map(Node::id).toList())
+            .toList();
     }
 
     @ClusterTest(serverProperties = {
@@ -392,7 +392,7 @@ public class BootstrapControllersIntegrationTest {
             assertDoesNotThrow(() -> admin.createAcls(Set.of(aclBinding)).all().get(1, TimeUnit.MINUTES));
 
             clusterInstance.waitAcls(new AclBindingFilter(resourcePattern.toFilter(), AccessControlEntryFilter.ANY),
-                    Set.of(accessControlEntry));
+                Set.of(accessControlEntry));
 
             Collection<AclBinding> aclBindings = admin.describeAcls(AclBindingFilter.ANY).values().get(1, TimeUnit.MINUTES);
             assertEquals(1, aclBindings.size());

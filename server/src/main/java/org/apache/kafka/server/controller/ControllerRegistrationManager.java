@@ -53,7 +53,7 @@ import java.util.concurrent.TimeUnit;
  * each variable, most mutable state can be accessed only from that event queue thread.
  */
 public class ControllerRegistrationManager implements MetadataPublisher {
-    
+
     private final Logger logger;
     private final int nodeId;
     private final Time time;
@@ -101,24 +101,24 @@ public class ControllerRegistrationManager implements MetadataPublisher {
     private NodeToControllerChannelManager channelManager;
 
     public ControllerRegistrationManager(
-            int nodeId,
-            Time time,
-            String threadNamePrefix,
-            Map<String, VersionRange> supportedFeatures,
-            Uuid incarnationId,
-            ListenerInfo listenerInfo) {
+        int nodeId,
+        Time time,
+        String threadNamePrefix,
+        Map<String, VersionRange> supportedFeatures,
+        Uuid incarnationId,
+        ListenerInfo listenerInfo) {
         this(nodeId, time, threadNamePrefix, supportedFeatures, incarnationId, listenerInfo, new ExponentialBackoff(100, 2, 120000L, 0.02));
     }
 
     public ControllerRegistrationManager(
-            int nodeId,
-            Time time,
-            String threadNamePrefix,
-            Map<String, VersionRange> supportedFeatures,
-            Uuid incarnationId,
-            ListenerInfo listenerInfo,
-            ExponentialBackoff resendExponentialBackoff
-    )  {
+        int nodeId,
+        Time time,
+        String threadNamePrefix,
+        Map<String, VersionRange> supportedFeatures,
+        Uuid incarnationId,
+        ListenerInfo listenerInfo,
+        ExponentialBackoff resendExponentialBackoff
+    ) {
         this.nodeId = nodeId;
         this.time = time;
         this.supportedFeatures = supportedFeatures;
@@ -126,24 +126,24 @@ public class ControllerRegistrationManager implements MetadataPublisher {
         this.listenerInfo = listenerInfo;
         this.resendExponentialBackoff = resendExponentialBackoff;
         LogContext logContext = new LogContext("[ControllerRegistrationManager" +
-                " id=" + this.nodeId +
-                " incarnation=" + this.incarnationId +
-                "] ");
+            " id=" + this.nodeId +
+            " incarnation=" + this.incarnationId +
+            "] ");
         this.logger = logContext.logger(ControllerRegistrationManager.class);
         this.eventQueue = new KafkaEventQueue(time,
-                logContext,
-                threadNamePrefix + "registration-manager-",
-                new ShutdownEvent());
+            logContext,
+            threadNamePrefix + "registration-manager-",
+            new ShutdownEvent());
     }
-    
-    @Override 
+
+    @Override
     public String name() {
         return "ControllerRegistrationManager";
     }
 
     private class ShutdownEvent implements EventQueue.Event {
-        
-        @Override 
+
+        @Override
         public void run() {
             try {
                 logger.info("shutting down.");
@@ -184,16 +184,16 @@ public class ControllerRegistrationManager implements MetadataPublisher {
     /**
      * Shut down the ControllerRegistrationManager and block until all threads are joined.
      */
-    @Override 
+    @Override
     public void close() throws Exception {
         beginShutdown();
         eventQueue.close();
     }
 
-    @Override 
+    @Override
     public void onMetadataUpdate(MetadataDelta delta, MetadataImage newImage, LoaderManifest manifest) {
         if (delta.featuresDelta() != null ||
-                (delta.clusterDelta() != null && delta.clusterDelta().changedControllers().containsKey(nodeId))) {
+            (delta.clusterDelta() != null && delta.clusterDelta().changedControllers().containsKey(nodeId))) {
             eventQueue.append(new MetadataUpdateEvent(delta, newImage));
         }
     }
@@ -207,8 +207,8 @@ public class ControllerRegistrationManager implements MetadataPublisher {
             this.delta = delta;
             this.newImage = newImage;
         }
-            
-        @Override 
+
+        @Override
         public void run() {
             try {
                 if (delta.featuresDelta() != null) {
@@ -246,7 +246,7 @@ public class ControllerRegistrationManager implements MetadataPublisher {
             logger.info("maybeSendControllerRegistration: cannot register yet because the metadata.version is not known yet.");
         } else if (!metadataVersion.get().isControllerRegistrationSupported()) {
             logger.info("maybeSendControllerRegistration: cannot register yet because the metadata.version is " +
-                    "still {}, which does not support KIP-919 controller registration.", metadataVersion);
+                "still {}, which does not support KIP-919 controller registration.", metadataVersion);
         } else if (pendingRpc) {
             logger.info("maybeSendControllerRegistration: waiting for the previous RPC to complete.");
         } else {
@@ -257,9 +257,9 @@ public class ControllerRegistrationManager implements MetadataPublisher {
     private void sendControllerRegistration() {
         ControllerRegistrationRequestData.FeatureCollection features = new ControllerRegistrationRequestData.FeatureCollection();
         supportedFeatures.forEach((name, range) -> features.add(new ControllerRegistrationRequestData.Feature().
-                setName(name).
-                setMinSupportedVersion(range.min()).
-                setMaxSupportedVersion(range.max())));
+            setName(name).
+            setMinSupportedVersion(range.min()).
+            setMaxSupportedVersion(range.max())));
         ControllerRegistrationRequestData data = new ControllerRegistrationRequestData().
             setControllerId(nodeId).
             setFeatures(features).
@@ -269,13 +269,13 @@ public class ControllerRegistrationManager implements MetadataPublisher {
 
         logger.info("sendControllerRegistration: attempting to send {}", data);
         channelManager.sendRequest(new ControllerRegistrationRequest.Builder(data),
-                new RegistrationResponseHandler());
+            new RegistrationResponseHandler());
         pendingRpc = true;
     }
 
     private class RegistrationResponseHandler implements ControllerRequestCompletionHandler {
-        
-        @Override 
+
+        @Override
         public void onComplete(ClientResponse response) {
             eventQueue.append(new RequestCompleteEvent(response));
         }
@@ -289,12 +289,12 @@ public class ControllerRegistrationManager implements MetadataPublisher {
     private class RequestCompleteEvent implements EventQueue.Event {
 
         private final ClientResponse response;
-        
+
         RequestCompleteEvent(ClientResponse response) {
             this.response = response;
         }
-        
-        @Override 
+
+        @Override
         public void run() {
             pendingRpc = false;
             if (response.authenticationException() != null) {
@@ -324,8 +324,8 @@ public class ControllerRegistrationManager implements MetadataPublisher {
     }
 
     private class RequestTimeoutEvent implements EventQueue.Event {
-        
-        @Override 
+
+        @Override
         public void run() {
             pendingRpc = false;
             logger.error("RegistrationResponseHandler: channel manager timed out before sending the request.");
@@ -343,8 +343,8 @@ public class ControllerRegistrationManager implements MetadataPublisher {
         logger.trace("Scheduling next communication at {} ms from now.", intervalMs);
         long deadlineNs = time.nanoseconds() + TimeUnit.MILLISECONDS.toNanos(intervalMs);
         eventQueue.scheduleDeferred("communication",
-                new EventQueue.DeadlineFunction(deadlineNs),
-                this::maybeSendControllerRegistration);
+            new EventQueue.DeadlineFunction(deadlineNs),
+            this::maybeSendControllerRegistration);
     }
 
     // Only for testing

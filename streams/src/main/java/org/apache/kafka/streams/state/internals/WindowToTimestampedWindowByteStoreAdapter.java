@@ -48,74 +48,74 @@ public class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<By
 
     @Override
     public void put(final Bytes key,
-                    final byte[] valueWithTimestamp,
-                    final long windowStartTimestamp) {
+        final byte[] valueWithTimestamp,
+        final long windowStartTimestamp) {
         store.put(key, rawValue(valueWithTimestamp), windowStartTimestamp);
     }
 
     @Override
     public byte[] fetch(final Bytes key,
-                        final long time) {
+        final long time) {
         return convertToTimestampedFormat(store.fetch(key, time));
     }
 
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key,
-                                             final long timeFrom,
-                                             final long timeTo) {
+        final long timeFrom,
+        final long timeTo) {
         return new WindowToTimestampedWindowIteratorAdapter(store.fetch(key, timeFrom, timeTo));
     }
 
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key,
-                                             final Instant timeFrom,
-                                             final Instant timeTo) throws IllegalArgumentException {
+        final Instant timeFrom,
+        final Instant timeTo) throws IllegalArgumentException {
         return new WindowToTimestampedWindowIteratorAdapter(store.fetch(key, timeFrom, timeTo));
     }
 
     @Override
     public WindowStoreIterator<byte[]> backwardFetch(final Bytes key,
-                                                     final long timeFrom,
-                                                     final long timeTo) {
+        final long timeFrom,
+        final long timeTo) {
         return new WindowToTimestampedWindowIteratorAdapter(store.backwardFetch(key, timeFrom, timeTo));
     }
 
     @Override
     public WindowStoreIterator<byte[]> backwardFetch(final Bytes key,
-                                                     final Instant timeFrom,
-                                                     final Instant timeTo) throws IllegalArgumentException {
+        final Instant timeFrom,
+        final Instant timeTo) throws IllegalArgumentException {
         return new WindowToTimestampedWindowIteratorAdapter(store.backwardFetch(key, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
-                                                           final Bytes keyTo,
-                                                           final long timeFrom,
-                                                           final long timeTo) {
+        final Bytes keyTo,
+        final long timeFrom,
+        final long timeTo) {
         return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.fetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom,
-                                                                   final Bytes keyTo,
-                                                                   final Instant timeFrom,
-                                                                   final Instant timeTo) throws IllegalArgumentException {
+        final Bytes keyTo,
+        final Instant timeFrom,
+        final Instant timeTo) throws IllegalArgumentException {
         return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
-                                                           final Bytes keyTo,
-                                                           final Instant timeFrom,
-                                                           final Instant timeTo)  throws IllegalArgumentException {
+        final Bytes keyTo,
+        final Instant timeFrom,
+        final Instant timeTo) throws IllegalArgumentException {
         return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.fetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom,
-                                                                   final Bytes keyTo,
-                                                                   final long timeFrom,
-                                                                   final long timeTo) {
+        final Bytes keyTo,
+        final long timeFrom,
+        final long timeTo) {
         return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
@@ -131,13 +131,13 @@ public class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<By
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom,
-                                                              final long timeTo) {
+        final long timeTo) {
         return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.fetchAll(timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final Instant timeFrom,
-                                                              final Instant timeTo) throws IllegalArgumentException {
+        final Instant timeTo) throws IllegalArgumentException {
         return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.fetchAll(timeFrom, timeTo));
     }
 
@@ -148,7 +148,7 @@ public class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<By
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final Instant timeFrom,
-                                                                      final Instant timeTo) throws IllegalArgumentException {
+        final Instant timeTo) throws IllegalArgumentException {
         return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.backwardFetchAll(timeFrom, timeTo));
     }
 

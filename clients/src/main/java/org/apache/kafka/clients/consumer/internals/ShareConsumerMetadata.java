@@ -30,21 +30,21 @@ public class ShareConsumerMetadata extends Metadata {
     private final SubscriptionState subscription;
 
     public ShareConsumerMetadata(long refreshBackoffMs,
-                                 long refreshBackoffMaxMs,
-                                 long metadataExpireMs,
-                                 boolean allowAutoTopicCreation,
-                                 SubscriptionState subscription,
-                                 LogContext logContext,
-                                 ClusterResourceListeners clusterResourceListeners) {
+        long refreshBackoffMaxMs,
+        long metadataExpireMs,
+        boolean allowAutoTopicCreation,
+        SubscriptionState subscription,
+        LogContext logContext,
+        ClusterResourceListeners clusterResourceListeners) {
         super(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, logContext, clusterResourceListeners);
         this.allowAutoTopicCreation = allowAutoTopicCreation;
         this.subscription = subscription;
     }
 
     public ShareConsumerMetadata(ConsumerConfig config,
-                                 SubscriptionState subscriptions,
-                                 LogContext logContext,
-                                 ClusterResourceListeners clusterResourceListeners) {
+        SubscriptionState subscriptions,
+        LogContext logContext,
+        ClusterResourceListeners clusterResourceListeners) {
         this(config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
             config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG),
             config.getLong(ConsumerConfig.METADATA_MAX_AGE_CONFIG),

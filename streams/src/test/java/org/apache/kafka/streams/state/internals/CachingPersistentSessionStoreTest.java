@@ -138,9 +138,11 @@ public class CachingPersistentSessionStoreTest {
             assertFalse(b.hasNext());
         }
     }
+
     @Test
     public void shouldMatchPositionAfterPutWithFlushListener() {
-        cachingStore.setFlushListener(record -> { }, false);
+        cachingStore.setFlushListener(record -> {
+        }, false);
         shouldMatchPositionAfterPut();
     }
 
@@ -449,9 +451,9 @@ public class CachingPersistentSessionStoreTest {
     public void shouldQueryItemsInCacheAndStore() {
         final List<KeyValue<Windowed<Bytes>, byte[]>> added = addSessionsUntilOverflow("a");
         final List<KeyValue<Windowed<Bytes>, byte[]>> actual = toListAndCloseIterator(cachingStore.findSessions(
-                Bytes.wrap("a".getBytes(StandardCharsets.UTF_8)),
-                0,
-                added.size() * 10L
+            Bytes.wrap("a".getBytes(StandardCharsets.UTF_8)),
+            0,
+            added.size() * 10L
         ));
         verifyKeyValueList(added, actual);
     }
@@ -884,7 +886,7 @@ public class CachingPersistentSessionStoreTest {
         private final List<KeyValueTimestamp<K, Change<V>>> forwarded = new LinkedList<>();
 
         CacheFlushListenerStub(final Deserializer<K> keyDeserializer,
-                               final Deserializer<V> valueDeserializer) {
+            final Deserializer<V> valueDeserializer) {
             this.keyDeserializer = keyDeserializer;
             this.valueDeserializer = valueDeserializer;
         }

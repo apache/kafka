@@ -132,7 +132,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     @Test
     public void shouldWriteAllKeyValueToInnerStoreOnPutAll() {
         store.putAll(Arrays.asList(KeyValue.pair(hi, there),
-                                   KeyValue.pair(hello, world)));
+            KeyValue.pair(hello, world)));
         assertThat(inner.get(hi), equalTo(there));
         assertThat(inner.get(hello), equalTo(world));
 

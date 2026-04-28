@@ -75,10 +75,10 @@ public class LegacyStickyTaskAssignor implements LegacyTaskAssignor {
 
     @Override
     public boolean assign(final Map<ProcessId, ClientState> clients,
-                          final Set<TaskId> allTaskIds,
-                          final Set<TaskId> statefulTaskIds,
-                          final RackAwareTaskAssignor rackAwareTaskAssignor,
-                          final AssignmentConfigs configs) {
+        final Set<TaskId> allTaskIds,
+        final Set<TaskId> statefulTaskIds,
+        final RackAwareTaskAssignor rackAwareTaskAssignor,
+        final AssignmentConfigs configs) {
         this.clients = clients;
         this.allTaskIds = allTaskIds;
         this.statefulTaskIds = statefulTaskIds;
@@ -128,11 +128,11 @@ public class LegacyStickyTaskAssignor implements LegacyTaskAssignor {
                 final Set<ProcessId> ids = findClientsWithoutAssignedTask(taskId);
                 if (ids.isEmpty()) {
                     log.warn("Unable to assign {} of {} standby tasks for task [{}]. " +
-                                     "There is not enough available capacity. You should " +
-                                     "increase the number of threads and/or application instances " +
-                                     "to maintain the requested number of standby replicas.",
-                             numStandbyReplicas - i,
-                             numStandbyReplicas, taskId);
+                        "There is not enough available capacity. You should " +
+                        "increase the number of threads and/or application instances " +
+                        "to maintain the requested number of standby replicas.",
+                        numStandbyReplicas - i,
+                        numStandbyReplicas, taskId);
                     break;
                 }
                 allocateTaskWithClientCandidates(taskId, ids, false);
@@ -279,8 +279,8 @@ public class LegacyStickyTaskAssignor implements LegacyTaskAssignor {
     }
 
     private ClientState findLeastLoaded(final TaskId taskId,
-                                        final Set<ProcessId> clientIds,
-                                        final boolean checkTaskPairs) {
+        final Set<ProcessId> clientIds,
+        final boolean checkTaskPairs) {
         ClientState leastLoaded = null;
         for (final ProcessId id : clientIds) {
             final ClientState client = clients.get(id);
@@ -333,7 +333,7 @@ public class LegacyStickyTaskAssignor implements LegacyTaskAssignor {
         }
 
         boolean hasNewPair(final TaskId task1,
-                           final Set<TaskId> taskIds) {
+            final Set<TaskId> taskIds) {
             if (pairs.size() == maxPairs) {
                 return false;
             }
@@ -377,7 +377,7 @@ public class LegacyStickyTaskAssignor implements LegacyTaskAssignor {
                 }
                 final Pair pair = (Pair) o;
                 return Objects.equals(task1, pair.task1) &&
-                        Objects.equals(task2, pair.task2);
+                    Objects.equals(task2, pair.task2);
             }
 
             @Override

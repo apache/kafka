@@ -43,18 +43,18 @@ class ConsumerGroupCommandTestUtils {
     }
 
     static <T> AutoCloseable buildConsumers(int numberOfConsumers,
-                                            Set<TopicPartition> partitions,
-                                            Supplier<KafkaConsumer<T, T>> consumerSupplier) {
+        Set<TopicPartition> partitions,
+        Supplier<KafkaConsumer<T, T>> consumerSupplier) {
         return buildConsumers(numberOfConsumers, false, consumerSupplier,
-                consumer -> consumer.assign(partitions));
+            consumer -> consumer.assign(partitions));
     }
 
     static <T> AutoCloseable buildConsumers(int numberOfConsumers,
-                                            boolean syncCommit,
-                                            String topic,
-                                            Supplier<KafkaConsumer<T, T>> consumerSupplier) {
+        boolean syncCommit,
+        String topic,
+        Supplier<KafkaConsumer<T, T>> consumerSupplier) {
         return buildConsumers(numberOfConsumers, syncCommit, consumerSupplier,
-                consumer -> consumer.subscribe(Set.of(topic)));
+            consumer -> consumer.subscribe(Set.of(topic)));
     }
 
     static <T> AutoCloseable buildConsumers(
@@ -91,8 +91,8 @@ class ConsumerGroupCommandTestUtils {
     }
 
     private static <T> void initConsumer(boolean syncCommit,
-                                         Supplier<KafkaConsumer<T, T>> consumerSupplier,
-                                         AtomicBoolean closed) {
+        Supplier<KafkaConsumer<T, T>> consumerSupplier,
+        AtomicBoolean closed) {
         try (KafkaConsumer<T, T> kafkaConsumer = consumerSupplier.get()) {
             while (!closed.get()) {
                 kafkaConsumer.poll(Duration.ofMillis(1000));

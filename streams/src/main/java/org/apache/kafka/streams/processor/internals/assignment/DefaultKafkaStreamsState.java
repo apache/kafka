@@ -53,14 +53,14 @@ public class DefaultKafkaStreamsState implements KafkaStreamsState {
     private final Optional<String> rackId;
 
     public DefaultKafkaStreamsState(final ProcessId processId,
-                                    final int numProcessingThreads,
-                                    final Map<String, String> clientTags,
-                                    final SortedSet<TaskId> previousActiveTasks,
-                                    final SortedSet<TaskId> previousStandbyTasks,
-                                    final SortedMap<String, Set<TaskId>> taskIdsByConsumer,
-                                    final Optional<HostInfo> hostInfo,
-                                    final Optional<Map<TaskId, Long>> taskLagTotals,
-                                    final Optional<String> rackId) {
+        final int numProcessingThreads,
+        final Map<String, String> clientTags,
+        final SortedSet<TaskId> previousActiveTasks,
+        final SortedSet<TaskId> previousStandbyTasks,
+        final SortedMap<String, Set<TaskId>> taskIdsByConsumer,
+        final Optional<HostInfo> hostInfo,
+        final Optional<Map<TaskId, Long>> taskLagTotals,
+        final Optional<String> rackId) {
         this.processId = processId;
         this.numProcessingThreads = numProcessingThreads;
         this.clientTags = unmodifiableMap(clientTags);

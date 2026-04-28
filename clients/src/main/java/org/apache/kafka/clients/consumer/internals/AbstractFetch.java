@@ -83,13 +83,13 @@ public abstract class AbstractFetch implements Closeable {
     private final ApiVersions apiVersions;
 
     public AbstractFetch(final LogContext logContext,
-                         final ConsumerMetadata metadata,
-                         final SubscriptionState subscriptions,
-                         final FetchConfig fetchConfig,
-                         final FetchBuffer fetchBuffer,
-                         final FetchMetricsManager metricsManager,
-                         final Time time,
-                         final ApiVersions apiVersions) {
+        final ConsumerMetadata metadata,
+        final SubscriptionState subscriptions,
+        final FetchConfig fetchConfig,
+        final FetchBuffer fetchBuffer,
+        final FetchMetricsManager metricsManager,
+        final Time time,
+        final ApiVersions apiVersions) {
         this.log = logContext.logger(AbstractFetch.class);
         this.completedFetchLog = logContext.logger(CompletedFetch.class);
         this.logContext = logContext;
@@ -149,15 +149,15 @@ public abstract class AbstractFetch implements Closeable {
      */
     @SuppressWarnings("NPathComplexity")
     protected void handleFetchSuccess(final Node fetchTarget,
-                                      final FetchSessionHandler.FetchRequestData data,
-                                      final ClientResponse resp) {
+        final FetchSessionHandler.FetchRequestData data,
+        final ClientResponse resp) {
         try {
             final FetchResponse response = (FetchResponse) resp.responseBody();
             final FetchSessionHandler handler = sessionHandler(fetchTarget.id());
 
             if (handler == null) {
                 log.error("Unable to find FetchSessionHandler for node {}. Ignoring fetch response.",
-                        fetchTarget.id());
+                    fetchTarget.id());
                 return;
             }
 
@@ -187,12 +187,12 @@ public abstract class AbstractFetch implements Closeable {
 
                     if (data.metadata().isFull()) {
                         message = MessageFormatter.arrayFormat(
-                                "Response for missing full request partition: partition={}; metadata={}",
-                                new Object[]{partition, data.metadata()}).getMessage();
+                            "Response for missing full request partition: partition={}; metadata={}",
+                            new Object[]{partition, data.metadata()}).getMessage();
                     } else {
                         message = MessageFormatter.arrayFormat(
-                                "Response for missing session request partition: partition={}; metadata={}; toSend={}; toForget={}; toReplace={}",
-                                new Object[]{partition, data.metadata(), data.toSend(), data.toForget(), data.toReplace()}).getMessage();
+                            "Response for missing session request partition: partition={}; metadata={}; toSend={}; toForget={}; toReplace={}",
+                            new Object[]{partition, data.metadata(), data.toSend(), data.toForget(), data.toReplace()}).getMessage();
                     }
 
                     // Received fetch response for missing session partition
@@ -203,7 +203,7 @@ public abstract class AbstractFetch implements Closeable {
                 FetchResponseData.PartitionData partitionData = entry.getValue();
 
                 log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
-                        fetchConfig.isolationLevel, fetchOffset, partition, partitionData);
+                    fetchConfig.isolationLevel, fetchOffset, partition, partitionData);
 
                 Errors partitionError = Errors.forCode(partitionData.errorCode());
                 if (partitionError == Errors.NOT_LEADER_OR_FOLLOWER || partitionError == Errors.FENCED_LEADER_EPOCH) {
@@ -215,13 +215,13 @@ public abstract class AbstractFetch implements Closeable {
                 }
 
                 CompletedFetch completedFetch = new CompletedFetch(
-                        completedFetchLog,
-                        subscriptions,
-                        decompressionBufferSupplier,
-                        partition,
-                        partitionData,
-                        metricAggregator,
-                        fetchOffset);
+                    completedFetchLog,
+                    subscriptions,
+                    decompressionBufferSupplier,
+                    partition,
+                    partitionData,
+                    metricAggregator,
+                    fetchOffset);
                 fetchBuffer.add(completedFetch);
                 needsWakeup = false;
             }
@@ -264,8 +264,8 @@ public abstract class AbstractFetch implements Closeable {
      * @param t           {@link Throwable} representing the error that resulted in the failure
      */
     protected void handleFetchFailure(final Node fetchTarget,
-                                      final FetchSessionHandler.FetchRequestData data,
-                                      final Throwable t) {
+        final FetchSessionHandler.FetchRequestData data,
+        final Throwable t) {
         try {
             final FetchSessionHandler handler = sessionHandler(fetchTarget.id());
 
@@ -279,20 +279,20 @@ public abstract class AbstractFetch implements Closeable {
     }
 
     protected void handleCloseFetchSessionSuccess(final Node fetchTarget,
-                                                  final FetchSessionHandler.FetchRequestData data,
-                                                  final ClientResponse ignored) {
+        final FetchSessionHandler.FetchRequestData data,
+        final ClientResponse ignored) {
         int sessionId = data.metadata().sessionId();
         removePendingFetchRequest(fetchTarget, sessionId);
         log.debug("Successfully sent a close message for fetch session: {} to node: {}", sessionId, fetchTarget);
     }
 
     public void handleCloseFetchSessionFailure(final Node fetchTarget,
-                                               final FetchSessionHandler.FetchRequestData data,
-                                               final Throwable t) {
+        final FetchSessionHandler.FetchRequestData data,
+        final Throwable t) {
         int sessionId = data.metadata().sessionId();
         removePendingFetchRequest(fetchTarget, sessionId);
         log.debug("Unable to send a close message for fetch session: {} to node: {}. " +
-                "This may result in unnecessary fetch sessions at the broker.", sessionId, fetchTarget, t);
+            "This may result in unnecessary fetch sessions at the broker.", sessionId, fetchTarget, t);
     }
 
     private void removePendingFetchRequest(Node fetchTarget, int sessionId) {
@@ -308,19 +308,19 @@ public abstract class AbstractFetch implements Closeable {
      * @return {@link FetchRequest.Builder} that can be submitted to the broker
      */
     protected FetchRequest.Builder createFetchRequest(final Node fetchTarget,
-                                                      final FetchSessionHandler.FetchRequestData requestData) {
+        final FetchSessionHandler.FetchRequestData requestData) {
         // Version 12 is the maximum version that could be used without topic IDs. See FetchRequest.json for schema
         // changelog.
         final short maxVersion = requestData.canUseTopicIds() ? ApiKeys.FETCH.latestVersion() : (short) 12;
 
         final FetchRequest.Builder request = FetchRequest.Builder
-                .forConsumer(maxVersion, fetchConfig.maxWaitMs, fetchConfig.minBytes, requestData.toSend())
-                .isolationLevel(fetchConfig.isolationLevel)
-                .setMaxBytes(fetchConfig.maxBytes)
-                .metadata(requestData.metadata())
-                .removed(requestData.toForget())
-                .replaced(requestData.toReplace())
-                .rackId(fetchConfig.clientRackId);
+            .forConsumer(maxVersion, fetchConfig.maxWaitMs, fetchConfig.minBytes, requestData.toSend())
+            .isolationLevel(fetchConfig.isolationLevel)
+            .setMaxBytes(fetchConfig.maxBytes)
+            .metadata(requestData.metadata())
+            .removed(requestData.toForget())
+            .replaced(requestData.toReplace())
+            .rackId(fetchConfig.clientRackId);
 
         log.debug("Sending {} {} to broker {}", fetchConfig.isolationLevel, requestData, fetchTarget);
 
@@ -380,7 +380,7 @@ public abstract class AbstractFetch implements Closeable {
                 return node.get();
             } else {
                 log.trace("Not fetching from {} for partition {} since it is marked offline or is missing from our metadata," +
-                        " using the leader instead.", nodeId, partition);
+                    " using the leader instead.", nodeId, partition);
                 // Note that this condition may happen due to stale metadata, so we clear preferred replica and
                 // refresh metadata.
                 requestMetadataUpdate(metadata, subscriptions, partition);
@@ -472,15 +472,15 @@ public abstract class AbstractFetch implements Closeable {
                 });
                 Uuid topicId = topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID);
                 FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(topicId,
-                        position.offset,
-                        FetchRequest.INVALID_LOG_START_OFFSET,
-                        fetchConfig.fetchSize,
-                        position.currentLeader.epoch,
-                        Optional.empty());
+                    position.offset,
+                    FetchRequest.INVALID_LOG_START_OFFSET,
+                    fetchConfig.fetchSize,
+                    position.currentLeader.epoch,
+                    Optional.empty());
                 builder.add(partition, partitionData);
 
                 log.debug("Added {} fetch request for partition {} at position {} to node {}", fetchConfig.isolationLevel,
-                        partition, position, node);
+                    partition, position, node);
             }
         }
 
@@ -524,8 +524,8 @@ public abstract class AbstractFetch implements Closeable {
      * {@link Metadata.LeaderAndEpoch#leader leader}
      */
     private Optional<Node> maybeNodeForPosition(TopicPartition partition,
-                                                SubscriptionState.FetchPosition position,
-                                                long currentTimeMs) {
+        SubscriptionState.FetchPosition position,
+        long currentTimeMs) {
         Optional<Node> leaderOpt = position.currentLeader.leader;
 
         if (leaderOpt.isEmpty()) {

@@ -29,7 +29,7 @@ public class ProcessorGraphNode<K, V> extends GraphNode {
     private final ProcessorParameters<K, V, ?, ?> processorParameters;
 
     public ProcessorGraphNode(final String nodeName,
-                              final ProcessorParameters<K, V, ?, ?> processorParameters) {
+        final ProcessorParameters<K, V, ?, ?> processorParameters) {
 
         super(nodeName);
 
@@ -43,8 +43,8 @@ public class ProcessorGraphNode<K, V> extends GraphNode {
     @Override
     public String toString() {
         return "ProcessorNode{" +
-               "processorParameters=" + processorParameters +
-               "} " + super.toString();
+            "processorParameters=" + processorParameters +
+            "} " + super.toString();
     }
 
     @Override

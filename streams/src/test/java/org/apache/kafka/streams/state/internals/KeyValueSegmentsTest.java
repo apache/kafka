@@ -130,7 +130,7 @@ public class KeyValueSegmentsTest extends AbstractSegmentsTest<KeyValueSegments>
 
     @Test
     public void shouldOpenExistingSegments() {
-        segments = new KeyValueSegments("test",  METRICS_SCOPE, 4, 1);
+        segments = new KeyValueSegments("test", METRICS_SCOPE, 4, 1);
         segments.openExisting(context, -1L);
         segments.getOrCreateSegmentIfLive(0, context, -1L);
         segments.getOrCreateSegmentIfLive(1, context, -1L);
@@ -140,7 +140,7 @@ public class KeyValueSegmentsTest extends AbstractSegmentsTest<KeyValueSegments>
         // close existing.
         segments.close();
 
-        segments = new KeyValueSegments("test",  METRICS_SCOPE, 4, 1);
+        segments = new KeyValueSegments("test", METRICS_SCOPE, 4, 1);
         segments.openExisting(context, -1L);
 
         assertTrue(segments.segmentForTimestamp(0).isOpen());
@@ -266,7 +266,7 @@ public class KeyValueSegmentsTest extends AbstractSegmentsTest<KeyValueSegments>
     public void shouldUpdateSegmentFileNameFromOldDateFormatToNewFormat() throws Exception {
         final long segmentInterval = 60_000L; // the old segment file's naming system maxes out at 1 minute granularity.
 
-        segments = new KeyValueSegments(storeName,  METRICS_SCOPE, NUM_SEGMENTS * segmentInterval, segmentInterval);
+        segments = new KeyValueSegments(storeName, METRICS_SCOPE, NUM_SEGMENTS * segmentInterval, segmentInterval);
 
         final String storeDirectoryPath = context.stateDir().getAbsolutePath() + File.separator + storeName;
         final File storeDirectory = new File(storeDirectoryPath);

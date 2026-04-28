@@ -39,14 +39,14 @@ public final class StructSpec {
 
     @JsonCreator
     public StructSpec(@JsonProperty("name") String name,
-                      @JsonProperty("versions") String versions,
-                      @JsonProperty("deprecatedVersions") String deprecatedVersions,
-                      @JsonProperty("fields") List<FieldSpec> fields) {
+        @JsonProperty("versions") String versions,
+        @JsonProperty("deprecatedVersions") String deprecatedVersions,
+        @JsonProperty("fields") List<FieldSpec> fields) {
         this.name = Objects.requireNonNull(name);
         this.versions = Versions.parse(versions, null);
         if (this.versions == null) {
             throw new RuntimeException("You must specify the version of the " +
-                    name + " structure.");
+                name + " structure.");
         }
         this.deprecatedVersions = Versions.parse(deprecatedVersions, Versions.NONE);
         ArrayList<FieldSpec> newFields = new ArrayList<>();
@@ -59,14 +59,14 @@ public final class StructSpec {
                 field.tag().ifPresent(tag -> {
                     if (!tags.add(tag)) {
                         throw new RuntimeException("In " + name + ", field " + field.name() +
-                                " has a duplicate tag ID " + tag + ". All tags IDs " +
-                                "must be unique.");
+                            " has a duplicate tag ID " + tag + ". All tags IDs " +
+                            "must be unique.");
                     }
                 });
                 if (!names.add(field.name())) {
                     throw new RuntimeException("In " + name + ", field " + field.name() +
-                            " has a duplicate name " + field.name() + ". All field names " +
-                            "must be unique.");
+                        " has a duplicate name " + field.name() + ". All field names " +
+                        "must be unique.");
                 }
                 newFields.add(field);
             }

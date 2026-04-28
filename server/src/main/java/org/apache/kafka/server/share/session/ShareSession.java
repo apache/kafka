@@ -146,11 +146,11 @@ public class ShareSession {
 
     public String toString() {
         return "ShareSession(" +
-                "key=" + key +
-                ", partitionMap=" + partitionMap +
-                ", epoch=" + epoch +
-                ", cachedSize=" + cachedSize +
-                ", connectionId=" + connectionId +
-                ")";
+            "key=" + key +
+            ", partitionMap=" + partitionMap +
+            ", epoch=" + epoch +
+            ", cachedSize=" + cachedSize +
+            ", connectionId=" + connectionId +
+            ")";
     }
 }

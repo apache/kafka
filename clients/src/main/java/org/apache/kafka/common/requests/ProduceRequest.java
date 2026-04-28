@@ -58,8 +58,8 @@ public class ProduceRequest extends AbstractRequest {
         private final ProduceRequestData data;
 
         public Builder(short minVersion,
-                       short maxVersion,
-                       ProduceRequestData data) {
+            short maxVersion,
+            ProduceRequestData data) {
             super(ApiKeys.PRODUCE, minVersion, maxVersion);
             this.data = data;
         }
@@ -76,11 +76,11 @@ public class ProduceRequest extends AbstractRequest {
         @Override
         public String toString() {
             return "(type=ProduceRequest" +
-                    ", acks=" + data.acks() +
-                    ", timeout=" + data.timeoutMs() +
-                    ", partitionRecords=(" + data.topicData().stream().flatMap(d -> d.partitionData().stream()).collect(Collectors.toList()) +
-                    "), transactionalId='" + (data.transactionalId() != null ? data.transactionalId() : "") +
-                    "'";
+                ", acks=" + data.acks() +
+                ", timeout=" + data.timeoutMs() +
+                ", partitionRecords=(" + data.topicData().stream().flatMap(d -> d.partitionData().stream()).collect(Collectors.toList()) +
+                "), transactionalId='" + (data.transactionalId() != null ? data.transactionalId() : "") +
+                "'";
         }
     }
 
@@ -149,7 +149,7 @@ public class ProduceRequest extends AbstractRequest {
         // Use the same format as `Struct.toString()`
         StringBuilder bld = new StringBuilder();
         bld.append("{acks=").append(acks)
-                .append(",timeout=").append(timeout);
+            .append(",timeout=").append(timeout);
 
         if (verbose)
             bld.append(",partitionSizes=").append(Utils.mkString(partitionSizes(), "[", "]", "=", ","));
@@ -173,13 +173,13 @@ public class ProduceRequest extends AbstractRequest {
                 data.responses().add(tpr);
             }
             tpr.partitionResponses().add(new ProduceResponseData.PartitionProduceResponse()
-                    .setIndex(tpId.partition())
-                    .setRecordErrors(List.of())
-                    .setBaseOffset(INVALID_OFFSET)
-                    .setLogAppendTimeMs(RecordBatch.NO_TIMESTAMP)
-                    .setLogStartOffset(INVALID_OFFSET)
-                    .setErrorMessage(apiError.message())
-                    .setErrorCode(apiError.error().code()));
+                .setIndex(tpId.partition())
+                .setRecordErrors(List.of())
+                .setBaseOffset(INVALID_OFFSET)
+                .setLogAppendTimeMs(RecordBatch.NO_TIMESTAMP)
+                .setLogStartOffset(INVALID_OFFSET)
+                .setErrorMessage(apiError.message())
+                .setErrorCode(apiError.error().code()));
         });
         return new ProduceResponse(data);
     }
@@ -214,20 +214,20 @@ public class ProduceRequest extends AbstractRequest {
             Iterator<? extends RecordBatch> iterator = records.batches().iterator();
             if (!iterator.hasNext())
                 throw new InvalidRecordException("Produce requests with version " + version + " must have at least " +
-                        "one record batch per partition");
+                    "one record batch per partition");
 
             RecordBatch entry = iterator.next();
             if (entry.magic() != RecordBatch.MAGIC_VALUE_V2)
                 throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
-                        "contain record batches with magic version 2");
+                    "contain record batches with magic version 2");
             if (version < 7 && entry.compressionType() == CompressionType.ZSTD) {
                 throw new UnsupportedCompressionTypeException("Produce requests with version " + version + " are not allowed to " +
-                        "use ZStandard compression");
+                    "use ZStandard compression");
             }
 
             if (iterator.hasNext())
                 throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
-                        "contain exactly one record batch per partition");
+                    "contain exactly one record batch per partition");
         }
     }
 

@@ -267,7 +267,7 @@ public class Formatter {
                     "--feature " + MetadataVersion.FEATURE_NAME + "=X to avoid ambiguity.");
             }
             return verifyReleaseVersion(MetadataVersion.fromFeatureLevel(
-                    featureLevels.get(MetadataVersion.FEATURE_NAME)));
+                featureLevels.get(MetadataVersion.FEATURE_NAME)));
         } else if (releaseVersion != null) {
             return verifyReleaseVersion(releaseVersion);
         } else if (unstableFeatureVersionsEnabled) {
@@ -281,7 +281,7 @@ public class Formatter {
         if (!unstableFeatureVersionsEnabled) {
             if (!metadataVersion.isProduction()) {
                 throw new FormatterException(MetadataVersion.FEATURE_NAME + " " + metadataVersion +
-                        " is not yet stable.");
+                    " is not yet stable.");
             }
         }
         return metadataVersion;
@@ -298,7 +298,7 @@ public class Formatter {
             if (!featureName.equals(MetadataVersion.FEATURE_NAME)) {
                 if (!nameToSupportedFeature.containsKey(featureName)) {
                     throw new FormatterException("Unsupported feature: " + featureName +
-                            ". Supported features are: " + String.join(", ", nameToSupportedFeature.keySet()));
+                        ". Supported features are: " + String.join(", ", nameToSupportedFeature.keySet()));
                 }
             }
             newFeatureLevels.put(featureName, level);
@@ -344,18 +344,18 @@ public class Formatter {
                 if (hasDynamicQuorum()) {
                     throw new FormatterException(
                         "Cannot set kraft.version to 0 if controller.quorum.voters is empty and one of the flags " +
-                        "--standalone, --initial-controllers, or --no-initial-controllers is used. For dynamic " +
-                        "controllers support, try removing the --feature flag for kraft.version."
+                            "--standalone, --initial-controllers, or --no-initial-controllers is used. For dynamic " +
+                            "controllers support, try removing the --feature flag for kraft.version."
                     );
                 }
             } else {
                 if (!hasDynamicQuorum()) {
                     throw new FormatterException(
                         "Cannot set kraft.version to " + configuredKRaftVersionLevel.get() +
-                        " unless controller.quorum.voters is empty and one of the flags --standalone, " +
-                        "--initial-controllers, or --no-initial-controllers is used. " +
-                        "For dynamic controllers support, try using one of --standalone, --initial-controllers, " +
-                        "or --no-initial-controllers and removing controller.quorum.voters."
+                            " unless controller.quorum.voters is empty and one of the flags --standalone, " +
+                            "--initial-controllers, or --no-initial-controllers is used. " +
+                            "For dynamic controllers support, try using one of --standalone, --initial-controllers, " +
+                            "or --no-initial-controllers and removing controller.quorum.voters."
                     );
                 }
             }
@@ -367,14 +367,14 @@ public class Formatter {
         }
     }
 
-    BootstrapMetadata calculateBootstrapMetadata() throws  Exception {
+    BootstrapMetadata calculateBootstrapMetadata() throws Exception {
         BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
             fromVersions(releaseVersion, featureLevels, "format command");
         List<ApiMessageAndVersion> bootstrapRecords = new ArrayList<>(bootstrapMetadata.records());
         if (!scramArguments.isEmpty()) {
             if (!releaseVersion.isScramSupported()) {
                 throw new FormatterException("SCRAM is only supported in " + MetadataVersion.FEATURE_NAME +
-                        " " + MetadataVersion.IBP_3_5_IV2 + " or later.");
+                    " " + MetadataVersion.IBP_3_5_IV2 + " or later.");
             }
             bootstrapRecords.addAll(ScramParser.parse(scramArguments));
         }
@@ -383,16 +383,16 @@ public class Formatter {
 
     void doFormat(BootstrapMetadata bootstrapMetadata) throws Exception {
         MetaProperties metaProperties = new MetaProperties.Builder().
-                setVersion(MetaPropertiesVersion.V1).
-                setClusterId(clusterId).
-                setNodeId(nodeId).
-                build();
+            setVersion(MetaPropertiesVersion.V1).
+            setClusterId(clusterId).
+            setNodeId(nodeId).
+            build();
         MetaPropertiesEnsemble.Loader loader = new MetaPropertiesEnsemble.Loader();
         loader.addLogDirs(directories);
         MetaPropertiesEnsemble ensemble = loader.load();
         ensemble.verify(Optional.of(clusterId),
-                OptionalInt.of(nodeId),
-                EnumSet.noneOf(MetaPropertiesEnsemble.VerificationFlag.class));
+            OptionalInt.of(nodeId),
+            EnumSet.noneOf(MetaPropertiesEnsemble.VerificationFlag.class));
         MetaPropertiesEnsemble.Copier copier = new MetaPropertiesEnsemble.Copier(ensemble);
         if (!(ignoreFormatted || copier.logDirProps().isEmpty())) {
             String firstLogDir = copier.logDirProps().keySet().iterator().next();
@@ -443,7 +443,7 @@ public class Formatter {
             });
             copier.setWriteErrorHandler((errorLogDir, e) -> {
                 throw new FormatterException("Error while writing meta.properties file " +
-                        errorLogDir + ": " + e);
+                    errorLogDir + ": " + e);
             });
             copier.writeLogDirChanges();
         }
@@ -495,15 +495,15 @@ public class Formatter {
     ) {
         File parentDir = new File(writeLogDir);
         File clusterMetadataDirectory = new File(parentDir, String.format("%s-%d",
-                CLUSTER_METADATA_TOPIC_PARTITION.topic(),
-                CLUSTER_METADATA_TOPIC_PARTITION.partition()));
+            CLUSTER_METADATA_TOPIC_PARTITION.topic(),
+            CLUSTER_METADATA_TOPIC_PARTITION.partition()));
         VoterSet voterSet = initialControllers.toVoterSet(controllerListenerName);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder().
             setLastContainedLogTimestamp(Time.SYSTEM.milliseconds()).
             setMaxBatchSizeBytes(KafkaRaftClient.MAX_BATCH_SIZE_BYTES).
             setRawSnapshotWriter(FileRawSnapshotWriter.create(
-                clusterMetadataDirectory.toPath(),
-                Snapshots.BOOTSTRAP_SNAPSHOT_ID)).
+            clusterMetadataDirectory.toPath(),
+            Snapshots.BOOTSTRAP_SNAPSHOT_ID)).
             setKraftVersion(KRaftVersion.fromFeatureLevel(kraftVersion)).
             setVoterSet(Optional.of(voterSet));
         try (RecordsSnapshotWriter<ApiMessageAndVersion> writer = builder.build(new MetadataRecordSerde())) {

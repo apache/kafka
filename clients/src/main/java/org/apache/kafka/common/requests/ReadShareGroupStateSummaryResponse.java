@@ -132,7 +132,7 @@ public class ReadShareGroupStateSummaryResponse extends AbstractResponse {
         request.topics().forEach(topicData -> {
             List<ReadShareGroupStateSummaryResponseData.PartitionResult> partitionResults = new ArrayList<>();
             topicData.partitions().forEach(partitionData -> partitionResults.add(
-                toErrorResponsePartitionResult(partitionData.partition(), error, error.message()))
+                    toErrorResponsePartitionResult(partitionData.partition(), error, error.message()))
             );
             readStateSummaryResults.add(toResponseReadStateSummaryResult(topicData.topicId(), partitionResults));
         });

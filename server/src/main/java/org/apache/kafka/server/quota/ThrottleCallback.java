@@ -18,5 +18,6 @@ package org.apache.kafka.server.quota;
 
 public interface ThrottleCallback {
     void startThrottling();
+
     void endThrottling();
 }

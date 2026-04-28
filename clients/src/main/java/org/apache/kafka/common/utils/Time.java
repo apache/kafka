@@ -100,7 +100,7 @@ public interface Time {
     default <T> T waitForFuture(
         Future<T> future,
         long deadlineNs
-    ) throws TimeoutException, InterruptedException, ExecutionException  {
+    ) throws TimeoutException, InterruptedException, ExecutionException {
         TimeoutException timeoutException = null;
         while (true) {
             long nowNs = nanoseconds();

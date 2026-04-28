@@ -90,7 +90,7 @@ public class StickyTaskAssignor implements TaskAssignor {
     }
 
     private void optimizeActive(final ApplicationState applicationState,
-                                final AssignmentState assignmentState) {
+        final AssignmentState assignmentState) {
         if (mustPreserveActiveTaskAssignment) {
             return;
         }
@@ -140,9 +140,9 @@ public class StickyTaskAssignor implements TaskAssignor {
     }
 
     private static void assignActive(final ApplicationState applicationState,
-                                     final Collection<KafkaStreamsState> clients,
-                                     final AssignmentState assignmentState,
-                                     final boolean mustPreserveActiveTaskAssignment) {
+        final Collection<KafkaStreamsState> clients,
+        final AssignmentState assignmentState,
+        final boolean mustPreserveActiveTaskAssignment) {
         final int totalCapacity = computeTotalProcessingThreads(clients);
         final Set<TaskId> allTaskIds = applicationState.allTasks().keySet();
         final int taskCount = allTaskIds.size();
@@ -166,7 +166,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         for (final Iterator<TaskId> iterator = unassigned.iterator(); iterator.hasNext(); ) {
             final TaskId taskId = iterator.next();
             final Set<ProcessId> previousClientsForStandbyTask = assignmentState.previousStandbyAssignment.getOrDefault(taskId, new HashSet<>());
-            for (final ProcessId client: previousClientsForStandbyTask) {
+            for (final ProcessId client : previousClientsForStandbyTask) {
                 if (assignmentState.hasRoomForActiveTask(client, activeTasksPerThread)) {
                     assignmentState.finalizeAssignment(taskId, client, AssignedTask.Type.ACTIVE);
                     iterator.remove();
@@ -179,8 +179,8 @@ public class StickyTaskAssignor implements TaskAssignor {
         final List<TaskId> sortedTasks = new ArrayList<>(unassigned);
         Collections.sort(sortedTasks);
         final Set<ProcessId> candidateClients = clients.stream()
-                .map(KafkaStreamsState::processId)
-                .collect(Collectors.toSet());
+            .map(KafkaStreamsState::processId)
+            .collect(Collectors.toSet());
         for (final TaskId taskId : sortedTasks) {
             final ProcessId bestClient = assignmentState.findBestClientForTask(taskId, candidateClients);
             assignmentState.finalizeAssignment(taskId, bestClient, AssignedTask.Type.ACTIVE);
@@ -188,7 +188,7 @@ public class StickyTaskAssignor implements TaskAssignor {
     }
 
     private static void assignStandby(final ApplicationState applicationState,
-                                      final AssignmentState assignmentState) {
+        final AssignmentState assignmentState) {
         final Set<TaskInfo> statefulTasks = applicationState.allTasks().values().stream()
             .filter(taskInfo -> taskInfo.topicPartitions().stream().anyMatch(TaskTopicPartition::isChangelog))
             .collect(Collectors.toSet());
@@ -198,9 +198,9 @@ public class StickyTaskAssignor implements TaskAssignor {
                 final Set<ProcessId> candidateClients = assignmentState.findClientsWithoutAssignedTask(task.id());
                 if (candidateClients.isEmpty()) {
                     LOG.warn("Unable to assign {} of {} standby tasks for task [{}]. " +
-                             "There is not enough available capacity. You should " +
-                             "increase the number of threads and/or application instances " +
-                             "to maintain the requested number of standby replicas.",
+                        "There is not enough available capacity. You should " +
+                        "increase the number of threads and/or application instances " +
+                        "to maintain the requested number of standby replicas.",
                         numStandbyReplicas - i,
                         numStandbyReplicas, task.id());
                     break;
@@ -252,9 +252,9 @@ public class StickyTaskAssignor implements TaskAssignor {
         private Map<ProcessId, KafkaStreamsAssignment> newAssignments;
 
         private AssignmentState(final ApplicationState applicationState,
-                                final Map<ProcessId, KafkaStreamsState> clients,
-                                final Map<TaskId, ProcessId> previousActiveAssignment,
-                                final Map<TaskId, Set<ProcessId>> previousStandbyAssignment) {
+            final Map<ProcessId, KafkaStreamsState> clients,
+            final Map<TaskId, ProcessId> previousActiveAssignment,
+            final Map<TaskId, Set<ProcessId>> previousStandbyAssignment) {
             this.clients = clients;
             this.previousActiveAssignment = unmodifiableMap(previousActiveAssignment);
             this.previousStandbyAssignment = unmodifiableMap(previousStandbyAssignment);
@@ -373,7 +373,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         }
 
         private ProcessId findLeastLoadedClientWithPreviousActiveOrStandbyTask(final TaskId taskId,
-                                                                               final Set<ProcessId> clientsWithin) {
+            final Set<ProcessId> clientsWithin) {
             final ProcessId previous = previousActiveAssignment.get(taskId);
             if (previous != null && clientsWithin.contains(previous)) {
                 return previous;
@@ -382,7 +382,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         }
 
         private ProcessId findLeastLoadedClientWithPreviousStandbyTask(final TaskId taskId,
-                                                                       final Set<ProcessId> clientsWithin) {
+            final Set<ProcessId> clientsWithin) {
             final Set<ProcessId> ids = previousStandbyAssignment.getOrDefault(taskId, new HashSet<>());
             final HashSet<ProcessId> constrainTo = new HashSet<>(ids);
             constrainTo.retainAll(clientsWithin);
@@ -414,7 +414,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         }
 
         public boolean hasNewPair(final TaskId task1,
-                                  final Set<TaskId> taskIds) {
+            final Set<TaskId> taskIds) {
             if (pairs.size() == maxPairs) {
                 return false;
             }
@@ -459,7 +459,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             }
             final TaskPair pair = (TaskPair) o;
             return Objects.equals(task1, pair.task1) &&
-                   Objects.equals(task2, pair.task2);
+                Objects.equals(task2, pair.task2);
         }
 
         @Override

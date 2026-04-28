@@ -32,9 +32,9 @@ import java.util.stream.Stream;
 public class AllowlistConnectorClientConfigOverridePolicyTest extends BaseConnectorClientConfigOverridePolicyTest {
 
     private static final List<String> ALL_CONFIGS = Stream.of(
-                    ProducerConfig.configNames(),
-                    ConsumerConfig.configNames(),
-                    AdminClientConfig.configNames())
+            ProducerConfig.configNames(),
+            ConsumerConfig.configNames(),
+            AdminClientConfig.configNames())
             .flatMap(Collection::stream)
             .toList();
 

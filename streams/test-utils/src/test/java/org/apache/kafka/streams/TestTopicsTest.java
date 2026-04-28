@@ -247,20 +247,20 @@ public class TestTopicsTest {
     public void testWithHeaders() {
         long baseTime = 3;
         final Headers headers = new RecordHeaders(
-                new Header[]{
-                    new RecordHeader("foo", "value".getBytes()),
-                    new RecordHeader("bar", null),
-                    new RecordHeader("\"A\\u00ea\\u00f1\\u00fcC\"", "value".getBytes())
-                });
+            new Header[]{
+                new RecordHeader("foo", "value".getBytes()),
+                new RecordHeader("bar", null),
+                new RecordHeader("\"A\\u00ea\\u00f1\\u00fcC\"", "value".getBytes())
+            });
         final TestInputTopic<Long, String> inputTopic =
             testDriver.createInputTopic(INPUT_TOPIC, longSerde.serializer(), stringSerde.serializer());
         final TestOutputTopic<Long, String> outputTopic =
             testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde.deserializer(), stringSerde.deserializer());
         inputTopic.pipeInput(new TestRecord<>(1L, "Hello", headers));
         assertThat(outputTopic.readRecord(), allOf(
-                hasProperty("key", equalTo(1L)),
-                hasProperty("value", equalTo("Hello")),
-                hasProperty("headers", equalTo(headers))));
+            hasProperty("key", equalTo(1L)),
+            hasProperty("value", equalTo("Hello")),
+            hasProperty("headers", equalTo(headers))));
         inputTopic.pipeInput(new TestRecord<>(2L, "Kafka", headers, ++baseTime));
         assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<>(2L, "Kafka", headers, baseTime))));
     }
@@ -387,9 +387,9 @@ public class TestTopicsTest {
         final TestInputTopic<String, String> inputTopic =
             testDriver.createInputTopic("topicName", stringSerde.serializer(), stringSerde.serializer());
         assertThat(inputTopic.toString(), allOf(
-                containsString("TestInputTopic"),
-                containsString("topic='topicName'"),
-                containsString("StringSerializer")));
+            containsString("TestInputTopic"),
+            containsString("topic='topicName'"),
+            containsString("StringSerializer")));
     }
 
     @Test
@@ -417,10 +417,10 @@ public class TestTopicsTest {
         final TestOutputTopic<String, String> outputTopic =
             testDriver.createOutputTopic(OUTPUT_TOPIC, stringSerde.deserializer(), stringSerde.deserializer());
         assertThat(outputTopic.toString(), allOf(
-                containsString("TestOutputTopic"),
-                containsString("topic='output1'"),
-                containsString("size=0"),
-                containsString("StringDeserializer")));
+            containsString("TestOutputTopic"),
+            containsString("topic='output1'"),
+            containsString("size=0"),
+            containsString("StringDeserializer")));
     }
 
     @Test

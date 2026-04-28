@@ -39,7 +39,7 @@ public final class ReassignReplicaAction implements TieredStorageTestAction {
     private final List<Integer> replicaIds;
 
     public ReassignReplicaAction(TopicPartition topicPartition,
-                                 List<Integer> replicaIds) {
+            List<Integer> replicaIds) {
         this.topicPartition = topicPartition;
         this.replicaIds = replicaIds;
     }

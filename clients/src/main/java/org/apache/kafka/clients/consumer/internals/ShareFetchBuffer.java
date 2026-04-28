@@ -208,8 +208,8 @@ public class ShareFetchBuffer implements AutoCloseable {
         lock.lock();
         try {
             idempotentCloser.close(
-                    this::drainAll,
-                    () -> log.warn("The fetch buffer was already closed")
+                this::drainAll,
+                () -> log.warn("The fetch buffer was already closed")
             );
         } finally {
             lock.unlock();

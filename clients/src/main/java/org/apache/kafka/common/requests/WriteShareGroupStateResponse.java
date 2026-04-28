@@ -113,7 +113,7 @@ public class WriteShareGroupStateResponse extends AbstractResponse {
         request.topics().forEach(topicData -> {
             List<WriteShareGroupStateResponseData.PartitionResult> partitionResults = new ArrayList<>();
             topicData.partitions().forEach(partitionData -> partitionResults.add(
-                toErrorResponsePartitionResult(partitionData.partition(), error, error.message()))
+                    toErrorResponsePartitionResult(partitionData.partition(), error, error.message()))
             );
             writeStateResults.add(toResponseWriteStateResult(topicData.topicId(), partitionResults));
         });

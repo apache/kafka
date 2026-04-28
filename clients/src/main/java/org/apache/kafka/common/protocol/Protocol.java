@@ -43,7 +43,7 @@ public class Protocol {
         b.append(schema.leftBracket());
         b.append(" ");
         // Top level fields
-        for (BoundField field: schema.fields()) {
+        for (BoundField field : schema.fields()) {
             Type type = field.def.type;
             if (type.isArray()) {
                 b.append(type.leftBracket());
@@ -82,7 +82,7 @@ public class Protocol {
         b.append("\n");
 
         // Sub Types/Schemas
-        for (Map.Entry<String, Type> entry: subTypes.entrySet()) {
+        for (Map.Entry<String, Type> entry : subTypes.entrySet()) {
             if (entry.getValue() instanceof Schema) {
                 // Complex Schema Type
                 b.append(indentStr);
@@ -101,7 +101,7 @@ public class Protocol {
     }
 
     private static void populateSchemaFields(Schema schema, Set<BoundField> fields) {
-        for (BoundField field: schema.fields()) {
+        for (BoundField field : schema.fields()) {
             fields.add(field);
             if (field.def.type.isArray()) {
                 Type innerType = field.def.type.arrayElementType().get();
@@ -164,14 +164,14 @@ public class Protocol {
         final StringBuilder b = new StringBuilder();
         b.append("<h5>Headers:</h5>\n");
 
-        for (int i = RequestHeaderData.LOWEST_SUPPORTED_VERSION; i <= RequestHeaderData.HIGHEST_SUPPORTED_VERSION; i++) {
+        for (int i = RequestHeaderData.LOWEST_SUPPORTED_VERSION;i <= RequestHeaderData.HIGHEST_SUPPORTED_VERSION;i++) {
             b.append("<pre>");
             b.append("Request Header v").append(i).append(" => ");
             schemaToBnfHtml(RequestHeaderData.SCHEMAS[i], b, 2);
             b.append("</pre>\n");
             schemaToFieldTableHtml(RequestHeaderData.SCHEMAS[i], b);
         }
-        for (int i = ResponseHeaderData.LOWEST_SUPPORTED_VERSION; i <= ResponseHeaderData.HIGHEST_SUPPORTED_VERSION; i++) {
+        for (int i = ResponseHeaderData.LOWEST_SUPPORTED_VERSION;i <= ResponseHeaderData.HIGHEST_SUPPORTED_VERSION;i++) {
             b.append("<pre>");
             b.append("Response Header v").append(i).append(" => ");
             schemaToBnfHtml(ResponseHeaderData.SCHEMAS[i], b, 2);
@@ -189,7 +189,7 @@ public class Protocol {
             // Requests
             b.append("<b>Requests:</b><br>\n");
             Schema[] requests = key.messageType.requestSchemas();
-            for (short version = key.oldestVersion(); version <= key.latestVersion(); version++) {
+            for (short version = key.oldestVersion();version <= key.latestVersion();version++) {
                 Schema schema = requests[version];
                 if (schema == null)
                     throw new IllegalStateException("Unexpected null schema for " + key + " with version " + version);
@@ -219,7 +219,7 @@ public class Protocol {
             // Responses
             b.append("<b>Responses:</b><br>\n");
             Schema[] responses = key.messageType.responseSchemas();
-            for (int version = key.oldestVersion(); version <= key.latestVersion(); version++) {
+            for (int version = key.oldestVersion();version <= key.latestVersion();version++) {
                 Schema schema = responses[version];
                 if (schema == null)
                     throw new IllegalStateException("Unexpected null schema for " + key + " with version " + version);

@@ -38,10 +38,10 @@ public class Joined<K, VLeft, VRight> implements NamedOperation<Joined<K, VLeft,
     protected final Duration gracePeriod;
 
     private Joined(final Serde<K> keySerde,
-                   final Serde<VLeft> leftValueSerde,
-                   final Serde<VRight> rightValueSerde,
-                   final String name,
-                   final Duration gracePeriod) {
+        final Serde<VLeft> leftValueSerde,
+        final Serde<VRight> rightValueSerde,
+        final String name,
+        final Duration gracePeriod) {
         this.keySerde = keySerde;
         this.leftValueSerde = leftValueSerde;
         this.rightValueSerde = rightValueSerde;
@@ -71,8 +71,8 @@ public class Joined<K, VLeft, VRight> implements NamedOperation<Joined<K, VLeft,
      * @return new {@code Joined} instance with the provided serdes
      */
     public static <K, VLeft, VRight> Joined<K, VLeft, VRight> with(final Serde<K> keySerde,
-                                                                   final Serde<VLeft> leftValueSerde,
-                                                                   final Serde<VRight> rightValueSerde) {
+        final Serde<VLeft> leftValueSerde,
+        final Serde<VRight> rightValueSerde) {
         return new Joined<>(keySerde, leftValueSerde, rightValueSerde, null, null);
     }
 
@@ -97,9 +97,9 @@ public class Joined<K, VLeft, VRight> implements NamedOperation<Joined<K, VLeft,
      * @return new {@code Joined} instance with the provided serdes
      */
     public static <K, VLeft, VRight> Joined<K, VLeft, VRight> with(final Serde<K> keySerde,
-                                                                   final Serde<VLeft> leftValueSerde,
-                                                                   final Serde<VRight> rightValueSerde,
-                                                                   final String name) {
+        final Serde<VLeft> leftValueSerde,
+        final Serde<VRight> rightValueSerde,
+        final String name) {
         return new Joined<>(keySerde, leftValueSerde, rightValueSerde, name, null);
     }
 
@@ -126,10 +126,10 @@ public class Joined<K, VLeft, VRight> implements NamedOperation<Joined<K, VLeft,
      * @return new {@code Joined} instance with the provided serdes
      */
     public static <K, VLeft, VRight> Joined<K, VLeft, VRight> with(final Serde<K> keySerde,
-                                                                   final Serde<VLeft> leftValueSerde,
-                                                                   final Serde<VRight> rightValueSerde,
-                                                                   final String name,
-                                                                   final Duration gracePeriod) {
+        final Serde<VLeft> leftValueSerde,
+        final Serde<VRight> rightValueSerde,
+        final String name,
+        final Duration gracePeriod) {
         return new Joined<>(keySerde, leftValueSerde, rightValueSerde, name, gracePeriod);
     }
 

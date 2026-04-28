@@ -94,7 +94,7 @@ public class SustainedConnectionWorker implements TaskWorker {
 
     @Override
     public void start(Platform platform, WorkerStatusTracker status,
-                      KafkaFutureImpl<String> doneFuture) throws Exception {
+        KafkaFutureImpl<String> doneFuture) throws Exception {
         if (!running.compareAndSet(false, true)) {
             throw new IllegalStateException("SustainedConnectionWorker is already running.");
         }
@@ -139,7 +139,9 @@ public class SustainedConnectionWorker implements TaskWorker {
 
     private interface SustainedConnection extends AutoCloseable {
         boolean needsRefresh(long milliseconds);
+
         void refresh();
+
         void claim();
     }
 
@@ -188,7 +190,7 @@ public class SustainedConnectionWorker implements TaskWorker {
             this.props = new Properties();
             this.props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, SustainedConnectionWorker.this.spec.bootstrapServers());
             WorkerUtils.addConfigsToProperties(
-                    this.props, SustainedConnectionWorker.this.spec.commonClientConf(), SustainedConnectionWorker.this.spec.commonClientConf());
+                this.props, SustainedConnectionWorker.this.spec.commonClientConf(), SustainedConnectionWorker.this.spec.commonClientConf());
         }
 
         @Override
@@ -251,7 +253,7 @@ public class SustainedConnectionWorker implements TaskWorker {
             this.props = new Properties();
             this.props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, SustainedConnectionWorker.this.spec.bootstrapServers());
             WorkerUtils.addConfigsToProperties(
-                    this.props, SustainedConnectionWorker.this.spec.commonClientConf(), SustainedConnectionWorker.this.spec.producerConf());
+                this.props, SustainedConnectionWorker.this.spec.commonClientConf(), SustainedConnectionWorker.this.spec.producerConf());
         }
 
         @Override
@@ -264,8 +266,8 @@ public class SustainedConnectionWorker implements TaskWorker {
                     // Create the producer, fetch the specified topic's partitions and randomize them.
                     this.producer = new KafkaProducer<>(this.props, new ByteArraySerializer(), new ByteArraySerializer());
                     this.partitions = this.producer.partitionsFor(this.topicName).stream()
-                             .map(partitionInfo -> new TopicPartition(partitionInfo.topic(), partitionInfo.partition()))
-                             .collect(Collectors.toList());
+                        .map(partitionInfo -> new TopicPartition(partitionInfo.topic(), partitionInfo.partition()))
+                        .collect(Collectors.toList());
                     Collections.shuffle(this.partitions);
                 }
 
@@ -277,7 +279,7 @@ public class SustainedConnectionWorker implements TaskWorker {
                 // Produce a single record and send it synchronously.
                 TopicPartition partition = this.partitionsIterator.next();
                 ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
-                        partition.topic(), partition.partition(), keys.next(), values.next());
+                    partition.topic(), partition.partition(), keys.next(), values.next());
                 producer.send(record).get();
 
             } catch (Throwable e) {
@@ -327,7 +329,7 @@ public class SustainedConnectionWorker implements TaskWorker {
             this.props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1);
             this.props.put(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, 1024);
             WorkerUtils.addConfigsToProperties(
-                    this.props, SustainedConnectionWorker.this.spec.commonClientConf(), SustainedConnectionWorker.this.spec.consumerConf());
+                this.props, SustainedConnectionWorker.this.spec.commonClientConf(), SustainedConnectionWorker.this.spec.consumerConf());
         }
 
         @Override
@@ -342,8 +344,8 @@ public class SustainedConnectionWorker implements TaskWorker {
                     // Create the consumer and fetch the partitions for the specified topic.
                     this.consumer = new KafkaConsumer<>(this.props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
                     List<TopicPartition> partitions = this.consumer.partitionsFor(this.topicName).stream()
-                            .map(partitionInfo -> new TopicPartition(partitionInfo.topic(), partitionInfo.partition()))
-                            .toList();
+                        .map(partitionInfo -> new TopicPartition(partitionInfo.topic(), partitionInfo.partition()))
+                        .toList();
 
                     // Select a random partition and assign it.
                     this.activePartition = partitions.get(this.rand.nextInt(partitions.size()));
@@ -416,14 +418,14 @@ public class SustainedConnectionWorker implements TaskWorker {
             try {
                 JsonNode node = JsonUtil.JSON_SERDE.valueToTree(
                     new StatusData(
-                            SustainedConnectionWorker.this.totalProducerConnections.get(),
-                            SustainedConnectionWorker.this.totalProducerFailedConnections.get(),
-                            SustainedConnectionWorker.this.totalConsumerConnections.get(),
-                            SustainedConnectionWorker.this.totalConsumerFailedConnections.get(),
-                            SustainedConnectionWorker.this.totalMetadataConnections.get(),
-                            SustainedConnectionWorker.this.totalMetadataFailedConnections.get(),
-                            SustainedConnectionWorker.this.totalAbortedThreads.get(),
-                            Time.SYSTEM.milliseconds()));
+                        SustainedConnectionWorker.this.totalProducerConnections.get(),
+                        SustainedConnectionWorker.this.totalProducerFailedConnections.get(),
+                        SustainedConnectionWorker.this.totalConsumerConnections.get(),
+                        SustainedConnectionWorker.this.totalConsumerFailedConnections.get(),
+                        SustainedConnectionWorker.this.totalMetadataConnections.get(),
+                        SustainedConnectionWorker.this.totalMetadataFailedConnections.get(),
+                        SustainedConnectionWorker.this.totalAbortedThreads.get(),
+                        Time.SYSTEM.milliseconds()));
                 status.update(node);
             } catch (Exception e) {
                 SustainedConnectionWorker.log.error("Aborted test while running StatusUpdater", e);
@@ -444,13 +446,13 @@ public class SustainedConnectionWorker implements TaskWorker {
 
         @JsonCreator
         StatusData(@JsonProperty("totalProducerConnections") long totalProducerConnections,
-                   @JsonProperty("totalProducerFailedConnections") long totalProducerFailedConnections,
-                   @JsonProperty("totalConsumerConnections") long totalConsumerConnections,
-                   @JsonProperty("totalConsumerFailedConnections") long totalConsumerFailedConnections,
-                   @JsonProperty("totalMetadataConnections") long totalMetadataConnections,
-                   @JsonProperty("totalMetadataFailedConnections") long totalMetadataFailedConnections,
-                   @JsonProperty("totalAbortedThreads") long totalAbortedThreads,
-                   @JsonProperty("updatedMs") long updatedMs) {
+            @JsonProperty("totalProducerFailedConnections") long totalProducerFailedConnections,
+            @JsonProperty("totalConsumerConnections") long totalConsumerConnections,
+            @JsonProperty("totalConsumerFailedConnections") long totalConsumerFailedConnections,
+            @JsonProperty("totalMetadataConnections") long totalMetadataConnections,
+            @JsonProperty("totalMetadataFailedConnections") long totalMetadataFailedConnections,
+            @JsonProperty("totalAbortedThreads") long totalAbortedThreads,
+            @JsonProperty("updatedMs") long updatedMs) {
             this.totalProducerConnections = totalProducerConnections;
             this.totalProducerFailedConnections = totalProducerFailedConnections;
             this.totalConsumerConnections = totalConsumerConnections;

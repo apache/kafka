@@ -60,10 +60,10 @@ public class WindowStoreBuilderTest {
         when(supplier.metricsScope()).thenReturn("metricScope");
 
         builder = new WindowStoreBuilder<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime());
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime());
     }
 
     public void setUp() {
@@ -107,8 +107,8 @@ public class WindowStoreBuilderTest {
     public void shouldHaveChangeLoggingStoreWhenLoggingEnabled() {
         setUp();
         final WindowStore<String, String> store = builder
-                .withLoggingEnabled(Collections.emptyMap())
-                .build();
+            .withLoggingEnabled(Collections.emptyMap())
+            .build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(store, instanceOf(MeteredWindowStore.class));
         assertThat(wrapped, instanceOf(ChangeLoggingWindowBytesStore.class));
@@ -119,9 +119,9 @@ public class WindowStoreBuilderTest {
     public void shouldHaveCachingAndChangeLoggingWhenBothEnabled() {
         setUp();
         final WindowStore<String, String> store = builder
-                .withLoggingEnabled(Collections.emptyMap())
-                .withCachingEnabled()
-                .build();
+            .withLoggingEnabled(Collections.emptyMap())
+            .withCachingEnabled()
+            .build();
         final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
         final WrappedStateStore changeLogging = (WrappedStateStore) caching.wrapped();
         assertThat(store, instanceOf(MeteredWindowStore.class));
@@ -140,7 +140,7 @@ public class WindowStoreBuilderTest {
             Serdes.String(),
             new MockTime()
         ).withCachingEnabled();
-        
+
         builder.build();
 
         assertFalse(((AbstractStoreBuilder<String, String, WindowStore<String, String>>) builder).enableCaching);
@@ -175,7 +175,7 @@ public class WindowStoreBuilderTest {
     @Test
     public void shouldThrowNullPointerIfTimeIsNull() {
         assertThrows(NullPointerException.class, () -> new WindowStoreBuilder<>(supplier, Serdes.String(),
-                Serdes.String(), null));
+            Serdes.String(), null));
     }
 
     @Test

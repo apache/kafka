@@ -39,6 +39,7 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
     private static final long INSERT_VALID_FROM_TIMESTAMP = 10L;
     private static final long INSERT_VALID_TO_TIMESTAMP = 13L;
     private static final byte[] INSERT_VALUE = "new".getBytes();
+
     /**
      * Non-exceptional scenarios which are expected to occur during regular store operation.
      */
@@ -59,7 +60,7 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
             Arguments.of(new TestCase("records with empty bytes (e, e, r)", 10, new TestRecord(new byte[0], 8), new TestRecord(new byte[0], 2), new TestRecord("foo".getBytes(), 1)))
         );
     }
-    
+
     /**
      * These scenarios may only be hit in the event of an earlier exception, such as failure to
      * write to a particular segment store of {@link RocksDBVersionedStore} resulting in an
@@ -68,13 +69,13 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
      */
     private static Stream<Arguments> exceptionalData() {
         return Stream.of(
-                Arguments.of(new TestCase("truncate all, single record", 15, new TestRecord(null, 12))),
-                Arguments.of(new TestCase("truncate all, single record, exact timestamp match", 15, new TestRecord(null, INSERT_VALID_FROM_TIMESTAMP))),
-                Arguments.of(new TestCase("truncate all, multiple records", 15, new TestRecord(null, 12), new TestRecord("foo".getBytes(), 11))),
-                Arguments.of(new TestCase("truncate all, multiple records, exact timestamp match", 15, new TestRecord(null, 12), new TestRecord("foo".getBytes(), 11), new TestRecord(null, INSERT_VALID_FROM_TIMESTAMP))),
-                Arguments.of(new TestCase("partial truncation, single record", 15, new TestRecord(null, 8))),
-                Arguments.of(new TestCase("partial truncation, multiple records", 15, new TestRecord("foo".getBytes(), 12), new TestRecord("bar".getBytes(), 8))),
-                Arguments.of(new TestCase("partial truncation, on record boundary", 15, new TestRecord("foo".getBytes(), 12), new TestRecord("bar".getBytes(), INSERT_VALID_FROM_TIMESTAMP), new TestRecord("baz".getBytes(), 8)))
+            Arguments.of(new TestCase("truncate all, single record", 15, new TestRecord(null, 12))),
+            Arguments.of(new TestCase("truncate all, single record, exact timestamp match", 15, new TestRecord(null, INSERT_VALID_FROM_TIMESTAMP))),
+            Arguments.of(new TestCase("truncate all, multiple records", 15, new TestRecord(null, 12), new TestRecord("foo".getBytes(), 11))),
+            Arguments.of(new TestCase("truncate all, multiple records, exact timestamp match", 15, new TestRecord(null, 12), new TestRecord("foo".getBytes(), 11), new TestRecord(null, INSERT_VALID_FROM_TIMESTAMP))),
+            Arguments.of(new TestCase("partial truncation, single record", 15, new TestRecord(null, 8))),
+            Arguments.of(new TestCase("partial truncation, multiple records", 15, new TestRecord("foo".getBytes(), 12), new TestRecord("bar".getBytes(), 8))),
+            Arguments.of(new TestCase("partial truncation, on record boundary", 15, new TestRecord("foo".getBytes(), 12), new TestRecord("bar".getBytes(), INSERT_VALID_FROM_TIMESTAMP), new TestRecord("baz".getBytes(), 8)))
         );
     }
 

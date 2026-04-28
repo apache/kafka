@@ -109,43 +109,43 @@ public class RecordAccumulatorFlushBenchmark {
     private Cluster createTestCluster() {
         Node node = new Node(0, "localhost", 1111);
         MetadataResponse.PartitionMetadata partMetadata = new MetadataResponse.PartitionMetadata(
-            Errors.NONE,
-            tp,
-            Optional.of(node.id()),
-            Optional.empty(),
-            null,
-            null,
-            null
+                Errors.NONE,
+                tp,
+                Optional.of(node.id()),
+                Optional.empty(),
+                null,
+                null,
+                null
         );
 
         Map<Integer, Node> nodes = Stream.of(node).collect(Collectors.toMap(Node::id, Function.identity()));
         MetadataSnapshot metadataCache = new MetadataSnapshot(
-            null,
-            nodes,
-            List.of(partMetadata),
-            Set.of(),
-            Set.of(),
-            Set.of(),
-            null,
-            Map.of()
+                null,
+                nodes,
+                List.of(partMetadata),
+                Set.of(),
+                Set.of(),
+                Set.of(),
+                null,
+                Map.of()
         );
         return metadataCache.cluster();
     }
 
     private RecordAccumulator createRecordAccumulator() {
         return new RecordAccumulator(
-            new LogContext(),
-            BATCH_SIZE + DefaultRecordBatch.RECORD_BATCH_OVERHEAD,
-            Compression.NONE,
-            Integer.MAX_VALUE,  // lingerMs
-            100L,               // retryBackoffMs
-            1000L,              // retryBackoffMaxMs
-            3200,               // deliveryTimeoutMs
-            metrics,
-            "producer-metrics",
-            time,
-            null,
-            new BufferPool(TOTAL_SIZE, BATCH_SIZE, metrics, time, "producer-metrics")
+                new LogContext(),
+                BATCH_SIZE + DefaultRecordBatch.RECORD_BATCH_OVERHEAD,
+                Compression.NONE,
+                Integer.MAX_VALUE,  // lingerMs
+                100L,               // retryBackoffMs
+                1000L,              // retryBackoffMaxMs
+                3200,               // deliveryTimeoutMs
+                metrics,
+                "producer-metrics",
+                time,
+                null,
+                new BufferPool(TOTAL_SIZE, BATCH_SIZE, metrics, time, "producer-metrics")
         );
     }
 
@@ -155,16 +155,16 @@ public class RecordAccumulatorFlushBenchmark {
 
         for (int i = 0; i < numRecords; i++) {
             accum.append(
-                TOPIC,
-                PARTITION,
-                0L,
-                key,
-                value,
-                Record.EMPTY_HEADERS,
-                null,
-                1000L,
-                time.milliseconds(),
-                cluster
+                    TOPIC,
+                    PARTITION,
+                    0L,
+                    key,
+                    value,
+                    Record.EMPTY_HEADERS,
+                    null,
+                    1000L,
+                    time.milliseconds(),
+                    cluster
             );
         }
     }

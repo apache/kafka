@@ -28,8 +28,8 @@ public class StoreDelegatingProcessorSupplier<KIn, VIn, KOut, VOut> implements P
     private final Set<StoreBuilder<?>> stores;
 
     public StoreDelegatingProcessorSupplier(
-            final ProcessorSupplier<KIn, VIn, KOut, VOut> delegate,
-            final Set<StoreBuilder<?>> stores
+        final ProcessorSupplier<KIn, VIn, KOut, VOut> delegate,
+        final Set<StoreBuilder<?>> stores
     ) {
         this.delegate = delegate;
         this.stores = stores;

@@ -154,25 +154,25 @@ public class LogManagerBuilder {
         if (brokerTopicStats == null) throw new IllegalStateException("you must set brokerTopicStats");
         if (logDirFailureChannel == null) throw new IllegalStateException("you must set logDirFailureChannel");
         return new LogManager(logDirs,
-                              initialOfflineDirs,
-                              configRepository,
-                              initialDefaultConfig,
-                              cleanerConfig,
-                              recoveryThreadsPerDataDir,
-                              flushCheckMs,
-                              flushRecoveryOffsetCheckpointMs,
-                              flushStartOffsetCheckpointMs,
-                              retentionCheckMs,
-                              maxTransactionTimeoutMs,
-                              producerStateManagerConfig,
-                              PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS,
-                              scheduler,
-                              brokerTopicStats,
-                              logDirFailureChannel,
-                              time,
-                              remoteStorageSystemEnable,
-                              initialTaskDelayMs,
-                              LogCleaner::new
-                );
+            initialOfflineDirs,
+            configRepository,
+            initialDefaultConfig,
+            cleanerConfig,
+            recoveryThreadsPerDataDir,
+            flushCheckMs,
+            flushRecoveryOffsetCheckpointMs,
+            flushStartOffsetCheckpointMs,
+            retentionCheckMs,
+            maxTransactionTimeoutMs,
+            producerStateManagerConfig,
+            PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS,
+            scheduler,
+            brokerTopicStats,
+            logDirFailureChannel,
+            time,
+            remoteStorageSystemEnable,
+            initialTaskDelayMs,
+            LogCleaner::new
+        );
     }
 }

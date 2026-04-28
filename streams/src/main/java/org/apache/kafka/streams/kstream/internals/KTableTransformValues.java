@@ -43,8 +43,8 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
     private boolean sendOldValues = false;
 
     KTableTransformValues(final KTableImpl<K, ?, V> parent,
-                          final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VOut> transformerSupplier,
-                          final String queryableName) {
+        final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VOut> transformerSupplier,
+        final String queryableName) {
         this.parent = Objects.requireNonNull(parent, "parent");
         this.transformerSupplier = Objects.requireNonNull(transformerSupplier, "transformerSupplier");
         this.queryableName = queryableName;
@@ -144,7 +144,7 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
         private final ValueTransformerWithKey<? super K, ? super V, ? extends VOut> valueTransformer;
 
         KTableTransformValuesGetter(final KTableValueGetter<K, V> parentGetter,
-                                    final ValueTransformerWithKey<? super K, ? super V, ? extends VOut> valueTransformer) {
+            final ValueTransformerWithKey<? super K, ? super V, ? extends VOut> valueTransformer) {
             this.parentGetter = Objects.requireNonNull(parentGetter, "parentGetter");
             this.valueTransformer = Objects.requireNonNull(valueTransformer, "valueTransformer");
         }
@@ -196,7 +196,7 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
                 valueTransformer.transform(key, getValueOrNull(valueTimestampHeaders)),
                 valueTimestampHeaders == null ? UNKNOWN : valueTimestampHeaders.timestamp(),
                 valueTimestampHeaders == null ? currentContext.headers() : valueTimestampHeaders.headers()
-                );
+            );
 
             internalProcessorContext.setRecordContext(currentContext);
 

@@ -56,7 +56,8 @@ public final class ByteBufferUnmapper {
         }
     }
 
-    private ByteBufferUnmapper() {}
+    private ByteBufferUnmapper() {
+    }
 
     /**
      * Unmap the provided mapped or direct byte buffer.
@@ -84,7 +85,7 @@ public final class ByteBufferUnmapper {
         try {
             Class<?> unsafeClass = Class.forName("sun.misc.Unsafe");
             MethodHandle unmapper = lookup.findVirtual(unsafeClass, "invokeCleaner",
-                    methodType(void.class, ByteBuffer.class));
+                methodType(void.class, ByteBuffer.class));
             Field f = unsafeClass.getDeclaredField("theUnsafe");
             f.setAccessible(true);
             Object theUnsafe = f.get(null);

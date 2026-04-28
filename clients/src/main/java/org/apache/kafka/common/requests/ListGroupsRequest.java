@@ -49,7 +49,7 @@ public class ListGroupsRequest extends AbstractRequest {
         public ListGroupsRequest build(short version) {
             if (!data.statesFilter().isEmpty() && version < 4) {
                 throw new UnsupportedVersionException("The broker only supports ListGroups " +
-                        "v" + version + ", but we need v4 or newer to request groups by states.");
+                    "v" + version + ", but we need v4 or newer to request groups by states.");
             }
             if (!data.typesFilter().isEmpty() && version < 5) {
                 // Types filter is supported by brokers with version 3.8.0 or later. Older brokers only support

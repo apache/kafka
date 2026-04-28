@@ -95,9 +95,9 @@ public class StandbyTaskAssignorFactoryTest {
 
     private static AssignmentConfigs newAssignmentConfigs(final List<String> rackAwareAssignmentTags) {
         return new AssignmentConfigs(ACCEPTABLE_RECOVERY_LAG,
-                                     MAX_WARMUP_REPLICAS,
-                                     NUMBER_OF_STANDBY_REPLICAS,
-                                     PROBING_REBALANCE_INTERVAL_MS,
-                                     rackAwareAssignmentTags);
+            MAX_WARMUP_REPLICAS,
+            NUMBER_OF_STANDBY_REPLICAS,
+            PROBING_REBALANCE_INTERVAL_MS,
+            rackAwareAssignmentTags);
     }
 }

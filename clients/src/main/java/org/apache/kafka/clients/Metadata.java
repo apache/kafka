@@ -97,10 +97,10 @@ public class Metadata implements Closeable {
      * @param clusterResourceListeners List of ClusterResourceListeners which will receive metadata updates.
      */
     public Metadata(long refreshBackoffMs,
-                    long refreshBackoffMaxMs,
-                    long metadataExpireMs,
-                    LogContext logContext,
-                    ClusterResourceListeners clusterResourceListeners) {
+        long refreshBackoffMaxMs,
+        long metadataExpireMs,
+        LogContext logContext,
+        ClusterResourceListeners clusterResourceListeners) {
         this.log = logContext.logger(Metadata.class);
         this.refreshBackoff = new ExponentialBackoff(
             refreshBackoffMs,
@@ -153,7 +153,7 @@ public class Metadata implements Closeable {
     public synchronized long timeToAllowUpdate(long nowMs) {
         // Calculate the backoff for attempts which acts when metadata responses fail
         long backoffForAttempts = Math.max(this.lastRefreshMs +
-                this.refreshBackoff.backoff(this.attempts > 0 ? this.attempts - 1 : 0) - nowMs, 0);
+            this.refreshBackoff.backoff(this.attempts > 0 ? this.attempts - 1 : 0) - nowMs, 0);
 
         // Periodic updates based on expiration resets the equivalent response count so exponential backoff is not used
         if (Math.max(this.lastSuccessfulRefreshMs + this.metadataExpireMs - nowMs, 0) == 0) {
@@ -162,7 +162,7 @@ public class Metadata implements Closeable {
 
         // Calculate the backoff for equivalent responses which acts when metadata responses are not making progress
         long backoffForEquivalentResponseCount = Math.max(this.lastRefreshMs +
-                (this.equivalentResponseCount > 0 ? this.refreshBackoff.backoff(this.equivalentResponseCount - 1) : 0) - nowMs, 0);
+            (this.equivalentResponseCount > 0 ? this.refreshBackoff.backoff(this.equivalentResponseCount - 1) : 0) - nowMs, 0);
 
         return Math.max(backoffForAttempts, backoffForEquivalentResponseCount);
     }
@@ -281,7 +281,7 @@ public class Metadata implements Closeable {
             return partitionMetadata;
         } else {
             return partitionMetadata.filter(metadata ->
-                    metadata.leaderEpoch.orElse(NO_PARTITION_LEADER_EPOCH).equals(epoch));
+                metadata.leaderEpoch.orElse(NO_PARTITION_LEADER_EPOCH).equals(epoch));
         }
     }
 
@@ -388,7 +388,7 @@ public class Metadata implements Closeable {
         // 2. for which corresponding leader's node is missing in the new-nodes.
         // 3. for which the existing metadata doesn't know about the partition.
         List<PartitionMetadata> updatePartitionMetadata = new ArrayList<>();
-        for (Entry<TopicPartition, Metadata.LeaderIdAndEpoch> partitionLeader: partitionLeaders.entrySet()) {
+        for (Entry<TopicPartition, Metadata.LeaderIdAndEpoch> partitionLeader : partitionLeaders.entrySet()) {
             TopicPartition partition = partitionLeader.getKey();
             Metadata.LeaderAndEpoch currentLeader = currentLeader(partition);
             Metadata.LeaderIdAndEpoch newLeader = partitionLeader.getValue();
@@ -523,7 +523,7 @@ public class Metadata implements Closeable {
 
                     if (partitionMetadata.error.exception() instanceof InvalidMetadataException) {
                         log.debug("Requesting metadata update for partition {} due to error {}",
-                                partitionMetadata.topicPartition, partitionMetadata.error);
+                            partitionMetadata.topicPartition, partitionMetadata.error);
                         requestUpdate(false);
                     }
                 }
@@ -555,10 +555,10 @@ public class Metadata implements Closeable {
      * available and reliable) and whether the topic ID changed.
      */
     private Optional<MetadataResponse.PartitionMetadata> updateLatestMetadata(
-            MetadataResponse.PartitionMetadata partitionMetadata,
-            boolean hasReliableLeaderEpoch,
-            Uuid topicId,
-            Uuid oldTopicId) {
+        MetadataResponse.PartitionMetadata partitionMetadata,
+        boolean hasReliableLeaderEpoch,
+        Uuid topicId,
+        Uuid oldTopicId) {
         TopicPartition tp = partitionMetadata.topicPartition;
         if (hasReliableLeaderEpoch && partitionMetadata.leaderEpoch.isPresent()) {
             int newEpoch = partitionMetadata.leaderEpoch.get();
@@ -566,7 +566,7 @@ public class Metadata implements Closeable {
             if (currentEpoch == null) {
                 // We have no previous info, so we can just insert the new epoch info
                 log.debug("Setting the last seen epoch of partition {} to {} since the last known epoch was undefined.",
-                        tp, newEpoch);
+                    tp, newEpoch);
                 lastSeenLeaderEpochs.put(tp, newEpoch);
                 this.equivalentResponseCount = 0;
                 return Optional.of(partitionMetadata);
@@ -576,7 +576,7 @@ public class Metadata implements Closeable {
                 // corresponding topicId (i.e. `oldTopicId` will be null). In this case, when we discover the new
                 // topicId, we allow the corresponding leader epoch to override the last seen value.
                 log.info("Resetting the last seen epoch of partition {} to {} since the associated topicId changed from {} to {}",
-                        tp, newEpoch, oldTopicId, topicId);
+                    tp, newEpoch, oldTopicId, topicId);
                 lastSeenLeaderEpochs.put(tp, newEpoch);
                 this.equivalentResponseCount = 0;
                 return Optional.of(partitionMetadata);
@@ -778,8 +778,8 @@ public class Metadata implements Closeable {
         public final boolean isPartialUpdate;
 
         private MetadataRequestAndVersion(MetadataRequest.Builder requestBuilder,
-                                          int requestVersion,
-                                          boolean isPartialUpdate) {
+            int requestVersion,
+            boolean isPartialUpdate) {
             this.requestBuilder = requestBuilder;
             this.requestVersion = requestVersion;
             this.isPartialUpdate = isPartialUpdate;
@@ -828,9 +828,9 @@ public class Metadata implements Closeable {
         @Override
         public String toString() {
             return "LeaderAndEpoch{" +
-                    "leader=" + leader +
-                    ", epoch=" + epoch.map(Number::toString).orElse("absent") +
-                    '}';
+                "leader=" + leader +
+                ", epoch=" + epoch.map(Number::toString).orElse("absent") +
+                '}';
         }
     }
 

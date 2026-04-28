@@ -25,7 +25,7 @@ public class TerminateTransactionOptions extends AbstractOptions<TerminateTransa
     @Override
     public String toString() {
         return "TerminateTransactionOptions{" +
-                "timeoutMs=" + timeoutMs +
-                '}';
+            "timeoutMs=" + timeoutMs +
+            '}';
     }
 }

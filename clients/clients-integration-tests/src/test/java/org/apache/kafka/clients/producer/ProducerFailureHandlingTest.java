@@ -89,12 +89,12 @@ public class ProducerFailureHandlingTest {
      */
     @ClusterTest
     public void testTooLargeRecordWithAckZero(ClusterInstance clusterInstance) throws InterruptedException,
-            ExecutionException {
+        ExecutionException {
         clusterInstance.createTopic(topic1, 1, (short) clusterInstance.brokers().size());
         try (Producer<byte[], byte[]> producer = clusterInstance.producer(producerConfig(0))) {
             // send a too-large record
             ProducerRecord<byte[], byte[]> record =
-                    new ProducerRecord<>(topic1, null, "key".getBytes(), new byte[serverMessageMaxBytes + 1]);
+                new ProducerRecord<>(topic1, null, "key".getBytes(), new byte[serverMessageMaxBytes + 1]);
 
             RecordMetadata recordMetadata = producer.send(record).get();
             assertNotNull(recordMetadata);
@@ -113,7 +113,7 @@ public class ProducerFailureHandlingTest {
         try (Producer<byte[], byte[]> producer = clusterInstance.producer(producerConfig(1))) {
             // send a too-large record
             ProducerRecord<byte[], byte[]> record =
-                    new ProducerRecord<>(topic1, null, "key".getBytes(), new byte[serverMessageMaxBytes + 1]);
+                new ProducerRecord<>(topic1, null, "key".getBytes(), new byte[serverMessageMaxBytes + 1]);
             assertThrows(ExecutionException.class, () -> producer.send(record).get());
         }
     }
@@ -124,7 +124,7 @@ public class ProducerFailureHandlingTest {
      */
     @ClusterTest
     public void testPartitionTooLargeForReplicationWithAckAll(ClusterInstance clusterInstance) throws InterruptedException,
-            ExecutionException {
+        ExecutionException {
         checkTooLargeRecordForReplicationWithAckAll(clusterInstance, replicaFetchMaxPartitionBytes);
     }
 
@@ -133,7 +133,7 @@ public class ProducerFailureHandlingTest {
      */
     @ClusterTest
     public void testResponseTooLargeForReplicationWithAckAll(ClusterInstance clusterInstance) throws InterruptedException,
-            ExecutionException {
+        ExecutionException {
         checkTooLargeRecordForReplicationWithAckAll(clusterInstance, replicaFetchMaxResponseBytes);
     }
 
@@ -145,7 +145,7 @@ public class ProducerFailureHandlingTest {
     public void testNonExistentTopic(ClusterInstance clusterInstance) {
         // send a record with non-exist topic
         ProducerRecord<byte[], byte[]> record =
-                new ProducerRecord<>(topic2, null, "key".getBytes(), "value".getBytes());
+            new ProducerRecord<>(topic2, null, "key".getBytes(), "value".getBytes());
         try (Producer<byte[], byte[]> producer = clusterInstance.producer(producerConfig(0))) {
             assertThrows(ExecutionException.class, () -> producer.send(record).get());
         }
@@ -164,7 +164,7 @@ public class ProducerFailureHandlingTest {
         try (Producer<byte[], byte[]> producer = clusterInstance.producer(producerConfig)) {
             // send a record with incorrect broker list
             ProducerRecord<byte[], byte[]> record =
-                    new ProducerRecord<>(topic1, null, "key".getBytes(), "value".getBytes());
+                new ProducerRecord<>(topic1, null, "key".getBytes(), "value".getBytes());
             assertThrows(ExecutionException.class, () -> producer.send(record).get());
         }
     }
@@ -181,7 +181,7 @@ public class ProducerFailureHandlingTest {
         // create a record with incorrect partition id (higher than the number of partitions), send should fail
         try (Producer<byte[], byte[]> producer = clusterInstance.producer(producerConfig(0))) {
             ProducerRecord<byte[], byte[]> higherRecord =
-                    new ProducerRecord<>(topic1, 1, "key".getBytes(), "value".getBytes());
+                new ProducerRecord<>(topic1, 1, "key".getBytes(), "value".getBytes());
             Exception e = assertThrows(ExecutionException.class, () -> producer.send(higherRecord).get());
             assertEquals(TimeoutException.class, e.getCause().getClass());
         }
@@ -201,7 +201,7 @@ public class ProducerFailureHandlingTest {
         Producer<byte[], byte[]> producer3 = clusterInstance.producer(producerConfig(-1));
 
         ProducerRecord<byte[], byte[]> record =
-                new ProducerRecord<>(topic1, null, "key".getBytes(), "value".getBytes());
+            new ProducerRecord<>(topic1, null, "key".getBytes(), "value".getBytes());
         // first send a message to make sure the metadata is refreshed
         producer1.send(record).get();
         producer2.send(record).get();
@@ -220,25 +220,25 @@ public class ProducerFailureHandlingTest {
         try (Admin admin = clusterInstance.admin()) {
             Map<String, String> topicConfig = new HashMap<>();
             clusterInstance.brokers().get(0)
-                    .groupCoordinator()
-                    .groupMetadataTopicConfigs()
-                    .forEach((k, v) -> topicConfig.put(k.toString(), v.toString()));
+                .groupCoordinator()
+                .groupMetadataTopicConfigs()
+                .forEach((k, v) -> topicConfig.put(k.toString(), v.toString()));
             admin.createTopics(List.of(new NewTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1).configs(topicConfig)));
             clusterInstance.waitTopicDeletion(Topic.GROUP_METADATA_TOPIC_NAME);
         }
 
         try (Producer<byte[], byte[]> producer = clusterInstance.producer(producerConfig(1))) {
             Exception thrown = assertThrows(ExecutionException.class,
-                    () -> producer.send(new ProducerRecord<>(Topic.GROUP_METADATA_TOPIC_NAME, "test".getBytes(),
-                            "test".getBytes())).get());
+                () -> producer.send(new ProducerRecord<>(Topic.GROUP_METADATA_TOPIC_NAME, "test".getBytes(),
+                    "test".getBytes())).get());
             assertInstanceOf(InvalidTopicException.class, thrown.getCause(),
-                    () -> "Unexpected exception while sending to an invalid topic " + thrown.getCause());
+                () -> "Unexpected exception while sending to an invalid topic " + thrown.getCause());
         }
     }
 
     @ClusterTest
     public void testNotEnoughReplicasAfterBrokerShutdown(ClusterInstance clusterInstance) throws InterruptedException,
-            ExecutionException {
+        ExecutionException {
         String topicName = "minisrtest2";
         int brokerNum = clusterInstance.brokers().size();
         Map<String, String> topicConfig = Map.of(MIN_IN_SYNC_REPLICAS_CONFIG, String.valueOf(brokerNum));
@@ -247,7 +247,7 @@ public class ProducerFailureHandlingTest {
         }
 
         ProducerRecord<byte[], byte[]> record =
-                new ProducerRecord<>(topicName, null, "key".getBytes(), "value".getBytes());
+            new ProducerRecord<>(topicName, null, "key".getBytes(), "value".getBytes());
 
         try (Producer<byte[], byte[]> producer = clusterInstance.producer(producerConfig(-1))) {
             // this should work with all brokers up and running
@@ -259,8 +259,8 @@ public class ProducerFailureHandlingTest {
 
             Exception e = assertThrows(ExecutionException.class, () -> producer.send(record).get());
             assertTrue(e.getCause() instanceof NotEnoughReplicasException ||
-                    e.getCause() instanceof NotEnoughReplicasAfterAppendException ||
-                    e.getCause() instanceof TimeoutException);
+                e.getCause() instanceof NotEnoughReplicasAfterAppendException ||
+                e.getCause() instanceof TimeoutException);
 
             // restart the server
             oneBroker.startup();
@@ -290,11 +290,11 @@ public class ProducerFailureHandlingTest {
 
     private Map<String, Object> producerConfig(int acks) {
         return Map.of(
-                ACKS_CONFIG, String.valueOf(acks),
-                RETRIES_CONFIG, 0,
-                REQUEST_TIMEOUT_MS_CONFIG, 30000,
-                MAX_BLOCK_MS_CONFIG, 10000,
-                BUFFER_MEMORY_CONFIG, producerBufferSize);
+            ACKS_CONFIG, String.valueOf(acks),
+            RETRIES_CONFIG, 0,
+            REQUEST_TIMEOUT_MS_CONFIG, 30000,
+            MAX_BLOCK_MS_CONFIG, 10000,
+            BUFFER_MEMORY_CONFIG, producerBufferSize);
     }
 
 }

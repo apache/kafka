@@ -38,10 +38,10 @@ class KStreamKTableJoin<StreamKey, StreamValue, TableValue, VOut> implements Pro
     private final Set<StoreBuilder<?>> stores;
 
     KStreamKTableJoin(final KTableValueGetterSupplier<StreamKey, TableValue> valueGetterSupplier,
-                      final ValueJoinerWithKey<? super StreamKey, ? super StreamValue, ? super TableValue, ? extends VOut> joiner,
-                      final boolean leftJoin,
-                      final Optional<Duration> gracePeriod,
-                      final Optional<StoreBuilder<?>> bufferStoreBuilder) {
+        final ValueJoinerWithKey<? super StreamKey, ? super StreamValue, ? super TableValue, ? extends VOut> joiner,
+        final boolean leftJoin,
+        final Optional<Duration> gracePeriod,
+        final Optional<StoreBuilder<?>> bufferStoreBuilder) {
         this.valueGetterSupplier = valueGetterSupplier;
         this.joiner = joiner;
         this.leftJoin = leftJoin;

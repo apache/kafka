@@ -76,16 +76,16 @@ public class NoOpProcessorContext extends AbstractProcessorContext<Object, Objec
 
     @Override
     public Cancellable schedule(final Duration interval,
-                                final PunctuationType type,
-                                final Punctuator callback) throws IllegalArgumentException {
+        final PunctuationType type,
+        final Punctuator callback) throws IllegalArgumentException {
         return null;
     }
 
     @Override
     public Cancellable schedule(final Instant startTime,
-                                final Duration interval,
-                                final PunctuationType type,
-                                final Punctuator callback) {
+        final Duration interval,
+        final PunctuationType type,
+        final Punctuator callback) {
         return null;
     }
 
@@ -110,7 +110,8 @@ public class NoOpProcessorContext extends AbstractProcessorContext<Object, Objec
     }
 
     @Override
-    public void commit() {}
+    public void commit() {
+    }
 
     @Override
     public long currentSystemTimeMs() {
@@ -129,8 +130,8 @@ public class NoOpProcessorContext extends AbstractProcessorContext<Object, Objec
 
     @Override
     public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback,
-                         final CommitCallback checkpoint) {
+        final StateRestoreCallback stateRestoreCallback,
+        final CommitCallback checkpoint) {
     }
 
     @Override
@@ -140,11 +141,11 @@ public class NoOpProcessorContext extends AbstractProcessorContext<Object, Objec
 
     @Override
     public void logChange(final String storeName,
-                          final Bytes key,
-                          final byte[] value,
-                          final long timestamp,
-                          final Headers headers,
-                          final Position position) {
+        final Bytes key,
+        final byte[] value,
+        final long timestamp,
+        final Headers headers,
+        final Position position) {
     }
 
     @Override

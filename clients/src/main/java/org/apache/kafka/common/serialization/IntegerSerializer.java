@@ -21,7 +21,7 @@ public class IntegerSerializer implements Serializer<Integer> {
         if (data == null)
             return null;
 
-        return new byte[] {
+        return new byte[]{
             (byte) (data >>> 24),
             (byte) (data >>> 16),
             (byte) (data >>> 8),

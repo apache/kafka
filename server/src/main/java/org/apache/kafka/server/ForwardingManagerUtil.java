@@ -28,7 +28,7 @@ public final class ForwardingManagerUtil {
         KafkaPrincipalSerde principalSerde = context.principalSerde.orElseThrow(() ->
             new IllegalArgumentException(
                 "Cannot deserialize principal from request context " + context +
-                " since there is no serde defined"
+                    " since there is no serde defined"
             )
         );
         byte[] serializedPrincipal = principalSerde.serialize(context.principal);

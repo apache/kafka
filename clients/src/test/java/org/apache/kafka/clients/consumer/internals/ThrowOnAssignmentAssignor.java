@@ -29,8 +29,8 @@ public class ThrowOnAssignmentAssignor extends MockPartitionAssignor {
     private final String name;
 
     ThrowOnAssignmentAssignor(final List<RebalanceProtocol> supportedProtocols,
-                              final RuntimeException bookeepedException,
-                              final String name) {
+        final RuntimeException bookeepedException,
+        final String name) {
         super(supportedProtocols);
         this.bookeepedException = bookeepedException;
         this.name = name;

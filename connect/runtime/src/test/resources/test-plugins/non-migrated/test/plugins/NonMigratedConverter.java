@@ -30,19 +30,19 @@ import java.util.Map;
  */
 public final class NonMigratedConverter implements Converter {
 
-  @Override
-  public void configure(final Map<String, ?> configs, final boolean isKey) {
-  }
+    @Override
+    public void configure(final Map<String, ?> configs, final boolean isKey) {
+    }
 
-  @Override
-  public byte[] fromConnectData(final String topic, final Schema schema, final Object value) {
-    return new byte[0];
-  }
+    @Override
+    public byte[] fromConnectData(final String topic, final Schema schema, final Object value) {
+        return new byte[0];
+    }
 
-  @Override
-  public SchemaAndValue toConnectData(final String topic, final byte[] value) {
-    return null;
-  }
+    @Override
+    public SchemaAndValue toConnectData(final String topic, final byte[] value) {
+        return null;
+    }
 
     @Override
     public String version() {

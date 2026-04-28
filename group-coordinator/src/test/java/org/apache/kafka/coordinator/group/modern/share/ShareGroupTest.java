@@ -444,10 +444,10 @@ public class ShareGroupTest {
         assertEquals(ShareGroupState.EMPTY.toString(), shareGroup.stateAsString(0));
 
         shareGroup.updateMember(new ShareGroupMember.Builder("member1")
-                .setSubscribedTopicNames(List.of("foo"))
-                .build());
+            .setSubscribedTopicNames(List.of("foo"))
+            .build());
         shareGroup.updateMember(new ShareGroupMember.Builder("member2")
-                .build());
+            .build());
         snapshotRegistry.idempotentCreateSnapshot(1);
 
         ShareGroupDescribeResponseData.DescribedGroup expected = new ShareGroupDescribeResponseData.DescribedGroup()

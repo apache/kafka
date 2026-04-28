@@ -36,7 +36,7 @@ public class InternalTopicProperties {
     @Override
     public String toString() {
         return "InternalTopicProperties{" +
-               "numberOfPartitions=" + numberOfPartitions +
-               '}';
+            "numberOfPartitions=" + numberOfPartitions +
+            '}';
     }
 }

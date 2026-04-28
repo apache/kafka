@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class KafkaRaftClientClusterAuthTest {
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     void testClusterAuthorizationFailedInFetch(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -45,9 +45,9 @@ public class KafkaRaftClientClusterAuthTest {
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-                .withKip853Rpc(withKip853Rpc)
-                .withElectedLeader(epoch, otherNodeId)
-                .build();
+            .withKip853Rpc(withKip853Rpc)
+            .withElectedLeader(epoch, otherNodeId)
+            .build();
 
         context.assertElectedLeader(epoch, otherNodeId);
 
@@ -55,17 +55,17 @@ public class KafkaRaftClientClusterAuthTest {
 
         RaftRequest.Outbound request = context.assertSentFetchRequest(epoch, 0, 0, context.client.highWatermark());
         FetchResponseData response = new FetchResponseData()
-                .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
+            .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
         context.deliverResponse(
-                request.correlationId(),
-                request.destination(),
-                response
+            request.correlationId(),
+            request.destination(),
+            response
         );
         assertThrows(ClusterAuthorizationException.class, context.client::poll);
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     void testClusterAuthorizationFailedInBeginQuorumEpoch(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -73,10 +73,10 @@ public class KafkaRaftClientClusterAuthTest {
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-                .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
-                .withUnknownLeader(epoch - 1)
-                .withKip853Rpc(withKip853Rpc)
-                .build();
+            .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
+            .withUnknownLeader(epoch - 1)
+            .withKip853Rpc(withKip853Rpc)
+            .build();
 
         context.time.sleep(context.electionTimeoutMs());
         context.expectAndGrantPreVotes(epoch - 1);
@@ -88,14 +88,14 @@ public class KafkaRaftClientClusterAuthTest {
         RaftRequest.Outbound request = requests.get(0);
         assertEquals(otherNodeId, request.destination().id());
         BeginQuorumEpochResponseData response = new BeginQuorumEpochResponseData()
-                .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
+            .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
 
         context.deliverResponse(request.correlationId(), request.destination(), response);
         assertThrows(ClusterAuthorizationException.class, context.client::poll);
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     void testClusterAuthorizationFailedInVote(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -103,9 +103,9 @@ public class KafkaRaftClientClusterAuthTest {
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-                .withUnknownLeader(epoch - 1)
-                .withKip853Rpc(withKip853Rpc)
-                .build();
+            .withUnknownLeader(epoch - 1)
+            .withKip853Rpc(withKip853Rpc)
+            .build();
 
         // Become a candidate
         context.unattachedToCandidate();
@@ -114,23 +114,23 @@ public class KafkaRaftClientClusterAuthTest {
 
         RaftRequest.Outbound request = context.assertSentVoteRequest(epoch, 0, 0L, 1);
         VoteResponseData response = new VoteResponseData()
-                .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
+            .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
 
         context.deliverResponse(request.correlationId(), request.destination(), response);
         assertThrows(ClusterAuthorizationException.class, context.client::poll);
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @ValueSource(booleans = {true, false})
     void testClusterAuthorizationFailedInEndQuorumEpoch(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-                .withUnknownLeader(1)
-                .withKip853Rpc(withKip853Rpc)
-                .build();
+            .withUnknownLeader(1)
+            .withKip853Rpc(withKip853Rpc)
+            .build();
 
         context.unattachedToLeader();
         int epoch = context.currentEpoch();
@@ -140,7 +140,7 @@ public class KafkaRaftClientClusterAuthTest {
 
         RaftRequest.Outbound request = context.assertSentEndQuorumEpochRequest(epoch, otherNodeId);
         EndQuorumEpochResponseData response = new EndQuorumEpochResponseData()
-                .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
+            .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
 
         context.deliverResponse(request.correlationId(), request.destination(), response);
         assertThrows(ClusterAuthorizationException.class, context.client::poll);

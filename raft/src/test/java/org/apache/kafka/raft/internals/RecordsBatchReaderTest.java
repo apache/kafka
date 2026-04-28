@@ -83,15 +83,16 @@ class RecordsBatchReaderTest {
         ControlRecord expectedRecord = ControlRecord.of(new LeaderChangeMessage());
 
         try (RecordsBatchReader<String> reader = RecordsBatchReader.of(
-                0,
-                records,
-                serde,
-                BufferSupplier.NO_CACHING,
-                MAX_BATCH_BYTES,
-                ignore -> { },
-                true,
-                new LogContext()
-            )
+                 0,
+                 records,
+                 serde,
+                 BufferSupplier.NO_CACHING,
+                 MAX_BATCH_BYTES,
+                 ignore -> {
+                 },
+                 true,
+                 new LogContext()
+             )
         ) {
             assertTrue(reader.hasNext());
             assertEquals(List.of(expectedRecord), reader.next().controlRecords());

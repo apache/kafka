@@ -145,14 +145,14 @@ public class ConnectMetricsRegistry {
         connectorTags.add(CONNECTOR_TAG_NAME);
 
         connectorStatus = createTemplate("status", CONNECTOR_GROUP_NAME,
-                                         "The status of the connector. One of 'unassigned', 'running', 'paused', 'stopped', 'failed', or " +
-                                         "'restarting'.",
-                                         connectorTags);
+                "The status of the connector. One of 'unassigned', 'running', 'paused', 'stopped', 'failed', or " +
+                        "'restarting'.",
+                connectorTags);
         connectorType = createTemplate("connector-type", CONNECTOR_GROUP_NAME, "The type of the connector. One of 'source' or 'sink'.",
-                                       connectorTags);
+                connectorTags);
         connectorClass = createTemplate("connector-class", CONNECTOR_GROUP_NAME, "The name of the connector class.", connectorTags);
         connectorVersion = createTemplate("connector-version", CONNECTOR_GROUP_NAME,
-                                          "The version of the connector class, as reported by the connector.", connectorTags);
+                "The version of the connector class, as reported by the connector.", connectorTags);
 
         /* Worker task level */
         Set<String> workerTaskTags = new LinkedHashSet<>(tags);
@@ -160,46 +160,46 @@ public class ConnectMetricsRegistry {
         workerTaskTags.add(TASK_TAG_NAME);
 
         taskStatus = createTemplate("status", TASK_GROUP_NAME,
-                                    "The status of the connector task. One of 'unassigned', 'running', 'paused', 'failed', or " +
-                                    "'restarting'.",
-                                    workerTaskTags);
+                "The status of the connector task. One of 'unassigned', 'running', 'paused', 'failed', or " +
+                        "'restarting'.",
+                workerTaskTags);
         taskRunningRatio = createTemplate("running-ratio", TASK_GROUP_NAME,
-                                          "The fraction of time this task has spent in the running state.", workerTaskTags);
+                "The fraction of time this task has spent in the running state.", workerTaskTags);
         taskPauseRatio = createTemplate("pause-ratio", TASK_GROUP_NAME, "The fraction of time this task has spent in the pause state.",
-                                        workerTaskTags);
+                workerTaskTags);
         taskCommitTimeMax = createTemplate("offset-commit-max-time-ms", TASK_GROUP_NAME,
-                                           "The maximum time in milliseconds taken by this task to commit offsets.", workerTaskTags);
+                "The maximum time in milliseconds taken by this task to commit offsets.", workerTaskTags);
         taskCommitTimeAvg = createTemplate("offset-commit-avg-time-ms", TASK_GROUP_NAME,
-                                           "The average time in milliseconds taken by this task to commit offsets.", workerTaskTags);
+                "The average time in milliseconds taken by this task to commit offsets.", workerTaskTags);
         taskBatchSizeMax = createTemplate("batch-size-max", TASK_GROUP_NAME, "The number of records in the largest batch the task has processed so far.",
-                                          workerTaskTags);
+                workerTaskTags);
         taskBatchSizeAvg = createTemplate("batch-size-avg", TASK_GROUP_NAME, "The average number of records in the batches the task has processed so far.",
-                                          workerTaskTags);
+                workerTaskTags);
         taskCommitFailurePercentage = createTemplate("offset-commit-failure-percentage", TASK_GROUP_NAME,
-                                                     "The average percentage of this task's offset commit attempts that failed.",
-                                                     workerTaskTags);
+                "The average percentage of this task's offset commit attempts that failed.",
+                workerTaskTags);
         taskCommitSuccessPercentage = createTemplate("offset-commit-success-percentage", TASK_GROUP_NAME,
-                                                     "The average percentage of this task's offset commit attempts that succeeded.",
-                                                     workerTaskTags);
+                "The average percentage of this task's offset commit attempts that succeeded.",
+                workerTaskTags);
         taskConnectorClass = createTemplate("connector-class", TASK_GROUP_NAME, "The name of the connector class.", workerTaskTags);
         taskConnectorClassVersion = createTemplate("connector-version", TASK_GROUP_NAME,
-                                                   "The version of the connector class, as reported by the connector.", workerTaskTags);
+                "The version of the connector class, as reported by the connector.", workerTaskTags);
         taskConnectorType = createTemplate("connector-type", TASK_GROUP_NAME, "The type of the connector. One of 'source' or 'sink'.",
-                                           workerTaskTags);
+                workerTaskTags);
         taskClass = createTemplate("task-class", TASK_GROUP_NAME, "The class name of the task.", workerTaskTags);
         taskVersion = createTemplate("task-version", TASK_GROUP_NAME, "The version of the task.", workerTaskTags);
         taskKeyConverterClass = createTemplate("key-converter-class", TASK_GROUP_NAME,
-                                            "The fully qualified class name from key.converter", workerTaskTags);
+                "The fully qualified class name from key.converter", workerTaskTags);
         taskValueConverterClass = createTemplate("value-converter-class", TASK_GROUP_NAME,
-                                            "The fully qualified class name from value.converter", workerTaskTags);
+                "The fully qualified class name from value.converter", workerTaskTags);
         taskKeyConverterVersion = createTemplate("key-converter-version", TASK_GROUP_NAME,
-                                            "The version instantiated for key.converter. May be undefined", workerTaskTags);
+                "The version instantiated for key.converter. May be undefined", workerTaskTags);
         taskValueConverterVersion = createTemplate("value-converter-version", TASK_GROUP_NAME,
-                                                "The version instantiated for value.converter. May be undefined", workerTaskTags);
+                "The version instantiated for value.converter. May be undefined", workerTaskTags);
         taskHeaderConverterClass = createTemplate("header-converter-class", TASK_GROUP_NAME,
-                                                "The fully qualified class name from header.converter", workerTaskTags);
+                "The fully qualified class name from header.converter", workerTaskTags);
         taskHeaderConverterVersion = createTemplate("header-converter-version", TASK_GROUP_NAME,
-                                                    "The version instantiated for header.converter. May be undefined", workerTaskTags);
+                "The version instantiated for header.converter. May be undefined", workerTaskTags);
 
         /* Transformation Metrics */
         Set<String> transformTags = new LinkedHashSet<>(tags);
@@ -225,53 +225,53 @@ public class ConnectMetricsRegistry {
         sourceTaskTags.add(TASK_TAG_NAME);
 
         sourceRecordPollRate = createTemplate("source-record-poll-rate", SOURCE_TASK_GROUP_NAME,
-                                              "The average per-second number of records produced/polled (before transformation) by " +
-                                              "this task belonging to the named source connector in this worker.",
-                                              sourceTaskTags);
+                "The average per-second number of records produced/polled (before transformation) by " +
+                        "this task belonging to the named source connector in this worker.",
+                sourceTaskTags);
         sourceRecordPollTotal = createTemplate("source-record-poll-total", SOURCE_TASK_GROUP_NAME,
-                                               "The total number of records produced/polled (before transformation) by this task " +
-                                               "belonging to the named source connector in this worker.",
-                                               sourceTaskTags);
+                "The total number of records produced/polled (before transformation) by this task " +
+                        "belonging to the named source connector in this worker.",
+                sourceTaskTags);
         sourceRecordWriteRate = createTemplate("source-record-write-rate", SOURCE_TASK_GROUP_NAME,
-                                               "The average per-second number of records written to Kafka for this task belonging to the " +
-                                                "named source connector in this worker, since the task was last restarted. This is after " +
-                                                "transformations are applied, and excludes any records filtered out by the transformations.",
-                                               sourceTaskTags);
+                "The average per-second number of records written to Kafka for this task belonging to the " +
+                        "named source connector in this worker, since the task was last restarted. This is after " +
+                        "transformations are applied, and excludes any records filtered out by the transformations.",
+                sourceTaskTags);
         sourceRecordWriteTotal = createTemplate("source-record-write-total", SOURCE_TASK_GROUP_NAME,
-                                                "The number of records output written to Kafka for this task belonging to the " +
-                                                "named source connector in this worker, since the task was last restarted. This is after " +
-                                                "transformations are applied, and excludes any records filtered out by the transformations.",
-                                                sourceTaskTags);
+                "The number of records output written to Kafka for this task belonging to the " +
+                        "named source connector in this worker, since the task was last restarted. This is after " +
+                        "transformations are applied, and excludes any records filtered out by the transformations.",
+                sourceTaskTags);
         sourceRecordPollBatchTimeMax = createTemplate("poll-batch-max-time-ms", SOURCE_TASK_GROUP_NAME,
-                                                      "The maximum time in milliseconds taken by this task to poll for a batch of " +
-                                                      "source records.",
-                                                      sourceTaskTags);
+                "The maximum time in milliseconds taken by this task to poll for a batch of " +
+                        "source records.",
+                sourceTaskTags);
         sourceRecordPollBatchTimeAvg = createTemplate("poll-batch-avg-time-ms", SOURCE_TASK_GROUP_NAME,
-                                                      "The average time in milliseconds taken by this task to poll for a batch of " +
-                                                      "source records.",
-                                                      sourceTaskTags);
+                "The average time in milliseconds taken by this task to poll for a batch of " +
+                        "source records.",
+                sourceTaskTags);
         sourceRecordActiveCount = createTemplate("source-record-active-count", SOURCE_TASK_GROUP_NAME,
-                                                 "The number of records that have been produced by this task but not yet completely " +
-                                                 "written to Kafka.",
-                                                 sourceTaskTags);
+                "The number of records that have been produced by this task but not yet completely " +
+                        "written to Kafka.",
+                sourceTaskTags);
         sourceRecordActiveCountMax = createTemplate("source-record-active-count-max", SOURCE_TASK_GROUP_NAME,
-                                                    "The maximum number of records that have been produced by this task but not yet " +
-                                                    "completely written to Kafka.",
-                                                    sourceTaskTags);
+                "The maximum number of records that have been produced by this task but not yet " +
+                        "completely written to Kafka.",
+                sourceTaskTags);
         sourceRecordActiveCountAvg = createTemplate("source-record-active-count-avg", SOURCE_TASK_GROUP_NAME,
-                                                    "The average number of records that have been produced by this task but not yet " +
-                                                    "completely written to Kafka.",
-                                                    sourceTaskTags);
+                "The average number of records that have been produced by this task but not yet " +
+                        "completely written to Kafka.",
+                sourceTaskTags);
 
         transactionSizeMin = createTemplate("transaction-size-min", SOURCE_TASK_GROUP_NAME,
-                                            "The number of records in the smallest transaction the task has committed so far. ",
-                                            sourceTaskTags);
+                "The number of records in the smallest transaction the task has committed so far. ",
+                sourceTaskTags);
         transactionSizeMax = createTemplate("transaction-size-max", SOURCE_TASK_GROUP_NAME,
-                                            "The number of records in the largest transaction the task has committed so far.",
-                                            sourceTaskTags);
+                "The number of records in the largest transaction the task has committed so far.",
+                sourceTaskTags);
         transactionSizeAvg = createTemplate("transaction-size-avg", SOURCE_TASK_GROUP_NAME,
-                                            "The average number of records in the transactions the task has committed so far.",
-                                            sourceTaskTags);
+                "The average number of records in the transactions the task has committed so far.",
+                sourceTaskTags);
 
         /* Sink worker task level */
         Set<String> sinkTaskTags = new LinkedHashSet<>(tags);
@@ -279,66 +279,66 @@ public class ConnectMetricsRegistry {
         sinkTaskTags.add(TASK_TAG_NAME);
 
         sinkRecordReadRate = createTemplate("sink-record-read-rate", SINK_TASK_GROUP_NAME,
-                                            "The average per-second number of records read from Kafka for this task belonging to the" +
-                                            " named sink connector in this worker. This is before transformations are applied.",
-                                            sinkTaskTags);
+                "The average per-second number of records read from Kafka for this task belonging to the" +
+                        " named sink connector in this worker. This is before transformations are applied.",
+                sinkTaskTags);
         sinkRecordReadTotal = createTemplate("sink-record-read-total", SINK_TASK_GROUP_NAME,
-                                             "The total number of records read from Kafka by this task belonging to the named sink " +
-                                             "connector in this worker, since the task was last restarted.",
-                                             sinkTaskTags);
+                "The total number of records read from Kafka by this task belonging to the named sink " +
+                        "connector in this worker, since the task was last restarted.",
+                sinkTaskTags);
         sinkRecordSendRate = createTemplate("sink-record-send-rate", SINK_TASK_GROUP_NAME,
-                                            "The average per-second number of records output from the transformations and sent/put " +
-                                            "to this task belonging to the named sink connector in this worker. This is after " +
-                                            "transformations are applied and excludes any records filtered out by the " +
-                                            "transformations.",
-                                            sinkTaskTags);
+                "The average per-second number of records output from the transformations and sent/put " +
+                        "to this task belonging to the named sink connector in this worker. This is after " +
+                        "transformations are applied and excludes any records filtered out by the " +
+                        "transformations.",
+                sinkTaskTags);
         sinkRecordSendTotal = createTemplate("sink-record-send-total", SINK_TASK_GROUP_NAME,
-                                             "The total number of records output from the transformations and sent/put to this task " +
-                                             "belonging to the named sink connector in this worker, since the task was last " +
-                                             "restarted.",
-                                             sinkTaskTags);
+                "The total number of records output from the transformations and sent/put to this task " +
+                        "belonging to the named sink connector in this worker, since the task was last " +
+                        "restarted.",
+                sinkTaskTags);
         sinkRecordLagMax = createTemplate("sink-record-lag-max", SINK_TASK_GROUP_NAME,
-                                          "The maximum lag in terms of number of records that the sink task is behind the consumer's " +
-                                          "position for any topic partitions.",
-                                          sinkTaskTags);
+                "The maximum lag in terms of number of records that the sink task is behind the consumer's " +
+                        "position for any topic partitions.",
+                sinkTaskTags);
         sinkRecordPartitionCount = createTemplate("partition-count", SINK_TASK_GROUP_NAME,
-                                                  "The number of topic partitions assigned to this task belonging to the named sink " +
-                                                  "connector in this worker.",
-                                                  sinkTaskTags);
+                "The number of topic partitions assigned to this task belonging to the named sink " +
+                        "connector in this worker.",
+                sinkTaskTags);
         sinkRecordOffsetCommitSeqNum = createTemplate("offset-commit-seq-no", SINK_TASK_GROUP_NAME,
-                                                      "The current sequence number for offset commits.", sinkTaskTags);
+                "The current sequence number for offset commits.", sinkTaskTags);
         sinkRecordOffsetCommitCompletionRate = createTemplate("offset-commit-completion-rate", SINK_TASK_GROUP_NAME,
-                                                              "The average per-second number of offset commit completions that were " +
-                                                              "completed successfully.",
-                                                              sinkTaskTags);
+                "The average per-second number of offset commit completions that were " +
+                        "completed successfully.",
+                sinkTaskTags);
         sinkRecordOffsetCommitCompletionTotal = createTemplate("offset-commit-completion-total", SINK_TASK_GROUP_NAME,
-                                                               "The total number of offset commit completions that were completed " +
-                                                               "successfully.",
-                                                               sinkTaskTags);
+                "The total number of offset commit completions that were completed " +
+                        "successfully.",
+                sinkTaskTags);
         sinkRecordOffsetCommitSkipRate = createTemplate("offset-commit-skip-rate", SINK_TASK_GROUP_NAME,
-                                                        "The average per-second number of offset commit completions that were " +
-                                                        "received too late and skipped/ignored.",
-                                                        sinkTaskTags);
+                "The average per-second number of offset commit completions that were " +
+                        "received too late and skipped/ignored.",
+                sinkTaskTags);
         sinkRecordOffsetCommitSkipTotal = createTemplate("offset-commit-skip-total", SINK_TASK_GROUP_NAME,
-                                                         "The total number of offset commit completions that were received too late " +
-                                                         "and skipped/ignored.",
-                                                         sinkTaskTags);
+                "The total number of offset commit completions that were received too late " +
+                        "and skipped/ignored.",
+                sinkTaskTags);
         sinkRecordPutBatchTimeMax = createTemplate("put-batch-max-time-ms", SINK_TASK_GROUP_NAME,
-                                                   "The maximum time taken by this task to put a batch of sinks records.", sinkTaskTags);
+                "The maximum time taken by this task to put a batch of sinks records.", sinkTaskTags);
         sinkRecordPutBatchTimeAvg = createTemplate("put-batch-avg-time-ms", SINK_TASK_GROUP_NAME,
-                                                   "The average time taken by this task to put a batch of sinks records.", sinkTaskTags);
+                "The average time taken by this task to put a batch of sinks records.", sinkTaskTags);
         sinkRecordActiveCount = createTemplate("sink-record-active-count", SINK_TASK_GROUP_NAME,
-                                               "The number of records that have been read from Kafka but not yet completely " +
-                                               "committed/flushed/acknowledged by the sink task.",
-                                               sinkTaskTags);
+                "The number of records that have been read from Kafka but not yet completely " +
+                        "committed/flushed/acknowledged by the sink task.",
+                sinkTaskTags);
         sinkRecordActiveCountMax = createTemplate("sink-record-active-count-max", SINK_TASK_GROUP_NAME,
-                                                  "The maximum number of records that have been read from Kafka but not yet completely "
-                                                  + "committed/flushed/acknowledged by the sink task.",
-                                                  sinkTaskTags);
+                "The maximum number of records that have been read from Kafka but not yet completely "
+                        + "committed/flushed/acknowledged by the sink task.",
+                sinkTaskTags);
         sinkRecordActiveCountAvg = createTemplate("sink-record-active-count-avg", SINK_TASK_GROUP_NAME,
-                                                  "The average number of records that have been read from Kafka but not yet completely "
-                                                  + "committed/flushed/acknowledged by the sink task.",
-                                                  sinkTaskTags);
+                "The average number of records that have been read from Kafka but not yet completely "
+                        + "committed/flushed/acknowledged by the sink task.",
+                sinkTaskTags);
 
         /* Worker level */
         Set<String> workerTags = new LinkedHashSet<>(tags);
@@ -346,53 +346,53 @@ public class ConnectMetricsRegistry {
         connectorCount = createTemplate("connector-count", WORKER_GROUP_NAME, "The number of connectors run in this worker.", workerTags);
         taskCount = createTemplate("task-count", WORKER_GROUP_NAME, "The number of tasks run in this worker.", workerTags);
         connectorStartupAttemptsTotal = createTemplate("connector-startup-attempts-total", WORKER_GROUP_NAME,
-                                                  "The total number of connector startups that this worker has attempted.", workerTags);
+                "The total number of connector startups that this worker has attempted.", workerTags);
         connectorStartupSuccessTotal = createTemplate("connector-startup-success-total", WORKER_GROUP_NAME,
-                                                 "The total number of connector starts that succeeded.", workerTags);
+                "The total number of connector starts that succeeded.", workerTags);
         connectorStartupSuccessPercentage = createTemplate("connector-startup-success-percentage", WORKER_GROUP_NAME,
-                                                      "The average percentage of this worker's connectors starts that succeeded.", workerTags);
+                "The average percentage of this worker's connectors starts that succeeded.", workerTags);
         connectorStartupFailureTotal = createTemplate("connector-startup-failure-total", WORKER_GROUP_NAME,
-                                                 "The total number of connector starts that failed.", workerTags);
+                "The total number of connector starts that failed.", workerTags);
         connectorStartupFailurePercentage = createTemplate("connector-startup-failure-percentage", WORKER_GROUP_NAME,
-                                                      "The average percentage of this worker's connectors starts that failed.", workerTags);
+                "The average percentage of this worker's connectors starts that failed.", workerTags);
         taskStartupAttemptsTotal = createTemplate("task-startup-attempts-total", WORKER_GROUP_NAME,
-                                                  "The total number of task startups that this worker has attempted.", workerTags);
+                "The total number of task startups that this worker has attempted.", workerTags);
         taskStartupSuccessTotal = createTemplate("task-startup-success-total", WORKER_GROUP_NAME,
-                                                 "The total number of task starts that succeeded.", workerTags);
+                "The total number of task starts that succeeded.", workerTags);
         taskStartupSuccessPercentage = createTemplate("task-startup-success-percentage", WORKER_GROUP_NAME,
-                                                      "The average percentage of this worker's tasks starts that succeeded.", workerTags);
+                "The average percentage of this worker's tasks starts that succeeded.", workerTags);
         taskStartupFailureTotal = createTemplate("task-startup-failure-total", WORKER_GROUP_NAME,
-                                                 "The total number of task starts that failed.", workerTags);
+                "The total number of task starts that failed.", workerTags);
         taskStartupFailurePercentage = createTemplate("task-startup-failure-percentage", WORKER_GROUP_NAME,
-                                                      "The average percentage of this worker's tasks starts that failed.", workerTags);
+                "The average percentage of this worker's tasks starts that failed.", workerTags);
 
         Set<String> workerConnectorTags = new LinkedHashSet<>(tags);
         workerConnectorTags.add(CONNECTOR_TAG_NAME);
         connectorTotalTaskCount = createTemplate("connector-total-task-count", WORKER_GROUP_NAME,
-            "The number of tasks of the connector on the worker.", workerConnectorTags);
+                "The number of tasks of the connector on the worker.", workerConnectorTags);
         connectorRunningTaskCount = createTemplate("connector-running-task-count", WORKER_GROUP_NAME,
-            "The number of running tasks of the connector on the worker.", workerConnectorTags);
+                "The number of running tasks of the connector on the worker.", workerConnectorTags);
         connectorPausedTaskCount = createTemplate("connector-paused-task-count", WORKER_GROUP_NAME,
-            "The number of paused tasks of the connector on the worker.", workerConnectorTags);
+                "The number of paused tasks of the connector on the worker.", workerConnectorTags);
         connectorFailedTaskCount = createTemplate("connector-failed-task-count", WORKER_GROUP_NAME,
-            "The number of failed tasks of the connector on the worker.", workerConnectorTags);
+                "The number of failed tasks of the connector on the worker.", workerConnectorTags);
         connectorUnassignedTaskCount = createTemplate("connector-unassigned-task-count",
-            WORKER_GROUP_NAME,
-            "The number of unassigned tasks of the connector on the worker.", workerConnectorTags);
+                WORKER_GROUP_NAME,
+                "The number of unassigned tasks of the connector on the worker.", workerConnectorTags);
         connectorDestroyedTaskCount = createTemplate("connector-destroyed-task-count",
-            WORKER_GROUP_NAME,
-            "The number of destroyed tasks of the connector on the worker.", workerConnectorTags);
+                WORKER_GROUP_NAME,
+                "The number of destroyed tasks of the connector on the worker.", workerConnectorTags);
         connectorRestartingTaskCount = createTemplate("connector-restarting-task-count",
-            WORKER_GROUP_NAME,
-            "The number of restarting tasks of the connector on the worker.", workerConnectorTags);
+                WORKER_GROUP_NAME,
+                "The number of restarting tasks of the connector on the worker.", workerConnectorTags);
 
         connectorStatusMetrics = Map.of(
-            connectorRunningTaskCount, TaskStatus.State.RUNNING,
-            connectorPausedTaskCount, TaskStatus.State.PAUSED,
-            connectorFailedTaskCount, TaskStatus.State.FAILED,
-            connectorUnassignedTaskCount, TaskStatus.State.UNASSIGNED,
-            connectorDestroyedTaskCount, TaskStatus.State.DESTROYED,
-            connectorRestartingTaskCount, TaskStatus.State.RESTARTING
+                connectorRunningTaskCount, TaskStatus.State.RUNNING,
+                connectorPausedTaskCount, TaskStatus.State.PAUSED,
+                connectorFailedTaskCount, TaskStatus.State.FAILED,
+                connectorUnassignedTaskCount, TaskStatus.State.UNASSIGNED,
+                connectorDestroyedTaskCount, TaskStatus.State.DESTROYED,
+                connectorRestartingTaskCount, TaskStatus.State.RESTARTING
         );
 
         /* Worker rebalance level */
@@ -402,15 +402,15 @@ public class ConnectMetricsRegistry {
         leaderName = createTemplate("leader-name", WORKER_REBALANCE_GROUP_NAME, "The name of the group leader.", rebalanceTags);
         epoch = createTemplate("epoch", WORKER_REBALANCE_GROUP_NAME, "The epoch or generation number of this worker.", rebalanceTags);
         rebalanceCompletedTotal = createTemplate("completed-rebalances-total", WORKER_REBALANCE_GROUP_NAME,
-                                                "The total number of rebalances completed by this worker.", rebalanceTags);
+                "The total number of rebalances completed by this worker.", rebalanceTags);
         rebalanceMode = createTemplate("rebalancing", WORKER_REBALANCE_GROUP_NAME,
-                                               "Whether this worker is currently rebalancing.", rebalanceTags);
+                "Whether this worker is currently rebalancing.", rebalanceTags);
         rebalanceTimeMax = createTemplate("rebalance-max-time-ms", WORKER_REBALANCE_GROUP_NAME,
-                                          "The maximum time in milliseconds spent by this worker to rebalance.", rebalanceTags);
+                "The maximum time in milliseconds spent by this worker to rebalance.", rebalanceTags);
         rebalanceTimeAvg = createTemplate("rebalance-avg-time-ms", WORKER_REBALANCE_GROUP_NAME,
-                                          "The average time in milliseconds spent by this worker to rebalance.", rebalanceTags);
+                "The average time in milliseconds spent by this worker to rebalance.", rebalanceTags);
         rebalanceTimeSinceLast = createTemplate("time-since-last-rebalance-ms", WORKER_REBALANCE_GROUP_NAME,
-                                                "The time in milliseconds since this worker completed the most recent rebalance.", rebalanceTags);
+                "The time in milliseconds since this worker completed the most recent rebalance.", rebalanceTags);
 
         /* Task Error Handling Metrics */
         Set<String> taskErrorHandlingTags = new LinkedHashSet<>(tags);

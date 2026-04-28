@@ -60,7 +60,7 @@ public class MiniTrogdorCluster implements AutoCloseable {
         private Scheduler scheduler = Scheduler.SYSTEM;
 
         private BasicPlatform.CommandRunner commandRunner =
-                new BasicPlatform.ShellCommandRunner();
+            new BasicPlatform.ShellCommandRunner();
 
         private static class NodeData {
             String hostname;
@@ -221,9 +221,9 @@ public class MiniTrogdorCluster implements AutoCloseable {
     private final Scheduler scheduler;
 
     private MiniTrogdorCluster(Scheduler scheduler,
-                               TreeMap<String, Agent> agents,
-                               TreeMap<String, Builder.NodeData> nodesByAgent,
-                               Coordinator coordinator) {
+        TreeMap<String, Agent> agents,
+        TreeMap<String, Builder.NodeData> nodesByAgent,
+        Coordinator coordinator) {
         this.scheduler = scheduler;
         this.agents = agents;
         this.nodesByAgent = nodesByAgent;

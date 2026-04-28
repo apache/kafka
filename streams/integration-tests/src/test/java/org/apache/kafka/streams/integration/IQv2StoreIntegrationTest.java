@@ -142,27 +142,28 @@ public class IQv2StoreIntegrationTest {
     private static final Position POSITION_0 =
         Position.fromMap(mkMap(mkEntry(INPUT_TOPIC_NAME, mkMap(mkEntry(0, 5L)))));
 
-    public static class UnknownQuery implements Query<Void> { }
+    public static class UnknownQuery implements Query<Void> {
+    }
 
     private KafkaStreams kafkaStreams;
 
     public enum StoresToTest {
         GLOBAL_IN_MEMORY_KV {
-            @Override
-            public StoreSupplier<?> supplier() {
-                return Stores.inMemoryKeyValueStore(STORE_NAME);
-            }
+        @Override
+        public StoreSupplier<?> supplier() {
+            return Stores.inMemoryKeyValueStore(STORE_NAME);
+        }
 
-            @Override
-            public boolean global() {
-                return true;
-            }
+        @Override
+        public boolean global() {
+            return true;
+        }
 
-            @Override
-            public boolean keyValue() {
-                return true;
-            }
-        },
+        @Override
+        public boolean keyValue() {
+            return true;
+        }
+    },
         GLOBAL_IN_MEMORY_LRU {
             @Override
             public StoreSupplier<?> supplier() {
@@ -269,7 +270,7 @@ public class IQv2StoreIntegrationTest {
             @Override
             public StoreSupplier<?> supplier() {
                 return Stores.inMemoryWindowStore(STORE_NAME, Duration.ofDays(1), WINDOW_SIZE,
-                                                  false
+                    false
                 );
             }
 
@@ -282,7 +283,7 @@ public class IQv2StoreIntegrationTest {
             @Override
             public StoreSupplier<?> supplier() {
                 return Stores.persistentWindowStore(STORE_NAME, Duration.ofDays(1), WINDOW_SIZE,
-                                                    false
+                    false
                 );
             }
 
@@ -300,7 +301,7 @@ public class IQv2StoreIntegrationTest {
             @Override
             public StoreSupplier<?> supplier() {
                 return Stores.persistentTimestampedWindowStore(STORE_NAME, Duration.ofDays(1),
-                                                               WINDOW_SIZE, false
+                    WINDOW_SIZE, false
                 );
             }
 
@@ -477,9 +478,9 @@ public class IQv2StoreIntegrationTest {
     }
 
     private void setUpSessionDSLTopology(final SessionBytesStoreSupplier supplier,
-                                         final StreamsBuilder builder,
-                                         final boolean cache,
-                                         final boolean log) {
+        final StreamsBuilder builder,
+        final boolean cache,
+        final boolean log) {
         final Materialized<Integer, Integer, SessionStore<Bytes, byte[]>> materialized =
             Materialized.as(supplier);
 
@@ -508,9 +509,9 @@ public class IQv2StoreIntegrationTest {
     }
 
     private void setUpWindowDSLTopology(final WindowBytesStoreSupplier supplier,
-                                        final StreamsBuilder builder,
-                                        final boolean cache,
-                                        final boolean log) {
+        final StreamsBuilder builder,
+        final boolean cache,
+        final boolean log) {
         final Materialized<Integer, Integer, WindowStore<Bytes, byte[]>> materialized =
             Materialized.as(supplier);
 
@@ -538,10 +539,10 @@ public class IQv2StoreIntegrationTest {
     }
 
     private void setUpKeyValueDSLTopology(final KeyValueBytesStoreSupplier supplier,
-                                          final StreamsBuilder builder,
-                                          final boolean cache,
-                                          final boolean log,
-                                          final StoresToTest storeToTest) {
+        final StreamsBuilder builder,
+        final boolean cache,
+        final boolean log,
+        final StoresToTest storeToTest) {
         final Materialized<Integer, Integer, KeyValueStore<Bytes, byte[]>> materialized =
             Materialized.as(supplier);
 
@@ -573,10 +574,10 @@ public class IQv2StoreIntegrationTest {
     }
 
     private void setUpKeyValuePAPITopology(final KeyValueBytesStoreSupplier supplier,
-                                           final StreamsBuilder builder,
-                                           final boolean cache,
-                                           final boolean log,
-                                           final StoresToTest storeToTest) {
+        final StreamsBuilder builder,
+        final boolean cache,
+        final boolean log,
+        final StoresToTest storeToTest) {
         final StoreBuilder<?> keyValueStoreStoreBuilder;
         final ProcessorSupplier<Integer, Integer, Void, Void> processorSupplier;
         if (storeToTest.timestamped()) {
@@ -641,10 +642,10 @@ public class IQv2StoreIntegrationTest {
     }
 
     private void setUpWindowPAPITopology(final WindowBytesStoreSupplier supplier,
-                                         final StreamsBuilder builder,
-                                         final boolean cache,
-                                         final boolean log,
-                                         final StoresToTest storeToTest) {
+        final StreamsBuilder builder,
+        final boolean cache,
+        final boolean log,
+        final StoresToTest storeToTest) {
         final StoreBuilder<?> windowStoreStoreBuilder;
         final ProcessorSupplier<Integer, Integer, Void, Void> processorSupplier;
         if (storeToTest.timestamped()) {
@@ -712,10 +713,10 @@ public class IQv2StoreIntegrationTest {
     }
 
     private void setUpSessionPAPITopology(final SessionBytesStoreSupplier supplier,
-                                          final StreamsBuilder builder,
-                                          final boolean cache,
-                                          final boolean log,
-                                          final StoresToTest storeToTest) {
+        final StreamsBuilder builder,
+        final boolean cache,
+        final boolean log,
+        final StoresToTest storeToTest) {
         final StoreBuilder<?> sessionStoreStoreBuilder;
         final ProcessorSupplier<Integer, Integer, Void, Void> processorSupplier;
         sessionStoreStoreBuilder = Stores.sessionStoreBuilder(
@@ -790,7 +791,7 @@ public class IQv2StoreIntegrationTest {
                 shouldCollectExecutionInfoUnderFailure();
                 if (storeToTest.keyValue()) {
                     if (storeToTest.timestamped()) {
-                        shouldHandleKeyQuery(2,  5);
+                        shouldHandleKeyQuery(2, 5);
                         shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.makeAllowNullable(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5));
                         shouldHandleRangeQueries();
                         shouldHandleTimestampedRangeQueries(true);
@@ -932,25 +933,25 @@ public class IQv2StoreIntegrationTest {
             Optional.of(4),
             true,
             Arrays.asList(ValueAndTimestamp.make(1, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() : -1L),
-                          ValueAndTimestamp.make(5, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 5 : -1L),
-                          ValueAndTimestamp.make(9, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 9 : -1L),
-                          ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L),
-                          ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L)));
+                ValueAndTimestamp.make(5, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 5 : -1L),
+                ValueAndTimestamp.make(9, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 9 : -1L),
+                ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L),
+                ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.of(1),
             Optional.of(3),
             true,
             Arrays.asList(ValueAndTimestamp.make(5, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 5 : -1L),
-                          ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L),
-                          ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L)));
+                ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L),
+                ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.of(3),
             Optional.empty(),
             true,
             Arrays.asList(ValueAndTimestamp.make(9, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 9 : -1L),
-                          ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L))
+                ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L))
         );
 
         shouldHandleTimestampedRangeQuery(
@@ -958,63 +959,63 @@ public class IQv2StoreIntegrationTest {
             Optional.of(3),
             true,
             Arrays.asList(ValueAndTimestamp.make(1, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() : -1L),
-                          ValueAndTimestamp.make(5, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 5 : -1L),
-                          ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L),
-                          ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L)));
+                ValueAndTimestamp.make(5, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 5 : -1L),
+                ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L),
+                ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.empty(),
             Optional.empty(),
             true,
             Arrays.asList(ValueAndTimestamp.make(1, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() : -1L),
-                          ValueAndTimestamp.make(5, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 5 : -1L),
-                          ValueAndTimestamp.make(9, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 9 : -1L),
-                          ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L),
-                          ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L)));
+                ValueAndTimestamp.make(5, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 5 : -1L),
+                ValueAndTimestamp.make(9, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 9 : -1L),
+                ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L),
+                ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.of(0),
             Optional.of(4),
             false,
             Arrays.asList(ValueAndTimestamp.make(9, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 9 : -1L),
-                          ValueAndTimestamp.make(5, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 5 : -1L),
-                          ValueAndTimestamp.make(1, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() : -1L),
-                          ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L),
-                          ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L)));
+                ValueAndTimestamp.make(5, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 5 : -1L),
+                ValueAndTimestamp.make(1, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() : -1L),
+                ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L),
+                ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.of(1),
             Optional.of(3),
             false,
             Arrays.asList(ValueAndTimestamp.make(5, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 5 : -1L),
-                          ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L),
-                          ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L)));
+                ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L),
+                ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.of(3),
             Optional.empty(),
             false,
             Arrays.asList(ValueAndTimestamp.make(9, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 9 : -1L),
-                          ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L)));
+                ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.empty(),
             Optional.of(3),
             false,
             Arrays.asList(ValueAndTimestamp.make(5, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 5 : -1L),
-                          ValueAndTimestamp.make(1, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() : -1L),
-                          ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L),
-                          ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L)));
+                ValueAndTimestamp.make(1, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() : -1L),
+                ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L),
+                ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.empty(),
             Optional.empty(),
             false,
             Arrays.asList(ValueAndTimestamp.make(9, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 9 : -1L),
-                          ValueAndTimestamp.make(5, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 5 : -1L),
-                          ValueAndTimestamp.make(1, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() : -1L),
-                          ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L),
-                          ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L)));
+                ValueAndTimestamp.make(5, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 5 : -1L),
+                ValueAndTimestamp.make(1, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() : -1L),
+                ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L),
+                ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L)));
     }
 
     private <T> void shouldHandleWindowKeyDSLQueries(final Function<T, Integer> extractor) {
@@ -1676,18 +1677,18 @@ public class IQv2StoreIntegrationTest {
     }
 
     public <V> void shouldHandleTimestampedKeyQuery(
-            final Integer key,
-            final ValueAndTimestamp expectedValueAndTimestamp) {
+        final Integer key,
+        final ValueAndTimestamp expectedValueAndTimestamp) {
 
         final TimestampedKeyQuery<Integer, V> query = TimestampedKeyQuery.withKey(key);
         final StateQueryRequest<ValueAndTimestamp<V>> request =
-                inStore(STORE_NAME)
-                        .withQuery(query)
-                        .withPartitions(Set.of(0, 1))
-                        .withPositionBound(PositionBound.at(INPUT_POSITION));
+            inStore(STORE_NAME)
+                .withQuery(query)
+                .withPartitions(Set.of(0, 1))
+                .withPositionBound(PositionBound.at(INPUT_POSITION));
 
         final StateQueryResult<ValueAndTimestamp<V>> result =
-                IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
+            IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
         final QueryResult<ValueAndTimestamp<V>> queryResult = result.getOnlyPartitionResult();
         if (queryResult == null) {
             throw new AssertionError("cannot use this query type to query result");
@@ -1700,8 +1701,8 @@ public class IQv2StoreIntegrationTest {
 
         assertThrows(IllegalArgumentException.class, queryResult::getFailureReason);
         assertThrows(
-                IllegalArgumentException.class,
-                queryResult::getFailureMessage
+            IllegalArgumentException.class,
+            queryResult::getFailureMessage
         );
 
         final ValueAndTimestamp<V> valueAndTimestamp = queryResult.getResult();
@@ -2035,7 +2036,7 @@ public class IQv2StoreIntegrationTest {
     }
 
     private static Properties streamsConfiguration(final boolean cache, final boolean log,
-                                                   final String supplier, final String kind, final String groupProtocol, final boolean withHeaders) {
+        final String supplier, final String kind, final String groupProtocol, final boolean withHeaders) {
         final String safeTestName =
             IQv2StoreIntegrationTest.class.getName() + "-" + cache + "-" + log + "-" + supplier
                 + "-" + kind + "-" + groupProtocol + "-" + withHeaders + "-" + RANDOM.nextInt();

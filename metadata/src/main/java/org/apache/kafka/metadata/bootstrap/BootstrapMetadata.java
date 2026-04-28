@@ -53,7 +53,7 @@ public class BootstrapMetadata {
             // metadata.version is handled in a special way, and kraft.version generates no
             // FeatureLevelRecord.
             if (!(n.equals(MetadataVersion.FEATURE_NAME) ||
-                    n.equals(KRaftVersion.FEATURE_NAME))) {
+                n.equals(KRaftVersion.FEATURE_NAME))) {
                 featureNames.add(n);
             }
         });
@@ -87,7 +87,7 @@ public class BootstrapMetadata {
         }
         if (metadataVersionLevel.isEmpty()) {
             throw new RuntimeException("No FeatureLevelRecord for " + MetadataVersion.FEATURE_NAME +
-                    " was found in the bootstrap metadata from " + source);
+                " was found in the bootstrap metadata from " + source);
         }
         return new BootstrapMetadata(records, metadataVersionLevel.get(), source);
     }

@@ -156,10 +156,10 @@ public class LogCleaner implements BrokerReconfigurable {
      */
     @SuppressWarnings("this-escape")
     public LogCleaner(CleanerConfig initialConfig,
-                      List<File> logDirs,
-                      ConcurrentMap<TopicPartition, UnifiedLog> logs,
-                      LogDirFailureChannel logDirFailureChannel,
-                      Time time) {
+            List<File> logDirs,
+            ConcurrentMap<TopicPartition, UnifiedLog> logs,
+            LogDirFailureChannel logDirFailureChannel,
+            Time time) {
         config = initialConfig;
         this.logs = logs;
         this.logDirFailureChannel = logDirFailureChannel;
@@ -621,21 +621,21 @@ public class LogCleaner implements BrokerReconfigurable {
         private void recordStats(int id, String name, long from, long to, CleanerStats stats) {
             this.lastStats = stats;
             String message = String.format("%n\tLog cleaner thread %d cleaned log %s (dirty section = [%d, %d])%n", id, name, from, to) +
-                        String.format("\t%,.1f MB of log processed in %,.1f seconds (%,.1f MB/sec).%n", mb(stats.bytesRead),
-                                stats.elapsedSecs(),
-                                mb(stats.bytesRead / stats.elapsedSecs())) +
-                        String.format("\tIndexed %,.1f MB in %.1f seconds (%,.1f Mb/sec, %.1f%% of total time)%n", mb(stats.mapBytesRead),
-                                stats.elapsedIndexSecs(),
-                                mb(stats.mapBytesRead) / stats.elapsedIndexSecs(),
-                                100 * stats.elapsedIndexSecs() / stats.elapsedSecs()) +
-                        String.format("\tBuffer utilization: %.1f%%%n", 100 * stats.bufferUtilization) +
-                        String.format("\tCleaned %,.1f MB in %.1f seconds (%,.1f Mb/sec, %.1f%% of total time)%n", mb(stats.bytesRead),
-                                stats.elapsedSecs() - stats.elapsedIndexSecs(),
-                                mb(stats.bytesRead) / (stats.elapsedSecs() - stats.elapsedIndexSecs()), 100 * (stats.elapsedSecs() - stats.elapsedIndexSecs()) / stats.elapsedSecs()) +
-                        String.format("\tStart size: %,.1f MB (%,d messages)%n", mb(stats.bytesRead), stats.messagesRead) +
-                        String.format("\tEnd size: %,.1f MB (%,d messages)%n", mb(stats.bytesWritten), stats.messagesWritten) +
-                        String.format("\t%.1f%% size reduction (%.1f%% fewer messages)%n", 100.0 * (1.0 - Long.valueOf(stats.bytesWritten).doubleValue() / stats.bytesRead),
-                                100.0 * (1.0 - Long.valueOf(stats.messagesWritten).doubleValue() / stats.messagesRead));
+                    String.format("\t%,.1f MB of log processed in %,.1f seconds (%,.1f MB/sec).%n", mb(stats.bytesRead),
+                            stats.elapsedSecs(),
+                            mb(stats.bytesRead / stats.elapsedSecs())) +
+                    String.format("\tIndexed %,.1f MB in %.1f seconds (%,.1f Mb/sec, %.1f%% of total time)%n", mb(stats.mapBytesRead),
+                            stats.elapsedIndexSecs(),
+                            mb(stats.mapBytesRead) / stats.elapsedIndexSecs(),
+                            100 * stats.elapsedIndexSecs() / stats.elapsedSecs()) +
+                    String.format("\tBuffer utilization: %.1f%%%n", 100 * stats.bufferUtilization) +
+                    String.format("\tCleaned %,.1f MB in %.1f seconds (%,.1f Mb/sec, %.1f%% of total time)%n", mb(stats.bytesRead),
+                            stats.elapsedSecs() - stats.elapsedIndexSecs(),
+                            mb(stats.bytesRead) / (stats.elapsedSecs() - stats.elapsedIndexSecs()), 100 * (stats.elapsedSecs() - stats.elapsedIndexSecs()) / stats.elapsedSecs()) +
+                    String.format("\tStart size: %,.1f MB (%,d messages)%n", mb(stats.bytesRead), stats.messagesRead) +
+                    String.format("\tEnd size: %,.1f MB (%,d messages)%n", mb(stats.bytesWritten), stats.messagesWritten) +
+                    String.format("\t%.1f%% size reduction (%.1f%% fewer messages)%n", 100.0 * (1.0 - Long.valueOf(stats.bytesWritten).doubleValue() / stats.bytesRead),
+                            100.0 * (1.0 - Long.valueOf(stats.messagesWritten).doubleValue() / stats.messagesRead));
             logger.info(message);
             if (lastPreCleanStats.delayedPartitions() > 0) {
                 logger.info("\tCleanable partitions: {}, Delayed partitions: {}, max delay: {}",

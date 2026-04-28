@@ -60,14 +60,14 @@ public class ClassicGroupMemberTest {
         JoinGroupRequestProtocolCollection collection = new JoinGroupRequestProtocolCollection();
         collection.add(new JoinGroupRequestProtocol()
             .setName("range")
-            .setMetadata(new byte[] {0}));
+            .setMetadata(new byte[]{0}));
 
         assertTrue(member.matches(collection));
 
         collection = new JoinGroupRequestProtocolCollection();
         collection.add(new JoinGroupRequestProtocol()
             .setName("range")
-            .setMetadata(new byte[] {1}));
+            .setMetadata(new byte[]{1}));
 
         assertFalse(member.matches(collection));
 
@@ -215,7 +215,7 @@ public class ClassicGroupMemberTest {
         assertTrue(member.isStaticMember());
         assertEquals(Optional.of("group-instance-id"), member.groupInstanceId());
     }
-    
+
     @Test
     public void testPlainProtocolSet() {
         JoinGroupRequestProtocolCollection protocolCollection =

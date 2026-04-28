@@ -175,5 +175,6 @@ public class ResignedState implements EpochState {
     }
 
     @Override
-    public void close() {}
+    public void close() {
+    }
 }

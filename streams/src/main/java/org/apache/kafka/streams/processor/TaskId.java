@@ -49,7 +49,7 @@ public class TaskId implements Comparable<TaskId> {
         this.partition = partition;
         if (topologyName != null && topologyName.length() == 0) {
             LOG.warn("Empty string passed in for task's namedTopology, since NamedTopology name cannot be empty, we "
-                         + "assume this task does not belong to a NamedTopology and downgrade this to null");
+                + "assume this task does not belong to a NamedTopology and downgrade this to null");
             this.topologyName = null;
         } else {
             this.topologyName = topologyName;

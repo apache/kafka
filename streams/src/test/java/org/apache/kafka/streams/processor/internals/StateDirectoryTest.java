@@ -103,19 +103,19 @@ public class StateDirectoryTest {
     }
 
     private void initializeStateDirectory(
-            final boolean createStateDirectory,
-            final boolean hasNamedTopology,
-            final boolean allowOsGroupWriteAccess
+        final boolean createStateDirectory,
+        final boolean hasNamedTopology,
+        final boolean allowOsGroupWriteAccess
     ) throws IOException {
         stateDir = new File(TestUtils.IO_TMP_DIR, "kafka-" + TestUtils.randomString(5));
         if (!createStateDirectory) {
             cleanup();
         }
         config = new StreamsConfig(Map.of(
-                StreamsConfig.APPLICATION_ID_CONFIG, applicationId,
-                StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234",
-                StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath(),
-                StreamsConfig.ALLOW_OS_GROUP_WRITE_ACCESS_CONFIG, allowOsGroupWriteAccess
+            StreamsConfig.APPLICATION_ID_CONFIG, applicationId,
+            StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234",
+            StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath(),
+            StreamsConfig.ALLOW_OS_GROUP_WRITE_ACCESS_CONFIG, allowOsGroupWriteAccess
         ));
         directory = new StateDirectory(config, time, createStateDirectory, hasNamedTopology);
         appDir = new File(stateDir, applicationId);
@@ -171,11 +171,11 @@ public class StateDirectoryTest {
         final Path path = file.toPath();
         if (path.getFileSystem().supportedFileAttributeViews().contains("posix")) {
             final Set<PosixFilePermission> expectedPermissions = EnumSet.of(
-                    PosixFilePermission.OWNER_EXECUTE,
-                    PosixFilePermission.GROUP_READ,
-                    PosixFilePermission.OWNER_WRITE,
-                    PosixFilePermission.GROUP_EXECUTE,
-                    PosixFilePermission.OWNER_READ);
+                PosixFilePermission.OWNER_EXECUTE,
+                PosixFilePermission.GROUP_READ,
+                PosixFilePermission.OWNER_WRITE,
+                PosixFilePermission.GROUP_EXECUTE,
+                PosixFilePermission.OWNER_READ);
             if (allowOsGroupWriteAccess) {
                 expectedPermissions.add(PosixFilePermission.GROUP_WRITE);
             }
@@ -671,8 +671,8 @@ public class StateDirectoryTest {
             assertThat(
                 appender.getMessages(),
                 hasItem("Using an OS temp directory in the state.dir property can cause failures with writing the" +
-                            " checkpoint file due to the fact that this directory can be cleared by the OS." +
-                            " Resolved state.dir: [" + System.getProperty("java.io.tmpdir") + "/kafka-streams]")
+                    " checkpoint file due to the fact that this directory can be cleared by the OS." +
+                    " Resolved state.dir: [" + System.getProperty("java.io.tmpdir") + "/kafka-streams]")
             );
         }
     }
@@ -832,7 +832,7 @@ public class StateDirectoryTest {
 
         final FileOutputStream fileOutputStream = new FileOutputStream(processFile);
         try (final BufferedWriter writer = new BufferedWriter(
-            new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
+                 new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
             writer.write(processId.toString());
             writer.flush();
             fileOutputStream.getFD().sync();
@@ -960,14 +960,14 @@ public class StateDirectoryTest {
         }
 
         final ProcessorTopology processorTopology = new ProcessorTopology(
-                Collections.emptyList(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                Collections.singletonList(store),
-                Collections.emptyList(),
-                Collections.singletonMap(store.name(), store.name() + "-changelog"),
-                Collections.emptySet(),
-                Collections.emptyMap()
+            Collections.emptyList(),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.singletonList(store),
+            Collections.emptyList(),
+            Collections.singletonMap(store.name(), store.name() + "-changelog"),
+            Collections.emptySet(),
+            Collections.emptyMap()
         );
         Mockito.when(metadata.buildSubtopology(ArgumentMatchers.any())).thenReturn(processorTopology);
         Mockito.when(metadata.taskConfig(ArgumentMatchers.any())).thenReturn(topologyConfig.getTaskConfig());
@@ -1006,8 +1006,8 @@ public class StateDirectoryTest {
         private File taskDirectory;
 
         private CreateTaskDirRunner(final StateDirectory directory,
-                                    final TaskId taskId,
-                                    final AtomicBoolean passed) {
+            final TaskId taskId,
+            final AtomicBoolean passed) {
             this.directory = directory;
             this.taskId = taskId;
             this.passed = passed;

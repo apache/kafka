@@ -50,26 +50,26 @@ public class ApplicationEventHandler implements Closeable {
     private final AsyncConsumerMetrics asyncConsumerMetrics;
 
     public ApplicationEventHandler(final LogContext logContext,
-                                   final Time time,
-                                   final int initializationTimeoutMs,
-                                   final BlockingQueue<ApplicationEvent> applicationEventQueue,
-                                   final CompletableEventReaper applicationEventReaper,
-                                   final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
-                                   final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-                                   final Supplier<RequestManagers> requestManagersSupplier,
-                                   final AsyncConsumerMetrics asyncConsumerMetrics) {
+        final Time time,
+        final int initializationTimeoutMs,
+        final BlockingQueue<ApplicationEvent> applicationEventQueue,
+        final CompletableEventReaper applicationEventReaper,
+        final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
+        final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
+        final Supplier<RequestManagers> requestManagersSupplier,
+        final AsyncConsumerMetrics asyncConsumerMetrics) {
         this.log = logContext.logger(ApplicationEventHandler.class);
         this.time = time;
         this.applicationEventQueue = applicationEventQueue;
         this.asyncConsumerMetrics = asyncConsumerMetrics;
         ConsumerNetworkThread networkThread = new ConsumerNetworkThread(logContext,
-                time,
-                applicationEventQueue,
-                applicationEventReaper,
-                applicationEventProcessorSupplier,
-                networkClientDelegateSupplier,
-                requestManagersSupplier,
-                asyncConsumerMetrics);
+            time,
+            applicationEventQueue,
+            applicationEventReaper,
+            applicationEventProcessorSupplier,
+            networkClientDelegateSupplier,
+            requestManagersSupplier,
+            asyncConsumerMetrics);
 
         try {
             networkThread.start(initializationTimeoutMs);
@@ -151,8 +151,8 @@ public class ApplicationEventHandler implements Closeable {
 
     public void close(final Duration timeout) {
         closer.close(
-                () -> Utils.closeQuietly(() -> networkThread.close(timeout), "consumer network thread"),
-                () -> log.warn("The application event handler was already closed")
+            () -> Utils.closeQuietly(() -> networkThread.close(timeout), "consumer network thread"),
+            () -> log.warn("The application event handler was already closed")
         );
     }
 }

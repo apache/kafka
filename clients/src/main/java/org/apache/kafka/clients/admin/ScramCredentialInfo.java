@@ -57,9 +57,9 @@ public class ScramCredentialInfo {
     @Override
     public String toString() {
         return "ScramCredentialInfo{" +
-                "mechanism=" + mechanism +
-                ", iterations=" + iterations +
-                '}';
+            "mechanism=" + mechanism +
+            ", iterations=" + iterations +
+            '}';
     }
 
     @Override
@@ -68,7 +68,7 @@ public class ScramCredentialInfo {
         if (o == null || getClass() != o.getClass()) return false;
         ScramCredentialInfo that = (ScramCredentialInfo) o;
         return iterations == that.iterations &&
-                mechanism == that.mechanism;
+            mechanism == that.mechanism;
     }
 
     @Override

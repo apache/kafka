@@ -36,8 +36,8 @@ public interface StateManager {
      * @throws StreamsException if the store's change log does not contain the partition
      */
     void registerStore(final StateStore store,
-                       final StateRestoreCallback stateRestoreCallback,
-                       final CommitCallback checkpoint);
+        final StateRestoreCallback stateRestoreCallback,
+        final CommitCallback checkpoint);
 
     StateStore store(final String name);
 

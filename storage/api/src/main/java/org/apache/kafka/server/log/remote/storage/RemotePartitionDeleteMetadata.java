@@ -38,9 +38,9 @@ public class RemotePartitionDeleteMetadata extends RemoteLogMetadata {
      * @param brokerId         Id of the broker in which this event is raised.
      */
     public RemotePartitionDeleteMetadata(TopicIdPartition topicIdPartition,
-                                         RemotePartitionDeleteState state,
-                                         long eventTimestampMs,
-                                         int brokerId) {
+           RemotePartitionDeleteState state,
+           long eventTimestampMs,
+           int brokerId) {
         super(brokerId, eventTimestampMs);
         this.topicIdPartition = Objects.requireNonNull(topicIdPartition);
         this.state = Objects.requireNonNull(state);
@@ -80,9 +80,9 @@ public class RemotePartitionDeleteMetadata extends RemoteLogMetadata {
         }
         RemotePartitionDeleteMetadata that = (RemotePartitionDeleteMetadata) o;
         return Objects.equals(topicIdPartition, that.topicIdPartition) &&
-                state == that.state &&
-                eventTimestampMs() == that.eventTimestampMs() &&
-                brokerId() == that.brokerId();
+               state == that.state &&
+               eventTimestampMs() == that.eventTimestampMs() &&
+               brokerId() == that.brokerId();
     }
 
     @Override

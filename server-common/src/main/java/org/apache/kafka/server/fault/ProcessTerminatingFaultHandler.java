@@ -64,7 +64,8 @@ public final class ProcessTerminatingFaultHandler implements FaultHandler {
 
     public static final class Builder {
         private boolean shouldHalt = true;
-        private Runnable action = () -> { };
+        private Runnable action = () -> {
+        };
 
         /**
          * Set if halt or exit should be used.

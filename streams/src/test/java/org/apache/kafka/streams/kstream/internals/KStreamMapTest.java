@@ -48,7 +48,7 @@ public class KStreamMapTest {
     public void testMap() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topicName = "topic";
-        final int[] expectedKeys = new int[] {0, 1, 2, 3};
+        final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
@@ -57,12 +57,12 @@ public class KStreamMapTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             for (final int expectedKey : expectedKeys) {
                 final TestInputTopic<Integer, String> inputTopic =
-                        driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                    driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
                 inputTopic.pipeInput(expectedKey, "V" + expectedKey, 10L - expectedKey);
             }
         }
 
-        final KeyValueTimestamp[] expected = new KeyValueTimestamp[] {new KeyValueTimestamp<>("V0", 0, 10),
+        final KeyValueTimestamp[] expected = new KeyValueTimestamp[]{new KeyValueTimestamp<>("V0", 0, 10),
             new KeyValueTimestamp<>("V1", 1, 9),
             new KeyValueTimestamp<>("V2", 2, 8),
             new KeyValueTimestamp<>("V3", 3, 7)};
@@ -76,7 +76,7 @@ public class KStreamMapTest {
     public void testKeyValueMapperResultNotNull() {
         final KStreamMap<String, Integer, String, Integer> supplier = new KStreamMap<>((key, value) -> null);
         final Throwable throwable = assertThrows(NullPointerException.class,
-                () -> supplier.get().process(new Record<>("K", 0, 0L)));
+            () -> supplier.get().process(new Record<>("K", 0, 0L)));
         assertThat(throwable.getMessage(), is("The provided KeyValueMapper returned null which is not allowed."));
     }
 

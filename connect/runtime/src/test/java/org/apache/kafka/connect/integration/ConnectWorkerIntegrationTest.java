@@ -227,12 +227,12 @@ public class ConnectWorkerIntegrationTest {
 
         // Restart the failed task
         String taskRestartEndpoint = connect.endpointForResource(
-            String.format("connectors/%s/tasks/0/restart", CONNECTOR_NAME));
+                String.format("connectors/%s/tasks/0/restart", CONNECTOR_NAME));
         connect.requestPost(taskRestartEndpoint, "", Map.of());
 
         // Ensure the task started successfully this time
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, numTasks,
-            "Connector tasks are not all in running state.");
+                "Connector tasks are not all in running state.");
     }
 
     /**
@@ -354,10 +354,10 @@ public class ConnectWorkerIntegrationTest {
         // When automatic topic creation is disabled on the broker
         brokerProps.put("auto.create.topics.enable", "false");
         connect = connectBuilder
-            .brokerProps(brokerProps)
-            .numWorkers(1)
-            .numBrokers(1)
-            .build();
+                .brokerProps(brokerProps)
+                .numWorkers(1)
+                .numBrokers(1)
+                .build();
         connect.start();
 
         // and when the connector is not configured to create topics
@@ -370,7 +370,7 @@ public class ConnectWorkerIntegrationTest {
         connector.expectedRecords(NUM_TASKS * MESSAGES_PER_POLL);
         connect.configureConnector(CONNECTOR_NAME, props);
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME,
-            NUM_TASKS, "Connector tasks did not start in time");
+                NUM_TASKS, "Connector tasks did not start in time");
         connector.awaitRecords(TimeUnit.MINUTES.toMillis(1));
 
         // Then, if we delete the connector, it and each of its tasks should be stopped by the framework
@@ -567,17 +567,17 @@ public class ConnectWorkerIntegrationTest {
         connect.start();
 
         CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
-            CONNECTOR_NAME,
-            defaultSourceConnectorProps(TOPIC_NAME),
-            CreateConnectorRequest.InitialState.PAUSED
+                CONNECTOR_NAME,
+                defaultSourceConnectorProps(TOPIC_NAME),
+                CreateConnectorRequest.InitialState.PAUSED
         );
         connect.configureConnector(createConnectorRequest);
 
         // Verify that the connector's status is PAUSED and also that no tasks were spawned for the connector
         connect.assertions().assertConnectorAndExactlyNumTasksArePaused(
-            CONNECTOR_NAME,
-            0,
-            "Connector was not created in a paused state"
+                CONNECTOR_NAME,
+                0,
+                "Connector was not created in a paused state"
         );
         assertEquals(List.of(), connect.connectorInfo(CONNECTOR_NAME).tasks());
         assertEquals(List.of(), connect.taskConfigs(CONNECTOR_NAME));
@@ -585,9 +585,9 @@ public class ConnectWorkerIntegrationTest {
         // Verify that a connector created in the PAUSED state can be resumed successfully
         connect.resumeConnector(CONNECTOR_NAME);
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
-            CONNECTOR_NAME,
-            NUM_TASKS,
-            "Connector or tasks did not start running healthily in time"
+                CONNECTOR_NAME,
+                NUM_TASKS,
+                "Connector or tasks did not start running healthily in time"
         );
     }
 
@@ -603,16 +603,16 @@ public class ConnectWorkerIntegrationTest {
         props.put("max.messages", "10");
         props.put(TASKS_MAX_CONFIG, "1");
         CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
-            CONNECTOR_NAME,
-            props,
-            CreateConnectorRequest.InitialState.STOPPED
+                CONNECTOR_NAME,
+                props,
+                CreateConnectorRequest.InitialState.STOPPED
         );
         connect.configureConnector(createConnectorRequest);
 
         // Verify that the connector's status is STOPPED and also that no tasks were spawned for the connector
         connect.assertions().assertConnectorIsStopped(
-            CONNECTOR_NAME,
-            "Connector was not created in a stopped state"
+                CONNECTOR_NAME,
+                "Connector was not created in a stopped state"
         );
         assertEquals(List.of(), connect.connectorInfo(CONNECTOR_NAME).tasks());
         assertEquals(List.of(), connect.taskConfigs(CONNECTOR_NAME));
@@ -621,17 +621,17 @@ public class ConnectWorkerIntegrationTest {
 
         // Alter the offsets so that only 5 messages are produced
         connect.alterSourceConnectorOffset(
-            CONNECTOR_NAME,
-            Map.of("task.id", CONNECTOR_NAME + "-0"),
-            Map.of("saved", 5L)
+                CONNECTOR_NAME,
+                Map.of("task.id", CONNECTOR_NAME + "-0"),
+                Map.of("saved", 5L)
         );
 
         // Verify that a connector created in the STOPPED state can be resumed successfully
         connect.resumeConnector(CONNECTOR_NAME);
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
-            CONNECTOR_NAME,
-            1,
-            "Connector or tasks did not start running healthily in time"
+                CONNECTOR_NAME,
+                1,
+                "Connector or tasks did not start running healthily in time"
         );
 
         // Verify that only 5 messages were produced. We verify this by consuming all the messages from the topic after we've already ensured that at
@@ -657,16 +657,16 @@ public class ConnectWorkerIntegrationTest {
         props.put(TASKS_MAX_CONFIG, "1");
 
         CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
-            CONNECTOR_NAME,
-            props,
-            CreateConnectorRequest.InitialState.STOPPED
+                CONNECTOR_NAME,
+                props,
+                CreateConnectorRequest.InitialState.STOPPED
         );
         connect.configureConnector(createConnectorRequest);
 
         // Verify that the connector's status is STOPPED and also that no tasks were spawned for the connector
         connect.assertions().assertConnectorIsStopped(
-            CONNECTOR_NAME,
-            "Connector was not created in a stopped state"
+                CONNECTOR_NAME,
+                "Connector was not created in a stopped state"
         );
         assertEquals(List.of(), connect.connectorInfo(CONNECTOR_NAME).tasks());
         assertEquals(List.of(), connect.taskConfigs(CONNECTOR_NAME));
@@ -678,11 +678,11 @@ public class ConnectWorkerIntegrationTest {
 
         // This will cause the connector task to fail if it encounters a record with offset < 5
         TaskHandle taskHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME).taskHandle(CONNECTOR_NAME + "-0",
-            sinkRecord -> {
-                if (sinkRecord.kafkaOffset() < 5L) {
-                    throw new ConnectException("Unexpected record encountered: " + sinkRecord);
-                }
-            });
+                sinkRecord -> {
+                    if (sinkRecord.kafkaOffset() < 5L) {
+                        throw new ConnectException("Unexpected record encountered: " + sinkRecord);
+                    }
+                });
 
         // We produced 10 records and altered the connector offsets to skip over the first 5, so we expect 5 records to be consumed
         taskHandle.expectedRecords(5);
@@ -690,18 +690,18 @@ public class ConnectWorkerIntegrationTest {
         // Verify that a connector created in the STOPPED state can be resumed successfully
         connect.resumeConnector(CONNECTOR_NAME);
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
-            CONNECTOR_NAME,
-            1,
-            "Connector or tasks did not start running healthily in time"
+                CONNECTOR_NAME,
+                1,
+                "Connector or tasks did not start running healthily in time"
         );
 
         taskHandle.awaitRecords(TimeUnit.SECONDS.toMillis(10));
 
         // Confirm that the task is still running (i.e. it didn't fail due to encountering any records with offset < 5)
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
-            CONNECTOR_NAME,
-            1,
-            "Connector or tasks did not start running healthily in time"
+                CONNECTOR_NAME,
+                1,
+                "Connector or tasks did not start running healthily in time"
         );
     }
 
@@ -713,17 +713,17 @@ public class ConnectWorkerIntegrationTest {
 
         // Create a connector with PAUSED initial state
         CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
-            CONNECTOR_NAME,
-            defaultSourceConnectorProps(TOPIC_NAME),
-            CreateConnectorRequest.InitialState.PAUSED
+                CONNECTOR_NAME,
+                defaultSourceConnectorProps(TOPIC_NAME),
+                CreateConnectorRequest.InitialState.PAUSED
         );
         connect.configureConnector(createConnectorRequest);
 
         // Verify that the connector's status is PAUSED and also that no tasks were spawned for the connector
         connect.assertions().assertConnectorAndExactlyNumTasksArePaused(
-            CONNECTOR_NAME,
-            0,
-            "Connector was not created in a paused state"
+                CONNECTOR_NAME,
+                0,
+                "Connector was not created in a paused state"
         );
         assertEquals(List.of(), connect.connectorInfo(CONNECTOR_NAME).tasks());
         assertEquals(List.of(), connect.taskConfigs(CONNECTOR_NAME));
@@ -735,16 +735,16 @@ public class ConnectWorkerIntegrationTest {
 
         // Create a connector with STOPPED initial state
         createConnectorRequest = new CreateConnectorRequest(
-            CONNECTOR_NAME,
-            defaultSourceConnectorProps(TOPIC_NAME),
-            CreateConnectorRequest.InitialState.STOPPED
+                CONNECTOR_NAME,
+                defaultSourceConnectorProps(TOPIC_NAME),
+                CreateConnectorRequest.InitialState.STOPPED
         );
         connect.configureConnector(createConnectorRequest);
 
         // Verify that the connector's status is STOPPED and also that no tasks were spawned for the connector
         connect.assertions().assertConnectorIsStopped(
-            CONNECTOR_NAME,
-            "Connector was not created in a stopped state"
+                CONNECTOR_NAME,
+                "Connector was not created in a stopped state"
         );
         assertEquals(List.of(), connect.connectorInfo(CONNECTOR_NAME).tasks());
         assertEquals(List.of(), connect.taskConfigs(CONNECTOR_NAME));
@@ -875,9 +875,9 @@ public class ConnectWorkerIntegrationTest {
         workerProps.put(REBALANCE_TIMEOUT_MS_CONFIG, Long.toString(TimeUnit.SECONDS.toMillis(20)));
         workerProps.put(TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG, Long.toString(TimeUnit.SECONDS.toMillis(30)));
         connect = connectBuilder
-            .numBrokers(1)
-            .numWorkers(1)
-            .build();
+                .numBrokers(1)
+                .numWorkers(1)
+                .build();
 
         connect.start();
 
@@ -889,18 +889,18 @@ public class ConnectWorkerIntegrationTest {
         connect.configureConnector(CONNECTOR_NAME, connectorWithBlockingTaskStopConfig);
 
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
-            CONNECTOR_NAME, 1, "connector and tasks did not start in time"
+                CONNECTOR_NAME, 1, "connector and tasks did not start in time"
         );
 
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(DistributedHerder.class)) {
             connect.restartTask(CONNECTOR_NAME, 0);
             TestUtils.waitForCondition(() -> logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("WARN")) &&
-                    logCaptureAppender.getEvents().stream().anyMatch(e ->
-                        // Ensure that the tick thread is blocked on the stage which we expect it to be, i.e restarting the task.
-                        e.getMessage().contains("worker poll timeout has expired") &&
-                        e.getMessage().contains("The last known action being performed by the worker is : restarting task " + CONNECTOR_NAME + "-0")
-                    ),
-                "Coordinator did not poll for rebalance.timeout.ms");
+                            logCaptureAppender.getEvents().stream().anyMatch(e ->
+                                    // Ensure that the tick thread is blocked on the stage which we expect it to be, i.e restarting the task.
+                                    e.getMessage().contains("worker poll timeout has expired") &&
+                                            e.getMessage().contains("The last known action being performed by the worker is : restarting task " + CONNECTOR_NAME + "-0")
+                            ),
+                    "Coordinator did not poll for rebalance.timeout.ms");
             // This clean up ensures that the test ends quickly as o/w we will wait for task#stop.
             BlockingConnectorTest.Block.reset();
         }

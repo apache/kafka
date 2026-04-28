@@ -26,14 +26,23 @@ import java.nio.ByteBuffer;
 
 public interface Writable {
     void writeByte(byte val);
+
     void writeShort(short val);
+
     void writeInt(int val);
+
     void writeLong(long val);
+
     void writeDouble(double val);
+
     void writeByteArray(byte[] arr);
+
     void writeUnsignedVarint(int i);
+
     void writeByteBuffer(ByteBuffer buf);
+
     void writeVarint(int i);
+
     void writeVarlong(long i);
 
     default void writeRecords(BaseRecords records) {

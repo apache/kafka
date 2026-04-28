@@ -26,7 +26,7 @@ public class RocksDbSessionHeadersBytesStoreSupplier implements SessionBytesStor
     private final long retentionPeriod;
 
     public RocksDbSessionHeadersBytesStoreSupplier(final String name,
-                                                   final long retentionPeriod) {
+        final long retentionPeriod) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
     }

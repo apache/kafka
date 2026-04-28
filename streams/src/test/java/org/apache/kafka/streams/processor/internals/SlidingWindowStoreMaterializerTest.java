@@ -85,13 +85,13 @@ public class SlidingWindowStoreMaterializerTest {
         doReturn(emptyMap())
             .when(streamsConfig).originals();
         doReturn(new BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers())
-                .when(streamsConfig).getConfiguredInstance(
-                    StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG,
-                    DslStoreSuppliers.class,
-                    emptyMap()
-            );
+            .when(streamsConfig).getConfiguredInstance(
+            StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG,
+            DslStoreSuppliers.class,
+            emptyMap()
+        );
         lenient().doReturn("timestamped")
-                .when(streamsConfig).getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
+            .when(streamsConfig).getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
     }
 
     private final class HeadersStoreSupplier implements WindowBytesStoreSupplier, HeadersBytesStoreSupplier {

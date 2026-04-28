@@ -35,7 +35,7 @@ public class BasicNode implements Node {
     private final Set<String> tags;
 
     public BasicNode(String name, String hostname, Map<String, String> config,
-                     Set<String> tags) {
+        Set<String> tags) {
         this.name = name;
         this.hostname = hostname;
         this.config = config;
@@ -55,7 +55,7 @@ public class BasicNode implements Node {
             } else if (key.equals("tags")) {
                 if (!node.isArray()) {
                     throw new RuntimeException("Expected the 'tags' field to be an " +
-                            "array of strings.");
+                        "array of strings.");
                 }
                 tags = new HashSet<>();
                 for (Iterator<JsonNode> tagIter = node.elements(); tagIter.hasNext(); ) {

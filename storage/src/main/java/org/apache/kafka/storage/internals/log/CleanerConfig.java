@@ -78,7 +78,7 @@ public class CleanerConfig {
     public static final String LOG_CLEANER_MIN_COMPACTION_LAG_MS_DOC = "The minimum time a message will remain uncompacted in the log. Only applicable for logs that are being compacted.";
     public static final String LOG_CLEANER_MAX_COMPACTION_LAG_MS_DOC = "The maximum time a message will remain ineligible for compaction in the log. Only applicable for logs that are being compacted.";
 
-    public static final ConfigDef CONFIG_DEF =  new ConfigDef()
+    public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(LOG_CLEANER_THREADS_PROP, INT, LOG_CLEANER_THREADS, atLeast(0), MEDIUM, LOG_CLEANER_THREADS_DOC)
             .define(LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP, DOUBLE, LOG_CLEANER_IO_MAX_BYTES_PER_SECOND, MEDIUM, LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_DOC)
             .define(LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, LONG, LOG_CLEANER_DEDUPE_BUFFER_SIZE, MEDIUM, LOG_CLEANER_DEDUPE_BUFFER_SIZE_DOC)
@@ -102,7 +102,7 @@ public class CleanerConfig {
 
     public CleanerConfig(boolean enableCleaner) {
         this(1, 4 * 1024 * 1024, 0.9, 1024 * 1024,
-            32 * 1024 * 1024, Double.MAX_VALUE, 15 * 1000, enableCleaner);
+                32 * 1024 * 1024, Double.MAX_VALUE, 15 * 1000, enableCleaner);
     }
 
     /**
@@ -117,13 +117,13 @@ public class CleanerConfig {
      * @param enableCleaner Allows completely disabling the log cleaner
      */
     public CleanerConfig(int numThreads,
-                         long dedupeBufferSize,
-                         double dedupeBufferLoadFactor,
-                         int ioBufferSize,
-                         int maxMessageSize,
-                         double maxIoBytesPerSecond,
-                         long backoffMs,
-                         boolean enableCleaner) {
+            long dedupeBufferSize,
+            double dedupeBufferLoadFactor,
+            int ioBufferSize,
+            int maxMessageSize,
+            double maxIoBytesPerSecond,
+            long backoffMs,
+            boolean enableCleaner) {
         this.numThreads = numThreads;
         this.dedupeBufferSize = dedupeBufferSize;
         this.dedupeBufferLoadFactor = dedupeBufferLoadFactor;

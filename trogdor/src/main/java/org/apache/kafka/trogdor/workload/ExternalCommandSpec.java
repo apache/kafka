@@ -70,12 +70,12 @@ public class ExternalCommandSpec extends TaskSpec {
 
     @JsonCreator
     public ExternalCommandSpec(
-            @JsonProperty("startMs") long startMs,
-            @JsonProperty("durationMs") long durationMs,
-            @JsonProperty("commandNode") String commandNode,
-            @JsonProperty("command") List<String> command,
-            @JsonProperty("workload") JsonNode workload,
-            @JsonProperty("shutdownGracePeriodMs") Optional<Integer> shutdownGracePeriodMs) {
+        @JsonProperty("startMs") long startMs,
+        @JsonProperty("durationMs") long durationMs,
+        @JsonProperty("commandNode") String commandNode,
+        @JsonProperty("command") List<String> command,
+        @JsonProperty("workload") JsonNode workload,
+        @JsonProperty("shutdownGracePeriodMs") Optional<Integer> shutdownGracePeriodMs) {
         super(startMs, durationMs);
         this.commandNode = (commandNode == null) ? "" : commandNode;
         this.command = (command == null) ? List.of() : command;

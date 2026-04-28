@@ -65,7 +65,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class SessionStoreFetchTest {
-    private enum StoreType { InMemory, RocksDB }
+    private enum StoreType {InMemory, RocksDB}
     private static final String STORE_NAME = "store";
     private static final int DATA_SIZE = 5;
     private static final long WINDOW_SIZE = 500L;
@@ -148,14 +148,14 @@ public class SessionStoreFetchTest {
     @BeforeEach
     public void setUp() {
         streamsConfig = mkProperties(mkMap(
-                mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
     }
 
     private void verifyNormalQuery(final SessionStore<String, Long> stateStore) {
         try (final KeyValueIterator<Windowed<String>, Long> scanIterator = forward ?
-            stateStore.fetch("key-a", "key-bb") :
-            stateStore.backwardFetch("key-a", "key-bb")) {
+                 stateStore.fetch("key-a", "key-bb") :
+                 stateStore.backwardFetch("key-a", "key-bb")) {
 
             final Iterator<KeyValue<Windowed<String>, Long>> dataIterator = forward ?
                 expectedRecords.iterator() :
@@ -165,8 +165,8 @@ public class SessionStoreFetchTest {
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> scanIterator = forward ?
-            stateStore.findSessions("key-a", "key-bb", 0L, Long.MAX_VALUE) :
-            stateStore.backwardFindSessions("key-a", "key-bb", 0L, Long.MAX_VALUE)) {
+                 stateStore.findSessions("key-a", "key-bb", 0L, Long.MAX_VALUE) :
+                 stateStore.backwardFindSessions("key-a", "key-bb", 0L, Long.MAX_VALUE)) {
 
             final Iterator<KeyValue<Windowed<String>, Long>> dataIterator = forward ?
                 expectedRecords.iterator() :
@@ -178,8 +178,8 @@ public class SessionStoreFetchTest {
 
     private void verifyInfiniteQuery(final SessionStore<String, Long> stateStore) {
         try (final KeyValueIterator<Windowed<String>, Long> scanIterator = forward ?
-            stateStore.fetch(null, null) :
-            stateStore.backwardFetch(null, null)) {
+                 stateStore.fetch(null, null) :
+                 stateStore.backwardFetch(null, null)) {
 
             final Iterator<KeyValue<Windowed<String>, Long>> dataIterator = forward ?
                 expectedRecords.iterator() :
@@ -189,8 +189,8 @@ public class SessionStoreFetchTest {
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> scanIterator = forward ?
-            stateStore.findSessions(null, null, 0L, Long.MAX_VALUE) :
-            stateStore.backwardFindSessions(null, null, 0L, Long.MAX_VALUE)) {
+                 stateStore.findSessions(null, null, 0L, Long.MAX_VALUE) :
+                 stateStore.backwardFindSessions(null, null, 0L, Long.MAX_VALUE)) {
 
             final Iterator<KeyValue<Windowed<String>, Long>> dataIterator = forward ?
                 expectedRecords.iterator() :
@@ -229,7 +229,7 @@ public class SessionStoreFetchTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology)) {
             //get input topic and stateStore
             final TestInputTopic<String, String> input = driver
-                    .createInputTopic("input", new StringSerializer(), new StringSerializer());
+                .createInputTopic("input", new StringSerializer(), new StringSerializer());
             final SessionStore<String, Long> stateStore = driver.getSessionStore(STORE_NAME);
 
             //write some data
@@ -272,9 +272,9 @@ public class SessionStoreFetchTest {
     }
 
     private static Stream<Arguments> buildParameters(final List<StoreType> types,
-                                                     final List<Boolean> logging,
-                                                     final List<Boolean> caching,
-                                                     final List<Boolean> forward) {
+        final List<Boolean> logging,
+        final List<Boolean> caching,
+        final List<Boolean> forward) {
         final Stream.Builder<Arguments> builder = Stream.builder();
         for (final StoreType type : types) {
             for (final boolean log : logging) {
@@ -301,9 +301,9 @@ public class SessionStoreFetchTest {
 
         final SessionBytesStoreSupplier stateStoreSupplier = createStore.get();
         final Materialized<String, Long, SessionStore<Bytes, byte[]>> stateStoreConfig = Materialized
-                .<String, Long>as(stateStoreSupplier)
-                .withKeySerde(Serdes.String())
-                .withValueSerde(Serdes.Long());
+            .<String, Long>as(stateStoreSupplier)
+            .withKeySerde(Serdes.String())
+            .withValueSerde(Serdes.Long());
         if (cachingEnabled) {
             stateStoreConfig.withCachingEnabled();
         } else {

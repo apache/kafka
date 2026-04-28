@@ -104,13 +104,13 @@ public class PlainToHeadersWindowStoreAdapterTest {
     @SuppressWarnings("unchecked")
     public void shouldHandleWindowKeyQuerySuccessfully() {
         final TimestampedWindowStoreWithHeaders<String, String> store = Stores.timestampedWindowStoreWithHeadersBuilder(
-                Stores.persistentWindowStore(
-                    "typed-adapter-test",
-                    ofMillis(RETENTION_PERIOD),
-                    ofMillis(WINDOW_SIZE),
-                    false),
-                Serdes.String(),
-                Serdes.String())
+            Stores.persistentWindowStore(
+                "typed-adapter-test",
+                ofMillis(RETENTION_PERIOD),
+                ofMillis(WINDOW_SIZE),
+                false),
+            Serdes.String(),
+            Serdes.String())
             .withLoggingDisabled()
             .build();
 
@@ -165,13 +165,13 @@ public class PlainToHeadersWindowStoreAdapterTest {
     @SuppressWarnings("unchecked")
     public void shouldHandleWindowRangeQuerySuccessfully() {
         final TimestampedWindowStoreWithHeaders<String, String> store = Stores.timestampedWindowStoreWithHeadersBuilder(
-                Stores.persistentWindowStore(
-                    "typed-range-adapter-test",
-                    ofMillis(RETENTION_PERIOD),
-                    ofMillis(WINDOW_SIZE),
-                    false),
-                Serdes.String(),
-                Serdes.String())
+            Stores.persistentWindowStore(
+                "typed-range-adapter-test",
+                ofMillis(RETENTION_PERIOD),
+                ofMillis(WINDOW_SIZE),
+                false),
+            Serdes.String(),
+            Serdes.String())
             .withLoggingDisabled()
             .build();
 

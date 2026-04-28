@@ -112,7 +112,7 @@ public class ClientQuotasImageNodeTest {
     @Test
     public void testClientIdEntityWithParentheses() {
         entityToStringRoundTrip(new ClientQuotaEntity(Map.of("client-id", "(this )one)")),
-                "clientId(\\(this \\)one\\))");
+            "clientId(\\(this \\)one\\))");
     }
 
     @Test
@@ -120,7 +120,7 @@ public class ClientQuotasImageNodeTest {
         assertEquals("Invalid empty entity",
             assertThrows(RuntimeException.class, () -> ClientQuotasImageNode.
                 clientQuotaEntityToString(new ClientQuotaEntity(Map.of()))).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -128,6 +128,6 @@ public class ClientQuotasImageNodeTest {
         assertEquals("Invalid entity type foobar",
             assertThrows(RuntimeException.class, () -> ClientQuotasImageNode.
                 clientQuotaEntityToString(new ClientQuotaEntity(Map.of("foobar", "baz")))).
-                    getMessage());
+                getMessage());
     }
 }

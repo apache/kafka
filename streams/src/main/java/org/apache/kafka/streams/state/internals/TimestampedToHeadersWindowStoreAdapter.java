@@ -101,25 +101,25 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo,
-                                                           final long timeFrom, final long timeTo) {
+        final long timeFrom, final long timeTo) {
         return new TimestampedToHeadersIteratorAdapter<>(store.fetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo,
-                                                           final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
+        final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
         return new TimestampedToHeadersIteratorAdapter<>(store.fetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo,
-                                                                   final long timeFrom, final long timeTo) {
+        final long timeFrom, final long timeTo) {
         return new TimestampedToHeadersIteratorAdapter<>(store.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo,
-                                                                   final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
+        final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
         return new TimestampedToHeadersIteratorAdapter<>(store.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
@@ -197,8 +197,8 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
     @SuppressWarnings("unchecked")
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
+        final PositionBound positionBound,
+        final QueryConfig config) {
         final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
         final QueryResult<R> result;
 

@@ -49,7 +49,7 @@ public class ShellTest {
     @Test
     public void testAttemptToRunNonExistentProgram() {
         IOException e = assertThrows(IOException.class, () -> Shell.execCommand(NONEXISTENT_PATH),
-                "Expected to get an exception when trying to run a program that does not exist");
+            "Expected to get an exception when trying to run a program that does not exist");
         assertTrue(e.getMessage().contains("No such file"), "Unexpected error message '" + e.getMessage() + "'");
     }
 

@@ -149,11 +149,11 @@ public class Histogram {
         for (float percentile : percentiles) {
             if (percentile < prev) {
                 throw new RuntimeException("Invalid percentiles fraction array.  Bad element " +
-                        percentile + ".  The array must be sorted and non-negative.");
+                    percentile + ".  The array must be sorted and non-negative.");
             }
             if (percentile > 1.0f) {
                 throw new RuntimeException("Invalid percentiles fraction array.  Bad element " +
-                        percentile + ".  Elements must be less than or equal to 1.");
+                    percentile + ".  Elements must be less than or equal to 1.");
             }
         }
         // Find out how many total samples we have, and what the average is.
@@ -172,7 +172,7 @@ public class Histogram {
     }
 
     private List<PercentileSummary> summarizePercentiles(int[] countsCopy, float[] percentiles,
-                                                         long numSamples) {
+        long numSamples) {
         if (percentiles.length == 0) {
             return List.of();
         }

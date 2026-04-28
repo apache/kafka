@@ -78,8 +78,8 @@ public class DeleteShareGroupOffsetsResult {
     }
 
     private boolean maybeCompleteExceptionally(Map<String, ApiException> topicLevelErrors,
-                                               String topic,
-                                               KafkaFutureImpl<Void> result) {
+        String topic,
+        KafkaFutureImpl<Void> result) {
         Throwable exception;
         if (!topicLevelErrors.containsKey(topic)) {
             exception = new IllegalArgumentException("Offset deletion result for topic \"" + topic + "\" was not included in the response");

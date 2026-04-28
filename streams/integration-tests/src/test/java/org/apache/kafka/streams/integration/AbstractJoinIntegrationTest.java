@@ -146,19 +146,19 @@ public abstract class AbstractJoinIntegrationTest {
     }
 
     void runTestWithDriver(
-            final List<Input<String>> input,
-            final List<List<TestRecord<Long, String>>> expectedResult,
-            final Properties properties,
-            final Topology topology) {
+        final List<Input<String>> input,
+        final List<List<TestRecord<Long, String>>> expectedResult,
+        final Properties properties,
+        final Topology topology) {
         runTestWithDriver(input, expectedResult, null, properties, topology);
     }
 
     void runTestWithDriver(
-            final List<Input<String>> input,
-            final List<List<TestRecord<Long, String>>> expectedResult,
-            final String storeName,
-            final Properties properties,
-            final Topology topology) {
+        final List<Input<String>> input,
+        final List<List<TestRecord<Long, String>>> expectedResult,
+        final String storeName,
+        final Properties properties,
+        final Topology topology) {
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, properties)) {
             final TestInputTopic<Long, String> right = driver.createInputTopic(INPUT_TOPIC_RIGHT, new LongSerializer(), new StringSerializer());
             final TestInputTopic<Long, String> left = driver.createInputTopic(INPUT_TOPIC_LEFT, new LongSerializer(), new StringSerializer());
@@ -198,11 +198,11 @@ public abstract class AbstractJoinIntegrationTest {
     }
 
     void runTestWithDriver(
-            final List<Input<String>> input,
-            final TestRecord<Long, String> expectedFinalResult,
-            final String storeName,
-            final Properties streamsConfig,
-            final Topology topology) {
+        final List<Input<String>> input,
+        final TestRecord<Long, String> expectedFinalResult,
+        final String storeName,
+        final Properties streamsConfig,
+        final Topology topology) {
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<Long, String> right = driver.createInputTopic(INPUT_TOPIC_RIGHT, new LongSerializer(), new StringSerializer());
             final TestInputTopic<Long, String> left = driver.createInputTopic(INPUT_TOPIC_LEFT, new LongSerializer(), new StringSerializer());
@@ -236,9 +236,9 @@ public abstract class AbstractJoinIntegrationTest {
     }
 
     void runSelfJoinTestWithDriver(
-            final List<List<TestRecord<Long, String>>> expectedResult,
-            final Properties streamsConfig,
-            final Topology topology) {
+        final List<List<TestRecord<Long, String>>> expectedResult,
+        final Properties streamsConfig,
+        final Topology topology) {
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<Long, String> left = driver.createInputTopic(INPUT_TOPIC_LEFT, new LongSerializer(), new StringSerializer());
             final TestOutputTopic<Long, String> outputTopic = driver.createOutputTopic(OUTPUT_TOPIC, new LongDeserializer(), new StringDeserializer());

@@ -81,9 +81,9 @@ public class TopicBasedRemoteLogMetadataManagerTest {
     private TopicBasedRemoteLogMetadataManager topicBasedRlmm() {
         if (remoteLogMetadataManager == null)
             remoteLogMetadataManager = RemoteLogMetadataManagerTestUtils.builder()
-                .bootstrapServers(clusterInstance.bootstrapServers())
-                .remotePartitionMetadataStore(() -> spyRemotePartitionMetadataEventHandler)
-                .build();
+                    .bootstrapServers(clusterInstance.bootstrapServers())
+                    .remotePartitionMetadataStore(() -> spyRemotePartitionMetadataEventHandler)
+                    .build();
         return remoteLogMetadataManager;
     }
 
@@ -119,14 +119,14 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         Admin mockAdmin = mock(Admin.class);
         DescribeTopicsResult mockDescribeTopicsResult = mock(DescribeTopicsResult.class);
         KafkaFuture<TopicDescription> mockFuture = mock(KafkaFuture.class);
-        
+
         String topic = "test-topic";
-        
+
         // Set up the mock to throw a RuntimeException wrapped in ExecutionException
         when(mockAdmin.describeTopics(anySet())).thenReturn(mockDescribeTopicsResult);
         when(mockDescribeTopicsResult.topicNameValues()).thenReturn(Map.of(topic, mockFuture));
         when(mockFuture.get()).thenThrow(new ExecutionException("Admin client connection error", new RuntimeException("Connection failed")));
-        
+
         // The method should re-throw the ExecutionException since it's not an UnknownTopicOrPartitionException
         TopicBasedRemoteLogMetadataManager rlmm = topicBasedRlmm();
         assertThrows(ExecutionException.class, () -> rlmm.doesTopicExist(mockAdmin, topic));
@@ -173,13 +173,13 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         // These messages would have been published to the respective metadata topic partitions but the ConsumerManager
         // has not yet been subscribing as they are not yet registered.
         RemoteLogSegmentMetadata leaderSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(newLeaderTopicIdPartition, Uuid.randomUuid()),
-                                                                                0, 100, -1L, 0,
-                                                                                time.milliseconds(), SEG_SIZE, Map.of(0, 0L));
+                0, 100, -1L, 0,
+                time.milliseconds(), SEG_SIZE, Map.of(0, 0L));
         assertThrows(Exception.class, () -> topicBasedRlmm().addRemoteLogSegmentMetadata(leaderSegmentMetadata).get());
 
         RemoteLogSegmentMetadata followerSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(newFollowerTopicIdPartition, Uuid.randomUuid()),
-                                                                                0, 100, -1L, 0,
-                                                                                time.milliseconds(), SEG_SIZE, Map.of(0, 0L));
+                0, 100, -1L, 0,
+                time.milliseconds(), SEG_SIZE, Map.of(0, 0L));
         assertThrows(Exception.class, () -> topicBasedRlmm().addRemoteLogSegmentMetadata(followerSegmentMetadata).get());
 
         // `listRemoteLogSegments` will receive an exception as these topic partitions are not yet registered.
@@ -190,7 +190,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         assertFalse(topicBasedRlmm().isReady(newFollowerTopicIdPartition));
 
         topicBasedRlmm().onPartitionLeadershipChanges(Set.of(newLeaderTopicIdPartition),
-                                                      Set.of(newFollowerTopicIdPartition));
+                Set.of(newFollowerTopicIdPartition));
 
         // RemoteLogSegmentMetadata events are already published, and topicBasedRlmm's consumer manager will start
         // fetching those events and build the cache.
@@ -349,7 +349,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         // Set up a custom exit procedure for testing
         final AtomicBoolean exitCalled = new AtomicBoolean(false);
         final AtomicInteger exitCode = new AtomicInteger(-1);
-        
+
         // Set custom exit procedure that won't actually exit the process
         Exit.setExitProcedure((statusCode, message) -> {
             exitCalled.set(true);
@@ -359,16 +359,16 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         try (TopicBasedRemoteLogMetadataManager rlmm = new TopicBasedRemoteLogMetadataManager()) {
             // configure rlmm without bootstrap servers, so it will fail to initialize admin client.
             Map<String, Object> configs = Map.of(
-                TopicBasedRemoteLogMetadataManagerConfig.LOG_DIR, TestUtils.tempDirectory("rlmm_segs_").getAbsolutePath(),
-                TopicBasedRemoteLogMetadataManagerConfig.BROKER_ID, 0
+                    TopicBasedRemoteLogMetadataManagerConfig.LOG_DIR, TestUtils.tempDirectory("rlmm_segs_").getAbsolutePath(),
+                    TopicBasedRemoteLogMetadataManagerConfig.BROKER_ID, 0
             );
             rlmm.configure(configs);
             rlmm.onBrokerReady();
-            
+
             // Wait for initialization failure and exit procedure to be called
-            TestUtils.waitForCondition(() -> exitCalled.get(), 
-                "Exit procedure should be called due to initialization failure");
-            
+            TestUtils.waitForCondition(() -> exitCalled.get(),
+                    "Exit procedure should be called due to initialization failure");
+
             // Verify exit code
             assertEquals(1, exitCode.get(), "Exit code should be 1");
         } finally {
@@ -382,8 +382,8 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         // Initialize the manager which will create the __remote_log_metadata topic
         TopicBasedRemoteLogMetadataManager topicBasedRemoteLogMetadataManager = topicBasedRlmm();
         verifyRemoteLogMetadataTopicWithMinIsr(topicBasedRemoteLogMetadataManager,
-                                               TopicBasedRemoteLogMetadataManagerConfig.DEFAULT_REMOTE_LOG_METADATA_TOPIC_MIN_ISR,
-                                               "default value");
+                TopicBasedRemoteLogMetadataManagerConfig.DEFAULT_REMOTE_LOG_METADATA_TOPIC_MIN_ISR,
+                "default value");
     }
 
     @ClusterTest
@@ -391,29 +391,29 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         // Create a manager with custom min.isr value
         short customMinIsr = 3;
         Map<String, Object> overrideProps = Map.of(
-            TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_MIN_ISR_PROP, customMinIsr
+                TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_MIN_ISR_PROP, customMinIsr
         );
         try (TopicBasedRemoteLogMetadataManager customRlmm = RemoteLogMetadataManagerTestUtils.builder()
-                .bootstrapServers(clusterInstance.bootstrapServers())
-                .overrideRemoteLogMetadataManagerProps(overrideProps)
-                .build()) {
+                     .bootstrapServers(clusterInstance.bootstrapServers())
+                     .overrideRemoteLogMetadataManagerProps(overrideProps)
+                     .build()) {
             verifyRemoteLogMetadataTopicWithMinIsr(customRlmm, customMinIsr, "custom value");
         }
     }
 
     private void verifyRemoteLogMetadataTopicWithMinIsr(TopicBasedRemoteLogMetadataManager rlmm,
-                                                        short expectedMinIsr,
-                                                        String valueDescription)
-                                                        throws ExecutionException, InterruptedException {
+            short expectedMinIsr,
+            String valueDescription)
+            throws ExecutionException, InterruptedException {
         try (Admin admin = clusterInstance.admin()) {
             String metadataTopic = TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME;
-            
+
             // Wait for the topic to be created
             clusterInstance.waitTopicCreation(metadataTopic, RemoteLogMetadataManagerTestUtils.METADATA_TOPIC_PARTITIONS_COUNT);
-            
+
             // Verify the topic exists
             assertTrue(rlmm.doesTopicExist(admin, metadataTopic));
-            
+
             // Describe the topic configs to verify min.insync.replicas
             ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, metadataTopic);
             DescribeConfigsResult describeResult = admin.describeConfigs(List.of(topicResource));
@@ -422,8 +422,8 @@ public class TopicBasedRemoteLogMetadataManagerTest {
             assertNotNull(config, "Topic config should not be null");
             ConfigEntry minIsrEntry = config.get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
             assertNotNull(minIsrEntry, "min.insync.replicas config should exist");
-            assertEquals(String.valueOf(expectedMinIsr), minIsrEntry.value(), 
-                "min.insync.replicas should be " + expectedMinIsr + " (" + valueDescription + ")");
+            assertEquals(String.valueOf(expectedMinIsr), minIsrEntry.value(),
+                    "min.insync.replicas should be " + expectedMinIsr + " (" + valueDescription + ")");
         }
     }
 }

@@ -152,7 +152,7 @@ public class DegradedNetworkFaultWorker implements TaskWorker {
      */
     private void netemDelay(int delayMs, int deviationMs, Consumer<String> consumer) {
         Stream.of("netem", "delay", String.format("%dms", delayMs), String.format("%dms", deviationMs),
-                "distribution", "paretonormal").forEach(consumer);
+            "distribution", "paretonormal").forEach(consumer);
     }
 
     /**
@@ -168,7 +168,7 @@ public class DegradedNetworkFaultWorker implements TaskWorker {
      * @throws IOException
      */
     private void disableTrafficControl(Platform platform, String networkDevice) throws IOException {
-        platform.runCommand(new String[] {
+        platform.runCommand(new String[]{
             "sudo", "tc", "qdisc", "del", "dev", networkDevice, "root"
         });
     }

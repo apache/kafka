@@ -83,7 +83,8 @@ public class KafkaNetworkChannelTest {
         }
 
         @Override
-        public void update(Time time, MockClient.MetadataUpdate update) { }
+        public void update(Time time, MockClient.MetadataUpdate update) {
+        }
     }
 
     private static final List<ApiKeys> RAFT_APIS = List.of(

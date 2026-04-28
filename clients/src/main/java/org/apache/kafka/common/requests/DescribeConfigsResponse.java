@@ -66,7 +66,7 @@ public class DescribeConfigsResponse extends AbstractResponse {
         }
 
         public ConfigEntry(String name, String value, ConfigSource source, boolean isSensitive, boolean readOnly,
-                           Collection<ConfigSynonym> synonyms, ConfigType type, String documentation) {
+            Collection<ConfigSynonym> synonyms, ConfigType type, String documentation) {
 
             this.name = Objects.requireNonNull(name, "name");
             this.value = value;
@@ -200,9 +200,11 @@ public class DescribeConfigsResponse extends AbstractResponse {
         public String name() {
             return name;
         }
+
         public String value() {
             return value;
         }
+
         public ConfigSource source() {
             return source;
         }
@@ -211,8 +213,8 @@ public class DescribeConfigsResponse extends AbstractResponse {
     public Map<ConfigResource, DescribeConfigsResponseData.DescribeConfigsResult> resultMap() {
         return data().results().stream().collect(Collectors.toMap(
             configsResult ->
-                    new ConfigResource(ConfigResource.Type.forId(configsResult.resourceType()),
-                            configsResult.resourceName()),
+                new ConfigResource(ConfigResource.Type.forId(configsResult.resourceType()),
+                    configsResult.resourceName()),
             Function.identity()));
     }
 

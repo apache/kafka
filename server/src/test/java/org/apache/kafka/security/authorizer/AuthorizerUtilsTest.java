@@ -58,11 +58,11 @@ public class AuthorizerUtilsTest {
         Metrics metrics = new Metrics();
         assertEquals(1, metrics.metrics().size());
         Plugin<Authorizer> authorizer = AuthorizerUtils.createAuthorizer(
-                MonitorableAuthorizer.class.getName(),
-                configs,
-                metrics,
-                ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG,
-                role.toString());
+            MonitorableAuthorizer.class.getName(),
+            configs,
+            metrics,
+            ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG,
+            role.toString());
         assertInstanceOf(MonitorableAuthorizer.class, authorizer.get());
         MonitorableAuthorizer monitorableAuthorizer = (MonitorableAuthorizer) authorizer.get();
         assertTrue(monitorableAuthorizer.configured);
@@ -74,9 +74,9 @@ public class AuthorizerUtilsTest {
             }
         }
         assertNotNull(metricName);
-        assertEquals(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG,  metricName.tags().get("config"));
-        assertEquals(MonitorableAuthorizer.class.getSimpleName(),  metricName.tags().get("class"));
-        assertEquals(role.toString(),  metricName.tags().get("role"));
+        assertEquals(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, metricName.tags().get("config"));
+        assertEquals(MonitorableAuthorizer.class.getSimpleName(), metricName.tags().get("class"));
+        assertEquals(role.toString(), metricName.tags().get("role"));
         assertTrue(metricName.tags().entrySet().containsAll(MonitorableAuthorizer.EXTRA_TAGS.entrySet()));
         assertEquals(0, metrics.metric(metricName).metricValue());
         monitorableAuthorizer.authorize(null, null);

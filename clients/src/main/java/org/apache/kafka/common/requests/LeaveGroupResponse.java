@@ -73,20 +73,20 @@ public class LeaveGroupResponse extends AbstractResponse {
     }
 
     public LeaveGroupResponse(List<MemberResponse> memberResponses,
-                              Errors topLevelError,
-                              final int throttleTimeMs,
-                              final short version) {
+        Errors topLevelError,
+        final int throttleTimeMs,
+        final short version) {
         super(ApiKeys.LEAVE_GROUP);
         if (version <= 2) {
             // Populate member level error.
             final short errorCode = getError(topLevelError, memberResponses).code();
 
             this.data = new LeaveGroupResponseData()
-                            .setErrorCode(errorCode);
+                .setErrorCode(errorCode);
         } else {
             this.data = new LeaveGroupResponseData()
-                            .setErrorCode(topLevelError.code())
-                            .setMembers(memberResponses);
+                .setErrorCode(topLevelError.code())
+                .setMembers(memberResponses);
         }
 
         if (version >= 1) {
@@ -160,7 +160,7 @@ public class LeaveGroupResponse extends AbstractResponse {
     @Override
     public boolean equals(Object other) {
         return other instanceof LeaveGroupResponse &&
-                   ((LeaveGroupResponse) other).data.equals(this.data);
+            ((LeaveGroupResponse) other).data.equals(this.data);
     }
 
     @Override

@@ -58,14 +58,14 @@ public class InternalRequestSignatureTest {
             "[{\"config\":\"value\"},{\"config\":\"other_value\"}]".getBytes();
     private static final String SIGNATURE_ALGORITHM = "HmacSHA256";
     private static final SecretKey KEY = new SecretKeySpec(
-        new byte[] {
-            109, 116, -111, 49, -94, 25, -103, 44, -99, -118, 53, -69, 87, -124, 5, 48,
-            89, -105, -2, 58, -92, 87, 67, 49, -125, -79, -39, -126, -51, -53, -85, 57
-        }, "HmacSHA256"
+            new byte[]{
+                    109, 116, -111, 49, -94, 25, -103, 44, -99, -118, 53, -69, 87, -124, 5, 48,
+                    89, -105, -2, 58, -92, 87, 67, 49, -125, -79, -39, -126, -51, -53, -85, 57
+            }, "HmacSHA256"
     );
-    private static final byte[] SIGNATURE = new byte[] {
-        42, -3, 127, 57, 43, 49, -51, -43, 72, -62, -10, 120, 123, 125, 26, -65,
-        36, 72, 86, -71, -32, 13, -8, 115, 85, 73, -65, -112, 6, 68, 41, -50
+    private static final byte[] SIGNATURE = new byte[]{
+            42, -3, 127, 57, 43, 49, -51, -43, 72, -62, -10, 120, 123, 125, 26, -65,
+            36, 72, 86, -71, -32, 13, -8, 115, 85, 73, -65, -112, 6, 68, 41, -50
     };
     private static final String ENCODED_SIGNATURE = Base64.getEncoder().encodeToString(SIGNATURE);
     private final Crypto crypto = Crypto.SYSTEM;
@@ -88,13 +88,13 @@ public class InternalRequestSignatureTest {
     @Test
     public void fromHeadersShouldThrowExceptionOnInvalidSignatureAlgorithm() {
         assertThrows(BadRequestException.class, () -> InternalRequestSignature.fromHeaders(crypto, REQUEST_BODY,
-            internalRequestHeaders(ENCODED_SIGNATURE, "doesn'texist")));
+                internalRequestHeaders(ENCODED_SIGNATURE, "doesn'texist")));
     }
 
     @Test
     public void fromHeadersShouldThrowExceptionOnInvalidBase64Signature() {
         assertThrows(BadRequestException.class, () -> InternalRequestSignature.fromHeaders(crypto, REQUEST_BODY,
-            internalRequestHeaders("not valid base 64", SIGNATURE_ALGORITHM)));
+                internalRequestHeaders("not valid base 64", SIGNATURE_ALGORITHM)));
     }
 
     @Test
@@ -121,11 +121,11 @@ public class InternalRequestSignatureTest {
         InternalRequestSignature.addToRequest(crypto, KEY, REQUEST_BODY, SIGNATURE_ALGORITHM, request);
 
         assertEquals(ENCODED_SIGNATURE,
-            request.getHeaders().get(InternalRequestSignature.SIGNATURE_HEADER),
-            "Request should have valid base 64-encoded signature added as header");
+                request.getHeaders().get(InternalRequestSignature.SIGNATURE_HEADER),
+                "Request should have valid base 64-encoded signature added as header");
         assertEquals(SIGNATURE_ALGORITHM,
-            request.getHeaders().get(InternalRequestSignature.SIGNATURE_ALGORITHM_HEADER),
-            "Request should have provided signature algorithm added as header");
+                request.getHeaders().get(InternalRequestSignature.SIGNATURE_ALGORITHM_HEADER),
+                "Request should have provided signature algorithm added as header");
     }
 
     @Test
@@ -148,9 +148,9 @@ public class InternalRequestSignatureTest {
     private static HttpHeaders internalRequestHeaders(String signature, String signatureAlgorithm) {
         HttpHeaders result = mock(HttpHeaders.class);
         when(result.getHeaderString(eq(InternalRequestSignature.SIGNATURE_HEADER)))
-            .thenReturn(signature);
+                .thenReturn(signature);
         when(result.getHeaderString(eq(InternalRequestSignature.SIGNATURE_ALGORITHM_HEADER)))
-            .thenReturn(signatureAlgorithm);
+                .thenReturn(signatureAlgorithm);
         return result;
     }
 }

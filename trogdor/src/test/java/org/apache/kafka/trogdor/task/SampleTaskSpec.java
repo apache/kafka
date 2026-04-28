@@ -28,9 +28,9 @@ public class SampleTaskSpec extends TaskSpec {
 
     @JsonCreator
     public SampleTaskSpec(@JsonProperty("startMs") long startMs,
-                        @JsonProperty("durationMs") long durationMs,
-                        @JsonProperty("nodeToExitMs") Map<String, Long> nodeToExitMs,
-                        @JsonProperty("error") String error) {
+        @JsonProperty("durationMs") long durationMs,
+        @JsonProperty("nodeToExitMs") Map<String, Long> nodeToExitMs,
+        @JsonProperty("error") String error) {
         super(startMs, durationMs);
         this.nodeToExitMs = nodeToExitMs == null ? Map.of() : Map.copyOf(nodeToExitMs);
         this.error = error == null ? "" : error;

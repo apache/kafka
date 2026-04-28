@@ -26,14 +26,14 @@ public class SocketServer {
     public static final String METRICS_GROUP = "socket-server-metrics";
 
     public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
-            SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG,
-            SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG,
-            SocketServerConfigs.MAX_CONNECTIONS_CONFIG,
-            SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG);
+        SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG,
+        SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG,
+        SocketServerConfigs.MAX_CONNECTIONS_CONFIG,
+        SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG);
 
     public static final Set<String> LISTENER_RECONFIGURABLE_CONFIGS = Set.of(
-            SocketServerConfigs.MAX_CONNECTIONS_CONFIG,
-            SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG);
+        SocketServerConfigs.MAX_CONNECTIONS_CONFIG,
+        SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG);
 
     public static void closeSocket(SocketChannel channel) {
         Utils.closeQuietly(channel.socket(), "channel socket");

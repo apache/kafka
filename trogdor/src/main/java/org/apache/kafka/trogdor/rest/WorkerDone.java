@@ -51,11 +51,11 @@ public class WorkerDone extends WorkerState {
 
     @JsonCreator
     public WorkerDone(@JsonProperty("taskId") String taskId,
-            @JsonProperty("spec") TaskSpec spec,
-            @JsonProperty("startedMs") long startedMs,
-            @JsonProperty("doneMs") long doneMs,
-            @JsonProperty("status") JsonNode status,
-            @JsonProperty("error") String error) {
+        @JsonProperty("spec") TaskSpec spec,
+        @JsonProperty("startedMs") long startedMs,
+        @JsonProperty("doneMs") long doneMs,
+        @JsonProperty("status") JsonNode status,
+        @JsonProperty("error") String error) {
         super(taskId, spec);
         this.startedMs = startedMs;
         this.doneMs = doneMs;

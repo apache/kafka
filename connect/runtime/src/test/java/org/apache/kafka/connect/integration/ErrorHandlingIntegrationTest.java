@@ -71,7 +71,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 @Tag("integration")
 @Timeout(value = 600)
 public class ErrorHandlingIntegrationTest {
-    
+
     private static final Logger log = LoggerFactory.getLogger(ErrorHandlingIntegrationTest.class);
     private static final String DLQ_TOPIC = "my-connector-errors";
     private static final String CONNECTOR_NAME = "error-conn";
@@ -216,11 +216,11 @@ public class ErrorHandlingIntegrationTest {
 
         connect.configureConnector(CONNECTOR_NAME, props);
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
-            "Connector tasks did not start in time.");
+                "Connector tasks did not start in time.");
 
         waitForCondition(this::checkForPartitionAssignment,
-            CONNECTOR_SETUP_DURATION_MS,
-            "Connector task was not assigned a partition.");
+                CONNECTOR_SETUP_DURATION_MS,
+                "Connector task was not assigned a partition.");
 
         // produce some strings into test topic
         for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
@@ -253,7 +253,7 @@ public class ErrorHandlingIntegrationTest {
 
         connect.deleteConnector(CONNECTOR_NAME);
         connect.assertions().assertConnectorDoesNotExist(CONNECTOR_NAME,
-            "Connector wasn't deleted in time.");
+                "Connector wasn't deleted in time.");
     }
 
     /**
@@ -269,7 +269,7 @@ public class ErrorHandlingIntegrationTest {
             ConnectorStateInfo info = connect.connectorStatus(CONNECTOR_NAME);
             return info != null && info.tasks().size() == NUM_TASKS
                     && connectorHandle.taskHandle(TASK_ID).numPartitionsAssigned() == 1;
-        }  catch (Exception e) {
+        } catch (Exception e) {
             // Log the exception and return that the partitions were not assigned
             log.error("Could not check connector state info.", e);
             return false;

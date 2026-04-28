@@ -155,7 +155,7 @@ public class StoreQueryIntegrationTest {
         until(() -> {
 
             final KeyQueryMetadata keyQueryMetadata = kafkaStreams1
-                    .queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> Optional.of(Collections.singleton(0)));
+                .queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> Optional.of(Collections.singleton(0)));
 
             final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = keyValueStore();
             final ReadOnlyKeyValueStore<Integer, Integer> store1 = getStore(TABLE_NAME, kafkaStreams1, queryableStoreType);
@@ -203,7 +203,7 @@ public class StoreQueryIntegrationTest {
         assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
         until(() -> {
             final KeyQueryMetadata keyQueryMetadata = kafkaStreams1
-                    .queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> Optional.of(Collections.singleton(0)));
+                .queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> Optional.of(Collections.singleton(0)));
 
             //key belongs to this partition
             final int keyPartition = keyQueryMetadata.partition();
@@ -233,7 +233,7 @@ public class StoreQueryIntegrationTest {
 
             final StoreQueryParameters<ReadOnlyKeyValueStore<Integer, Integer>> storeQueryParam2 =
                 StoreQueryParameters.<ReadOnlyKeyValueStore<Integer, Integer>>fromNameAndType(TABLE_NAME, keyValueStore())
-                .withPartition(keyDontBelongPartition);
+                    .withPartition(keyDontBelongPartition);
 
             try {
                 // Assert that key is not served when wrong specific partition is requested
@@ -322,7 +322,7 @@ public class StoreQueryIntegrationTest {
         // Assert that all messages in the first batch were processed in a timely manner
         assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
         final KeyQueryMetadata keyQueryMetadata = kafkaStreams1
-                .queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> Optional.of(Collections.singleton(0)));
+            .queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> Optional.of(Collections.singleton(0)));
 
         //key belongs to this partition
         final int keyPartition = keyQueryMetadata.partition();
@@ -662,8 +662,8 @@ public class StoreQueryIntegrationTest {
         IntegrationTestUtils.produceKeyValuesSynchronously(
             INPUT_TOPIC_NAME,
             IntStream.range(start, endExclusive)
-                     .mapToObj(i -> KeyValue.pair(key, i))
-                     .collect(Collectors.toList()),
+                .mapToObj(i -> KeyValue.pair(key, i))
+                .collect(Collectors.toList()),
             producerProps,
             mockTime);
     }

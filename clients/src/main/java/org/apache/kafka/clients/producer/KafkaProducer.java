@@ -249,17 +249,17 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public static final String PRODUCER_METRIC_GROUP_NAME = "producer-metrics";
 
     private static final String INIT_TXN_TIMEOUT_MSG = "InitTransactions timed out - " +
-            "did not complete coordinator discovery or " +
-            "receive the InitProducerId response within max.block.ms.";
+        "did not complete coordinator discovery or " +
+        "receive the InitProducerId response within max.block.ms.";
 
     private static final String SEND_OFFSETS_TIMEOUT_MSG =
-            "SendOffsetsToTransaction timed out - did not reach the coordinator or " +
-                    "receive the TxnOffsetCommit/AddOffsetsToTxn response within max.block.ms";
+        "SendOffsetsToTransaction timed out - did not reach the coordinator or " +
+            "receive the TxnOffsetCommit/AddOffsetsToTxn response within max.block.ms";
     private static final String COMMIT_TXN_TIMEOUT_MSG =
-            "CommitTransaction timed out - did not complete EndTxn with the transaction coordinator within max.block.ms";
+        "CommitTransaction timed out - did not complete EndTxn with the transaction coordinator within max.block.ms";
     private static final String ABORT_TXN_TIMEOUT_MSG =
-            "AbortTransaction timed out - did not complete EndTxn(abort) with the transaction coordinator within max.block.ms";
-    
+        "AbortTransaction timed out - did not complete EndTxn(abort) with the transaction coordinator within max.block.ms";
+
     private final String clientId;
     // Visible for testing
     final Metrics metrics;
@@ -314,7 +314,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public KafkaProducer(Map<String, Object> configs, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         this(new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, keySerializer, valueSerializer)),
-                keySerializer, valueSerializer, null, null, null, new ApiVersions(), Time.SYSTEM);
+            keySerializer, valueSerializer, null, null, null, new ApiVersions(), Time.SYSTEM);
     }
 
     /**
@@ -346,13 +346,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     // visible for testing
     @SuppressWarnings({"unchecked", "this-escape"})
     KafkaProducer(ProducerConfig config,
-                  Serializer<K> keySerializer,
-                  Serializer<V> valueSerializer,
-                  ProducerMetadata metadata,
-                  KafkaClient kafkaClient,
-                  ProducerInterceptors<K, V> interceptors,
-                  ApiVersions apiVersions,
-                  Time time) {
+        Serializer<K> keySerializer,
+        Serializer<V> valueSerializer,
+        ProducerMetadata metadata,
+        KafkaClient kafkaClient,
+        ProducerInterceptors<K, V> interceptors,
+        ApiVersions apiVersions,
+        Time time) {
         try {
             this.producerConfig = config;
             this.time = time;
@@ -371,23 +371,23 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
             Map<String, String> metricTags = Collections.singletonMap("client-id", clientId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
-                    .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
-                    .recordLevel(Sensor.RecordingLevel.forName(config.getString(ProducerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
-                    .tags(metricTags);
+                .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
+                .recordLevel(Sensor.RecordingLevel.forName(config.getString(ProducerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
+                .tags(metricTags);
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
             this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
             this.clientTelemetryReporter.ifPresent(reporters::add);
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
-                    config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
+                config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
             this.producerMetrics = new KafkaProducerMetrics(metrics);
             this.partitionerPlugin = Plugin.wrapInstance(
-                    config.getConfiguredInstance(
-                        ProducerConfig.PARTITIONER_CLASS_CONFIG,
-                        Partitioner.class,
-                        Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId)),
-                    metrics,
-                    ProducerConfig.PARTITIONER_CLASS_CONFIG);
+                config.getConfiguredInstance(
+                    ProducerConfig.PARTITIONER_CLASS_CONFIG,
+                    Partitioner.class,
+                    Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId)),
+                metrics,
+                ProducerConfig.PARTITIONER_CLASS_CONFIG);
             this.partitionerIgnoreKeys = config.getBoolean(ProducerConfig.PARTITIONER_IGNORE_KEYS_CONFIG);
             long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
             long retryBackoffMaxMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
@@ -409,16 +409,16 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
 
             List<ProducerInterceptor<K, V>> interceptorList = (List<ProducerInterceptor<K, V>>) ClientUtils.configuredInterceptors(config,
-                    ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
-                    ProducerInterceptor.class);
+                ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
+                ProducerInterceptor.class);
             if (interceptors != null)
                 this.interceptors = interceptors;
             else
                 this.interceptors = new ProducerInterceptors<>(interceptorList, metrics);
             ClusterResourceListeners clusterResourceListeners = ClientUtils.configureClusterResourceListeners(
-                    interceptorList,
-                    reporters,
-                    Arrays.asList(this.keySerializerPlugin.get(), this.valueSerializerPlugin.get()));
+                interceptorList,
+                reporters,
+                Arrays.asList(this.keySerializerPlugin.get(), this.valueSerializerPlugin.get()));
             this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
             this.compression = configureCompression(config);
@@ -441,30 +441,30 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // batching which in practice actually means using a batch size of 1.
             int batchSize = Math.max(1, config.getInt(ProducerConfig.BATCH_SIZE_CONFIG));
             this.accumulator = new RecordAccumulator(logContext,
-                    batchSize,
-                    compression,
-                    lingerMs(config),
-                    retryBackoffMs,
-                    retryBackoffMaxMs,
-                    deliveryTimeoutMs,
-                    partitionerConfig,
-                    metrics,
-                    PRODUCER_METRIC_GROUP_NAME,
-                    time,
-                    transactionManager,
-                    new BufferPool(this.totalMemorySize, batchSize, metrics, time, PRODUCER_METRIC_GROUP_NAME));
+                batchSize,
+                compression,
+                lingerMs(config),
+                retryBackoffMs,
+                retryBackoffMaxMs,
+                deliveryTimeoutMs,
+                partitionerConfig,
+                metrics,
+                PRODUCER_METRIC_GROUP_NAME,
+                time,
+                transactionManager,
+                new BufferPool(this.totalMemorySize, batchSize, metrics, time, PRODUCER_METRIC_GROUP_NAME));
 
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
             if (metadata != null) {
                 this.metadata = metadata;
             } else {
                 this.metadata = new ProducerMetadata(retryBackoffMs,
-                        retryBackoffMaxMs,
-                        config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG),
-                        config.getLong(ProducerConfig.METADATA_MAX_IDLE_CONFIG),
-                        logContext,
-                        clusterResourceListeners,
-                        Time.SYSTEM);
+                    retryBackoffMaxMs,
+                    config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG),
+                    config.getLong(ProducerConfig.METADATA_MAX_IDLE_CONFIG),
+                    logContext,
+                    clusterResourceListeners,
+                    Time.SYSTEM);
                 this.metadata.bootstrap(addresses);
             }
             this.errors = this.metrics.sensor("errors");
@@ -485,19 +485,19 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     // visible for testing
     KafkaProducer(ProducerConfig config,
-                  LogContext logContext,
-                  Metrics metrics,
-                  Serializer<K> keySerializer,
-                  Serializer<V> valueSerializer,
-                  ProducerMetadata metadata,
-                  RecordAccumulator accumulator,
-                  TransactionManager transactionManager,
-                  Sender sender,
-                  ProducerInterceptors<K, V> interceptors,
-                  Partitioner partitioner,
-                  Time time,
-                  Sender.SenderThread ioThread,
-                  Optional<ClientTelemetryReporter> clientTelemetryReporter) {
+        LogContext logContext,
+        Metrics metrics,
+        Serializer<K> keySerializer,
+        Serializer<V> valueSerializer,
+        ProducerMetadata metadata,
+        RecordAccumulator accumulator,
+        TransactionManager transactionManager,
+        Sender sender,
+        ProducerInterceptors<K, V> interceptors,
+        Partitioner partitioner,
+        Time time,
+        Sender.SenderThread ioThread,
+        Optional<ClientTelemetryReporter> clientTelemetryReporter) {
         this.producerConfig = config;
         this.time = time;
         this.clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
@@ -530,30 +530,30 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         ProducerMetrics metricsRegistry = new ProducerMetrics(this.metrics);
         Sensor throttleTimeSensor = Sender.throttleTimeSensor(metricsRegistry.senderMetrics);
         KafkaClient client = kafkaClient != null ? kafkaClient : ClientUtils.createNetworkClient(producerConfig,
-                this.metrics,
-                "producer",
-                logContext,
-                apiVersions,
-                time,
-                maxInflightRequests,
-                metadata,
-                throttleTimeSensor,
-                clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null));
+            this.metrics,
+            "producer",
+            logContext,
+            apiVersions,
+            time,
+            maxInflightRequests,
+            metadata,
+            throttleTimeSensor,
+            clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null));
 
         short acks = Short.parseShort(producerConfig.getString(ProducerConfig.ACKS_CONFIG));
         return new Sender(logContext,
-                client,
-                metadata,
-                this.accumulator,
-                maxInflightRequests == 1,
-                producerConfig.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG),
-                acks,
-                producerConfig.getInt(ProducerConfig.RETRIES_CONFIG),
-                metricsRegistry.senderMetrics,
-                time,
-                requestTimeoutMs,
-                producerConfig.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG),
-                this.transactionManager);
+            client,
+            metadata,
+            this.accumulator,
+            maxInflightRequests == 1,
+            producerConfig.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG),
+            acks,
+            producerConfig.getInt(ProducerConfig.RETRIES_CONFIG),
+            metricsRegistry.senderMetrics,
+            time,
+            requestTimeoutMs,
+            producerConfig.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG),
+            this.transactionManager);
     }
 
     private static Compression configureCompression(ProducerConfig config) {
@@ -561,18 +561,18 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         switch (type) {
             case GZIP: {
                 return Compression.gzip()
-                        .level(config.getInt(ProducerConfig.COMPRESSION_GZIP_LEVEL_CONFIG))
-                        .build();
+                    .level(config.getInt(ProducerConfig.COMPRESSION_GZIP_LEVEL_CONFIG))
+                    .build();
             }
             case LZ4: {
                 return Compression.lz4()
-                        .level(config.getInt(ProducerConfig.COMPRESSION_LZ4_LEVEL_CONFIG))
-                        .build();
+                    .level(config.getInt(ProducerConfig.COMPRESSION_LZ4_LEVEL_CONFIG))
+                    .build();
             }
             case ZSTD: {
                 return Compression.zstd()
-                        .level(config.getInt(ProducerConfig.COMPRESSION_ZSTD_LEVEL_CONFIG))
-                        .build();
+                    .level(config.getInt(ProducerConfig.COMPRESSION_ZSTD_LEVEL_CONFIG))
+                    .build();
             }
             default:
                 return Compression.of(type).build();
@@ -607,7 +607,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     private TransactionManager configureTransactionState(ProducerConfig config,
-                                                         LogContext logContext) {
+        LogContext logContext) {
         TransactionManager transactionManager = null;
 
         if (config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG)) {
@@ -615,7 +615,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             final boolean enable2PC = config.getBoolean(ProducerConfig.TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG);
             final int transactionTimeoutMs = config.getInt(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
             final long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
-            
+
             transactionManager = new TransactionManager(
                 logContext,
                 transactionalId,
@@ -765,7 +765,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws InterruptException if the thread is interrupted while blocked
      */
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                         ConsumerGroupMetadata groupMetadata) throws ProducerFencedException {
+        ConsumerGroupMetadata groupMetadata) throws ProducerFencedException {
         throwIfInvalidGroupMetadata(groupMetadata);
         throwIfNoTransactionManager();
         throwIfProducerClosed();
@@ -917,16 +917,16 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void completeTransaction(PreparedTxnState preparedTxnState) throws ProducerFencedException {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
-        
+
         if (!transactionManager.isPrepared()) {
             throw new InvalidTxnStateException("Cannot complete transaction because no transaction has been prepared. " +
                 "Call prepareTransaction() first, or make sure initTransaction(true) was called.");
         }
-        
+
         // Get the current prepared transaction state
         ProducerIdAndEpoch currentProducerIdAndEpoch = transactionManager.preparedTransactionState();
         PreparedTxnState currentPreparedState = new PreparedTxnState(currentProducerIdAndEpoch.producerId, currentProducerIdAndEpoch.epoch);
-        
+
         // Compare the prepared transaction state token and commit or abort accordingly
         if (currentPreparedState.equals(preparedTxnState)) {
             commitTransaction();
@@ -1120,16 +1120,16 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 serializedKey = keySerializerPlugin.get().serialize(record.topic(), record.headers(), record.key());
             } catch (ClassCastException cce) {
                 throw new SerializationException("Can't convert key of class " + record.key().getClass().getName() +
-                        " to class " + producerConfig.getClass(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG).getName() +
-                        " specified in key.serializer", cce);
+                    " to class " + producerConfig.getClass(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG).getName() +
+                    " specified in key.serializer", cce);
             }
             byte[] serializedValue;
             try {
                 serializedValue = valueSerializerPlugin.get().serialize(record.topic(), record.headers(), record.value());
             } catch (ClassCastException cce) {
                 throw new SerializationException("Can't convert value of class " + record.value().getClass().getName() +
-                        " to class " + producerConfig.getClass(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG).getName() +
-                        " specified in value.serializer", cce);
+                    " to class " + producerConfig.getClass(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG).getName() +
+                    " specified in value.serializer", cce);
             }
 
             // Try to calculate partition, but note that after this call it can be RecordMetadata.UNKNOWN_PARTITION,
@@ -1141,14 +1141,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             Header[] headers = record.headers().toArray();
 
             int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(RecordBatch.CURRENT_MAGIC_VALUE,
-                    compression.type(), serializedKey, serializedValue, headers);
+                compression.type(), serializedKey, serializedValue, headers);
             ensureValidRecordSize(serializedSize);
             long timestamp = record.timestamp() == null ? nowMs : record.timestamp();
 
             // Append the record to the accumulator.  Note, that the actual partition may be
             // calculated there and can be accessed via appendCallbacks.topicPartition.
             RecordAccumulator.RecordAppendResult result = accumulator.append(record.topic(), partition, timestamp, serializedKey,
-                    serializedValue, headers, appendCallbacks, remainingWaitMs, nowMs, cluster);
+                serializedValue, headers, appendCallbacks, remainingWaitMs, nowMs, cluster);
             assert appendCallbacks.getPartition() != RecordMetadata.UNKNOWN_PARTITION;
 
             // Add the partition to the transaction (if in progress) after it has been successfully
@@ -1277,19 +1277,20 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             String.format("Partition %d of topic %s with partition count %d is not present in metadata after %d ms.",
                 partition, topic, partitionsCount, maxWaitMs);
     }
+
     /**
      * Validate that the record size isn't too large
      */
     private void ensureValidRecordSize(int size) {
         if (size > maxRequestSize)
             throw new RecordTooLargeException("The message is " + size +
-                    " bytes when serialized which is larger than " + maxRequestSize + ", which is the value of the " +
-                    ProducerConfig.MAX_REQUEST_SIZE_CONFIG + " configuration.");
+                " bytes when serialized which is larger than " + maxRequestSize + ", which is the value of the " +
+                ProducerConfig.MAX_REQUEST_SIZE_CONFIG + " configuration.");
         if (size > totalMemorySize)
             throw new RecordTooLargeException("The message is " + size +
-                    " bytes when serialized which is larger than the total memory buffer you have configured with the " +
-                    ProducerConfig.BUFFER_MEMORY_CONFIG +
-                    " configuration.");
+                " bytes when serialized which is larger than the total memory buffer you have configured with the " +
+                ProducerConfig.BUFFER_MEMORY_CONFIG +
+                " configuration.");
     }
 
     /**
@@ -1414,7 +1415,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void registerMetricForSubscription(KafkaMetric metric) {
         if (!metrics().containsKey(metric.metricName())) {
             clientTelemetryReporter.ifPresent(reporter -> reporter.metricChange(metric));
-        }  else {
+        } else {
             log.debug("Skipping registration for metric {}. Existing producer metrics cannot be overwritten.", metric.metricName());
         }
     }
@@ -1525,8 +1526,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         if (timeoutMs > 0) {
             if (invokedFromCallback) {
                 log.warn("Overriding close timeout {} ms to 0 ms in order to prevent useless blocking due to self-join. " +
-                        "This means you have incorrectly invoked close with a non-zero timeout from the producer call-back.",
-                        timeoutMs);
+                    "This means you have incorrectly invoked close with a non-zero timeout from the producer call-back.",
+                    timeoutMs);
             } else {
                 // Try to close gracefully.
                 final Timer closeTimer = time.timer(timeout);
@@ -1552,7 +1553,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         if (this.sender != null && this.ioThread != null && this.ioThread.isAlive()) {
             log.info("Proceeding to force close the producer since pending requests could not be completed " +
-                    "within timeout {} ms.", timeoutMs);
+                "within timeout {} ms.", timeoutMs);
             this.sender.forceClose();
             // Only join the sender thread when not calling from callback.
             if (!invokedFromCallback) {
@@ -1626,7 +1627,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private void throwIfNoTransactionManager() {
         if (transactionManager == null)
             throw new IllegalStateException("Cannot use transactional methods without enabling transactions " +
-                    "by setting the " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " configuration property");
+                "by setting the " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " configuration property");
     }
 
     // Visible for testing
@@ -1637,6 +1638,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private static class ClusterAndWaitTime {
         final Cluster cluster;
         final long waitedOnMetadataMs;
+
         ClusterAndWaitTime(Cluster cluster, long waitedOnMetadataMs) {
             this.cluster = cluster;
             this.waitedOnMetadataMs = waitedOnMetadataMs;

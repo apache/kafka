@@ -87,27 +87,27 @@ public class Cleaner {
      * @param checkDone Check if the cleaning for a partition is finished or aborted
      */
     public Cleaner(int id,
-                   OffsetMap offsetMap,
-                   int ioBufferSize,
-                   int maxIoBufferSize,
-                   double dupBufferLoadFactor,
-                   Throttler throttler,
-                   Time time,
-                   Consumer<TopicPartition> checkDone) {
+            OffsetMap offsetMap,
+            int ioBufferSize,
+            int maxIoBufferSize,
+            double dupBufferLoadFactor,
+            Throttler throttler,
+            Time time,
+            Consumer<TopicPartition> checkDone) {
         this(id, offsetMap, ioBufferSize, maxIoBufferSize, dupBufferLoadFactor, throttler, time, checkDone, Integer.MAX_VALUE, Integer.MAX_VALUE);
     }
 
     // Only for testing
     public Cleaner(int id,
-                   OffsetMap offsetMap,
-                   int ioBufferSize,
-                   int maxIoBufferSize,
-                   double dupBufferLoadFactor,
-                   Throttler throttler,
-                   Time time,
-                   Consumer<TopicPartition> checkDone,
-                   long maxCleanedSegmentSize,
-                   long maxCleanedOffsetRange) {
+            OffsetMap offsetMap,
+            int ioBufferSize,
+            int maxIoBufferSize,
+            double dupBufferLoadFactor,
+            Throttler throttler,
+            Time time,
+            Consumer<TopicPartition> checkDone,
+            long maxCleanedSegmentSize,
+            long maxCleanedOffsetRange) {
         this.id = id;
         this.offsetMap = offsetMap;
         this.ioBufferSize = ioBufferSize;
@@ -228,13 +228,13 @@ public class Cleaner {
      * @param upperBoundOffsetOfCleaningRound The upper bound offset of this round of cleaning
      */
     public void cleanSegments(UnifiedLog log,
-                              List<LogSegment> segments,
-                              OffsetMap map,
-                              long currentTime,
-                              CleanerStats stats,
-                              CleanedTransactionMetadata transactionMetadata,
-                              long legacyDeleteHorizonMs,
-                              long upperBoundOffsetOfCleaningRound) throws IOException {
+            List<LogSegment> segments,
+            OffsetMap map,
+            long currentTime,
+            CleanerStats stats,
+            CleanedTransactionMetadata transactionMetadata,
+            long legacyDeleteHorizonMs,
+            long upperBoundOffsetOfCleaningRound) throws IOException {
         List<LogSegment> cleanedSegments = new ArrayList<>();
 
         // Create initial cleaned segment with the base offset of the first source segment
@@ -260,7 +260,7 @@ public class Cleaner {
                 boolean retainLegacyDeletesAndTxnMarkers = currentSegment.lastModified() > legacyDeleteHorizonMs;
                 logger.info(
                         "Cleaning {} in log {} into {} with an upper bound deletion horizon {} computed from " +
-                        "the segment last modified time of {},{} deletes.",
+                                "the segment last modified time of {},{} deletes.",
                         currentSegment, log.name(), currentCleaned.baseOffset(), legacyDeleteHorizonMs, currentSegment.lastModified(),
                         retainLegacyDeletesAndTxnMarkers ? "retaining" : "discarding"
                 );
@@ -329,14 +329,14 @@ public class Cleaner {
 
         } catch (LogCleaningAbortedException e) {
             Stream.concat(cleanedSegments.stream(), Stream.of(currentCleaned))
-                .distinct()
-                .forEach(segment -> {
-                    try {
-                        segment.deleteIfExists();
-                    } catch (Exception deleteException) {
-                        e.addSuppressed(deleteException);
-                    }
-                });
+                    .distinct()
+                    .forEach(segment -> {
+                        try {
+                            segment.deleteIfExists();
+                        } catch (Exception deleteException) {
+                            e.addSuppressed(deleteException);
+                        }
+                    });
             throw e;
         }
     }
@@ -363,18 +363,18 @@ public class Cleaner {
      *         was detected in the source), or {@code Optional.empty()} if cleaning completed normally
      */
     private Optional<Integer> cleanInto(TopicPartition topicPartition,
-                           FileRecords sourceRecords,
-                           LogSegment dest,
-                           int startPosition,
-                           OffsetMap map,
-                           boolean retainLegacyDeletesAndTxnMarkers,
-                           long deleteRetentionMs,
-                           int maxLogMessageSize,
-                           CleanedTransactionMetadata transactionMetadata,
-                           Map<Long, LastRecord> lastRecordsOfActiveProducers,
-                           long upperBoundOffsetOfCleaningRound,
-                           CleanerStats stats,
-                           long currentTime) throws IOException {
+            FileRecords sourceRecords,
+            LogSegment dest,
+            int startPosition,
+            OffsetMap map,
+            boolean retainLegacyDeletesAndTxnMarkers,
+            long deleteRetentionMs,
+            int maxLogMessageSize,
+            CleanedTransactionMetadata transactionMetadata,
+            Map<Long, LastRecord> lastRecordsOfActiveProducers,
+            long upperBoundOffsetOfCleaningRound,
+            CleanerStats stats,
+            long currentTime) throws IOException {
         MemoryRecords.RecordFilter logCleanerFilter = new MemoryRecords.RecordFilter(currentTime, deleteRetentionMs) {
             private boolean discardBatchRecords;
 
@@ -505,9 +505,9 @@ public class Cleaner {
      * @param memoryRecords The memory records in read buffer
      */
     private void growBuffersOrFail(FileRecords sourceRecords,
-                                   int position,
-                                   int maxLogMessageSize,
-                                   MemoryRecords memoryRecords) throws IOException {
+            int position,
+            int maxLogMessageSize,
+            MemoryRecords memoryRecords) throws IOException {
         int maxSize;
 
         if (readBuffer.capacity() >= maxLogMessageSize) {
@@ -544,7 +544,7 @@ public class Cleaner {
      * @return if the batch can be discarded
      */
     private boolean shouldDiscardBatch(RecordBatch batch,
-                                       CleanedTransactionMetadata transactionMetadata) {
+            CleanedTransactionMetadata transactionMetadata) {
         if (batch.isControlBatch())
             return transactionMetadata.onControlBatchRead(batch);
         else
@@ -564,11 +564,11 @@ public class Cleaner {
      * @return if the record  can be retained
      */
     private boolean shouldRetainRecord(OffsetMap map,
-                                       boolean retainDeletesForLegacyRecords,
-                                       RecordBatch batch,
-                                       Record record,
-                                       CleanerStats stats,
-                                       long currentTime) throws DigestException {
+            boolean retainDeletesForLegacyRecords,
+            RecordBatch batch,
+            Record record,
+            CleanerStats stats,
+            long currentTime) throws DigestException {
         boolean pastLatestOffset = record.offset() > map.latestOffset();
         if (pastLatestOffset) {
             return true;
@@ -707,10 +707,10 @@ public class Cleaner {
      * @param stats Collector for cleaning statistics
      */
     public void buildOffsetMap(UnifiedLog log,
-                               long start,
-                               long end,
-                               OffsetMap map,
-                               CleanerStats stats) throws IOException, DigestException {
+            long start,
+            long end,
+            OffsetMap map,
+            CleanerStats stats) throws IOException, DigestException {
         map.clear();
         List<LogSegment> dirty = log.logSegments(start, end);
         List<Long> nextSegmentStartOffsets = new ArrayList<>();
@@ -769,13 +769,13 @@ public class Cleaner {
      * @return If the map was filled whilst loading from this segment
      */
     private boolean buildOffsetMapForSegment(TopicPartition topicPartition,
-                                             LogSegment segment,
-                                             OffsetMap map,
-                                             long startOffset,
-                                             long nextSegmentStartOffset,
-                                             int maxLogMessageSize,
-                                             CleanedTransactionMetadata transactionMetadata,
-                                             CleanerStats stats) throws IOException, DigestException {
+            LogSegment segment,
+            OffsetMap map,
+            long startOffset,
+            long nextSegmentStartOffset,
+            int maxLogMessageSize,
+            CleanedTransactionMetadata transactionMetadata,
+            CleanerStats stats) throws IOException, DigestException {
         int position = segment.offsetIndex().lookup(startOffset).position();
         int maxDesiredMapSize = (int) (map.slots() * dupBufferLoadFactor);
 

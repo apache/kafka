@@ -37,40 +37,40 @@ public class DeleteAclsResponseTest {
     private static final short V1 = 1;
 
     private static final DeleteAclsMatchingAcl LITERAL_ACL1 = new DeleteAclsMatchingAcl()
-            .setResourceType(ResourceType.TOPIC.code())
-            .setResourceName("foo")
-            .setPatternType(PatternType.LITERAL.code())
-            .setPrincipal("User:ANONYMOUS")
-            .setHost("127.0.0.1")
-            .setOperation(AclOperation.READ.code())
-            .setPermissionType(AclPermissionType.DENY.code());
+        .setResourceType(ResourceType.TOPIC.code())
+        .setResourceName("foo")
+        .setPatternType(PatternType.LITERAL.code())
+        .setPrincipal("User:ANONYMOUS")
+        .setHost("127.0.0.1")
+        .setOperation(AclOperation.READ.code())
+        .setPermissionType(AclPermissionType.DENY.code());
 
     private static final DeleteAclsMatchingAcl LITERAL_ACL2 = new DeleteAclsMatchingAcl()
-            .setResourceType(ResourceType.GROUP.code())
-            .setResourceName("group")
-            .setPatternType(PatternType.LITERAL.code())
-            .setPrincipal("User:*")
-            .setHost("127.0.0.1")
-            .setOperation(AclOperation.WRITE.code())
-            .setPermissionType(AclPermissionType.ALLOW.code());
+        .setResourceType(ResourceType.GROUP.code())
+        .setResourceName("group")
+        .setPatternType(PatternType.LITERAL.code())
+        .setPrincipal("User:*")
+        .setHost("127.0.0.1")
+        .setOperation(AclOperation.WRITE.code())
+        .setPermissionType(AclPermissionType.ALLOW.code());
 
     private static final DeleteAclsMatchingAcl PREFIXED_ACL1 = new DeleteAclsMatchingAcl()
-            .setResourceType(ResourceType.GROUP.code())
-            .setResourceName("prefix")
-            .setPatternType(PatternType.PREFIXED.code())
-            .setPrincipal("User:*")
-            .setHost("127.0.0.1")
-            .setOperation(AclOperation.CREATE.code())
-            .setPermissionType(AclPermissionType.ALLOW.code());
+        .setResourceType(ResourceType.GROUP.code())
+        .setResourceName("prefix")
+        .setPatternType(PatternType.PREFIXED.code())
+        .setPrincipal("User:*")
+        .setHost("127.0.0.1")
+        .setOperation(AclOperation.CREATE.code())
+        .setPermissionType(AclPermissionType.ALLOW.code());
 
     private static final DeleteAclsMatchingAcl UNKNOWN_ACL = new DeleteAclsMatchingAcl()
-            .setResourceType(ResourceType.UNKNOWN.code())
-            .setResourceName("group")
-            .setPatternType(PatternType.LITERAL.code())
-            .setPrincipal("User:*")
-            .setHost("127.0.0.1")
-            .setOperation(AclOperation.WRITE.code())
-            .setPermissionType(AclPermissionType.ALLOW.code());
+        .setResourceType(ResourceType.UNKNOWN.code())
+        .setResourceName("group")
+        .setPatternType(PatternType.LITERAL.code())
+        .setPrincipal("User:*")
+        .setHost("127.0.0.1")
+        .setOperation(AclOperation.WRITE.code())
+        .setPermissionType(AclPermissionType.ALLOW.code());
 
     private static final DeleteAclsFilterResult LITERAL_RESPONSE = new DeleteAclsFilterResult().setMatchingAcls(asList(
         LITERAL_ACL1, LITERAL_ACL2));
@@ -79,7 +79,7 @@ public class DeleteAclsResponseTest {
         LITERAL_ACL1, PREFIXED_ACL1));
 
     private static final DeleteAclsFilterResult UNKNOWN_RESPONSE = new DeleteAclsFilterResult().setMatchingAcls(singletonList(
-            UNKNOWN_ACL));
+        UNKNOWN_ACL));
 
     @Test
     public void shouldThrowOnIfUnknown() {

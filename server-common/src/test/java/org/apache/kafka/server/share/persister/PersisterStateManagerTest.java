@@ -100,7 +100,7 @@ class PersisterStateManagerTest {
         private Time time = MOCK_TIME;
         private Timer timer = MOCK_TIMER;
         private ShareCoordinatorMetadataCacheHelper cacheHelper = CACHE_HELPER;
-        private int requestTimeoutMs =  Math.toIntExact(CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS);
+        private int requestTimeoutMs = Math.toIntExact(CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS);
 
         private PersisterStateManagerBuilder withKafkaClient(KafkaClient client) {
             this.client = client;

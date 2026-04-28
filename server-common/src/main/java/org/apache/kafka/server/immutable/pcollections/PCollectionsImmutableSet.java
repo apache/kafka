@@ -59,7 +59,7 @@ public class PCollectionsImmutableSet<E> implements ImmutableSet<E> {
     public ImmutableSet<E> added(E e) {
         return new PCollectionsImmutableSet<>(underlying().plus(e));
     }
-    
+
     @Override
     public ImmutableSet<E> removed(E e) {
         return new PCollectionsImmutableSet<>(underlying().minus(e));

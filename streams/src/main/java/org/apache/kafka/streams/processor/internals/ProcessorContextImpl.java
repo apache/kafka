@@ -60,23 +60,23 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
     final Map<String, DirtyEntryFlushListener> cacheNameToFlushListener = new HashMap<>();
 
     public ProcessorContextImpl(final TaskId id,
-                                final StreamsConfig config,
-                                final ProcessorStateManager stateMgr,
-                                final StreamsMetricsImpl metrics,
-                                final ThreadCache cache) {
+        final StreamsConfig config,
+        final ProcessorStateManager stateMgr,
+        final StreamsMetricsImpl metrics,
+        final ThreadCache cache) {
         super(id, config, metrics, cache);
         stateManager = stateMgr;
         consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-                appConfigs(),
-                IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
-                false);
+            appConfigs(),
+            IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+            false);
     }
 
     @Override
     public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
         if (stateManager.taskType() != TaskType.ACTIVE) {
             throw new IllegalStateException("Tried to transition processor context to active but the state manager's " +
-                                                "type was " + stateManager.taskType());
+                "type was " + stateManager.taskType());
         }
         this.streamTask = streamTask;
         this.collector = recordCollector;
@@ -88,7 +88,7 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
     public void transitionToStandby(final ThreadCache newCache) {
         if (stateManager.taskType() != TaskType.STANDBY) {
             throw new IllegalStateException("Tried to transition processor context to standby but the state manager's " +
-                                                "type was " + stateManager.taskType());
+                "type was " + stateManager.taskType());
         }
         this.streamTask = null;
         this.collector = null;
@@ -120,11 +120,11 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
 
     @Override
     public void logChange(final String storeName,
-                          final Bytes key,
-                          final byte[] value,
-                          final long timestamp,
-                          final Headers headers,
-                          final Position position) {
+        final Bytes key,
+        final byte[] value,
+        final long timestamp,
+        final Headers headers,
+        final Position position) {
         throwUnsupportedOperationExceptionIfStandby("logChange");
 
         final TopicPartition changelogPartition = stateManager().registeredChangelogPartitionFor(storeName);
@@ -158,7 +158,7 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
      */
     @SuppressWarnings("unchecked")
     @Override
-    public <S extends StateStore> S  getStateStore(final String name) {
+    public <S extends StateStore> S getStateStore(final String name) {
         throwUnsupportedOperationExceptionIfStandby("getStateStore");
         if (currentNode() == null) {
             throw new StreamsException("Accessing from an unknown node");
@@ -186,7 +186,7 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
 
     @Override
     public <K, V> void forward(final K key,
-                               final V value) {
+        final V value) {
         final Record<K, V> toForward = new Record<>(
             key,
             value,
@@ -198,8 +198,8 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
 
     @Override
     public <K, V> void forward(final K key,
-                               final V value,
-                               final To to) {
+        final V value,
+        final To to) {
         final ToInternal toInternal = new ToInternal(to);
         final Record<K, V> toForward = new Record<>(
             key,
@@ -236,10 +236,10 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
         final ProcessorNode<?, ?, ?, ?> previousNode = currentNode();
         if (previousNode == null) {
             throw new StreamsException("Current node is unknown. This can happen if 'forward()' is called " +
-                    "in an illegal scope. The root cause could be that a 'Processor' instance " +
-                    "is shared. To avoid this error, make sure that your suppliers return new instances " +
-                    "each time 'get()' of Supplier is called and do not return the same object reference " +
-                    "multiple times.");
+                "in an illegal scope. The root cause could be that a 'Processor' instance " +
+                "is shared. To avoid this error, make sure that your suppliers return new instances " +
+                "each time 'get()' of Supplier is called and do not return the same object reference " +
+                "multiple times.");
         }
 
         final ProcessorRecordContext previousContext = recordContext;
@@ -275,7 +275,7 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
                 final ProcessorNode<?, ?, ?, ?> child = currentNode().child(childName);
                 if (child == null) {
                     throw new StreamsException("Unknown downstream node: " + childName
-                                                   + " either does not exist or is not connected to this processor.");
+                        + " either does not exist or is not connected to this processor.");
                 }
                 forwardInternal((ProcessorNode<K, V, ?, ?>) child, record);
             }
@@ -287,7 +287,7 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
     }
 
     private <K, V> void forwardInternal(final ProcessorNode<K, V, ?, ?> child,
-                                        final Record<K, V> record) {
+        final Record<K, V> record) {
         setCurrentNode(child);
 
         child.process(record);
@@ -305,22 +305,23 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
 
     @Override
     public Cancellable schedule(final Duration interval,
-                                final PunctuationType type,
-                                final Punctuator callback) throws IllegalArgumentException {
+        final PunctuationType type,
+        final Punctuator callback) throws IllegalArgumentException {
         throwUnsupportedOperationExceptionIfStandby("schedule");
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(interval, "interval");
         final long intervalMs = validateMillisecondDuration(interval, msgPrefix);
         if (intervalMs < 1) {
             throw new IllegalArgumentException("The minimum supported scheduling interval is 1 millisecond.");
         }
-        return streamTask.schedule(intervalMs, type, callback);    }
+        return streamTask.schedule(intervalMs, type, callback);
+    }
 
     @Override
     public Cancellable schedule(
-            final Instant startTime,
-            final Duration interval,
-            final PunctuationType type,
-            final Punctuator callback) throws IllegalArgumentException {
+        final Instant startTime,
+        final Duration interval,
+        final PunctuationType type,
+        final Punctuator callback) throws IllegalArgumentException {
         throwUnsupportedOperationExceptionIfStandby("schedule");
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(interval, "interval");
         final long intervalMs = validateMillisecondDuration(interval, msgPrefix);

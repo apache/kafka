@@ -63,41 +63,41 @@ enum FieldDomain {
             case MESSAGE1_ONLY:
                 if (present2) {
                     throw new UnificationException(what + " " + field.name() + " is present in " +
-                            "message2, but should not be, based on its versions.");
+                        "message2, but should not be, based on its versions.");
                 }
                 if (!present1) {
                     throw new UnificationException(what + " " + field.name() + " is not present in " +
-                            "message1, but should be, based on its versions.");
+                        "message1, but should be, based on its versions.");
                 }
                 break;
             case BOTH:
                 if (!present1) {
                     throw new UnificationException(what + " " + field.name() + " is not present in " +
-                            "message1, but should be, based on its versions.");
+                        "message1, but should be, based on its versions.");
                 }
                 if (!present2) {
                     throw new UnificationException(what + " " + field.name() + " is not present in " +
-                            "message2, but should be, based on its versions.");
+                        "message2, but should be, based on its versions.");
                 }
                 break;
             case MESSAGE2_ONLY:
                 if (present1) {
                     throw new UnificationException(what + " " + field.name() + " is present in " +
-                            "message1, but should not be, based on its versions.");
+                        "message1, but should not be, based on its versions.");
                 }
                 if (!present2) {
                     throw new UnificationException(what + " " + field.name() + " is not present in " +
-                            "message2, but should be, based on its versions.");
+                        "message2, but should be, based on its versions.");
                 }
                 break;
             case NEITHER:
                 if (present1) {
                     throw new UnificationException(what + " " + field.name() + " is present in " +
-                            "message1, but should not be, based on its versions.");
+                        "message1, but should not be, based on its versions.");
                 }
                 if (present2) {
                     throw new UnificationException(what + " " + field.name() + " is present in " +
-                            "message2, but should not be, based on its versions.");
+                        "message2, but should not be, based on its versions.");
                 }
                 break;
         }

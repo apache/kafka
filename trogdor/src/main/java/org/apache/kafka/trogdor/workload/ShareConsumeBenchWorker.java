@@ -73,6 +73,7 @@ public class ShareConsumeBenchWorker implements TaskWorker {
     private StatusUpdater statusUpdater;
     private Future<?> statusUpdaterFuture;
     private KafkaFutureImpl<String> doneFuture;
+
     public ShareConsumeBenchWorker(String id, ShareConsumeBenchSpec spec) {
         this.id = id;
         this.spec = spec;
@@ -80,15 +81,15 @@ public class ShareConsumeBenchWorker implements TaskWorker {
 
     @Override
     public void start(Platform platform, WorkerStatusTracker status,
-                      KafkaFutureImpl<String> doneFuture) throws Exception {
+        KafkaFutureImpl<String> doneFuture) throws Exception {
         if (!running.compareAndSet(false, true)) {
             throw new IllegalStateException("ShareConsumeBenchWorker is already running.");
         }
         log.info("{}: Activating ShareConsumeBenchWorker with {}", id, spec);
         this.statusUpdater = new StatusUpdater();
         this.executor = Executors.newScheduledThreadPool(
-                spec.threadsPerWorker() + 2, // 1 thread for all the ConsumeStatusUpdater and 1 for the StatusUpdater
-                ThreadUtils.createThreadFactory("ShareConsumeBenchWorkerThread%d", false));
+            spec.threadsPerWorker() + 2, // 1 thread for all the ConsumeStatusUpdater and 1 for the StatusUpdater
+            ThreadUtils.createThreadFactory("ShareConsumeBenchWorkerThread%d", false));
         this.statusUpdaterFuture = executor.scheduleAtFixedRate(this.statusUpdater, 1, 1, TimeUnit.MINUTES);
         this.workerStatus = status;
         this.doneFuture = doneFuture;
@@ -158,12 +159,12 @@ public class ShareConsumeBenchWorker implements TaskWorker {
         private final Optional<RecordProcessor> recordProcessor;
 
         private ConsumeMessages(ThreadSafeShareConsumer consumer,
-                                Optional<RecordProcessor> recordProcessor) {
+            Optional<RecordProcessor> recordProcessor) {
             this.latencyHistogram = new Histogram(10000);
             this.messageSizeHistogram = new Histogram(2 * 1024 * 1024);
             this.clientId = consumer.clientId();
             this.statusUpdaterFuture = executor.scheduleAtFixedRate(
-                    new ConsumeStatusUpdater(latencyHistogram, messageSizeHistogram, consumer, recordProcessor), 1, 1, TimeUnit.MINUTES);
+                new ConsumeStatusUpdater(latencyHistogram, messageSizeHistogram, consumer, recordProcessor), 1, 1, TimeUnit.MINUTES);
             int perPeriod;
             if (spec.targetMessagesPerSec() <= 0)
                 perPeriod = Integer.MAX_VALUE;
@@ -176,8 +177,8 @@ public class ShareConsumeBenchWorker implements TaskWorker {
         }
 
         ConsumeMessages(ThreadSafeShareConsumer consumer,
-                        Optional<RecordProcessor> recordProcessor,
-                        Set<String> topics) {
+            Optional<RecordProcessor> recordProcessor,
+            Set<String> topics) {
             this(consumer, recordProcessor);
             log.info("Will consume from topics {}.", topics);
             this.consumer.subscribe(topics);
@@ -226,10 +227,10 @@ public class ShareConsumeBenchWorker implements TaskWorker {
             } finally {
                 statusUpdaterFuture.cancel(false);
                 StatusData statusData =
-                        new ConsumeStatusUpdater(latencyHistogram, messageSizeHistogram, consumer, spec.recordProcessor()).update();
+                    new ConsumeStatusUpdater(latencyHistogram, messageSizeHistogram, consumer, spec.recordProcessor()).update();
                 long curTimeMs = Time.SYSTEM.milliseconds();
                 log.info("{} Consumed total number of messages={}, bytes={} in {} ms.  status: {}",
-                        clientId, messagesConsumed, bytesConsumed, curTimeMs - startTimeMs, statusData);
+                    clientId, messagesConsumed, bytesConsumed, curTimeMs - startTimeMs, statusData);
             }
             consumer.close();
             return null;
@@ -294,9 +295,9 @@ public class ShareConsumeBenchWorker implements TaskWorker {
         private final Optional<RecordProcessor> recordProcessor;
 
         ConsumeStatusUpdater(Histogram latencyHistogram,
-                             Histogram messageSizeHistogram,
-                             ThreadSafeShareConsumer consumer,
-                             Optional<RecordProcessor> recordProcessor) {
+            Histogram messageSizeHistogram,
+            ThreadSafeShareConsumer consumer,
+            Optional<RecordProcessor> recordProcessor) {
             this.latencyHistogram = latencyHistogram;
             this.messageSizeHistogram = messageSizeHistogram;
             this.consumer = consumer;
@@ -323,15 +324,15 @@ public class ShareConsumeBenchWorker implements TaskWorker {
             }
 
             StatusData statusData = new StatusData(
-                    consumer.subscription(),
-                    latSummary.numSamples(),
-                    (long) (msgSummary.numSamples() * msgSummary.average()),
-                    (long) msgSummary.average(),
-                    latSummary.average(),
-                    latSummary.percentiles().get(0).value(),
-                    latSummary.percentiles().get(1).value(),
-                    latSummary.percentiles().get(2).value(),
-                    recordProcessorStatus);
+                consumer.subscription(),
+                latSummary.numSamples(),
+                (long) (msgSummary.numSamples() * msgSummary.average()),
+                (long) msgSummary.average(),
+                latSummary.average(),
+                latSummary.percentiles().get(0).value(),
+                latSummary.percentiles().get(1).value(),
+                latSummary.percentiles().get(2).value(),
+                recordProcessorStatus);
             statusUpdater.updateConsumeStatus(consumer.clientId(), statusData);
             log.info("Status={}", JsonUtil.toJsonString(statusData));
             return statusData;
@@ -354,16 +355,17 @@ public class ShareConsumeBenchWorker implements TaskWorker {
          * These should match up with the p50LatencyMs, p95LatencyMs, etc. fields.
          */
         static final float[] PERCENTILES = {0.5f, 0.95f, 0.99f};
+
         @JsonCreator
         StatusData(@JsonProperty("subscription") Set<String> subscription,
-                   @JsonProperty("totalMessagesReceived") long totalMessagesReceived,
-                   @JsonProperty("totalBytesReceived") long totalBytesReceived,
-                   @JsonProperty("averageMessageSizeBytes") long averageMessageSizeBytes,
-                   @JsonProperty("averageLatencyMs") float averageLatencyMs,
-                   @JsonProperty("p50LatencyMs") int p50latencyMs,
-                   @JsonProperty("p95LatencyMs") int p95latencyMs,
-                   @JsonProperty("p99LatencyMs") int p99latencyMs,
-                   @JsonProperty("recordProcessorStatus") Optional<JsonNode> recordProcessorStatus) {
+            @JsonProperty("totalMessagesReceived") long totalMessagesReceived,
+            @JsonProperty("totalBytesReceived") long totalBytesReceived,
+            @JsonProperty("averageMessageSizeBytes") long averageMessageSizeBytes,
+            @JsonProperty("averageLatencyMs") float averageLatencyMs,
+            @JsonProperty("p50LatencyMs") int p50latencyMs,
+            @JsonProperty("p95LatencyMs") int p95latencyMs,
+            @JsonProperty("p99LatencyMs") int p99latencyMs,
+            @JsonProperty("recordProcessorStatus") Optional<JsonNode> recordProcessorStatus) {
             this.subscription = subscription;
             this.totalMessagesReceived = totalMessagesReceived;
             this.totalBytesReceived = totalBytesReceived;

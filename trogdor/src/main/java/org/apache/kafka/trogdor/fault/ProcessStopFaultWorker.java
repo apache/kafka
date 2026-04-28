@@ -47,7 +47,7 @@ public class ProcessStopFaultWorker implements TaskWorker {
 
     @Override
     public void start(Platform platform, WorkerStatusTracker status,
-                      KafkaFutureImpl<String> errorFuture) throws Exception {
+        KafkaFutureImpl<String> errorFuture) throws Exception {
         this.status = status;
         log.info("Activating ProcessStopFault {}.", id);
         this.status.update(new TextNode("stopping " + javaProcessName));
@@ -64,7 +64,7 @@ public class ProcessStopFaultWorker implements TaskWorker {
     }
 
     private void sendSignals(Platform platform, String signalName) throws Exception {
-        String jcmdOutput = platform.runCommand(new String[] {"jcmd"});
+        String jcmdOutput = platform.runCommand(new String[]{"jcmd"});
         String[] lines = jcmdOutput.split("\n");
         List<Integer> pids = new ArrayList<>();
         for (String line : lines) {
@@ -84,7 +84,7 @@ public class ProcessStopFaultWorker implements TaskWorker {
             log.info("{}: sending {} to {} pid(s) {}",
                 id, signalName, javaProcessName, pids.stream().map(Object::toString).collect(Collectors.joining(",")));
             for (Integer pid : pids) {
-                platform.runCommand(new String[] {"kill", "-" + signalName, pid.toString()});
+                platform.runCommand(new String[]{"kill", "-" + signalName, pid.toString()});
             }
         }
     }

@@ -88,7 +88,7 @@ public class ConnectMetrics {
         List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(workerId, config);
         MetricConfig metricConfig = new MetricConfig().samples(numSamples)
                 .timeWindow(sampleWindowMs, TimeUnit.MILLISECONDS).recordLevel(
-                        Sensor.RecordingLevel.forName(metricsRecordingLevel));
+                Sensor.RecordingLevel.forName(metricsRecordingLevel));
 
         Map<String, Object> contextLabels = new HashMap<>(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
         contextLabels.put(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID, clusterId);

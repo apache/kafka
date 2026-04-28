@@ -37,24 +37,24 @@ public class TokenInformation {
     private final String tokenId;
 
     public TokenInformation(String tokenId, KafkaPrincipal owner,
-                            Collection<KafkaPrincipal> renewers, long issueTimestamp, long maxTimestamp, long expiryTimestamp) {
+        Collection<KafkaPrincipal> renewers, long issueTimestamp, long maxTimestamp, long expiryTimestamp) {
         this(tokenId, owner, owner, renewers, issueTimestamp, maxTimestamp, expiryTimestamp);
     }
 
     public TokenInformation(String tokenId, KafkaPrincipal owner, KafkaPrincipal tokenRequester,
-                            Collection<KafkaPrincipal> renewers, long issueTimestamp, long maxTimestamp, long expiryTimestamp) {
+        Collection<KafkaPrincipal> renewers, long issueTimestamp, long maxTimestamp, long expiryTimestamp) {
         this.tokenId = tokenId;
         this.owner = owner;
         this.tokenRequester = tokenRequester;
         this.renewers = renewers;
-        this.issueTimestamp =  issueTimestamp;
-        this.maxTimestamp =  maxTimestamp;
-        this.expiryTimestamp =  expiryTimestamp;
+        this.issueTimestamp = issueTimestamp;
+        this.maxTimestamp = maxTimestamp;
+        this.expiryTimestamp = expiryTimestamp;
     }
 
     // Convert record elements into a TokenInformation
     public static TokenInformation fromRecord(String tokenId, KafkaPrincipal owner, KafkaPrincipal tokenRequester,
-                            Collection<KafkaPrincipal> renewers, long issueTimestamp, long maxTimestamp, long expiryTimestamp) {
+        Collection<KafkaPrincipal> renewers, long issueTimestamp, long maxTimestamp, long expiryTimestamp) {
         return new TokenInformation(
             tokenId, owner, tokenRequester, renewers, issueTimestamp, maxTimestamp, expiryTimestamp);
     }

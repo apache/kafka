@@ -128,8 +128,8 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         final ConstrainedPrioritySet constrainedPrioritySet = createLeastLoadedPrioritySetConstrainedByAssignedTask(clientStates);
         final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
         final Map<TaskId, ProcessId> taskToClientId = mkMap(mkEntry(TASK_0_0, PID_1),
-                                                       mkEntry(TASK_0_1, PID_2),
-                                                       mkEntry(TASK_0_2, PID_3));
+            mkEntry(TASK_0_1, PID_2),
+            mkEntry(TASK_0_2, PID_3));
 
         final Map<String, Set<String>> tagKeyToValues = new HashMap<>();
         final Map<TagEntry, Set<ProcessId>> tagEntryToClients = new HashMap<>();
@@ -171,8 +171,8 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         final int numStandbyReplicas = 3;
         final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
         final Map<TaskId, ProcessId> taskToClientId = mkMap(mkEntry(TASK_0_0, PID_1),
-                                                       mkEntry(TASK_0_1, PID_2),
-                                                       mkEntry(TASK_0_2, PID_3));
+            mkEntry(TASK_0_1, PID_2),
+            mkEntry(TASK_0_2, PID_3));
 
         final Map<String, Set<String>> tagKeyToValues = new HashMap<>();
         final Map<TagEntry, Set<ProcessId>> tagEntryToClients = new HashMap<>();
@@ -791,53 +791,53 @@ public class ClientTagAwareStandbyTaskAssignorTest {
     }
 
     private static void assertStandbyTaskCountForClientEqualsTo(final Map<ProcessId, ClientState> clientStates,
-                                                                final ProcessId client,
-                                                                final int... expectedStandbyTaskCounts) {
+        final ProcessId client,
+        final int... expectedStandbyTaskCounts) {
         final int standbyTaskCount = clientStates.get(client).standbyTaskCount();
         final String msg = String.format("Client [%s] doesn't have expected number of standby tasks. " +
-                                         "Expected any of %s, actual [%s]",
-                                         client, Arrays.toString(expectedStandbyTaskCounts), standbyTaskCount);
+            "Expected any of %s, actual [%s]",
+            client, Arrays.toString(expectedStandbyTaskCounts), standbyTaskCount);
 
         assertTrue(Arrays.stream(expectedStandbyTaskCounts).anyMatch(expectedStandbyTaskCount -> expectedStandbyTaskCount == standbyTaskCount), msg);
     }
 
     private static boolean standbyClientsHonorRackAwareness(final TaskId activeTaskId,
-                                                            final Map<ProcessId, ClientState> clientStates,
-                                                            final List<Set<ProcessId>> validClientIdsBasedOnRackAwareAssignmentTags) {
+        final Map<ProcessId, ClientState> clientStates,
+        final List<Set<ProcessId>> validClientIdsBasedOnRackAwareAssignmentTags) {
         final Set<ProcessId> standbyTaskClientIds = findAllStandbyTaskClients(clientStates, activeTaskId);
 
         return validClientIdsBasedOnRackAwareAssignmentTags.stream()
-                                                           .filter(it -> it.equals(standbyTaskClientIds))
-                                                           .count() == 1;
+            .filter(it -> it.equals(standbyTaskClientIds))
+            .count() == 1;
     }
 
     private static boolean containsStandbyTasks(final TaskId activeTaskId,
-                                                final Map<ProcessId, ClientState> clientStates,
-                                                final Set<ProcessId> validClientIdsBasedOnRackAwareAssignmentTags) {
+        final Map<ProcessId, ClientState> clientStates,
+        final Set<ProcessId> validClientIdsBasedOnRackAwareAssignmentTags) {
         final Set<ProcessId> standbyTaskClientIds = findAllStandbyTaskClients(clientStates, activeTaskId);
         return validClientIdsBasedOnRackAwareAssignmentTags.containsAll(standbyTaskClientIds);
     }
 
     private static Set<ProcessId> findAllStandbyTaskClients(final Map<ProcessId, ClientState> clientStates, final TaskId task) {
         return clientStates.keySet()
-                           .stream()
-                           .filter(clientId -> clientStates.get(clientId).standbyTasks().contains(task))
-                           .collect(Collectors.toSet());
+            .stream()
+            .filter(clientId -> clientStates.get(clientId).standbyTasks().contains(task))
+            .collect(Collectors.toSet());
     }
 
     private static AssignmentConfigs newAssignmentConfigs(final int numStandbyReplicas,
-                                                          final String... rackAwareAssignmentTags) {
+        final String... rackAwareAssignmentTags) {
         return new AssignmentConfigs(0L,
-                                     1,
-                                     numStandbyReplicas,
-                                     60000L,
-                                     asList(rackAwareAssignmentTags));
+            1,
+            numStandbyReplicas,
+            60000L,
+            asList(rackAwareAssignmentTags));
     }
 
     private static ClientState createClientStateWithCapacity(final ProcessId processId,
-                                                             final int capacity,
-                                                             final Map<String, String> clientTags,
-                                                             final TaskId... tasks) {
+        final int capacity,
+        final Map<String, String> clientTags,
+        final TaskId... tasks) {
         final ClientState clientState = new ClientState(processId, capacity, clientTags);
 
         Optional.ofNullable(tasks).ifPresent(t -> clientState.assignActiveTasks(asList(t)));
@@ -847,8 +847,8 @@ public class ClientTagAwareStandbyTaskAssignorTest {
 
     private static Set<TaskId> findAllActiveTasks(final Map<ProcessId, ClientState> clientStates) {
         return clientStates.entrySet()
-                           .stream()
-                           .flatMap(clientStateEntry -> clientStateEntry.getValue().activeTasks().stream())
-                           .collect(Collectors.toSet());
+            .stream()
+            .flatMap(clientStateEntry -> clientStateEntry.getValue().activeTasks().stream())
+            .collect(Collectors.toSet());
     }
 }

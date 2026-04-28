@@ -48,11 +48,11 @@ public class LegacySubscriptionInfoSerde {
     private final String userEndPoint;
 
     public LegacySubscriptionInfoSerde(final int version,
-                                       final int latestSupportedVersion,
-                                       final ProcessId processId,
-                                       final Set<TaskId> prevTasks,
-                                       final Set<TaskId> standbyTasks,
-                                       final String userEndPoint) {
+        final int latestSupportedVersion,
+        final ProcessId processId,
+        final Set<TaskId> prevTasks,
+        final Set<TaskId> standbyTasks,
+        final String userEndPoint) {
         if (latestSupportedVersion == UNKNOWN && (version < 1 || version > 2)) {
             throw new IllegalArgumentException(
                 "Only versions 1 and 2 are expected to use an UNKNOWN (-1) latest supported version. " +
@@ -158,7 +158,7 @@ public class LegacySubscriptionInfoSerde {
             return buf1;
         } else {
             throw new IllegalStateException("Unknown metadata version: " + usedVersion
-                                                + "; latest supported version: " + LATEST_SUPPORTED_VERSION);
+                + "; latest supported version: " + LATEST_SUPPORTED_VERSION);
         }
     }
 
@@ -168,8 +168,8 @@ public class LegacySubscriptionInfoSerde {
     }
 
     public static void encodeTasks(final ByteBuffer buf,
-                                   final Collection<TaskId> taskIds,
-                                   final int version) {
+        final Collection<TaskId> taskIds,
+        final int version) {
         buf.putInt(taskIds.size());
         for (final TaskId id : taskIds) {
             writeTaskIdTo(id, buf, version);
@@ -177,7 +177,7 @@ public class LegacySubscriptionInfoSerde {
     }
 
     public static void encodeUserEndPoint(final ByteBuffer buf,
-                                          final byte[] endPointBytes) {
+        final byte[] endPointBytes) {
         if (endPointBytes != null) {
             buf.putInt(endPointBytes.length);
             buf.put(endPointBytes);

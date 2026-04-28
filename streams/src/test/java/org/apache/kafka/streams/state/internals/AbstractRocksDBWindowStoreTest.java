@@ -53,7 +53,7 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
     private static final String METRICS_SCOPE = "test-state-id";
 
     private final KeyValueSegments segments =
-            new KeyValueSegments(STORE_NAME, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
+        new KeyValueSegments(STORE_NAME, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
 
     enum StoreType {
         RocksDBWindowStore,
@@ -67,61 +67,61 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
 
     @Override
     <K, V> WindowStore<K, V> buildWindowStore(final long retentionPeriod,
-                                              final long windowSize,
-                                              final boolean retainDuplicates,
-                                              final Serde<K> keySerde,
-                                              final Serde<V> valueSerde) {
+        final long windowSize,
+        final boolean retainDuplicates,
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde) {
 
         switch (storeType()) {
             case RocksDBWindowStore: {
                 return Stores.windowStoreBuilder(
-                                Stores.persistentWindowStore(
-                                        STORE_NAME,
-                                        ofMillis(retentionPeriod),
-                                        ofMillis(windowSize),
-                                        retainDuplicates),
-                                keySerde,
-                                valueSerde)
-                        .build();
+                    Stores.persistentWindowStore(
+                        STORE_NAME,
+                        ofMillis(retentionPeriod),
+                        ofMillis(windowSize),
+                        retainDuplicates),
+                    keySerde,
+                    valueSerde)
+                    .build();
             }
             case RocksDBTimeOrderedWindowStoreWithIndex: {
                 final long defaultSegmentInterval = Math.max(retentionPeriod / 2, 60_000L);
                 return Stores.windowStoreBuilder(
-                        new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
-                                retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates,
-                                true, false),
-                        keySerde,
-                        valueSerde
+                    new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
+                        retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates,
+                        true, false),
+                    keySerde,
+                    valueSerde
                 ).build();
             }
             case RocksDBTimeOrderedWindowStoreWithoutIndex: {
                 final long defaultSegmentInterval = Math.max(retentionPeriod / 2, 60_000L);
                 return Stores.windowStoreBuilder(
-                        new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
-                                retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates,
-                                false, false),
-                        keySerde,
-                        valueSerde
+                    new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
+                        retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates,
+                        false, false),
+                    keySerde,
+                    valueSerde
                 ).build();
             }
             case RocksDBTimeOrderedWindowStoreWithHeadersWithIndex: {
                 final long defaultSegmentInterval = Math.max(retentionPeriod / 2, 60_000L);
                 return Stores.windowStoreBuilder(
-                        new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
-                                retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates,
-                                true, true),
-                        keySerde,
-                        valueSerde
+                    new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
+                        retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates,
+                        true, true),
+                    keySerde,
+                    valueSerde
                 ).build();
             }
             case RocksDBTimeOrderedWindowStoreWithHeadersWithoutIndex: {
                 final long defaultSegmentInterval = Math.max(retentionPeriod / 2, 60_000L);
                 return Stores.windowStoreBuilder(
-                        new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
-                                retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates,
-                                false, true),
-                        keySerde,
-                        valueSerde
+                    new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
+                        retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates,
+                        false, true),
+                    keySerde,
+                    valueSerde
                 ).build();
             }
             default:
@@ -166,41 +166,41 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
 
         windowStore.put(2, "two", startTime + increment * 2);
         assertEquals(
-                Set.of(
-                        segments.segmentName(2),
-                        segments.segmentName(3)
-                ),
-                segmentDirs(baseDir)
+            Set.of(
+                segments.segmentName(2),
+                segments.segmentName(3)
+            ),
+            segmentDirs(baseDir)
         );
 
         windowStore.put(4, "four", startTime + increment * 4);
         assertEquals(
-                Set.of(
-                        segments.segmentName(2),
-                        segments.segmentName(3),
-                        segments.segmentName(4)
-                ),
-                segmentDirs(baseDir)
+            Set.of(
+                segments.segmentName(2),
+                segments.segmentName(3),
+                segments.segmentName(4)
+            ),
+            segmentDirs(baseDir)
         );
 
         windowStore.put(5, "five", startTime + increment * 5);
         assertEquals(
-                Set.of(
-                        segments.segmentName(2),
-                        segments.segmentName(3),
-                        segments.segmentName(4)
-                ),
-                segmentDirs(baseDir)
+            Set.of(
+                segments.segmentName(2),
+                segments.segmentName(3),
+                segments.segmentName(4)
+            ),
+            segmentDirs(baseDir)
         );
         // For all tests, for WindowStore actualFrom is computed using observedStreamTime - retention + 1.
         // while for TimeOrderedWindowStores, actualFrom = observedStreamTime - retention
         // expired record
         assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        0,
-                        ofEpochMilli(startTime - WINDOW_SIZE),
-                        ofEpochMilli(startTime + WINDOW_SIZE))));
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                0,
+                ofEpochMilli(startTime - WINDOW_SIZE),
+                ofEpochMilli(startTime + WINDOW_SIZE))));
         // RocksDbWindwStore =>
         //  from = 149997
         //  to = 150003
@@ -212,67 +212,67 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
         //  actualFrom = 150000, hence not ignored
         if (storeType() == StoreType.RocksDBWindowStore) {
             assertEquals(
-                    Set.of(),
-                    valuesToSetAndCloseIterator(windowStore.fetch(
-                            1,
-                            ofEpochMilli(startTime + increment - WINDOW_SIZE),
-                            ofEpochMilli(startTime + increment + WINDOW_SIZE))));
+                Set.of(),
+                valuesToSetAndCloseIterator(windowStore.fetch(
+                    1,
+                    ofEpochMilli(startTime + increment - WINDOW_SIZE),
+                    ofEpochMilli(startTime + increment + WINDOW_SIZE))));
 
         } else {
             assertEquals(
-                    Set.of("one"),
-                    valuesToSetAndCloseIterator(windowStore.fetch(
-                            1,
-                            ofEpochMilli(startTime + increment - WINDOW_SIZE),
-                            ofEpochMilli(startTime + increment + WINDOW_SIZE))));
+                Set.of("one"),
+                valuesToSetAndCloseIterator(windowStore.fetch(
+                    1,
+                    ofEpochMilli(startTime + increment - WINDOW_SIZE),
+                    ofEpochMilli(startTime + increment + WINDOW_SIZE))));
         }
         assertEquals(
-                Set.of("two"),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        2,
-                        ofEpochMilli(startTime + increment * 2 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 2 + WINDOW_SIZE))));
+            Set.of("two"),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                2,
+                ofEpochMilli(startTime + increment * 2 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 2 + WINDOW_SIZE))));
         assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        3,
-                        ofEpochMilli(startTime + increment * 3 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 3 + WINDOW_SIZE))));
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                3,
+                ofEpochMilli(startTime + increment * 3 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 3 + WINDOW_SIZE))));
         assertEquals(
-                Set.of("four"),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        4,
-                        ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 4 + WINDOW_SIZE))));
+            Set.of("four"),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                4,
+                ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 4 + WINDOW_SIZE))));
         assertEquals(
-                Set.of("five"),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        5,
-                        ofEpochMilli(startTime + increment * 5 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 5 + WINDOW_SIZE))));
+            Set.of("five"),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                5,
+                ofEpochMilli(startTime + increment * 5 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 5 + WINDOW_SIZE))));
 
         windowStore.put(6, "six", startTime + increment * 6);
         assertEquals(
-                Set.of(
-                        segments.segmentName(3),
-                        segments.segmentName(4),
-                        segments.segmentName(5)
-                ),
-                segmentDirs(baseDir)
+            Set.of(
+                segments.segmentName(3),
+                segments.segmentName(4),
+                segments.segmentName(5)
+            ),
+            segmentDirs(baseDir)
         );
 
         assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        0,
-                        ofEpochMilli(startTime - WINDOW_SIZE),
-                        ofEpochMilli(startTime + WINDOW_SIZE))));
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                0,
+                ofEpochMilli(startTime - WINDOW_SIZE),
+                ofEpochMilli(startTime + WINDOW_SIZE))));
         assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        1,
-                        ofEpochMilli(startTime + increment - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment + WINDOW_SIZE))));
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                1,
+                ofEpochMilli(startTime + increment - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment + WINDOW_SIZE))));
         // RocksDbWindwStore =>
         //  from = 179997
         //  to = 180003
@@ -284,192 +284,192 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
         //  actualFrom = 180000, hence not ignored
         if (storeType() == StoreType.RocksDBWindowStore) {
             assertEquals(
-                    // expired record
-                    Set.of(),
-                    valuesToSetAndCloseIterator(windowStore.fetch(
-                            2,
-                            ofEpochMilli(startTime + increment * 2 - WINDOW_SIZE),
-                            ofEpochMilli(startTime + increment * 2 + WINDOW_SIZE))));
-        } else {
-            assertEquals(
-                    // expired record
-                    Set.of("two"),
-                    valuesToSetAndCloseIterator(windowStore.fetch(
-                            2,
-                            ofEpochMilli(startTime + increment * 2 - WINDOW_SIZE),
-                            ofEpochMilli(startTime + increment * 2 + WINDOW_SIZE))));
-        }
-        assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        3,
-                        ofEpochMilli(startTime + increment * 3 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 3 + WINDOW_SIZE))));
-        assertEquals(
-                Set.of("four"),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        4,
-                        ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 4 + WINDOW_SIZE))));
-        assertEquals(
-                Set.of("five"),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        5,
-                        ofEpochMilli(startTime + increment * 5 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 5 + WINDOW_SIZE))));
-        assertEquals(
-                Set.of("six"),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        6,
-                        ofEpochMilli(startTime + increment * 6 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 6 + WINDOW_SIZE))));
-
-        windowStore.put(7, "seven", startTime + increment * 7);
-        assertEquals(
-                Set.of(
-                        segments.segmentName(3),
-                        segments.segmentName(4),
-                        segments.segmentName(5)
-                ),
-                segmentDirs(baseDir)
-        );
-
-        assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        0,
-                        ofEpochMilli(startTime - WINDOW_SIZE),
-                        ofEpochMilli(startTime + WINDOW_SIZE))));
-        assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        1,
-                        ofEpochMilli(startTime + increment - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment + WINDOW_SIZE))));
-        assertEquals(
                 // expired record
                 Set.of(),
                 valuesToSetAndCloseIterator(windowStore.fetch(
-                        2,
-                        ofEpochMilli(startTime + increment * 2 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 2 + WINDOW_SIZE))));
-        assertEquals(
-                Set.of(),
+                    2,
+                    ofEpochMilli(startTime + increment * 2 - WINDOW_SIZE),
+                    ofEpochMilli(startTime + increment * 2 + WINDOW_SIZE))));
+        } else {
+            assertEquals(
+                // expired record
+                Set.of("two"),
                 valuesToSetAndCloseIterator(windowStore.fetch(
-                        3,
-                        ofEpochMilli(startTime + increment * 3 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 3 + WINDOW_SIZE))));
+                    2,
+                    ofEpochMilli(startTime + increment * 2 - WINDOW_SIZE),
+                    ofEpochMilli(startTime + increment * 2 + WINDOW_SIZE))));
+        }
         assertEquals(
-                Set.of("four"),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        4,
-                        ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 4 + WINDOW_SIZE))));
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                3,
+                ofEpochMilli(startTime + increment * 3 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 3 + WINDOW_SIZE))));
         assertEquals(
-                Set.of("five"),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        5,
-                        ofEpochMilli(startTime + increment * 5 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 5 + WINDOW_SIZE))));
+            Set.of("four"),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                4,
+                ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 4 + WINDOW_SIZE))));
         assertEquals(
-                Set.of("six"),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        6,
-                        ofEpochMilli(startTime + increment * 6 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 6 + WINDOW_SIZE))));
+            Set.of("five"),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                5,
+                ofEpochMilli(startTime + increment * 5 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 5 + WINDOW_SIZE))));
         assertEquals(
-                Set.of("seven"),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        7,
-                        ofEpochMilli(startTime + increment * 7 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 7 + WINDOW_SIZE))));
+            Set.of("six"),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                6,
+                ofEpochMilli(startTime + increment * 6 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 6 + WINDOW_SIZE))));
 
-        windowStore.put(8, "eight", startTime + increment * 8);
+        windowStore.put(7, "seven", startTime + increment * 7);
         assertEquals(
-                Set.of(
-                        segments.segmentName(4),
-                        segments.segmentName(5),
-                        segments.segmentName(6)
-                ),
-                segmentDirs(baseDir)
+            Set.of(
+                segments.segmentName(3),
+                segments.segmentName(4),
+                segments.segmentName(5)
+            ),
+            segmentDirs(baseDir)
         );
 
         assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        0,
-                        ofEpochMilli(startTime - WINDOW_SIZE),
-                        ofEpochMilli(startTime + WINDOW_SIZE))));
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                0,
+                ofEpochMilli(startTime - WINDOW_SIZE),
+                ofEpochMilli(startTime + WINDOW_SIZE))));
         assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        1,
-                        ofEpochMilli(startTime + increment - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment + WINDOW_SIZE))));
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                1,
+                ofEpochMilli(startTime + increment - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment + WINDOW_SIZE))));
         assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        2,
-                        ofEpochMilli(startTime + increment * 2 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 2 + WINDOW_SIZE))));
+            // expired record
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                2,
+                ofEpochMilli(startTime + increment * 2 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 2 + WINDOW_SIZE))));
         assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        3,
-                        ofEpochMilli(startTime + increment * 3 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 3 + WINDOW_SIZE))));
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                3,
+                ofEpochMilli(startTime + increment * 3 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 3 + WINDOW_SIZE))));
+        assertEquals(
+            Set.of("four"),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                4,
+                ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 4 + WINDOW_SIZE))));
+        assertEquals(
+            Set.of("five"),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                5,
+                ofEpochMilli(startTime + increment * 5 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 5 + WINDOW_SIZE))));
+        assertEquals(
+            Set.of("six"),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                6,
+                ofEpochMilli(startTime + increment * 6 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 6 + WINDOW_SIZE))));
+        assertEquals(
+            Set.of("seven"),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                7,
+                ofEpochMilli(startTime + increment * 7 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 7 + WINDOW_SIZE))));
+
+        windowStore.put(8, "eight", startTime + increment * 8);
+        assertEquals(
+            Set.of(
+                segments.segmentName(4),
+                segments.segmentName(5),
+                segments.segmentName(6)
+            ),
+            segmentDirs(baseDir)
+        );
+
+        assertEquals(
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                0,
+                ofEpochMilli(startTime - WINDOW_SIZE),
+                ofEpochMilli(startTime + WINDOW_SIZE))));
+        assertEquals(
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                1,
+                ofEpochMilli(startTime + increment - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment + WINDOW_SIZE))));
+        assertEquals(
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                2,
+                ofEpochMilli(startTime + increment * 2 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 2 + WINDOW_SIZE))));
+        assertEquals(
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                3,
+                ofEpochMilli(startTime + increment * 3 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 3 + WINDOW_SIZE))));
         if (storeType() == StoreType.RocksDBWindowStore) {
             assertEquals(
-                    // expired record
-                    Set.of(),
-                    valuesToSetAndCloseIterator(windowStore.fetch(
-                            4,
-                            ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
-                            ofEpochMilli(startTime + increment * 4 + WINDOW_SIZE))));
+                // expired record
+                Set.of(),
+                valuesToSetAndCloseIterator(windowStore.fetch(
+                    4,
+                    ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
+                    ofEpochMilli(startTime + increment * 4 + WINDOW_SIZE))));
         } else {
             assertEquals(
-                    // expired record
-                    Set.of("four"),
-                    valuesToSetAndCloseIterator(windowStore.fetch(
-                            4,
-                            ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
-                            ofEpochMilli(startTime + increment * 4 + WINDOW_SIZE))));
+                // expired record
+                Set.of("four"),
+                valuesToSetAndCloseIterator(windowStore.fetch(
+                    4,
+                    ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
+                    ofEpochMilli(startTime + increment * 4 + WINDOW_SIZE))));
 
         }
         assertEquals(
-                Set.of("five"),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        5,
-                        ofEpochMilli(startTime + increment * 5 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 5 + WINDOW_SIZE))));
+            Set.of("five"),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                5,
+                ofEpochMilli(startTime + increment * 5 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 5 + WINDOW_SIZE))));
         assertEquals(
-                Set.of("six"),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        6,
-                        ofEpochMilli(startTime + increment * 6 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 6 + WINDOW_SIZE))));
+            Set.of("six"),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                6,
+                ofEpochMilli(startTime + increment * 6 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 6 + WINDOW_SIZE))));
         assertEquals(
-                Set.of("seven"),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        7,
-                        ofEpochMilli(startTime + increment * 7 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 7 + WINDOW_SIZE))));
+            Set.of("seven"),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                7,
+                ofEpochMilli(startTime + increment * 7 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 7 + WINDOW_SIZE))));
         assertEquals(
-                Set.of("eight"),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        8,
-                        ofEpochMilli(startTime + increment * 8 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 8 + WINDOW_SIZE))));
+            Set.of("eight"),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                8,
+                ofEpochMilli(startTime + increment * 8 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 8 + WINDOW_SIZE))));
 
         // check segment directories
         windowStore.commit(Map.of());
         assertEquals(
-                Set.of(
-                        segments.segmentName(4),
-                        segments.segmentName(5),
-                        segments.segmentName(6)
-                ),
-                segmentDirs(baseDir)
+            Set.of(
+                segments.segmentName(4),
+                segments.segmentName(5),
+                segments.segmentName(6)
+            ),
+            segmentDirs(baseDir)
         );
     }
 
@@ -477,27 +477,27 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
     public void testSegmentMaintenance() {
         windowStore.close();
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, true, Serdes.Integer(),
-                Serdes.String());
+            Serdes.String());
         windowStore.init(context, windowStore);
 
         context.setTime(0L);
         windowStore.put(0, "v", 0);
         assertEquals(
-                Set.of(segments.segmentName(0L)),
-                segmentDirs(baseDir)
+            Set.of(segments.segmentName(0L)),
+            segmentDirs(baseDir)
         );
 
         windowStore.put(0, "v", SEGMENT_INTERVAL - 1);
         windowStore.put(0, "v", SEGMENT_INTERVAL - 1);
         assertEquals(
-                Set.of(segments.segmentName(0L)),
-                segmentDirs(baseDir)
+            Set.of(segments.segmentName(0L)),
+            segmentDirs(baseDir)
         );
 
         windowStore.put(0, "v", SEGMENT_INTERVAL);
         assertEquals(
-                Set.of(segments.segmentName(0L), segments.segmentName(1L)),
-                segmentDirs(baseDir)
+            Set.of(segments.segmentName(0L), segments.segmentName(1L)),
+            segmentDirs(baseDir)
         );
 
         int fetchedCount;
@@ -512,8 +512,8 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
         assertEquals(4, fetchedCount);
 
         assertEquals(
-                Set.of(segments.segmentName(0L), segments.segmentName(1L)),
-                segmentDirs(baseDir)
+            Set.of(segments.segmentName(0L), segments.segmentName(1L)),
+            segmentDirs(baseDir)
         );
 
         windowStore.put(0, "v", SEGMENT_INTERVAL * 3);
@@ -535,8 +535,8 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
         }
 
         assertEquals(
-                Set.of(segments.segmentName(1L), segments.segmentName(3L)),
-                segmentDirs(baseDir)
+            Set.of(segments.segmentName(1L), segments.segmentName(3L)),
+            segmentDirs(baseDir)
         );
 
         windowStore.put(0, "v", SEGMENT_INTERVAL * 5);
@@ -553,8 +553,8 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
         // RocksDbWindowStore shouldn't have an implication and all stores should return the same fetched counts.
         assertEquals(1, fetchedCount);
         assertEquals(
-                Set.of(segments.segmentName(3L), segments.segmentName(5L)),
-                segmentDirs(baseDir)
+            Set.of(segments.segmentName(3L), segments.segmentName(5L)),
+            segmentDirs(baseDir)
         );
 
     }
@@ -580,9 +580,9 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
         windowStore.put(1, "v", 6L * SEGMENT_INTERVAL);
 
         final List<String> expected = asList(
-                segments.segmentName(4L),
-                segments.segmentName(5L),
-                segments.segmentName(6L));
+            segments.segmentName(4L),
+            segments.segmentName(5L),
+            segments.segmentName(6L));
         expected.sort(String::compareTo);
 
         final List<String> actual = Utils.toList(segmentDirs(baseDir).iterator());
@@ -597,11 +597,11 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
         }
 
         assertEquals(
-                Set.of(
-                        segments.segmentName(4L),
-                        segments.segmentName(5L),
-                        segments.segmentName(6L)),
-                segmentDirs(baseDir)
+            Set.of(
+                segments.segmentName(4L),
+                segments.segmentName(5L),
+                segments.segmentName(6L)),
+            segmentDirs(baseDir)
         );
     }
 
@@ -627,69 +627,69 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
         Utils.delete(new File(baseDir, STORE_NAME));
 
         windowStore = buildWindowStore(RETENTION_PERIOD,
-                WINDOW_SIZE,
-                false,
-                Serdes.Integer(),
-                Serdes.String());
+            WINDOW_SIZE,
+            false,
+            Serdes.Integer(),
+            Serdes.String());
         windowStore.init(context, windowStore);
 
         // For all tests, for WindowStore actualFrom is computed using observedStreamTime - retention + 1.
         // while for TimeOrderedWindowStores, actualFrom = observedStreamTime - retention
 
         assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        0,
-                        ofEpochMilli(startTime - WINDOW_SIZE),
-                        ofEpochMilli(startTime + WINDOW_SIZE))));
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                0,
+                ofEpochMilli(startTime - WINDOW_SIZE),
+                ofEpochMilli(startTime + WINDOW_SIZE))));
         assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        1,
-                        ofEpochMilli(startTime + increment - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment + WINDOW_SIZE))));
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                1,
+                ofEpochMilli(startTime + increment - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment + WINDOW_SIZE))));
         assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        2,
-                        ofEpochMilli(startTime + increment * 2 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 2 + WINDOW_SIZE))));
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                2,
+                ofEpochMilli(startTime + increment * 2 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 2 + WINDOW_SIZE))));
         assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        3,
-                        ofEpochMilli(startTime + increment * 3 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 3 + WINDOW_SIZE))));
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                3,
+                ofEpochMilli(startTime + increment * 3 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 3 + WINDOW_SIZE))));
         assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        4,
-                        ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 4 + WINDOW_SIZE))));
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                4,
+                ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 4 + WINDOW_SIZE))));
         assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        5,
-                        ofEpochMilli(startTime + increment * 5 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 5 + WINDOW_SIZE))));
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                5,
+                ofEpochMilli(startTime + increment * 5 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 5 + WINDOW_SIZE))));
         assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        6,
-                        ofEpochMilli(startTime + increment * 6 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 6 + WINDOW_SIZE))));
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                6,
+                ofEpochMilli(startTime + increment * 6 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 6 + WINDOW_SIZE))));
         assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        7,
-                        ofEpochMilli(startTime + increment * 7 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 7 + WINDOW_SIZE))));
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                7,
+                ofEpochMilli(startTime + increment * 7 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 7 + WINDOW_SIZE))));
         assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        8,
-                        ofEpochMilli(startTime + increment * 8 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 8 + WINDOW_SIZE))));
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                8,
+                ofEpochMilli(startTime + increment * 8 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 8 + WINDOW_SIZE))));
 
         final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
         for (final ProducerRecord<Object, Object> record : recordCollector.collected()) {
@@ -699,29 +699,29 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
         context.restore(STORE_NAME, changeLog);
 
         assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        0,
-                        ofEpochMilli(startTime - WINDOW_SIZE),
-                        ofEpochMilli(startTime + WINDOW_SIZE))));
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                0,
+                ofEpochMilli(startTime - WINDOW_SIZE),
+                ofEpochMilli(startTime + WINDOW_SIZE))));
         assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        1,
-                        ofEpochMilli(startTime + increment - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment + WINDOW_SIZE))));
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                1,
+                ofEpochMilli(startTime + increment - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment + WINDOW_SIZE))));
         assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        2,
-                        ofEpochMilli(startTime + increment * 2 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 2 + WINDOW_SIZE))));
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                2,
+                ofEpochMilli(startTime + increment * 2 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 2 + WINDOW_SIZE))));
         assertEquals(
-                Set.of(),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        3,
-                        ofEpochMilli(startTime + increment * 3 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 3 + WINDOW_SIZE))));
+            Set.of(),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                3,
+                ofEpochMilli(startTime + increment * 3 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 3 + WINDOW_SIZE))));
         // RocksDbWindwStore =>
         //  from = 239,997
         //  to = 240,003
@@ -733,53 +733,53 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
         //  actualFrom = 240,000, hence not ignored
         if (storeType() == StoreType.RocksDBWindowStore) {
             assertEquals(
-                    Set.of(),
-                    valuesToSetAndCloseIterator(windowStore.fetch(
-                            4,
-                            ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
-                            ofEpochMilli(startTime + increment * 4 + WINDOW_SIZE))));
+                Set.of(),
+                valuesToSetAndCloseIterator(windowStore.fetch(
+                    4,
+                    ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
+                    ofEpochMilli(startTime + increment * 4 + WINDOW_SIZE))));
         } else {
             assertEquals(
-                    Set.of("four"),
-                    valuesToSetAndCloseIterator(windowStore.fetch(
-                            4,
-                            ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
-                            ofEpochMilli(startTime + increment * 4 + WINDOW_SIZE))));
+                Set.of("four"),
+                valuesToSetAndCloseIterator(windowStore.fetch(
+                    4,
+                    ofEpochMilli(startTime + increment * 4 - WINDOW_SIZE),
+                    ofEpochMilli(startTime + increment * 4 + WINDOW_SIZE))));
 
         }
         assertEquals(
-                Set.of("five"),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        5,
-                        ofEpochMilli(startTime + increment * 5 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 5 + WINDOW_SIZE))));
+            Set.of("five"),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                5,
+                ofEpochMilli(startTime + increment * 5 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 5 + WINDOW_SIZE))));
         assertEquals(
-                Set.of("six"),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        6,
-                        ofEpochMilli(startTime + increment * 6 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 6 + WINDOW_SIZE))));
+            Set.of("six"),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                6,
+                ofEpochMilli(startTime + increment * 6 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 6 + WINDOW_SIZE))));
         assertEquals(
-                Set.of("seven"),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        7,
-                        ofEpochMilli(startTime + increment * 7 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 7 + WINDOW_SIZE))));
+            Set.of("seven"),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                7,
+                ofEpochMilli(startTime + increment * 7 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 7 + WINDOW_SIZE))));
         assertEquals(
-                Set.of("eight"),
-                valuesToSetAndCloseIterator(windowStore.fetch(
-                        8,
-                        ofEpochMilli(startTime + increment * 8 - WINDOW_SIZE),
-                        ofEpochMilli(startTime + increment * 8 + WINDOW_SIZE))));
+            Set.of("eight"),
+            valuesToSetAndCloseIterator(windowStore.fetch(
+                8,
+                ofEpochMilli(startTime + increment * 8 - WINDOW_SIZE),
+                ofEpochMilli(startTime + increment * 8 + WINDOW_SIZE))));
 
         // check segment directories
         windowStore.commit(Map.of());
         assertEquals(
-                Set.of(
-                        segments.segmentName(4L),
-                        segments.segmentName(5L),
-                        segments.segmentName(6L)),
-                segmentDirs(baseDir)
+            Set.of(
+                segments.segmentName(4L),
+                segments.segmentName(5L),
+                segments.segmentName(6L)),
+            segmentDirs(baseDir)
         );
     }
 

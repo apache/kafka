@@ -36,7 +36,7 @@ public class UserScramCredentialsDescription {
         if (o == null || getClass() != o.getClass()) return false;
         UserScramCredentialsDescription that = (UserScramCredentialsDescription) o;
         return name.equals(that.name) &&
-                credentialInfos.equals(that.credentialInfos);
+            credentialInfos.equals(that.credentialInfos);
     }
 
     @Override
@@ -47,9 +47,9 @@ public class UserScramCredentialsDescription {
     @Override
     public String toString() {
         return "UserScramCredentialsDescription{" +
-                "name='" + name + '\'' +
-                ", credentialInfos=" + credentialInfos +
-                '}';
+            "name='" + name + '\'' +
+            ", credentialInfos=" + credentialInfos +
+            '}';
     }
 
     /**

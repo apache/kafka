@@ -27,7 +27,7 @@ public class FenceProducersOptions extends AbstractOptions<FenceProducersOptions
     @Override
     public String toString() {
         return "FenceProducersOptions{" +
-                "timeoutMs=" + timeoutMs +
-                '}';
+            "timeoutMs=" + timeoutMs +
+            '}';
     }
 }

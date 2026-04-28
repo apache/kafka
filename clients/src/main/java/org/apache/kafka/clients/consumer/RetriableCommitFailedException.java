@@ -38,7 +38,7 @@ public class RetriableCommitFailedException extends RetriableException {
      */
     public RetriableCommitFailedException(Throwable t) {
         super("Offset commit failed with a retriable exception. You should retry committing " +
-                "the latest consumed offsets.", t);
+            "the latest consumed offsets.", t);
     }
 
     /**

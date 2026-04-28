@@ -256,7 +256,7 @@ public final class ListOffsetsHandlerTest {
     public void testBuildRequestWithDefaultApiTimeoutMs() {
         ListOffsetsOptions options = new ListOffsetsOptions();
         ListOffsetsHandler handler =
-                new ListOffsetsHandler(offsetTimestampsByPartition, options, logContext, defaultApiTimeoutMs);
+            new ListOffsetsHandler(offsetTimestampsByPartition, options, logContext, defaultApiTimeoutMs);
         ListOffsetsRequest request = handler.buildBatchedRequest(node.id(), Set.of(t0p0, t0p1)).build();
         assertEquals(defaultApiTimeoutMs, request.timeoutMs());
     }
@@ -266,7 +266,7 @@ public final class ListOffsetsHandlerTest {
         Integer timeoutMs = 200;
         ListOffsetsOptions options = new ListOffsetsOptions().timeoutMs(timeoutMs);
         ListOffsetsHandler handler =
-                new ListOffsetsHandler(offsetTimestampsByPartition, options, logContext, defaultApiTimeoutMs);
+            new ListOffsetsHandler(offsetTimestampsByPartition, options, logContext, defaultApiTimeoutMs);
         ListOffsetsRequest request = handler.buildBatchedRequest(node.id(), Set.of(t0p0, t0p1)).build();
         assertEquals(timeoutMs, request.timeoutMs());
     }

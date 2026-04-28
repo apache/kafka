@@ -26,7 +26,7 @@ public class RocksDBKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupp
     private final boolean returnTimestampedStore;
 
     public RocksDBKeyValueBytesStoreSupplier(final String name,
-                                             final boolean returnTimestampedStore) {
+        final boolean returnTimestampedStore) {
         this.name = name;
         this.returnTimestampedStore = returnTimestampedStore;
     }

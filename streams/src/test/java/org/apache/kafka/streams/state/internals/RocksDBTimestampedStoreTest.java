@@ -265,7 +265,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         }
 
         try (final KeyValueIterator<Bytes, byte[]> it =
-                rocksDBStore.range(new Bytes("key2".getBytes()), new Bytes("key5".getBytes()))) {
+                 rocksDBStore.range(new Bytes("key2".getBytes()), new Bytes("key5".getBytes()))) {
             {
                 final KeyValue<Bytes, byte[]> keyValue = it.next();
                 assertArrayEquals("key2".getBytes(), keyValue.key.get());
@@ -492,8 +492,8 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
 
             assertThat(exception.getMessage(), is(
                 "Store " + DB_NAME + " is a timestamped key-value store and cannot be opened as a regular key-value store. " +
-                "Downgrade from timestamped to regular store is not supported directly. " +
-                "To downgrade, you can delete the local state in the state directory, and rebuild the store as regular key-value store from the changelog."));
+                    "Downgrade from timestamped to regular store is not supported directly. " +
+                    "To downgrade, you can delete the local state in the state directory, and rebuild the store as regular key-value store from the changelog."));
         } finally {
             kvStore.close();
         }

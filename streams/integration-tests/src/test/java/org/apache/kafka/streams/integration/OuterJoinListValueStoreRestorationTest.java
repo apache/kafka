@@ -147,7 +147,7 @@ public class OuterJoinListValueStoreRestorationTest {
     @ParameterizedTest
     @MethodSource("processingGuaranteeAndStoreFormat")
     public void testOuterJoinRestorationWithMultipleRecords(final String processingGuarantee,
-                                                            final String storeFormat) throws Exception {
+        final String storeFormat) throws Exception {
         // Configure processing guarantee and store format
         streamsConfig.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee);
         streamsConfig.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, storeFormat);

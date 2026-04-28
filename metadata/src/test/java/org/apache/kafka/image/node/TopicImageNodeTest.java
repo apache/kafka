@@ -38,9 +38,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 @Timeout(value = 40)
 public class TopicImageNodeTest {
-    private static final TopicImageNode NODE = new TopicImageNode(newTopicImage("topic-image-node-test-topic", Uuid.ZERO_UUID, new PartitionRegistration.Builder().setReplicas(new int[] {2, 3, 4}).
-            setDirectories(DirectoryId.migratingArray(3)).
-            setIsr(new int[] {2, 3}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(345).build()));
+    private static final TopicImageNode NODE = new TopicImageNode(newTopicImage("topic-image-node-test-topic", Uuid.ZERO_UUID, new PartitionRegistration.Builder().setReplicas(new int[]{2, 3, 4}).
+        setDirectories(DirectoryId.migratingArray(3)).
+        setIsr(new int[]{2, 3}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(345).build()));
 
     private static TopicImage newTopicImage(String name, Uuid id, PartitionRegistration... partitions) {
         Map<Integer, PartitionRegistration> partitionMap = new HashMap<>();
@@ -50,6 +50,7 @@ public class TopicImageNodeTest {
         }
         return new TopicImage(name, id, partitionMap);
     }
+
     @Test
     public void testChildNames() {
         assertEquals(List.of("name", "id", "0"), NODE.childNames());
@@ -81,9 +82,9 @@ public class TopicImageNodeTest {
         NodeStringifier stringifier = new NodeStringifier();
         child.print(stringifier);
         assertEquals("PartitionRegistration(replicas=[2, 3, 4], " +
-                "directories=[AAAAAAAAAAAAAAAAAAAAAA, AAAAAAAAAAAAAAAAAAAAAA, AAAAAAAAAAAAAAAAAAAAAA], " +
-                "isr=[2, 3], removingReplicas=[], addingReplicas=[], elr=[], lastKnownElr=[], leader=2, " +
-                "leaderRecoveryState=RECOVERED, leaderEpoch=1, partitionEpoch=345)", stringifier.toString());
+            "directories=[AAAAAAAAAAAAAAAAAAAAAA, AAAAAAAAAAAAAAAAAAAAAA, AAAAAAAAAAAAAAAAAAAAAA], " +
+            "isr=[2, 3], removingReplicas=[], addingReplicas=[], elr=[], lastKnownElr=[], leader=2, " +
+            "leaderRecoveryState=RECOVERED, leaderEpoch=1, partitionEpoch=345)", stringifier.toString());
     }
 
     @Test

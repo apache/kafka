@@ -97,8 +97,8 @@ public interface ClusterMetadataAuthorizer extends Authorizer {
      * the cluster metadata log.
      */
     default List<? extends CompletionStage<AclCreateResult>> createAcls(
-            AuthorizableRequestContext requestContext,
-            List<AclBinding> aclBindings) {
+        AuthorizableRequestContext requestContext,
+        List<AclBinding> aclBindings) {
         List<CompletableFuture<AclCreateResult>> futures = new ArrayList<>(aclBindings.size());
         AclMutator aclMutator = aclMutatorOrException();
         aclBindings.forEach(b -> futures.add(new CompletableFuture<>()));
@@ -137,8 +137,8 @@ public interface ClusterMetadataAuthorizer extends Authorizer {
      * ACL deletions have been persisted to the cluster metadata log (if any).
      */
     default List<? extends CompletionStage<AclDeleteResult>> deleteAcls(
-            AuthorizableRequestContext requestContext,
-            List<AclBindingFilter> filters) {
+        AuthorizableRequestContext requestContext,
+        List<AclBindingFilter> filters) {
         List<CompletableFuture<AclDeleteResult>> futures = new ArrayList<>(filters.size());
         AclMutator aclMutator = aclMutatorOrException();
         filters.forEach(b -> futures.add(new CompletableFuture<>()));

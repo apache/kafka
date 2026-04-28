@@ -134,8 +134,8 @@ public final class WordCountTransformerDemo {
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.<String, String>stream("streams-plaintext-input")
-                .process(new MyProcessorSupplier())
-                .to("streams-wordcount-processor-output");
+            .process(new MyProcessorSupplier())
+            .to("streams-wordcount-processor-output");
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         final CountDownLatch latch = new CountDownLatch(1);

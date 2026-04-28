@@ -65,7 +65,7 @@ public class MockProcessorSupplier<KIn, VIn, KOut, VOut> implements org.apache.k
         return processors.size();
     }
 
-        // get the captured processors with the expected number
+    // get the captured processors with the expected number
     public List<MockProcessor<KIn, VIn, KOut, VOut>> capturedProcessors(final int expectedNumberOfProcessors) {
         assertEquals(expectedNumberOfProcessors, processors.size());
 

@@ -58,11 +58,11 @@ public abstract class AbstractStream<K, V> {
     }
 
     AbstractStream(final String name,
-                   final Serde<K> keySerde,
-                   final Serde<V> valueSerde,
-                   final Set<String> subTopologySourceNodes,
-                   final GraphNode graphNode,
-                   final InternalStreamsBuilder builder) {
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde,
+        final Set<String> subTopologySourceNodes,
+        final GraphNode graphNode,
+        final InternalStreamsBuilder builder) {
         if (subTopologySourceNodes == null || subTopologySourceNodes.isEmpty()) {
             throw new IllegalArgumentException("parameter <sourceNodes> must not be null or empty");
         }
@@ -83,7 +83,7 @@ public abstract class AbstractStream<K, V> {
 
     Set<String> ensureCopartitionWith(final Collection<? extends AbstractStream<K, ?>> otherStreams) {
         final Set<String> allSourceNodes = new HashSet<>(subTopologySourceNodes);
-        for (final AbstractStream<K, ?> other: otherStreams) {
+        for (final AbstractStream<K, ?> other : otherStreams) {
             allSourceNodes.addAll(other.subTopologySourceNodes);
         }
         builder.internalTopologyBuilder.copartitionSources(allSourceNodes);

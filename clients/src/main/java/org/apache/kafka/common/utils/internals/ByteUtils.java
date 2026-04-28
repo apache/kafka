@@ -38,7 +38,8 @@ public final class ByteUtils {
 
     public static final ByteBuffer EMPTY_BUF = ByteBuffer.wrap(new byte[0]);
 
-    private ByteUtils() {}
+    private ByteUtils() {
+    }
 
     /**
      * Increment the underlying byte array by adding 1.
@@ -51,7 +52,7 @@ public final class ByteUtils {
         byte[] inputArr = input.get();
         byte[] ret = new byte[inputArr.length];
         int carry = 1;
-        for (int i = inputArr.length - 1; i >= 0; i--) {
+        for (int i = inputArr.length - 1;i >= 0;i--) {
             if (inputArr[i] == (byte) 0xFF && carry == 1) {
                 ret[i] = (byte) 0x00;
             } else {
@@ -74,7 +75,7 @@ public final class ByteUtils {
     public interface ByteArrayComparator extends Comparator<byte[]> {
 
         int compare(final byte[] buffer1, int offset1, int length1,
-                    final byte[] buffer2, int offset2, int length2);
+            final byte[] buffer2, int offset2, int length2);
     }
 
     public static class LexicographicByteArrayComparator implements ByteArrayComparator {
@@ -85,12 +86,12 @@ public final class ByteUtils {
         }
 
         public int compare(final byte[] buffer1, int offset1, int length1,
-                           final byte[] buffer2, int offset2, int length2) {
+            final byte[] buffer2, int offset2, int length2) {
 
             // short circuit equal case
             if (buffer1 == buffer2 &&
-                    offset1 == offset2 &&
-                    length1 == length2) {
+                offset1 == offset2 &&
+                length1 == length2) {
                 return 0;
             }
 
@@ -129,9 +130,9 @@ public final class ByteUtils {
      */
     public static int readUnsignedIntLE(InputStream in) throws IOException {
         return in.read()
-                | (in.read() << 8)
-                | (in.read() << 16)
-                | (in.read() << 24);
+            | (in.read() << 8)
+            | (in.read() << 16)
+            | (in.read() << 24);
     }
 
     /**
@@ -144,9 +145,9 @@ public final class ByteUtils {
      */
     public static int readUnsignedIntLE(byte[] buffer, int offset) {
         return (buffer[offset] << 0 & 0xff)
-                | ((buffer[offset + 1] & 0xff) << 8)
-                | ((buffer[offset + 2] & 0xff) << 16)
-                | ((buffer[offset + 3] & 0xff) << 24);
+            | ((buffer[offset + 1] & 0xff) << 8)
+            | ((buffer[offset + 2] & 0xff) << 16)
+            | ((buffer[offset + 3] & 0xff) << 24);
     }
 
     /**
@@ -205,7 +206,7 @@ public final class ByteUtils {
         buffer[offset] = (byte) value;
         buffer[offset + 1] = (byte) (value >>> 8);
         buffer[offset + 2] = (byte) (value >>> 16);
-        buffer[offset + 3]   = (byte) (value >>> 24);
+        buffer[offset + 3] = (byte) (value >>> 24);
     }
 
     /**
@@ -354,13 +355,13 @@ public final class ByteUtils {
      *
      * @throws IllegalArgumentException if variable-length value does not terminate after 10 bytes have been read
      */
-    public static long readVarlong(ByteBuffer buffer)  {
-        long raw =  readUnsignedVarlong(buffer);
+    public static long readVarlong(ByteBuffer buffer) {
+        long raw = readUnsignedVarlong(buffer);
         return (raw >>> 1) ^ -(raw & 1);
     }
 
     // visible for testing
-    static long readUnsignedVarlong(ByteBuffer buffer)  {
+    static long readUnsignedVarlong(ByteBuffer buffer) {
         long value = 0L;
         int i = 0;
         long b;
@@ -604,11 +605,11 @@ public final class ByteUtils {
 
     private static IllegalArgumentException illegalVarintException(int value) {
         throw new IllegalArgumentException("Varint is too long, the most significant bit in the 5th byte is set, " +
-                "converted value: " + Integer.toHexString(value));
+            "converted value: " + Integer.toHexString(value));
     }
 
     private static IllegalArgumentException illegalVarlongException(long value) {
         throw new IllegalArgumentException("Varlong is too long, most significant bit in the 10th byte is set, " +
-                "converted value: " + Long.toHexString(value));
+            "converted value: " + Long.toHexString(value));
     }
 }

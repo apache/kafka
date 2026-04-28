@@ -65,7 +65,7 @@ public class OAuthBearerSaslServer implements SaslServer {
     public OAuthBearerSaslServer(CallbackHandler callbackHandler) {
         if (!(Objects.requireNonNull(callbackHandler) instanceof AuthenticateCallbackHandler))
             throw new IllegalArgumentException(String.format("Callback handler must be castable to %s: %s",
-                    AuthenticateCallbackHandler.class.getName(), callbackHandler.getClass().getName()));
+                AuthenticateCallbackHandler.class.getName(), callbackHandler.getClass().getName()));
         this.callbackHandler = (AuthenticateCallbackHandler) callbackHandler;
     }
 
@@ -153,14 +153,14 @@ public class OAuthBearerSaslServer implements SaslServer {
     private byte[] process(String tokenValue, String authorizationId, SaslExtensions extensions) throws SaslException {
         OAuthBearerValidatorCallback callback = new OAuthBearerValidatorCallback(tokenValue);
         try {
-            callbackHandler.handle(new Callback[] {callback});
+            callbackHandler.handle(new Callback[]{callback});
         } catch (IOException | UnsupportedCallbackException e) {
             handleCallbackError(e);
         }
         OAuthBearerToken token = callback.token();
         if (token == null) {
             errorMessage = jsonErrorResponse(callback.errorStatus(), callback.errorScope(),
-                    callback.errorOpenIDConfiguration());
+                callback.errorOpenIDConfiguration());
             log.debug(errorMessage);
             return errorMessage.getBytes(StandardCharsets.UTF_8);
         }
@@ -170,8 +170,8 @@ public class OAuthBearerSaslServer implements SaslServer {
          */
         if (!authorizationId.isEmpty() && !authorizationId.equals(token.principalName()))
             throw new SaslAuthenticationException(String.format(
-                    "Authentication failed: Client requested an authorization id (%s) that is different from the token's principal name (%s)",
-                    authorizationId, token.principalName()));
+                "Authentication failed: Client requested an authorization id (%s) that is different from the token's principal name (%s)",
+                authorizationId, token.principalName()));
 
         Map<String, String> validExtensions = processExtensions(token, extensions);
 
@@ -185,7 +185,7 @@ public class OAuthBearerSaslServer implements SaslServer {
     private Map<String, String> processExtensions(OAuthBearerToken token, SaslExtensions extensions) throws SaslException {
         OAuthBearerExtensionsValidatorCallback extensionsCallback = new OAuthBearerExtensionsValidatorCallback(token, extensions);
         try {
-            callbackHandler.handle(new Callback[] {extensionsCallback});
+            callbackHandler.handle(new Callback[]{extensionsCallback});
         } catch (UnsupportedCallbackException e) {
             // backwards compatibility - no extensions will be added
         } catch (IOException e) {
@@ -193,8 +193,8 @@ public class OAuthBearerSaslServer implements SaslServer {
         }
         if (!extensionsCallback.invalidExtensions().isEmpty()) {
             String errorMessage = String.format("Authentication failed: %d extensions are invalid! They are: %s",
-                    extensionsCallback.invalidExtensions().size(),
-                    Utils.mkString(extensionsCallback.invalidExtensions(), "", "", ": ", "; "));
+                extensionsCallback.invalidExtensions().size(),
+                Utils.mkString(extensionsCallback.invalidExtensions(), "", "", ": ", "; "));
             log.debug(errorMessage);
             throw new SaslAuthenticationException(errorMessage);
         }
@@ -208,7 +208,7 @@ public class OAuthBearerSaslServer implements SaslServer {
             jsonErrorResponse = String.format("%s, \"scope\":\"%s\"", jsonErrorResponse, errorScope);
         if (errorOpenIDConfiguration != null)
             jsonErrorResponse = String.format("%s, \"openid-configuration\":\"%s\"", jsonErrorResponse,
-                    errorOpenIDConfiguration);
+                errorOpenIDConfiguration);
         jsonErrorResponse = String.format("%s}", jsonErrorResponse);
         return jsonErrorResponse;
     }
@@ -220,14 +220,14 @@ public class OAuthBearerSaslServer implements SaslServer {
     }
 
     public static String[] mechanismNamesCompatibleWithPolicy(Map<String, ?> props) {
-        return props != null && "true".equals(String.valueOf(props.get(Sasl.POLICY_NOPLAINTEXT))) ? new String[] {}
-                : new String[] {OAuthBearerLoginModule.OAUTHBEARER_MECHANISM};
+        return props != null && "true".equals(String.valueOf(props.get(Sasl.POLICY_NOPLAINTEXT))) ? new String[]{}
+            : new String[]{OAuthBearerLoginModule.OAUTHBEARER_MECHANISM};
     }
 
     public static class OAuthBearerSaslServerFactory implements SaslServerFactory {
         @Override
         public SaslServer createSaslServer(String mechanism, String protocol, String serverName, Map<String, ?> props,
-                CallbackHandler callbackHandler) {
+            CallbackHandler callbackHandler) {
             String[] mechanismNamesCompatibleWithPolicy = getMechanismNames(props);
             for (String name : mechanismNamesCompatibleWithPolicy) {
                 if (name.equals(mechanism)) {

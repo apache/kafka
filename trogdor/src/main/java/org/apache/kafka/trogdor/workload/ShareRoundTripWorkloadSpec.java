@@ -27,17 +27,17 @@ public class ShareRoundTripWorkloadSpec extends RoundTripWorkloadSpec {
 
     @JsonCreator
     public ShareRoundTripWorkloadSpec(@JsonProperty("startMs") long startMs,
-              @JsonProperty("durationMs") long durationMs,
-              @JsonProperty("clientNode") String clientNode,
-              @JsonProperty("bootstrapServers") String bootstrapServers,
-              @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
-              @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
-              @JsonProperty("consumerConf") Map<String, String> consumerConf,
-              @JsonProperty("producerConf") Map<String, String> producerConf,
-              @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
-              @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
-              @JsonProperty("activeTopics") TopicsSpec activeTopics,
-              @JsonProperty("maxMessages") long maxMessages) {
+        @JsonProperty("durationMs") long durationMs,
+        @JsonProperty("clientNode") String clientNode,
+        @JsonProperty("bootstrapServers") String bootstrapServers,
+        @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
+        @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
+        @JsonProperty("consumerConf") Map<String, String> consumerConf,
+        @JsonProperty("producerConf") Map<String, String> producerConf,
+        @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
+        @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
+        @JsonProperty("activeTopics") TopicsSpec activeTopics,
+        @JsonProperty("maxMessages") long maxMessages) {
         super(startMs, durationMs, clientNode, bootstrapServers, commonClientConf, adminClientConf, consumerConf, producerConf, targetMessagesPerSec, valueGenerator, activeTopics, maxMessages);
     }
 

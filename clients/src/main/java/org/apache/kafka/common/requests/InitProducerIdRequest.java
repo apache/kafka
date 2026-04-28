@@ -59,10 +59,10 @@ public class InitProducerIdRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         InitProducerIdResponseData response = new InitProducerIdResponseData()
-                .setErrorCode(Errors.forException(e).code())
-                .setProducerId(RecordBatch.NO_PRODUCER_ID)
-                .setProducerEpoch(RecordBatch.NO_PRODUCER_EPOCH)
-                .setThrottleTimeMs(throttleTimeMs);
+            .setErrorCode(Errors.forException(e).code())
+            .setProducerId(RecordBatch.NO_PRODUCER_ID)
+            .setProducerEpoch(RecordBatch.NO_PRODUCER_EPOCH)
+            .setThrottleTimeMs(throttleTimeMs);
         return new InitProducerIdResponse(response);
     }
 

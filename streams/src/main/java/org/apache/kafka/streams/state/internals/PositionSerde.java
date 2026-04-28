@@ -55,7 +55,7 @@ public final class PositionSerde {
                 return Position.fromMap(position);
             default:
                 throw new IllegalArgumentException(
-                        "Unknown version " + version + " when deserializing Position"
+                    "Unknown version " + version + " when deserializing Position"
                 );
         }
     }
@@ -69,7 +69,7 @@ public final class PositionSerde {
         arraySize += Integer.SIZE;
 
         final ArrayList<String> entries =
-                new ArrayList<>(position.getTopics());
+            new ArrayList<>(position.getTopics());
         final byte[][] topics = new byte[entries.size()][];
 
         for (int i = 0; i < nTopics; i++) {
@@ -82,7 +82,7 @@ public final class PositionSerde {
             final Map<Integer, Long> partitionOffsets = position.getPartitionPositions(topic);
             arraySize += Integer.SIZE; // Number of PartitionOffset pairs
             arraySize += (Integer.SIZE + Long.SIZE)
-                    * partitionOffsets.size(); // partitionOffsets themselves
+                * partitionOffsets.size(); // partitionOffsets themselves
         }
 
         final ByteBuffer buffer = ByteBuffer.allocate(arraySize);

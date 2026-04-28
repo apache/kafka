@@ -36,77 +36,77 @@ import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
  */
 public final class SamplingConnector extends SinkConnector implements SamplingTestPlugin {
 
-  private static final ClassLoader STATIC_CLASS_LOADER;
-  private static List<SamplingTestPlugin> instances;
-  private final ClassLoader classloader;
-  private Map<String, SamplingTestPlugin> samples;
+    private static final ClassLoader STATIC_CLASS_LOADER;
+    private static List<SamplingTestPlugin> instances;
+    private final ClassLoader classloader;
+    private Map<String, SamplingTestPlugin> samples;
 
-  static {
-    STATIC_CLASS_LOADER = Thread.currentThread().getContextClassLoader();
-    instances = Collections.synchronizedList(new ArrayList<>());
-  }
+    static {
+        STATIC_CLASS_LOADER = Thread.currentThread().getContextClassLoader();
+        instances = Collections.synchronizedList(new ArrayList<>());
+    }
 
-  {
-    samples = new HashMap<>();
-    classloader = Thread.currentThread().getContextClassLoader();
-  }
+    {
+        samples = new HashMap<>();
+        classloader = Thread.currentThread().getContextClassLoader();
+    }
 
-  public SamplingConnector() {
-    logMethodCall(samples);
-    instances.add(this);
-  }
+    public SamplingConnector() {
+        logMethodCall(samples);
+        instances.add(this);
+    }
 
-  @Override
-  public void start(Map<String, String> props) {
-    logMethodCall(samples);
-  }
+    @Override
+    public void start(Map<String, String> props) {
+        logMethodCall(samples);
+    }
 
-  @Override
-  public Class<? extends Task> taskClass() {
-    logMethodCall(samples);
-    return null;
-  }
+    @Override
+    public Class<? extends Task> taskClass() {
+        logMethodCall(samples);
+        return null;
+    }
 
-  @Override
-  public List<Map<String, String>> taskConfigs(int maxTasks) {
-    logMethodCall(samples);
-    return null;
-  }
+    @Override
+    public List<Map<String, String>> taskConfigs(int maxTasks) {
+        logMethodCall(samples);
+        return null;
+    }
 
-  @Override
-  public void stop() {
-    logMethodCall(samples);
-  }
+    @Override
+    public void stop() {
+        logMethodCall(samples);
+    }
 
-  @Override
-  public ConfigDef config() {
-    logMethodCall(samples);
-    return null;
-  }
+    @Override
+    public ConfigDef config() {
+        logMethodCall(samples);
+        return null;
+    }
 
-  @Override
-  public String version() {
-    logMethodCall(samples);
-    return "1.0.0";
-  }
+    @Override
+    public String version() {
+        logMethodCall(samples);
+        return "1.0.0";
+    }
 
-  @Override
-  public ClassLoader staticClassloader() {
-    return STATIC_CLASS_LOADER;
-  }
+    @Override
+    public ClassLoader staticClassloader() {
+        return STATIC_CLASS_LOADER;
+    }
 
-  @Override
-  public ClassLoader classloader() {
-    return classloader;
-  }
+    @Override
+    public ClassLoader classloader() {
+        return classloader;
+    }
 
-  @Override
-  public Map<String, SamplingTestPlugin> otherSamples() {
-    return samples;
-  }
+    @Override
+    public Map<String, SamplingTestPlugin> otherSamples() {
+        return samples;
+    }
 
-  @Override
-  public List<SamplingTestPlugin> allInstances() {
-    return instances;
-  }
+    @Override
+    public List<SamplingTestPlugin> allInstances() {
+        return instances;
+    }
 }

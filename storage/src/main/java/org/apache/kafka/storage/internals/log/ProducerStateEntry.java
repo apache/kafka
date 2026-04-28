@@ -46,7 +46,7 @@ public class ProducerStateEntry {
     }
 
     public ProducerStateEntry(long producerId, short producerEpoch, int coordinatorEpoch, long lastTimestamp,
-                              OptionalLong currentTxnFirstOffset) {
+            OptionalLong currentTxnFirstOffset) {
         this.producerId = producerId;
         this.producerEpoch = producerEpoch;
         this.coordinatorEpoch = coordinatorEpoch;
@@ -112,7 +112,7 @@ public class ProducerStateEntry {
     }
 
     private void update(short producerEpoch, int coordinatorEpoch, long lastTimestamp, Deque<BatchMetadata> batchMetadata,
-                        OptionalLong currentTxnFirstOffset) {
+            OptionalLong currentTxnFirstOffset) {
         maybeUpdateProducerEpoch(producerEpoch);
         while (!batchMetadata.isEmpty())
             addBatchMetadata(batchMetadata.removeFirst());
@@ -132,8 +132,8 @@ public class ProducerStateEntry {
     // Return the batch metadata of the cached batch having the exact sequence range, if any.
     private Optional<BatchMetadata> batchWithSequenceRange(int firstSeq, int lastSeq) {
         return batchMetadata.stream()
-            .filter(metadata -> firstSeq == metadata.firstSeq() && lastSeq == metadata.lastSeq())
-            .findFirst();
+                .filter(metadata -> firstSeq == metadata.firstSeq() && lastSeq == metadata.lastSeq())
+                .findFirst();
     }
 
     public Collection<BatchMetadata> batchMetadata() {

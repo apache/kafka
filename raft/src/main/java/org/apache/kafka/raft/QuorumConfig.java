@@ -114,21 +114,21 @@ public class QuorumConfig {
 
     public static final String QUORUM_FETCH_MAX_BYTES_CONFIG = QUORUM_PREFIX + "fetch.max.bytes";
     public static final String QUORUM_FETCH_MAX_BYTES_DOC = "Maximum amount of data to retrieve for each Fetch request. " +
-            "Always returns at least one batch even if it is greater than controller.quorum.fetch.max.bytes.";
+        "Always returns at least one batch even if it is greater than controller.quorum.fetch.max.bytes.";
     public static final int DEFAULT_QUORUM_FETCH_MAX_BYTES = 1048576;
 
-    public static final ConfigDef CONFIG_DEF =  new ConfigDef()
-            .define(QUORUM_VOTERS_CONFIG, LIST, DEFAULT_QUORUM_VOTERS, new ControllerQuorumVotersValidator(), HIGH, QUORUM_VOTERS_DOC)
-            .define(QUORUM_BOOTSTRAP_SERVERS_CONFIG, LIST, DEFAULT_QUORUM_BOOTSTRAP_SERVERS, new ControllerQuorumBootstrapServersValidator(), HIGH, QUORUM_BOOTSTRAP_SERVERS_DOC)
-            .define(QUORUM_ELECTION_TIMEOUT_MS_CONFIG, INT, DEFAULT_QUORUM_ELECTION_TIMEOUT_MS, atLeast(0), HIGH, QUORUM_ELECTION_TIMEOUT_MS_DOC)
-            .define(QUORUM_FETCH_TIMEOUT_MS_CONFIG, INT, DEFAULT_QUORUM_FETCH_TIMEOUT_MS, atLeast(0), HIGH, QUORUM_FETCH_TIMEOUT_MS_DOC)
-            .define(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, INT, DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS, atLeast(0), HIGH, QUORUM_ELECTION_BACKOFF_MAX_MS_DOC)
-            .define(QUORUM_LINGER_MS_CONFIG, INT, DEFAULT_QUORUM_LINGER_MS, atLeast(0), MEDIUM, QUORUM_LINGER_MS_DOC)
-            .define(QUORUM_REQUEST_TIMEOUT_MS_CONFIG, INT, DEFAULT_QUORUM_REQUEST_TIMEOUT_MS, atLeast(0), MEDIUM, QUORUM_REQUEST_TIMEOUT_MS_DOC)
-            .define(QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, DEFAULT_QUORUM_RETRY_BACKOFF_MS, atLeast(0), LOW, QUORUM_RETRY_BACKOFF_MS_DOC)
-            .define(QUORUM_AUTO_JOIN_ENABLE_CONFIG, BOOLEAN, DEFAULT_QUORUM_AUTO_JOIN_ENABLE, LOW, QUORUM_AUTO_JOIN_ENABLE_DOC)
-            .define(QUORUM_FETCH_SNAPSHOT_MAX_BYTES_CONFIG, INT, DEFAULT_QUORUM_FETCH_SNAPSHOT_MAX_BYTES, atLeast(1), LOW, QUORUM_FETCH_SNAPSHOT_MAX_BYTES_DOC)
-            .define(QUORUM_FETCH_MAX_BYTES_CONFIG, INT, DEFAULT_QUORUM_FETCH_MAX_BYTES, atLeast(1), LOW, QUORUM_FETCH_MAX_BYTES_DOC);
+    public static final ConfigDef CONFIG_DEF = new ConfigDef()
+        .define(QUORUM_VOTERS_CONFIG, LIST, DEFAULT_QUORUM_VOTERS, new ControllerQuorumVotersValidator(), HIGH, QUORUM_VOTERS_DOC)
+        .define(QUORUM_BOOTSTRAP_SERVERS_CONFIG, LIST, DEFAULT_QUORUM_BOOTSTRAP_SERVERS, new ControllerQuorumBootstrapServersValidator(), HIGH, QUORUM_BOOTSTRAP_SERVERS_DOC)
+        .define(QUORUM_ELECTION_TIMEOUT_MS_CONFIG, INT, DEFAULT_QUORUM_ELECTION_TIMEOUT_MS, atLeast(0), HIGH, QUORUM_ELECTION_TIMEOUT_MS_DOC)
+        .define(QUORUM_FETCH_TIMEOUT_MS_CONFIG, INT, DEFAULT_QUORUM_FETCH_TIMEOUT_MS, atLeast(0), HIGH, QUORUM_FETCH_TIMEOUT_MS_DOC)
+        .define(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, INT, DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS, atLeast(0), HIGH, QUORUM_ELECTION_BACKOFF_MAX_MS_DOC)
+        .define(QUORUM_LINGER_MS_CONFIG, INT, DEFAULT_QUORUM_LINGER_MS, atLeast(0), MEDIUM, QUORUM_LINGER_MS_DOC)
+        .define(QUORUM_REQUEST_TIMEOUT_MS_CONFIG, INT, DEFAULT_QUORUM_REQUEST_TIMEOUT_MS, atLeast(0), MEDIUM, QUORUM_REQUEST_TIMEOUT_MS_DOC)
+        .define(QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, DEFAULT_QUORUM_RETRY_BACKOFF_MS, atLeast(0), LOW, QUORUM_RETRY_BACKOFF_MS_DOC)
+        .define(QUORUM_AUTO_JOIN_ENABLE_CONFIG, BOOLEAN, DEFAULT_QUORUM_AUTO_JOIN_ENABLE, LOW, QUORUM_AUTO_JOIN_ENABLE_DOC)
+        .define(QUORUM_FETCH_SNAPSHOT_MAX_BYTES_CONFIG, INT, DEFAULT_QUORUM_FETCH_SNAPSHOT_MAX_BYTES, atLeast(1), LOW, QUORUM_FETCH_SNAPSHOT_MAX_BYTES_DOC)
+        .define(QUORUM_FETCH_MAX_BYTES_CONFIG, INT, DEFAULT_QUORUM_FETCH_MAX_BYTES, atLeast(1), LOW, QUORUM_FETCH_MAX_BYTES_DOC);
 
     private final List<String> voters;
     private final List<String> bootstrapServers;
@@ -269,7 +269,7 @@ public class QuorumConfig {
             throw new ConfigException(
                 String.format(
                     "Failed to parse host name from %s for the configuration %s. Each " +
-                    "entry should be in the form \"{host}:{port}\"",
+                        "entry should be in the form \"{host}:{port}\"",
                     bootstrapServer,
                     QUORUM_BOOTSTRAP_SERVERS_CONFIG
                 )
@@ -281,7 +281,7 @@ public class QuorumConfig {
             throw new ConfigException(
                 String.format(
                     "Failed to parse host port from %s for the configuration %s. Each " +
-                    "entry should be in the form \"{host}:{port}\"",
+                        "entry should be in the form \"{host}:{port}\"",
                     bootstrapServer,
                     QUORUM_BOOTSTRAP_SERVERS_CONFIG
                 )

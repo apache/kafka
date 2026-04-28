@@ -302,7 +302,7 @@ public class LeaderStateTest {
         ReplicaKey nodeKey1 = ReplicaKey.of(1, Uuid.randomUuid());
         ReplicaKey nodeKey2 = ReplicaKey.of(2, Uuid.randomUuid());
 
-        VoterSet originalVoters  = localWithRemoteVoterSet(Stream.of(nodeKey1), true);
+        VoterSet originalVoters = localWithRemoteVoterSet(Stream.of(nodeKey1), true);
         LeaderState<?> state = newLeaderState(
             originalVoters,
             5L,
@@ -545,7 +545,7 @@ public class LeaderStateTest {
         ReplicaKey nodeKey2 = ReplicaKey.of(2, Uuid.randomUuid());
         ReplicaKey nodeKey3 = ReplicaKey.of(3, Uuid.randomUuid());
 
-        VoterSet originalVoters  = localWithRemoteVoterSet(Stream.of(nodeKey1, nodeKey2), true);
+        VoterSet originalVoters = localWithRemoteVoterSet(Stream.of(nodeKey1, nodeKey2), true);
         LeaderState<?> state = newLeaderState(
             originalVoters,
             0L,

@@ -40,21 +40,21 @@ public class ClassicGroupDescription {
     private final Set<AclOperation> authorizedOperations;
 
     public ClassicGroupDescription(String groupId,
-                                   String protocol,
-                                   String protocolData,
-                                   Collection<MemberDescription> members,
-                                   ClassicGroupState state,
-                                   Node coordinator) {
+        String protocol,
+        String protocolData,
+        Collection<MemberDescription> members,
+        ClassicGroupState state,
+        Node coordinator) {
         this(groupId, protocol, protocolData, members, state, coordinator, Set.of());
     }
 
     public ClassicGroupDescription(String groupId,
-                                   String protocol,
-                                   String protocolData,
-                                   Collection<MemberDescription> members,
-                                   ClassicGroupState state,
-                                   Node coordinator,
-                                   Set<AclOperation> authorizedOperations) {
+        String protocol,
+        String protocolData,
+        Collection<MemberDescription> members,
+        ClassicGroupState state,
+        Node coordinator,
+        Set<AclOperation> authorizedOperations) {
         this.groupId = groupId == null ? "" : groupId;
         this.protocol = protocol;
         this.protocolData = protocolData == null ? "" : protocolData;

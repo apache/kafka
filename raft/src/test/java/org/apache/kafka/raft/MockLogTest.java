@@ -199,7 +199,7 @@ public class MockLogTest {
     public void testAppendControlRecord() {
         final long initialOffset = 0;
         final int currentEpoch = 3;
-        LeaderChangeMessage messageData =  new LeaderChangeMessage().setLeaderId(0);
+        LeaderChangeMessage messageData = new LeaderChangeMessage().setLeaderId(0);
         ByteBuffer buffer = ByteBuffer.allocate(256);
         log.appendAsLeader(
             MemoryRecords.withLeaderChangeMessage(

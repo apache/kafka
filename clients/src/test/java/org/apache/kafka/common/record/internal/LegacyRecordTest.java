@@ -112,14 +112,14 @@ public class LegacyRecordTest {
 
         byte attributes = LegacyRecord.computeAttributes(args.magic, args.compression, TimestampType.CREATE_TIME);
         assertEquals(record.checksum(), LegacyRecord.computeChecksum(
-                args.magic,
-                attributes,
-                args.timestamp,
-                args.key == null ? null : args.key.array(),
-                args.value == null ? null : args.value.array()
+            args.magic,
+            attributes,
+            args.timestamp,
+            args.key == null ? null : args.key.array(),
+            args.value == null ? null : args.value.array()
         ));
         assertTrue(record.isValid());
-        for (int i = LegacyRecord.CRC_OFFSET + LegacyRecord.CRC_LENGTH; i < record.sizeInBytes(); i++) {
+        for (int i = LegacyRecord.CRC_OFFSET + LegacyRecord.CRC_LENGTH;i < record.sizeInBytes();i++) {
             LegacyRecord copy = copyOf(record);
             copy.buffer().put(i, (byte) 69);
             assertFalse(copy.isValid());

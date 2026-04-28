@@ -63,24 +63,24 @@ public class TopicCreationConfig {
             + "missing it gets the value of the default group";
 
     public static final ConfigDef.Validator REPLICATION_FACTOR_VALIDATOR = ConfigDef.LambdaValidator.with(
-        (name, value) -> validateReplicationFactor(name, (short) value),
-        () -> "Positive number not larger than the number of brokers in the Kafka cluster, or -1 to use the broker's default"
+            (name, value) -> validateReplicationFactor(name, (short) value),
+            () -> "Positive number not larger than the number of brokers in the Kafka cluster, or -1 to use the broker's default"
     );
     public static final ConfigDef.Validator PARTITIONS_VALIDATOR = ConfigDef.LambdaValidator.with(
-        (name, value) -> validatePartitions(name, (int) value),
-        () -> "Positive number, or -1 to use the broker's default"
+            (name, value) -> validatePartitions(name, (int) value),
+            () -> "Positive number, or -1 to use the broker's default"
     );
     @SuppressWarnings("unchecked")
     public static final ConfigDef.Validator REGEX_VALIDATOR = ConfigDef.LambdaValidator.with(
-        (name, value) -> {
-            try {
-                ((List<String>) value).forEach(Pattern::compile);
-            } catch (PatternSyntaxException e) {
-                throw new ConfigException(name, value,
-                        "Syntax error in regular expression: " + e.getMessage());
-            }
-        },
-        () -> "Positive number, or -1 to use the broker's default"
+            (name, value) -> {
+                try {
+                    ((List<String>) value).forEach(Pattern::compile);
+                } catch (PatternSyntaxException e) {
+                    throw new ConfigException(name, value,
+                            "Syntax error in regular expression: " + e.getMessage());
+                }
+            },
+            () -> "Positive number, or -1 to use the broker's default"
     );
 
     private static void validatePartitions(String configName, int factor) {

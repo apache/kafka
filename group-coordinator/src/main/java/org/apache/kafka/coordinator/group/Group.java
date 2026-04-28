@@ -69,7 +69,7 @@ public interface Group {
 
             return type == null ? UNKNOWN : type;
         }
-        
+
         static String[] documentValidValues() {
             return Arrays.stream(GroupType.values())
                 .filter(type -> type != UNKNOWN)
@@ -166,7 +166,8 @@ public interface Group {
      *
      * @param timer The coordinator timer.
      */
-    default void cancelTimers(CoordinatorTimer<CoordinatorRecord> timer) {}
+    default void cancelTimers(CoordinatorTimer<CoordinatorRecord> timer) {
+    }
 
     /**
      * @return Whether the group is in Empty state.

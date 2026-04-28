@@ -38,7 +38,7 @@ import static org.mockito.Mockito.when;
  * 3. A way to define how to invoke the method on the wrapper
  * 4. A way to test that the method on the mock is invoked correctly when the wrapper method is invoked
  * 5. A way to test that any return value from the wrapper method is correct
-
+ 
  * @param <D> delegate type
  * @param <W> wrapper type
  * @param <T> delegating method return type, if any
@@ -100,7 +100,7 @@ public abstract class DelegationChecker<D, W, T> {
     }
 
     public DelegationChecker<D, W, T> defineWrapperUnsupportedFunctionInvocation(
-            Function<W, T> wrapperFunctionApplier) {
+        Function<W, T> wrapperFunctionApplier) {
         this.wrapperFunctionApplier = Objects.requireNonNull(wrapperFunctionApplier);
         return this;
     }

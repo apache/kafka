@@ -48,8 +48,8 @@ public final class ExpectLeaderAction implements TieredStorageTestAction {
     private final Boolean electLeader;
 
     public ExpectLeaderAction(TopicPartition topicPartition,
-                              int replicaId,
-                              Boolean electLeader) {
+            int replicaId,
+            Boolean electLeader) {
         this.topicPartition = topicPartition;
         this.replicaId = replicaId;
         this.electLeader = electLeader;

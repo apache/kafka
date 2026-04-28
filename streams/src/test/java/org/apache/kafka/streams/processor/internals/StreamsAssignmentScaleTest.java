@@ -163,10 +163,10 @@ public class StreamsAssignmentScaleTest {
     }
 
     private void completeLargeAssignment(final int numPartitions,
-                                         final int numClients,
-                                         final int numThreadsPerClient,
-                                         final int numStandbys,
-                                         final Class<? extends LegacyTaskAssignor> taskAssignor) {
+        final int numClients,
+        final int numThreadsPerClient,
+        final int numStandbys,
+        final Class<? extends LegacyTaskAssignor> taskAssignor) {
         final List<String> topic = singletonList("topic");
 
         final Map<TopicPartition, Long> changelogEndOffsets = new HashMap<>();

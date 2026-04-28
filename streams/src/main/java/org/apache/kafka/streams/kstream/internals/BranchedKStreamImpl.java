@@ -48,7 +48,7 @@ public class BranchedKStreamImpl<K, V> implements BranchedKStream<K, V> {
 
         // predicates and childNames are passed by reference so when the user adds a branch they get added to
         final ProcessorParameters<K, V, ?, ?> processorParameters =
-                new ProcessorParameters<>(new KStreamBranch<>(predicates, childNames), splitterName);
+            new ProcessorParameters<>(new KStreamBranch<>(predicates, childNames), splitterName);
         splitterNode = new ProcessorGraphNode<>(splitterName, processorParameters);
         source.builder.addGraphNode(source.graphNode, splitterNode);
     }
@@ -85,8 +85,8 @@ public class BranchedKStreamImpl<K, V> implements BranchedKStream<K, V> {
         final ProcessorGraphNode<K, V> branchChildNode = new ProcessorGraphNode<>(branchChildName, parameters);
         source.builder.addGraphNode(splitterNode, branchChildNode);
         final KStreamImpl<K, V> branch = new KStreamImpl<>(branchChildName, source.keySerde,
-                source.valueSerde, source.subTopologySourceNodes,
-                repartitionRequired, branchChildNode, source.builder);
+            source.valueSerde, source.subTopologySourceNodes,
+            repartitionRequired, branchChildNode, source.builder);
         process(branch, branchChildName, branchedInternal);
     }
 
@@ -99,7 +99,7 @@ public class BranchedKStreamImpl<K, V> implements BranchedKStream<K, V> {
     }
 
     private void process(final KStreamImpl<K, V> branch, final String branchChildName,
-                         final BranchedInternal<K, V> branchedInternal) {
+        final BranchedInternal<K, V> branchedInternal) {
         if (branchedInternal.chainFunction() != null) {
             final KStream<K, V> transformedStream = branchedInternal.chainFunction().apply(branch);
             if (transformedStream != null) {

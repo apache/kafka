@@ -151,11 +151,11 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     public void ensureValid() {
         if (sizeInBytes() < RECORD_BATCH_OVERHEAD)
             throw new CorruptRecordException("Record batch is corrupt (the size " + sizeInBytes() +
-                    " is smaller than the minimum allowed overhead " + RECORD_BATCH_OVERHEAD + ")");
+                " is smaller than the minimum allowed overhead " + RECORD_BATCH_OVERHEAD + ")");
 
         if (!isValid())
             throw new CorruptRecordException("Record is corrupt (stored crc = " + checksum()
-                    + ", computed crc = " + computeChecksum() + ")");
+                + ", computed crc = " + computeChecksum() + ")");
     }
 
     /**
@@ -308,12 +308,15 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                     throw new InvalidRecordException("Incorrect declared batch size, premature EOF reached");
                 }
             }
+
             @Override
             protected boolean ensureNoneRemaining() {
                 return !buffer.hasRemaining();
             }
+
             @Override
-            public void close() {}
+            public void close() {
+            }
         };
     }
 
@@ -422,10 +425,10 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     }
 
     private static byte computeAttributes(CompressionType type, TimestampType timestampType,
-                                          boolean isTransactional, boolean isControl, boolean isDeleteHorizonSet) {
+        boolean isTransactional, boolean isControl, boolean isDeleteHorizonSet) {
         if (timestampType == TimestampType.NO_TIMESTAMP_TYPE)
             throw new IllegalArgumentException("Timestamp type must be provided to compute attributes for message " +
-                    "format v2 and above");
+                "format v2 and above");
 
         byte attributes = isTransactional ? TRANSACTIONAL_FLAG_MASK : 0;
         if (isControl)
@@ -440,40 +443,40 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     }
 
     public static void writeEmptyHeader(ByteBuffer buffer,
-                                        byte magic,
-                                        long producerId,
-                                        short producerEpoch,
-                                        int baseSequence,
-                                        long baseOffset,
-                                        long lastOffset,
-                                        int partitionLeaderEpoch,
-                                        TimestampType timestampType,
-                                        long timestamp,
-                                        boolean isTransactional,
-                                        boolean isControlRecord) {
+        byte magic,
+        long producerId,
+        short producerEpoch,
+        int baseSequence,
+        long baseOffset,
+        long lastOffset,
+        int partitionLeaderEpoch,
+        TimestampType timestampType,
+        long timestamp,
+        boolean isTransactional,
+        boolean isControlRecord) {
         int offsetDelta = (int) (lastOffset - baseOffset);
         writeHeader(buffer, baseOffset, offsetDelta, DefaultRecordBatch.RECORD_BATCH_OVERHEAD, magic,
-                    CompressionType.NONE, timestampType, RecordBatch.NO_TIMESTAMP, timestamp, producerId,
-                    producerEpoch, baseSequence, isTransactional, isControlRecord, false, partitionLeaderEpoch, 0);
+            CompressionType.NONE, timestampType, RecordBatch.NO_TIMESTAMP, timestamp, producerId,
+            producerEpoch, baseSequence, isTransactional, isControlRecord, false, partitionLeaderEpoch, 0);
     }
 
     public static void writeHeader(ByteBuffer buffer,
-                                   long baseOffset,
-                                   int lastOffsetDelta,
-                                   int sizeInBytes,
-                                   byte magic,
-                                   CompressionType compressionType,
-                                   TimestampType timestampType,
-                                   long baseTimestamp,
-                                   long maxTimestamp,
-                                   long producerId,
-                                   short epoch,
-                                   int sequence,
-                                   boolean isTransactional,
-                                   boolean isControlBatch,
-                                   boolean isDeleteHorizonSet,
-                                   int partitionLeaderEpoch,
-                                   int numRecords) {
+        long baseOffset,
+        int lastOffsetDelta,
+        int sizeInBytes,
+        byte magic,
+        CompressionType compressionType,
+        TimestampType timestampType,
+        long baseTimestamp,
+        long maxTimestamp,
+        long producerId,
+        short epoch,
+        int sequence,
+        boolean isTransactional,
+        boolean isControlBatch,
+        boolean isDeleteHorizonSet,
+        int partitionLeaderEpoch,
+        int numRecords) {
         if (magic < RecordBatch.CURRENT_MAGIC_VALUE)
             throw new IllegalArgumentException("Invalid magic value " + magic);
         if (baseTimestamp < 0 && baseTimestamp != NO_TIMESTAMP)
@@ -502,10 +505,10 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     @Override
     public String toString() {
         return "RecordBatch(magic=" + magic() + ", offsets=[" + baseOffset() + ", " + lastOffset() + "], " +
-                "sequence=[" + baseSequence() + ", " + lastSequence() + "], " +
-                "partitionLeaderEpoch=" + partitionLeaderEpoch() + ", " +
-                "isTransactional=" + isTransactional() + ", isControlBatch=" + isControlBatch() + ", " +
-                "compression=" + compressionType() + ", timestampType=" + timestampType() + ", crc=" + checksum() + ")";
+            "sequence=[" + baseSequence() + ", " + lastSequence() + "], " +
+            "partitionLeaderEpoch=" + partitionLeaderEpoch() + ", " +
+            "isTransactional=" + isTransactional() + ", isControlBatch=" + isControlBatch() + ", " +
+            "compression=" + compressionType() + ", timestampType=" + timestampType() + ", crc=" + checksum() + ")";
     }
 
     public static int sizeInBytes(long baseOffset, Iterable<Record> records) {
@@ -522,7 +525,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                 baseTimestamp = record.timestamp();
             long timestampDelta = record.timestamp() - baseTimestamp;
             size += DefaultRecord.sizeInBytes(offsetDelta, timestampDelta, record.key(), record.value(),
-                    record.headers());
+                record.headers());
         }
         return size;
     }
@@ -541,7 +544,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                 baseTimestamp = record.timestamp();
             long timestampDelta = record.timestamp() - baseTimestamp;
             size += DefaultRecord.sizeInBytes(offsetDelta++, timestampDelta, record.key(), record.value(),
-                    record.headers());
+                record.headers());
         }
         return size;
     }
@@ -584,7 +587,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             int numRecords = count();
             if (numRecords < 0)
                 throw new InvalidRecordException("Found invalid record count " + numRecords + " in magic v" +
-                        magic() + " batch");
+                    magic() + " batch");
             this.numRecords = numRecords;
         }
 
@@ -665,10 +668,10 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     static class DefaultFileChannelRecordBatch extends FileLogInputStream.FileChannelRecordBatch {
 
         DefaultFileChannelRecordBatch(long offset,
-                                      byte magic,
-                                      FileRecords fileRecords,
-                                      int position,
-                                      int batchSize) {
+            byte magic,
+            FileRecords fileRecords,
+            int position,
+            int batchSize) {
             super(offset, magic, fileRecords, position, batchSize);
         }
 

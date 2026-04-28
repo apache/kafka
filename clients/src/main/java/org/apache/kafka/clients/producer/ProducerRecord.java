@@ -71,10 +71,10 @@ public class ProducerRecord<K, V> {
             throw new IllegalArgumentException("Topic cannot be null.");
         if (timestamp != null && timestamp < 0)
             throw new IllegalArgumentException(
-                    String.format("Invalid timestamp: %d. Timestamp should always be non-negative or null.", timestamp));
+                String.format("Invalid timestamp: %d. Timestamp should always be non-negative or null.", timestamp));
         if (partition != null && partition < 0)
             throw new IllegalArgumentException(
-                    String.format("Invalid partition: %d. Partition number should always be non-negative or null.", partition));
+                String.format("Invalid partition: %d. Partition number should always be non-negative or null.", partition));
         this.topic = topic;
         this.partition = partition;
         this.key = key;
@@ -109,7 +109,7 @@ public class ProducerRecord<K, V> {
     public ProducerRecord(String topic, Integer partition, K key, V value, Iterable<Header> headers) {
         this(topic, partition, null, key, value, headers);
     }
-    
+
     /**
      * Creates a record to be sent to a specified topic and partition
      *
@@ -121,7 +121,7 @@ public class ProducerRecord<K, V> {
     public ProducerRecord(String topic, Integer partition, K key, V value) {
         this(topic, partition, null, key, value, null);
     }
-    
+
     /**
      * Create a record to be sent to Kafka
      * 
@@ -132,7 +132,7 @@ public class ProducerRecord<K, V> {
     public ProducerRecord(String topic, K key, V value) {
         this(topic, null, null, key, value, null);
     }
-    
+
     /**
      * Create a record with no key
      * 

@@ -241,15 +241,15 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     public void shouldShutDownClientIfGlobalStreamThreadWantsToReplaceThread(final boolean streamsRebalanceProtocolEnabled, final boolean withHeaders) throws Exception {
         properties = basicProps(streamsRebalanceProtocolEnabled, withHeaders);
         builder.addGlobalStore(
-                new KeyValueStoreBuilder<>(
-                        Stores.persistentKeyValueStore("globalStore"),
-                        Serdes.String(),
-                        Serdes.String(),
-                        CLUSTER.time
-                ),
-                inputTopic2,
-                Consumed.with(Serdes.String(), Serdes.String()),
-                () -> new ShutdownProcessor<String, String, Void, Void>(processorValueCollector)
+            new KeyValueStoreBuilder<>(
+                Stores.persistentKeyValueStore("globalStore"),
+                Serdes.String(),
+                Serdes.String(),
+                CLUSTER.time
+            ),
+            inputTopic2,
+            Consumed.with(Serdes.String(), Serdes.String()),
+            () -> new ShutdownProcessor<String, String, Void, Void>(processorValueCollector)
         );
         properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 0);
 
@@ -305,7 +305,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
                     IntegerSerializer.class,
                     StringSerializer.class,
                     new Properties()),
-                    NOW);
+                NOW);
 
             IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 inputTopic2,
@@ -318,7 +318,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
                     IntegerSerializer.class,
                     StringSerializer.class,
                     new Properties()),
-                    NOW);
+                NOW);
 
             IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
                 TestUtils.consumerConfig(
@@ -364,7 +364,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
         final Topology topology = builder.build();
         final MockTime time = new MockTime(0L);
-        
+
         try (final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, properties, time);
              final KafkaStreams kafkaStreams2 = new KafkaStreams(topology, properties, time);
              final LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister()) {
@@ -379,7 +379,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
             assertThat(processorValueCollector.size(), equalTo(1));
             assertThat("Shutdown warning log message should be exported exactly once",
-                    logCaptureAppender.getMessages("WARN").stream().filter(msg -> msg.contains("Detected that shutdown was requested")).count(), equalTo(1L));
+                logCaptureAppender.getMessages("WARN").stream().filter(msg -> msg.contains("Detected that shutdown was requested")).count(), equalTo(1L));
         }
     }
 

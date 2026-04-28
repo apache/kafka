@@ -126,6 +126,7 @@ public class AbstractHerderTest {
     private static final String TEST_REF = "${file:/tmp/somefile.txt:somevar}";
     private static final String TEST_REF2 = "${file:/tmp/somefile2.txt:somevar2}";
     private static final String TEST_REF3 = "${file:/tmp/somefile3.txt:somevar3}";
+
     static {
         CONN1_CONFIG.put(ConnectorConfig.NAME_CONFIG, CONN1);
         CONN1_CONFIG.put(ConnectorConfig.TASKS_MAX_CONFIG, MAX_TASKS.toString());
@@ -135,23 +136,30 @@ public class AbstractHerderTest {
         CONN1_CONFIG.put(TEST_KEY2, TEST_REF2);
         CONN1_CONFIG.put(TEST_KEY3, TEST_REF3);
     }
+
     private static final Map<String, String> TASK_CONFIG = new HashMap<>();
+
     static {
         TASK_CONFIG.put(TaskConfig.TASK_CLASS_CONFIG, SampleSourceConnector.SampleSourceTask.class.getName());
         TASK_CONFIG.put(TEST_KEY, TEST_REF);
     }
+
     private static final List<Map<String, String>> TASK_CONFIGS = new ArrayList<>();
+
     static {
         TASK_CONFIGS.add(TASK_CONFIG);
         TASK_CONFIGS.add(TASK_CONFIG);
         TASK_CONFIGS.add(TASK_CONFIG);
     }
+
     private static final HashMap<ConnectorTaskId, Map<String, String>> TASK_CONFIGS_MAP = new HashMap<>();
+
     static {
         TASK_CONFIGS_MAP.put(TASK0, TASK_CONFIG);
         TASK_CONFIGS_MAP.put(TASK1, TASK_CONFIG);
         TASK_CONFIGS_MAP.put(TASK2, TASK_CONFIG);
     }
+
     private static final ClusterConfigState SNAPSHOT = new ClusterConfigState(
             1,
             null,
@@ -720,22 +728,22 @@ public class AbstractHerderTest {
         assertEquals(SampleSourceConnector.class.getName(), result.name());
         // Each transform also gets its own group
         List<String> expectedGroups = List.of(
-            ConnectorConfig.COMMON_GROUP,
-            ConnectorConfig.TRANSFORMS_GROUP,
-            ConnectorConfig.PREDICATES_GROUP,
-            ConnectorConfig.ERROR_GROUP,
-            SourceConnectorConfig.TOPIC_CREATION_GROUP,
-            SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_GROUP,
-            SourceConnectorConfig.OFFSETS_TOPIC_GROUP
+                ConnectorConfig.COMMON_GROUP,
+                ConnectorConfig.TRANSFORMS_GROUP,
+                ConnectorConfig.PREDICATES_GROUP,
+                ConnectorConfig.ERROR_GROUP,
+                SourceConnectorConfig.TOPIC_CREATION_GROUP,
+                SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_GROUP,
+                SourceConnectorConfig.OFFSETS_TOPIC_GROUP
         );
         assertEquals(expectedGroups, result.groups());
         assertEquals(1, result.errorCount());
         // Base connector config has 19 fields, connector's configs add 7, and 2 producer overrides
         assertEquals(28, result.configs().size());
         assertTrue(result.configs().stream().anyMatch(
-            configInfo -> ackConfigKey.equals(configInfo.configValue().name()) && !configInfo.configValue().errors().isEmpty()));
+                configInfo -> ackConfigKey.equals(configInfo.configValue().name()) && !configInfo.configValue().errors().isEmpty()));
         assertTrue(result.configs().stream().anyMatch(
-            configInfo -> saslConfigKey.equals(configInfo.configValue().name()) && configInfo.configValue().errors().isEmpty()));
+                configInfo -> saslConfigKey.equals(configInfo.configValue().name()) && configInfo.configValue().errors().isEmpty()));
 
         verifyValidationIsolation();
     }
@@ -782,8 +790,8 @@ public class AbstractHerderTest {
             }
         }
         Map<String, String> rawOverriddenClientConfigs = config.entrySet().stream()
-            .filter(e -> overriddenClientConfigs.contains(e.getKey()))
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                .filter(e -> overriddenClientConfigs.contains(e.getKey()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
         assertEquals(rawOverriddenClientConfigs, validatedOverriddenClientConfigs);
 
@@ -863,9 +871,9 @@ public class AbstractHerderTest {
         config.put("required", "value");
 
         Map<String, String> overrides = Map.of(
-            producerOverrideKey(ProducerConfig.MAX_REQUEST_SIZE_CONFIG), "420",
-            producerOverrideKey(ProducerConfig.MAX_BLOCK_MS_CONFIG), "28980",
-            producerOverrideKey(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG), "true");
+                producerOverrideKey(ProducerConfig.MAX_REQUEST_SIZE_CONFIG), "420",
+                producerOverrideKey(ProducerConfig.MAX_BLOCK_MS_CONFIG), "28980",
+                producerOverrideKey(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG), "true");
         config.putAll(overrides);
 
         herder.validateConnectorConfig(config, s -> null, false);
@@ -1329,10 +1337,10 @@ public class AbstractHerderTest {
 
     protected ConfigInfo findInfo(ConfigInfos infos, String name) {
         return infos.configs()
-                    .stream()
-                    .filter(i -> i.configValue().name().equals(name))
-                    .findFirst()
-                    .orElse(null);
+                .stream()
+                .filter(i -> i.configValue().name().equals(name))
+                .findFirst()
+                .orElse(null);
     }
 
     private void testConfigProviderRegex(String rawConnConfig) {
@@ -1346,13 +1354,13 @@ public class AbstractHerderTest {
     }
 
     private AbstractHerder createConfigValidationHerder(Class<? extends Connector> connectorClass,
-                                                        ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
         return createConfigValidationHerder(connectorClass, connectorClientConfigOverridePolicy, 1);
     }
 
     private AbstractHerder createConfigValidationHerder(Class<? extends Connector> connectorClass,
-                                                        ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
-                                                        int countOfCallingNewConnector) {
+            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+            int countOfCallingNewConnector) {
         // Call to validateConnectorConfig
         when(worker.configTransformer()).thenReturn(transformer);
         @SuppressWarnings("unchecked")

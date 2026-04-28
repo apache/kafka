@@ -32,7 +32,7 @@ public class TopologyTestDriverWrapper extends TopologyTestDriver {
 
 
     public TopologyTestDriverWrapper(final Topology topology,
-                                     final Properties config) {
+        final Properties config) {
         super(topology, config);
     }
 

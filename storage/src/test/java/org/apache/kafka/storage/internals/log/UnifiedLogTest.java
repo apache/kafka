@@ -177,8 +177,8 @@ public class UnifiedLogTest {
     @Test
     public void shouldApplyEpochToMessageOnAppendIfLeader() throws IOException {
         SimpleRecord[] records = IntStream.range(0, 50)
-            .mapToObj(id -> new SimpleRecord(String.valueOf(id).getBytes()))
-            .toArray(SimpleRecord[]::new);
+                .mapToObj(id -> new SimpleRecord(String.valueOf(id).getBytes()))
+                .toArray(SimpleRecord[]::new);
 
         // Given this partition is on leader epoch 72
         int epoch = 72;
@@ -203,8 +203,8 @@ public class UnifiedLogTest {
     public void followerShouldSaveEpochInformationFromReplicatedMessagesToTheEpochCache() throws IOException {
         int[] messageIds = IntStream.range(0, 50).toArray();
         SimpleRecord[] records = Arrays.stream(messageIds)
-            .mapToObj(id -> new SimpleRecord(String.valueOf(id).getBytes()))
-            .toArray(SimpleRecord[]::new);
+                .mapToObj(id -> new SimpleRecord(String.valueOf(id).getBytes()))
+                .toArray(SimpleRecord[]::new);
 
         //Given each message has an offset & epoch, as msgs from leader would
         Function<Integer, MemoryRecords> recordsForEpoch = i -> {
@@ -228,7 +228,7 @@ public class UnifiedLogTest {
 
     @Test
     public void shouldTruncateLeaderEpochsWhenDeletingSegments() throws IOException {
-        Supplier<MemoryRecords>  records = () -> singletonRecords("test".getBytes());
+        Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes());
         LogConfig config = new LogTestUtils.LogConfigBuilder()
                 .segmentBytes(records.get().sizeInBytes() * 5)
                 .retentionBytes(records.get().sizeInBytes() * 10L)
@@ -660,9 +660,9 @@ public class UnifiedLogTest {
         log = createLog(logDir, logConfig);
 
         MemoryRecords records = MemoryRecords.withRecords(Compression.NONE,
-            new SimpleRecord("foo".getBytes()),
-            new SimpleRecord("bar".getBytes()),
-            new SimpleRecord("baz".getBytes()));
+                new SimpleRecord("foo".getBytes()),
+                new SimpleRecord("bar".getBytes()),
+                new SimpleRecord("baz".getBytes()));
 
         log.appendAsLeader(records, 0);
         assertEquals(Optional.empty(), log.firstUnstableOffset());
@@ -692,7 +692,7 @@ public class UnifiedLogTest {
         // add more transactional records
         seq += 3;
         log.appendAsLeader(MemoryRecords.withTransactionalRecords(Compression.NONE, pid, epoch, seq,
-            new SimpleRecord("blah".getBytes())), 0);
+                new SimpleRecord("blah".getBytes())), 0);
         assertEquals(Optional.of(firstAppendInfo.firstOffset()), log.firstUnstableOffset());
 
         // now transaction is committed
@@ -791,7 +791,7 @@ public class UnifiedLogTest {
         assertEquals(simpleRecords.size(), secondAppendInfo.firstOffset());
 
         log.roll();
-        LogAppendInfo afterRollAppendInfo =  log.appendAsLeader(LogTestUtils.records(simpleRecords), 0);
+        LogAppendInfo afterRollAppendInfo = log.appendAsLeader(LogTestUtils.records(simpleRecords), 0);
         assertEquals(simpleRecords.size() * 2, afterRollAppendInfo.firstOffset());
     }
 
@@ -1455,6 +1455,7 @@ public class UnifiedLogTest {
             public MemoryRecords.RecordFilter.BatchRetentionResult checkBatchRetention(RecordBatch batch) {
                 return new MemoryRecords.RecordFilter.BatchRetentionResult(MemoryRecords.RecordFilter.BatchRetention.DELETE_EMPTY, false);
             }
+
             @Override
             public boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                 return !record.hasKey();
@@ -1508,7 +1509,9 @@ public class UnifiedLogTest {
             public MemoryRecords.RecordFilter.BatchRetentionResult checkBatchRetention(RecordBatch batch) {
                 return new MemoryRecords.RecordFilter.BatchRetentionResult(MemoryRecords.RecordFilter.BatchRetention.RETAIN_EMPTY, true);
             }
-            @Override public boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
+
+            @Override
+            public boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                 return false;
             }
         }, filtered, BufferSupplier.NO_CACHING);
@@ -1558,10 +1561,13 @@ public class UnifiedLogTest {
 
         ByteBuffer filtered = ByteBuffer.allocate(2048);
         records.filterTo(new MemoryRecords.RecordFilter(0, 0) {
-            @Override public MemoryRecords.RecordFilter.BatchRetentionResult checkBatchRetention(RecordBatch batch) {
+            @Override
+            public MemoryRecords.RecordFilter.BatchRetentionResult checkBatchRetention(RecordBatch batch) {
                 return new MemoryRecords.RecordFilter.BatchRetentionResult(MemoryRecords.RecordFilter.BatchRetention.DELETE_EMPTY, false);
             }
-            @Override public boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
+
+            @Override
+            public boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                 return !record.hasKey();
             }
         }, filtered, BufferSupplier.NO_CACHING);
@@ -1737,7 +1743,8 @@ public class UnifiedLogTest {
 
         Cleaner cleaner = new Cleaner(0, fakeOffsetMap, 64 * 1024, 64 * 1024, 0.75,
                 new Throttler(Double.MAX_VALUE, Long.MAX_VALUE, "throttler", "entries", mockTime),
-                mockTime, tp -> { });
+                mockTime, tp -> {
+                });
 
         log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("a".getBytes(), "a".getBytes())), pid1, epoch, 0, 0L), 0);
         log.roll();
@@ -2559,13 +2566,13 @@ public class UnifiedLogTest {
     }
 
     public static MemoryRecords records(List<SimpleRecord> records,
-                                        byte magicValue,
-                                        Compression compression,
-                                        long producerId,
-                                        short producerEpoch,
-                                        int sequence,
-                                        long baseOffset,
-                                        int partitionLeaderEpoch) {
+            byte magicValue,
+            Compression compression,
+            long producerId,
+            short producerEpoch,
+            int sequence,
+            long baseOffset,
+            int partitionLeaderEpoch) {
         ByteBuffer buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records));
         MemoryRecordsBuilder builder = MemoryRecords.builder(buf, magicValue, compression, TimestampType.CREATE_TIME, baseOffset,
                 System.currentTimeMillis(), producerId, producerEpoch, sequence, false, partitionLeaderEpoch);
@@ -2585,14 +2592,14 @@ public class UnifiedLogTest {
      */
     @ParameterizedTest
     @CsvSource({
-        // Remote storage enabled with copy enabled: metric handled by RemoteLogManager, returns 0 here
-        "true, false, 0",
-        // Remote storage enabled but copy disabled: metric should be calculated (100%)
-        "true, true, 100",
-        // Remote storage disabled: metric should be calculated (100%)
-        "false, false, 100",
-        // Remote storage disabled (remoteLogCopyDisable is ignored): metric should be calculated (100%)
-        "false, true, 100"
+            // Remote storage enabled with copy enabled: metric handled by RemoteLogManager, returns 0 here
+            "true, false, 0",
+            // Remote storage enabled but copy disabled: metric should be calculated (100%)
+            "true, true, 100",
+            // Remote storage disabled: metric should be calculated (100%)
+            "false, false, 100",
+            // Remote storage disabled (remoteLogCopyDisable is ignored): metric should be calculated (100%)
+            "false, true, 100"
     })
     public void testRetentionSizeInPercentMetric(
             boolean remoteLogStorageEnable,
@@ -2865,8 +2872,8 @@ public class UnifiedLogTest {
         int numMessages = 100;
         MemoryRecords[] messageSets = IntStream.range(0, numMessages)
                 .mapToObj(i -> MemoryRecords.withRecords(
-                        Compression.NONE,
-                        new SimpleRecord(mockTime.milliseconds(), null, String.valueOf(i).getBytes()))
+                                Compression.NONE,
+                                new SimpleRecord(mockTime.milliseconds(), null, String.valueOf(i).getBytes()))
                 ).toArray(MemoryRecords[]::new);
         for (MemoryRecords messageSet : messageSets) {
             log.appendAsLeader(messageSet, 0);
@@ -3323,7 +3330,8 @@ public class UnifiedLogTest {
                 "clusterId",
                 mockTime,
                 tp -> Optional.empty(),
-                (tp, offset) -> { },
+                (tp, offset) -> {
+                },
                 brokerTopicStats,
                 new Metrics(),
                 Optional.empty()));
@@ -3402,7 +3410,8 @@ public class UnifiedLogTest {
                 "clusterId",
                 mockTime,
                 tp -> Optional.empty(),
-                (tp, offset) -> { },
+                (tp, offset) -> {
+                },
                 brokerTopicStats,
                 new Metrics(),
                 Optional.empty()));
@@ -3467,16 +3476,16 @@ public class UnifiedLogTest {
 
         // Test initial state before any records
         assertFetchOffsetBySpecialTimestamp(log, Optional.empty(),
-            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, -1, Optional.of(-1)),
-            ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
+                new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, -1, Optional.of(-1)),
+                ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
 
         // Append records
         prepareLogWithSequentialRecords(log, 2);
 
         // Test state after records are appended
         assertFetchOffsetBySpecialTimestamp(log, Optional.empty(),
-            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, -1, Optional.of(-1)),
-            ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
+                new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, -1, Optional.of(-1)),
+                ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
     }
 
     @Test
@@ -3508,24 +3517,24 @@ public class UnifiedLogTest {
 
         // In the assertions below we test that offset 0 (first timestamp) is only in remote and offset 1 (second timestamp) is in local storage.
         assertFetchOffsetByTimestamp(log, Optional.of(remoteLogManager),
-            Optional.of(new FileRecords.TimestampAndOffset(firstTimestamp, 0L, Optional.of(firstLeaderEpoch))), firstTimestamp);
+                Optional.of(new FileRecords.TimestampAndOffset(firstTimestamp, 0L, Optional.of(firstLeaderEpoch))), firstTimestamp);
         assertFetchOffsetByTimestamp(log, Optional.of(remoteLogManager),
-            Optional.of(new FileRecords.TimestampAndOffset(secondTimestamp, 1L, Optional.of(secondLeaderEpoch))), secondTimestamp);
+                Optional.of(new FileRecords.TimestampAndOffset(secondTimestamp, 1L, Optional.of(secondLeaderEpoch))), secondTimestamp);
         assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
-            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)),
-            ListOffsetsRequest.EARLIEST_TIMESTAMP);
+                new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)),
+                ListOffsetsRequest.EARLIEST_TIMESTAMP);
         assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
-            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)),
-            ListOffsetsRequest.LATEST_TIERED_TIMESTAMP);
+                new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)),
+                ListOffsetsRequest.LATEST_TIERED_TIMESTAMP);
         assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
-            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 1L, Optional.of(secondLeaderEpoch)),
-            ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP);
+                new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 1L, Optional.of(secondLeaderEpoch)),
+                ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP);
         assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
-            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 3L, Optional.of(thirdLeaderEpoch)),
-            ListOffsetsRequest.LATEST_TIMESTAMP);
+                new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 3L, Optional.of(thirdLeaderEpoch)),
+                ListOffsetsRequest.LATEST_TIMESTAMP);
         assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
-            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 1L, Optional.of(secondLeaderEpoch)),
-            ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
+                new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 1L, Optional.of(secondLeaderEpoch)),
+                ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
     }
 
     @Test
@@ -3560,24 +3569,24 @@ public class UnifiedLogTest {
 
         // In the assertions below we test that offset 0 (first timestamp) and offset 1 (second timestamp) are on both remote and local storage
         assertFetchOffsetByTimestamp(log, Optional.of(remoteLogManager),
-            Optional.of(new FileRecords.TimestampAndOffset(firstTimestamp, 0L, Optional.of(firstLeaderEpoch))), firstTimestamp);
+                Optional.of(new FileRecords.TimestampAndOffset(firstTimestamp, 0L, Optional.of(firstLeaderEpoch))), firstTimestamp);
         assertFetchOffsetByTimestamp(log, Optional.of(remoteLogManager),
-            Optional.of(new FileRecords.TimestampAndOffset(secondTimestamp, 1L, Optional.of(secondLeaderEpoch))), secondTimestamp);
+                Optional.of(new FileRecords.TimestampAndOffset(secondTimestamp, 1L, Optional.of(secondLeaderEpoch))), secondTimestamp);
         assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
-            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)),
-            ListOffsetsRequest.EARLIEST_TIMESTAMP);
+                new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)),
+                ListOffsetsRequest.EARLIEST_TIMESTAMP);
         assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
-            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 1L, Optional.of(secondLeaderEpoch)),
-            ListOffsetsRequest.LATEST_TIERED_TIMESTAMP);
+                new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 1L, Optional.of(secondLeaderEpoch)),
+                ListOffsetsRequest.LATEST_TIERED_TIMESTAMP);
         assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
-            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)),
-            ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP);
+                new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)),
+                ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP);
         assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
-            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 3L, Optional.of(thirdLeaderEpoch)),
-            ListOffsetsRequest.LATEST_TIMESTAMP);
+                new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 3L, Optional.of(thirdLeaderEpoch)),
+                ListOffsetsRequest.LATEST_TIMESTAMP);
         assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
-            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(thirdLeaderEpoch)),
-            ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
+                new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(thirdLeaderEpoch)),
+                ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
     }
 
     @Test
@@ -3604,24 +3613,24 @@ public class UnifiedLogTest {
 
         // In the assertions below we test that offset 0 (first timestamp), offset 1 (second timestamp) and offset 2 (third timestamp) are only on the local storage.
         assertFetchOffsetByTimestamp(log, Optional.of(remoteLogManager),
-            Optional.of(new FileRecords.TimestampAndOffset(firstTimestamp, 0L, Optional.of(firstLeaderEpoch))), firstTimestamp);
+                Optional.of(new FileRecords.TimestampAndOffset(firstTimestamp, 0L, Optional.of(firstLeaderEpoch))), firstTimestamp);
         assertFetchOffsetByTimestamp(log, Optional.of(remoteLogManager),
-            Optional.of(new FileRecords.TimestampAndOffset(secondTimestamp, 1L, Optional.of(secondLeaderEpoch))), secondTimestamp);
+                Optional.of(new FileRecords.TimestampAndOffset(secondTimestamp, 1L, Optional.of(secondLeaderEpoch))), secondTimestamp);
         assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
-            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)),
-            ListOffsetsRequest.EARLIEST_TIMESTAMP);
+                new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)),
+                ListOffsetsRequest.EARLIEST_TIMESTAMP);
         assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
-            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, -1L, Optional.of(-1)),
-            ListOffsetsRequest.LATEST_TIERED_TIMESTAMP);
+                new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, -1L, Optional.of(-1)),
+                ListOffsetsRequest.LATEST_TIERED_TIMESTAMP);
         assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
-            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)),
-            ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP);
+                new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)),
+                ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP);
         assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
-            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 3L, Optional.of(thirdLeaderEpoch)),
-            ListOffsetsRequest.LATEST_TIMESTAMP);
+                new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 3L, Optional.of(thirdLeaderEpoch)),
+                ListOffsetsRequest.LATEST_TIMESTAMP);
         assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
-            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)),
-            ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
+                new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)),
+                ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
     }
 
     @Test
@@ -3649,24 +3658,24 @@ public class UnifiedLogTest {
 
         // In the assertions below we test that offset 100 (first timestamp), offset 101 (second timestamp) and offset 102 (third timestamp) are only on the local storage.
         assertFetchOffsetByTimestamp(log, Optional.of(remoteLogManager),
-            Optional.of(new FileRecords.TimestampAndOffset(firstTimestamp, 100L, Optional.of(firstLeaderEpoch))), firstTimestamp);
+                Optional.of(new FileRecords.TimestampAndOffset(firstTimestamp, 100L, Optional.of(firstLeaderEpoch))), firstTimestamp);
         assertFetchOffsetByTimestamp(log, Optional.of(remoteLogManager),
-            Optional.of(new FileRecords.TimestampAndOffset(secondTimestamp, 101L, Optional.of(secondLeaderEpoch))), secondTimestamp);
+                Optional.of(new FileRecords.TimestampAndOffset(secondTimestamp, 101L, Optional.of(secondLeaderEpoch))), secondTimestamp);
         assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
-            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 100L, Optional.of(firstLeaderEpoch)),
-            ListOffsetsRequest.EARLIEST_TIMESTAMP);
+                new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 100L, Optional.of(firstLeaderEpoch)),
+                ListOffsetsRequest.EARLIEST_TIMESTAMP);
         assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
-            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 50L, Optional.empty()),
-            ListOffsetsRequest.LATEST_TIERED_TIMESTAMP);
+                new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 50L, Optional.empty()),
+                ListOffsetsRequest.LATEST_TIERED_TIMESTAMP);
         assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
-            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 100L, Optional.of(firstLeaderEpoch)),
-            ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP);
+                new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 100L, Optional.of(firstLeaderEpoch)),
+                ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP);
         assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
-            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 103L, Optional.of(thirdLeaderEpoch)),
-            ListOffsetsRequest.LATEST_TIMESTAMP);
+                new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 103L, Optional.of(thirdLeaderEpoch)),
+                ListOffsetsRequest.LATEST_TIMESTAMP);
         assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
-            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 100L, Optional.of(firstLeaderEpoch)),
-            ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
+                new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 100L, Optional.of(firstLeaderEpoch)),
+                ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
     }
 
     /**
@@ -3751,16 +3760,16 @@ public class UnifiedLogTest {
 
         List<LogSegment> segments = new ArrayList<>(log.logSegments());
         assertEquals(expectedEntries, segments.get(0).offsetIndex().maxEntries(),
-            "The index of the first segment should have " + expectedEntries + " entries");
+                "The index of the first segment should have " + expectedEntries + " entries");
         assertEquals(expectedEntries, segments.get(0).timeIndex().maxEntries(),
-            "The time index of the first segment should have " + expectedEntries + " entries");
+                "The time index of the first segment should have " + expectedEntries + " entries");
 
         log.truncateTo(0);
         assertEquals(1, log.numberOfSegments(), "There should be exactly 1 segment.");
         assertEquals(log.config().maxIndexSize / 8, new ArrayList<>(log.logSegments()).get(0).offsetIndex().maxEntries(),
-            "The index of segment 1 should be resized to maxIndexSize");
+                "The index of segment 1 should be resized to maxIndexSize");
         assertEquals(log.config().maxIndexSize / 12, new ArrayList<>(log.logSegments()).get(0).timeIndex().maxEntries(),
-            "The time index of segment 1 should be resized to maxIndexSize");
+                "The time index of segment 1 should be resized to maxIndexSize");
 
         mockTime.sleep(msgPerSeg);
         for (int i = 1; i <= msgPerSeg; i++)
@@ -3801,11 +3810,11 @@ public class UnifiedLogTest {
 
         assertEquals(1, log.numberOfSegments(), "Only one segment should remain.");
         assertTrue(segments.stream().allMatch(s -> s.log().file().getName().endsWith(LogFileUtils.DELETED_FILE_SUFFIX)) &&
-            segments.stream().allMatch(s -> s.offsetIndexFile().getName().endsWith(LogFileUtils.DELETED_FILE_SUFFIX)),
-            "All log and index files should end in .deleted");
+                segments.stream().allMatch(s -> s.offsetIndexFile().getName().endsWith(LogFileUtils.DELETED_FILE_SUFFIX)),
+                "All log and index files should end in .deleted");
         assertTrue(segments.stream().allMatch(s -> s.log().file().exists()) &&
-            segments.stream().allMatch(s -> s.offsetIndexFile().exists()),
-            "The .deleted files should still be there.");
+                segments.stream().allMatch(s -> s.offsetIndexFile().exists()),
+                "The .deleted files should still be there.");
         assertTrue(oldFiles.stream().noneMatch(File::exists), "The original file should be gone.");
 
         // when enough time passes the files should be deleted
@@ -3836,7 +3845,7 @@ public class UnifiedLogTest {
         ByteBuffer buffer = ByteBuffer.allocate(512);
         for (long offset : appendOffsets) {
             MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, Compression.NONE,
-                TimestampType.LOG_APPEND_TIME, offset, mockTime.milliseconds(), 1L, (short) 0, 0, false, epoch);
+                    TimestampType.LOG_APPEND_TIME, offset, mockTime.milliseconds(), 1L, (short) 0, 0, false, epoch);
             builder.append(new SimpleRecord("key".getBytes(), "value".getBytes()));
             builder.close();
         }
@@ -3848,11 +3857,11 @@ public class UnifiedLogTest {
 
     private static Stream<Arguments> magicAndCompressionTypes() {
         return Stream.of(
-            RecordBatch.MAGIC_VALUE_V0,
-            RecordBatch.MAGIC_VALUE_V1,
-            RecordBatch.MAGIC_VALUE_V2
+                RecordBatch.MAGIC_VALUE_V0,
+                RecordBatch.MAGIC_VALUE_V1,
+                RecordBatch.MAGIC_VALUE_V2
         ).flatMap(magic -> Stream.of(CompressionType.NONE, CompressionType.LZ4)
-            .map(compressionType -> Arguments.of(magic, compressionType)));
+                .map(compressionType -> Arguments.of(magic, compressionType)));
     }
 
     @ParameterizedTest(name = "magic={0}, compressionType={1}")
@@ -3864,10 +3873,10 @@ public class UnifiedLogTest {
 
         Compression compression = Compression.of(compressionType).build();
         MemoryRecords invalidRecord = MemoryRecords.withRecords(magic, compression,
-            new SimpleRecord(Integer.toString(1).getBytes()));
+                new SimpleRecord(Integer.toString(1).getBytes()));
         assertThrows(
-            UnexpectedAppendOffsetException.class,
-            () -> log.appendAsFollower(invalidRecord, Integer.MAX_VALUE)
+                UnexpectedAppendOffsetException.class,
+                () -> log.appendAsFollower(invalidRecord, Integer.MAX_VALUE)
         );
     }
 
@@ -3881,27 +3890,27 @@ public class UnifiedLogTest {
 
         long firstOffset = 4L;
         MemoryRecords batch = LogTestUtils.records(
-            List.of(new SimpleRecord("k1".getBytes(), "v1".getBytes()),
-                    new SimpleRecord("k2".getBytes(), "v2".getBytes()),
-                    new SimpleRecord("k3".getBytes(), "v3".getBytes())),
-            magic, Compression.of(compressionType).build(),
-            RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
-            firstOffset, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+                List.of(new SimpleRecord("k1".getBytes(), "v1".getBytes()),
+                        new SimpleRecord("k2".getBytes(), "v2".getBytes()),
+                        new SimpleRecord("k3".getBytes(), "v3".getBytes())),
+                magic, Compression.of(compressionType).build(),
+                RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
+                firstOffset, RecordBatch.NO_PARTITION_LEADER_EPOCH);
         UnexpectedAppendOffsetException exception = assertThrows(
-            UnexpectedAppendOffsetException.class,
-            () -> log.appendAsFollower(batch, Integer.MAX_VALUE)
+                UnexpectedAppendOffsetException.class,
+                () -> log.appendAsFollower(batch, Integer.MAX_VALUE)
         );
         assertEquals(firstOffset, exception.firstOffset,
-            "UnexpectedAppendOffsetException#firstOffset");
+                "UnexpectedAppendOffsetException#firstOffset");
         assertEquals(firstOffset + 2, exception.lastOffset,
-            "UnexpectedAppendOffsetException#lastOffset");
+                "UnexpectedAppendOffsetException#lastOffset");
     }
 
     @Test
     public void testAppendWithNoTimestamp() throws IOException {
         UnifiedLog log = createLog(logDir, new LogConfig(new Properties()));
         log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE,
-            new SimpleRecord(RecordBatch.NO_TIMESTAMP, "key".getBytes(), "value".getBytes())), 0);
+                new SimpleRecord(RecordBatch.NO_TIMESTAMP, "key".getBytes(), "value".getBytes())), 0);
     }
 
     @Test
@@ -3917,7 +3926,7 @@ public class UnifiedLogTest {
         // to the index will fail.
         log.activeSegment().txnIndex().renameTo(log.dir());
         assertThrows(KafkaStorageException.class, () -> LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT,
-            mockTime.milliseconds(), 1, 0, TransactionVersion.TV_0.featureLevel()));
+                mockTime.milliseconds(), 1, 0, TransactionVersion.TV_0.featureLevel()));
         assertThrows(KafkaStorageException.class, () -> log.appendAsLeader(LogTestUtils.singletonRecords(null, null), 0));
         assertThrows(KafkaStorageException.class, () -> LogTestUtils.readLog(log, 0, 4096).records.records().iterator().next().offset());
     }
@@ -4008,8 +4017,8 @@ public class UnifiedLogTest {
         assertEquals(Optional.of(5), log.leaderEpochCache().latestEpoch());
 
         log.appendAsFollower(
-            LogTestUtils.records(List.of(new SimpleRecord("foo".getBytes())), RecordVersion.V1.value, 1L),
-            5
+                LogTestUtils.records(List.of(new SimpleRecord("foo".getBytes())), RecordVersion.V1.value, 1L),
+                5
         );
         assertEquals(Optional.empty(), log.leaderEpochCache().latestEpoch());
     }
@@ -4023,7 +4032,7 @@ public class UnifiedLogTest {
         LogConfig logConfig = new LogConfig(logProps);
         UnifiedLog log = createLog(logDir, logConfig);
         log.appendAsLeaderWithRecordVersion(LogTestUtils.records(List.of(new SimpleRecord("bar".getBytes())),
-            RecordBatch.MAGIC_VALUE_V1, 0L), 5, RecordVersion.V1);
+                RecordBatch.MAGIC_VALUE_V1, 0L), 5, RecordVersion.V1);
         assertTrue(log.latestEpoch().isEmpty());
 
         log.appendAsLeader(LogTestUtils.records(List.of(new SimpleRecord("foo".getBytes()))), 5);
@@ -4060,9 +4069,9 @@ public class UnifiedLogTest {
 
         long overflowOffset = (long) Integer.MAX_VALUE + 1;
         MemoryRecords batch1 = MemoryRecords.withRecords(overflowOffset, Compression.NONE, 0,
-            new SimpleRecord("a".getBytes()));
+                new SimpleRecord("a".getBytes()));
         MemoryRecords batch2 = MemoryRecords.withRecords(overflowOffset + 1, Compression.NONE, 0,
-            new SimpleRecord("b".getBytes()));
+                new SimpleRecord("b".getBytes()));
 
         testDegenerateSplitSegmentWithOverflow(0L, List.of(batch1, batch2));
     }
@@ -4074,9 +4083,9 @@ public class UnifiedLogTest {
 
         long firstBatchBaseOffset = (long) Integer.MAX_VALUE - 1;
         MemoryRecords records = MemoryRecords.withRecords(firstBatchBaseOffset, Compression.NONE, 0,
-            new SimpleRecord("a".getBytes()),
-            new SimpleRecord("b".getBytes()),
-            new SimpleRecord("c".getBytes()));
+                new SimpleRecord("a".getBytes()),
+                new SimpleRecord("b".getBytes()),
+                new SimpleRecord("c".getBytes()));
 
         testDegenerateSplitSegmentWithOverflow(0L, List.of(records));
     }
@@ -4108,7 +4117,7 @@ public class UnifiedLogTest {
                     nonEmptyReads += 1;
 
                 LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, producerEpoch, ControlRecordType.ABORT,
-                    mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel());
+                        mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel());
             }
             return nonEmptyReads;
         };
@@ -4161,29 +4170,29 @@ public class UnifiedLogTest {
         LogTestUtils.appendNonTransactionalAsLeader(log, 2); // 19
         appendPid1.accept(10); // 29
         LogTestUtils.appendEndTxnMarkerAsLeader(log, pid1, epoch, ControlRecordType.ABORT,
-            mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel()); // 30
+                mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel()); // 30
         appendPid2.accept(6); // 36
         appendPid4.accept(3); // 39
         LogTestUtils.appendNonTransactionalAsLeader(log, 10); // 49
         appendPid3.accept(9); // 58
         LogTestUtils.appendEndTxnMarkerAsLeader(log, pid3, epoch, ControlRecordType.COMMIT,
-            mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel()); // 59
+                mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel()); // 59
         appendPid4.accept(8); // 67
         appendPid2.accept(7); // 74
         LogTestUtils.appendEndTxnMarkerAsLeader(log, pid2, epoch, ControlRecordType.ABORT,
-            mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel()); // 75
+                mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel()); // 75
         LogTestUtils.appendNonTransactionalAsLeader(log, 10); // 85
         appendPid4.accept(4); // 89
         LogTestUtils.appendEndTxnMarkerAsLeader(log, pid4, epoch, ControlRecordType.COMMIT,
-            mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel()); // 90
+                mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel()); // 90
 
         List<AbortedTxn> abortedTransactions = new ArrayList<>();
         for (LogSegment segment : log.logSegments()) {
             abortedTransactions.addAll(segment.txnIndex().allAbortedTxns());
         }
         List<AbortedTxn> expectedTransactions = List.of(
-            new AbortedTxn().setProducerId(pid1).setFirstOffset(0L).setLastOffset(29L).setLastStableOffset(8L),
-            new AbortedTxn().setProducerId(pid2).setFirstOffset(8L).setLastOffset(74L).setLastStableOffset(36L)
+                new AbortedTxn().setProducerId(pid1).setFirstOffset(0L).setLastOffset(29L).setLastStableOffset(8L),
+                new AbortedTxn().setProducerId(pid2).setFirstOffset(8L).setLastOffset(74L).setLastStableOffset(36L)
         );
         assertEquals(expectedTransactions, abortedTransactions);
 
@@ -4223,7 +4232,7 @@ public class UnifiedLogTest {
         LogTestUtils.initializeLogDirWithOverflowedSegment(logDir);
         log = createLog(logDir, logConfig, Long.MAX_VALUE);
         return LogTestUtils.firstOverflowSegment(log).orElseThrow(
-            () -> new AssertionError("Failed to create log with a segment which has overflowed offsets"));
+                () -> new AssertionError("Failed to create log with a segment which has overflowed offsets"));
     }
 
     private void testDegenerateSplitSegmentWithOverflow(long segmentBaseOffset, List<MemoryRecords> records) throws IOException {
@@ -4242,7 +4251,7 @@ public class UnifiedLogTest {
         UnifiedLog log = createLog(logDir, logConfig, Long.MAX_VALUE);
 
         LogSegment segmentWithOverflow = LogTestUtils.firstOverflowSegment(log).orElseThrow(
-            () -> new AssertionError("Failed to create log with a segment which has overflowed offsets"));
+                () -> new AssertionError("Failed to create log with a segment which has overflowed offsets"));
 
         List<Record> allRecordsBeforeSplit = allRecords(log);
         log.splitOverflowedSegment(segmentWithOverflow);
@@ -4256,23 +4265,25 @@ public class UnifiedLogTest {
         assertFalse(LogTestUtils.hasOffsetOverflow(log));
     }
 
-    private record TimestampAndEpoch(long timestamp, int leaderEpoch) { }
+    private record TimestampAndEpoch(long timestamp, int leaderEpoch) {
+    }
 
     private void prepare(int logStartOffset) throws IOException {
         RemoteLogManagerConfig config = createRemoteLogManagerConfig();
         DelayedOperationPurgatory<DelayedRemoteListOffsets> purgatory =
-            new DelayedOperationPurgatory<>("RemoteListOffsets", 0);
+                new DelayedOperationPurgatory<>("RemoteListOffsets", 0);
         remoteLogManager = spy(new RemoteLogManager(
-            config,
-            0,
-            logDir.getAbsolutePath(),
-            "clusterId",
-            mockTime,
-            tp -> Optional.empty(),
-            (tp, l) -> { },
-            brokerTopicStats,
-            new Metrics(),
-            Optional.empty()
+                config,
+                0,
+                logDir.getAbsolutePath(),
+                "clusterId",
+                mockTime,
+                tp -> Optional.empty(),
+                (tp, l) -> {
+                },
+                brokerTopicStats,
+                new Metrics(),
+                Optional.empty()
         ));
         remoteLogManager.setDelayedOperationPurgatory(purgatory);
 
@@ -4287,8 +4298,8 @@ public class UnifiedLogTest {
 
         // Verify earliest pending upload offset for empty log
         assertFetchOffsetBySpecialTimestamp(log, Optional.of(remoteLogManager),
-            new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, logStartOffset, Optional.empty()),
-            ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
+                new FileRecords.TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, logStartOffset, Optional.empty()),
+                ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
 
         timestampAndEpochs = prepareLogWithSequentialRecords(log, 3);
     }
@@ -4300,8 +4311,8 @@ public class UnifiedLogTest {
         for (int i = 0; i < recordCount; i++) {
             TimestampAndEpoch timestampAndEpoch = new TimestampAndEpoch(firstTimestamp + i, i);
             log.appendAsLeader(
-                singletonRecords(TestUtils.randomBytes(10), firstTimestamp + i),
-                timestampAndEpoch.leaderEpoch
+                    singletonRecords(TestUtils.randomBytes(10), firstTimestamp + i),
+                    timestampAndEpoch.leaderEpoch
             );
             result.add(timestampAndEpoch);
         }
@@ -4310,18 +4321,18 @@ public class UnifiedLogTest {
     }
 
     private void assertFetchOffsetBySpecialTimestamp(UnifiedLog log,
-                                                      Optional<RemoteLogManager> remoteLogManagerOpt,
-                                                      FileRecords.TimestampAndOffset expected,
-                                                      long timestamp) {
+            Optional<RemoteLogManager> remoteLogManagerOpt,
+            FileRecords.TimestampAndOffset expected,
+            long timestamp) {
         Optional<AsyncOffsetReader> remoteOffsetReader = remoteLogManagerOpt.map(rlm -> rlm);
         OffsetResultHolder offsetResultHolder = log.fetchOffsetByTimestamp(timestamp, remoteOffsetReader);
         assertEquals(new OffsetResultHolder(expected), offsetResultHolder);
     }
 
     private void assertFetchOffsetByTimestamp(UnifiedLog log,
-                                               Optional<RemoteLogManager> remoteLogManagerOpt,
-                                               Optional<FileRecords.TimestampAndOffset> expected,
-                                               long timestamp) throws Exception {
+            Optional<RemoteLogManager> remoteLogManagerOpt,
+            Optional<FileRecords.TimestampAndOffset> expected,
+            long timestamp) throws Exception {
         Optional<AsyncOffsetReader> remoteOffsetReader = remoteLogManagerOpt.map(rlm -> rlm);
         OffsetResultHolder offsetResultHolder = log.fetchOffsetByTimestamp(timestamp, remoteOffsetReader);
         assertTrue(offsetResultHolder.futureHolderOpt().isPresent());
@@ -4340,9 +4351,9 @@ public class UnifiedLogTest {
     }
 
     private void assertFetchOffsetByTimestamp(RemoteLogManager remoteLogManager,
-                                               FileRecords.TimestampAndOffset expected,
-                                               long timestamp,
-                                               UnifiedLog testLog) throws Exception {
+            FileRecords.TimestampAndOffset expected,
+            long timestamp,
+            UnifiedLog testLog) throws Exception {
         OffsetResultHolder offsetResultHolder = testLog.fetchOffsetByTimestamp(timestamp, Optional.of(remoteLogManager));
         assertTrue(offsetResultHolder.futureHolderOpt().isPresent());
         offsetResultHolder.futureHolderOpt().get().taskFuture().get(1, TimeUnit.SECONDS);
@@ -4411,8 +4422,8 @@ public class UnifiedLogTest {
 
         List<AbortedTxn> abortedTransactions = LogTestUtils.allAbortedTransactions(log);
         List<AbortedTxn> expectedTransactions = List.of(
-            new AbortedTxn().setProducerId(pid1).setFirstOffset(0L).setLastOffset(29L).setLastStableOffset(8L),
-            new AbortedTxn().setProducerId(pid2).setFirstOffset(8L).setLastOffset(74L).setLastStableOffset(36L)
+                new AbortedTxn().setProducerId(pid1).setFirstOffset(0L).setLastOffset(29L).setLastStableOffset(8L),
+                new AbortedTxn().setProducerId(pid2).setFirstOffset(8L).setLastOffset(74L).setLastStableOffset(36L)
         );
 
         assertEquals(expectedTransactions, abortedTransactions);
@@ -4439,15 +4450,15 @@ public class UnifiedLogTest {
 
         append.accept(10);
         LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
-            1, 0, TransactionVersion.TV_0.featureLevel());
+                1, 0, TransactionVersion.TV_0.featureLevel());
 
         append.accept(5);
         LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.COMMIT, mockTime.milliseconds(),
-            2, 0, TransactionVersion.TV_0.featureLevel());
+                2, 0, TransactionVersion.TV_0.featureLevel());
 
         assertThrows(TransactionCoordinatorFencedException.class,
-            () -> LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
-                1, 0, TransactionVersion.TV_0.featureLevel()));
+                () -> LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
+                        1, 0, TransactionVersion.TV_0.featureLevel()));
     }
 
     @Test
@@ -4468,10 +4479,10 @@ public class UnifiedLogTest {
         LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
                 2, 1, TransactionVersion.TV_0.featureLevel());
         LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
-            2, 1, TransactionVersion.TV_0.featureLevel());
+                2, 1, TransactionVersion.TV_0.featureLevel());
         assertThrows(TransactionCoordinatorFencedException.class,
-            () -> LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
-                1, 1, TransactionVersion.TV_0.featureLevel()));
+                () -> LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
+                        1, 1, TransactionVersion.TV_0.featureLevel()));
     }
 
     @ParameterizedTest(name = "testEndTxnWithFencedProducerEpoch with transactionVersion={0}")
@@ -4484,8 +4495,8 @@ public class UnifiedLogTest {
 
         // First, write some transactional records to establish the current epoch
         MemoryRecords records = MemoryRecords.withTransactionalRecords(
-            Compression.NONE, producerId, epoch, 0,
-            new SimpleRecord("key".getBytes(), "value".getBytes())
+                Compression.NONE, producerId, epoch, 0,
+                new SimpleRecord("key".getBytes(), "value".getBytes())
         );
         log.appendAsLeader(records, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, transactionVersion);
 
@@ -4493,8 +4504,8 @@ public class UnifiedLogTest {
         // TV0/TV1: markerEpoch < currentEpoch is rejected
         // TV2: markerEpoch <= currentEpoch is rejected (requires strict >)
         assertThrows(InvalidProducerEpochException.class,
-            () -> LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, (short) (epoch - 1),
-                ControlRecordType.ABORT, mockTime.milliseconds(), 1, 0, transactionVersion));
+                () -> LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, (short) (epoch - 1),
+                        ControlRecordType.ABORT, mockTime.milliseconds(), 1, 0, transactionVersion));
 
         // Test 2: Same epoch behavior differs between TV0/TV1 and TV2
         // TV0/TV1: same epoch is allowed (markerEpoch >= currentEpoch)
@@ -4502,12 +4513,12 @@ public class UnifiedLogTest {
         if (transactionVersion >= 2) {
             // TV2: same epoch should be rejected
             assertThrows(InvalidProducerEpochException.class,
-                () -> LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, epoch,
-                    ControlRecordType.ABORT, mockTime.milliseconds(), 1, 0, transactionVersion));
+                    () -> LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, epoch,
+                            ControlRecordType.ABORT, mockTime.milliseconds(), 1, 0, transactionVersion));
         } else {
             // TV0/TV1: same epoch should be allowed
             assertDoesNotThrow(() -> LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, epoch,
-                ControlRecordType.ABORT, mockTime.milliseconds(), 1, 0, transactionVersion));
+                    ControlRecordType.ABORT, mockTime.milliseconds(), 1, 0, transactionVersion));
         }
     }
 
@@ -4523,16 +4534,16 @@ public class UnifiedLogTest {
 
         // First, write some transactional records to establish the current epoch
         MemoryRecords records = MemoryRecords.withTransactionalRecords(
-            Compression.NONE, producerId, epoch, 0,
-            new SimpleRecord("key".getBytes(), "value".getBytes())
+                Compression.NONE, producerId, epoch, 0,
+                new SimpleRecord("key".getBytes(), "value".getBytes())
         );
         log.appendAsLeader(records, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, transactionVersion);
 
         // TV2: Verify that bumped epoch (epoch + 1) is accepted
         short bumpedEpoch = (short) (epoch + 1);
         assertDoesNotThrow(() -> LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, bumpedEpoch,
-            ControlRecordType.COMMIT, mockTime.milliseconds(), 1,
-            0, TransactionVersion.TV_2.featureLevel()));
+                ControlRecordType.COMMIT, mockTime.milliseconds(), 1,
+                0, TransactionVersion.TV_2.featureLevel()));
 
         // Verify the marker was successfully appended by checking producer state
         ProducerStateEntry producerState = log.producerStateManager().activeProducers().get(producerId);
@@ -4557,8 +4568,8 @@ public class UnifiedLogTest {
 
         // Step 1: Write transactional records as leader to establish current epoch
         MemoryRecords transactionalRecords = MemoryRecords.withTransactionalRecords(
-            Compression.NONE, producerId, epoch, 0,
-            new SimpleRecord("key".getBytes(), "value".getBytes())
+                Compression.NONE, producerId, epoch, 0,
+                new SimpleRecord("key".getBytes(), "value".getBytes())
         );
         log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_2.featureLevel());
 
@@ -4566,10 +4577,10 @@ public class UnifiedLogTest {
         // This is what happens at the leader when WriteTxnMarkersRequest is received
         short bumpedEpoch = (short) (epoch + 1);
         MemoryRecords leaderMarker = MemoryRecords.withEndTransactionMarker(
-            mockTime.milliseconds(),
-            producerId,
-            bumpedEpoch,
-            new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch)
+                mockTime.milliseconds(),
+                producerId,
+                bumpedEpoch,
+                new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch)
         );
         // Leader validates with TV2 (strict: markerEpoch > currentEpoch)
         log.appendAsLeader(leaderMarker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_2.featureLevel());
@@ -4585,8 +4596,8 @@ public class UnifiedLogTest {
 
         // Step 4: Follower replicates transactional records first
         MemoryRecords followerTransactionalRecords = MemoryRecords.withTransactionalRecords(
-            0L, Compression.NONE, producerId, epoch, 0, 0,
-            new SimpleRecord("key".getBytes(), "value".getBytes())
+                0L, Compression.NONE, producerId, epoch, 0, 0,
+                new SimpleRecord("key".getBytes(), "value".getBytes())
         );
         followerLog.appendAsFollower(followerTransactionalRecords, 0);
 
@@ -4595,12 +4606,12 @@ public class UnifiedLogTest {
         // and defaults to TV_0 validation (markerEpoch >= currentEpoch), which is more permissive
         // The marker should be at offset 1 (after the transactional record at offset 0)
         MemoryRecords followerMarker = MemoryRecords.withEndTransactionMarker(
-            1L, // offset after the transactional record
-            mockTime.milliseconds(),
-            0, // partition leader epoch
-            producerId,
-            bumpedEpoch,
-            new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch)
+                1L, // offset after the transactional record
+                mockTime.milliseconds(),
+                0, // partition leader epoch
+                producerId,
+                bumpedEpoch,
+                new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch)
         );
 
         // This should not throw an exception - TV_UNKNOWN is allowed for replication
@@ -4628,22 +4639,22 @@ public class UnifiedLogTest {
 
         // Write transactional records as leader to establish current epoch
         MemoryRecords transactionalRecords = MemoryRecords.withTransactionalRecords(
-            Compression.NONE, producerId, epoch, 0,
-            new SimpleRecord("key".getBytes(), "value".getBytes())
+                Compression.NONE, producerId, epoch, 0,
+                new SimpleRecord("key".getBytes(), "value".getBytes())
         );
         log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_2.featureLevel());
 
         // Attempt to write a transaction marker with TV_UNKNOWN as COORDINATOR (leader)
         // This should throw IllegalArgumentException because TV_UNKNOWN is not allowed for COORDINATOR origin
         MemoryRecords marker = MemoryRecords.withEndTransactionMarker(
-            mockTime.milliseconds(),
-            producerId,
-            (short) (epoch + 1), // bumped epoch for TV2
-            new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch)
+                mockTime.milliseconds(),
+                producerId,
+                (short) (epoch + 1), // bumped epoch for TV2
+                new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch)
         );
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-            log.appendAsLeader(marker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_UNKNOWN));
+                log.appendAsLeader(marker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_UNKNOWN));
 
         assertTrue(exception.getMessage().contains("transactionVersion must be explicitly specified"));
         assertTrue(exception.getMessage().contains("TV_UNKNOWN"));
@@ -4719,8 +4730,8 @@ public class UnifiedLogTest {
 
         // The append will be written to the log successfully, but the write to the index will fail
         assertThrows(KafkaStorageException.class,
-            () -> LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
-                1, 0, TransactionVersion.TV_0.featureLevel()));
+                () -> LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
+                        1, 0, TransactionVersion.TV_0.featureLevel()));
         assertEquals(11L, log.logEndOffset());
         assertEquals(0L, log.lastStableOffset());
 
@@ -4728,8 +4739,8 @@ public class UnifiedLogTest {
         // because the log dir is marked as failed.  Nor will there be a write to the transaction
         // index.
         assertThrows(KafkaStorageException.class,
-            () -> LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
-                1, 0, TransactionVersion.TV_0.featureLevel()));
+                () -> LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
+                        1, 0, TransactionVersion.TV_0.featureLevel()));
         assertEquals(11L, log.logEndOffset());
         assertEquals(0L, log.lastStableOffset());
 
@@ -4739,7 +4750,7 @@ public class UnifiedLogTest {
 
         assertThrows(KafkaStorageException.class, () -> log.close());
         UnifiedLog reopenedLog = createLog(logDir, logConfig, 0L, 0L, brokerTopicStats, mockTime.scheduler, mockTime,
-            producerStateManagerConfig, false, Optional.empty(), false);
+                producerStateManagerConfig, false, Optional.empty(), false);
         assertEquals(11L, reopenedLog.logEndOffset());
         assertEquals(1, reopenedLog.activeSegment().txnIndex().allAbortedTxns().size());
         reopenedLog.updateHighWatermark(12L);
@@ -4753,14 +4764,14 @@ public class UnifiedLogTest {
 
         // append a few records
         appendAsFollower(
-            log,
-            MemoryRecords.withRecords(
-                Compression.NONE,
-                new SimpleRecord("a".getBytes()),
-                new SimpleRecord("b".getBytes()),
-                new SimpleRecord("c".getBytes())
-            ),
-            5
+                log,
+                MemoryRecords.withRecords(
+                        Compression.NONE,
+                        new SimpleRecord("a".getBytes()),
+                        new SimpleRecord("b".getBytes()),
+                        new SimpleRecord("c".getBytes())
+                ),
+                5
         );
 
         log.updateHighWatermark(3L);
@@ -4788,29 +4799,29 @@ public class UnifiedLogTest {
 
         // add some transactional records
         LogAppendInfo firstAppendInfo = log.appendAsLeader(MemoryRecords.withTransactionalRecords(Compression.NONE, pid1, epoch, seq1,
-            new SimpleRecord("a".getBytes()),
-            new SimpleRecord("b".getBytes()),
-            new SimpleRecord("c".getBytes())), 0);
+                new SimpleRecord("a".getBytes()),
+                new SimpleRecord("b".getBytes()),
+                new SimpleRecord("c".getBytes())), 0);
         assertEquals(Optional.of(firstAppendInfo.firstOffset()), log.firstUnstableOffset());
 
         // mix in some non-transactional data
         log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE,
-            new SimpleRecord("g".getBytes()),
-            new SimpleRecord("h".getBytes()),
-            new SimpleRecord("i".getBytes())), 0);
+                new SimpleRecord("g".getBytes()),
+                new SimpleRecord("h".getBytes()),
+                new SimpleRecord("i".getBytes())), 0);
 
         // append data from a second transactional producer
         LogAppendInfo secondAppendInfo = log.appendAsLeader(MemoryRecords.withTransactionalRecords(Compression.NONE, pid2, epoch, seq2,
-            new SimpleRecord("d".getBytes()),
-            new SimpleRecord("e".getBytes()),
-            new SimpleRecord("f".getBytes())), 0);
+                new SimpleRecord("d".getBytes()),
+                new SimpleRecord("e".getBytes()),
+                new SimpleRecord("f".getBytes())), 0);
 
         // LSO should not have changed
         assertEquals(Optional.of(firstAppendInfo.firstOffset()), log.firstUnstableOffset());
 
         // now first producer's transaction is aborted
         LogAppendInfo abortAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid1, epoch, ControlRecordType.ABORT,
-            mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel());
+                mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel());
         log.updateHighWatermark(abortAppendInfo.lastOffset() + 1);
 
         // LSO should now point to one less than the first offset of the second transaction
@@ -4818,7 +4829,7 @@ public class UnifiedLogTest {
 
         // commit the second transaction
         LogAppendInfo commitAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid2, epoch, ControlRecordType.COMMIT,
-            mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel());
+                mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel());
         log.updateHighWatermark(commitAppendInfo.lastOffset() + 1);
 
         // now there should be no first unstable offset
@@ -4832,9 +4843,9 @@ public class UnifiedLogTest {
         int seq = 0;
 
         MemoryRecords records = MemoryRecords.withTransactionalRecords(Compression.NONE, pid, epoch, seq,
-            new SimpleRecord("a".getBytes()),
-            new SimpleRecord("b".getBytes()),
-            new SimpleRecord("c".getBytes()));
+                new SimpleRecord("a".getBytes()),
+                new SimpleRecord("b".getBytes()),
+                new SimpleRecord("c".getBytes()));
 
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder().segmentBytes(records.sizeInBytes()).build();
         log = createLog(logDir, logConfig);
@@ -4844,15 +4855,15 @@ public class UnifiedLogTest {
 
         // this write should spill to the second segment
         log.appendAsLeader(MemoryRecords.withTransactionalRecords(Compression.NONE, pid, epoch, 3,
-            new SimpleRecord("d".getBytes()),
-            new SimpleRecord("e".getBytes()),
-            new SimpleRecord("f".getBytes())), 0);
+                new SimpleRecord("d".getBytes()),
+                new SimpleRecord("e".getBytes()),
+                new SimpleRecord("f".getBytes())), 0);
         assertEquals(Optional.of(firstAppendInfo.firstOffset()), log.firstUnstableOffset());
         assertEquals(3L, log.logEndOffsetMetadata().segmentBaseOffset);
 
         // now abort the transaction
         LogAppendInfo abortAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT,
-            mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel());
+                mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel());
         log.updateHighWatermark(abortAppendInfo.lastOffset() + 1);
         assertEquals(Optional.empty(), log.firstUnstableOffset());
 
@@ -4946,7 +4957,7 @@ public class UnifiedLogTest {
 
         log.updateHighWatermark(25L);
         assertThrows(OffsetOutOfRangeException.class,
-            () -> log.maybeIncrementLogStartOffset(26L, LogStartOffsetIncrementReason.ClientRecordDeletion));
+                () -> log.maybeIncrementLogStartOffset(26L, LogStartOffsetIncrementReason.ClientRecordDeletion));
     }
 
     @Test
@@ -4996,7 +5007,7 @@ public class UnifiedLogTest {
         return (offset, numRecords) -> {
             int baseSequence = sequence.get();
             MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE, TimestampType.CREATE_TIME,
-                offset, mockTime.milliseconds(), producerId, producerEpoch, baseSequence, true, leaderEpoch);
+                    offset, mockTime.milliseconds(), producerId, producerEpoch, baseSequence, true, leaderEpoch);
             for (int seq = baseSequence; seq < baseSequence + numRecords; seq++) {
                 builder.append(new SimpleRecord(String.valueOf(seq).getBytes()));
             }
@@ -5006,19 +5017,19 @@ public class UnifiedLogTest {
     }
 
     private void appendEndTxnMarkerToBuffer(ByteBuffer buffer, long producerId, short producerEpoch,
-                                             long offset, ControlRecordType controlType) {
+            long offset, ControlRecordType controlType) {
         appendEndTxnMarkerToBuffer(buffer, producerId, producerEpoch, offset, controlType, 0, 0);
     }
 
     private void appendEndTxnMarkerToBuffer(ByteBuffer buffer, long producerId, short producerEpoch,
-                                             long offset, ControlRecordType controlType,
-                                             int coordinatorEpoch) {
+            long offset, ControlRecordType controlType,
+            int coordinatorEpoch) {
         appendEndTxnMarkerToBuffer(buffer, producerId, producerEpoch, offset, controlType, coordinatorEpoch, 0);
     }
 
     private void appendEndTxnMarkerToBuffer(ByteBuffer buffer, long producerId, short producerEpoch,
-                                             long offset, ControlRecordType controlType,
-                                             int coordinatorEpoch, int leaderEpoch) {
+            long offset, ControlRecordType controlType,
+            int coordinatorEpoch, int leaderEpoch) {
         EndTransactionMarker marker = new EndTransactionMarker(controlType, coordinatorEpoch);
         MemoryRecords.writeEndTransactionalMarker(buffer, offset, mockTime.milliseconds(), leaderEpoch, producerId, producerEpoch, marker);
     }
@@ -5518,7 +5529,7 @@ public class UnifiedLogTest {
                 (segment, next) -> segment.baseOffset() <= 5);
         List<LogSegment> expected = log.nonActiveLogSegmentsFrom(0L).stream()
                 .filter(segment -> segment.baseOffset() <= 5)
-                        .toList();
+                .toList();
         assertEquals(6, expected.size());
         assertEquals(expected, deletable);
 

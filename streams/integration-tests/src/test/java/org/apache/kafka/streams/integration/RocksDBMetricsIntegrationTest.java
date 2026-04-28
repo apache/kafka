@@ -207,8 +207,8 @@ public class RocksDBMetricsIntegrationTest {
     }
 
     private void cleanUpStateRunVerifyAndClose(final StreamsBuilder builder,
-                                               final Properties streamsConfiguration,
-                                               final MetricsVerifier metricsVerifier) throws Exception {
+        final Properties streamsConfiguration,
+        final MetricsVerifier metricsVerifier) throws Exception {
         final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.cleanUp();
         produceRecords();
@@ -256,7 +256,7 @@ public class RocksDBMetricsIntegrationTest {
     }
 
     private void verifyThatRocksDBMetricsAreExposed(final KafkaStreams kafkaStreams,
-                                                    final String metricsScope) {
+        final String metricsScope) {
         final List<Metric> listMetricStore = getRocksDBMetrics(kafkaStreams, metricsScope);
         checkMetricByName(listMetricStore, BYTES_WRITTEN_RATE, 1);
         checkMetricByName(listMetricStore, BYTES_WRITTEN_TOTAL, 1);
@@ -299,8 +299,8 @@ public class RocksDBMetricsIntegrationTest {
     }
 
     private void checkMetricByName(final List<Metric> listMetric,
-                                   final String metricName,
-                                   final int numMetric) {
+        final String metricName,
+        final int numMetric) {
         final List<Metric> metrics = listMetric.stream()
             .filter(m -> m.metricName().name().equals(metricName))
             .collect(Collectors.toList());
@@ -315,7 +315,7 @@ public class RocksDBMetricsIntegrationTest {
     }
 
     private List<Metric> getRocksDBMetrics(final KafkaStreams kafkaStreams,
-                                           final String metricsScope) {
+        final String metricsScope) {
         return new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().group().equals(METRICS_GROUP) && m.metricName().tags().containsKey(metricsScope))
             .collect(Collectors.toList());

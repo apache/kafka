@@ -239,7 +239,7 @@ public class PlaintextConsumerTest {
 
             // Close should not hang waiting for retries when broker is already down
             assertTimeoutPreemptively(Duration.ofSeconds(5), () -> consumer.close(),
-                    "Consumer close should not wait for full timeout when broker is already shutdown");
+                "Consumer close should not wait for full timeout when broker is already shutdown");
         }
     }
 
@@ -315,13 +315,13 @@ public class PlaintextConsumerTest {
              Consumer<byte[], byte[]> consumer = cluster.consumer(consumerConfig)
         ) {
             producer.send(new ProducerRecord<>(
-                TP.topic(), 
-                TP.partition(), 
-                null, 
-                "key".getBytes(), 
+                TP.topic(),
+                TP.partition(),
+                null,
+                "key".getBytes(),
                 "value".getBytes())
             );
-            
+
             assertEquals(0, consumer.assignment().size());
             consumer.assign(List.of(TP));
             assertEquals(1, consumer.assignment().size());
@@ -496,7 +496,7 @@ public class PlaintextConsumerTest {
             // First call would create the topic
             consumer.partitionsFor("non-exist-topic");
             TestUtils.waitForCondition(
-                () -> !consumer.partitionsFor("non-exist-topic").isEmpty(), 
+                () -> !consumer.partitionsFor("non-exist-topic").isEmpty(),
                 "Timed out while awaiting non empty partitions."
             );
         }
@@ -526,14 +526,14 @@ public class PlaintextConsumerTest {
     public void testClassicConsumerSeek() throws Exception {
         testSeek(
             Map.of(GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT)
-        ));
+            ));
     }
 
     @ClusterTest
     public void testAsyncConsumerSeek() throws Exception {
         testSeek(
             Map.of(GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT)
-        ));
+            ));
     }
 
     private void testSeek(Map<String, Object> consumerConfig) throws Exception {
@@ -647,7 +647,7 @@ public class PlaintextConsumerTest {
         consumerConfigOverride.put(INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName());
         consumerConfigOverride.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerConfigOverride.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        
+
         try (Producer<String, String> producer = cluster.producer(producerConfig);
              Consumer<String, String> consumer = cluster.consumer(consumerConfigOverride)
         ) {
@@ -670,20 +670,20 @@ public class PlaintextConsumerTest {
             // send invalid record
             assertThrows(
                 Throwable.class,
-                () -> producer.send(null), 
+                () -> producer.send(null),
                 "Should not allow sending a null record"
             );
             assertEquals(
-                1, 
-                MockProducerInterceptor.ON_ERROR_COUNT.intValue(), 
+                1,
+                MockProducerInterceptor.ON_ERROR_COUNT.intValue(),
                 "Interceptor should be notified about exception"
             );
             assertEquals(
-                0, 
+                0,
                 MockProducerInterceptor.ON_ERROR_WITH_METADATA_COUNT.intValue(),
                 "Interceptor should not receive metadata with an exception when record is null"
             );
-            
+
             consumer.assign(List.of(TP));
             consumer.seek(TP, 0);
 
@@ -933,7 +933,7 @@ public class PlaintextConsumerTest {
         var topic2 = "topic2";
         var tp2 = new TopicPartition(TOPIC, 1);
         cluster.createTopic(topic2, 2, (short) BROKER_COUNT);
-        
+
         try (Consumer<byte[], byte[]> consumer = cluster.consumer(consumerConfig)) {
             // send some messages.
             sendRecords(cluster, TP, numMessages);
@@ -1000,7 +1000,7 @@ public class PlaintextConsumerTest {
         try (Consumer<byte[], byte[]> consumer = cluster.consumer(consumerConfig)) {
             // send some messages.
             sendRecords(cluster, TP, numMessages);
-            
+
             // Test subscribe
             // Create a consumer and consumer some messages.
             var listener = new TestConsumerReassignmentListener();
@@ -1059,14 +1059,14 @@ public class PlaintextConsumerTest {
         var numMessages = 1000;
         var tp2 = new TopicPartition(TOPIC, 1);
         cluster.createTopic(TOPIC, 2, (short) BROKER_COUNT);
-        
+
         try (Producer<byte[], byte[]> producer = cluster.producer();
              Consumer<byte[], byte[]> consumer = cluster.consumer(consumerConfig)
         ) {
             // Test assign send some messages.
             sendRecords(producer, TP, numMessages, System.currentTimeMillis());
             sendRecords(producer, tp2, numMessages, System.currentTimeMillis());
-            
+
             consumer.assign(List.of(TP));
             var records = awaitNonEmptyRecords(consumer, TP);
 
@@ -1074,7 +1074,7 @@ public class PlaintextConsumerTest {
             Map<String, String> tags = Map.of(
                 "client-id", consumerClientId,
                 "topic", TP.topic(),
-                "partition", String.valueOf(TP.partition()) 
+                "partition", String.valueOf(TP.partition())
             );
 
             var fetchLead = consumer.metrics().get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags));
@@ -1219,7 +1219,7 @@ public class PlaintextConsumerTest {
     }
 
     private void testQuotaMetricsNotCreatedIfNoQuotasConfigured(
-        Map<String, Object> consumerConfig, 
+        Map<String, Object> consumerConfig,
         String consumerClientId
     ) throws Exception {
         var producerClientId = UUID.randomUUID().toString();
@@ -1235,7 +1235,7 @@ public class PlaintextConsumerTest {
             consumer.assign(List.of(TP));
             consumer.seek(TP, 0);
             consumeAndVerifyRecords(consumer, TP, numRecords, 0, 0, startingTimestamp);
-            
+
             var brokers = cluster.brokers().values();
             brokers.forEach(broker -> assertNoMetric(broker, "byte-rate", QuotaType.PRODUCE, producerClientId));
             brokers.forEach(broker -> assertNoMetric(broker, "throttle-time", QuotaType.PRODUCE, producerClientId));
@@ -1252,7 +1252,7 @@ public class PlaintextConsumerTest {
         var metricName = broker.metrics().metricName(name, quotaType.toString(), "", "user", "", "client-id", clientId);
         assertNull(broker.metrics().metric(metricName), "Metric should not have been created " + metricName);
     }
-    
+
     @ClusterTest
     public void testClassicConsumerSeekThrowsIllegalStateIfPartitionsNotAssigned() throws Exception {
         testSeekThrowsIllegalStateIfPartitionsNotAssigned(Map.of(
@@ -1527,7 +1527,7 @@ public class PlaintextConsumerTest {
             assertEquals(Optional.of(0), timestampTp1.leaderEpoch());
         }
     }
-    
+
     @ClusterTest
     public void testClassicConsumerPositionRespectsTimeout() {
         testPositionRespectsTimeout(Map.of(
@@ -1551,7 +1551,7 @@ public class PlaintextConsumerTest {
             assertThrows(TimeoutException.class, () -> consumer.position(topicPartition, Duration.ofSeconds(3)));
         }
     }
-    
+
     @ClusterTest
     public void testClassicConsumerPositionRespectsWakeup() {
         testPositionRespectsWakeup(Map.of(
@@ -1581,7 +1581,7 @@ public class PlaintextConsumerTest {
             assertThrows(WakeupException.class, () -> consumer.position(topicPartition, Duration.ofSeconds(3)));
         }
     }
-    
+
     @ClusterTest
     public void testClassicConsumerPositionWithErrorConnectionRespectsWakeup() {
         testPositionWithErrorConnectionRespectsWakeup(Map.of(
@@ -1670,8 +1670,8 @@ public class PlaintextConsumerTest {
             var leaveGroupTimeoutMs = config.getInt(SESSION_TIMEOUT_MS_CONFIG) / 2;
 
             TestUtils.waitForCondition(
-                () -> checkGroupMemberEmpty(config), 
-                leaveGroupTimeoutMs, 
+                () -> checkGroupMemberEmpty(config),
+                leaveGroupTimeoutMs,
                 "Consumer did not leave the consumer group within " + leaveGroupTimeoutMs + " ms of close"
             );
         }
@@ -1862,7 +1862,7 @@ public class PlaintextConsumerTest {
             consumer2.subscribe(List.of(TOPIC));
             OffsetAndMetadata committed = consumer2.committed(Set.of(TP)).get(TP);
             assertNull(committed,
-                    "unsubscribe() should not commit offsets even when auto-commit is enabled");
+                "unsubscribe() should not commit offsets even when auto-commit is enabled");
         }
     }
 
@@ -1922,7 +1922,7 @@ public class PlaintextConsumerTest {
             // Consumer 2 should have received another assignment callback due to the rebalance
             assertTrue(listener2.callsToAssigned > initialAssignedCalls,
                 "Consumer 2 should have received a rebalance after static consumer 1 left the group permanently. " +
-                "Initial assigned calls: " + initialAssignedCalls + ", current: " + listener2.callsToAssigned);
+                    "Initial assigned calls: " + initialAssignedCalls + ", current: " + listener2.callsToAssigned);
         }
     }
 

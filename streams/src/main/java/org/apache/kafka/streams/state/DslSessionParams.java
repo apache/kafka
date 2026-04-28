@@ -42,17 +42,17 @@ public class DslSessionParams {
      */
     @Deprecated
     public DslSessionParams(
-            final String name,
-            final Duration retentionPeriod,
-            final EmitStrategy emitStrategy
+        final String name,
+        final Duration retentionPeriod,
+        final EmitStrategy emitStrategy
     ) {
         this(name, retentionPeriod, emitStrategy, DslStoreFormat.PLAIN);
     }
 
     public DslSessionParams(final String name,
-                            final Duration retentionPeriod,
-                            final EmitStrategy emitStrategy,
-                            final DslStoreFormat storeFormat) {
+        final Duration retentionPeriod,
+        final EmitStrategy emitStrategy,
+        final DslStoreFormat storeFormat) {
         Objects.requireNonNull(name);
         this.name = name;
         this.retentionPeriod = retentionPeriod;
@@ -86,9 +86,9 @@ public class DslSessionParams {
         }
         final DslSessionParams that = (DslSessionParams) o;
         return Objects.equals(name, that.name)
-                && Objects.equals(retentionPeriod, that.retentionPeriod)
-                && Objects.equals(emitStrategy, that.emitStrategy)
-                && Objects.equals(storeFormat, that.storeFormat);
+            && Objects.equals(retentionPeriod, that.retentionPeriod)
+            && Objects.equals(emitStrategy, that.emitStrategy)
+            && Objects.equals(storeFormat, that.storeFormat);
     }
 
     @Override
@@ -99,10 +99,10 @@ public class DslSessionParams {
     @Override
     public String toString() {
         return "DslSessionParams{" +
-                "name='" + name + '\'' +
-                ", retentionPeriod=" + retentionPeriod +
-                ", emitStrategy=" + emitStrategy +
-                ", storeFormat=" + storeFormat +
-                '}';
+            "name='" + name + '\'' +
+            ", retentionPeriod=" + retentionPeriod +
+            ", emitStrategy=" + emitStrategy +
+            ", storeFormat=" + storeFormat +
+            '}';
     }
 }

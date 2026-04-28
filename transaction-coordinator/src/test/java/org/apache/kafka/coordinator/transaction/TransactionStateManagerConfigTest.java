@@ -36,11 +36,11 @@ class TransactionStateManagerConfigTest {
     @Test
     void ShouldDefineAllConfigInConfigDef() {
         Set<String> declaredConfigs = Arrays.stream(TransactionStateManagerConfig.class.getDeclaredFields())
-                .filter(field -> field.getName().endsWith("_CONFIG"))
-                .peek(field -> field.setAccessible(true))
-                .map(field -> assertDoesNotThrow(() -> (String) field.get(null)))
-                .collect(Collectors.toSet());
-        assertEquals(declaredConfigs,  TransactionStateManagerConfig.CONFIG_DEF.names());
+            .filter(field -> field.getName().endsWith("_CONFIG"))
+            .peek(field -> field.setAccessible(true))
+            .map(field -> assertDoesNotThrow(() -> (String) field.get(null)))
+            .collect(Collectors.toSet());
+        assertEquals(declaredConfigs, TransactionStateManagerConfig.CONFIG_DEF.names());
     }
 
     @Test

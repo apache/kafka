@@ -173,8 +173,8 @@ public class WorkerSinkTaskThreadedTest {
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
         workerProps.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         WorkerConfig workerConfig = new StandaloneConfig(workerProps);
-        Plugin<Converter> keyConverterPlugin = metrics.wrap(keyConverter, taskId,  true);
-        Plugin<Converter> valueConverterPlugin = metrics.wrap(valueConverter, taskId,  false);
+        Plugin<Converter> keyConverterPlugin = metrics.wrap(keyConverter, taskId, true);
+        Plugin<Converter> valueConverterPlugin = metrics.wrap(valueConverter, taskId, false);
         Plugin<HeaderConverter> headerConverterPlugin = metrics.wrap(headerConverter, taskId);
         workerTask = new WorkerSinkTask(
                 taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics, keyConverterPlugin,
@@ -322,8 +322,8 @@ public class WorkerSinkTaskThreadedTest {
         expectInitialAssignment();
         expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
         ExpectOffsetCommitCommand[] commands = new ExpectOffsetCommitCommand[]{
-            new ExpectOffsetCommitCommand(1L, null, null, 0, true),
-            new ExpectOffsetCommitCommand(2L, new RuntimeException(), null, 0, true)
+                new ExpectOffsetCommitCommand(1L, null, null, 0, true),
+                new ExpectOffsetCommitCommand(2L, new RuntimeException(), null, 0, true)
         };
         expectPreCommit(commands);
         expectOffsetCommit(commands);
@@ -601,7 +601,7 @@ public class WorkerSinkTaskThreadedTest {
             TopicPartition topicPartition = new TopicPartition(TOPIC, PARTITION);
             ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, TIMESTAMP, TIMESTAMP_TYPE, 0, 0, RAW_KEY, RAW_VALUE, emptyHeaders(), Optional.empty());
             ConsumerRecords<byte[], byte[]> records = new ConsumerRecords<>(Map.of(topicPartition, List.of(consumerRecord)),
-                Map.of(topicPartition, new OffsetAndMetadata(FIRST_OFFSET + recordsReturned + 1, Optional.empty(), "")));
+                    Map.of(topicPartition, new OffsetAndMetadata(FIRST_OFFSET + recordsReturned + 1, Optional.empty(), "")));
             recordsReturned++;
             return records;
         });
@@ -633,7 +633,7 @@ public class WorkerSinkTaskThreadedTest {
                     0, 0, RAW_KEY, RAW_VALUE, emptyHeaders(), Optional.empty());
             ConsumerRecords<byte[], byte[]> records =
                     new ConsumerRecords<>(Map.of(topicPartition, List.of(consumerRecord)),
-                        Map.of(topicPartition, new OffsetAndMetadata(FIRST_OFFSET + recordsReturned + 1, Optional.empty(), "")));
+                            Map.of(topicPartition, new OffsetAndMetadata(FIRST_OFFSET + recordsReturned + 1, Optional.empty(), "")));
             recordsReturned++;
             return records;
         });
@@ -721,7 +721,7 @@ public class WorkerSinkTaskThreadedTest {
     }
 
     private record ExpectOffsetCommitCommand(long expectedMessages, RuntimeException error,
-                                             Exception consumerCommitError, long consumerCommitDelayMs,
-                                             boolean invokeCallback) {
+    Exception consumerCommitError, long consumerCommitDelayMs,
+    boolean invokeCallback) {
     }
 }

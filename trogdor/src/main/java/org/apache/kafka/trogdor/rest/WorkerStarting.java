@@ -30,7 +30,7 @@ import com.fasterxml.jackson.databind.node.TextNode;
 public final class WorkerStarting extends WorkerState {
     @JsonCreator
     public WorkerStarting(@JsonProperty("taskId") String taskId,
-            @JsonProperty("spec") TaskSpec spec) {
+        @JsonProperty("spec") TaskSpec spec) {
         super(taskId, spec);
     }
 

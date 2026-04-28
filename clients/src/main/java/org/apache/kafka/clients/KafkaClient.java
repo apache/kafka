@@ -176,7 +176,7 @@ public interface KafkaClient extends Closeable {
      * @param expectResponse true iff we expect a response
      */
     ClientRequest newClientRequest(String nodeId, AbstractRequest.Builder<?> requestBuilder,
-                                   long createdTimeMs, boolean expectResponse);
+        long createdTimeMs, boolean expectResponse);
 
     /**
      * Create a new ClientRequest.
@@ -191,12 +191,11 @@ public interface KafkaClient extends Closeable {
      * @param callback the callback to invoke when we get a response
      */
     ClientRequest newClientRequest(String nodeId,
-                                   AbstractRequest.Builder<?> requestBuilder,
-                                   long createdTimeMs,
-                                   boolean expectResponse,
-                                   int requestTimeoutMs,
-                                   RequestCompletionHandler callback);
-
+        AbstractRequest.Builder<?> requestBuilder,
+        long createdTimeMs,
+        boolean expectResponse,
+        int requestTimeoutMs,
+        RequestCompletionHandler callback);
 
 
     /**

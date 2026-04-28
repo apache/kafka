@@ -60,7 +60,7 @@ public interface CreateTopicPolicy extends Configurable, AutoCloseable {
          *                passed via the {@code configure()} method of the policy implementation.
          */
         public RequestMetadata(String topic, Integer numPartitions, Short replicationFactor,
-                        Map<Integer, List<Integer>> replicasAssignments, Map<String, String> configs) {
+            Map<Integer, List<Integer>> replicasAssignments, Map<String, String> configs) {
             this.topic = topic;
             this.numPartitions = numPartitions;
             this.replicationFactor = replicationFactor;
@@ -126,10 +126,10 @@ public interface CreateTopicPolicy extends Configurable, AutoCloseable {
         @Override
         public String toString() {
             return "CreateTopicPolicy.RequestMetadata(topic=" + topic +
-                    ", numPartitions=" + numPartitions +
-                    ", replicationFactor=" + replicationFactor +
-                    ", replicasAssignments=" + replicasAssignments +
-                    ", configs=" + configs + ")";
+                ", numPartitions=" + numPartitions +
+                ", replicationFactor=" + replicationFactor +
+                ", replicasAssignments=" + replicasAssignments +
+                ", configs=" + configs + ")";
         }
     }
 

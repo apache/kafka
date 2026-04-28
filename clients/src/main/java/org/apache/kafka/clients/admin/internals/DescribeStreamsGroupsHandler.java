@@ -53,8 +53,8 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
 
     public DescribeStreamsGroupsHandler(
-          boolean includeAuthorizedOperations,
-          LogContext logContext) {
+        boolean includeAuthorizedOperations,
+        LogContext logContext) {
         this.includeAuthorizedOperations = includeAuthorizedOperations;
         this.log = logContext.logger(DescribeStreamsGroupsHandler.class);
         this.lookupStrategy = new CoordinatorStrategy(CoordinatorType.GROUP, logContext);
@@ -97,9 +97,9 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
 
     @Override
     public ApiResult<CoordinatorKey, StreamsGroupDescription> handleResponse(
-            Node coordinator,
-            Set<CoordinatorKey> groupIds,
-            AbstractResponse abstractResponse) {
+        Node coordinator,
+        Set<CoordinatorKey> groupIds,
+        AbstractResponse abstractResponse) {
         final StreamsGroupDescribeResponse response = (StreamsGroupDescribeResponse) abstractResponse;
         final Map<CoordinatorKey, StreamsGroupDescription> completed = new HashMap<>();
         final Map<CoordinatorKey, Throwable> failed = new HashMap<>();
@@ -121,15 +121,15 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
             final Set<AclOperation> authorizedOperations = validAclOperations(describedGroup.authorizedOperations());
 
             final StreamsGroupDescription streamsGroupDescription = new StreamsGroupDescription(
-                    describedGroup.groupId(),
-                    describedGroup.groupEpoch(),
-                    describedGroup.assignmentEpoch(),
-                    describedGroup.topology().epoch(),
-                    convertSubtopologies(describedGroup.topology().subtopologies()),
-                    convertMembers(describedGroup.members()),
-                    GroupState.parse(describedGroup.groupState()),
-                    coordinator,
-                    authorizedOperations
+                describedGroup.groupId(),
+                describedGroup.groupEpoch(),
+                describedGroup.assignmentEpoch(),
+                describedGroup.topology().epoch(),
+                convertSubtopologies(describedGroup.topology().subtopologies()),
+                convertMembers(describedGroup.members()),
+                GroupState.parse(describedGroup.groupState()),
+                coordinator,
+                authorizedOperations
             );
             completed.put(groupIdKey, streamsGroupDescription);
         }
@@ -227,14 +227,14 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
 
 
     private void handleError(
-            CoordinatorKey groupId,
-            StreamsGroupDescribeResponseData.DescribedGroup describedGroup,
-            Node coordinator,
-            Errors error,
-            String errorMsg,
-            Map<CoordinatorKey, StreamsGroupDescription> completed,
-            Map<CoordinatorKey, Throwable> failed,
-            Set<CoordinatorKey> groupsToUnmap) {
+        CoordinatorKey groupId,
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup,
+        Node coordinator,
+        Errors error,
+        String errorMsg,
+        Map<CoordinatorKey, StreamsGroupDescription> completed,
+        Map<CoordinatorKey, Throwable> failed,
+        Set<CoordinatorKey> groupsToUnmap) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
             case TOPIC_AUTHORIZATION_FAILED:

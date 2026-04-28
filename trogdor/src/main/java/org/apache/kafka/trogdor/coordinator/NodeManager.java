@@ -89,7 +89,7 @@ public final class NodeManager {
         private WorkerState state;
 
         ManagedWorker(long workerId, String taskId, TaskSpec spec,
-                      boolean shouldRun, WorkerState state) {
+            boolean shouldRun, WorkerState state) {
             this.workerId = workerId;
             this.taskId = taskId;
             this.spec = spec;

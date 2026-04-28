@@ -36,10 +36,10 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
     private InternalProcessorContext<Void, Void> context;
 
     SinkNode(final String name,
-             final TopicNameExtractor<? super KIn, ? super VIn> topicExtractor,
-             final Serializer<KIn> keySerializer,
-             final Serializer<VIn> valSerializer,
-             final StreamPartitioner<? super KIn, ? super VIn> partitioner) {
+        final TopicNameExtractor<? super KIn, ? super VIn> topicExtractor,
+        final Serializer<KIn> keySerializer,
+        final Serializer<VIn> valSerializer,
+        final StreamPartitioner<? super KIn, ? super VIn> partitioner) {
         super(name);
 
         this.topicExtractor = topicExtractor;
@@ -120,8 +120,8 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
     @Override
     public String toString(final String indent) {
         return super.toString(indent) + indent + "\ttopic:\t\t" +
-                topicExtractor +
-                "\n";
+            topicExtractor +
+            "\n";
     }
 
 }

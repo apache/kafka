@@ -56,7 +56,8 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
     private Class<?> listClass;
     private Integer primitiveSize;
 
-    public ListDeserializer() {}
+    public ListDeserializer() {
+    }
 
     public <L extends List<Inner>> ListDeserializer(Class<L> listClass, Deserializer<Inner> inner) {
         if (listClass == null || inner == null) {
@@ -135,7 +136,7 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
                 return listConstructor.newInstance();
             }
         } catch (InstantiationException | IllegalAccessException | NoSuchMethodException |
-                IllegalArgumentException | InvocationTargetException e) {
+            IllegalArgumentException | InvocationTargetException e) {
             log.error("Failed to construct list due to ", e);
             throw new KafkaException("Could not construct a list instance of \"" + listClass.getCanonicalName() + "\"", e);
         }
@@ -177,7 +178,7 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
             }
             final int size = dis.readInt();
             List<Inner> deserializedList = createListInstance(size);
-            for (int i = 0; i < size; i++) {
+            for (int i = 0;i < size;i++) {
                 int entrySize = serStrategy == SerializationStrategy.CONSTANT_SIZE ? primitiveSize : dis.readInt();
                 if (entrySize == ListSerde.NULL_ENTRY_VALUE || (nullIndexList != null && nullIndexList.contains(i))) {
                     deserializedList.add(null);

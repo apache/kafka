@@ -41,7 +41,7 @@ public class Log4jConfiguration {
     }
 }
 
-@JsonPropertyOrder({ "Properties", "Appenders", "Loggers" })
+@JsonPropertyOrder({"Properties", "Appenders", "Loggers"})
 @JsonIgnoreProperties(ignoreUnknown = true)
 class Configuration {
     private Properties properties;
@@ -165,7 +165,7 @@ class Root {
     }
 }
 
-@JsonPropertyOrder({ "name", "level" })
+@JsonPropertyOrder({"name", "level"})
 @JsonIgnoreProperties(ignoreUnknown = true)
 class Logger {
     private String name;

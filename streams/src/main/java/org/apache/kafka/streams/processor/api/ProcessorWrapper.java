@@ -55,15 +55,15 @@ public interface ProcessorWrapper extends Configurable {
      * use the {@link ProcessorWrapper#asWrapped(ProcessorSupplier)} method
      */
     <KIn, VIn, KOut, VOut> WrappedProcessorSupplier<KIn, VIn, KOut, VOut> wrapProcessorSupplier(final String processorName,
-                                                                                                final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier);
+        final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier);
 
     /**
      * Wrap or replace the provided {@link FixedKeyProcessorSupplier} and return a {@link WrappedFixedKeyProcessorSupplier}
      * To convert a {@link FixedKeyProcessorSupplier} instance into a {@link WrappedFixedKeyProcessorSupplier},
      * use the {@link ProcessorWrapper#asWrappedFixedKey(FixedKeyProcessorSupplier)} method
      */
-    <KIn, VIn,  VOut> WrappedFixedKeyProcessorSupplier<KIn, VIn,  VOut> wrapFixedKeyProcessorSupplier(final String processorName,
-                                                                                                      final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier);
+    <KIn, VIn, VOut> WrappedFixedKeyProcessorSupplier<KIn, VIn, VOut> wrapFixedKeyProcessorSupplier(final String processorName,
+        final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier);
 
     /**
      * Use to convert a {@link ProcessorSupplier} instance into a {@link WrappedProcessorSupplier}
@@ -77,7 +77,7 @@ public interface ProcessorWrapper extends Configurable {
     /**
      * Use to convert a {@link FixedKeyProcessorSupplier} instance into a {@link WrappedFixedKeyProcessorSupplier}
      */
-    static <KIn, VIn,  VOut> WrappedFixedKeyProcessorSupplier<KIn, VIn,  VOut> asWrappedFixedKey(
+    static <KIn, VIn, VOut> WrappedFixedKeyProcessorSupplier<KIn, VIn, VOut> asWrappedFixedKey(
         final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier
     ) {
         return new WrappedFixedKeyProcessorSupplierImpl<>(processorSupplier);

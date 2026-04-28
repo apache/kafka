@@ -40,7 +40,7 @@ public final class KafkaMetric implements Metric {
      * @param time The time instance to use with the metrics
      */
     public KafkaMetric(Object lock, MetricName metricName, MetricValueProvider<?> valueProvider,
-            MetricConfig config, Time time) {
+        MetricConfig config, Time time) {
         this.metricName = metricName;
         this.lock = lock;
         this.metricValueProvider = Objects.requireNonNull(valueProvider, "valueProvider must not be null");

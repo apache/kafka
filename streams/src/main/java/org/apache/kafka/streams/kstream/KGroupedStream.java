@@ -196,7 +196,7 @@ public interface KGroupedStream<K, V> {
      * represent the latest (rolling) count (i.e., number of records) for each key
      */
     KTable<K, Long> count(final Named named,
-                          final Materialized<K, Long, KeyValueStore<Bytes, byte[]>> materialized);
+        final Materialized<K, Long, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Combine the values of records in this stream by the grouped key.
@@ -298,7 +298,7 @@ public interface KGroupedStream<K, V> {
      * latest (rolling) aggregate for each key
      */
     KTable<K, V> reduce(final Reducer<V> reducer,
-                        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
+        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
 
 
     /**
@@ -366,8 +366,8 @@ public interface KGroupedStream<K, V> {
      * will be handled as newly initialized value.
      */
     KTable<K, V> reduce(final Reducer<V> reducer,
-                        final Named named,
-                        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
+        final Named named,
+        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Aggregate the values of records in this stream by the grouped key.
@@ -413,7 +413,7 @@ public interface KGroupedStream<K, V> {
      * will be handled as newly initialized value.
      */
     <VOut> KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
-                                     final Aggregator<? super K, ? super V, VOut> aggregator);
+        final Aggregator<? super K, ? super V, VOut> aggregator);
 
     /**
      * Aggregate the values of records in this stream by the grouped key.
@@ -472,8 +472,8 @@ public interface KGroupedStream<K, V> {
      * latest (rolling) aggregate for each key
      */
     <VOut> KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
-                                     final Aggregator<? super K, ? super V, VOut> aggregator,
-                                     final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
+        final Aggregator<? super K, ? super V, VOut> aggregator,
+        final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Aggregate the values of records in this stream by the grouped key.
@@ -535,9 +535,9 @@ public interface KGroupedStream<K, V> {
      * will be handled as newly initialized value.
      */
     <VOut> KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
-                                     final Aggregator<? super K, ? super V, VOut> aggregator,
-                                     final Named named,
-                                     final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
+        final Aggregator<? super K, ? super V, VOut> aggregator,
+        final Named named,
+        final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Create a new {@link TimeWindowedKStream} instance that can be used to perform windowed aggregations.

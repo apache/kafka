@@ -49,11 +49,11 @@ public class TxnOffsetCommitResponseTest extends OffsetCommitResponseTest {
                     Collections.singletonList(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
                         .setPartitionIndex(partitionOne)
                         .setErrorCode(errorOne.code()))),
-                    new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic().setPartitions(
-                        Collections.singletonList(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
-                            .setPartitionIndex(partitionTwo)
-                            .setErrorCode(errorTwo.code())))
-                ));
+                new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic().setPartitions(
+                    Collections.singletonList(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+                        .setPartitionIndex(partitionTwo)
+                        .setErrorCode(errorTwo.code())))
+            ));
 
         for (short version : ApiKeys.TXN_OFFSET_COMMIT.allVersions()) {
             TxnOffsetCommitResponse response = TxnOffsetCommitResponse.parse(

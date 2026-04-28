@@ -82,7 +82,7 @@ public class AclCache {
 
         if (this.aclsByResource.contains(acl)) {
             throw new RuntimeException("Unable to add the ACL with ID " + id +
-                    " to aclsByResource");
+                " to aclsByResource");
         }
 
         ImmutableNavigableSet<StandardAcl> aclsByResource = this.aclsByResource.added(acl);
@@ -98,7 +98,7 @@ public class AclCache {
 
         if (!this.aclsByResource.contains(acl)) {
             throw new RuntimeException("Unable to remove the ACL with ID " + id +
-                    " from aclsByResource");
+                " from aclsByResource");
         }
 
         ImmutableNavigableSet<StandardAcl> aclsByResource = this.aclsByResource.removed(acl);

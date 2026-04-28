@@ -26,10 +26,12 @@ public class KafkaClusterThreadFactoryTest {
     public void testGetThreadIds() {
         String testThreadFactoryPrefix = "test-thread-factory-";
         KafkaClusterThreadFactory testThreadFactory = new KafkaClusterThreadFactory(testThreadFactoryPrefix);
-        Thread firstThread = testThreadFactory.newThread(() -> { });
+        Thread firstThread = testThreadFactory.newThread(() -> {
+        });
         assertTrue(firstThread.getName().startsWith(testThreadFactoryPrefix));
 
-        Thread secondThread = testThreadFactory.newThread(() -> { });
+        Thread secondThread = testThreadFactory.newThread(() -> {
+        });
         assertNotEquals(firstThread.getName(), secondThread.getName());
 
         assertTrue(testThreadFactory.getThreadIds().contains(firstThread.getId()));

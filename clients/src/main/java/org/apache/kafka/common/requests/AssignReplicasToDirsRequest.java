@@ -62,9 +62,9 @@ public class AssignReplicasToDirsRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         return new AssignReplicasToDirsResponse(
-                new AssignReplicasToDirsResponseData()
-                        .setThrottleTimeMs(throttleTimeMs)
-                        .setErrorCode(Errors.forException(e).code())
+            new AssignReplicasToDirsResponseData()
+                .setThrottleTimeMs(throttleTimeMs)
+                .setErrorCode(Errors.forException(e).code())
         );
     }
 
@@ -75,6 +75,6 @@ public class AssignReplicasToDirsRequest extends AbstractRequest {
 
     public static AssignReplicasToDirsRequest parse(Readable readable, short version) {
         return new AssignReplicasToDirsRequest(new AssignReplicasToDirsRequestData(
-                readable, version), version);
+            readable, version), version);
     }
 }

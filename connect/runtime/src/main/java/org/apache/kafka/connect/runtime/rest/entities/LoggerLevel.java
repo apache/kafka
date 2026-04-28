@@ -21,8 +21,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Objects;
 
 public record LoggerLevel(
-    @JsonProperty String level,
-    @JsonProperty("last_modified") Long lastModified
+@JsonProperty String level,
+@JsonProperty("last_modified") Long lastModified
 ) {
     public LoggerLevel {
         Objects.requireNonNull(level, "level may not be null");

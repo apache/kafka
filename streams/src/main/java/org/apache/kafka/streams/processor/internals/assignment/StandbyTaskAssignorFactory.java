@@ -26,10 +26,11 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 
 class StandbyTaskAssignorFactory {
-    private StandbyTaskAssignorFactory() {}
+    private StandbyTaskAssignorFactory() {
+    }
 
     static StandbyTaskAssignor create(final AssignmentConfigs configs,
-                                      final RackAwareTaskAssignor rackAwareTaskAssignor) {
+        final RackAwareTaskAssignor rackAwareTaskAssignor) {
         if (!configs.rackAwareAssignmentTags().isEmpty()) {
             return new ClientTagAwareStandbyTaskAssignor();
         } else if (rackAwareTaskAssignor != null && rackAwareTaskAssignor.validClientRack()) {

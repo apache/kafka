@@ -48,7 +48,7 @@ public class WakeupTriggerTest {
     public void setup() {
         this.wakeupTrigger = new WakeupTrigger();
     }
-    
+
     @Test
     public void testEnsureActiveFutureCanBeWakeUp() {
         CompletableFuture<Void> task = new CompletableFuture<>();

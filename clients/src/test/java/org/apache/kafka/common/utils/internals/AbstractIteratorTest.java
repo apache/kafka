@@ -35,10 +35,10 @@ public class AbstractIteratorTest {
     public void testIterator() {
         int max = 10;
         List<Integer> l = new ArrayList<>();
-        for (int i = 0; i < max; i++)
+        for (int i = 0;i < max;i++)
             l.add(i);
         ListIterator<Integer> iter = new ListIterator<>(l);
-        for (int i = 0; i < max; i++) {
+        for (int i = 0;i < max;i++) {
             Integer value = i;
             assertEquals(value, iter.peek());
             assertTrue(iter.hasNext());

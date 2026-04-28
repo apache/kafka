@@ -88,6 +88,8 @@ public abstract class CoordinatorRecordMessageFormatter implements MessageFormat
     }
 
     protected abstract boolean isRecordTypeAllowed(short recordType);
+
     protected abstract JsonNode keyAsJson(ApiMessage message);
+
     protected abstract JsonNode valueAsJson(ApiMessage message, short version);
-}  
+}

@@ -64,41 +64,41 @@ public class ClusterTool {
 
     static void execute(String... args) throws Exception {
         ArgumentParser parser = ArgumentParsers
-                .newArgumentParser("kafka-cluster")
-                .defaultHelp(true)
-                .description("The Kafka cluster tool.");
+            .newArgumentParser("kafka-cluster")
+            .defaultHelp(true)
+            .description("The Kafka cluster tool.");
         Subparsers subparsers = parser.addSubparsers().dest("command");
 
         Subparser clusterIdParser = subparsers.addParser("cluster-id")
-                .help("Get information about the ID of a cluster.");
+            .help("Get information about the ID of a cluster.");
         Subparser unregisterParser = subparsers.addParser("unregister")
-                .help("Unregister a broker.");
+            .help("Unregister a broker.");
         Subparser listEndpoints = subparsers.addParser("list-endpoints")
-                .help("List endpoints");
+            .help("List endpoints");
         for (Subparser subpparser : List.of(clusterIdParser, unregisterParser, listEndpoints)) {
             MutuallyExclusiveGroup connectionOptions = subpparser.addMutuallyExclusiveGroup().required(true);
             connectionOptions.addArgument("--bootstrap-server", "-b")
-                    .action(store())
-                    .help("A list of host/port pairs to use for establishing the connection to the Kafka cluster.");
+                .action(store())
+                .help("A list of host/port pairs to use for establishing the connection to the Kafka cluster.");
             connectionOptions.addArgument("--bootstrap-controller", "-C")
-                    .action(store())
-                    .help("A list of host/port pairs to use for establishing the connection to the KRaft controllers.");
+                .action(store())
+                .help("A list of host/port pairs to use for establishing the connection to the KRaft controllers.");
             subpparser.addArgument("--config")
-                    .action(store())
-                    .help("(DEPRECATED) A property file containing configurations for the Admin client. " +
-                            "This option will be removed in a future version. Use --command-config instead.");
+                .action(store())
+                .help("(DEPRECATED) A property file containing configurations for the Admin client. " +
+                    "This option will be removed in a future version. Use --command-config instead.");
             subpparser.addArgument("--command-config", "-c")
-                    .action(store())
-                    .help("Config properties file for the Admin client.");
+                .action(store())
+                .help("Config properties file for the Admin client.");
         }
         unregisterParser.addArgument("--id", "-i")
-                .type(Integer.class)
-                .action(store())
-                .required(true)
-                .help("The ID of the broker to unregister.");
+            .type(Integer.class)
+            .action(store())
+            .required(true)
+            .help("The ID of the broker to unregister.");
         listEndpoints.addArgument("--include-fenced-brokers")
-                .action(storeTrue())
-                .help("Whether to include fenced brokers when listing broker endpoints");
+            .action(storeTrue())
+            .help("Whether to include fenced brokers when listing broker endpoints");
 
         Namespace namespace = parser.parseArgsOrFail(args);
         String command = namespace.getString("command");
@@ -114,8 +114,8 @@ public class ClusterTool {
         Properties properties = (commandConfigFile != null) ? Utils.loadProps(commandConfigFile) : new Properties();
 
         CommandLineUtils.initializeBootstrapProperties(properties,
-                Optional.ofNullable(namespace.getString("bootstrap_server")),
-                Optional.ofNullable(namespace.getString("bootstrap_controller")));
+            Optional.ofNullable(namespace.getString("bootstrap_server")),
+            Optional.ofNullable(namespace.getString("bootstrap_controller")));
 
         switch (command) {
             case "cluster-id": {
@@ -181,22 +181,22 @@ public class ClusterTool {
                 String format = "%-10s %-" + maxHostLength + "s %-10s %-" + maxRackLength + "s %-15s%n";
                 stream.printf(format, "ID", "HOST", "PORT", "RACK", "ENDPOINT_TYPE");
                 nodes.forEach(node -> stream.printf(format,
-                        node.idString(),
-                        node.host(),
-                        node.port(),
-                        node.rack(),
-                        "controller"
+                    node.idString(),
+                    node.host(),
+                    node.port(),
+                    node.rack(),
+                    "controller"
                 ));
             } else {
                 String format = "%-10s %-" + maxHostLength + "s %-10s %-" + maxRackLength + "s %-10s %-15s%n";
                 stream.printf(format, "ID", "HOST", "PORT", "RACK", "STATE", "ENDPOINT_TYPE");
                 nodes.forEach(node -> stream.printf(format,
-                        node.idString(),
-                        node.host(),
-                        node.port(),
-                        node.rack(),
-                        node.isFenced() ? "fenced" : "unfenced",
-                        "broker"
+                    node.idString(),
+                    node.host(),
+                    node.port(),
+                    node.rack(),
+                    node.isFenced() ? "fenced" : "unfenced",
+                    "broker"
                 ));
             }
         } catch (ExecutionException ee) {

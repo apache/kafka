@@ -110,7 +110,7 @@ public class ReadOnlyTask implements Task {
 
     @Override
     public void updateInputPartitions(final Set<TopicPartition> topicPartitions,
-                                      final Map<String, List<String>> allTopologyNodesToSourceTopics) {
+        final Map<String, List<String>> allTopologyNodesToSourceTopics) {
         throw new UnsupportedOperationException("This task is read-only");
     }
 

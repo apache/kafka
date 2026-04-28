@@ -83,7 +83,7 @@ public class DescribeConsumerGroupsHandlerTest {
     private final Node coordinator = new Node(1, "host", 1234);
     private final Set<TopicPartition> tps = Set.of(
         new TopicPartition("foo", 0),
-        new TopicPartition("bar",  1)
+        new TopicPartition("bar", 1)
     );
 
     @ParameterizedTest
@@ -270,22 +270,22 @@ public class DescribeConsumerGroupsHandlerTest {
     @Test
     public void testSuccessfulHandleClassicGroupResponse() {
         Collection<MemberDescription> members = singletonList(new MemberDescription(
-                "memberId",
-                Optional.empty(),
-                Optional.empty(),
-                "clientId",
-                "host",
-                new MemberAssignment(tps),
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty()));
+            "memberId",
+            Optional.empty(),
+            Optional.empty(),
+            "clientId",
+            "host",
+            new MemberAssignment(tps),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty()));
         ConsumerGroupDescription expected = new ConsumerGroupDescription(
-                groupId1,
-                true,
-                members,
-                "assignor",
-                ConsumerGroupState.STABLE,
-                coordinator);
+            groupId1,
+            true,
+            members,
+            "assignor",
+            ConsumerGroupState.STABLE,
+            coordinator);
         assertCompleted(handleClassicGroupWithError(Errors.NONE, ""), expected);
     }
 
@@ -342,23 +342,23 @@ public class DescribeConsumerGroupsHandlerTest {
 
     private DescribeGroupsResponse buildResponse(Errors error, String protocolType) {
         return new DescribeGroupsResponse(
-                new DescribeGroupsResponseData()
-                    .setGroups(singletonList(
-                            new DescribedGroup()
-                                .setErrorCode(error.code())
-                                .setGroupId(groupId1)
-                                .setGroupState(GroupState.STABLE.toString())
-                                .setProtocolType(protocolType)
-                                .setProtocolData("assignor")
-                                .setAuthorizedOperations(Utils.to32BitField(emptySet()))
-                                .setMembers(singletonList(
-                                        new DescribedGroupMember()
-                                            .setClientHost("host")
-                                            .setClientId("clientId")
-                                            .setMemberId("memberId")
-                                            .setMemberAssignment(ConsumerProtocol.serializeAssignment(
-                                                    new Assignment(new ArrayList<>(tps))).array())
-                                            )))));
+            new DescribeGroupsResponseData()
+                .setGroups(singletonList(
+                    new DescribedGroup()
+                        .setErrorCode(error.code())
+                        .setGroupId(groupId1)
+                        .setGroupState(GroupState.STABLE.toString())
+                        .setProtocolType(protocolType)
+                        .setProtocolData("assignor")
+                        .setAuthorizedOperations(Utils.to32BitField(emptySet()))
+                        .setMembers(singletonList(
+                            new DescribedGroupMember()
+                                .setClientHost("host")
+                                .setClientId("clientId")
+                                .setMemberId("memberId")
+                                .setMemberAssignment(ConsumerProtocol.serializeAssignment(
+                                    new Assignment(new ArrayList<>(tps))).array())
+                        )))));
     }
 
     private AdminApiHandler.ApiResult<CoordinatorKey, ConsumerGroupDescription> handleClassicGroupWithError(

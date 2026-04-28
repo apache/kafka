@@ -117,11 +117,11 @@ public class OffsetAndMetadataTest {
                 OptionalLong.empty(),
                 uuid
             ), OffsetAndMetadata.fromRequest(
-                uuid,
-                partition,
-                time.milliseconds(),
-                OptionalLong.empty()
-            )
+            uuid,
+            partition,
+            time.milliseconds(),
+            OptionalLong.empty()
+        )
         );
 
         partition
@@ -137,11 +137,11 @@ public class OffsetAndMetadataTest {
                 OptionalLong.empty(),
                 uuid
             ), OffsetAndMetadata.fromRequest(
-                uuid,
-                partition,
-                time.milliseconds(),
-                OptionalLong.empty()
-            )
+            uuid,
+            partition,
+            time.milliseconds(),
+            OptionalLong.empty()
+        )
         );
 
         assertEquals(
@@ -153,11 +153,11 @@ public class OffsetAndMetadataTest {
                 OptionalLong.of(5678L),
                 uuid
             ), OffsetAndMetadata.fromRequest(
-                uuid,
-                partition,
-                time.milliseconds(),
-                OptionalLong.of(5678L)
-            )
+            uuid,
+            partition,
+            time.milliseconds(),
+            OptionalLong.of(5678L)
+        )
         );
     }
 
@@ -181,9 +181,9 @@ public class OffsetAndMetadataTest {
                 OptionalLong.empty(),
                 Uuid.ZERO_UUID
             ), OffsetAndMetadata.fromRequest(
-                partition,
-                time.milliseconds()
-            )
+            partition,
+            time.milliseconds()
+        )
         );
 
         partition
@@ -199,9 +199,9 @@ public class OffsetAndMetadataTest {
                 OptionalLong.empty(),
                 Uuid.ZERO_UUID
             ), OffsetAndMetadata.fromRequest(
-                partition,
-                time.milliseconds()
-            )
+            partition,
+            time.milliseconds()
+        )
         );
     }
 }

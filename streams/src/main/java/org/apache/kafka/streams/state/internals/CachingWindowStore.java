@@ -65,8 +65,8 @@ public class CachingWindowStore
     private final AtomicLong maxObservedTimestamp;
 
     CachingWindowStore(final WindowStore<Bytes, byte[]> underlying,
-                       final long windowSize,
-                       final long segmentInterval) {
+        final long windowSize,
+        final long segmentInterval) {
         super(underlying);
         this.windowSize = windowSize;
         this.cacheFunction = new SegmentedCacheFunction(keySchema, segmentInterval);
@@ -93,7 +93,7 @@ public class CachingWindowStore
     }
 
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry,
-                                    final InternalProcessorContext<?, ?> context) {
+        final InternalProcessorContext<?, ?> context) {
         final byte[] binaryWindowKey = cacheFunction.key(entry.key()).get();
         final Windowed<Bytes> windowedKeyBytes = WindowKeySchema.fromStoreBytesKey(binaryWindowKey, windowSize);
         final long windowStartTimestamp = windowedKeyBytes.window().start();
@@ -135,7 +135,7 @@ public class CachingWindowStore
 
     @Override
     public boolean setFlushListener(final CacheFlushListener<byte[], byte[]> flushListener,
-                                    final boolean sendOldValues) {
+        final boolean sendOldValues) {
         this.flushListener = flushListener;
         this.sendOldValues = sendOldValues;
 
@@ -145,8 +145,8 @@ public class CachingWindowStore
 
     @Override
     public synchronized void put(final Bytes key,
-                                 final byte[] value,
-                                 final long windowStartTimestamp) {
+        final byte[] value,
+        final long windowStartTimestamp) {
         // since this function may not access the underlying inner store, we need to validate
         // if store is open outside as well.
         validateStoreOpen();
@@ -171,7 +171,7 @@ public class CachingWindowStore
 
     @Override
     public byte[] fetch(final Bytes key,
-                        final long timestamp) {
+        final long timestamp) {
         validateStoreOpen();
         final Bytes bytesKey = WindowKeySchema.toStoreKeyBinary(key, timestamp, 0);
         final Bytes cacheKey = cacheFunction.cacheKey(bytesKey);
@@ -188,8 +188,8 @@ public class CachingWindowStore
 
     @Override
     public synchronized WindowStoreIterator<byte[]> fetch(final Bytes key,
-                                                          final long timeFrom,
-                                                          final long timeTo) {
+        final long timeFrom,
+        final long timeTo) {
         // since this function may not access the underlying inner store, we need to validate
         // if store is open outside as well.
         validateStoreOpen();
@@ -216,8 +216,8 @@ public class CachingWindowStore
 
     @Override
     public synchronized WindowStoreIterator<byte[]> backwardFetch(final Bytes key,
-                                                                  final long timeFrom,
-                                                                  final long timeTo) {
+        final long timeFrom,
+        final long timeTo) {
         // since this function may not access the underlying inner store, we need to validate
         // if store is open outside as well.
         validateStoreOpen();
@@ -244,9 +244,9 @@ public class CachingWindowStore
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
-                                                           final Bytes keyTo,
-                                                           final long timeFrom,
-                                                           final long timeTo) {
+        final Bytes keyTo,
+        final long timeFrom,
+        final long timeTo) {
         if (keyFrom != null && keyTo != null && keyFrom.compareTo(keyTo) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
                 "This may be due to range arguments set in the wrong order, " +
@@ -289,9 +289,9 @@ public class CachingWindowStore
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom,
-                                                                   final Bytes keyTo,
-                                                                   final long timeFrom,
-                                                                   final long timeTo) {
+        final Bytes keyTo,
+        final long timeFrom,
+        final long timeTo) {
         if (keyFrom != null && keyTo != null && keyFrom.compareTo(keyTo) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
                 + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
@@ -333,7 +333,7 @@ public class CachingWindowStore
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom,
-                                                              final long timeTo) {
+        final long timeTo) {
         validateStoreOpen();
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = wrapped().fetchAll(timeFrom, timeTo);
@@ -354,7 +354,7 @@ public class CachingWindowStore
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final long timeFrom,
-                                                                      final long timeTo) {
+        final long timeTo) {
         validateStoreOpen();
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = wrapped().backwardFetchAll(timeFrom, timeTo);
@@ -454,17 +454,17 @@ public class CachingWindowStore
         private ThreadCache.MemoryLRUCacheBytesIterator current;
 
         private CacheIteratorWrapper(final Bytes key,
-                                     final long timeFrom,
-                                     final long timeTo,
-                                     final boolean forward) {
+            final long timeFrom,
+            final long timeTo,
+            final boolean forward) {
             this(key, key, timeFrom, timeTo, forward);
         }
 
         private CacheIteratorWrapper(final Bytes keyFrom,
-                                     final Bytes keyTo,
-                                     final long timeFrom,
-                                     final long timeTo,
-                                     final boolean forward) {
+            final Bytes keyTo,
+            final long timeFrom,
+            final long timeTo,
+            final boolean forward) {
             this.keyFrom = keyFrom;
             this.keyTo = keyTo;
             this.timeTo = timeTo;

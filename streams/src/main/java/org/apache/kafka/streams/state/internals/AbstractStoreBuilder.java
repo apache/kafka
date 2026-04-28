@@ -35,9 +35,9 @@ public abstract class AbstractStoreBuilder<K, V, T extends StateStore> implement
     boolean enableLogging = true;
 
     public AbstractStoreBuilder(final String name,
-                                final Serde<K> keySerde,
-                                final Serde<V> valueSerde,
-                                final Time time) {
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde,
+        final Time time) {
         Objects.requireNonNull(name, "name cannot be null");
         Objects.requireNonNull(time, "time cannot be null");
         this.name = name;

@@ -79,8 +79,8 @@ public class AdminFenceProducersTest {
 
             producer.beginTransaction();
             ExecutionException exceptionDuringSend = assertThrows(
-                    ExecutionException.class,
-                    () -> producer.send(RECORD).get(), "expected InvalidProducerEpochException"
+                ExecutionException.class,
+                () -> producer.send(RECORD).get(), "expected InvalidProducerEpochException"
             );
 
             // In Transaction V2, the ProducerFencedException will be converted to InvalidProducerEpochException when
@@ -100,8 +100,8 @@ public class AdminFenceProducersTest {
 
         try (Admin adminClient = clusterInstance.admin(config)) {
             ExecutionException exception = assertThrows(
-                    ExecutionException.class, () ->
-                            adminClient.fenceProducers(Collections.singletonList(TXN_ID), new FenceProducersOptions().timeoutMs(0)).all().get());
+                ExecutionException.class, () ->
+                    adminClient.fenceProducers(Collections.singletonList(TXN_ID), new FenceProducersOptions().timeoutMs(0)).all().get());
             assertInstanceOf(TimeoutException.class, exception.getCause());
         }
     }
@@ -120,18 +120,18 @@ public class AdminFenceProducersTest {
             adminClient.fenceProducers(Collections.singletonList(TXN_ID)).all().get();
 
             ExecutionException exceptionDuringSend = assertThrows(
-                    ExecutionException.class, () ->
-                            producer.send(RECORD).get(), "expected ProducerFencedException"
+                ExecutionException.class, () ->
+                    producer.send(RECORD).get(), "expected ProducerFencedException"
             );
             assertTrue(exceptionDuringSend.getCause() instanceof ProducerFencedException ||
-                    exceptionDuringSend.getCause() instanceof InvalidProducerEpochException);
+                exceptionDuringSend.getCause() instanceof InvalidProducerEpochException);
 
             ApiException exceptionDuringCommit = assertThrows(
-                    ApiException.class,
-                    producer::commitTransaction, "Expected Exception"
+                ApiException.class,
+                producer::commitTransaction, "Expected Exception"
             );
             assertTrue(exceptionDuringCommit instanceof ProducerFencedException ||
-                    exceptionDuringCommit instanceof InvalidProducerEpochException);
+                exceptionDuringCommit instanceof InvalidProducerEpochException);
         }
     }
 }

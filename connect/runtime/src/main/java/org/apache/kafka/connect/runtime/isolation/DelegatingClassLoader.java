@@ -92,8 +92,8 @@ public class DelegatingClassLoader extends URLClassLoader {
 
         ClassLoader pluginLoader = findPluginLoader(inner, name, range, connectorLoader);
         return pluginLoader instanceof PluginClassLoader
-            ? (PluginClassLoader) pluginLoader
-            : null;
+                ? (PluginClassLoader) pluginLoader
+                : null;
     }
 
     ClassLoader connectorLoader(String classOrAlias, VersionRange range) {
@@ -155,10 +155,10 @@ public class DelegatingClassLoader extends URLClassLoader {
     }
 
     private ClassLoader findPluginLoader(
-        SortedMap<PluginDesc<?>, ClassLoader> loaders,
-        String pluginName,
-        VersionRange range,
-        Optional<ClassLoader> connectorLoader
+            SortedMap<PluginDesc<?>, ClassLoader> loaders,
+            String pluginName,
+            VersionRange range,
+            Optional<ClassLoader> connectorLoader
     ) {
 
         if (range != null && range.getRecommendedVersion() != null) {
@@ -193,8 +193,8 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     public void installDiscoveredPlugins(PluginScanResult scanResult) {
         scanResult.forEach(pluginDesc ->
-            pluginLoaders.computeIfAbsent(pluginDesc.className(), k -> new TreeMap<>())
-                    .put(pluginDesc, pluginDesc.loader()));
+                pluginLoaders.computeIfAbsent(pluginDesc.className(), k -> new TreeMap<>())
+                        .put(pluginDesc, pluginDesc.loader()));
         for (String pluginClassName : pluginLoaders.keySet()) {
             log.info("Added plugin '{}'", pluginClassName);
         }
@@ -210,9 +210,9 @@ public class DelegatingClassLoader extends URLClassLoader {
     }
 
     protected Class<?> loadVersionedPluginClass(
-        String name,
-        VersionRange range,
-        boolean resolve
+            String name,
+            VersionRange range,
+            boolean resolve
     ) throws VersionedPluginLoadingException, ClassNotFoundException {
 
         String fullName = aliases.getOrDefault(name, name);

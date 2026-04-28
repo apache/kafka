@@ -126,7 +126,7 @@ class FetchTest {
         var fetch = Fetch.forPartition(TP0, records, true, new OffsetAndMetadata(1, Optional.empty(), ""));
 
         assertThrows(UnsupportedOperationException.class,
-                () -> fetch.nextOffsets().put(TP1, new OffsetAndMetadata(99, Optional.empty(), "")));
+            () -> fetch.nextOffsets().put(TP1, new OffsetAndMetadata(99, Optional.empty(), "")));
     }
 
     @Test

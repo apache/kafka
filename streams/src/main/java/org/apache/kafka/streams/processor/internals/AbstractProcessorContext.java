@@ -51,9 +51,9 @@ public abstract class AbstractProcessorContext<KOut, VOut> implements InternalPr
     private ProcessorMetadata processorMetadata;
 
     public AbstractProcessorContext(final TaskId taskId,
-                                    final StreamsConfig config,
-                                    final StreamsMetricsImpl metrics,
-                                    final ThreadCache cache) {
+        final StreamsConfig config,
+        final StreamsMetricsImpl metrics,
+        final ThreadCache cache) {
         this.taskId = taskId;
         this.applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.config = config;
@@ -114,14 +114,15 @@ public abstract class AbstractProcessorContext<KOut, VOut> implements InternalPr
 
     @Override
     public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {
-        register(store, stateRestoreCallback, () -> { });
+        final StateRestoreCallback stateRestoreCallback) {
+        register(store, stateRestoreCallback, () -> {
+        });
     }
 
     @Override
     public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback,
-                         final CommitCallback checkpoint) {
+        final StateRestoreCallback stateRestoreCallback,
+        final CommitCallback checkpoint) {
         if (initialized) {
             throw new IllegalStateException("Can only create state stores during initialization.");
         }

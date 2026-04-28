@@ -106,7 +106,8 @@ public final class RecordConverters {
     }
 
     // privatize the constructor so the class cannot be instantiated (only used for its static members)
-    private RecordConverters() {}
+    private RecordConverters() {
+    }
 
     public static RecordConverter rawValueToTimestampedValue() {
         return RAW_TO_TIMESTAMED_INSTANCE;

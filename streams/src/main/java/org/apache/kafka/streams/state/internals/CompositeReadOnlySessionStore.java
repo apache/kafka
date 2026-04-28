@@ -35,8 +35,8 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
     private final String storeName;
 
     public CompositeReadOnlySessionStore(final StateStoreProvider storeProvider,
-                                         final QueryableStoreType<ReadOnlySessionStore<K, V>> queryableStoreType,
-                                         final String storeName) {
+        final QueryableStoreType<ReadOnlySessionStore<K, V>> queryableStoreType,
+        final String storeName) {
         this.storeProvider = storeProvider;
         this.queryableStoreType = queryableStoreType;
         this.storeName = storeName;
@@ -44,8 +44,8 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
 
     @Override
     public KeyValueIterator<Windowed<K>, V> findSessions(final K key,
-                                                         final long earliestSessionEndTime,
-                                                         final long latestSessionStartTime) {
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime) {
         Objects.requireNonNull(key, "key can't be null");
         final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
         for (final ReadOnlySessionStore<K, V> store : stores) {
@@ -72,8 +72,8 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
 
     @Override
     public KeyValueIterator<Windowed<K>, V> backwardFindSessions(final K key,
-                                                                 final long earliestSessionEndTime,
-                                                                 final long latestSessionStartTime) {
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime) {
         Objects.requireNonNull(key, "key can't be null");
         final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
         for (final ReadOnlySessionStore<K, V> store : stores) {
@@ -98,9 +98,9 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
 
     @Override
     public KeyValueIterator<Windowed<K>, V> findSessions(final K keyFrom,
-                                                         final K keyTo,
-                                                         final long earliestSessionEndTime,
-                                                         final long latestSessionStartTime) {
+        final K keyTo,
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime) {
         final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
         for (final ReadOnlySessionStore<K, V> store : stores) {
             try {
@@ -125,9 +125,9 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
 
     @Override
     public KeyValueIterator<Windowed<K>, V> backwardFindSessions(final K keyFrom,
-                                                                 final K keyTo,
-                                                                 final long earliestSessionEndTime,
-                                                                 final long latestSessionStartTime) {
+        final K keyTo,
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime) {
         final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
         for (final ReadOnlySessionStore<K, V> store : stores) {
             try {
@@ -183,9 +183,9 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
                 }
             } catch (final InvalidStateStoreException ise) {
                 throw new InvalidStateStoreException("State store  [" + storeName + "] is not available anymore" +
-                                                             " and may have been migrated to another instance; " +
-                                                             "please re-discover its location from the state metadata. " +
-                                                             "Original error message: " + ise);
+                    " and may have been migrated to another instance; " +
+                    "please re-discover its location from the state metadata. " +
+                    "Original error message: " + ise);
             }
         }
         return KeyValueIterators.emptyIterator();
@@ -220,9 +220,9 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
         final NextIteratorFunction<Windowed<K>, V, ReadOnlySessionStore<K, V>> nextIteratorFunction =
             store -> store.fetch(keyFrom, keyTo);
         return new DelegatingPeekingKeyValueIterator<>(storeName,
-                                                       new CompositeKeyValueIterator<>(
-                                                               storeProvider.stores(storeName, queryableStoreType).iterator(),
-                                                               nextIteratorFunction));
+            new CompositeKeyValueIterator<>(
+                storeProvider.stores(storeName, queryableStoreType).iterator(),
+                nextIteratorFunction));
     }
 
     @Override

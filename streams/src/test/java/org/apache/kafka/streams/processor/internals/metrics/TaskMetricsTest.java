@@ -45,7 +45,7 @@ public class TaskMetricsTest {
     public void shouldGetActiveProcessRatioSensor() {
         final String operation = "active-process-ratio";
         when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.INFO))
-                .thenReturn(expectedSensor);
+            .thenReturn(expectedSensor);
 
         final String ratioDescription = "The fraction of time the thread spent " +
             "on processing this task among all assigned active tasks";
@@ -70,7 +70,7 @@ public class TaskMetricsTest {
     public void shouldGetActiveBufferCountSensor() {
         final String operation = "active-buffer-count";
         when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))
-                .thenReturn(expectedSensor);
+            .thenReturn(expectedSensor);
         final String countDescription = "The count of buffered records that are polled " +
             "from consumer and not yet processed for this active task";
         when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
@@ -94,7 +94,7 @@ public class TaskMetricsTest {
     public void shouldGetProcessLatencySensor() {
         final String operation = "process-latency";
         when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))
-                .thenReturn(expectedSensor);
+            .thenReturn(expectedSensor);
         final String avgLatencyDescription = "The average latency of calls to process";
         final String maxLatencyDescription = "The maximum latency of calls to process";
         when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
@@ -119,20 +119,20 @@ public class TaskMetricsTest {
     public void shouldGetTotalCacheSizeInBytesSensor() {
         final String operation = "cache-size-bytes-total";
         when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))
-                .thenReturn(expectedSensor);
+            .thenReturn(expectedSensor);
         final String totalBytesDescription = "The total size in bytes of this task's cache.";
         when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
 
         try (final MockedStatic<StreamsMetricsImpl> streamsMetricsStaticMock = mockStatic(StreamsMetricsImpl.class)) {
             final Sensor sensor = TaskMetrics.totalCacheSizeBytesSensor(THREAD_ID, TASK_ID, streamsMetrics);
             streamsMetricsStaticMock.verify(
-                    () -> StreamsMetricsImpl.addValueMetricToSensor(
-                            expectedSensor,
-                            TASK_LEVEL_GROUP,
-                            tagMap,
-                            operation,
-                            totalBytesDescription
-                    )
+                () -> StreamsMetricsImpl.addValueMetricToSensor(
+                    expectedSensor,
+                    TASK_LEVEL_GROUP,
+                    tagMap,
+                    operation,
+                    totalBytesDescription
+                )
             );
             assertThat(sensor, is(expectedSensor));
         }
@@ -143,7 +143,7 @@ public class TaskMetricsTest {
     public void shouldGetPunctuateSensor() {
         final String operation = "punctuate";
         when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))
-                .thenReturn(expectedSensor);
+            .thenReturn(expectedSensor);
         final String operationLatency = operation + StreamsMetricsImpl.LATENCY_SUFFIX;
         final String totalDescription = "The total number of calls to punctuate";
         final String rateDescription = "The average number of calls to punctuate per second";

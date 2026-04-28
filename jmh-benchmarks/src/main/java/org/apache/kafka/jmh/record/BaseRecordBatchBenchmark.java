@@ -80,7 +80,7 @@ public abstract class BaseRecordBatchBenchmark {
     ByteBuffer[] batchBuffers;
     RequestLocal requestLocal;
     LogValidator.MetricsRecorder validatorMetricsRecorder = UnifiedLog.newValidatorMetricsRecorder(
-        new BrokerTopicStats(false).allTopicsStats());
+            new BrokerTopicStats(false).allTopicsStats());
 
     @Setup
     public void init() {
@@ -136,12 +136,12 @@ public abstract class BaseRecordBatchBenchmark {
         Header[] headers = messageVersion < RecordBatch.MAGIC_VALUE_V2 ? Record.EMPTY_HEADERS : createHeaders();
         byte[] value = new byte[messageSize];
         final ByteBuffer buf = ByteBuffer.allocate(
-            AbstractRecords.estimateSizeInBytesUpperBound(messageVersion, compression().type(), new byte[0], value,
-                    headers) * batchSize
+                AbstractRecords.estimateSizeInBytesUpperBound(messageVersion, compression().type(), new byte[0], value,
+                        headers) * batchSize
         );
 
         final MemoryRecordsBuilder builder =
-            MemoryRecords.builder(buf, messageVersion, compression(), TimestampType.CREATE_TIME, startingOffset);
+                MemoryRecords.builder(buf, messageVersion, compression(), TimestampType.CREATE_TIME, startingOffset);
 
         for (int i = 0; i < batchSize; ++i) {
             switch (bytes) {

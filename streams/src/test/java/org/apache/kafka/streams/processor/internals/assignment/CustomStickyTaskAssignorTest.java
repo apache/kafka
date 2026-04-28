@@ -285,7 +285,7 @@ public class CustomStickyTaskAssignorTest {
         // one client should get 3 tasks and the other should have 4
         assertThat(
             (client1Tasks.size() == 3 && client2Tasks.size() == 4) ||
-            (client1Tasks.size() == 4 && client2Tasks.size() == 3),
+                (client1Tasks.size() == 4 && client2Tasks.size() == 3),
             is(true));
         allTasks.removeAll(client1Tasks);
         // client2 should have all the remaining tasks not assigned to client 1
@@ -681,8 +681,8 @@ public class CustomStickyTaskAssignorTest {
 
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, 1, rackAwareStrategy);
 
-        for (final KafkaStreamsState client1: streamStates.values()) {
-            for (final KafkaStreamsState client2: streamStates.values()) {
+        for (final KafkaStreamsState client1 : streamStates.values()) {
+            for (final KafkaStreamsState client2 : streamStates.values()) {
                 if (!client1.processId().equals(client2.processId())) {
                     final Set<TaskId> assignedTasks1 = assignments.get(client1.processId()).tasks().keySet();
                     final Set<TaskId> assignedTasks2 = assignments.get(client2.processId()).tasks().keySet();
@@ -717,8 +717,8 @@ public class CustomStickyTaskAssignorTest {
 
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, 1, rackAwareStrategy);
 
-        for (final KafkaStreamsState client1: streamStates.values()) {
-            for (final KafkaStreamsState client2: streamStates.values()) {
+        for (final KafkaStreamsState client1 : streamStates.values()) {
+            for (final KafkaStreamsState client2 : streamStates.values()) {
                 if (!client1.processId().equals(client2.processId())) {
                     final Set<TaskId> assignedTasks1 = assignments.get(client1.processId()).tasks().keySet();
                     final Set<TaskId> assignedTasks2 = assignments.get(client2.processId()).tasks().keySet();
@@ -817,21 +817,21 @@ public class CustomStickyTaskAssignorTest {
     }
 
     private Map<ProcessId, KafkaStreamsAssignment> assign(final Map<ProcessId, KafkaStreamsState> streamStates,
-                                                          final Map<TaskId, TaskInfo> tasks,
-                                                          final String rackAwareStrategy) {
+        final Map<TaskId, TaskInfo> tasks,
+        final String rackAwareStrategy) {
         return assign(streamStates, tasks, 0, rackAwareStrategy);
     }
 
     private Map<ProcessId, KafkaStreamsAssignment> assign(final Map<ProcessId, KafkaStreamsState> streamStates,
-                                                          final Map<TaskId, TaskInfo> tasks,
-                                                          final int numStandbys,
-                                                          final String rackAwareStrategy) {
+        final Map<TaskId, TaskInfo> tasks,
+        final int numStandbys,
+        final String rackAwareStrategy) {
         return assign(streamStates, tasks, defaultAssignmentConfigs(numStandbys, rackAwareStrategy));
     }
 
     private Map<ProcessId, KafkaStreamsAssignment> assign(final Map<ProcessId, KafkaStreamsState> streamStates,
-                                                          final Map<TaskId, TaskInfo> tasks,
-                                                          final AssignmentConfigs assignmentConfigs) {
+        final Map<TaskId, TaskInfo> tasks,
+        final AssignmentConfigs assignmentConfigs) {
         final ApplicationState applicationState = new TaskAssignmentUtilsTest.TestApplicationState(
             assignmentConfigs,
             streamStates,
@@ -861,7 +861,7 @@ public class CustomStickyTaskAssignorTest {
     }
 
     private Set<TaskId> activeTasks(final Map<ProcessId, KafkaStreamsAssignment> assignments,
-                                    final int client) {
+        final int client) {
         final KafkaStreamsAssignment assignment = assignments.getOrDefault(processId(client), null);
         if (assignment == null) {
             return Set.of();
@@ -872,7 +872,7 @@ public class CustomStickyTaskAssignorTest {
     }
 
     private Set<TaskId> standbyTasks(final Map<ProcessId, KafkaStreamsAssignment> assignments,
-                                    final int client) {
+        final int client) {
         final KafkaStreamsAssignment assignment = assignments.getOrDefault(processId(client), null);
         if (assignment == null) {
             return Set.of();
@@ -889,9 +889,9 @@ public class CustomStickyTaskAssignorTest {
     }
 
     private void assertHasAssignment(final Map<ProcessId, KafkaStreamsAssignment> assignments,
-                                     final int client,
-                                     final TaskId taskId,
-                                     final AssignedTask.Type taskType) {
+        final int client,
+        final TaskId taskId,
+        final AssignedTask.Type taskType) {
         final KafkaStreamsAssignment assignment = assignments.getOrDefault(processId(client), null);
         assertThat(assignment, notNullValue());
         final AssignedTask assignedTask = assignment.tasks().getOrDefault(taskId, null);

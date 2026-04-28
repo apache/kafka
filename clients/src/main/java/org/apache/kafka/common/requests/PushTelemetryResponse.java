@@ -25,7 +25,7 @@ import org.apache.kafka.common.protocol.Readable;
 import java.util.EnumMap;
 import java.util.Map;
 
-public class PushTelemetryResponse  extends AbstractResponse {
+public class PushTelemetryResponse extends AbstractResponse {
 
     private final PushTelemetryResponseData data;
 
@@ -66,6 +66,6 @@ public class PushTelemetryResponse  extends AbstractResponse {
 
     public static PushTelemetryResponse parse(Readable readable, short version) {
         return new PushTelemetryResponse(new PushTelemetryResponseData(
-                readable, version));
+            readable, version));
     }
 }

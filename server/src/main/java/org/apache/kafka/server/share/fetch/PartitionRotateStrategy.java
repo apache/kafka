@@ -94,5 +94,6 @@ public interface PartitionRotateStrategy {
      *
      * @param sessionEpoch the share session epoch.
      */
-    record PartitionRotateMetadata(int sessionEpoch) { }
+    record PartitionRotateMetadata(int sessionEpoch) {
+    }
 }

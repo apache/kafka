@@ -275,7 +275,7 @@ public class BufferPoolTest {
         final long totalMemory = numThreads / 2 * poolableSize;
         final BufferPool pool = new BufferPool(totalMemory, poolableSize, metrics, time, metricGroup);
         List<StressTestThread> threads = new ArrayList<>();
-        for (int i = 0; i < numThreads; i++)
+        for (int i = 0;i < numThreads;i++)
             threads.add(new StressTestThread(pool, iterations));
         for (StressTestThread thread : threads)
             thread.start();
@@ -338,7 +338,7 @@ public class BufferPoolTest {
     public static class StressTestThread extends Thread {
         private final int iterations;
         private final BufferPool pool;
-        private final long maxBlockTimeMs =  20_000;
+        private final long maxBlockTimeMs = 20_000;
         public final AtomicBoolean success = new AtomicBoolean(false);
 
         public StressTestThread(BufferPool pool, int iterations) {
@@ -349,7 +349,7 @@ public class BufferPoolTest {
         @Override
         public void run() {
             try {
-                for (int i = 0; i < iterations; i++) {
+                for (int i = 0;i < iterations;i++) {
                     int size;
                     if (TestUtils.RANDOM.nextBoolean())
                         // allocate poolable size
@@ -393,7 +393,7 @@ public class BufferPoolTest {
             assertThrows(KafkaException.class, () -> pool.allocate(1, Long.MAX_VALUE));
             return null;
         };
-        for (int i = 0; i < numWorkers; ++i) {
+        for (int i = 0;i < numWorkers;++i) {
             executor.submit(work);
         }
 

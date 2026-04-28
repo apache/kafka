@@ -36,14 +36,14 @@ class LRUCacheEntry {
     }
 
     LRUCacheEntry(final byte[] value,
-                  final Headers headers,
-                  final boolean isDirty,
-                  final long offset,
-                  final long timestamp,
-                  final int partition,
-                  final String topic,
-                  final byte[] rawKey,
-                  final byte[] rawValue) {
+        final Headers headers,
+        final boolean isDirty,
+        final long offset,
+        final long timestamp,
+        final int partition,
+        final String topic,
+        final byte[] rawKey,
+        final byte[] rawValue) {
         final ProcessorRecordContext context = new ProcessorRecordContext(
             timestamp,
             offset,

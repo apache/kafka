@@ -97,7 +97,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
         metrics.addMetric(this.logEndEpochMetricName, (Gauge<Integer>) (mConfig, currentTimeMs) -> logEndOffset.epoch());
 
         this.numUnknownVoterConnectionsMetricName = metrics.metricName("number-unknown-voter-connections", metricGroupName,
-                "Number of unknown voters whose connection information is not cached; would never be larger than quorum-size.");
+            "Number of unknown voters whose connection information is not cached; would never be larger than quorum-size.");
         metrics.addMetric(this.numUnknownVoterConnectionsMetricName, (Gauge<Integer>) (mConfig, currentTimeMs) -> numUnknownVoterConnections);
 
         this.numVotersMetricName = metrics.metricName("number-of-voters", metricGroupName, "Number of voters for a KRaft topic partition.");
@@ -110,25 +110,25 @@ public class KafkaRaftMetrics implements AutoCloseable {
 
         this.commitTimeSensor = metrics.sensor("commit-latency");
         this.commitTimeSensor.add(metrics.metricName("commit-latency-avg", metricGroupName,
-                "The average time in milliseconds to commit an entry in the raft log."), new Avg());
+            "The average time in milliseconds to commit an entry in the raft log."), new Avg());
         this.commitTimeSensor.add(metrics.metricName("commit-latency-max", metricGroupName,
-                "The maximum time in milliseconds to commit an entry in the raft log."), new Max());
+            "The maximum time in milliseconds to commit an entry in the raft log."), new Max());
 
         this.electionTimeSensor = metrics.sensor("election-latency");
         this.electionTimeSensor.add(metrics.metricName("election-latency-avg", metricGroupName,
-                "The average time in milliseconds spent on electing a new leader."), new Avg());
+            "The average time in milliseconds spent on electing a new leader."), new Avg());
         this.electionTimeSensor.add(metrics.metricName("election-latency-max", metricGroupName,
-                "The maximum time in milliseconds spent on electing a new leader."), new Max());
+            "The maximum time in milliseconds spent on electing a new leader."), new Max());
 
         this.fetchRecordsSensor = metrics.sensor("fetch-records");
         this.fetchRecordsSensor.add(metrics.metricName("fetch-records-rate", metricGroupName,
                 "The average number of records fetched from the leader of the raft quorum."),
-                new Rate(TimeUnit.SECONDS, new WindowedSum()));
+            new Rate(TimeUnit.SECONDS, new WindowedSum()));
 
         this.appendRecordsSensor = metrics.sensor("append-records");
         this.appendRecordsSensor.add(metrics.metricName("append-records-rate", metricGroupName,
                 "The average number of records appended per sec as the leader of the raft quorum."),
-                new Rate(TimeUnit.SECONDS, new WindowedSum()));
+            new Rate(TimeUnit.SECONDS, new WindowedSum()));
 
         this.pollDurationSensor = metrics.sensor("poll-idle-ratio");
         this.pollDurationSensor.add(
@@ -190,7 +190,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
 
         metrics.addMetric(
             this.highWatermarkMetricName,
-                (Gauge<Long>) (mConfig, currentTimeMs) -> state.highWatermark().map(LogOffsetMetadata::offset).orElse(-1L)
+            (Gauge<Long>) (mConfig, currentTimeMs) -> state.highWatermark().map(LogOffsetMetadata::offset).orElse(-1L)
         );
     }
 

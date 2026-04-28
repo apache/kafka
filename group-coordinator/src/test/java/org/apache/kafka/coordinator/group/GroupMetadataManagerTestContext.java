@@ -492,7 +492,7 @@ public class GroupMetadataManagerTestContext {
             this.streamsGroupBuilders.add(builder);
             return this;
         }
-        
+
         public Builder withShareGroup(ShareGroupBuilder builder) {
             this.shareGroupBuilders.add(builder);
             return this;
@@ -507,7 +507,7 @@ public class GroupMetadataManagerTestContext {
             this.authorizerPlugin = Optional.of(authorizerPlugin);
             return this;
         }
-        
+
         public Builder withStreamsGroupTaskAssignors(List<TaskAssignor> assignors) {
             this.streamsGroupAssignors = assignors;
             return this;
@@ -666,7 +666,7 @@ public class GroupMetadataManagerTestContext {
             .getMemberOrThrow(memberId)
             .state();
     }
-    
+
     public CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> consumerGroupHeartbeat(
         ConsumerGroupHeartbeatRequestData request
     ) {
@@ -1142,9 +1142,9 @@ public class GroupMetadataManagerTestContext {
         String followerId = followerJoinResult.joinFuture.get().memberId();
         List<SyncGroupRequestData.SyncGroupRequestAssignment> assignment = new ArrayList<>();
         assignment.add(new SyncGroupRequestData.SyncGroupRequestAssignment().setMemberId(leaderId)
-                                                                            .setAssignment(new byte[]{1}));
+            .setAssignment(new byte[]{1}));
         assignment.add(new SyncGroupRequestData.SyncGroupRequestAssignment().setMemberId(followerId)
-                                                                            .setAssignment(new byte[]{2}));
+            .setAssignment(new byte[]{2}));
 
         SyncGroupRequestData syncRequest = new SyncGroupRequestBuilder()
             .withGroupId(groupId)
@@ -1175,8 +1175,8 @@ public class GroupMetadataManagerTestContext {
 
         SyncResult followerSyncResult = sendClassicGroupSync(
             syncRequest.setGroupInstanceId(followerInstanceId)
-                       .setMemberId(followerId)
-                       .setAssignments(List.of())
+                .setMemberId(followerId)
+                .setAssignments(List.of())
         );
 
         assertTrue(followerSyncResult.records.isEmpty());
@@ -1311,7 +1311,7 @@ public class GroupMetadataManagerTestContext {
 
     public void verifySessionExpiration(ClassicGroup group, int timeoutMs) {
         Set<String> expectedHeartbeatKeys = group.allMembers().stream()
-                                                 .map(member -> classicGroupHeartbeatKey(group.groupId(), member.memberId())).collect(Collectors.toSet());
+            .map(member -> classicGroupHeartbeatKey(group.groupId(), member.memberId())).collect(Collectors.toSet());
 
         // Member should be removed as session expires.
         List<MockCoordinatorTimer.ExpiredTimeout<CoordinatorRecord>> timeouts = sleep(timeoutMs);

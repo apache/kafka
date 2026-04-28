@@ -59,10 +59,10 @@ public final class ProduceAction implements TieredStorageTestAction {
     private final Serde<String> serde = Serdes.String();
 
     public ProduceAction(TopicPartition topicPartition,
-                         List<OffloadedSegmentSpec> offloadedSegmentSpecs,
-                         List<ProducerRecord<String, String>> recordsToProduce,
-                         Integer batchSize,
-                         Long expectedEarliestLocalOffset) {
+            List<OffloadedSegmentSpec> offloadedSegmentSpecs,
+            List<ProducerRecord<String, String>> recordsToProduce,
+            Integer batchSize,
+            Long expectedEarliestLocalOffset) {
         this.topicPartition = topicPartition;
         this.offloadedSegmentSpecs = offloadedSegmentSpecs;
         this.recordsToProduce = recordsToProduce;
@@ -158,8 +158,8 @@ public final class ProduceAction implements TieredStorageTestAction {
      * @param topicPartition    The topic-partition of the records.
      */
     private void compareRecords(List<Record> discoveredRecords,
-                                List<ProducerRecord<String, String>> producerRecords,
-                                TopicPartition topicPartition) {
+            List<ProducerRecord<String, String>> producerRecords,
+            TopicPartition topicPartition) {
         assertThat(discoveredRecords, correspondTo(producerRecords, topicPartition, serde, serde));
     }
 }

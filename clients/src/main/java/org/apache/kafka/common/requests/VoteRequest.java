@@ -70,25 +70,25 @@ public class VoteRequest extends AbstractRequest {
     }
 
     public static VoteRequestData singletonRequest(TopicPartition topicPartition,
-                                                   String clusterId,
-                                                   int replicaEpoch,
-                                                   int replicaId,
-                                                   int lastEpoch,
-                                                   long lastEpochEndOffset,
-                                                   boolean preVote) {
+        String clusterId,
+        int replicaEpoch,
+        int replicaId,
+        int lastEpoch,
+        long lastEpochEndOffset,
+        boolean preVote) {
         return new VoteRequestData()
-                   .setClusterId(clusterId)
-                   .setTopics(List.of(
-                       new VoteRequestData.TopicData()
-                           .setTopicName(topicPartition.topic())
-                           .setPartitions(List.of(
-                               new VoteRequestData.PartitionData()
-                                   .setPartitionIndex(topicPartition.partition())
-                                   .setReplicaEpoch(replicaEpoch)
-                                   .setReplicaId(replicaId)
-                                   .setLastOffsetEpoch(lastEpoch)
-                                   .setLastOffset(lastEpochEndOffset)
-                                   .setPreVote(preVote))
-                           )));
+            .setClusterId(clusterId)
+            .setTopics(List.of(
+                new VoteRequestData.TopicData()
+                    .setTopicName(topicPartition.topic())
+                    .setPartitions(List.of(
+                        new VoteRequestData.PartitionData()
+                            .setPartitionIndex(topicPartition.partition())
+                            .setReplicaEpoch(replicaEpoch)
+                            .setReplicaId(replicaId)
+                            .setLastOffsetEpoch(lastEpoch)
+                            .setLastOffset(lastEpochEndOffset)
+                            .setPreVote(preVote))
+                    )));
     }
 }

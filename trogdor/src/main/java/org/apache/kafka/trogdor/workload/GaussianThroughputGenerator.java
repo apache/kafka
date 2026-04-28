@@ -68,9 +68,9 @@ public class GaussianThroughputGenerator implements ThroughputGenerator {
 
     @JsonCreator
     public GaussianThroughputGenerator(@JsonProperty("messagesPerWindowAverage") int messagesPerWindowAverage,
-                                       @JsonProperty("messagesPerWindowDeviation") double messagesPerWindowDeviation,
-                                       @JsonProperty("windowsUntilRateChange") int windowsUntilRateChange,
-                                       @JsonProperty("windowSizeMs") long windowSizeMs) {
+        @JsonProperty("messagesPerWindowDeviation") double messagesPerWindowDeviation,
+        @JsonProperty("windowsUntilRateChange") int windowsUntilRateChange,
+        @JsonProperty("windowSizeMs") long windowSizeMs) {
         // Calculate the default values.
         if (windowSizeMs <= 0) {
             windowSizeMs = 100;

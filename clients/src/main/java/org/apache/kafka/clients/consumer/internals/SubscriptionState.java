@@ -73,7 +73,7 @@ import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UND
  */
 public class SubscriptionState {
     private static final String SUBSCRIPTION_EXCEPTION_MESSAGE =
-            "Subscription to topics, partitions and pattern are mutually exclusive";
+        "Subscription to topics, partitions and pattern are mutually exclusive";
 
     private final Logger log;
 
@@ -210,7 +210,7 @@ public class SubscriptionState {
     public synchronized boolean subscribeFromPattern(Set<String> topics) {
         if (subscriptionType != SubscriptionType.AUTO_PATTERN)
             throw new IllegalArgumentException("Attempt to subscribe from pattern while subscription type set to " +
-                    subscriptionType);
+                subscriptionType);
 
         return changeSubscription(topics);
     }
@@ -489,7 +489,7 @@ public class SubscriptionState {
         assignment.forEach((topicPartition, topicPartitionState) -> {
             // Cheap check is first to avoid evaluating the predicate if possible
             if ((subscriptionType.equals(SubscriptionType.AUTO_TOPICS_SHARE) || isFetchableAndSubscribed(topicPartition, topicPartitionState))
-                    && isAvailable.test(topicPartition)) {
+                && isAvailable.test(topicPartition)) {
                 result.add(topicPartition);
             }
         });
@@ -511,7 +511,7 @@ public class SubscriptionState {
 
     public synchronized boolean hasAutoAssignedPartitions() {
         return this.subscriptionType == SubscriptionType.AUTO_TOPICS || this.subscriptionType == SubscriptionType.AUTO_PATTERN
-                || this.subscriptionType == SubscriptionType.AUTO_TOPICS_SHARE || this.subscriptionType == SubscriptionType.AUTO_PATTERN_RE2J;
+            || this.subscriptionType == SubscriptionType.AUTO_TOPICS_SHARE || this.subscriptionType == SubscriptionType.AUTO_PATTERN_RE2J;
     }
 
     /**
@@ -540,8 +540,8 @@ public class SubscriptionState {
      * @return true if we enter the offset validation state
      */
     public synchronized boolean maybeValidatePositionForCurrentLeader(ApiVersions apiVersions,
-                                                                      TopicPartition tp,
-                                                                      Metadata.LeaderAndEpoch leaderAndEpoch) {
+        TopicPartition tp,
+        Metadata.LeaderAndEpoch leaderAndEpoch) {
         TopicPartitionState state = assignedStateOrNull(tp);
         if (state == null) {
             log.debug("Skipping validating position for partition {} which is not currently assigned.", tp);
@@ -566,8 +566,8 @@ public class SubscriptionState {
      * @return Log truncation details if detected and no reset policy is defined.
      */
     public synchronized Optional<LogTruncation> maybeCompleteValidation(TopicPartition tp,
-                                                                        FetchPosition requestPosition,
-                                                                        EpochEndOffset epochEndOffset) {
+        FetchPosition requestPosition,
+        EpochEndOffset epochEndOffset) {
         TopicPartitionState state = assignedStateOrNull(tp);
         if (state == null) {
             log.debug("Skipping completed validation for partition {} which is not currently assigned.", tp);
@@ -577,32 +577,32 @@ public class SubscriptionState {
             SubscriptionState.FetchPosition currentPosition = state.position;
             if (!currentPosition.equals(requestPosition)) {
                 log.debug("Skipping completed validation for partition {} since the current position {} " +
-                          "no longer matches the position {} when the request was sent",
-                          tp, currentPosition, requestPosition);
+                    "no longer matches the position {} when the request was sent",
+                    tp, currentPosition, requestPosition);
             } else if (epochEndOffset.endOffset() == UNDEFINED_EPOCH_OFFSET ||
-                        epochEndOffset.leaderEpoch() == UNDEFINED_EPOCH) {
+                epochEndOffset.leaderEpoch() == UNDEFINED_EPOCH) {
                 if (hasDefaultOffsetResetPolicy()) {
                     log.info("Truncation detected for partition {} at offset {}, resetting offset",
-                             tp, currentPosition);
+                        tp, currentPosition);
                     requestOffsetReset(tp);
                 } else {
                     log.warn("Truncation detected for partition {} at offset {}, but no reset policy is set",
-                             tp, currentPosition);
+                        tp, currentPosition);
                     return Optional.of(new LogTruncation(tp, requestPosition, Optional.empty()));
                 }
             } else if (epochEndOffset.endOffset() < currentPosition.offset) {
                 if (hasDefaultOffsetResetPolicy()) {
                     SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
-                            epochEndOffset.endOffset(), Optional.of(epochEndOffset.leaderEpoch()),
-                            currentPosition.currentLeader);
+                        epochEndOffset.endOffset(), Optional.of(epochEndOffset.leaderEpoch()),
+                        currentPosition.currentLeader);
                     log.info("Truncation detected for partition {} at offset {}, resetting offset to " +
-                             "the first offset known to diverge {}", tp, currentPosition, newPosition);
+                        "the first offset known to diverge {}", tp, currentPosition, newPosition);
                     state.seekValidated(newPosition);
                 } else {
                     OffsetAndMetadata divergentOffset = new OffsetAndMetadata(epochEndOffset.endOffset(),
                         Optional.of(epochEndOffset.leaderEpoch()), null);
                     log.warn("Truncation detected for partition {} at offset {} (the end offset from the " +
-                             "broker is {}), but no reset policy is set", tp, currentPosition, divergentOffset);
+                        "broker is {}), but no reset policy is set", tp, currentPosition, divergentOffset);
                     return Optional.of(new LogTruncation(tp, requestPosition, Optional.of(divergentOffset)));
                 }
             } else {
@@ -742,8 +742,8 @@ public class SubscriptionState {
      * @return {@code true} if the preferred read replica was updated, {@code false} otherwise.
      */
     public synchronized boolean tryUpdatingPreferredReadReplica(TopicPartition tp,
-                                                             int preferredReadReplicaId,
-                                                             LongSupplier timeMs) {
+        int preferredReadReplicaId,
+        LongSupplier timeMs) {
         final TopicPartitionState state = assignedStateOrNull(tp);
         if (state != null) {
             assignedState(tp).updatePreferredReadReplica(preferredReadReplicaId, timeMs);
@@ -788,7 +788,7 @@ public class SubscriptionState {
         assignment.forEach((topicPartition, partitionState) -> {
             if (partitionState.hasValidPosition())
                 allConsumed.put(topicPartition, new OffsetAndMetadata(partitionState.position.offset,
-                        partitionState.position.offsetEpoch, ""));
+                    partitionState.position.offsetEpoch, ""));
         });
         return allConsumed;
     }
@@ -903,7 +903,7 @@ public class SubscriptionState {
     }
 
     public synchronized boolean hasPartitionsNeedingValidation(long nowMs) {
-        for (TopicPartitionState tps  : assignment.partitionStateValues()) {
+        for (TopicPartitionState tps : assignment.partitionStateValues()) {
             if (tps.awaitingValidation() && !tps.awaitingRetryBackoff(nowMs) && tps.position != null) {
                 return true;
             }
@@ -941,7 +941,7 @@ public class SubscriptionState {
 
     // Visible for testing
     synchronized void markPendingOnAssignedCallback(Collection<TopicPartition> tps,
-                                                    boolean pendingOnAssignedCallback) {
+        boolean pendingOnAssignedCallback) {
         tps.forEach(tp -> assignedState(tp).markPendingOnAssignedCallback(pendingOnAssignedCallback));
     }
 
@@ -957,7 +957,7 @@ public class SubscriptionState {
      *                        are not fetchable until the onPartitionsAssigned callback completes.
      */
     public synchronized void assignFromSubscribedAwaitingCallback(Collection<TopicPartition> fullAssignment,
-                                                                  Collection<TopicPartition> addedPartitions) {
+        Collection<TopicPartition> addedPartitions) {
         assignFromSubscribed(fullAssignment);
         markPendingOnAssignedCallback(addedPartitions, true);
     }
@@ -973,7 +973,7 @@ public class SubscriptionState {
      * Set the set of topic IDs that have been assigned to the consumer by the coordinator.
      * This is used for topic IDs received in an assignment when using the new consumer rebalance protocol (KIP-848).
      */
-    public synchronized  void setAssignedTopicIds(Set<Uuid> assignedTopicIds) {
+    public synchronized void setAssignedTopicIds(Set<Uuid> assignedTopicIds) {
         this.assignedTopicIds = assignedTopicIds;
     }
 
@@ -1024,7 +1024,7 @@ public class SubscriptionState {
         private Integer preferredReadReplica;
         private Long preferredReadReplicaExpireTimeMs;
         private boolean endOffsetRequested;
-        
+
         TopicPartitionState() {
             this.paused = false;
             this.pendingRevocation = false;
@@ -1305,21 +1305,21 @@ public class SubscriptionState {
      */
     enum FetchStates implements FetchState {
         INITIALIZING() {
-            @Override
-            public Collection<FetchState> validTransitions() {
-                return Arrays.asList(FetchStates.FETCHING, FetchStates.AWAIT_RESET, FetchStates.AWAIT_VALIDATION);
-            }
+        @Override
+        public Collection<FetchState> validTransitions() {
+            return Arrays.asList(FetchStates.FETCHING, FetchStates.AWAIT_RESET, FetchStates.AWAIT_VALIDATION);
+        }
 
-            @Override
-            public boolean requiresPosition() {
-                return false;
-            }
+        @Override
+        public boolean requiresPosition() {
+            return false;
+        }
 
-            @Override
-            public boolean hasValidPosition() {
-                return false;
-            }
-        },
+        @Override
+        public boolean hasValidPosition() {
+            return false;
+        }
+    },
 
         FETCHING() {
             @Override
@@ -1400,8 +1400,8 @@ public class SubscriptionState {
             if (o == null || getClass() != o.getClass()) return false;
             FetchPosition that = (FetchPosition) o;
             return offset == that.offset &&
-                    offsetEpoch.equals(that.offsetEpoch) &&
-                    currentLeader.equals(that.currentLeader);
+                offsetEpoch.equals(that.offsetEpoch) &&
+                currentLeader.equals(that.currentLeader);
         }
 
         @Override
@@ -1412,10 +1412,10 @@ public class SubscriptionState {
         @Override
         public String toString() {
             return "FetchPosition{" +
-                    "offset=" + offset +
-                    ", offsetEpoch=" + offsetEpoch +
-                    ", currentLeader=" + currentLeader +
-                    '}';
+                "offset=" + offset +
+                ", offsetEpoch=" + offsetEpoch +
+                ", currentLeader=" + currentLeader +
+                '}';
         }
     }
 
@@ -1425,8 +1425,8 @@ public class SubscriptionState {
         public final Optional<OffsetAndMetadata> divergentOffsetOpt;
 
         public LogTruncation(TopicPartition topicPartition,
-                             FetchPosition fetchPosition,
-                             Optional<OffsetAndMetadata> divergentOffsetOpt) {
+            FetchPosition fetchPosition,
+            Optional<OffsetAndMetadata> divergentOffsetOpt) {
             this.topicPartition = topicPartition;
             this.fetchPosition = fetchPosition;
             this.divergentOffsetOpt = divergentOffsetOpt;

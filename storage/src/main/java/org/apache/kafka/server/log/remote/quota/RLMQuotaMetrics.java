@@ -46,9 +46,9 @@ public class RLMQuotaMetrics implements AutoCloseable {
     public Sensor sensor() {
         return sensorAccess.getOrCreate(name, expirationTime, s -> {
             s.add(metrics.metricName(name + "-avg", group,
-                String.format(descriptionFormat, "average")), new Avg());
+                    String.format(descriptionFormat, "average")), new Avg());
             s.add(metrics.metricName(name + "-max", group,
-                String.format(descriptionFormat, "maximum")), new Max());
+                    String.format(descriptionFormat, "maximum")), new Max());
         });
     }
 

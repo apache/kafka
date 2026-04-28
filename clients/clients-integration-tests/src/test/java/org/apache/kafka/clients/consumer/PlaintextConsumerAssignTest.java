@@ -96,7 +96,7 @@ public class PlaintextConsumerAssignTest {
             consumer.assign(List.of(tp));
             consumer.commitAsync(cb);
             ClientsTestUtils.pollUntilTrue(consumer, () -> cb.successCount >= 1 || cb.lastError.isPresent(),
-                    10000, "Failed to observe commit callback before timeout");
+                10000, "Failed to observe commit callback before timeout");
             Map<TopicPartition, OffsetAndMetadata> committedOffset = consumer.committed(Set.of(tp));
             assertNotNull(committedOffset);
             // No valid fetch position due to the absence of consumer.poll; and therefore no offset was committed to

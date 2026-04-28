@@ -190,8 +190,8 @@ public class CopartitionedTopicsEnforcerTest {
 
         assertEquals(Status.INCORRECTLY_PARTITIONED_TOPICS, ex.status());
         assertEquals(String.format("Number of partitions [%s] " +
-                "of repartition topic [%s] " +
-                "doesn't match number of partitions [%s] of the source topic.",
+            "of repartition topic [%s] " +
+            "doesn't match number of partitions [%s] of the source topic.",
             10, REPARTITION_TOPIC_1, 2), ex.getMessage());
     }
 

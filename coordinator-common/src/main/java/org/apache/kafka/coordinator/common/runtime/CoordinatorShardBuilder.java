@@ -39,7 +39,7 @@ public interface CoordinatorShardBuilder<S extends CoordinatorShard<U>, U> {
      * @return The builder.
      */
     CoordinatorShardBuilder<S, U> withSnapshotRegistry(
-        SnapshotRegistry snapshotRegistry
+            SnapshotRegistry snapshotRegistry
     );
 
     /**
@@ -50,7 +50,7 @@ public interface CoordinatorShardBuilder<S extends CoordinatorShard<U>, U> {
      * @return The builder.
      */
     CoordinatorShardBuilder<S, U> withLogContext(
-        LogContext logContext
+            LogContext logContext
     );
 
     /**
@@ -61,7 +61,7 @@ public interface CoordinatorShardBuilder<S extends CoordinatorShard<U>, U> {
      * @return The builder.
      */
     CoordinatorShardBuilder<S, U> withTime(
-        Time time
+            Time time
     );
 
     /**
@@ -72,7 +72,7 @@ public interface CoordinatorShardBuilder<S extends CoordinatorShard<U>, U> {
      * @return The builder.
      */
     CoordinatorShardBuilder<S, U> withTimer(
-        CoordinatorTimer<U> timer
+            CoordinatorTimer<U> timer
     );
 
     /**
@@ -83,7 +83,7 @@ public interface CoordinatorShardBuilder<S extends CoordinatorShard<U>, U> {
      * @return The builder.
      */
     CoordinatorShardBuilder<S, U> withExecutor(
-        CoordinatorExecutor<U> executor
+            CoordinatorExecutor<U> executor
     );
 
     /**
@@ -94,7 +94,7 @@ public interface CoordinatorShardBuilder<S extends CoordinatorShard<U>, U> {
      * @return The builder.
      */
     CoordinatorShardBuilder<S, U> withCoordinatorMetrics(
-        CoordinatorMetrics coordinatorMetrics
+            CoordinatorMetrics coordinatorMetrics
     );
 
     /**
@@ -105,7 +105,7 @@ public interface CoordinatorShardBuilder<S extends CoordinatorShard<U>, U> {
      * @return The builder.
      */
     CoordinatorShardBuilder<S, U> withTopicPartition(
-        TopicPartition topicPartition
+            TopicPartition topicPartition
     );
 
     /**

@@ -250,20 +250,20 @@ public class TimeWindowedKStreamImplTest {
                     // with cache returns all records (expired from underneath as well) as part of
                     // the merge process
                     assertThat(data, equalTo(asList(
-                            KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), 2L),
-                            KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), 1L),
-                            KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), 2L),
-                            KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), 1L))));
+                        KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), 2L),
+                        KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), 1L),
+                        KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), 2L),
+                        KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), 1L))));
                 } else {
                     // without cache, we get only non-expired record from underlying store.
                     if (!emitFinal) {
                         assertThat(data, equalTo(Collections.singletonList(
-                                KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), 1L))));
+                            KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), 1L))));
                     } else {
                         assertThat(data, equalTo(asList(
-                                KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), 1L),
-                                KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), 2L),
-                                KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), 1L))));
+                            KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), 1L),
+                            KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), 2L),
+                            KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), 1L))));
                     }
                 }
             }
@@ -276,19 +276,19 @@ public class TimeWindowedKStreamImplTest {
                 // the same values and logic described above applies here as well.
                 if (withCache) {
                     assertThat(data, equalTo(asList(
-                            KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), ValueAndTimestamp.make(2L, 15L)),
-                            KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), ValueAndTimestamp.make(1L, 500L)),
-                            KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), ValueAndTimestamp.make(2L, 550L)),
-                            KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), ValueAndTimestamp.make(1L, 1000L)))));
+                        KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), ValueAndTimestamp.make(2L, 15L)),
+                        KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), ValueAndTimestamp.make(1L, 500L)),
+                        KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), ValueAndTimestamp.make(2L, 550L)),
+                        KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), ValueAndTimestamp.make(1L, 1000L)))));
                 } else {
                     if (!emitFinal) {
                         assertThat(data, equalTo(Collections.singletonList(
-                                KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), ValueAndTimestamp.make(1L, 1000L)))));
+                            KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), ValueAndTimestamp.make(1L, 1000L)))));
                     } else {
                         assertThat(data, equalTo(asList(
-                                KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), ValueAndTimestamp.make(1L, 500L)),
-                                KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), ValueAndTimestamp.make(2L, 550L)),
-                                KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), ValueAndTimestamp.make(1L, 1000L)))));
+                            KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), ValueAndTimestamp.make(1L, 500L)),
+                            KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), ValueAndTimestamp.make(2L, 550L)),
+                            KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), ValueAndTimestamp.make(1L, 1000L)))));
                     }
                 }
             }
@@ -316,10 +316,10 @@ public class TimeWindowedKStreamImplTest {
                     // with cache returns all records (expired from underneath as well) as part of
                     // the merge process
                     assertThat(data, equalTo(asList(
-                            KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), "1+2"),
-                            KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), "3"),
-                            KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), "10+20"),
-                            KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), "30"))));
+                        KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), "1+2"),
+                        KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), "3"),
+                        KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), "10+20"),
+                        KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), "30"))));
                 } else {
                     // without cache, we get only non-expired record from underlying store.
                     // actualFrom = observedStreamTime(1500) - retentionPeriod(1000) + 1 = 501.
@@ -335,13 +335,13 @@ public class TimeWindowedKStreamImplTest {
                 // same logic/data as explained above.
                 if (withCache) {
                     assertThat(data, equalTo(asList(
-                            KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), ValueAndTimestamp.make("1+2", 15L)),
-                            KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), ValueAndTimestamp.make("3", 500L)),
-                            KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), ValueAndTimestamp.make("10+20", 550L)),
-                            KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), ValueAndTimestamp.make("30", 1000L)))));
+                        KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), ValueAndTimestamp.make("1+2", 15L)),
+                        KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), ValueAndTimestamp.make("3", 500L)),
+                        KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), ValueAndTimestamp.make("10+20", 550L)),
+                        KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), ValueAndTimestamp.make("30", 1000L)))));
                 } else {
                     assertThat(data, equalTo(Collections.singletonList(
-                            KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), ValueAndTimestamp.make("30", 1000L)))));
+                        KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), ValueAndTimestamp.make("30", 1000L)))));
                 }
             }
         }
@@ -369,16 +369,16 @@ public class TimeWindowedKStreamImplTest {
                     // with cache returns all records (expired from underneath as well) as part of
                     // the merge process
                     assertThat(data, equalTo(asList(
-                            KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), "0+1+2"),
-                            KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), "0+3"),
-                            KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), "0+10+20"),
-                            KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), "0+30"))));
+                        KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), "0+1+2"),
+                        KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), "0+3"),
+                        KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), "0+10+20"),
+                        KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), "0+30"))));
                 } else {
                     // without cache, we get only non-expired record from underlying store.
                     // actualFrom = observedStreamTime(1500) - retentionPeriod(1000) + 1 = 501.
                     // only 1 record is non expired and would be returned.
                     assertThat(data, equalTo(Collections
-                            .singletonList(KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), "0+30"))));
+                        .singletonList(KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), "0+30"))));
                 }
             }
             {
@@ -387,13 +387,13 @@ public class TimeWindowedKStreamImplTest {
                     StreamsTestUtils.toListAndCloseIterator(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
                 if (withCache) {
                     assertThat(data, equalTo(asList(
-                            KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), ValueAndTimestamp.make("0+1+2", 15L)),
-                            KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), ValueAndTimestamp.make("0+3", 500L)),
-                            KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), ValueAndTimestamp.make("0+10+20", 550L)),
-                            KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), ValueAndTimestamp.make("0+30", 1000L)))));
+                        KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), ValueAndTimestamp.make("0+1+2", 15L)),
+                        KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), ValueAndTimestamp.make("0+3", 500L)),
+                        KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), ValueAndTimestamp.make("0+10+20", 550L)),
+                        KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), ValueAndTimestamp.make("0+30", 1000L)))));
                 } else {
                     assertThat(data, equalTo(Collections.singletonList(
-                            KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), ValueAndTimestamp.make("0+30", 1000L)))));
+                        KeyValue.pair(new Windowed<>("2", new TimeWindow(1000, 1500)), ValueAndTimestamp.make("0+30", 1000L)))));
                 }
             }
         }
@@ -488,7 +488,7 @@ public class TimeWindowedKStreamImplTest {
 
     private void processData(final TopologyTestDriver driver) {
         final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
+            driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
         inputTopic.pipeInput("1", "1", 10L);
         inputTopic.pipeInput("1", "2", 15L);
         inputTopic.pipeInput("1", "3", 500L);

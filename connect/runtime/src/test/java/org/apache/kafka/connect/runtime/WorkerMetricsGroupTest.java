@@ -46,7 +46,7 @@ public class WorkerMetricsGroupTest {
     private final RuntimeException exception = new RuntimeException();
 
     @Mock private ConnectMetrics connectMetrics;
-    
+
     private Sensor connectorStartupResults;
     private Sensor connectorStartupAttempts;
     private Sensor connectorStartupSuccesses;
@@ -89,7 +89,7 @@ public class WorkerMetricsGroupTest {
         when(metricGroup.sensor(name)).thenReturn(sensor);
         return sensor;
     }
-    
+
     @Test
     public void testConnectorStartupRecordedMetrics() {
         WorkerMetricsGroup workerMetricsGroup = new WorkerMetricsGroup(new HashMap<>(), new HashMap<>(), connectMetrics);
@@ -120,7 +120,7 @@ public class WorkerMetricsGroupTest {
     public void testConnectorFailureBeforeStartupRecordedMetrics() {
         WorkerMetricsGroup workerMetricsGroup = new WorkerMetricsGroup(new HashMap<>(), new HashMap<>(), connectMetrics);
         final ConnectorStatus.Listener connectorListener = workerMetricsGroup.wrapStatusListener(delegateConnectorListener);
-        
+
         connectorListener.onFailure(connector, exception);
 
         verify(delegateConnectorListener).onFailure(connector, exception);
@@ -137,7 +137,7 @@ public class WorkerMetricsGroupTest {
         verify(delegateTaskListener).onStartup(task);
         verifyRecordTaskSuccess();
     }
-    
+
     @Test
     public void testTaskFailureAfterStartupRecordedMetrics() {
         WorkerMetricsGroup workerMetricsGroup = new WorkerMetricsGroup(new HashMap<>(), new HashMap<>(), connectMetrics);

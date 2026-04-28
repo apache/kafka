@@ -87,72 +87,72 @@ public class LogCompactionTester {
 
     public static class Options {
         public final OptionSpec<Long> numMessagesOpt;
-        public final OptionSpec<String>  messageCompressionOpt;
+        public final OptionSpec<String> messageCompressionOpt;
         public final OptionSpec<Integer> compressionLevelOpt;
         public final OptionSpec<Integer> numDupsOpt;
-        public final OptionSpec<String>  brokerOpt;
+        public final OptionSpec<String> brokerOpt;
         public final OptionSpec<Integer> topicsOpt;
         public final OptionSpec<Integer> percentDeletesOpt;
         public final OptionSpec<Integer> sleepSecsOpt;
-        public final OptionSpec<Void>    helpOpt;
+        public final OptionSpec<Void> helpOpt;
 
         public Options(OptionParser parser) {
             numMessagesOpt = parser
-                    .accepts("messages", "The number of messages to send or consume.")
-                    .withRequiredArg()
-                    .describedAs("count")
-                    .ofType(Long.class)
-                    .defaultsTo(Long.MAX_VALUE);
+                .accepts("messages", "The number of messages to send or consume.")
+                .withRequiredArg()
+                .describedAs("count")
+                .ofType(Long.class)
+                .defaultsTo(Long.MAX_VALUE);
 
             messageCompressionOpt = parser
-                    .accepts("compression-type", "message compression type")
-                    .withOptionalArg()
-                    .describedAs("compressionType")
-                    .ofType(String.class)
-                    .defaultsTo("none");
+                .accepts("compression-type", "message compression type")
+                .withOptionalArg()
+                .describedAs("compressionType")
+                .ofType(String.class)
+                .defaultsTo("none");
 
             compressionLevelOpt = parser
-                    .accepts("compression-level", "The compression level to use with the specified compression type.")
-                    .withOptionalArg()
-                    .describedAs("level")
-                    .ofType(Integer.class);
+                .accepts("compression-level", "The compression level to use with the specified compression type.")
+                .withOptionalArg()
+                .describedAs("level")
+                .ofType(Integer.class);
 
             numDupsOpt = parser
-                    .accepts("duplicates", "The number of duplicates for each key.")
-                    .withRequiredArg()
-                    .describedAs("count")
-                    .ofType(Integer.class)
-                    .defaultsTo(5);
+                .accepts("duplicates", "The number of duplicates for each key.")
+                .withRequiredArg()
+                .describedAs("count")
+                .ofType(Integer.class)
+                .defaultsTo(5);
 
             brokerOpt = parser
-                    .accepts("bootstrap-server", "The server(s) to connect to.")
-                    .withRequiredArg()
-                    .describedAs("url")
-                    .ofType(String.class);
+                .accepts("bootstrap-server", "The server(s) to connect to.")
+                .withRequiredArg()
+                .describedAs("url")
+                .ofType(String.class);
 
             topicsOpt = parser
-                    .accepts("topics", "The number of topics to test.")
-                    .withRequiredArg()
-                    .describedAs("count")
-                    .ofType(Integer.class)
-                    .defaultsTo(1);
+                .accepts("topics", "The number of topics to test.")
+                .withRequiredArg()
+                .describedAs("count")
+                .ofType(Integer.class)
+                .defaultsTo(1);
 
             percentDeletesOpt = parser
-                    .accepts("percent-deletes", "The percentage of updates that are deletes.")
-                    .withRequiredArg()
-                    .describedAs("percent")
-                    .ofType(Integer.class)
-                    .defaultsTo(0);
+                .accepts("percent-deletes", "The percentage of updates that are deletes.")
+                .withRequiredArg()
+                .describedAs("percent")
+                .ofType(Integer.class)
+                .defaultsTo(0);
 
             sleepSecsOpt = parser
-                    .accepts("sleep", "Time in milliseconds to sleep between production and consumption.")
-                    .withRequiredArg()
-                    .describedAs("ms")
-                    .ofType(Integer.class)
-                    .defaultsTo(0);
+                .accepts("sleep", "Time in milliseconds to sleep between production and consumption.")
+                .withRequiredArg()
+                .describedAs("ms")
+                .ofType(Integer.class)
+                .defaultsTo(0);
 
             helpOpt = parser
-                    .acceptsAll(List.of("h", "help"), "Display help information");
+                .acceptsAll(List.of("h", "help"), "Display help information");
         }
     }
 
@@ -173,10 +173,10 @@ public class LogCompactionTester {
             }
 
             return new TestRecord(
-                    components[0],
-                    Integer.parseInt(components[1]),
-                    Long.parseLong(components[2]),
-                    "d".equals(components[3])
+                components[0],
+                Integer.parseInt(components[1]),
+                Long.parseLong(components[2]),
+                "d".equals(components[3])
             );
         }
     }
@@ -207,7 +207,7 @@ public class LogCompactionTester {
 
         public static Iterator<TestRecord> valuesIterator(BufferedReader reader) {
             return Spliterators.iterator(new Spliterators.AbstractSpliterator<>(
-                    Long.MAX_VALUE, Spliterator.ORDERED) {
+                Long.MAX_VALUE, Spliterator.ORDERED) {
                 @Override
                 public boolean tryAdvance(java.util.function.Consumer<? super TestRecord> action) {
                     try {
@@ -243,7 +243,7 @@ public class LogCompactionTester {
         OptionSet optionSet = parser.parse(args);
         if (args.length == 0) {
             CommandLineUtils.printUsageAndExit(parser,
-                    "A tool to test log compaction. Valid options are: ");
+                "A tool to test log compaction. Valid options are: ");
         }
 
         CommandLineUtils.checkRequiredArgs(parser, optionSet, options.brokerOpt, options.numMessagesOpt);
@@ -259,15 +259,15 @@ public class LogCompactionTester {
 
         long testId = RANDOM.nextLong();
         Set<String> topics = IntStream.range(0, topicCount)
-                .mapToObj(i -> "log-cleaner-test-" + testId + "-" + i)
-                .collect(toCollection(LinkedHashSet::new));
+            .mapToObj(i -> "log-cleaner-test-" + testId + "-" + i)
+            .collect(toCollection(LinkedHashSet::new));
         createTopics(brokerUrl, topics);
 
         System.out.println("Producing " + messages + " messages..to topics " + String.join(",", topics));
         Path producedDataFilePath = produceMessages(
-                brokerUrl, topics, messages,
-                compressionType, compressionLevel,
-                dups, percentDeletes);
+            brokerUrl, topics, messages,
+            compressionType, compressionLevel,
+            dups, percentDeletes);
         System.out.println("Sleeping for " + sleepSecs + "seconds...");
         TimeUnit.MILLISECONDS.sleep(sleepSecs * 1000L);
         System.out.println("Consuming messages...");
@@ -297,10 +297,10 @@ public class LogCompactionTester {
 
         try (Admin adminClient = Admin.create(adminConfig)) {
             Map<String, String> topicConfigs = Map.of(
-                    TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT
+                TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT
             );
             List<NewTopic> newTopics = topics.stream()
-                    .map(name -> new NewTopic(name, 1, (short) 1).configs(topicConfigs)).toList();
+                .map(name -> new NewTopic(name, 1, (short) 1).configs(topicConfigs)).toList();
             adminClient.createTopics(newTopics).all().get();
 
             final List<String> pendingTopics = new ArrayList<>();
@@ -309,9 +309,9 @@ public class LogCompactionTester {
                     Set<String> allTopics = adminClient.listTopics().names().get();
                     pendingTopics.clear();
                     pendingTopics.addAll(
-                            topics.stream()
-                                    .filter(topicName -> !allTopics.contains(topicName))
-                                    .toList()
+                        topics.stream()
+                            .filter(topicName -> !allTopics.contains(topicName))
+                            .toList()
                     );
                     return pendingTopics.isEmpty();
                 } catch (InterruptedException | java.util.concurrent.ExecutionException e) {
@@ -331,9 +331,9 @@ public class LogCompactionTester {
             File consumedDedupedFile = new File(consumedDataFile.getAbsolutePath() + ".deduped");
 
             try (BufferedWriter producedDeduped = Files.newBufferedWriter(
-                    producedDedupedFile.toPath(), StandardCharsets.UTF_8);
+                     producedDedupedFile.toPath(), StandardCharsets.UTF_8);
                  BufferedWriter consumedDeduped = Files.newBufferedWriter(
-                         consumedDedupedFile.toPath(), StandardCharsets.UTF_8)) {
+                     consumedDedupedFile.toPath(), StandardCharsets.UTF_8)) {
                 int total = 0;
                 int mismatched = 0;
                 while (produced.hasNext() && consumed.hasNext()) {
@@ -369,10 +369,10 @@ public class LogCompactionTester {
         Path tempDir = Files.createTempDirectory("log_compaction_test");
 
         ProcessBuilder builder = new ProcessBuilder(
-                "sort", "--key=1,2", "--stable", "--buffer-size=20%",
-                "--temporary-directory=" + tempDir.toString(), file.getAbsolutePath());
+            "sort", "--key=1,2", "--stable", "--buffer-size=20%",
+            "--temporary-directory=" + tempDir.toString(), file.getAbsolutePath());
         builder.redirectError(ProcessBuilder.Redirect.INHERIT);
-        
+
         Process process;
         try {
             process = builder.start();
@@ -387,8 +387,8 @@ public class LogCompactionTester {
         }
 
         return new BufferedReader(
-                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8),
-                10 * 1024 * 1024
+            new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8),
+            10 * 1024 * 1024
         );
     }
 
@@ -406,13 +406,13 @@ public class LogCompactionTester {
     }
 
     private static Path produceMessages(String brokerUrl, Set<String> topics, long messages,
-                                        CompressionType compressionType, Integer compressionLevel,
-                                        int dups, int percentDeletes) throws IOException {
+        CompressionType compressionType, Integer compressionLevel,
+        int dups, int percentDeletes) throws IOException {
         Map<String, Object> producerProps = new HashMap<>();
         producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, String.valueOf(Long.MAX_VALUE));
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl);
         producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType.name);
-        
+
         if (compressionLevel != null) {
             switch (compressionType) {
                 case GZIP -> producerProps.put(ProducerConfig.COMPRESSION_GZIP_LEVEL_CONFIG, compressionLevel);
@@ -424,13 +424,13 @@ public class LogCompactionTester {
         }
 
         try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(
-                producerProps, new ByteArraySerializer(), new ByteArraySerializer())) {
+                 producerProps, new ByteArraySerializer(), new ByteArraySerializer())) {
             int keyCount = (int) (messages / dups);
             Path producedFilePath = Files.createTempFile("kafka-log-cleaner-produced-", ".txt");
             System.out.println("Logging produce requests to " + producedFilePath);
 
             try (BufferedWriter producedWriter = Files.newBufferedWriter(
-                    producedFilePath, StandardCharsets.UTF_8)) {
+                     producedFilePath, StandardCharsets.UTF_8)) {
                 List<String> topicsList = List.copyOf(topics);
                 int size = topicsList.size();
                 for (long i = 0; i < messages * size; i++) {
@@ -440,11 +440,11 @@ public class LogCompactionTester {
                     ProducerRecord<byte[], byte[]> record;
                     if (delete) {
                         record = new ProducerRecord<>(topic,
-                                String.valueOf(key).getBytes(StandardCharsets.UTF_8), null);
+                            String.valueOf(key).getBytes(StandardCharsets.UTF_8), null);
                     } else {
                         record = new ProducerRecord<>(topic,
-                                String.valueOf(key).getBytes(StandardCharsets.UTF_8),
-                                String.valueOf(i).getBytes(StandardCharsets.UTF_8));
+                            String.valueOf(key).getBytes(StandardCharsets.UTF_8),
+                            String.valueOf(i).getBytes(StandardCharsets.UTF_8));
                     }
                     producer.send(record);
                     producedWriter.write(new TestRecord(topic, key, i, delete).toString());
@@ -472,7 +472,7 @@ public class LogCompactionTester {
                             boolean delete = record.value() == null;
                             long value = delete ? -1L : Long.parseLong(record.value());
                             TestRecord testRecord = new TestRecord(
-                                    record.topic(), Integer.parseInt(record.key()), value, delete);
+                                record.topic(), Integer.parseInt(record.key()), value, delete);
                             consumedWriter.write(testRecord.toString());
                             consumedWriter.newLine();
                         } catch (IOException e) {
@@ -486,9 +486,9 @@ public class LogCompactionTester {
 
     private static Consumer<String, String> createConsumer(String brokerUrl) {
         Map<String, Object> consumerProps = Map.of(
-                ConsumerConfig.GROUP_ID_CONFIG, "log-cleaner-test-" + RANDOM.nextInt(Integer.MAX_VALUE),
-                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl,
-                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"
+            ConsumerConfig.GROUP_ID_CONFIG, "log-cleaner-test-" + RANDOM.nextInt(Integer.MAX_VALUE),
+            ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl,
+            ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"
         );
         return new KafkaConsumer<>(consumerProps, new StringDeserializer(), new StringDeserializer());
     }

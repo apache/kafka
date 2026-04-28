@@ -50,7 +50,7 @@ public class ClusterToolTest {
     @ClusterTest
     public void testClusterId(ClusterInstance clusterInstance) {
         String output = ToolsTestUtils.captureStandardOut(() ->
-                assertDoesNotThrow(() -> ClusterTool.execute("cluster-id", "--bootstrap-server", clusterInstance.bootstrapServers())));
+            assertDoesNotThrow(() -> ClusterTool.execute("cluster-id", "--bootstrap-server", clusterInstance.bootstrapServers())));
         assertTrue(output.contains("Cluster ID: " + clusterInstance.clusterId()));
     }
 
@@ -62,7 +62,7 @@ public class ClusterToolTest {
         brokerId = assertDoesNotThrow(() -> brokerIds.stream().findFirst().get());
         clusterInstance.shutdownBroker(brokerId);
         String output = ToolsTestUtils.captureStandardOut(() ->
-                assertDoesNotThrow(() -> ClusterTool.execute("unregister", "--bootstrap-server", clusterInstance.bootstrapServers(), "--id", String.valueOf(brokerId))));
+            assertDoesNotThrow(() -> ClusterTool.execute("unregister", "--bootstrap-server", clusterInstance.bootstrapServers(), "--id", String.valueOf(brokerId))));
 
         assertTrue(output.contains("Broker " + brokerId + " is no longer registered."));
     }
@@ -70,7 +70,7 @@ public class ClusterToolTest {
     @ClusterTest(brokers = 1, types = {Type.KRAFT, Type.CO_KRAFT})
     public void testListEndpointsWithBootstrapServer(ClusterInstance clusterInstance) {
         String output = ToolsTestUtils.captureStandardOut(() ->
-                assertDoesNotThrow(() -> ClusterTool.execute("list-endpoints", "--bootstrap-server", clusterInstance.bootstrapServers())));
+            assertDoesNotThrow(() -> ClusterTool.execute("list-endpoints", "--bootstrap-server", clusterInstance.bootstrapServers())));
         String port = clusterInstance.bootstrapServers().split(":")[1];
         int id = clusterInstance.brokerIds().iterator().next();
         String format = "%-10s %-9s %-10s %-10s %-10s %-15s%n%-10s %-9s %-10s %-10s %-10s %-6s";
@@ -83,12 +83,12 @@ public class ClusterToolTest {
         List<Integer> brokerIds = clusterInstance.brokerIds().stream().toList();
         clusterInstance.shutdownBroker(brokerIds.get(0));
 
-        List<String> ports = Arrays.stream(clusterInstance.bootstrapServers().split(",")).map(b ->  b.split(":")[1]).toList();
+        List<String> ports = Arrays.stream(clusterInstance.bootstrapServers().split(",")).map(b -> b.split(":")[1]).toList();
         String format = "%-10s %-9s %-10s %-10s %-10s %-15s%n%-10s %-9s %-10s %-10s %-10s %-15s%n%-10s %-9s %-10s %-10s %-10s %-6s";
         String expected = String.format(format,
-                "ID", "HOST", "PORT", "RACK", "STATE", "ENDPOINT_TYPE",
-                brokerIds.get(0), "localhost", ports.get(0), "null", "fenced", "broker",
-                brokerIds.get(1), "localhost", ports.get(1), "null", "unfenced", "broker");
+            "ID", "HOST", "PORT", "RACK", "STATE", "ENDPOINT_TYPE",
+            brokerIds.get(0), "localhost", ports.get(0), "null", "fenced", "broker",
+            brokerIds.get(1), "localhost", ports.get(1), "null", "unfenced", "broker");
 
         String output = ToolsTestUtils.captureStandardOut(() -> assertDoesNotThrow(() -> ClusterTool.execute("list-endpoints", "--bootstrap-server", clusterInstance.bootstrapServers(), "--include-fenced-brokers")));
 
@@ -98,7 +98,7 @@ public class ClusterToolTest {
     @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})
     public void testClusterIdWithBootstrapController(ClusterInstance clusterInstance) {
         String output = ToolsTestUtils.captureStandardOut(() ->
-                assertDoesNotThrow(() -> ClusterTool.execute("cluster-id", "--bootstrap-controller", clusterInstance.bootstrapControllers())));
+            assertDoesNotThrow(() -> ClusterTool.execute("cluster-id", "--bootstrap-controller", clusterInstance.bootstrapControllers())));
         assertTrue(output.contains("Cluster ID: " + clusterInstance.clusterId()));
     }
 
@@ -114,7 +114,7 @@ public class ClusterToolTest {
     @ClusterTest(brokers = 3, types = {Type.KRAFT, Type.CO_KRAFT})
     public void testListEndpointsWithBootstrapController(ClusterInstance clusterInstance) {
         String output = ToolsTestUtils.captureStandardOut(() ->
-                assertDoesNotThrow(() -> ClusterTool.execute("list-endpoints", "--bootstrap-controller", clusterInstance.bootstrapControllers())));
+            assertDoesNotThrow(() -> ClusterTool.execute("list-endpoints", "--bootstrap-controller", clusterInstance.bootstrapControllers())));
         String port = clusterInstance.bootstrapControllers().split(":")[1];
         int id = clusterInstance.controllerIds().iterator().next();
         String format = "%-10s %-9s %-10s %-10s %-15s%n%-10s %-9s %-10s %-10s %-10s";
@@ -125,8 +125,8 @@ public class ClusterToolTest {
     @ClusterTest(brokers = 3, types = {Type.KRAFT, Type.CO_KRAFT})
     public void testListEndpointsArgumentWithBootstrapController(ClusterInstance clusterInstance) {
         RuntimeException exception =
-                assertThrows(RuntimeException.class,
-                        () -> ClusterTool.execute("list-endpoints", "--bootstrap-controller", clusterInstance.bootstrapControllers(), "--include-fenced-brokers"));
+            assertThrows(RuntimeException.class,
+                () -> ClusterTool.execute("list-endpoints", "--bootstrap-controller", clusterInstance.bootstrapControllers(), "--include-fenced-brokers"));
         assertEquals("The option --include-fenced-brokers is only supported with --bootstrap-server option", exception.getMessage());
     }
 
@@ -190,8 +190,8 @@ public class ClusterToolTest {
     @Test
     public void testPrintClusterId() throws Exception {
         Admin adminClient = new MockAdminClient.Builder().
-                clusterId("QtNwvtfVQ3GEFpzOmDEE-w").
-                build();
+            clusterId("QtNwvtfVQ3GEFpzOmDEE-w").
+            build();
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
         ClusterTool.clusterIdCommand(new PrintStream(stream), adminClient);
         assertEquals("Cluster ID: QtNwvtfVQ3GEFpzOmDEE-w\n", stream.toString());
@@ -200,8 +200,8 @@ public class ClusterToolTest {
     @Test
     public void testClusterTooOldToHaveId() throws Exception {
         Admin adminClient = new MockAdminClient.Builder().
-                clusterId(null).
-                build();
+            clusterId(null).
+            build();
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
         ClusterTool.clusterIdCommand(new PrintStream(stream), adminClient);
         assertEquals("No cluster ID found. The Kafka version is probably too old.\n", stream.toString());
@@ -210,8 +210,8 @@ public class ClusterToolTest {
     @Test
     public void testUnregisterBroker() throws Exception {
         Admin adminClient = new MockAdminClient.Builder().numBrokers(3).
-                usingRaftController(true).
-                build();
+            usingRaftController(true).
+            build();
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
         ClusterTool.unregisterCommand(new PrintStream(stream), adminClient, 0);
         assertEquals("Broker 0 is no longer registered.\n", stream.toString());
@@ -220,8 +220,8 @@ public class ClusterToolTest {
     @Test
     public void testLegacyModeClusterCannotUnregisterBroker() throws Exception {
         Admin adminClient = new MockAdminClient.Builder().numBrokers(3).
-                usingRaftController(false).
-                build();
+            usingRaftController(false).
+            build();
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
         ClusterTool.unregisterCommand(new PrintStream(stream), adminClient, 0);
         assertEquals("The target cluster does not support the broker unregistration API.\n", stream.toString());

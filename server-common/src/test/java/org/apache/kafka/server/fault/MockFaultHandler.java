@@ -44,9 +44,9 @@ public class MockFaultHandler implements FaultHandler {
             log.error("Encountered {} fault: {}", name, failureMessage, cause);
         }
         FaultHandlerException e = (cause == null) ?
-                new FaultHandlerException(name + ": " + failureMessage) :
-                new FaultHandlerException(name + ": " + failureMessage +
-                        ": " + cause.getMessage(), cause);
+            new FaultHandlerException(name + ": " + failureMessage) :
+            new FaultHandlerException(name + ": " + failureMessage +
+                ": " + cause.getMessage(), cause);
         if (firstException == null) {
             firstException = e;
         }

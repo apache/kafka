@@ -39,7 +39,8 @@ import java.util.stream.Collectors;
 
 public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKey> {
 
-    private static final ApiRequestScope BATCH_REQUEST_SCOPE = new ApiRequestScope() { };
+    private static final ApiRequestScope BATCH_REQUEST_SCOPE = new ApiRequestScope() {
+    };
 
     private final Logger log;
     private final FindCoordinatorRequest.CoordinatorType type;
@@ -73,8 +74,8 @@ public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKe
         if (batch) {
             ensureSameType(representableKeys);
             FindCoordinatorRequestData data = new FindCoordinatorRequestData()
-                    .setKeyType(type.id())
-                    .setCoordinatorKeys(representableKeys.stream().map(k -> k.idValue).collect(Collectors.toList()));
+                .setKeyType(type.id())
+                .setCoordinatorKeys(representableKeys.stream().map(k -> k.idValue).collect(Collectors.toList()));
             return new FindCoordinatorRequest.Builder(data);
         } else {
             CoordinatorKey key = requireSingletonAndType(representableKeys);
@@ -105,14 +106,14 @@ public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKe
                 key = requireSingletonAndType(keys);
             else {
                 key = (type == CoordinatorType.GROUP)
-                        ? CoordinatorKey.byGroupId(coordinator.key())
-                        : CoordinatorKey.byTransactionalId(coordinator.key());
+                    ? CoordinatorKey.byGroupId(coordinator.key())
+                    : CoordinatorKey.byTransactionalId(coordinator.key());
             }
             handleError(Errors.forCode(coordinator.errorCode()),
-                        key,
-                        coordinator.nodeId(),
-                        mappedKeys,
-                        failedKeys);
+                key,
+                coordinator.nodeId(),
+                mappedKeys,
+                failedKeys);
         }
         return new LookupResult<>(failedKeys, mappedKeys);
     }

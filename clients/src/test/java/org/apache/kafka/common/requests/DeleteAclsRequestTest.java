@@ -65,7 +65,7 @@ public class DeleteAclsRequestTest {
     @Test
     public void shouldRoundTripV1() {
         final DeleteAclsRequest original = new DeleteAclsRequest.Builder(
-                requestData(LITERAL_FILTER, PREFIXED_FILTER, ANY_FILTER)
+            requestData(LITERAL_FILTER, PREFIXED_FILTER, ANY_FILTER)
         ).build(V1);
         final Readable readable = original.serialize();
 
@@ -77,7 +77,7 @@ public class DeleteAclsRequestTest {
     private static void assertRequestEquals(final DeleteAclsRequest original, final DeleteAclsRequest actual) {
         assertEquals(original.filters().size(), actual.filters().size(), "Number of filters wrong");
 
-        for (int idx = 0; idx != original.filters().size(); ++idx) {
+        for (int idx = 0;idx != original.filters().size();++idx) {
             final AclBindingFilter originalFilter = original.filters().get(idx);
             final AclBindingFilter actualFilter = actual.filters().get(idx);
             assertEquals(originalFilter, actualFilter);

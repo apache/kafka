@@ -39,7 +39,7 @@ public enum ElectionType {
             return UNCLEAN;
         } else {
             throw new IllegalArgumentException(
-                    String.format("Value %s must be one of %s", value, Arrays.asList(ElectionType.values())));
+                String.format("Value %s must be one of %s", value, Arrays.asList(ElectionType.values())));
         }
     }
 }

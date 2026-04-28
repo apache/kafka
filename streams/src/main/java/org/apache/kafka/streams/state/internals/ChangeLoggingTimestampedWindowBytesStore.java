@@ -26,13 +26,13 @@ import static org.apache.kafka.streams.state.internals.ValueAndTimestampDeserial
 public class ChangeLoggingTimestampedWindowBytesStore extends ChangeLoggingWindowBytesStore {
 
     ChangeLoggingTimestampedWindowBytesStore(final WindowStore<Bytes, byte[]> bytesStore,
-                                             final boolean retainDuplicates) {
+        final boolean retainDuplicates) {
         super(bytesStore, retainDuplicates, WindowKeySchema::toStoreKeyBinary);
     }
 
     @Override
     void log(final Bytes key,
-             final byte[] valueAndTimestamp) {
+        final byte[] valueAndTimestamp) {
         internalContext.logChange(
             name(),
             key,

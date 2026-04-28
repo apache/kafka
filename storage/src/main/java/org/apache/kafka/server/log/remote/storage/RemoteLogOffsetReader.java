@@ -40,12 +40,12 @@ public class RemoteLogOffsetReader implements Callable<Void> {
     private final Consumer<OffsetResultHolder.FileRecordsOrError> callback;
 
     public RemoteLogOffsetReader(RemoteLogManager rlm,
-                                 TopicPartition tp,
-                                 long timestamp,
-                                 long startingOffset,
-                                 LeaderEpochFileCache leaderEpochCache,
-                                 AsyncOffsetReader.TimestampAndOffsetSupplier searchInLocalLog,
-                                 Consumer<OffsetResultHolder.FileRecordsOrError> callback) {
+            TopicPartition tp,
+            long timestamp,
+            long startingOffset,
+            LeaderEpochFileCache leaderEpochCache,
+            AsyncOffsetReader.TimestampAndOffsetSupplier searchInLocalLog,
+            Consumer<OffsetResultHolder.FileRecordsOrError> callback) {
         this.rlm = rlm;
         this.tp = tp;
         this.timestamp = timestamp;

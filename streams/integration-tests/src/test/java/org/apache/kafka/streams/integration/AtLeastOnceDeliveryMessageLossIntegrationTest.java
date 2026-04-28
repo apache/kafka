@@ -74,42 +74,42 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class AtLeastOnceDeliveryMessageLossIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(
         AtLeastOnceDeliveryMessageLossIntegrationTest.class);
-    
+
     private static final int NUM_BROKERS = 1;
     private static final int LARGE_RECORD_COUNT = 50000;
     private static final int SMALL_RECORD_COUNT = 40000;
-    
+
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
-    
+
     @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
-    
+
     @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
-    
+
     private String applicationId;
     private String inputTopic;
     private String outputTopic;
     private Properties streamsConfiguration;
     private KafkaStreams kafkaStreams;
-    
+
     @BeforeEach
     public void setUp(final TestInfo testInfo) throws Exception {
         final String testId = safeUniqueTestName(testInfo);
         applicationId = "app-" + testId;
         inputTopic = "input-" + testId;
         outputTopic = "output-" + testId;
-        
+
         cleanStateBeforeTest(CLUSTER, inputTopic, outputTopic);
         CLUSTER.createTopics(inputTopic, outputTopic);
-        
+
         setupStreamsConfiguration();
     }
-    
+
     @AfterEach
     public void cleanUp() throws Exception {
         if (kafkaStreams != null) {
@@ -122,7 +122,7 @@ public class AtLeastOnceDeliveryMessageLossIntegrationTest {
 
     @Test
     public void shouldCommitOffsetsAndProduceOutputRecordsWhenProducerFailsWithMessageTooLarge() throws Exception {
-        
+
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(Sender.class)) {
             produceInputData(LARGE_RECORD_COUNT);
 
@@ -150,11 +150,11 @@ public class AtLeastOnceDeliveryMessageLossIntegrationTest {
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        
+
         // AT_LEAST_ONCE processing guarantee
         streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.AT_LEAST_ONCE);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 30000L);
-        
+
         // Producer configuration that can trigger MESSAGE_TOO_LARGE errors
         streamsConfiguration.put(ProducerConfig.LINGER_MS_CONFIG, 300000);
         streamsConfiguration.put(ProducerConfig.BATCH_SIZE_CONFIG, 33554432);
@@ -165,7 +165,7 @@ public class AtLeastOnceDeliveryMessageLossIntegrationTest {
         for (int i = 1; i <= recordCount; i++) {
             inputRecords.add(new KeyValue<>(String.valueOf(i), "item-" + i));
         }
-        
+
         IntegrationTestUtils.produceKeyValuesSynchronously(
             inputTopic,
             inputRecords,
@@ -173,13 +173,13 @@ public class AtLeastOnceDeliveryMessageLossIntegrationTest {
             CLUSTER.time
         );
     }
-    
+
     private void waitForProcessingAndCommit() throws Exception {
         // Wait slightly longer than commit interval to ensure processing and offset commits
         waitForCondition(
             () -> {
                 try (final Admin adminClient = Admin.create(mkMap(
-                        mkEntry(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())))) {
+                         mkEntry(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())))) {
                     final TopicPartition topicPartition = new TopicPartition(inputTopic, 0);
                     return adminClient
                         .listConsumerGroupOffsets(applicationId)
@@ -194,25 +194,25 @@ public class AtLeastOnceDeliveryMessageLossIntegrationTest {
             "Waiting for consumer offsets to be committed"
         );
     }
-    
+
     private boolean verifyConsumerOffsetsCommitted(final int expectedOffset) throws Exception {
         try (final Admin adminClient = Admin.create(mkMap(
-                mkEntry(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())))) {
-            
+                 mkEntry(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())))) {
+
             final TopicPartition topicPartition = new TopicPartition(inputTopic, 0);
-            
+
             final long committedOffset = adminClient
-                .listConsumerGroupOffsets(applicationId) 
+                .listConsumerGroupOffsets(applicationId)
                 .partitionsToOffsetAndMetadata()
                 .get()
                 .get(topicPartition)
                 .offset();
-            
+
             log.info("Consumer group {} committed offset: {} (expected: {})", applicationId, committedOffset, expectedOffset);
             return committedOffset == expectedOffset;
         }
     }
-    
+
     private int verifyOutputRecords(final int expectedRecordCount) {
         try {
             final List<KeyValue<String, String>> outputRecords =
@@ -237,14 +237,14 @@ public class AtLeastOnceDeliveryMessageLossIntegrationTest {
 
     private KafkaStreams createStreamsApplication() {
         final StreamsBuilder builder = new StreamsBuilder();
-        
+
         final KStream<String, String> input = builder.stream(inputTopic);
         input.peek((key, value) -> {
             if (Integer.parseInt(key) % 1000 == 0) {
                 log.debug("Processing record {}: {} -> {}", key, key, value);
             }
         }).to(outputTopic);
-        
+
         return new KafkaStreams(builder.build(), streamsConfiguration);
     }
 }

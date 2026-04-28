@@ -387,11 +387,11 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
 
     public static Collection<Arguments> rackAndSubscriptionCombinations() {
         return Arrays.asList(
-                Arguments.of(RackConfig.NO_BROKER_RACK, true),
-                Arguments.of(RackConfig.NO_CONSUMER_RACK, true),
-                Arguments.of(RackConfig.BROKER_AND_CONSUMER_RACK, true),
-                Arguments.of(RackConfig.NO_BROKER_RACK, false),
-                Arguments.of(RackConfig.NO_CONSUMER_RACK, false),
-                Arguments.of(RackConfig.BROKER_AND_CONSUMER_RACK, false));
+            Arguments.of(RackConfig.NO_BROKER_RACK, true),
+            Arguments.of(RackConfig.NO_CONSUMER_RACK, true),
+            Arguments.of(RackConfig.BROKER_AND_CONSUMER_RACK, true),
+            Arguments.of(RackConfig.NO_BROKER_RACK, false),
+            Arguments.of(RackConfig.NO_CONSUMER_RACK, false),
+            Arguments.of(RackConfig.BROKER_AND_CONSUMER_RACK, false));
     }
 }

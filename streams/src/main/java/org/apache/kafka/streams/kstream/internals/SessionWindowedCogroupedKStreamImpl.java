@@ -44,12 +44,12 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
     private final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns;
 
     SessionWindowedCogroupedKStreamImpl(final SessionWindows sessionWindows,
-                                        final InternalStreamsBuilder builder,
-                                        final Set<String> subTopologySourceNodes,
-                                        final String name,
-                                        final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder,
-                                        final GraphNode graphNode,
-                                        final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns) {
+        final InternalStreamsBuilder builder,
+        final Set<String> subTopologySourceNodes,
+        final String name,
+        final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder,
+        final GraphNode graphNode,
+        final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns) {
         super(name, null, null, subTopologySourceNodes, graphNode, builder);
         //keySerde and valueSerde are null because there are many different groupStreams that they could be from
         this.sessionWindows = sessionWindows;
@@ -59,27 +59,27 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
 
     @Override
     public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
-                                            final Merger<? super K, V> sessionMerger) {
+        final Merger<? super K, V> sessionMerger) {
         return aggregate(initializer, sessionMerger, Materialized.with(null, null));
     }
 
     @Override
     public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
-                                            final Merger<? super K, V> sessionMerger,
-                                            final Materialized<K, V, SessionStore<Bytes, byte[]>> materialized) {
+        final Merger<? super K, V> sessionMerger,
+        final Materialized<K, V, SessionStore<Bytes, byte[]>> materialized) {
         return aggregate(initializer, sessionMerger, NamedInternal.empty(), materialized);
     }
 
     @Override
     public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
-                                            final Merger<? super K, V> sessionMerger, final Named named) {
+        final Merger<? super K, V> sessionMerger, final Named named) {
         return aggregate(initializer, sessionMerger, named, Materialized.with(null, null));
     }
 
     @Override
     public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
-                                            final Merger<? super K, V> sessionMerger, final Named named,
-                                            final Materialized<K, V, SessionStore<Bytes, byte[]>> materialized) {
+        final Merger<? super K, V> sessionMerger, final Named named,
+        final Materialized<K, V, SessionStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(sessionMerger, "sessionMerger can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
@@ -93,9 +93,9 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
             initializer,
             new NamedInternal(named),
             new SessionStoreMaterializer<>(
-                    materializedInternal,
-                    sessionWindows,
-                    EmitStrategy.onWindowUpdate()),
+                materializedInternal,
+                sessionWindows,
+                EmitStrategy.onWindowUpdate()),
             materializedInternal.keySerde() != null ?
                 new WindowedSerdes.SessionWindowedSerde<>(
                     materializedInternal.keySerde()) :

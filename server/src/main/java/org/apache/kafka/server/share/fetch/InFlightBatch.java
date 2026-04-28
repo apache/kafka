@@ -185,7 +185,7 @@ public class InFlightBatch {
      * @throws IllegalStateException if the offset state is maintained and the batch state is not available.
      */
     public InFlightState startBatchStateTransition(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount,
-        String newMemberId
+                                                   String newMemberId
     ) {
         return inFlightState().startStateTransition(newState, ops, maxDeliveryCount, newMemberId);
     }

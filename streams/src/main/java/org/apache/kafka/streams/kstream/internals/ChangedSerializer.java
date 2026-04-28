@@ -102,7 +102,7 @@ public class ChangedSerializer<T> implements Serializer<Change<T>>, WrappingNull
         if (newValueIsNotNull && oldValueIsNotNull) {
             if (isUpgrade) {
                 throw new StreamsException("Both old and new values are not null (" + data.oldValue
-                        + " : " + data.newValue + ") in ChangeSerializer, which is not allowed unless upgrading.");
+                    + " : " + data.newValue + ") in ChangeSerializer, which is not allowed unless upgrading.");
             } else {
                 final int capacity = MAX_VARINT_LENGTH + newDataLength + oldDataLength + ENCODING_FLAG_SIZE;
                 final ByteBuffer buf = ByteBuffer.allocate(capacity);

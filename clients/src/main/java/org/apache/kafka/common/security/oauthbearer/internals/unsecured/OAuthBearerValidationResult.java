@@ -61,12 +61,12 @@ public class OAuthBearerValidationResult implements Serializable {
      * @return a new validation failure instance
      */
     public static OAuthBearerValidationResult newFailure(String failureDescription, String failureScope,
-            String failureOpenIdConfig) {
+        String failureOpenIdConfig) {
         return new OAuthBearerValidationResult(false, failureDescription, failureScope, failureOpenIdConfig);
     }
 
     private OAuthBearerValidationResult(boolean success, String failureDescription, String failureScope,
-            String failureOpenIdConfig) {
+        String failureOpenIdConfig) {
         if (success && (failureScope != null || failureOpenIdConfig != null))
             throw new IllegalArgumentException("success was indicated but failure scope/OpenIdConfig were provided");
         this.success = success;

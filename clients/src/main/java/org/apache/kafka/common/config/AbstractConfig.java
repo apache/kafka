@@ -65,8 +65,8 @@ public class AbstractConfig {
     public static final String AUTOMATIC_CONFIG_PROVIDERS_PROPERTY = "org.apache.kafka.automatic.config.providers";
 
     public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
-    public static final String CONFIG_PROVIDERS_DOC = 
-            "Comma-separated alias names for classes implementing the <code>ConfigProvider</code> interface. " +
+    public static final String CONFIG_PROVIDERS_DOC =
+        "Comma-separated alias names for classes implementing the <code>ConfigProvider</code> interface. " +
             "This enables loading configuration data (such as passwords, API keys, and other credentials) from external " +
             "sources. For example, see <a href=\"https://kafka.apache.org/documentation/#config_providers\">Configuration Providers</a>.";
 
@@ -264,7 +264,7 @@ public class AbstractConfig {
         for (Map.Entry<String, ?> entry : originals.entrySet()) {
             if (!(entry.getValue() instanceof String))
                 throw new ClassCastException("Non-string value found in original settings for key " + entry.getKey() +
-                        ": " + (entry.getValue() == null ? null : entry.getValue().getClass().getName()));
+                    ": " + (entry.getValue() == null ? null : entry.getValue().getClass().getName()));
             copy.put(entry.getKey(), (String) entry.getValue());
         }
         return copy;
@@ -570,8 +570,8 @@ public class AbstractConfig {
             return ignored -> true;
         } else {
             return Arrays.stream(systemProperty.split(","))
-                    .map(String::trim)
-                    .collect(Collectors.toSet())::contains;
+                .map(String::trim)
+                .collect(Collectors.toSet())::contains;
         }
     }
 
@@ -599,9 +599,9 @@ public class AbstractConfig {
      * @return map of config provider name and its instance.
      */
     private Map<String, ConfigProvider> instantiateConfigProviders(
-            Map<String, String> indirectConfigs,
-            Map<String, ?> providerConfigProperties,
-            Predicate<String> classNameFilter
+        Map<String, String> indirectConfigs,
+        Map<String, ?> providerConfigProperties,
+        Predicate<String> classNameFilter
     ) {
         final String configProviders = indirectConfigs.get(CONFIG_PROVIDERS_CONFIG);
 
@@ -619,7 +619,7 @@ public class AbstractConfig {
                     providerMap.put(provider, providerClassName);
                 } else {
                     throw new ConfigException(providerClassName + " is not allowed. Update System property '"
-                            + AUTOMATIC_CONFIG_PROVIDERS_PROPERTY + "' to allow " + providerClassName);
+                        + AUTOMATIC_CONFIG_PROVIDERS_PROPERTY + "' to allow " + providerClassName);
                 }
             }
         }

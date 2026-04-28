@@ -59,20 +59,20 @@ public class StateStoreProviderStub extends StreamThreadStateStoreProvider {
             return Collections.emptyList();
         }
         return (List<T>) Collections.unmodifiableList(
-                stores.entrySet().stream().
-                        filter(entry -> entry.getKey().getKey().equals(storeName) && queryableStoreType.accepts(entry.getValue())).
-                        map(Entry::getValue).
-                        collect(Collectors.toList()));
+            stores.entrySet().stream().
+                filter(entry -> entry.getKey().getKey().equals(storeName) && queryableStoreType.accepts(entry.getValue())).
+                map(Entry::getValue).
+                collect(Collectors.toList()));
     }
 
     public void addStore(final String storeName,
-                         final StateStore store) {
+        final StateStore store) {
         addStore(storeName, defaultStorePartition, store);
     }
 
     public void addStore(final String storeName,
-                         final int partition,
-                         final StateStore store) {
+        final int partition,
+        final StateStore store) {
         stores.put(new SimpleEntry<>(storeName, partition), store);
     }
 }

@@ -32,18 +32,18 @@ import java.util.Set;
 public class CertStores {
 
     public static final Set<String> KEYSTORE_PROPS = Set.of(
-            SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
-            SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
-            SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
-            SslConfigs.SSL_KEY_PASSWORD_CONFIG,
-            SslConfigs.SSL_KEYSTORE_KEY_CONFIG,
-            SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG);
+        SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
+        SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
+        SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
+        SslConfigs.SSL_KEY_PASSWORD_CONFIG,
+        SslConfigs.SSL_KEYSTORE_KEY_CONFIG,
+        SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG);
 
     public static final Set<String> TRUSTSTORE_PROPS = Set.of(
-            SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
-            SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
-            SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
-            SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG);
+        SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
+        SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
+        SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
+        SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG);
 
     private final Map<String, Object> sslConfig;
 
@@ -64,14 +64,14 @@ public class CertStores {
         ConnectionMode connectionMode = server ? ConnectionMode.SERVER : ConnectionMode.CLIENT;
         File truststoreFile = usePem ? null : TestUtils.tempFile(name + "TS", ".jks");
         sslConfig = new SslConfigsBuilder(connectionMode)
-                .useClientCert(!server)
-                .certAlias(name)
-                .cn(commonName)
-                .createNewTrustStore(truststoreFile)
-                .certBuilder(certBuilder)
-                .algorithm(keyAlgorithm)
-                .usePem(usePem)
-                .build();
+            .useClientCert(!server)
+            .certAlias(name)
+            .cn(commonName)
+            .createNewTrustStore(truststoreFile)
+            .certBuilder(certBuilder)
+            .algorithm(keyAlgorithm)
+            .usePem(usePem)
+            .build();
     }
 
 

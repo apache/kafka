@@ -428,11 +428,11 @@ public class OffsetsUtils {
         Map<TopicPartition, OffsetAndMetadata> preparedOffsetsForPartitionsWithoutCommittedOffset =
             getLogEndOffsets(partitionsToResetWithoutCommittedOffset)
                 .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> {
-                    if (!(e.getValue() instanceof OffsetsUtils.LogOffset)) {
-                        CommandLineUtils.printUsageAndExit(parser, "Error getting ending offset of topic partition: " + e.getKey());
-                    }
-                    return new OffsetAndMetadata(((OffsetsUtils.LogOffset) e.getValue()).value);
-                }));
+                if (!(e.getValue() instanceof OffsetsUtils.LogOffset)) {
+                    CommandLineUtils.printUsageAndExit(parser, "Error getting ending offset of topic partition: " + e.getKey());
+                }
+                return new OffsetAndMetadata(((OffsetsUtils.LogOffset) e.getValue()).value);
+            }));
 
         preparedOffsetsForPartitionsWithCommittedOffset.putAll(preparedOffsetsForPartitionsWithoutCommittedOffset);
 
@@ -465,7 +465,7 @@ public class OffsetsUtils {
                 .flatMap(entry -> entry.getValue().partitions().stream()
                     .filter(partitionInfo -> partitionInfo.leader() == null)
                     .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))
-                    .filter(topicPartitions::contains)
+                .filter(topicPartitions::contains)
                 .toList();
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -498,14 +498,17 @@ public class OffsetsUtils {
         e.ifPresent(Throwable::printStackTrace);
     }
 
-    public interface LogOffsetResult { }
+    public interface LogOffsetResult {
+    }
 
     public record LogOffset(long value) implements LogOffsetResult {
     }
 
-    public static class Unknown implements LogOffsetResult { }
+    public static class Unknown implements LogOffsetResult {
+    }
 
-    public static class Ignore implements LogOffsetResult { }
+    public static class Ignore implements LogOffsetResult {
+    }
 
 
     public static class OffsetsUtilsOptions {

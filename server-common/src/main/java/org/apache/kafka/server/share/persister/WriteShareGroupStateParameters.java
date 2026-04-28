@@ -37,21 +37,21 @@ public class WriteShareGroupStateParameters implements PersisterParameters {
 
     public static WriteShareGroupStateParameters from(WriteShareGroupStateRequestData data) {
         return new Builder()
-                .setGroupTopicPartitionData(new GroupTopicPartitionData<>(data.groupId(), data.topics().stream()
-                        .map(writeStateData -> new TopicData<>(writeStateData.topicId(),
-                                writeStateData.partitions().stream()
-                                        .map(partitionData -> PartitionFactory.newPartitionStateBatchData(
-                                                partitionData.partition(),
-                                                partitionData.stateEpoch(),
-                                                partitionData.startOffset(),
-                                                partitionData.deliveryCompleteCount(),
-                                                partitionData.leaderEpoch(),
-                                                partitionData.stateBatches().stream()
-                                                        .map(PersisterStateBatch::from)
-                                                        .collect(Collectors.toList())))
-                                        .collect(Collectors.toList())))
+            .setGroupTopicPartitionData(new GroupTopicPartitionData<>(data.groupId(), data.topics().stream()
+                .map(writeStateData -> new TopicData<>(writeStateData.topicId(),
+                    writeStateData.partitions().stream()
+                        .map(partitionData -> PartitionFactory.newPartitionStateBatchData(
+                            partitionData.partition(),
+                            partitionData.stateEpoch(),
+                            partitionData.startOffset(),
+                            partitionData.deliveryCompleteCount(),
+                            partitionData.leaderEpoch(),
+                            partitionData.stateBatches().stream()
+                                .map(PersisterStateBatch::from)
+                                .collect(Collectors.toList())))
                         .collect(Collectors.toList())))
-                .build();
+                .collect(Collectors.toList())))
+            .build();
     }
 
     public static class Builder {

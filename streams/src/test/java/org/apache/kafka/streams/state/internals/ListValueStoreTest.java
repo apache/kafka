@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ListValueStoreTest {
-    public enum StoreType { InMemory, RocksDB }
+    public enum StoreType {InMemory, RocksDB}
 
     private KeyValueStore<Integer, String> listStore;
 
@@ -74,8 +74,8 @@ public class ListValueStoreTest {
     }
 
     <K, V> KeyValueStore<K, V> buildStore(final Serde<K> keySerde,
-                                          final Serde<V> valueSerde,
-                                          final StoreType storeType) {
+        final Serde<V> valueSerde,
+        final StoreType storeType) {
         return new ListValueStoreBuilder<>(
             storeType == StoreType.RocksDB ? Stores.persistentKeyValueStore("rocksDB list store")
                 : Stores.inMemoryKeyValueStore("in-memory list store"),

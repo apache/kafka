@@ -87,15 +87,15 @@ public class OffsetSyncStoreTest {
     @Test
     public void testNoTranslationIfStoreNotStarted() {
         try (FakeOffsetSyncStore store = new FakeOffsetSyncStore() {
-            @Override
-            void backingStoreStart() {
-                // read a sync during startup
-                sync(tp, 100, 200);
-                assertEquals(OptionalLong.empty(), translateDownstream(null, tp, 0));
-                assertEquals(OptionalLong.empty(), translateDownstream(null, tp, 100));
-                assertEquals(OptionalLong.empty(), translateDownstream(null, tp, 200));
-            }
-        }) {
+                 @Override
+                 void backingStoreStart() {
+                     // read a sync during startup
+                     sync(tp, 100, 200);
+                     assertEquals(OptionalLong.empty(), translateDownstream(null, tp, 0));
+                     assertEquals(OptionalLong.empty(), translateDownstream(null, tp, 100));
+                     assertEquals(OptionalLong.empty(), translateDownstream(null, tp, 200));
+                 }
+             }) {
             // no offsets exist and store is not started
             assertEquals(OptionalLong.empty(), store.translateDownstream(null, tp, 0));
             assertEquals(OptionalLong.empty(), store.translateDownstream(null, tp, 100));
@@ -122,14 +122,14 @@ public class OffsetSyncStoreTest {
     public void testPastOffsetTranslation() {
         int maxOffsetLag = 10;
         try (FakeOffsetSyncStore store = new FakeOffsetSyncStore() {
-            @Override
-            void backingStoreStart() {
-                for (int offset = 0; offset <= 1000; offset += maxOffsetLag) {
-                    sync(tp, offset, offset);
-                    assertSparseSyncInvariant(this, tp);
-                }
-            }
-        }) {
+                 @Override
+                 void backingStoreStart() {
+                     for (int offset = 0; offset <= 1000; offset += maxOffsetLag) {
+                         sync(tp, offset, offset);
+                         assertSparseSyncInvariant(this, tp);
+                     }
+                 }
+             }) {
             store.start(true);
 
             // After starting but before seeing new offsets, only the latest startup offset can be translated
@@ -172,14 +172,14 @@ public class OffsetSyncStoreTest {
         final int maxOffsetLag = 10;
 
         try (FakeOffsetSyncStore store = new FakeOffsetSyncStore() {
-            @Override
-            void backingStoreStart() {
-                for (int offset = 0; offset <= 1000; offset += maxOffsetLag) {
-                    sync(tp, offset, offset);
-                    assertSparseSyncInvariant(this, tp);
-                }
-            }
-        }) {
+                 @Override
+                 void backingStoreStart() {
+                     for (int offset = 0; offset <= 1000; offset += maxOffsetLag) {
+                         sync(tp, offset, offset);
+                         assertSparseSyncInvariant(this, tp);
+                     }
+                 }
+             }) {
 
             store.start(false);
 
@@ -222,7 +222,7 @@ public class OffsetSyncStoreTest {
         long iterations = 100;
         long maxStep = Long.MAX_VALUE / iterations;
         // Test a variety of steps (corresponding to the offset.lag.max configuration)
-        for (long step = 1; step < maxStep; step = (step * 2) + 1)  {
+        for (long step = 1; step < maxStep; step = (step * 2) + 1) {
             for (long firstOffset = 0; firstOffset < 30; firstOffset++) {
                 long finalStep = step;
                 // Generate a stream of consistently spaced syncs

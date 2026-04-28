@@ -177,15 +177,15 @@ public abstract class AbstractResetIntegrationTest {
 
     private void add10InputElements() {
         final List<KeyValue<Long, String>> records = List.of(KeyValue.pair(0L, "aaa"),
-                                                                   KeyValue.pair(1L, "bbb"),
-                                                                   KeyValue.pair(0L, "ccc"),
-                                                                   KeyValue.pair(1L, "ddd"),
-                                                                   KeyValue.pair(0L, "eee"),
-                                                                   KeyValue.pair(1L, "fff"),
-                                                                   KeyValue.pair(0L, "ggg"),
-                                                                   KeyValue.pair(1L, "hhh"),
-                                                                   KeyValue.pair(0L, "iii"),
-                                                                   KeyValue.pair(1L, "jjj"));
+            KeyValue.pair(1L, "bbb"),
+            KeyValue.pair(0L, "ccc"),
+            KeyValue.pair(1L, "ddd"),
+            KeyValue.pair(0L, "eee"),
+            KeyValue.pair(1L, "fff"),
+            KeyValue.pair(0L, "ggg"),
+            KeyValue.pair(1L, "hhh"),
+            KeyValue.pair(0L, "iii"),
+            KeyValue.pair(1L, "jjj"));
 
         for (final KeyValue<Long, String> record : records) {
             mockTime.sleep(10);
@@ -210,12 +210,12 @@ public abstract class AbstractResetIntegrationTest {
         streams.cleanUp();
 
         final List<String> internalTopics = cluster.getAllTopicsInCluster().stream()
-                .filter(StreamsResetter::matchesInternalTopicFormat)
-                .toList();
+            .filter(StreamsResetter::matchesInternalTopicFormat)
+            .toList();
         cleanGlobal(false,
-                "--internal-topics",
-                String.join(",", internalTopics.subList(1, internalTopics.size())),
-                appID);
+            "--internal-topics",
+            String.join(",", internalTopics.subList(1, internalTopics.size())),
+            appID);
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
 
         assertInternalTopicsGotDeleted(internalTopics.get(0));
@@ -329,7 +329,7 @@ public abstract class AbstractResetIntegrationTest {
     }
 
     private Topology setupTopologyWithIntermediateTopic(final boolean useRepartitioned,
-                                                        final String outputTopic2) {
+        final String outputTopic2) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Long, String> input = builder.stream(INPUT_TOPIC);
@@ -371,13 +371,13 @@ public abstract class AbstractResetIntegrationTest {
     }
 
     protected boolean tryCleanGlobal(final boolean withIntermediateTopics,
-                                   final String resetScenario,
-                                   final String resetScenarioArg,
-                                   final String appID) throws Exception {
+        final String resetScenario,
+        final String resetScenarioArg,
+        final String appID) throws Exception {
         final List<String> parameterList = new ArrayList<>(
             List.of("--application-id", appID,
-                    "--bootstrap-server", cluster.bootstrapServers(),
-                    "--input-topics", INPUT_TOPIC
+                "--bootstrap-server", cluster.bootstrapServers(),
+                "--input-topics", INPUT_TOPIC
             ));
         if (withIntermediateTopics) {
             parameterList.add("--intermediate-topics");
@@ -413,9 +413,9 @@ public abstract class AbstractResetIntegrationTest {
     }
 
     protected void cleanGlobal(final boolean withIntermediateTopics,
-                             final String resetScenario,
-                             final String resetScenarioArg,
-                             final String appID) throws Exception {
+        final String resetScenario,
+        final String resetScenarioArg,
+        final String appID) throws Exception {
         final boolean cleanResult = tryCleanGlobal(withIntermediateTopics, resetScenario, resetScenarioArg, appID);
         assertTrue(cleanResult);
     }
@@ -423,10 +423,10 @@ public abstract class AbstractResetIntegrationTest {
     protected void assertInternalTopicsGotDeleted(final String additionalExistingTopic) throws Exception {
         if (additionalExistingTopic != null) {
             cluster.waitForRemainingTopics(30000, INPUT_TOPIC, OUTPUT_TOPIC, OUTPUT_TOPIC_2, OUTPUT_TOPIC_2_RERUN,
-                    Topic.GROUP_METADATA_TOPIC_NAME, additionalExistingTopic);
+                Topic.GROUP_METADATA_TOPIC_NAME, additionalExistingTopic);
         } else {
             cluster.waitForRemainingTopics(30000, INPUT_TOPIC, OUTPUT_TOPIC, OUTPUT_TOPIC_2, OUTPUT_TOPIC_2_RERUN,
-                    Topic.GROUP_METADATA_TOPIC_NAME);
+                Topic.GROUP_METADATA_TOPIC_NAME);
         }
     }
 }

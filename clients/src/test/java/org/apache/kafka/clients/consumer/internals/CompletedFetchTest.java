@@ -68,7 +68,7 @@ public class CompletedFetchTest {
         int startingOffset = 10;
         int numRecords = 11;        // Records for 10-20
         FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
-                .setRecords(newRecords(startingOffset, numRecords, fetchOffset));
+            .setRecords(newRecords(startingOffset, numRecords, fetchOffset));
 
         Deserializers<String, String> deserializers = newStringDeserializers();
         FetchConfig fetchConfig = newFetchConfig(IsolationLevel.READ_UNCOMMITTED, true);
@@ -95,8 +95,8 @@ public class CompletedFetchTest {
         Records rawRecords = newTranscactionalRecords(ControlRecordType.ABORT, numRecords);
 
         FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
-                .setRecords(rawRecords)
-                .setAbortedTransactions(newAbortedTransactions());
+            .setRecords(rawRecords)
+            .setAbortedTransactions(newAbortedTransactions());
 
         try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
             FetchConfig fetchConfig = newFetchConfig(IsolationLevel.READ_COMMITTED, true);
@@ -116,7 +116,7 @@ public class CompletedFetchTest {
         int numRecords = 10;
         Records rawRecords = newTranscactionalRecords(ControlRecordType.COMMIT, numRecords);
         FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
-                .setRecords(rawRecords);
+            .setRecords(rawRecords);
         CompletedFetch completedFetch = newCompletedFetch(0, partitionData);
         try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
             FetchConfig fetchConfig = newFetchConfig(IsolationLevel.READ_COMMITTED, true);
@@ -131,7 +131,7 @@ public class CompletedFetchTest {
         int startingOffset = 0;
         int numRecords = 10;
         FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
-                .setRecords(newRecords(startingOffset, numRecords, fetchOffset));
+            .setRecords(newRecords(startingOffset, numRecords, fetchOffset));
 
         try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
             CompletedFetch completedFetch = newCompletedFetch(fetchOffset, partitionData);
@@ -145,10 +145,10 @@ public class CompletedFetchTest {
     @Test
     public void testNoRecordsInFetch() {
         FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
-                .setPartitionIndex(0)
-                .setHighWatermark(10)
-                .setLastStableOffset(20)
-                .setLogStartOffset(0);
+            .setPartitionIndex(0)
+            .setHighWatermark(10)
+            .setLastStableOffset(20)
+            .setLogStartOffset(0);
 
         CompletedFetch completedFetch = newCompletedFetch(1, partitionData);
         try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
@@ -172,11 +172,11 @@ public class CompletedFetchTest {
             Records records = builder.build();
 
             FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
-                    .setPartitionIndex(0)
-                    .setHighWatermark(10)
-                    .setLastStableOffset(20)
-                    .setLogStartOffset(0)
-                    .setRecords(records);
+                .setPartitionIndex(0)
+                .setHighWatermark(10)
+                .setLastStableOffset(20)
+                .setLogStartOffset(0)
+                .setRecords(records);
 
             try (final Deserializers<UUID, UUID> deserializers = newUuidDeserializers()) {
                 FetchConfig fetchConfig = newFetchConfig(IsolationLevel.READ_COMMITTED, false);
@@ -185,7 +185,7 @@ public class CompletedFetchTest {
                 completedFetch.fetchRecords(fetchConfig, deserializers, 10);
 
                 RecordDeserializationException thrown = assertThrows(RecordDeserializationException.class,
-                        () -> completedFetch.fetchRecords(fetchConfig, deserializers, 10));
+                    () -> completedFetch.fetchRecords(fetchConfig, deserializers, 10));
                 assertEquals(RecordDeserializationException.DeserializationExceptionOrigin.KEY, thrown.origin());
                 assertEquals(1, thrown.offset());
                 assertEquals(TOPIC_NAME, thrown.topicPartition().topic());
@@ -198,7 +198,7 @@ public class CompletedFetchTest {
                 CompletedFetch completedFetch2 = newCompletedFetch(2, partitionData);
                 completedFetch2.fetchRecords(fetchConfig, deserializers, 10);
                 RecordDeserializationException valueThrown = assertThrows(RecordDeserializationException.class,
-                        () -> completedFetch2.fetchRecords(fetchConfig, deserializers, 10));
+                    () -> completedFetch2.fetchRecords(fetchConfig, deserializers, 10));
                 assertEquals(RecordDeserializationException.DeserializationExceptionOrigin.VALUE, valueThrown.origin());
                 assertEquals(3, valueThrown.offset());
                 assertEquals(TOPIC_NAME, valueThrown.topicPartition().topic());
@@ -212,7 +212,7 @@ public class CompletedFetchTest {
     }
 
     private CompletedFetch newCompletedFetch(long fetchOffset,
-                                             FetchResponseData.PartitionData partitionData) {
+        FetchResponseData.PartitionData partitionData) {
         LogContext logContext = new LogContext();
         SubscriptionState subscriptions = new SubscriptionState(logContext, AutoOffsetResetStrategy.NONE);
         FetchMetricsRegistry metricsRegistry = new FetchMetricsRegistry();
@@ -220,13 +220,13 @@ public class CompletedFetchTest {
         FetchMetricsAggregator metricAggregator = new FetchMetricsAggregator(metrics, Collections.singleton(TP));
 
         return new CompletedFetch(
-                logContext.logger(CompletedFetch.class),
-                subscriptions,
-                BufferSupplier.create(),
-                TP,
-                partitionData,
-                metricAggregator,
-                fetchOffset);
+            logContext.logger(CompletedFetch.class),
+            subscriptions,
+            BufferSupplier.create(),
+            TP,
+            partitionData,
+            metricAggregator,
+            fetchOffset);
     }
 
     private static Deserializers<UUID, UUID> newUuidDeserializers() {
@@ -239,20 +239,20 @@ public class CompletedFetchTest {
 
     private static FetchConfig newFetchConfig(IsolationLevel isolationLevel, boolean checkCrcs) {
         return new FetchConfig(
-                ConsumerConfig.DEFAULT_FETCH_MIN_BYTES,
-                ConsumerConfig.DEFAULT_FETCH_MAX_BYTES,
-                ConsumerConfig.DEFAULT_FETCH_MAX_WAIT_MS,
-                ConsumerConfig.DEFAULT_MAX_PARTITION_FETCH_BYTES,
-                ConsumerConfig.DEFAULT_MAX_POLL_RECORDS,
-                checkCrcs,
-                ConsumerConfig.DEFAULT_CLIENT_RACK,
-                isolationLevel
+            ConsumerConfig.DEFAULT_FETCH_MIN_BYTES,
+            ConsumerConfig.DEFAULT_FETCH_MAX_BYTES,
+            ConsumerConfig.DEFAULT_FETCH_MAX_WAIT_MS,
+            ConsumerConfig.DEFAULT_MAX_PARTITION_FETCH_BYTES,
+            ConsumerConfig.DEFAULT_MAX_POLL_RECORDS,
+            checkCrcs,
+            ConsumerConfig.DEFAULT_CLIENT_RACK,
+            isolationLevel
         );
     }
 
     private Records newRecords(long baseOffset, int count, long firstMessageId) {
         try (final MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), Compression.NONE, TimestampType.CREATE_TIME, baseOffset)) {
-            for (int i = 0; i < count; i++)
+            for (int i = 0;i < count;i++)
                 builder.append(0L, "key".getBytes(), ("value-" + (firstMessageId + i)).getBytes());
             return builder.build();
         }
@@ -263,17 +263,17 @@ public class CompletedFetchTest {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
 
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer,
-                RecordBatch.CURRENT_MAGIC_VALUE,
-                Compression.NONE,
-                TimestampType.CREATE_TIME,
-                0,
-                time.milliseconds(),
-                PRODUCER_ID,
-                PRODUCER_EPOCH,
-                0,
-                true,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH)) {
-            for (int i = 0; i < numRecords; i++)
+                 RecordBatch.CURRENT_MAGIC_VALUE,
+                 Compression.NONE,
+                 TimestampType.CREATE_TIME,
+                 0,
+                 time.milliseconds(),
+                 PRODUCER_ID,
+                 PRODUCER_EPOCH,
+                 0,
+                 true,
+                 RecordBatch.NO_PARTITION_LEADER_EPOCH)) {
+            for (int i = 0;i < numRecords;i++)
                 builder.append(new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
 
             builder.build();
@@ -286,16 +286,16 @@ public class CompletedFetchTest {
     }
 
     private void writeTransactionMarker(ByteBuffer buffer,
-                                        ControlRecordType controlRecordType,
-                                        int offset,
-                                        Time time) {
+        ControlRecordType controlRecordType,
+        int offset,
+        Time time) {
         MemoryRecords.writeEndTransactionalMarker(buffer,
-                offset,
-                time.milliseconds(),
-                0,
-                PRODUCER_ID,
-                PRODUCER_EPOCH,
-                new EndTransactionMarker(controlRecordType, 0));
+            offset,
+            time.milliseconds(),
+            0,
+            PRODUCER_ID,
+            PRODUCER_EPOCH,
+            new EndTransactionMarker(controlRecordType, 0));
     }
 
     private List<FetchResponseData.AbortedTransaction> newAbortedTransactions() {

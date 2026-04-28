@@ -84,7 +84,7 @@ public class RecordHeaders implements Headers {
     @Override
     public Header lastHeader(String key) {
         checkKey(key);
-        for (int i = headers.size() - 1; i >= 0; i--) {
+        for (int i = headers.size() - 1;i >= 0;i--) {
             Header header = headers.get(i);
             if (header.key().equals(key)) {
                 return header;
@@ -113,7 +113,7 @@ public class RecordHeaders implements Headers {
     }
 
     public Header[] toArray() {
-        return headers.isEmpty() ? Record.EMPTY_HEADERS : headers.toArray(new Header[0]);     
+        return headers.isEmpty() ? Record.EMPTY_HEADERS : headers.toArray(new Header[0]);
     }
 
     private void checkKey(String key) {
@@ -167,9 +167,9 @@ public class RecordHeaders implements Headers {
     @Override
     public String toString() {
         return "RecordHeaders(" +
-               "headers = " + headers +
-               ", isReadOnly = " + isReadOnly +
-               ')';
+            "headers = " + headers +
+            ", isReadOnly = " + isReadOnly +
+            ')';
     }
 
     private static final class FilterByKeyIterator extends AbstractIterator<Header> {

@@ -34,9 +34,9 @@ public interface ProducerIdManager {
     long generateProducerId() throws Exception;
 
     static ProducerIdManager rpc(int brokerId,
-                                 Time time,
-                                 Supplier<Long> brokerEpochSupplier,
-                                 NodeToControllerChannelManager controllerChannel) {
+        Time time,
+        Supplier<Long> brokerEpochSupplier,
+        NodeToControllerChannelManager controllerChannel) {
         return new RPCProducerIdManager(brokerId, time, brokerEpochSupplier, controllerChannel);
     }
 }

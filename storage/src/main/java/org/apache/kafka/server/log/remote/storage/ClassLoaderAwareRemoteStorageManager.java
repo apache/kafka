@@ -69,7 +69,7 @@ public class ClassLoaderAwareRemoteStorageManager implements RemoteStorageManage
     }
 
     public Optional<CustomMetadata> copyLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
-                                   LogSegmentData logSegmentData) throws RemoteStorageException {
+            LogSegmentData logSegmentData) throws RemoteStorageException {
         return withClassLoader(() -> delegate.copyLogSegmentData(remoteLogSegmentMetadata, logSegmentData));
     }
 

@@ -58,10 +58,10 @@ public class KStreamSplitTest {
     @Test
     public void testKStreamSplit() {
         final Map<String, KStream<Integer, String>> branches =
-                source.split()
-                        .branch(isEven, Branched.withConsumer(ks -> ks.to("x2")))
-                        .branch(isMultipleOfThree, Branched.withConsumer(ks -> ks.to("x3")))
-                        .branch(isMultipleOfFive, Branched.withConsumer(ks -> ks.to("x5"))).noDefaultBranch();
+            source.split()
+                .branch(isEven, Branched.withConsumer(ks -> ks.to("x2")))
+                .branch(isMultipleOfThree, Branched.withConsumer(ks -> ks.to("x3")))
+                .branch(isMultipleOfFive, Branched.withConsumer(ks -> ks.to("x5"))).noDefaultBranch();
 
         assertEquals(0, branches.size());
 
@@ -94,31 +94,32 @@ public class KStreamSplitTest {
         final Predicate<Number, Object> positive = (key, value) -> key.doubleValue() > 0;
         final Predicate<Number, Object> negative = (key, value) -> key.doubleValue() < 0;
         new StreamsBuilder()
-                .<Integer, String>stream("empty")
-                .split()
-                .branch(positive)
-                .branch(negative);
+            .<Integer, String>stream("empty")
+            .split()
+            .branch(positive)
+            .branch(negative);
     }
 
     @Test
     public void testResultingMap() {
         final Map<String, KStream<Integer, String>> branches =
-                source.split(Named.as("foo-"))
-                        // "foo-bar"
-                        .branch(isEven, Branched.as("bar"))
-                        // no entry: a Consumer is provided
-                        .branch(isMultipleOfThree, Branched.withConsumer(ks -> { }))
-                        // no entry: chain function returns null
-                        .branch(isMultipleOfFive, Branched.withFunction(ks -> null))
-                        // "foo-4": chain function returns non-null value
-                        .branch(isNegative, Branched.withFunction(ks -> ks))
-                        // "foo-5": name defaults to the branch position
-                        .branch(isMultipleOfSeven)
-                        // "foo-0": "0" is the default name for the default branch
-                        .defaultBranch();
+            source.split(Named.as("foo-"))
+                // "foo-bar"
+                .branch(isEven, Branched.as("bar"))
+                // no entry: a Consumer is provided
+                .branch(isMultipleOfThree, Branched.withConsumer(ks -> {
+                }))
+                // no entry: chain function returns null
+                .branch(isMultipleOfFive, Branched.withFunction(ks -> null))
+                // "foo-4": chain function returns non-null value
+                .branch(isNegative, Branched.withFunction(ks -> ks))
+                // "foo-5": name defaults to the branch position
+                .branch(isMultipleOfSeven)
+                // "foo-0": "0" is the default name for the default branch
+                .defaultBranch();
         assertEquals(4, branches.size());
         // direct the branched streams into different topics named with branch name
-        for (final Map.Entry<String, KStream<Integer, String>> branch: branches.entrySet()) {
+        for (final Map.Entry<String, KStream<Integer, String>> branch : branches.entrySet()) {
             branch.getValue().to(branch.getKey());
         }
         builder.build();
@@ -139,12 +140,12 @@ public class KStreamSplitTest {
     public void testBranchingWithNoTerminalOperation() {
         final String outputTopicName = "output";
         source.split()
-                .branch(isEven, Branched.withConsumer(ks -> ks.to(outputTopicName)))
-                .branch(isMultipleOfFive, Branched.withConsumer(ks -> ks.to(outputTopicName)));
+            .branch(isEven, Branched.withConsumer(ks -> ks.to(outputTopicName)))
+            .branch(isMultipleOfFive, Branched.withConsumer(ks -> ks.to(outputTopicName)));
         builder.build();
         withDriver(driver -> {
             final TestOutputTopic<Integer, String> outputTopic =
-                    driver.createOutputTopic(outputTopicName, new IntegerDeserializer(), new StringDeserializer());
+                driver.createOutputTopic(outputTopicName, new IntegerDeserializer(), new StringDeserializer());
             assertEquals(Arrays.asList("V0", "V2", "V4", "V5", "V6"), outputTopic.readValuesToList());
         });
     }

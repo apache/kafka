@@ -149,11 +149,11 @@ public class NewTopic {
     @Override
     public String toString() {
         return "(name=" + name +
-                ", numPartitions=" + numPartitions.map(String::valueOf).orElse("default") +
-                ", replicationFactor=" + replicationFactor.map(String::valueOf).orElse("default") +
-                ", replicasAssignments=" + replicasAssignments +
-                ", configs=" + configs +
-                ")";
+            ", numPartitions=" + numPartitions.map(String::valueOf).orElse("default") +
+            ", replicationFactor=" + replicationFactor.map(String::valueOf).orElse("default") +
+            ", replicasAssignments=" + replicasAssignments +
+            ", configs=" + configs +
+            ")";
     }
 
     @Override

@@ -71,9 +71,9 @@ public class GaussianTimestampRandomPayloadGenerator implements PayloadGenerator
 
     @JsonCreator
     public GaussianTimestampRandomPayloadGenerator(@JsonProperty("messageSizeAverage") int messageSizeAverage,
-                                                   @JsonProperty("messageSizeDeviation") double messageSizeDeviation,
-                                                   @JsonProperty("messagesUntilSizeChange") int messagesUntilSizeChange,
-                                                   @JsonProperty("seed") long seed) {
+        @JsonProperty("messageSizeDeviation") double messageSizeDeviation,
+        @JsonProperty("messagesUntilSizeChange") int messagesUntilSizeChange,
+        @JsonProperty("seed") long seed) {
         this.messageSizeAverage = messageSizeAverage;
         this.messageSizeDeviation = messageSizeDeviation;
         this.seed = seed;

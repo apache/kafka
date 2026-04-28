@@ -88,22 +88,22 @@ public class NetworkClientDelegateTest {
     void testPollResultTimer() throws Exception {
         try (NetworkClientDelegate ncd = newNetworkClientDelegate(false)) {
             NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
-                    new FindCoordinatorRequest.Builder(
-                            new FindCoordinatorRequestData()
-                                    .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
-                                    .setKey("foobar")),
-                    Optional.empty());
+                new FindCoordinatorRequest.Builder(
+                    new FindCoordinatorRequestData()
+                        .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
+                        .setKey("foobar")),
+                Optional.empty());
             req.setTimer(time, DEFAULT_REQUEST_TIMEOUT_MS);
 
             // purposely setting a non-MAX time to ensure it is returning Long.MAX_VALUE upon success
             NetworkClientDelegate.PollResult success = new NetworkClientDelegate.PollResult(
-                    10,
-                    Collections.singletonList(req));
+                10,
+                Collections.singletonList(req));
             assertEquals(10, ncd.addAll(success));
 
             NetworkClientDelegate.PollResult failure = new NetworkClientDelegate.PollResult(
-                    10,
-                    new ArrayList<>());
+                10,
+                new ArrayList<>());
             assertEquals(10, ncd.addAll(failure));
         }
     }
@@ -341,23 +341,23 @@ public class NetworkClientDelegateTest {
         properties.put(REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS);
         properties.put(BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         return new NetworkClientDelegate(time,
-                new ConsumerConfig(properties),
-                logContext,
-                this.client,
-                this.metadata,
-                this.backgroundEventHandler,
-                notifyMetadataErrorsViaErrorQueue,
-                asyncConsumerMetrics
+            new ConsumerConfig(properties),
+            logContext,
+            this.client,
+            this.metadata,
+            this.backgroundEventHandler,
+            notifyMetadataErrorsViaErrorQueue,
+            asyncConsumerMetrics
         );
     }
 
     public NetworkClientDelegate.UnsentRequest newUnsentFindCoordinatorRequest() {
         Objects.requireNonNull(GROUP_ID);
         return new NetworkClientDelegate.UnsentRequest(
-                new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData()
-                    .setKey(GROUP_ID)
-                    .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
-                ),
+            new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData()
+                .setKey(GROUP_ID)
+                .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
+            ),
             Optional.empty()
         );
     }

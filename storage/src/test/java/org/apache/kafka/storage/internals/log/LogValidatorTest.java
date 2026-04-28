@@ -128,15 +128,15 @@ public class LogValidatorTest {
 
     @ParameterizedTest
     @CsvSource({
-        "0,gzip,none", "1,gzip,none", "2,gzip,none",
-        "0,gzip,gzip", "1,gzip,gzip", "2,gzip,gzip",
-        "0,snappy,gzip", "1,snappy,gzip", "2,snappy,gzip",
-        "0,lz4,gzip", "1,lz4,gzip", "2,lz4,gzip",
-        "2,none,none", "2,none,gzip",
-        "2,zstd,gzip",
+            "0,gzip,none", "1,gzip,none", "2,gzip,none",
+            "0,gzip,gzip", "1,gzip,gzip", "2,gzip,gzip",
+            "0,snappy,gzip", "1,snappy,gzip", "2,snappy,gzip",
+            "0,lz4,gzip", "1,lz4,gzip", "2,lz4,gzip",
+            "2,none,none", "2,none,gzip",
+            "2,zstd,gzip",
     })
     public void checkOnlyOneBatch(Byte magic, String sourceCompression,
-                                   String targetCompression) {
+            String targetCompression) {
         assertThrows(InvalidRecordException.class,
                 () -> validateMessages(createTwoBatchedRecords(magic, Compression.of(sourceCompression).build()),
                         magic, CompressionType.forName(sourceCompression), Compression.of(targetCompression).build())
@@ -146,8 +146,8 @@ public class LogValidatorTest {
 
     private static Stream<Arguments> testAllCompression() {
         return Arrays.stream(CompressionType.values()).flatMap(source ->
-                        Arrays.stream(CompressionType.values()).map(target ->
-                                Arguments.of(source.name, target.name)));
+                Arrays.stream(CompressionType.values()).map(target ->
+                        Arguments.of(source.name, target.name)));
     }
 
     @ParameterizedTest
@@ -194,10 +194,11 @@ public class LogValidatorTest {
         Compression compression = Compression.of(compressionName).build();
         assertThrows(RecordValidationException.class,
                 () -> validateMessages(recordsWithInvalidInnerMagic(batchMagic, recordMagic, compression
-                        ), batchMagic, compression.type(), compression));
+                ), batchMagic, compression.type(), compression));
 
         assertTrue(metricsRecorder.recordInvalidMagicCount > 0);
     }
+
     @Test
     public void testCreateTimeUpConversionV1ToV2() {
         long timestamp = System.currentTimeMillis();
@@ -429,15 +430,15 @@ public class LogValidatorTest {
     @ParameterizedTest
     @CsvSource({"0,none,none", "1,none,none", "0,none,gzip", "1,none,gzip"})
     public void checkAllowMultiBatch(Byte magic, String sourceCompression, String targetCompression) {
-        validateMessages(createTwoBatchedRecords(magic,  Compression.of(sourceCompression).build()), magic,
+        validateMessages(createTwoBatchedRecords(magic, Compression.of(sourceCompression).build()), magic,
                 CompressionType.forName(sourceCompression), Compression.of(targetCompression).build());
     }
 
 
     private ValidationResult validateMessages(MemoryRecords records,
-                                              Byte magic,
-                                              CompressionType sourceCompressionType,
-                                              Compression targetCompressionType) {
+            Byte magic,
+            CompressionType sourceCompressionType,
+            Compression targetCompressionType) {
         MockTime mockTime = new MockTime(0L, 0L);
         return new LogValidator(records,
                 topicPartition,
@@ -456,7 +457,7 @@ public class LogValidatorTest {
     }
 
     private MemoryRecords createTwoBatchedRecords(Byte magicValue,
-                                                  Compression codec) {
+            Compression codec) {
         ByteBuffer buf = ByteBuffer.allocate(2048);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L);
         builder.append(10L, "1".getBytes(), "a".getBytes());
@@ -471,8 +472,8 @@ public class LogValidatorTest {
     }
 
     private MemoryRecords createRecords(byte magicValue,
-                                        long timestamp,
-                                        Compression codec) {
+            long timestamp,
+            Compression codec) {
         List<byte[]> records = List.of("hello".getBytes(), "there".getBytes(), "beautiful".getBytes());
         return createRecords(records, magicValue, timestamp, codec);
     }
@@ -572,9 +573,9 @@ public class LogValidatorTest {
     }
 
     private MemoryRecords createRecords(List<byte[]> records,
-                                        byte magicValue,
-                                        long timestamp,
-                                        Compression codec) {
+            byte magicValue,
+            long timestamp,
+            Compression codec) {
         ByteBuffer buf = ByteBuffer.allocate(512);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L);
 
@@ -694,9 +695,9 @@ public class LogValidatorTest {
 
     @ParameterizedTest
     @CsvSource({
-        "0,gzip,gzip", "1,gzip,gzip",
-        "0,lz4,lz4", "1,lz4,lz4",
-        "0,snappy,snappy", "1,snappy,snappy",
+            "0,gzip,gzip", "1,gzip,gzip",
+            "0,lz4,lz4", "1,lz4,lz4",
+            "0,snappy,snappy", "1,snappy,snappy",
     })
     public void checkInvalidChecksum(byte magic, String compressionName, String typeName) {
         Compression compression = Compression.of(compressionName).build();
@@ -756,7 +757,7 @@ public class LogValidatorTest {
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, compression,
-                 0L, producerId, producerEpoch, baseSequence, false);
+                0L, producerId, producerEpoch, baseSequence, false);
         builder.append(new SimpleRecord("hello".getBytes()));
 
         MemoryRecords memoryRecords = builder.build();
@@ -793,10 +794,10 @@ public class LogValidatorTest {
 
     @ParameterizedTest
     @CsvSource({
-        "0,gzip,gzip", "1,gzip,gzip", "2,gzip,gzip",
-        "0,lz4,lz4", "1,lz4,lz4", "2,lz4,lz4",
-        "0,snappy,snappy", "1,snappy,snappy", "2,snappy,snappy",
-        "2,zstd,zstd"
+            "0,gzip,gzip", "1,gzip,gzip", "2,gzip,gzip",
+            "0,lz4,lz4", "1,lz4,lz4", "2,lz4,lz4",
+            "0,snappy,snappy", "1,snappy,snappy", "2,snappy,snappy",
+            "2,zstd,zstd"
     })
     public void checkNoKeyCompactedTopic(byte magic, String compressionName, String typeName) {
         Compression codec = Compression.of(compressionName).build();
@@ -2035,7 +2036,7 @@ public class LogValidatorTest {
     }
 
     public void verifyRecordValidationStats(RecordValidationStats stats, int numConvertedRecords, MemoryRecords records,
-                                            boolean compressed) {
+            boolean compressed) {
         assertNotNull(stats, "Records processing info is null");
         assertEquals(numConvertedRecords, stats.numRecordsConverted());
         if (numConvertedRecords > 0) {

@@ -99,11 +99,11 @@ class ConfigOrJaas {
      */
     public String clientId(boolean isRequired) {
         return getValue(
-                SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID,
-                CLIENT_ID_CONFIG,
-                isRequired,
-                name -> cu.validateString(name, isRequired),
-                name -> jou.validateString(name, isRequired)
+            SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID,
+            CLIENT_ID_CONFIG,
+            isRequired,
+            name -> cu.validateString(name, isRequired),
+            name -> jou.validateString(name, isRequired)
         );
     }
 
@@ -120,11 +120,11 @@ class ConfigOrJaas {
      */
     public String clientSecret() {
         return getValue(
-                SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET,
-                CLIENT_SECRET_CONFIG,
-                true,
-                cu::validatePassword,
-                jou::validateString
+            SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET,
+            CLIENT_SECRET_CONFIG,
+            true,
+            cu::validatePassword,
+            jou::validateString
         );
     }
 
@@ -140,19 +140,19 @@ class ConfigOrJaas {
      */
     public String scope() {
         return getValue(
-                SASL_OAUTHBEARER_SCOPE,
-                SCOPE_CONFIG,
-                false,
-                name -> cu.validateString(name, false),
-                name -> jou.validateString(name, false)
+            SASL_OAUTHBEARER_SCOPE,
+            SCOPE_CONFIG,
+            false,
+            name -> cu.validateString(name, false),
+            name -> jou.validateString(name, false)
         );
     }
 
     private String getValue(String configName,
-                            String jaasName,
-                            boolean isRequired,
-                            Function<String, String> configValueGetter,
-                            Function<String, String> jaasValueGetter) {
+        String jaasName,
+        boolean isRequired,
+        Function<String, String> configValueGetter,
+        Function<String, String> jaasValueGetter) {
         boolean isPresentInConfig = cu.containsKey(configName);
         boolean isPresentInJaas = jou.containsKey(jaasName);
 
@@ -160,15 +160,15 @@ class ConfigOrJaas {
             if (isPresentInJaas) {
                 // Log if the user is using the deprecated JAAS option.
                 LOG.warn(
-                        "Both the OAuth configuration {} as well as the JAAS option {} (from the {} configuration) were provided. " +
-                                "Since the {} JAAS option is deprecated, it will be ignored and the value from the {} configuration will be used. " +
-                                "Please update your configuration to only use {}.",
-                        configName,
-                        jaasName,
-                        SASL_JAAS_CONFIG,
-                        jaasName,
-                        configName,
-                        configName
+                    "Both the OAuth configuration {} as well as the JAAS option {} (from the {} configuration) were provided. " +
+                        "Since the {} JAAS option is deprecated, it will be ignored and the value from the {} configuration will be used. " +
+                        "Please update your configuration to only use {}.",
+                    configName,
+                    jaasName,
+                    SASL_JAAS_CONFIG,
+                    jaasName,
+                    configName,
+                    configName
                 );
             }
 
@@ -178,11 +178,11 @@ class ConfigOrJaas {
 
             // Log if the user is using the deprecated JAAS option.
             LOG.warn(
-                    "The OAuth JAAS option {} was configured in {}, but that JAAS option is deprecated and will be removed. " +
-                            "Please update your configuration to use the {} configuration instead.",
-                    jaasName,
-                    SASL_JAAS_CONFIG,
-                    configName
+                "The OAuth JAAS option {} was configured in {}, but that JAAS option is deprecated and will be removed. " +
+                    "Please update your configuration to use the {} configuration instead.",
+                jaasName,
+                SASL_JAAS_CONFIG,
+                configName
             );
 
             return value;

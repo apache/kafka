@@ -46,10 +46,10 @@ public class PluginInfoTest {
     public void testPluginInfoJsonSerialization() throws Exception {
         ClassLoader classLoader = PluginInfoTest.class.getClassLoader();
         PluginInfo sinkInfo = new PluginInfo(
-            new PluginDesc<>(MockSinkConnector.class, "1.0.0", PluginType.SINK, classLoader)
+                new PluginDesc<>(MockSinkConnector.class, "1.0.0", PluginType.SINK, classLoader)
         );
         PluginInfo sourceInfo = new PluginInfo(
-            new PluginDesc<>(MockSourceConnector.class, "2.0.0", PluginType.SOURCE, classLoader)
+                new PluginDesc<>(MockSourceConnector.class, "2.0.0", PluginType.SOURCE, classLoader)
         );
 
         final ObjectMapper objectMapper = new ObjectMapper();
@@ -60,9 +60,9 @@ public class PluginInfoTest {
 
         // Verify type field is lowercase in JSON
         assertTrue(serializedSink.contains("\"type\":\"sink\""),
-            "Expected type to be lowercase 'sink' but got: " + serializedSink);
+                "Expected type to be lowercase 'sink' but got: " + serializedSink);
         assertTrue(serializedSource.contains("\"type\":\"source\""),
-            "Expected type to be lowercase 'source' but got: " + serializedSource);
+                "Expected type to be lowercase 'source' but got: " + serializedSource);
 
         // Deserialize back and verify
         PluginInfo deserializedSink = objectMapper.readValue(serializedSink, PluginInfo.class);

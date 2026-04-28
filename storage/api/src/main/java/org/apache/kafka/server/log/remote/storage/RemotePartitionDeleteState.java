@@ -66,7 +66,7 @@ public enum RemotePartitionDeleteState {
     DELETE_PARTITION_FINISHED((byte) 2);
 
     private static final Map<Byte, RemotePartitionDeleteState> STATE_TYPES = Collections.unmodifiableMap(
-            Arrays.stream(values()).collect(Collectors.toMap(RemotePartitionDeleteState::id, Function.identity())));
+           Arrays.stream(values()).collect(Collectors.toMap(RemotePartitionDeleteState::id, Function.identity())));
 
     private final byte id;
 
@@ -83,7 +83,7 @@ public enum RemotePartitionDeleteState {
     }
 
     public static boolean isValidTransition(RemotePartitionDeleteState srcState,
-                                            RemotePartitionDeleteState targetState) {
+           RemotePartitionDeleteState targetState) {
         Objects.requireNonNull(targetState, "targetState can not be null");
 
         if (srcState == null) {

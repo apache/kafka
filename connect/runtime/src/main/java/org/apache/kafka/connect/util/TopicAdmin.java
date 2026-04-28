@@ -280,7 +280,7 @@ public class TopicAdmin implements AutoCloseable {
         return result != null ? result.toString() : null;
     }
 
-   /**
+    /**
      * Attempt to create the topic described by the given definition, returning true if the topic was created or false
      * if the topic already existed.
      *
@@ -436,7 +436,7 @@ public class TopicAdmin implements AutoCloseable {
                 }
                 if (cause instanceof TopicAuthorizationException) {
                     log.debug("Not authorized to create topic(s) '{}' upon the brokers {}." +
-                                    " Falling back to assume topic(s) exist or will be auto-created by the broker.",
+                            " Falling back to assume topic(s) exist or will be auto-created by the broker.",
                             topicNameList, bootstrapServers);
                     return EMPTY_CREATION;
                 }
@@ -497,7 +497,7 @@ public class TopicAdmin implements AutoCloseable {
                 }
                 if (cause instanceof UnsupportedVersionException) {
                     String msg = String.format("Unable to describe topic(s) '%s' since the brokers "
-                                    + "at %s do not support the DescribeTopics API.",
+                            + "at %s do not support the DescribeTopics API.",
                             topicNameList, bootstrapServers);
                     throw new ConnectException(msg, cause);
                 }
@@ -529,10 +529,10 @@ public class TopicAdmin implements AutoCloseable {
         Set<String> cleanupPolicies = topicCleanupPolicy(topic);
         if (cleanupPolicies.isEmpty()) {
             log.info("Unable to use admin client to verify the cleanup policy of '{}' "
-                      + "topic is '{}', either because the broker is an older "
-                      + "version or because the Kafka principal used for Connect "
-                      + "internal topics does not have the required permission to "
-                      + "describe topic configurations.", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
+                    + "topic is '{}', either because the broker is an older "
+                    + "version or because the Kafka principal used for Connect "
+                    + "internal topics does not have the required permission to "
+                    + "describe topic configurations.", topic, TopicConfig.CLEANUP_POLICY_COMPACT);
             return false;
         }
         Set<String> expectedPolicies = Set.of(TopicConfig.CLEANUP_POLICY_COMPACT);
@@ -572,10 +572,10 @@ public class TopicAdmin implements AutoCloseable {
             String policyStr = entry.value();
             log.debug("Found cleanup.policy={} for topic '{}'", policyStr, topic);
             return Arrays.stream(policyStr.split(","))
-                         .map(String::trim)
-                         .filter(s -> !s.isEmpty())
-                         .map(String::toLowerCase)
-                         .collect(Collectors.toSet());
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .map(String::toLowerCase)
+                    .collect(Collectors.toSet());
         }
         // This is unexpected, as the topic config should include the cleanup.policy even if
         // the topic settings don't override the broker's log.cleanup.policy. But just to be safe.
@@ -622,17 +622,17 @@ public class TopicAdmin implements AutoCloseable {
             return Map.of();
         }
         Collection<String> topics = Arrays.stream(topicNames)
-                                          .filter(Objects::nonNull)
-                                          .map(String::trim)
-                                          .filter(s -> !s.isEmpty())
-                                          .collect(Collectors.toList());
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList());
         if (topics.isEmpty()) {
             return Map.of();
         }
         String topicNameList = String.join(", ", topics);
         Collection<ConfigResource> resources = topics.stream()
-                                                     .map(t -> new ConfigResource(ConfigResource.Type.TOPIC, t))
-                                                     .collect(Collectors.toList());
+                .map(t -> new ConfigResource(ConfigResource.Type.TOPIC, t))
+                .collect(Collectors.toList());
 
         Map<ConfigResource, KafkaFuture<Config>> newResults = admin.describeConfigs(resources, new DescribeConfigsOptions()).values();
 

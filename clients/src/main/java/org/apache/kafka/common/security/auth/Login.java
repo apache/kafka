@@ -44,7 +44,7 @@ public interface Login {
      *        {@link org.apache.kafka.common.config.SaslConfigs#SASL_LOGIN_CALLBACK_HANDLER_CLASS}.
      */
     void configure(Map<String, ?> configs, String contextName, Configuration jaasConfiguration,
-                   AuthenticateCallbackHandler loginCallbackHandler);
+        AuthenticateCallbackHandler loginCallbackHandler);
 
     /**
      * Performs login for each login module specified for the login context of this instance.

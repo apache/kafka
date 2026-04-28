@@ -850,8 +850,8 @@ public class StreamsGroupCommand {
         }
 
         private void printInternalTopicErrors(Map<String, Throwable> internalTopicsDeletionFailures,
-                                              Set<String> deletedGroupIds,
-                                              Set<String> groupIdsWithInternalTopics) {
+            Set<String> deletedGroupIds,
+            Set<String> groupIdsWithInternalTopics) {
             if (!deletedGroupIds.isEmpty()) {
                 if (internalTopicsDeletionFailures.isEmpty()) {
                     List<String> successfulGroups = deletedGroupIds.stream()

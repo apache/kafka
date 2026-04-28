@@ -52,7 +52,7 @@ public class MockApiFixedKeyProcessor<KIn, VIn, VOut> implements FixedKeyProcess
     private FixedKeyProcessorContext<KIn, VOut> context;
 
     public MockApiFixedKeyProcessor(final PunctuationType punctuationType,
-                            final long scheduleInterval) {
+        final long scheduleInterval) {
         this.punctuationType = punctuationType;
         this.scheduleInterval = scheduleInterval;
     }

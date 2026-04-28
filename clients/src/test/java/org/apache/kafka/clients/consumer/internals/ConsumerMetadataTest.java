@@ -176,14 +176,14 @@ public class ConsumerMetadataTest {
     @Test
     public void testUserAssignment() {
         subscription.assignFromUser(Set.of(
-                new TopicPartition("foo", 0),
-                new TopicPartition("bar", 0),
-                new TopicPartition("__consumer_offsets", 0)));
+            new TopicPartition("foo", 0),
+            new TopicPartition("bar", 0),
+            new TopicPartition("__consumer_offsets", 0)));
         testBasicSubscription(Set.of("foo", "bar"), Set.of("__consumer_offsets"));
 
         subscription.assignFromUser(Set.of(
-                new TopicPartition("baz", 0),
-                new TopicPartition("__consumer_offsets", 0)));
+            new TopicPartition("baz", 0),
+            new TopicPartition("__consumer_offsets", 0)));
         testBasicSubscription(Set.of("baz"), Set.of("__consumer_offsets"));
     }
 
@@ -257,8 +257,8 @@ public class ConsumerMetadataTest {
 
     private MetadataResponse.TopicMetadata topicMetadata(String topic, boolean isInternal) {
         MetadataResponse.PartitionMetadata partitionMetadata = new MetadataResponse.PartitionMetadata(Errors.NONE,
-                new TopicPartition(topic, 0), Optional.of(node.id()), Optional.of(5),
-                singletonList(node.id()), singletonList(node.id()), singletonList(node.id()));
+            new TopicPartition(topic, 0), Optional.of(node.id()), Optional.of(5),
+            singletonList(node.id()), singletonList(node.id()), singletonList(node.id()));
         return new MetadataResponse.TopicMetadata(Errors.NONE, topic, isInternal, singletonList(partitionMetadata));
     }
 
@@ -266,7 +266,7 @@ public class ConsumerMetadataTest {
         long refreshBackoffMs = 50;
         long expireMs = 50000;
         return new ConsumerMetadata(refreshBackoffMs, refreshBackoffMs, expireMs, includeInternalTopics, false,
-                subscription, new LogContext(), new ClusterResourceListeners());
+            subscription, new LogContext(), new ClusterResourceListeners());
     }
 
     @Test
@@ -293,17 +293,17 @@ public class ConsumerMetadataTest {
         assertEquals(new HashSet<>(originalNodes), new HashSet<>(updatedCluster.nodes()));
         verify(mockListener, never()).onUpdate(any());
         validateForUpdatePartitionLeadership(metadata,
-                metadataSupplier(Errors.NONE, new TopicPartition("topic1", 0), Optional.of(1), Optional.of(100), Arrays.asList(1, 2), Arrays.asList(1, 2), Collections.singletonList(3)),
-                metadataSupplier(Errors.NONE, new TopicPartition("topic2", 0), Optional.of(2), Optional.of(200), Arrays.asList(2, 3), Arrays.asList(2, 3), Collections.singletonList(1)),
-                metadataSupplier(Errors.NONE, new TopicPartition("topic1", 1), Optional.of(2), Optional.of(200), Arrays.asList(2, 3), Arrays.asList(2, 3), Collections.singletonList(1)),
-                metadataSupplier(Errors.NONE, new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0), Optional.of(2), Optional.of(300), Arrays.asList(2, 3), Arrays.asList(2, 3), Collections.singletonList(1)),
-                originalNodes,
-                "kafka-cluster",
-                Collections.singleton("topic4"),
-                Collections.singleton("topic3"),
-                Collections.singleton(Topic.GROUP_METADATA_TOPIC_NAME),
-                updatedCluster.controller(),
-                metadata.topicIds());
+            metadataSupplier(Errors.NONE, new TopicPartition("topic1", 0), Optional.of(1), Optional.of(100), Arrays.asList(1, 2), Arrays.asList(1, 2), Collections.singletonList(3)),
+            metadataSupplier(Errors.NONE, new TopicPartition("topic2", 0), Optional.of(2), Optional.of(200), Arrays.asList(2, 3), Arrays.asList(2, 3), Collections.singletonList(1)),
+            metadataSupplier(Errors.NONE, new TopicPartition("topic1", 1), Optional.of(2), Optional.of(200), Arrays.asList(2, 3), Arrays.asList(2, 3), Collections.singletonList(1)),
+            metadataSupplier(Errors.NONE, new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0), Optional.of(2), Optional.of(300), Arrays.asList(2, 3), Arrays.asList(2, 3), Collections.singletonList(1)),
+            originalNodes,
+            "kafka-cluster",
+            Collections.singleton("topic4"),
+            Collections.singleton("topic3"),
+            Collections.singleton(Topic.GROUP_METADATA_TOPIC_NAME),
+            updatedCluster.controller(),
+            metadata.topicIds());
     }
 
 
@@ -331,17 +331,17 @@ public class ConsumerMetadataTest {
         assertEquals(new HashSet<>(originalNodes), new HashSet<>(updatedCluster.nodes()));
         verify(mockListener, times(1)).onUpdate(any());
         validateForUpdatePartitionLeadership(metadata,
-                new MetadataResponse.PartitionMetadata(Errors.NONE, tp11, Optional.of(newLeaderId), Optional.of(newLeaderEpoch), Arrays.asList(1, 2), Arrays.asList(1, 2), Collections.singletonList(3)),
-                metadataSupplier(Errors.NONE, new TopicPartition("topic2", 0), Optional.of(2), Optional.of(200), Arrays.asList(2, 3), Arrays.asList(2, 3), Collections.singletonList(1)),
-                metadataSupplier(Errors.NONE, new TopicPartition("topic1", 1), Optional.of(2), Optional.of(200), Arrays.asList(2, 3), Arrays.asList(2, 3), Collections.singletonList(1)),
-                metadataSupplier(Errors.NONE, new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0), Optional.of(2), Optional.of(300), Arrays.asList(2, 3), Arrays.asList(2, 3), Collections.singletonList(1)),
-                originalNodes,
-                "kafka-cluster",
-                Collections.singleton("topic4"),
-                Collections.singleton("topic3"),
-                Collections.singleton(Topic.GROUP_METADATA_TOPIC_NAME),
-                updatedCluster.controller(),
-                metadata.topicIds());
+            new MetadataResponse.PartitionMetadata(Errors.NONE, tp11, Optional.of(newLeaderId), Optional.of(newLeaderEpoch), Arrays.asList(1, 2), Arrays.asList(1, 2), Collections.singletonList(3)),
+            metadataSupplier(Errors.NONE, new TopicPartition("topic2", 0), Optional.of(2), Optional.of(200), Arrays.asList(2, 3), Arrays.asList(2, 3), Collections.singletonList(1)),
+            metadataSupplier(Errors.NONE, new TopicPartition("topic1", 1), Optional.of(2), Optional.of(200), Arrays.asList(2, 3), Arrays.asList(2, 3), Collections.singletonList(1)),
+            metadataSupplier(Errors.NONE, new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0), Optional.of(2), Optional.of(300), Arrays.asList(2, 3), Arrays.asList(2, 3), Collections.singletonList(1)),
+            originalNodes,
+            "kafka-cluster",
+            Collections.singleton("topic4"),
+            Collections.singleton("topic3"),
+            Collections.singleton(Topic.GROUP_METADATA_TOPIC_NAME),
+            updatedCluster.controller(),
+            metadata.topicIds());
     }
 
     private Metadata initializeMetadata() {
@@ -373,16 +373,16 @@ public class ConsumerMetadataTest {
         metadata.requestUpdate(true);
         Metadata.MetadataRequestAndVersion versionAndBuilder = metadata.newMetadataRequestAndVersion(time.milliseconds());
         metadata.update(versionAndBuilder.requestVersion,
-                RequestTestUtils.metadataUpdateWith(clusterId,
-                        5,
-                        errorCounts,
-                        topicPartitionCounts,
-                        tp -> null,
-                        this::metadataSupplier,
-                        ApiKeys.METADATA.latestVersion(),
-                        topicIds),
-                false,
-                time.milliseconds());
+            RequestTestUtils.metadataUpdateWith(clusterId,
+                5,
+                errorCounts,
+                topicPartitionCounts,
+                tp -> null,
+                this::metadataSupplier,
+                ApiKeys.METADATA.latestVersion(),
+                topicIds),
+            false,
+            time.milliseconds());
 
         return metadata;
     }
@@ -410,17 +410,17 @@ public class ConsumerMetadataTest {
     }
 
     private void validateForUpdatePartitionLeadership(Metadata updatedMetadata,
-                                                      MetadataResponse.PartitionMetadata part1Metadata,
-                                                      MetadataResponse.PartitionMetadata part2Metadata,
-                                                      MetadataResponse.PartitionMetadata part12Metadata,
-                                                      MetadataResponse.PartitionMetadata internalPartMetadata,
-                                                      List<Node> expectedNodes,
-                                                      String expectedClusterId,
-                                                      Set<String> expectedUnauthorisedTopics,
-                                                      Set<String> expectedInvalidTopics,
-                                                      Set<String> expectedInternalTopics,
-                                                      Node expectedController,
-                                                      Map<String, Uuid> expectedTopicIds) {
+        MetadataResponse.PartitionMetadata part1Metadata,
+        MetadataResponse.PartitionMetadata part2Metadata,
+        MetadataResponse.PartitionMetadata part12Metadata,
+        MetadataResponse.PartitionMetadata internalPartMetadata,
+        List<Node> expectedNodes,
+        String expectedClusterId,
+        Set<String> expectedUnauthorisedTopics,
+        Set<String> expectedInvalidTopics,
+        Set<String> expectedInternalTopics,
+        Node expectedController,
+        Map<String, Uuid> expectedTopicIds) {
         Cluster updatedCluster = updatedMetadata.fetch();
         assertEquals(updatedCluster.clusterResource().clusterId(), expectedClusterId);
         assertEquals(new HashSet<>(expectedNodes), new HashSet<>(updatedCluster.nodes()));

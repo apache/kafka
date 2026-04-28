@@ -278,11 +278,11 @@ public class InFlightState {
             ")";
     }
 
-  /**
-   * This record is used to store the state before the transition. It is used to revert the state if the transition fails.
-   * @param state The state of the records before the transition.
-   * @param maxDeliveryCount The maximum delivery count for the record.
-   */
+    /**
+     * This record is used to store the state before the transition. It is used to revert the state if the transition fails.
+     * @param state The state of the records before the transition.
+     * @param maxDeliveryCount The maximum delivery count for the record.
+     */
     private record RollbackState(InFlightState state, int maxDeliveryCount) {
     }
 }

@@ -23,6 +23,7 @@ import org.rocksdb.WriteBatchInterface;
 
 public interface BatchWritingStore {
     void addToBatch(final KeyValue<byte[], byte[]> record,
-                    final WriteBatchInterface batch) throws RocksDBException;
+        final WriteBatchInterface batch) throws RocksDBException;
+
     void write(final WriteBatchInterface batch) throws RocksDBException;
 }

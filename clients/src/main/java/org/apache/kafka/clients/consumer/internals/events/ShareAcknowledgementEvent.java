@@ -34,8 +34,8 @@ public class ShareAcknowledgementEvent {
     private final Optional<Integer> acquisitionLockTimeoutMs;
 
     public ShareAcknowledgementEvent(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap,
-                                     boolean checkForRenewAcknowledgements,
-                                     Optional<Integer> acquisitionLockTimeoutMs) {
+        boolean checkForRenewAcknowledgements,
+        Optional<Integer> acquisitionLockTimeoutMs) {
         this.acknowledgementsMap = Map.copyOf(acknowledgementsMap);
         this.checkForRenewAcknowledgements = checkForRenewAcknowledgements;
         this.acquisitionLockTimeoutMs = acquisitionLockTimeoutMs;

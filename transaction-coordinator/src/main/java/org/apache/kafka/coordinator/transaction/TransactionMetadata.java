@@ -80,17 +80,17 @@ public class TransactionMetadata {
      * @param clientTransactionVersion TransactionVersion used by the client when the state was transitioned
      */
     public TransactionMetadata(String transactionalId,
-                               long producerId,
-                               long prevProducerId,
-                               long nextProducerId,
-                               short producerEpoch,
-                               short lastProducerEpoch,
-                               int txnTimeoutMs,
-                               TransactionState state,
-                               Set<TopicPartition> topicPartitions,
-                               long txnStartTimestamp,
-                               long txnLastUpdateTimestamp,
-                               TransactionVersion clientTransactionVersion) {
+        long producerId,
+        long prevProducerId,
+        long nextProducerId,
+        short producerEpoch,
+        short lastProducerEpoch,
+        int txnTimeoutMs,
+        TransactionState state,
+        Set<TopicPartition> topicPartitions,
+        long txnStartTimestamp,
+        long txnLastUpdateTimestamp,
+        TransactionVersion clientTransactionVersion) {
         this.transactionalId = transactionalId;
         this.producerId = producerId;
         this.prevProducerId = prevProducerId;
@@ -194,9 +194,9 @@ public class TransactionMetadata {
     }
 
     public TxnTransitMetadata prepareProducerIdRotation(long newProducerId,
-                                                        int newTxnTimeoutMs,
-                                                        long updateTimestamp,
-                                                        boolean recordLastEpoch) {
+        int newTxnTimeoutMs,
+        long updateTimestamp,
+        boolean recordLastEpoch) {
         if (hasPendingTransaction())
             throw new IllegalStateException("Cannot rotate producer ids while a transaction is still pending");
 
@@ -212,8 +212,8 @@ public class TransactionMetadata {
     }
 
     public TxnTransitMetadata prepareAddPartitions(Set<TopicPartition> addedTopicPartitions,
-                                                   long updateTimestamp,
-                                                   TransactionVersion clientTransactionVersion) {
+        long updateTimestamp,
+        TransactionVersion clientTransactionVersion) {
         long newTxnStartTimestamp;
         if (state == TransactionState.EMPTY || state == TransactionState.COMPLETE_ABORT || state == TransactionState.COMPLETE_COMMIT) {
             newTxnStartTimestamp = updateTimestamp;
@@ -233,10 +233,10 @@ public class TransactionMetadata {
     }
 
     public TxnTransitMetadata prepareAbortOrCommit(TransactionState newState,
-                                                   TransactionVersion clientTransactionVersion,
-                                                   long nextProducerId,
-                                                   long updateTimestamp,
-                                                   boolean noPartitionAdded) {
+        TransactionVersion clientTransactionVersion,
+        long nextProducerId,
+        long updateTimestamp,
+        boolean noPartitionAdded) {
         TransitionData data = new TransitionData(newState);
         if (clientTransactionVersion.supportsEpochBump()) {
             if (producerEpoch == Short.MAX_VALUE && newState == TransactionState.PREPARE_ABORT) {
@@ -512,6 +512,7 @@ public class TransactionMetadata {
     public void setProducerId(long producerId) {
         this.producerId = producerId;
     }
+
     public long producerId() {
         return producerId;
     }
@@ -520,6 +521,7 @@ public class TransactionMetadata {
     public void setPrevProducerId(long prevProducerId) {
         this.prevProducerId = prevProducerId;
     }
+
     public long prevProducerId() {
         return prevProducerId;
     }

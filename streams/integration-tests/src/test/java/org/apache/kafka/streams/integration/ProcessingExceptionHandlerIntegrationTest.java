@@ -461,9 +461,9 @@ public class ProcessingExceptionHandlerIntegrationTest {
         cacheTableTopologyBuilder
             .table("TOPIC_NAME", Consumed.with(Serdes.String(), Serdes.String()),
                 Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("table")
-                .withKeySerde(Serdes.String())
-                .withValueSerde(Serdes.String())
-                .withCachingEnabled())
+                    .withKeySerde(Serdes.String())
+                    .withValueSerde(Serdes.String())
+                    .withCachingEnabled())
             .mapValues(value -> {
                 throw new RuntimeException("Error");
             });
@@ -484,7 +484,7 @@ public class ProcessingExceptionHandlerIntegrationTest {
                 },
                 JoinWindows.ofTimeDifferenceAndGrace(Duration.ofMinutes(5), Duration.ofMinutes(1)),
                 StreamJoined.with(
-                        Serdes.String(), Serdes.String(), Serdes.String())
+                    Serdes.String(), Serdes.String(), Serdes.String())
                     .withName("join-rekey")
                     .withStoreName("join-store"));
 
@@ -501,10 +501,10 @@ public class ProcessingExceptionHandlerIntegrationTest {
     @ParameterizedTest
     @MethodSource("sourceRawRecordTopologyTestCases")
     public void shouldVerifySourceRawKeyAndSourceRawValuePresentOrNotInErrorHandlerContext(final List<ProducerRecord<String, String>> events,
-                                                                                           final Topology topology) {
+        final Topology topology) {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
-                AssertSourceRawRecordProcessingExceptionHandlerMockTest.class);
+            AssertSourceRawRecordProcessingExceptionHandlerMockTest.class);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, properties, Instant.ofEpochMilli(0L))) {
             for (final ProducerRecord<String, String> event : events) {

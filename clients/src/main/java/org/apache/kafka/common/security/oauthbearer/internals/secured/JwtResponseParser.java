@@ -26,7 +26,7 @@ import java.io.IOException;
 
 public class JwtResponseParser {
 
-    private static final String[] JSON_PATHS = new String[] {"/access_token", "/id_token"};
+    private static final String[] JSON_PATHS = new String[]{"/access_token", "/id_token"};
     private static final int MAX_RESPONSE_BODY_LENGTH = 1000;
 
     public String parseJwt(String responseBody) throws JwtRetrieverException {

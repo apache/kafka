@@ -136,7 +136,7 @@ public class KafkaChannel implements AutoCloseable {
     private long lastReauthenticationStartNanos;
 
     public KafkaChannel(String id, TransportLayer transportLayer, Supplier<Authenticator> authenticatorCreator,
-                        int maxReceiveSize, MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) {
+        int maxReceiveSize, MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) {
         this.id = id;
         this.transportLayer = transportLayer;
         this.authenticatorCreator = authenticatorCreator;
@@ -497,7 +497,7 @@ public class KafkaChannel implements AutoCloseable {
     public String toString() {
         return super.toString() + " id=" + id;
     }
-    
+
     /**
      * Return the number of times this instance has successfully authenticated. This
      * value can only exceed 1 when re-authentication is enabled and it has
@@ -538,10 +538,10 @@ public class KafkaChannel implements AutoCloseable {
      *             if this channel is not "ready"
      */
     public boolean maybeBeginServerReauthentication(NetworkReceive saslHandshakeNetworkReceive,
-            Supplier<Long> nowNanosSupplier) throws AuthenticationException, IOException {
+        Supplier<Long> nowNanosSupplier) throws AuthenticationException, IOException {
         if (!ready())
             throw new IllegalStateException(
-                    "KafkaChannel should be \"ready\" when processing SASL Handshake for potential re-authentication");
+                "KafkaChannel should be \"ready\" when processing SASL Handshake for potential re-authentication");
         /*
          * Re-authentication is disabled if there is no session expiration time, in
          * which case the SASL handshake network receive will be processed normally,
@@ -562,11 +562,11 @@ public class KafkaChannel implements AutoCloseable {
          * results in a failure result being sent to the client.
          */
         if (lastReauthenticationStartNanos != 0
-                && nowNanos - lastReauthenticationStartNanos < MIN_REAUTH_INTERVAL_ONE_SECOND_NANOS)
+            && nowNanos - lastReauthenticationStartNanos < MIN_REAUTH_INTERVAL_ONE_SECOND_NANOS)
             return false;
         lastReauthenticationStartNanos = nowNanos;
         swapAuthenticatorsAndBeginReauthentication(
-                new ReauthenticationContext(authenticator, saslHandshakeNetworkReceive, nowNanos));
+            new ReauthenticationContext(authenticator, saslHandshakeNetworkReceive, nowNanos));
         return true;
     }
 
@@ -595,12 +595,12 @@ public class KafkaChannel implements AutoCloseable {
      *             if this channel is not "ready"
      */
     public boolean maybeBeginClientReauthentication(Supplier<Long> nowNanosSupplier)
-            throws AuthenticationException, IOException {
+        throws AuthenticationException, IOException {
         if (!ready())
             throw new IllegalStateException(
-                    "KafkaChannel should always be \"ready\" when it is checked for possible re-authentication");
+                "KafkaChannel should always be \"ready\" when it is checked for possible re-authentication");
         if (muteState != ChannelMuteState.NOT_MUTED || midWrite
-                || authenticator.clientSessionReauthenticationTimeNanos() == null)
+            || authenticator.clientSessionReauthenticationTimeNanos() == null)
             return false;
         /*
          * We've delayed getting the time as long as possible in case we don't need it,
@@ -613,7 +613,7 @@ public class KafkaChannel implements AutoCloseable {
         receive = null;
         return true;
     }
-    
+
     /**
      * Return the number of milliseconds that elapsed while re-authenticating this
      * session from the perspective of this instance, if applicable, otherwise null.
@@ -642,7 +642,7 @@ public class KafkaChannel implements AutoCloseable {
         Long serverSessionExpirationTimeNanos = authenticator.serverSessionExpirationTimeNanos();
         return serverSessionExpirationTimeNanos != null && nowNanos - serverSessionExpirationTimeNanos > 0;
     }
-    
+
     /**
      * Return the (always non-null but possibly empty) client-side
      * {@link NetworkReceive} response that arrived during re-authentication but
@@ -658,7 +658,7 @@ public class KafkaChannel implements AutoCloseable {
     public Optional<NetworkReceive> pollResponseReceivedDuringReauthentication() {
         return authenticator.pollResponseReceivedDuringReauthentication();
     }
-    
+
     /**
      * Return true if this is a server-side channel and the connected client has
      * indicated that it supports re-authentication, otherwise false
@@ -671,7 +671,7 @@ public class KafkaChannel implements AutoCloseable {
     }
 
     private void swapAuthenticatorsAndBeginReauthentication(ReauthenticationContext reauthenticationContext)
-            throws IOException {
+        throws IOException {
         // it is up to the new authenticator to close the old one
         // replace with a new one and begin the process of re-authenticating
         authenticator = authenticatorCreator.get();

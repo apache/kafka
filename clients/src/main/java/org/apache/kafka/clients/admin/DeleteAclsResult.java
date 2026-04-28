@@ -102,7 +102,7 @@ public class DeleteAclsResult {
 
     private List<AclBinding> getAclBindings(Map<AclBindingFilter, KafkaFuture<FilterResults>> futures) {
         List<AclBinding> acls = new ArrayList<>();
-        for (KafkaFuture<FilterResults> value: futures.values()) {
+        for (KafkaFuture<FilterResults> value : futures.values()) {
             FilterResults results;
             try {
                 results = value.get();

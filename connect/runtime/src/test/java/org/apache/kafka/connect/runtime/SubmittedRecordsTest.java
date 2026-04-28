@@ -351,7 +351,7 @@ public class SubmittedRecordsTest {
 
     private void assertNoEmptyDeques() {
         submittedRecords.records.forEach((partition, deque) ->
-            assertFalse(deque.isEmpty(), "Empty deque for partition " + partition + " should have been cleaned up from internal records map")
+                assertFalse(deque.isEmpty(), "Empty deque for partition " + partition + " should have been cleaned up from internal records map")
         );
     }
 

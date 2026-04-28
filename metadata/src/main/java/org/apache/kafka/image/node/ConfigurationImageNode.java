@@ -51,7 +51,7 @@ public class ConfigurationImageNode implements MetadataNode {
             @Override
             public void print(MetadataNodePrinter printer) {
                 if (printer.redactionCriteria().
-                        shouldRedactConfig(image.resource().type(), name)) {
+                    shouldRedactConfig(image.resource().type(), name)) {
                     printer.output("[redacted]");
                 } else {
                     printer.output(value);

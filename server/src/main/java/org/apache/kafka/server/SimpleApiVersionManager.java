@@ -69,13 +69,13 @@ public class SimpleApiVersionManager implements ApiVersionManager {
     public ApiVersionsResponse apiVersionResponse(int throttleTimeMs, boolean alterFeatureLevel0) {
         FinalizedFeatures currentFeatures = features();
         return new ApiVersionsResponse.Builder()
-                .setThrottleTimeMs(throttleTimeMs)
-                .setApiVersions(apiVersions)
-                .setSupportedFeatures(brokerFeatures)
-                .setFinalizedFeatures(currentFeatures.finalizedFeatures())
-                .setFinalizedFeaturesEpoch(currentFeatures.finalizedFeaturesEpoch())
-                .setAlterFeatureLevel0(alterFeatureLevel0)
-                .build();
+            .setThrottleTimeMs(throttleTimeMs)
+            .setApiVersions(apiVersions)
+            .setSupportedFeatures(brokerFeatures)
+            .setFinalizedFeatures(currentFeatures.finalizedFeatures())
+            .setFinalizedFeaturesEpoch(currentFeatures.finalizedFeaturesEpoch())
+            .setAlterFeatureLevel0(alterFeatureLevel0)
+            .build();
     }
 
     @Override

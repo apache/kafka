@@ -200,7 +200,7 @@ class DefaultStatePersisterTest {
                 .setGroupId(groupId)
                 .setTopicsData(List.of(new TopicData<>(topicId,
                     List.of(PartitionFactory.newPartitionStateBatchData(
-                        incorrectPartition, 1, 0, 0,  0, null))))).build()).build());
+                        incorrectPartition, 1, 0, 0, 0, null))))).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
         assertFutureThrows(IllegalArgumentException.class, result);
@@ -1219,27 +1219,27 @@ class DefaultStatePersisterTest {
         // one entry has valid results
         futureMap.computeIfAbsent(tp1.topicId(), k -> new HashMap<>())
             .put(tp1.partition(), CompletableFuture.completedFuture(
-                    new WriteShareGroupStateResponse(
-                        WriteShareGroupStateResponse.toResponseData(
-                            tp1.topicId(),
-                            tp1.partition()
-                        )
+                new WriteShareGroupStateResponse(
+                    WriteShareGroupStateResponse.toResponseData(
+                        tp1.topicId(),
+                        tp1.partition()
                     )
                 )
+            )
             );
 
         // one entry has error
         futureMap.computeIfAbsent(tp2.topicId(), k -> new HashMap<>())
             .put(tp2.partition(), CompletableFuture.completedFuture(
-                    new WriteShareGroupStateResponse(
-                        WriteShareGroupStateResponse.toErrorResponseData(
-                            tp2.topicId(),
-                            tp2.partition(),
-                            Errors.UNKNOWN_TOPIC_OR_PARTITION,
-                            "unknown tp"
-                        )
+                new WriteShareGroupStateResponse(
+                    WriteShareGroupStateResponse.toErrorResponseData(
+                        tp2.topicId(),
+                        tp2.partition(),
+                        Errors.UNKNOWN_TOPIC_OR_PARTITION,
+                        "unknown tp"
                     )
                 )
+            )
             );
 
         PersisterStateManager psm = mock(PersisterStateManager.class);
@@ -1276,13 +1276,13 @@ class DefaultStatePersisterTest {
         // one entry has valid results
         futureMap.computeIfAbsent(tp1.topicId(), k -> new HashMap<>())
             .put(tp1.partition(), CompletableFuture.completedFuture(
-                    new WriteShareGroupStateResponse(
-                        WriteShareGroupStateResponse.toResponseData(
-                            tp1.topicId(),
-                            tp1.partition()
-                        )
+                new WriteShareGroupStateResponse(
+                    WriteShareGroupStateResponse.toResponseData(
+                        tp1.topicId(),
+                        tp1.partition()
                     )
                 )
+            )
             );
 
         // one entry has failed future
@@ -1323,30 +1323,30 @@ class DefaultStatePersisterTest {
         // one entry has valid results
         futureMap.computeIfAbsent(tp1.topicId(), k -> new HashMap<>())
             .put(tp1.partition(), CompletableFuture.completedFuture(
-                    new ReadShareGroupStateResponse(
-                        ReadShareGroupStateResponse.toResponseData(
-                            tp1.topicId(),
-                            tp1.partition(),
-                            1L,
-                            2,
-                            List.of()
-                        )
+                new ReadShareGroupStateResponse(
+                    ReadShareGroupStateResponse.toResponseData(
+                        tp1.topicId(),
+                        tp1.partition(),
+                        1L,
+                        2,
+                        List.of()
                     )
                 )
+            )
             );
 
         // one entry has error
         futureMap.computeIfAbsent(tp2.topicId(), k -> new HashMap<>())
             .put(tp2.partition(), CompletableFuture.completedFuture(
-                    new ReadShareGroupStateResponse(
-                        ReadShareGroupStateResponse.toErrorResponseData(
-                            tp2.topicId(),
-                            tp2.partition(),
-                            Errors.UNKNOWN_TOPIC_OR_PARTITION,
-                            "unknown tp"
-                        )
+                new ReadShareGroupStateResponse(
+                    ReadShareGroupStateResponse.toErrorResponseData(
+                        tp2.topicId(),
+                        tp2.partition(),
+                        Errors.UNKNOWN_TOPIC_OR_PARTITION,
+                        "unknown tp"
                     )
                 )
+            )
             );
 
         PersisterStateManager psm = mock(PersisterStateManager.class);
@@ -1383,16 +1383,16 @@ class DefaultStatePersisterTest {
         // one entry has valid results
         futureMap.computeIfAbsent(tp1.topicId(), k -> new HashMap<>())
             .put(tp1.partition(), CompletableFuture.completedFuture(
-                    new ReadShareGroupStateResponse(
-                        ReadShareGroupStateResponse.toResponseData(
-                            tp1.topicId(),
-                            tp1.partition(),
-                            1L,
-                            2,
-                            List.of()
-                        )
+                new ReadShareGroupStateResponse(
+                    ReadShareGroupStateResponse.toResponseData(
+                        tp1.topicId(),
+                        tp1.partition(),
+                        1L,
+                        2,
+                        List.of()
                     )
                 )
+            )
             );
 
         // one entry has failed future
@@ -1433,31 +1433,31 @@ class DefaultStatePersisterTest {
         // one entry has valid results
         futureMap.computeIfAbsent(tp1.topicId(), k -> new HashMap<>())
             .put(tp1.partition(), CompletableFuture.completedFuture(
-                    new ReadShareGroupStateSummaryResponse(
-                        ReadShareGroupStateSummaryResponse.toResponseData(
-                            tp1.topicId(),
-                            tp1.partition(),
-                            1L,
-                            0,
-                            1,
-                            2
-                        )
+                new ReadShareGroupStateSummaryResponse(
+                    ReadShareGroupStateSummaryResponse.toResponseData(
+                        tp1.topicId(),
+                        tp1.partition(),
+                        1L,
+                        0,
+                        1,
+                        2
                     )
                 )
+            )
             );
 
         // one entry has error
         futureMap.computeIfAbsent(tp2.topicId(), k -> new HashMap<>())
             .put(tp2.partition(), CompletableFuture.completedFuture(
-                    new ReadShareGroupStateSummaryResponse(
-                        ReadShareGroupStateSummaryResponse.toErrorResponseData(
-                            tp2.topicId(),
-                            tp2.partition(),
-                            Errors.UNKNOWN_TOPIC_OR_PARTITION,
-                            "unknown tp"
-                        )
+                new ReadShareGroupStateSummaryResponse(
+                    ReadShareGroupStateSummaryResponse.toErrorResponseData(
+                        tp2.topicId(),
+                        tp2.partition(),
+                        Errors.UNKNOWN_TOPIC_OR_PARTITION,
+                        "unknown tp"
                     )
                 )
+            )
             );
 
         PersisterStateManager psm = mock(PersisterStateManager.class);
@@ -1494,17 +1494,17 @@ class DefaultStatePersisterTest {
         // one entry has valid results
         futureMap.computeIfAbsent(tp1.topicId(), k -> new HashMap<>())
             .put(tp1.partition(), CompletableFuture.completedFuture(
-                    new ReadShareGroupStateSummaryResponse(
-                        ReadShareGroupStateSummaryResponse.toResponseData(
-                            tp1.topicId(),
-                            tp1.partition(),
-                            1L,
-                            0,
-                            1,
-                            2
-                        )
+                new ReadShareGroupStateSummaryResponse(
+                    ReadShareGroupStateSummaryResponse.toResponseData(
+                        tp1.topicId(),
+                        tp1.partition(),
+                        1L,
+                        0,
+                        1,
+                        2
                     )
                 )
+            )
             );
 
         // one entry has failed future
@@ -1545,27 +1545,27 @@ class DefaultStatePersisterTest {
         // one entry has valid results
         futureMap.computeIfAbsent(tp1.topicId(), k -> new HashMap<>())
             .put(tp1.partition(), CompletableFuture.completedFuture(
-                    new DeleteShareGroupStateResponse(
-                        DeleteShareGroupStateResponse.toResponseData(
-                            tp1.topicId(),
-                            tp1.partition()
-                        )
+                new DeleteShareGroupStateResponse(
+                    DeleteShareGroupStateResponse.toResponseData(
+                        tp1.topicId(),
+                        tp1.partition()
                     )
                 )
+            )
             );
 
         // one entry has error
         futureMap.computeIfAbsent(tp2.topicId(), k -> new HashMap<>())
             .put(tp2.partition(), CompletableFuture.completedFuture(
-                    new DeleteShareGroupStateResponse(
-                        DeleteShareGroupStateResponse.toErrorResponseData(
-                            tp2.topicId(),
-                            tp2.partition(),
-                            Errors.UNKNOWN_TOPIC_OR_PARTITION,
-                            "unknown tp"
-                        )
+                new DeleteShareGroupStateResponse(
+                    DeleteShareGroupStateResponse.toErrorResponseData(
+                        tp2.topicId(),
+                        tp2.partition(),
+                        Errors.UNKNOWN_TOPIC_OR_PARTITION,
+                        "unknown tp"
                     )
                 )
+            )
             );
 
         PersisterStateManager psm = mock(PersisterStateManager.class);

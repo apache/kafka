@@ -34,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(40)
 public class BrokersToIsrsTest {
-    private static final Uuid[] UUIDS = new Uuid[] {
+    private static final Uuid[] UUIDS = new Uuid[]{
         Uuid.fromString("z5XgH_fQSAK3-RYoF2ymgw"),
         Uuid.fromString("U52uRe20RsGI0RvpcTx33Q")
     };
@@ -56,20 +56,20 @@ public class BrokersToIsrsTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         BrokersToIsrs brokersToIsrs = new BrokersToIsrs(snapshotRegistry);
         assertEquals(toSet(), toSet(brokersToIsrs.iterator(1, false)));
-        brokersToIsrs.update(UUIDS[0], 0, null, new int[] {1, 2, 3}, -1, 1);
-        brokersToIsrs.update(UUIDS[1], 1, null, new int[] {2, 3, 4}, -1, 4);
+        brokersToIsrs.update(UUIDS[0], 0, null, new int[]{1, 2, 3}, -1, 1);
+        brokersToIsrs.update(UUIDS[1], 1, null, new int[]{2, 3, 4}, -1, 4);
         assertEquals(toSet(new TopicIdPartition(UUIDS[0], 0)),
             toSet(brokersToIsrs.iterator(1, false)));
         assertEquals(toSet(new TopicIdPartition(UUIDS[0], 0),
-                           new TopicIdPartition(UUIDS[1], 1)),
+            new TopicIdPartition(UUIDS[1], 1)),
             toSet(brokersToIsrs.iterator(2, false)));
         assertEquals(toSet(new TopicIdPartition(UUIDS[1], 1)),
             toSet(brokersToIsrs.iterator(4, false)));
         assertEquals(toSet(), toSet(brokersToIsrs.iterator(5, false)));
-        brokersToIsrs.update(UUIDS[1], 2, null, new int[] {3, 2, 1}, -1, 3);
+        brokersToIsrs.update(UUIDS[1], 2, null, new int[]{3, 2, 1}, -1, 3);
         assertEquals(toSet(new TopicIdPartition(UUIDS[0], 0),
-                new TopicIdPartition(UUIDS[1], 1),
-                new TopicIdPartition(UUIDS[1], 2)),
+            new TopicIdPartition(UUIDS[1], 1),
+            new TopicIdPartition(UUIDS[1], 2)),
             toSet(brokersToIsrs.iterator(2, false)));
     }
 

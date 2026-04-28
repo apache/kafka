@@ -90,13 +90,13 @@ public class PluginClassLoader extends URLClassLoader {
     public Enumeration<URL> getResources(String name) throws IOException {
         Objects.requireNonNull(name);
         List<URL> resources = new ArrayList<>();
-        for (Enumeration<URL> foundLocally = findResources(name); foundLocally.hasMoreElements();) {
+        for (Enumeration<URL> foundLocally = findResources(name); foundLocally.hasMoreElements(); ) {
             URL url = foundLocally.nextElement();
             if (url != null)
                 resources.add(url);
         }
         // Explicitly call the parent implementation instead of super to avoid double-listing the local resources
-        for (Enumeration<URL> foundByParent = getParent().getResources(name); foundByParent.hasMoreElements();) {
+        for (Enumeration<URL> foundByParent = getParent().getResources(name); foundByParent.hasMoreElements(); ) {
             URL url = foundByParent.nextElement();
             if (url != null)
                 resources.add(url);

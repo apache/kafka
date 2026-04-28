@@ -1126,7 +1126,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                             partitionsOrNull.remove(partitionId);
                         } else {
                             log.debug("[GroupId {}] Cannot remove the epoch {} from {}-{} because the partition is " +
-                                    "still owned at a different epoch {}", groupId, expectedEpoch, topicId, partitionId, prevValue);
+                                "still owned at a different epoch {}", groupId, expectedEpoch, topicId, partitionId, prevValue);
                         }
                     });
                     if (partitionsOrNull.isEmpty()) {
@@ -1136,7 +1136,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                     }
                 } else {
                     log.debug("[GroupId {}] Cannot remove the epoch {} from {} because it does not have any epoch",
-                            groupId, expectedEpoch, topicId);
+                        groupId, expectedEpoch, topicId);
                     return partitionsOrNull;
                 }
             });

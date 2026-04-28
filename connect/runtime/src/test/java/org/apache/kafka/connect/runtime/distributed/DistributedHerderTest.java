@@ -156,6 +156,7 @@ import static org.mockito.Mockito.withSettings;
 @SuppressWarnings("unchecked")
 public class DistributedHerderTest {
     private static final Map<String, String> HERDER_CONFIG = new HashMap<>();
+
     static {
         HERDER_CONFIG.put(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "status-topic");
         HERDER_CONFIG.put(DistributedConfig.CONFIG_TOPIC_CONFIG, "config-topic");
@@ -166,6 +167,7 @@ public class DistributedHerderTest {
         HERDER_CONFIG.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         HERDER_CONFIG.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "connect-offsets");
     }
+
     private static final String MEMBER_URL = "memberUrl";
 
     private static final String CONN1 = "sourceA";
@@ -178,45 +180,57 @@ public class DistributedHerderTest {
     private static final String FOO_TOPIC = "foo";
     private static final String BAR_TOPIC = "bar";
     private static final String BAZ_TOPIC = "baz";
+
     static {
         CONN1_CONFIG.put(ConnectorConfig.NAME_CONFIG, CONN1);
         CONN1_CONFIG.put(ConnectorConfig.TASKS_MAX_CONFIG, MAX_TASKS.toString());
         CONN1_CONFIG.put(SinkConnectorConfig.TOPICS_CONFIG, String.join(",", FOO_TOPIC, BAR_TOPIC));
         CONN1_CONFIG.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, BogusSourceConnector.class.getName());
     }
+
     private static final Map<String, String> CONN1_CONFIG_UPDATED = new HashMap<>(CONN1_CONFIG);
+
     static {
         CONN1_CONFIG_UPDATED.put(SinkConnectorConfig.TOPICS_CONFIG, String.join(",", FOO_TOPIC, BAR_TOPIC, BAZ_TOPIC));
     }
+
     private static final ConfigInfos CONN1_CONFIG_INFOS =
-        new ConfigInfos(CONN1, 0, List.of(), List.of());
+            new ConfigInfos(CONN1, 0, List.of(), List.of());
     private static final Map<String, String> CONN2_CONFIG = new HashMap<>();
+
     static {
         CONN2_CONFIG.put(ConnectorConfig.NAME_CONFIG, CONN2);
         CONN2_CONFIG.put(ConnectorConfig.TASKS_MAX_CONFIG, MAX_TASKS.toString());
         CONN2_CONFIG.put(SinkConnectorConfig.TOPICS_CONFIG, String.join(",", FOO_TOPIC, BAR_TOPIC));
         CONN2_CONFIG.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, BogusSourceConnector.class.getName());
     }
+
     private static final ConfigInfos CONN2_CONFIG_INFOS =
-        new ConfigInfos(CONN2, 0, List.of(), List.of());
+            new ConfigInfos(CONN2, 0, List.of(), List.of());
     private static final ConfigInfos CONN2_INVALID_CONFIG_INFOS =
-        new ConfigInfos(CONN2, 1, List.of(), List.of());
+            new ConfigInfos(CONN2, 1, List.of(), List.of());
     private static final Map<String, String> TASK_CONFIG = new HashMap<>();
+
     static {
         TASK_CONFIG.put(TaskConfig.TASK_CLASS_CONFIG, BogusSourceTask.class.getName());
     }
+
     private static final List<Map<String, String>> TASK_CONFIGS = new ArrayList<>();
+
     static {
         TASK_CONFIGS.add(TASK_CONFIG);
         TASK_CONFIGS.add(TASK_CONFIG);
         TASK_CONFIGS.add(TASK_CONFIG);
     }
+
     private static final HashMap<ConnectorTaskId, Map<String, String>> TASK_CONFIGS_MAP = new HashMap<>();
+
     static {
         TASK_CONFIGS_MAP.put(TASK0, TASK_CONFIG);
         TASK_CONFIGS_MAP.put(TASK1, TASK_CONFIG);
         TASK_CONFIGS_MAP.put(TASK2, TASK_CONFIG);
     }
+
     private static final ClusterConfigState SNAPSHOT = new ClusterConfigState(
             1,
             null,
@@ -304,7 +318,7 @@ public class DistributedHerderTest {
     private SinkConnectorConfig conn1SinkConfigUpdated;
     private short connectProtocolVersion;
     private final SampleConnectorClientConfigOverridePolicy
-        noneConnectorClientConfigOverridePolicy = new SampleConnectorClientConfigOverridePolicy();
+            noneConnectorClientConfigOverridePolicy = new SampleConnectorClientConfigOverridePolicy();
 
     @BeforeEach
     public void setUp() throws Exception {
@@ -640,7 +654,7 @@ public class DistributedHerderTest {
 
         // Revoke the connector in the next rebalance
         expectRebalance(List.of(CONN1), List.of(),
-            ConnectProtocol.Assignment.NO_ERROR, configOffset, List.of(),
+                ConnectProtocol.Assignment.NO_ERROR, configOffset, List.of(),
                 List.of());
 
         if (incompleteRebalance) {
@@ -1289,7 +1303,7 @@ public class DistributedHerderTest {
         FutureCallback<ConnectorStateInfo> callback = new FutureCallback<>();
         herder.restartConnectorAndTasks(restartRequest, callback);
         herder.tick();
-        assertEquals(connectorStateInfo,  callback.get(1000L, TimeUnit.MILLISECONDS));
+        assertEquals(connectorStateInfo, callback.get(1000L, TimeUnit.MILLISECONDS));
 
         verifyNoMoreInteractions(restartPlan, worker, member, configBackingStore, statusBackingStore);
     }
@@ -1340,7 +1354,7 @@ public class DistributedHerderTest {
         ConnectorStatus status = new ConnectorStatus(CONN1, AbstractStatus.State.RESTARTING, WORKER_ID, 0);
         doNothing().when(statusBackingStore).put(eq(status));
 
-        ArgumentCaptor<Callback<TargetState>>  stateCallback = ArgumentCaptor.forClass(Callback.class);
+        ArgumentCaptor<Callback<TargetState>> stateCallback = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
             stateCallback.getValue().onCompletion(null, TargetState.STARTED);
             return true;
@@ -1406,7 +1420,7 @@ public class DistributedHerderTest {
         ConnectorStatus status = new ConnectorStatus(CONN1, AbstractStatus.State.RESTARTING, WORKER_ID, 0);
         doNothing().when(statusBackingStore).put(eq(status));
 
-        ArgumentCaptor<Callback<TargetState>>  stateCallback = ArgumentCaptor.forClass(Callback.class);
+        ArgumentCaptor<Callback<TargetState>> stateCallback = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
             stateCallback.getValue().onCompletion(null, TargetState.STARTED);
             return true;
@@ -1708,7 +1722,7 @@ public class DistributedHerderTest {
         );
         when(configBackingStore.snapshot()).thenReturn(snapshotWithTransform);
         when(configTransformer.transform(eq(CONN1), any()))
-            .thenThrow(new ConfigException("Simulated exception thrown during config transformation"));
+                .thenThrow(new ConfigException("Simulated exception thrown during config transformation"));
         doNothing().when(worker).stopAndAwaitConnector(CONN1);
 
         ArgumentCaptor<ConnectorStatus> failedStatus = ArgumentCaptor.forClass(ConnectorStatus.class);
@@ -1926,9 +1940,9 @@ public class DistributedHerderTest {
 
         assertTrue(cb.isDone(), "Callback should already have been invoked by herder");
         ExecutionException e = assertThrows(
-            ExecutionException.class,
-            () -> cb.get(0, TimeUnit.SECONDS),
-            "Should not be able to handle request to stop connector when not leader"
+                ExecutionException.class,
+                () -> cb.get(0, TimeUnit.SECONDS),
+                "Should not be able to handle request to stop connector when not leader"
         );
         assertInstanceOf(NotLeaderException.class, e.getCause());
 
@@ -1967,9 +1981,9 @@ public class DistributedHerderTest {
 
         assertTrue(cb.isDone(), "Callback should already have been invoked by herder");
         ExecutionException e = assertThrows(
-            ExecutionException.class,
-            () -> cb.get(0, TimeUnit.SECONDS),
-            "Should not be able to handle request to stop connector when not leader"
+                ExecutionException.class,
+                () -> cb.get(0, TimeUnit.SECONDS),
+                "Should not be able to handle request to stop connector when not leader"
         );
         assertEquals(e.getCause(), taskConfigsWriteException);
 
@@ -2343,7 +2357,7 @@ public class DistributedHerderTest {
         assertEquals(Set.of(CONN1), listConnectorsCb.get());
         assertTrue(connectorInfoCb.isDone());
         ConnectorInfo info = new ConnectorInfo(CONN1, CONN1_CONFIG, List.of(TASK0, TASK1, TASK2),
-            ConnectorType.SOURCE);
+                ConnectorType.SOURCE);
         assertEquals(info, connectorInfoCb.get());
         assertTrue(connectorConfigCb.isDone());
         assertEquals(CONN1_CONFIG, connectorConfigCb.get());
@@ -2579,7 +2593,7 @@ public class DistributedHerderTest {
 
         expectRebalance(2, List.of(), List.of());
         SessionKey initialKey = new SessionKey(mock(SecretKey.class), 0);
-        ClusterConfigState snapshotWithKey =  new ClusterConfigState(
+        ClusterConfigState snapshotWithKey = new ClusterConfigState(
                 2,
                 initialKey,
                 Map.of(CONN1, 3),
@@ -2626,7 +2640,7 @@ public class DistributedHerderTest {
         when(initialSecretKey.getAlgorithm()).thenReturn(DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT);
         when(initialSecretKey.getEncoded()).thenReturn(new byte[32]);
         SessionKey initialKey = new SessionKey(initialSecretKey, time.milliseconds());
-        ClusterConfigState snapshotWithKey =  new ClusterConfigState(
+        ClusterConfigState snapshotWithKey = new ClusterConfigState(
                 1,
                 initialKey,
                 Map.of(CONN1, 3),
@@ -3376,20 +3390,20 @@ public class DistributedHerderTest {
     @Test
     public void testKeyExceptionDetection() {
         assertFalse(herder.isPossibleExpiredKeyException(
-            time.milliseconds(),
-            new RuntimeException()
+                time.milliseconds(),
+                new RuntimeException()
         ));
         assertFalse(herder.isPossibleExpiredKeyException(
-            time.milliseconds(),
-            new BadRequestException("")
+                time.milliseconds(),
+                new BadRequestException("")
         ));
         assertFalse(herder.isPossibleExpiredKeyException(
-            time.milliseconds() - TimeUnit.MINUTES.toMillis(2),
-            new ConnectRestException(FORBIDDEN.getStatusCode(), "")
+                time.milliseconds() - TimeUnit.MINUTES.toMillis(2),
+                new ConnectRestException(FORBIDDEN.getStatusCode(), "")
         ));
         assertTrue(herder.isPossibleExpiredKeyException(
-            time.milliseconds(),
-            new ConnectRestException(FORBIDDEN.getStatusCode(), "")
+                time.milliseconds(),
+                new ConnectRestException(FORBIDDEN.getStatusCode(), "")
         ));
     }
 
@@ -3712,8 +3726,8 @@ public class DistributedHerderTest {
         List<String> errors = validatedConfigs.get(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG).errorMessages();
         assertFalse(errors.isEmpty());
         assertTrue(
-            errors.get(0).contains("The connector does not implement the API required for preflight validation of exactly-once source support."),
-            "Error message did not contain expected text: " + errors.get(0));
+                errors.get(0).contains("The connector does not implement the API required for preflight validation of exactly-once source support."),
+                "Error message did not contain expected text: " + errors.get(0));
         assertEquals(1, errors.size());
     }
 
@@ -3733,8 +3747,8 @@ public class DistributedHerderTest {
         List<String> errors = validatedConfigs.get(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG).errorMessages();
         assertFalse(errors.isEmpty());
         assertTrue(
-            errors.get(0).contains(errorMessage),
-            "Error message did not contain expected text: " + errors.get(0));
+                errors.get(0).contains(errorMessage),
+                "Error message did not contain expected text: " + errors.get(0));
         assertEquals(1, errors.size());
     }
 
@@ -3769,8 +3783,8 @@ public class DistributedHerderTest {
         List<String> errors = validatedConfigs.get(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG).errorMessages();
         assertFalse(errors.isEmpty());
         assertTrue(
-            errors.get(0).contains("String must be one of (case insensitive): "),
-            "Error message did not contain expected text: " + errors.get(0));
+                errors.get(0).contains("String must be one of (case insensitive): "),
+                "Error message did not contain expected text: " + errors.get(0));
         assertEquals(1, errors.size());
     }
 
@@ -3807,8 +3821,8 @@ public class DistributedHerderTest {
         List<String> errors = validatedConfigs.get(SourceConnectorConfig.TRANSACTION_BOUNDARY_CONFIG).errorMessages();
         assertFalse(errors.isEmpty());
         assertTrue(
-            errors.get(0).contains("The connector does not support connector-defined transaction boundaries with the given configuration."),
-            "Error message did not contain expected text: " + errors.get(0));
+                errors.get(0).contains("The connector does not support connector-defined transaction boundaries with the given configuration."),
+                "Error message did not contain expected text: " + errors.get(0));
         assertEquals(1, errors.size());
     }
 
@@ -3828,8 +3842,8 @@ public class DistributedHerderTest {
         List<String> errors = validatedConfigs.get(SourceConnectorConfig.TRANSACTION_BOUNDARY_CONFIG).errorMessages();
         assertFalse(errors.isEmpty());
         assertTrue(
-            errors.get(0).contains(errorMessage),
-            "Error message did not contain expected text: " + errors.get(0));
+                errors.get(0).contains(errorMessage),
+                "Error message did not contain expected text: " + errors.get(0));
         assertEquals(1, errors.size());
     }
 
@@ -3847,8 +3861,8 @@ public class DistributedHerderTest {
         List<String> errors = validatedConfigs.get(SourceConnectorConfig.TRANSACTION_BOUNDARY_CONFIG).errorMessages();
         assertFalse(errors.isEmpty());
         assertTrue(
-            errors.get(0).contains("String must be one of (case insensitive): "),
-            "Error message did not contain expected text: " + errors.get(0));
+                errors.get(0).contains("String must be one of (case insensitive): "),
+                "Error message did not contain expected text: " + errors.get(0));
         assertEquals(1, errors.size());
     }
 
@@ -4123,58 +4137,59 @@ public class DistributedHerderTest {
     }
 
     private void expectRebalance(final long offset,
-                                 final List<String> assignedConnectors,
-                                 final List<ConnectorTaskId> assignedTasks) {
+            final List<String> assignedConnectors,
+            final List<ConnectorTaskId> assignedTasks) {
         expectRebalance(offset, assignedConnectors, assignedTasks, false);
     }
 
     private void expectRebalance(final long offset,
-                                 final List<String> assignedConnectors,
-                                 final List<ConnectorTaskId> assignedTasks,
-                                 final boolean isLeader) {
+            final List<String> assignedConnectors,
+            final List<ConnectorTaskId> assignedTasks,
+            final boolean isLeader) {
 
         expectRebalance(List.of(), List.of(),
                 ConnectProtocol.Assignment.NO_ERROR, offset, "leader", "leaderUrl", assignedConnectors, assignedTasks, 0, isLeader);
     }
 
     private void expectRebalance(final long offset,
-                                 final List<String> assignedConnectors, final List<ConnectorTaskId> assignedTasks,
-                                 String leader, String leaderUrl, boolean isLeader) {
+            final List<String> assignedConnectors, final List<ConnectorTaskId> assignedTasks,
+            String leader, String leaderUrl, boolean isLeader) {
         expectRebalance(List.of(), List.of(),
                 ConnectProtocol.Assignment.NO_ERROR, offset, leader, leaderUrl, assignedConnectors, assignedTasks, 0, isLeader);
     }
 
     // Handles common initial part of rebalance callback. Does not handle instantiation of connectors and tasks.
     private void expectRebalance(final Collection<String> revokedConnectors,
-                                 final List<ConnectorTaskId> revokedTasks,
-                                 final short error,
-                                 final long offset,
-                                 final List<String> assignedConnectors,
-                                 final List<ConnectorTaskId> assignedTasks) {
+            final List<ConnectorTaskId> revokedTasks,
+            final short error,
+            final long offset,
+            final List<String> assignedConnectors,
+            final List<ConnectorTaskId> assignedTasks) {
         expectRebalance(revokedConnectors, revokedTasks, error, offset, assignedConnectors, assignedTasks, 0);
     }
+
     // Handles common initial part of rebalance callback. Does not handle instantiation of connectors and tasks.
     private void expectRebalance(final Collection<String> revokedConnectors,
-                                 final List<ConnectorTaskId> revokedTasks,
-                                 final short error,
-                                 final long offset,
-                                 final List<String> assignedConnectors,
-                                 final List<ConnectorTaskId> assignedTasks,
-                                 int delay) {
+            final List<ConnectorTaskId> revokedTasks,
+            final short error,
+            final long offset,
+            final List<String> assignedConnectors,
+            final List<ConnectorTaskId> assignedTasks,
+            int delay) {
         expectRebalance(revokedConnectors, revokedTasks, error, offset, "leader", "leaderUrl", assignedConnectors, assignedTasks, delay, false);
     }
 
     // Handles common initial part of rebalance callback. Does not handle instantiation of connectors and tasks.
     private void expectRebalance(final Collection<String> revokedConnectors,
-                                 final List<ConnectorTaskId> revokedTasks,
-                                 final short error,
-                                 final long offset,
-                                 String leader,
-                                 String leaderUrl,
-                                 final List<String> assignedConnectors,
-                                 final List<ConnectorTaskId> assignedTasks,
-                                 int delay,
-                                 boolean isLeader) {
+            final List<ConnectorTaskId> revokedTasks,
+            final short error,
+            final long offset,
+            String leader,
+            String leaderUrl,
+            final List<String> assignedConnectors,
+            final List<ConnectorTaskId> assignedTasks,
+            int delay,
+            boolean isLeader) {
         ArgumentCaptor<Supplier<UncheckedCloseable>> onPoll = ArgumentCaptor.forClass(Supplier.class);
         doAnswer(invocation -> {
             onPoll.getValue().get().close();

@@ -104,7 +104,7 @@ public class KafkaMbeanTest {
         sensor.record(3.5);
         sensor.record(4.0);
         AttributeList attributeList = getAttributes(countMetricName, countMetricName.name(),
-                sumMetricName.name(), "name");
+            sumMetricName.name(), "name");
         List<Attribute> attributes = attributeList.asList();
         assertEquals(2, attributes.size());
         for (Attribute attribute : attributes) {

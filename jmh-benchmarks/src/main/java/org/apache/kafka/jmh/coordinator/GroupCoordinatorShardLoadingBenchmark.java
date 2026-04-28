@@ -126,16 +126,16 @@ public class GroupCoordinatorShardLoadingBenchmark {
                 int partition = 0;
 
                 OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(
-                    0L,
-                    OptionalInt.of(0),
-                    OffsetAndMetadata.NO_METADATA,
-                    0L,
-                    OptionalLong.empty(),
-                    Uuid.randomUuid()
+                        0L,
+                        OptionalInt.of(0),
+                        OffsetAndMetadata.NO_METADATA,
+                        0L,
+                        OptionalLong.empty(),
+                        Uuid.randomUuid()
                 );
 
                 CoordinatorRecord coordinatorRecord = GroupCoordinatorRecordHelpers.newOffsetCommitRecord(
-                    GROUP_ID, topic, partition, offsetAndMetadata
+                        GROUP_ID, topic, partition, offsetAndMetadata
                 );
 
                 byte[] keyBytes = new GroupCoordinatorRecordSerde().serializeKey(coordinatorRecord);
@@ -168,9 +168,9 @@ public class GroupCoordinatorShardLoadingBenchmark {
             }
 
             MemoryRecords records = MemoryRecords.withRecords(
-                startOffset,
-                Compression.NONE,
-                batch
+                    startOffset,
+                    Compression.NONE,
+                    batch
             );
             return new FetchDataInfo(new LogOffsetMetadata(startOffset), records);
         }
@@ -197,16 +197,16 @@ public class GroupCoordinatorShardLoadingBenchmark {
                 int partition = 0;
 
                 OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(
-                    0L,
-                    OptionalInt.of(0),
-                    OffsetAndMetadata.NO_METADATA,
-                    0L,
-                    OptionalLong.empty(),
-                    Uuid.randomUuid()
+                        0L,
+                        OptionalInt.of(0),
+                        OffsetAndMetadata.NO_METADATA,
+                        0L,
+                        OptionalLong.empty(),
+                        Uuid.randomUuid()
                 );
 
                 CoordinatorRecord coordinatorRecord = GroupCoordinatorRecordHelpers.newOffsetCommitRecord(
-                    GROUP_ID, topic, partition, offsetAndMetadata
+                        GROUP_ID, topic, partition, offsetAndMetadata
                 );
 
                 byte[] keyBytes = new GroupCoordinatorRecordSerde().serializeKey(coordinatorRecord);
@@ -242,23 +242,23 @@ public class GroupCoordinatorShardLoadingBenchmark {
             long patternLength = batch.length + 1;
             if (startOffset % patternLength < batch.length) {
                 MemoryRecords records = MemoryRecords.withTransactionalRecords(
-                    startOffset,
-                    Compression.NONE,
-                    producerId,
-                    producerEpoch,
-                    0,
-                    0,
-                    batch
+                        startOffset,
+                        Compression.NONE,
+                        producerId,
+                        producerEpoch,
+                        0,
+                        0,
+                        batch
                 );
                 return new FetchDataInfo(new LogOffsetMetadata(startOffset), records);
             } else {
                 MemoryRecords records = MemoryRecords.withEndTransactionMarker(
-                    startOffset,
-                    0L,
-                    0,
-                    producerId,
-                    producerEpoch,
-                    new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch)
+                        startOffset,
+                        0L,
+                        0,
+                        producerId,
+                        producerEpoch,
+                        new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch)
                 );
                 return new FetchDataInfo(new LogOffsetMetadata(startOffset), records);
             }
@@ -299,21 +299,21 @@ public class GroupCoordinatorShardLoadingBenchmark {
         GroupCoordinatorMetrics coordinatorMetrics = new GroupCoordinatorMetrics(metricsRegistry, metrics);
 
         coordinatorShard = new GroupCoordinatorShard.Builder(config, configManager)
-            .withAuthorizerPlugin(Optional.empty())
-            .withLogContext(logContext)
-            .withSnapshotRegistry(snapshotRegistry)
-            .withTime(time)
-            .withTimer(new MockCoordinatorTimer<>(time))
-            .withExecutor(new MockCoordinatorExecutor<>())
-            .withCoordinatorMetrics(coordinatorMetrics)
-            .withTopicPartition(topicPartition)
-            .build();
+                .withAuthorizerPlugin(Optional.empty())
+                .withLogContext(logContext)
+                .withSnapshotRegistry(snapshotRegistry)
+                .withTime(time)
+                .withTimer(new MockCoordinatorTimer<>(time))
+                .withExecutor(new MockCoordinatorExecutor<>())
+                .withCoordinatorMetrics(coordinatorMetrics)
+                .withTopicPartition(topicPartition)
+                .build();
 
         snapshottableCoordinator = new SnapshottableCoordinator<>(
-            logContext,
-            snapshotRegistry,
-            coordinatorShard,
-            topicPartition
+                logContext,
+                snapshotRegistry,
+                coordinatorShard,
+                topicPartition
         );
     }
 
@@ -322,12 +322,12 @@ public class GroupCoordinatorShardLoadingBenchmark {
         Function<TopicPartition, Optional<Long>> partitionLogEndOffsetSupplier = tp -> Optional.of(log.logEndOffset());
 
         CoordinatorLoaderImpl<CoordinatorRecord> loader = new CoordinatorLoaderImpl<>(
-            time,
-            partitionLogSupplier,
-            partitionLogEndOffsetSupplier,
-            serde,
-            config.offsetsLoadBufferSize(),
-            commitInterval
+                time,
+                partitionLogSupplier,
+                partitionLogEndOffsetSupplier,
+                serde,
+                config.offsetsLoadBufferSize(),
+                commitInterval
         );
 
         return loader.load(topicPartition, snapshottableCoordinator).get();

@@ -73,6 +73,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class MockRaftClient implements RaftClient<ApiMessageAndVersion>, AutoCloseable {
     interface LocalBatch {
         int epoch();
+
         int size();
     }
 
@@ -223,8 +224,8 @@ public final class MockRaftClient implements RaftClient<ApiMessageAndVersion>, A
             // No easy access to the concept of time. Use the base offset as the append timestamp
             long appendTimestamp = (prevOffset + 1) * 10;
             return tryAppend(nodeId,
-                    epoch,
-                    new LocalRecordBatch(epoch, appendTimestamp, batch));
+                epoch,
+                new LocalRecordBatch(epoch, appendTimestamp, batch));
         }
 
         synchronized long tryAppend(
@@ -234,16 +235,16 @@ public final class MockRaftClient implements RaftClient<ApiMessageAndVersion>, A
         ) {
             if (!leader.isLeader(nodeId)) {
                 log.debug("tryAppend(nodeId={}, epoch={}): the given node id does not " +
-                        "match the current leader id of {}.", nodeId, epoch, leader.leaderId());
+                    "match the current leader id of {}.", nodeId, epoch, leader.leaderId());
                 throw new NotLeaderException("Append failed because the replication is not the current leader");
             }
 
             if (epoch < leader.epoch()) {
                 throw new NotLeaderException("Append failed because the given epoch " + epoch + " is stale. " +
-                        "Current leader epoch = " + leader.epoch());
+                    "Current leader epoch = " + leader.epoch());
             } else if (epoch > leader.epoch()) {
                 throw new IllegalArgumentException("Attempt to append from epoch " + epoch +
-                        " which is larger than the current epoch " + leader.epoch());
+                    " which is larger than the current epoch " + leader.epoch());
             }
 
             log.trace("tryAppend(nodeId={}): appending {}.", nodeId, batch);
@@ -458,7 +459,7 @@ public final class MockRaftClient implements RaftClient<ApiMessageAndVersion>, A
         this.shared = shared;
         this.maxReadOffset = shared.initialMaxReadOffset();
         this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext,
-                threadNamePrefix, new ShutdownEvent());
+            threadNamePrefix, new ShutdownEvent());
         this.lastKRaftVersion = lastKRaftVersion;
         this.shared.registerRaftClient(this);
     }
@@ -516,7 +517,7 @@ public final class MockRaftClient implements RaftClient<ApiMessageAndVersion>, A
                                 listenerData.handleLeaderChange(entryOffset, batch.newLeader);
                             } else {
                                 log.debug("Node {}: Ignoring {} since it doesn't match the latest known leader {}",
-                                        nodeId, batch.newLeader, sharedLeader);
+                                    nodeId, batch.newLeader, sharedLeader);
                                 listenerData.setOffset(entryOffset);
                             }
                         } else if (entry.getValue() instanceof LocalRecordBatch batch) {
@@ -539,7 +540,8 @@ public final class MockRaftClient implements RaftClient<ApiMessageAndVersion>, A
                                             batch.records
                                         )
                                     ),
-                                    reader -> { }
+                                    reader -> {
+                                    }
                                 )
                             );
                         }
@@ -683,7 +685,8 @@ public final class MockRaftClient implements RaftClient<ApiMessageAndVersion>, A
     }
 
     @Override
-    public void schedulePreparedAppend() { }
+    public void schedulePreparedAppend() {
+    }
 
     @Override
     public void resign(int epoch) {
@@ -696,26 +699,26 @@ public final class MockRaftClient implements RaftClient<ApiMessageAndVersion>, A
 
         if (epoch > currentEpoch) {
             throw new IllegalArgumentException("Attempt to resign from epoch " + epoch +
-                    " which is larger than the current epoch " + currentEpoch);
+                " which is larger than the current epoch " + currentEpoch);
         } else if (epoch < currentEpoch) {
             // If the passed epoch is smaller than the current epoch, then it might mean
             // that the listener has not been notified about a leader change that already
             // took place. In this case, we consider the call as already fulfilled and
             // take no further action.
             log.debug("Ignoring call to resign from epoch {} since it is smaller than the " +
-                    "current epoch {}", epoch, currentEpoch);
+                "current epoch {}", epoch, currentEpoch);
             return;
         }
 
         LeaderAndEpoch nextLeader = new LeaderAndEpoch(OptionalInt.empty(), currentEpoch + 1);
         try {
             shared.tryAppend(nodeId,
-                    currentEpoch,
-                    new LeaderChangeBatch(nextLeader));
+                currentEpoch,
+                new LeaderChangeBatch(nextLeader));
         } catch (NotLeaderException exp) {
             // the leader epoch has already advanced. resign is a no op.
             log.debug("Ignoring call to resign from epoch {}. Either we are not the leader or the provided epoch is " +
-                    "smaller than the current epoch {}", epoch, currentEpoch);
+                "smaller than the current epoch {}", epoch, currentEpoch);
         }
     }
 

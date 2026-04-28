@@ -80,13 +80,13 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
         public SnapshotEmitter build() {
             if (raftClient == null) throw new RuntimeException("You must set the raftClient.");
             if (metrics == null) metrics = new SnapshotEmitterMetrics(
-                    Optional.empty(),
-                    time);
+                Optional.empty(),
+                time);
             return new SnapshotEmitter(time,
-                    nodeId,
-                    raftClient,
-                    batchSize,
-                    metrics);
+                nodeId,
+                raftClient,
+                batchSize,
+                metrics);
         }
     }
 
@@ -147,8 +147,8 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
         RaftSnapshotWriter writer = new RaftSnapshotWriter(snapshotWriter.get(), batchSize);
         try {
             image.write(writer, new ImageWriterOptions.Builder(image.features().metadataVersionOrThrow()).
-                    setEligibleLeaderReplicasEnabled(image.features().isElrEnabled()).
-                    build());
+                setEligibleLeaderReplicasEnabled(image.features().isElrEnabled()).
+                build());
             writer.close(true);
             metrics.setLatestSnapshotGeneratedTimeMs(time.milliseconds());
             metrics.setLatestSnapshotGeneratedBytes(writer.frozenSize().getAsLong());

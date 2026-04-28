@@ -41,7 +41,7 @@ public final class ExpectUserTopicMappedToMetadataPartitionsAction implements Ti
     private final List<Integer> metadataPartitions;
 
     public ExpectUserTopicMappedToMetadataPartitionsAction(String topic,
-                                                           List<Integer> metadataPartitions) {
+            List<Integer> metadataPartitions) {
         this.topic = topic;
         this.metadataPartitions = metadataPartitions;
     }

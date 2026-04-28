@@ -1222,7 +1222,7 @@ public class GroupCoordinatorShardTest {
 
         verify(groupMetadataManager).replay(key, null);
     }
-    
+
     @Test
     public void testReplayKeyCannotBeNull() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);

@@ -233,10 +233,10 @@ public class SuppressTopologyTest {
     public void shouldThrowOnSuppressForNonMaterializedVersionedTable() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table(
-                "input",
-                Materialized.as(Stores.persistentVersionedKeyValueStore("store", Duration.ZERO))
+            "input",
+            Materialized.as(Stores.persistentVersionedKeyValueStore("store", Duration.ZERO))
         ).filter((k, v) -> true)
-        .suppress(Suppressed.untilTimeLimit(Duration.ZERO, Suppressed.BufferConfig.unbounded()));
+            .suppress(Suppressed.untilTimeLimit(Duration.ZERO, Suppressed.BufferConfig.unbounded()));
 
         assertThrows(
             TopologyException.class,

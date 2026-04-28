@@ -80,10 +80,10 @@ public class FrequenciesTest {
         final NamedMeasurable trueMetric = frequencies.stats().get(1);
 
         // Record 25 "false" and 75 "true"
-        for (int i = 0; i != 25; ++i) {
+        for (int i = 0;i != 25;++i) {
             frequencies.record(config, 0.0, time.milliseconds());
         }
-        for (int i = 0; i != 75; ++i) {
+        for (int i = 0;i != 75;++i) {
             frequencies.record(config, 1.0, time.milliseconds());
         }
         assertEquals(0.25, falseMetric.stat().measure(config, time.milliseconds()), DELTA);
@@ -99,10 +99,10 @@ public class FrequenciesTest {
         final NamedMeasurable trueMetric = frequencies.stats().get(1);
 
         // Record 40 "false" and 60 "true"
-        for (int i = 0; i != 40; ++i) {
+        for (int i = 0;i != 40;++i) {
             frequencies.record(config, 0.0, time.milliseconds());
         }
-        for (int i = 0; i != 60; ++i) {
+        for (int i = 0;i != 60;++i) {
             frequencies.record(config, 1.0, time.milliseconds());
         }
         assertEquals(0.40, falseMetric.stat().measure(config, time.milliseconds()), DELTA);
@@ -112,12 +112,12 @@ public class FrequenciesTest {
     @Test
     public void testWithMetricsStrategy1() {
         Frequencies frequencies = new Frequencies(4, 1.0, 4.0, freq("1", 1.0),
-                freq("2", 2.0), freq("3", 3.0), freq("4", 4.0));
+            freq("2", 2.0), freq("3", 3.0), freq("4", 4.0));
         Sensor sensor = metrics.sensor("test", config);
         sensor.add(frequencies);
 
         // Record 100 events uniformly between all buckets
-        for (int i = 0; i < 100; ++i) {
+        for (int i = 0;i < 100;++i) {
             frequencies.record(config, i % 4 + 1, time.milliseconds());
         }
         assertEquals(0.25, metricValue("1"), DELTA);
@@ -129,12 +129,12 @@ public class FrequenciesTest {
     @Test
     public void testWithMetricsStrategy2() {
         Frequencies frequencies = new Frequencies(4, 1.0, 4.0, freq("1", 1.0),
-                freq("2", 2.0), freq("3", 3.0), freq("4", 4.0));
+            freq("2", 2.0), freq("3", 3.0), freq("4", 4.0));
         Sensor sensor = metrics.sensor("test", config);
         sensor.add(frequencies);
 
         // Record 100 events half-half between 1st and 2nd buckets
-        for (int i = 0; i < 100; ++i) {
+        for (int i = 0;i < 100;++i) {
             frequencies.record(config, i % 2 + 1, time.milliseconds());
         }
         assertEquals(0.50, metricValue("1"), DELTA);
@@ -146,16 +146,16 @@ public class FrequenciesTest {
     @Test
     public void testWithMetricsStrategy3() {
         Frequencies frequencies = new Frequencies(4, 1.0, 4.0, freq("1", 1.0),
-                freq("2", 2.0), freq("3", 3.0), freq("4", 4.0));
+            freq("2", 2.0), freq("3", 3.0), freq("4", 4.0));
         Sensor sensor = metrics.sensor("test", config);
         sensor.add(frequencies);
 
         // Record 50 events half-half between 1st and 2nd buckets
-        for (int i = 0; i < 50; ++i) {
+        for (int i = 0;i < 50;++i) {
             frequencies.record(config, i % 2 + 1, time.milliseconds());
         }
         // Record 50 events to 4th bucket
-        for (int i = 0; i < 50; ++i) {
+        for (int i = 0;i < 50;++i) {
             frequencies.record(config, 4.0, time.milliseconds());
         }
         assertEquals(0.25, metricValue("1"), DELTA);

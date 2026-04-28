@@ -36,9 +36,9 @@ public class ConsumerGroupMetadata {
      */
     @Deprecated(since = "4.2", forRemoval = true)
     public ConsumerGroupMetadata(String groupId,
-                                 int generationId,
-                                 String memberId,
-                                 Optional<String> groupInstanceId) {
+        int generationId,
+        String memberId,
+        Optional<String> groupInstanceId) {
         this.groupId = Objects.requireNonNull(groupId, "group.id can't be null");
         this.generationId = generationId;
         this.memberId = Objects.requireNonNull(memberId, "member.id can't be null");

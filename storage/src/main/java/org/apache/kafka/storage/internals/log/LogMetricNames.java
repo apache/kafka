@@ -27,8 +27,8 @@ public class LogMetricNames {
     public static final String RETENTION_SIZE_IN_PERCENT = "RetentionSizeInPercent";
 
     public static final List<String> ALL_METRIC_NAMES = List.of(
-                                                            NUM_LOG_SEGMENTS, 
-                                                            LOG_START_OFFSET, 
-                                                            LOG_END_OFFSET, SIZE, 
-                                                            RETENTION_SIZE_IN_PERCENT);
+            NUM_LOG_SEGMENTS,
+            LOG_START_OFFSET,
+            LOG_END_OFFSET, SIZE,
+            RETENTION_SIZE_IN_PERCENT);
 }

@@ -91,7 +91,7 @@ public class UtilsTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = { VALUE_STR, "" })
+    @ValueSource(strings = {VALUE_STR, ""})
     public void testRawTimestampedValue(final String valueStr) {
         final byte[] value = valueStr.getBytes(StandardCharsets.UTF_8);
         final byte[] headers = headersOf(HEADERS);
@@ -157,7 +157,7 @@ public class UtilsTest {
     }
 
     @ParameterizedTest
-    @ValueSource(bytes = { 0x10, 0x11 })
+    @ValueSource(bytes = {0x10, 0x11})
     public void testEmptyHeadersAndTimestampWithInvalidHeaderSizes(final byte invalidSize) {
         final byte[] invalid = new byte[MIN_SIZE];
         invalid[0] = invalidSize; // header size
@@ -170,7 +170,7 @@ public class UtilsTest {
 
         assertThrows(SerializationException.class, () -> readBytes(buf, -1));
         assertThrows(SerializationException.class, () -> readBytes(buf, VALUE.length + 1));
-        
+
         assertEquals('t', readBytes(buf, 1)[0]);
         assertEquals('e', readBytes(buf, 1)[0]);
 

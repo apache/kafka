@@ -42,7 +42,8 @@ public class SessionWindowedDeserializer<T> implements Deserializer<Windowed<T>>
     private Deserializer<T> inner;
 
     // Default constructor needed by Kafka
-    public SessionWindowedDeserializer() {}
+    public SessionWindowedDeserializer() {
+    }
 
     public SessionWindowedDeserializer(final Deserializer<T> inner) {
         this.inner = inner;

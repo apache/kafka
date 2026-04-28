@@ -40,11 +40,11 @@ public class StopPartition {
     @Override
     public String toString() {
         return "StopPartition(" +
-                "topicPartition=" + topicPartition +
-                ", deleteLocalLog=" + deleteLocalLog +
-                ", deleteRemoteLog=" + deleteRemoteLog +
-                ", stopRemoteLogMetadataManager=" + stopRemoteLogMetadataManager +
-                ')';
+            "topicPartition=" + topicPartition +
+            ", deleteLocalLog=" + deleteLocalLog +
+            ", deleteRemoteLog=" + deleteRemoteLog +
+            ", stopRemoteLogMetadataManager=" + stopRemoteLogMetadataManager +
+            ')';
     }
 
     @Override
@@ -53,9 +53,9 @@ public class StopPartition {
         if (o == null || getClass() != o.getClass()) return false;
         StopPartition that = (StopPartition) o;
         return deleteLocalLog == that.deleteLocalLog &&
-               deleteRemoteLog == that.deleteRemoteLog &&
-               stopRemoteLogMetadataManager == that.stopRemoteLogMetadataManager &&
-               Objects.equals(topicPartition, that.topicPartition);
+            deleteRemoteLog == that.deleteRemoteLog &&
+            stopRemoteLogMetadataManager == that.stopRemoteLogMetadataManager &&
+            Objects.equals(topicPartition, that.topicPartition);
     }
 
     @Override

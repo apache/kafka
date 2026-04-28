@@ -30,37 +30,37 @@ import java.util.Optional;
  * (3) ReadyForFetch, the active state where the thread is actively fetching data.
  */
 public record PartitionFetchState(
+    Optional<Uuid> topicId,
+    long fetchOffset,
+    Optional<Long> lag,
+    int currentLeaderEpoch,
+    Optional<Long> delay,
+    ReplicaState state,
+    Optional<Integer> lastFetchedEpoch,
+    Optional<Long> dueMs
+) {
+    public PartitionFetchState(
+        Optional<Uuid> topicId,
+        long fetchOffset,
+        Optional<Long> lag,
+        int currentLeaderEpoch,
+        ReplicaState state,
+        Optional<Integer> lastFetchedEpoch) {
+        this(topicId, fetchOffset, lag, currentLeaderEpoch,
+            Optional.empty(), state, lastFetchedEpoch);
+    }
+
+    public PartitionFetchState(
         Optional<Uuid> topicId,
         long fetchOffset,
         Optional<Long> lag,
         int currentLeaderEpoch,
         Optional<Long> delay,
         ReplicaState state,
-        Optional<Integer> lastFetchedEpoch,
-        Optional<Long> dueMs
-) {
-    public PartitionFetchState(
-            Optional<Uuid> topicId,
-            long fetchOffset,
-            Optional<Long> lag,
-            int currentLeaderEpoch,
-            ReplicaState state,
-            Optional<Integer> lastFetchedEpoch) {
+        Optional<Integer> lastFetchedEpoch) {
         this(topicId, fetchOffset, lag, currentLeaderEpoch,
-                Optional.empty(), state, lastFetchedEpoch);
-    }
-
-    public PartitionFetchState(
-            Optional<Uuid> topicId,
-            long fetchOffset,
-            Optional<Long> lag,
-            int currentLeaderEpoch,
-            Optional<Long> delay,
-            ReplicaState state,
-            Optional<Integer> lastFetchedEpoch) {
-        this(topicId, fetchOffset, lag, currentLeaderEpoch,
-                delay, state, lastFetchedEpoch,
-                delay.map(aLong -> aLong + Time.SYSTEM.milliseconds()));
+            delay, state, lastFetchedEpoch,
+            delay.map(aLong -> aLong + Time.SYSTEM.milliseconds()));
     }
 
     public boolean isReadyForFetch() {
@@ -82,17 +82,17 @@ public record PartitionFetchState(
     @Override
     public String toString() {
         return "FetchState(topicId=" + topicId +
-                ", fetchOffset=" + fetchOffset +
-                ", currentLeaderEpoch=" + currentLeaderEpoch +
-                ", lastFetchedEpoch=" + lastFetchedEpoch +
-                ", state=" + state +
-                ", lag=" + lag +
-                ", delay=" + delay.orElse(0L) + "ms)";
+            ", fetchOffset=" + fetchOffset +
+            ", currentLeaderEpoch=" + currentLeaderEpoch +
+            ", lastFetchedEpoch=" + lastFetchedEpoch +
+            ", state=" + state +
+            ", lag=" + lag +
+            ", delay=" + delay.orElse(0L) + "ms)";
     }
 
     public PartitionFetchState updateTopicId(Optional<Uuid> newTopicId) {
         return new PartitionFetchState(newTopicId, this.fetchOffset, this.lag,
-                this.currentLeaderEpoch, this.delay,
-                this.state, this.lastFetchedEpoch, this.dueMs);
+            this.currentLeaderEpoch, this.delay,
+            this.state, this.lastFetchedEpoch, this.dueMs);
     }
 }

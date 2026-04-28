@@ -91,8 +91,8 @@ public class ConsumerGroupDescribeRequest extends AbstractRequest {
     ) {
         return groupIds.stream()
             .map(groupId -> new ConsumerGroupDescribeResponseData.DescribedGroup()
-                .setGroupId(groupId)
-                .setErrorCode(error.code())
+                    .setGroupId(groupId)
+                    .setErrorCode(error.code())
             ).collect(Collectors.toList());
     }
 }

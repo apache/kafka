@@ -54,8 +54,8 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
 
     public DescribeShareGroupsHandler(
-          boolean includeAuthorizedOperations,
-          LogContext logContext) {
+        boolean includeAuthorizedOperations,
+        LogContext logContext) {
         this.includeAuthorizedOperations = includeAuthorizedOperations;
         this.log = logContext.logger(DescribeShareGroupsHandler.class);
         this.lookupStrategy = new CoordinatorStrategy(CoordinatorType.GROUP, logContext);
@@ -98,9 +98,9 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
 
     @Override
     public ApiResult<CoordinatorKey, ShareGroupDescription> handleResponse(
-            Node coordinator,
-            Set<CoordinatorKey> groupIds,
-            AbstractResponse abstractResponse) {
+        Node coordinator,
+        Set<CoordinatorKey> groupIds,
+        AbstractResponse abstractResponse) {
         final ShareGroupDescribeResponse response = (ShareGroupDescribeResponse) abstractResponse;
         final Map<CoordinatorKey, ShareGroupDescription> completed = new HashMap<>();
         final Map<CoordinatorKey, Throwable> failed = new HashMap<>();
@@ -151,14 +151,14 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
     }
 
     private void handleError(
-            CoordinatorKey groupId,
-            ShareGroupDescribeResponseData.DescribedGroup describedGroup,
-            Node coordinator,
-            Errors error,
-            String errorMsg,
-            Map<CoordinatorKey, ShareGroupDescription> completed,
-            Map<CoordinatorKey, Throwable> failed,
-            Set<CoordinatorKey> groupsToUnmap) {
+        CoordinatorKey groupId,
+        ShareGroupDescribeResponseData.DescribedGroup describedGroup,
+        Node coordinator,
+        Errors error,
+        String errorMsg,
+        Map<CoordinatorKey, ShareGroupDescription> completed,
+        Map<CoordinatorKey, Throwable> failed,
+        Set<CoordinatorKey> groupsToUnmap) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
             case TOPIC_AUTHORIZATION_FAILED:

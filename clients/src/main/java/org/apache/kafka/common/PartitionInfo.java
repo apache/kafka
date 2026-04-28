@@ -35,11 +35,11 @@ public class PartitionInfo {
     }
 
     public PartitionInfo(String topic,
-                         int partition,
-                         Node leader,
-                         Node[] replicas,
-                         Node[] inSyncReplicas,
-                         Node[] offlineReplicas) {
+        int partition,
+        Node leader,
+        Node[] replicas,
+        Node[] inSyncReplicas,
+        Node[] offlineReplicas) {
         this.topic = topic;
         this.partition = partition;
         this.leader = leader;
@@ -118,19 +118,19 @@ public class PartitionInfo {
     @Override
     public String toString() {
         return String.format("Partition(topic = %s, partition = %d, leader = %s, replicas = %s, isr = %s, offlineReplicas = %s)",
-                             topic,
-                             partition,
-                             leader == null ? "none" : leader.idString(),
-                             formatNodeIds(replicas),
-                             formatNodeIds(inSyncReplicas),
-                             formatNodeIds(offlineReplicas));
+            topic,
+            partition,
+            leader == null ? "none" : leader.idString(),
+            formatNodeIds(replicas),
+            formatNodeIds(inSyncReplicas),
+            formatNodeIds(offlineReplicas));
     }
 
     /* Extract the node ids from each item in the array and format for display */
     private String formatNodeIds(Node[] nodes) {
         StringBuilder b = new StringBuilder("[");
         if (nodes != null) {
-            for (int i = 0; i < nodes.length; i++) {
+            for (int i = 0;i < nodes.length;i++) {
                 b.append(nodes[i].idString());
                 if (i < nodes.length - 1)
                     b.append(',');

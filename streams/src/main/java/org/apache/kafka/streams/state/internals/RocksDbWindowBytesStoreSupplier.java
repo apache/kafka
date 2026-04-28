@@ -111,12 +111,12 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
     @Override
     public String toString() {
         return "RocksDbWindowBytesStoreSupplier{" +
-                   "name='" + name + '\'' +
-                   ", retentionPeriod=" + retentionPeriod +
-                   ", segmentInterval=" + segmentInterval +
-                   ", windowSize=" + windowSize +
-                   ", retainDuplicates=" + retainDuplicates +
-                   ", windowStoreType=" + windowStoreType +
-                   '}';
+            "name='" + name + '\'' +
+            ", retentionPeriod=" + retentionPeriod +
+            ", segmentInterval=" + segmentInterval +
+            ", windowSize=" + windowSize +
+            ", retainDuplicates=" + retainDuplicates +
+            ", windowStoreType=" + windowStoreType +
+            '}';
     }
 }

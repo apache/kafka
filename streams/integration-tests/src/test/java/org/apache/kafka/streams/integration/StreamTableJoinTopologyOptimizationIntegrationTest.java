@@ -197,9 +197,9 @@ public class StreamTableJoinTopologyOptimizationIntegrationTest {
     private int getNumberOfPartitionsForTopic(final String topic) throws Exception {
         try (final Admin adminClient = createAdminClient()) {
             final TopicDescription topicDescription = adminClient.describeTopics(Collections.singleton(topic))
-                                                                 .topicNameValues()
-                                                                 .get(topic)
-                                                                 .get(IntegrationTestUtils.DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
+                .topicNameValues()
+                .get(topic)
+                .get(IntegrationTestUtils.DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
 
             return topicDescription.partitions().size();
         }
@@ -210,8 +210,8 @@ public class StreamTableJoinTopologyOptimizationIntegrationTest {
     }
 
     private <K, V> void sendEvents(final String topic,
-                                   final long timestamp,
-                                   final List<KeyValue<K, V>> events) throws Exception {
+        final long timestamp,
+        final List<KeyValue<K, V>> events) throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             topic,
             events,
@@ -226,9 +226,9 @@ public class StreamTableJoinTopologyOptimizationIntegrationTest {
     }
 
     private <K, V> void validateReceivedMessages(final String topic,
-                                                 final Deserializer<K> keySerializer,
-                                                 final Deserializer<V> valueSerializer,
-                                                 final List<KeyValue<K, V>> expectedRecords) throws Exception {
+        final Deserializer<K> keySerializer,
+        final Deserializer<V> valueSerializer,
+        final List<KeyValue<K, V>> expectedRecords) throws Exception {
 
         final String safeTestName = safeUniqueTestName(testInfo);
         final Properties consumerProperties = new Properties();

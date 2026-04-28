@@ -228,7 +228,7 @@ public class SuppressionDurabilityIntegrationTest {
                 )
             );
             assertThat("suppress has apparently produced some duplicates. There should only be 5 output events.",
-                       eventCount.get(), is(5));
+                eventCount.get(), is(5));
 
             verifyOutput(
                 outputSuppressed,

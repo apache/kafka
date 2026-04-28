@@ -38,7 +38,8 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addRateOfSumAndSumMetricsToSensor;
 
 public class ProcessorNodeMetrics {
-    private ProcessorNodeMetrics() {}
+    private ProcessorNodeMetrics() {
+    }
 
     private static final String RATE_DESCRIPTION_PREFIX = "The average number of ";
     private static final String RATE_DESCRIPTION_SUFFIX = " per second";
@@ -53,7 +54,7 @@ public class ProcessorNodeMetrics {
     private static final String IDEMPOTENT_UPDATE_SKIP_DESCRIPTION = "skipped idempotent updates";
     private static final String IDEMPOTENT_UPDATE_SKIP_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + IDEMPOTENT_UPDATE_SKIP_DESCRIPTION;
     private static final String IDEMPOTENT_UPDATE_SKIP_RATE_DESCRIPTION =
-            RATE_DESCRIPTION_PREFIX + IDEMPOTENT_UPDATE_SKIP_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
+        RATE_DESCRIPTION_PREFIX + IDEMPOTENT_UPDATE_SKIP_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
 
     private static final String PROCESS = "process";
     private static final String PROCESS_DESCRIPTION = "calls to process";
@@ -73,9 +74,9 @@ public class ProcessorNodeMetrics {
     private static final String EMIT_FINAL_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION + EMIT_FINAL_DESCRIPTION + LATENCY_DESCRIPTION_SUFFIX;
 
     public static Sensor suppressionEmitSensor(final String threadId,
-                                               final String taskId,
-                                               final String processorNodeId,
-                                               final StreamsMetricsImpl streamsMetrics) {
+        final String taskId,
+        final String processorNodeId,
+        final StreamsMetricsImpl streamsMetrics) {
         return throughputSensor(
             threadId,
             taskId,
@@ -89,9 +90,9 @@ public class ProcessorNodeMetrics {
     }
 
     public static Sensor skippedIdempotentUpdatesSensor(final String threadId,
-            final String taskId,
-            final String processorNodeId,
-            final StreamsMetricsImpl streamsMetrics) {
+        final String taskId,
+        final String processorNodeId,
+        final StreamsMetricsImpl streamsMetrics) {
         return throughputSensor(
             threadId,
             taskId,
@@ -105,9 +106,9 @@ public class ProcessorNodeMetrics {
     }
 
     public static Sensor processAtSourceSensor(final String threadId,
-                                               final String taskId,
-                                               final String processorNodeId,
-                                               final StreamsMetricsImpl streamsMetrics) {
+        final String taskId,
+        final String processorNodeId,
+        final StreamsMetricsImpl streamsMetrics) {
         final Sensor parentSensor = streamsMetrics.taskLevelSensor(threadId, taskId, PROCESS, RecordingLevel.DEBUG);
         addInvocationRateAndCountToSensor(
             parentSensor,
@@ -131,9 +132,9 @@ public class ProcessorNodeMetrics {
     }
 
     public static Sensor e2ELatencySensor(final String threadId,
-                                          final String taskId,
-                                          final String processorNodeId,
-                                          final StreamsMetricsImpl streamsMetrics) {
+        final String taskId,
+        final String processorNodeId,
+        final StreamsMetricsImpl streamsMetrics) {
         final String sensorSuffix = processorNodeId + "-" + RECORD_E2E_LATENCY;
         final Sensor sensor = streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, sensorSuffix, RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
@@ -150,9 +151,9 @@ public class ProcessorNodeMetrics {
     }
 
     public static Sensor emitFinalLatencySensor(final String threadId,
-                                                final String taskId,
-                                                final String processorNodeId,
-                                                final StreamsMetricsImpl streamsMetrics) {
+        final String taskId,
+        final String processorNodeId,
+        final StreamsMetricsImpl streamsMetrics) {
         final String sensorSuffix = processorNodeId + "-" + EMIT_FINAL_LATENCY;
         final Sensor sensor = streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, sensorSuffix, RecordingLevel.DEBUG);
         final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
@@ -168,9 +169,9 @@ public class ProcessorNodeMetrics {
     }
 
     public static Sensor emittedRecordsSensor(final String threadId,
-                                              final String taskId,
-                                              final String processorNodeId,
-                                              final StreamsMetricsImpl streamsMetrics) {
+        final String taskId,
+        final String processorNodeId,
+        final StreamsMetricsImpl streamsMetrics) {
         final String sensorSuffix = processorNodeId + "-" + EMITTED_RECORDS;
         final Sensor sensor = streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, sensorSuffix, RecordingLevel.DEBUG);
         final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
@@ -186,14 +187,14 @@ public class ProcessorNodeMetrics {
     }
 
     private static Sensor throughputSensor(final String threadId,
-                                           final String taskId,
-                                           final String processorNodeId,
-                                           final String operationName,
-                                           final String descriptionOfRate,
-                                           final String descriptionOfCount,
-                                           final RecordingLevel recordingLevel,
-                                           final StreamsMetricsImpl streamsMetrics,
-                                           final Sensor... parentSensors) {
+        final String taskId,
+        final String processorNodeId,
+        final String operationName,
+        final String descriptionOfRate,
+        final String descriptionOfCount,
+        final RecordingLevel recordingLevel,
+        final StreamsMetricsImpl streamsMetrics,
+        final Sensor... parentSensors) {
         // use operation name as sensor suffix and metric name prefix
         final Sensor sensor =
             streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, operationName, recordingLevel, parentSensors);

@@ -45,11 +45,11 @@ public class KafkaClusterTestKitTest {
     @ValueSource(ints = {0, -1})
     public void testCreateClusterWithBadNumDisksThrows(int disks) {
         IllegalArgumentException e = assertThrowsExactly(IllegalArgumentException.class, () -> new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumDisksPerBroker(disks)
-                .setNumControllerNodes(1)
-                .build())
+                new TestKitNodes.Builder()
+                    .setNumBrokerNodes(1)
+                    .setNumDisksPerBroker(disks)
+                    .setNumControllerNodes(1)
+                    .build())
         );
         assertEquals("Invalid value for numDisksPerBroker", e.getMessage());
     }
@@ -57,10 +57,10 @@ public class KafkaClusterTestKitTest {
     @Test
     public void testCreateClusterWithBadNumOfControllers() {
         IllegalArgumentException e = assertThrowsExactly(IllegalArgumentException.class, () -> new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(-1)
-                .build())
+                new TestKitNodes.Builder()
+                    .setNumBrokerNodes(1)
+                    .setNumControllerNodes(-1)
+                    .build())
         );
         assertEquals("Invalid negative value for numControllerNodes", e.getMessage());
     }
@@ -68,10 +68,10 @@ public class KafkaClusterTestKitTest {
     @Test
     public void testCreateClusterWithBadNumOfBrokers() {
         IllegalArgumentException e = assertThrowsExactly(IllegalArgumentException.class, () -> new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(-1)
-                .setNumControllerNodes(1)
-                .build())
+                new TestKitNodes.Builder()
+                    .setNumBrokerNodes(-1)
+                    .setNumControllerNodes(1)
+                    .build())
         );
         assertEquals("Invalid negative value for numBrokerNodes", e.getMessage());
     }
@@ -83,11 +83,11 @@ public class KafkaClusterTestKitTest {
         perServerProperties.put(200, Map.of("bar", "bar1"));
 
         IllegalArgumentException e = assertThrowsExactly(IllegalArgumentException.class, () -> new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .setPerServerProperties(perServerProperties)
-                .build())
+                new TestKitNodes.Builder()
+                    .setNumBrokerNodes(1)
+                    .setNumControllerNodes(1)
+                    .setPerServerProperties(perServerProperties)
+                    .build())
         );
         assertEquals("Unknown server id 100, 200 in perServerProperties, the existent server ids are 0, 3000", e.getMessage());
     }
@@ -103,11 +103,11 @@ public class KafkaClusterTestKitTest {
     })
     public void testCreateClusterFormatAndCloseWithMultipleLogDirs(boolean combined, int numBrokers, int numControllers, int numDisks) throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder().
-                setNumBrokerNodes(numBrokers).
-                setNumDisksPerBroker(numDisks).
-                setCombined(combined).
-                setNumControllerNodes(numControllers).build()).build()) {
+                 new TestKitNodes.Builder().
+                     setNumBrokerNodes(numBrokers).
+                     setNumDisksPerBroker(numDisks).
+                     setCombined(combined).
+                     setNumControllerNodes(numControllers).build()).build()) {
 
             TestKitNodes nodes = cluster.nodes();
             assertEquals(numBrokers, nodes.brokerNodes().size());
@@ -117,13 +117,13 @@ public class KafkaClusterTestKitTest {
             nodes.brokerNodes().forEach((brokerId, node) -> {
                 assertEquals(numDisks, node.logDataDirectories().size());
                 Set<String> expectedDisks = IntStream.range(0, numDisks)
-                        .mapToObj(i -> {
-                            if (nodes.isCombined(node.id())) {
-                                return String.format("combined_%d_%d", brokerId, i);
-                            } else {
-                                return String.format("broker_%d_data%d", brokerId, i);
-                            }
-                        }).collect(Collectors.toSet());
+                    .mapToObj(i -> {
+                        if (nodes.isCombined(node.id())) {
+                            return String.format("combined_%d_%d", brokerId, i);
+                        } else {
+                            return String.format("broker_%d_data%d", brokerId, i);
+                        }
+                    }).collect(Collectors.toSet());
                 assertEquals(
                     expectedDisks,
                     node.logDataDirectories().stream()
@@ -150,11 +150,11 @@ public class KafkaClusterTestKitTest {
     public void testCreateClusterWithSpecificBaseDir() throws Exception {
         Path baseDirectory = TestUtils.tempDirectory().toPath();
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder().
-                setBaseDirectory(baseDirectory).
-                setNumBrokerNodes(1).
-                setCombined(true).
-                setNumControllerNodes(1).build()).build()) {
+                 new TestKitNodes.Builder().
+                     setBaseDirectory(baseDirectory).
+                     setNumBrokerNodes(1).
+                     setCombined(true).
+                     setNumControllerNodes(1).build()).build()) {
             assertEquals(cluster.nodes().baseDirectory(), baseDirectory.toFile().getAbsolutePath());
             cluster.nodes().controllerNodes().values().forEach(controller ->
                 assertTrue(Paths.get(controller.metadataDirectory()).startsWith(baseDirectory)));

@@ -46,9 +46,9 @@ public class ExpireDelegationTokenRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         return new ExpireDelegationTokenResponse(
-                new ExpireDelegationTokenResponseData()
-                    .setErrorCode(Errors.forException(e).code())
-                    .setThrottleTimeMs(throttleTimeMs));
+            new ExpireDelegationTokenResponseData()
+                .setErrorCode(Errors.forException(e).code())
+                .setThrottleTimeMs(throttleTimeMs));
     }
 
     public ByteBuffer hmac() {

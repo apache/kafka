@@ -242,7 +242,7 @@ public enum MetadataVersion {
             return (short) 0;
         } else {
             throw new RuntimeException("Controller registration is not supported in " +
-                    "MetadataVersion " + this);
+                "MetadataVersion " + this);
         }
     }
 
@@ -377,7 +377,7 @@ public enum MetadataVersion {
     }
 
     public static MetadataVersion fromFeatureLevel(short version) {
-        for (MetadataVersion metadataVersion: MetadataVersion.values()) {
+        for (MetadataVersion metadataVersion : MetadataVersion.values()) {
             if (metadataVersion.featureLevel() == version) {
                 return metadataVersion;
             }

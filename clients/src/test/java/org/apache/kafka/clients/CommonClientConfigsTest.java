@@ -44,6 +44,7 @@ public class CommonClientConfigsTest {
 
     private static class TestConfig extends AbstractConfig {
         private static final ConfigDef CONFIG;
+
         static {
             CONFIG = new ConfigDef()
                 .define(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG,
@@ -92,26 +93,30 @@ public class CommonClientConfigsTest {
     public void testExponentialBackoffDefaults() {
         TestConfig defaultConf = new TestConfig(Collections.emptyMap());
         assertEquals(Long.valueOf(50L),
-                defaultConf.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG));
+            defaultConf.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG));
         assertEquals(Long.valueOf(1000L),
-                defaultConf.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG));
+            defaultConf.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG));
 
-        TestConfig bothSetConfig = new TestConfig(new HashMap<String, Object>() {{
+        TestConfig bothSetConfig = new TestConfig(new HashMap<String, Object>() {
+            {
                 put(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG, "123");
                 put(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG, "12345");
-            }});
+            }
+        });
         assertEquals(Long.valueOf(123L),
-                bothSetConfig.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG));
+            bothSetConfig.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG));
         assertEquals(Long.valueOf(12345L),
-                bothSetConfig.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG));
+            bothSetConfig.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG));
 
-        TestConfig reconnectBackoffSetConf = new TestConfig(new HashMap<String, Object>() {{
+        TestConfig reconnectBackoffSetConf = new TestConfig(new HashMap<String, Object>() {
+            {
                 put(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG, "123");
-            }});
+            }
+        });
         assertEquals(Long.valueOf(123L),
-                reconnectBackoffSetConf.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG));
+            reconnectBackoffSetConf.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG));
         assertEquals(Long.valueOf(123L),
-                reconnectBackoffSetConf.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG));
+            reconnectBackoffSetConf.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG));
     }
 
     @Test
@@ -151,6 +156,7 @@ public class CommonClientConfigsTest {
     }
 
     public static class MyJmxReporter extends JmxReporter {
-        public MyJmxReporter() {}
+        public MyJmxReporter() {
+        }
     }
 }

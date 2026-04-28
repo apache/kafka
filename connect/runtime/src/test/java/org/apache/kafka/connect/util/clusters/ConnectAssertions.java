@@ -68,9 +68,9 @@ public class ConnectAssertions {
     public void assertAtLeastNumWorkersAreUp(int numWorkers, String detailMessage) throws InterruptedException {
         try {
             waitForCondition(
-                () -> checkWorkersUp(numWorkers, (actual, expected) -> actual >= expected).orElse(false),
-                WORKER_SETUP_DURATION_MS,
-                "Didn't meet the minimum requested number of online workers: " + numWorkers);
+                    () -> checkWorkersUp(numWorkers, (actual, expected) -> actual >= expected).orElse(false),
+                    WORKER_SETUP_DURATION_MS,
+                    "Didn't meet the minimum requested number of online workers: " + numWorkers);
         } catch (AssertionError e) {
             throw new AssertionError(detailMessage, e);
         }
@@ -84,9 +84,9 @@ public class ConnectAssertions {
     public void assertExactlyNumWorkersAreUp(int numWorkers, String detailMessage) throws InterruptedException {
         try {
             waitForCondition(
-                () -> checkWorkersUp(numWorkers, (actual, expected) -> actual == expected).orElse(false),
-                WORKER_SETUP_DURATION_MS,
-                "Didn't meet the exact requested number of online workers: " + numWorkers);
+                    () -> checkWorkersUp(numWorkers, (actual, expected) -> actual == expected).orElse(false),
+                    WORKER_SETUP_DURATION_MS,
+                    "Didn't meet the exact requested number of online workers: " + numWorkers);
         } catch (AssertionError e) {
             throw new AssertionError(detailMessage, e);
         }
@@ -116,9 +116,9 @@ public class ConnectAssertions {
     public void assertExactlyNumBrokersAreUp(int numBrokers, String detailMessage) throws InterruptedException {
         try {
             waitForCondition(
-                () -> checkBrokersUp(numBrokers, (actual, expected) -> actual == expected).orElse(false),
-                WORKER_SETUP_DURATION_MS,
-                "Didn't meet the exact requested number of online brokers: " + numBrokers);
+                    () -> checkBrokersUp(numBrokers, (actual, expected) -> actual == expected).orElse(false),
+                    WORKER_SETUP_DURATION_MS,
+                    "Didn't meet the exact requested number of online brokers: " + numBrokers);
         } catch (AssertionError e) {
             throw new AssertionError(detailMessage, e);
         }
@@ -149,11 +149,11 @@ public class ConnectAssertions {
         Set<String> topicNameSet = Set.of(topicNames);
         AtomicReference<Set<String>> existingTopics = new AtomicReference<>(topicNameSet);
         waitForCondition(
-            () -> checkTopicsExist(topicNameSet, (actual, expected) -> {
-                existingTopics.set(actual);
-                return actual.isEmpty();
-            }).orElse(false),
-            CONNECTOR_SETUP_DURATION_MS,
+                () -> checkTopicsExist(topicNameSet, (actual, expected) -> {
+                    existingTopics.set(actual);
+                    return actual.isEmpty();
+                }).orElse(false),
+                CONNECTOR_SETUP_DURATION_MS,
                 () -> "Unexpectedly found topics " + existingTopics.get());
     }
 
@@ -166,13 +166,13 @@ public class ConnectAssertions {
         Set<String> topicNameSet = Set.of(topicNames);
         AtomicReference<Set<String>> missingTopics = new AtomicReference<>(topicNameSet);
         waitForCondition(
-            () -> checkTopicsExist(topicNameSet, (actual, expected) -> {
-                Set<String> missing = new HashSet<>(expected);
-                missing.removeAll(actual);
-                missingTopics.set(missing);
-                return missing.isEmpty();
-            }).orElse(false),
-            CONNECTOR_SETUP_DURATION_MS,
+                () -> checkTopicsExist(topicNameSet, (actual, expected) -> {
+                    Set<String> missing = new HashSet<>(expected);
+                    missing.removeAll(actual);
+                    missingTopics.set(missing);
+                    return missing.isEmpty();
+                }).orElse(false),
+                CONNECTOR_SETUP_DURATION_MS,
                 () -> "Didn't find the topics " + missingTopics.get());
     }
 
@@ -180,10 +180,10 @@ public class ConnectAssertions {
         try {
             Map<String, Optional<TopicDescription>> topics = connect.kafka().describeTopics(topicNames);
             Set<String> actualExistingTopics = topics.entrySet()
-                                                     .stream()
-                                                     .filter(e -> e.getValue().isPresent())
-                                                     .map(Map.Entry::getKey)
-                                                     .collect(Collectors.toSet());
+                    .stream()
+                    .filter(e -> e.getValue().isPresent())
+                    .map(Map.Entry::getKey)
+                    .collect(Collectors.toSet());
             return Optional.of(comp.apply(actualExistingTopics, topicNames));
         } catch (Exception e) {
             log.error("Failed to describe the topic(s): {}.", topicNames, e);
@@ -204,15 +204,15 @@ public class ConnectAssertions {
             throws InterruptedException {
         try {
             waitForCondition(
-                () -> checkTopicSettings(
-                    topicName,
-                    replicas,
-                    partitions
-                ).orElse(false),
-                VALIDATION_DURATION_MS,
-                "Topic " + topicName + " does not exist or does not have exactly "
-                        + partitions + " partitions or at least "
-                        + replicas + " per partition");
+                    () -> checkTopicSettings(
+                            topicName,
+                            replicas,
+                            partitions
+                    ).orElse(false),
+                    VALIDATION_DURATION_MS,
+                    "Topic " + topicName + " does not exist or does not have exactly "
+                            + partitions + " partitions or at least "
+                            + replicas + " per partition");
         } catch (AssertionError e) {
             throw new AssertionError(detailMessage, e);
         }
@@ -242,7 +242,7 @@ public class ConnectAssertions {
      * @param detailMessage  the assertion message
      */
     public void assertExactlyNumErrorsOnConnectorConfigValidation(String connectorClass, Map<String, String> connConfig,
-                                                                  int numErrors, String detailMessage) throws InterruptedException {
+            int numErrors, String detailMessage) throws InterruptedException {
         assertExactlyNumErrorsOnConnectorConfigValidation(connectorClass, connConfig, numErrors, detailMessage, VALIDATION_DURATION_MS);
     }
 
@@ -259,17 +259,17 @@ public class ConnectAssertions {
      * validation before the timeout expires
      */
     public void assertExactlyNumErrorsOnConnectorConfigValidation(String connectorClass, Map<String, String> connConfig,
-        int numErrors, String detailMessage, long timeout) throws InterruptedException {
+            int numErrors, String detailMessage, long timeout) throws InterruptedException {
         try {
             waitForCondition(
-                () -> checkValidationErrors(
-                    connectorClass,
-                    connConfig,
-                    numErrors,
-                    (actual, expected) -> actual == expected
-                ).orElse(false),
-                timeout,
-                "Didn't meet the exact requested number of validation errors: " + numErrors);
+                    () -> checkValidationErrors(
+                            connectorClass,
+                            connConfig,
+                            numErrors,
+                            (actual, expected) -> actual == expected
+                    ).orElse(false),
+                    timeout,
+                    "Didn't meet the exact requested number of validation errors: " + numErrors);
         } catch (AssertionError e) {
             throw new AssertionError(detailMessage, e);
         }
@@ -284,7 +284,7 @@ public class ConnectAssertions {
      * @return true if exactly {@code numErrors} are produced by the validation; false otherwise
      */
     protected Optional<Boolean> checkValidationErrors(String connectorClass, Map<String, String> connConfig,
-        int numErrors, BiFunction<Integer, Integer, Boolean> comp) {
+            int numErrors, BiFunction<Integer, Integer, Boolean> comp) {
         try {
             int numErrorsProduced = connect.validateConnectorConfig(connectorClass, connConfig).errorCount();
             return Optional.of(comp.apply(numErrorsProduced, numErrors));
@@ -465,9 +465,9 @@ public class ConnectAssertions {
             throws InterruptedException {
         try {
             waitForCondition(
-                () -> checkConnectorDoesNotExist(connectorName),
-                CONNECTOR_SETUP_DURATION_MS,
-                "The connector should not exist.");
+                    () -> checkConnectorDoesNotExist(connectorName),
+                    CONNECTOR_SETUP_DURATION_MS,
+                    "The connector should not exist.");
         } catch (AssertionError e) {
             throw new AssertionError(detailMessage, e);
         }
@@ -562,7 +562,7 @@ public class ConnectAssertions {
                         if (lastInfo.get() != null) {
                             return result + " When last checked, " + stateSummary(lastInfo.get());
                         } else if (lastInfoError.get() != null) {
-                            result +=  " The last attempt to check the connector state failed: " + lastInfoError.get().getClass();
+                            result += " The last attempt to check the connector state failed: " + lastInfoError.get().getClass();
                             String exceptionMessage = lastInfoError.get().getMessage();
                             if (exceptionMessage != null) {
                                 result += ": " + exceptionMessage;
@@ -589,9 +589,9 @@ public class ConnectAssertions {
     public void assertConnectorActiveTopics(String connectorName, Collection<String> topics, String detailMessage) throws InterruptedException {
         try {
             waitForCondition(
-                () -> checkConnectorActiveTopics(connectorName, topics).orElse(false),
-                CONNECT_INTERNAL_TOPIC_UPDATES_DURATION_MS,
-                "Connector active topics don't match the expected collection");
+                    () -> checkConnectorActiveTopics(connectorName, topics).orElse(false),
+                    CONNECT_INTERNAL_TOPIC_UPDATES_DURATION_MS,
+                    "Connector active topics don't match the expected collection");
         } catch (AssertionError e) {
             throw new AssertionError(detailMessage, e);
         }

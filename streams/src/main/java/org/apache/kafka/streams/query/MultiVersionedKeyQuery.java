@@ -45,21 +45,21 @@ public final class MultiVersionedKeyQuery<K, V> implements Query<VersionedRecord
         this.order = order;
     }
 
-  /**
-   * Creates a query that will retrieve the set of records identified by {@code key} if any exists
-   * (or {@code null} otherwise).
-   *
-   * <p>
-   * While the query by default returns the all the record versions of the specified {@code key}, setting
-   * the {@code fromTimestamp} (by calling the {@link #fromTime(Instant)} method), and the {@code toTimestamp}
-   * (by calling the {@link #toTime(Instant)} method) makes the query to return the record versions associated
-   * to the specified time range.
-   *
-   * @param key The specified key by the query
-   * @param <K> The type of the key
-   * @param <V> The type of the value that will be retrieved
-   * @throws NullPointerException if {@code key} is null
-   */
+    /**
+     * Creates a query that will retrieve the set of records identified by {@code key} if any exists
+     * (or {@code null} otherwise).
+     *
+     * <p>
+     * While the query by default returns the all the record versions of the specified {@code key}, setting
+     * the {@code fromTimestamp} (by calling the {@link #fromTime(Instant)} method), and the {@code toTimestamp}
+     * (by calling the {@link #toTime(Instant)} method) makes the query to return the record versions associated
+     * to the specified time range.
+     *
+     * @param key The specified key by the query
+     * @param <K> The type of the key
+     * @param <V> The type of the value that will be retrieved
+     * @throws NullPointerException if {@code key} is null
+     */
     public static <K, V> MultiVersionedKeyQuery<K, V> withKey(final K key) {
         Objects.requireNonNull(key, "key cannot be null.");
         return new MultiVersionedKeyQuery<>(key, Optional.empty(), Optional.empty(), ResultOrder.ANY);

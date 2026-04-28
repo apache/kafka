@@ -80,36 +80,36 @@ public final class ConsumerUtils {
     private static final Logger log = LoggerFactory.getLogger(ConsumerUtils.class);
 
     public static ConsumerNetworkClient createConsumerNetworkClient(ConsumerConfig config,
-                                                                    Metrics metrics,
-                                                                    LogContext logContext,
-                                                                    ApiVersions apiVersions,
-                                                                    Time time,
-                                                                    Metadata metadata,
-                                                                    Sensor throttleTimeSensor,
-                                                                    long retryBackoffMs,
-                                                                    ClientTelemetrySender clientTelemetrySender) {
+        Metrics metrics,
+        LogContext logContext,
+        ApiVersions apiVersions,
+        Time time,
+        Metadata metadata,
+        Sensor throttleTimeSensor,
+        long retryBackoffMs,
+        ClientTelemetrySender clientTelemetrySender) {
         NetworkClient netClient = ClientUtils.createNetworkClient(config,
-                metrics,
-                CONSUMER_METRIC_GROUP_PREFIX,
-                logContext,
-                apiVersions,
-                time,
-                CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
-                metadata,
-                throttleTimeSensor,
-                clientTelemetrySender);
+            metrics,
+            CONSUMER_METRIC_GROUP_PREFIX,
+            logContext,
+            apiVersions,
+            time,
+            CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
+            metadata,
+            throttleTimeSensor,
+            clientTelemetrySender);
 
         // Will avoid blocking an extended period of time to prevent heartbeat thread starvation
         int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
 
         return new ConsumerNetworkClient(
-                logContext,
-                netClient,
-                metadata,
-                time,
-                retryBackoffMs,
-                config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
-                heartbeatIntervalMs);
+            logContext,
+            netClient,
+            metadata,
+            time,
+            retryBackoffMs,
+            config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
+            heartbeatIntervalMs);
     }
 
     public static LogContext createLogContext(ConsumerConfig config, GroupRebalanceConfig groupRebalanceConfig) {
@@ -119,7 +119,7 @@ public final class ConsumerUtils {
         // If group.instance.id is set, we will append it to the log context.
         if (groupRebalanceConfig.groupInstanceId.isPresent()) {
             return new LogContext("[Consumer instanceId=" + groupRebalanceConfig.groupInstanceId.get() +
-                    ", clientId=" + clientId + ", groupId=" + groupId.orElse("null") + "] ");
+                ", clientId=" + clientId + ", groupId=" + groupId.orElse("null") + "] ");
         } else {
             return new LogContext("[Consumer clientId=" + clientId + ", groupId=" + groupId.orElse("null") + "] ");
         }
@@ -138,19 +138,19 @@ public final class ConsumerUtils {
 
     public static Metrics createMetrics(ConsumerConfig config, Time time) {
         return createMetrics(config, time, CommonClientConfigs.metricsReporters(
-                config.getString(ConsumerConfig.CLIENT_ID_CONFIG), config));
+            config.getString(ConsumerConfig.CLIENT_ID_CONFIG), config));
     }
 
     public static Metrics createMetrics(ConsumerConfig config, Time time, List<MetricsReporter> reporters) {
         String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
         Map<String, String> metricsTags = Collections.singletonMap(CONSUMER_CLIENT_ID_METRIC_TAG, clientId);
         MetricConfig metricConfig = new MetricConfig()
-                .samples(config.getInt(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG))
-                .timeWindow(config.getLong(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
-                .recordLevel(Sensor.RecordingLevel.forName(config.getString(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
-                .tags(metricsTags);
+            .samples(config.getInt(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG))
+            .timeWindow(config.getLong(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
+            .recordLevel(Sensor.RecordingLevel.forName(config.getString(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
+            .tags(metricsTags);
         MetricsContext metricsContext = new KafkaMetricsContext(CONSUMER_JMX_PREFIX,
-                config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
+            config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
         return new Metrics(metricConfig, reporters, time, metricsContext);
     }
 
@@ -189,8 +189,8 @@ public final class ConsumerUtils {
      *                           committed offsets.
      */
     public static void refreshCommittedOffsets(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata,
-                                               final ConsumerMetadata metadata,
-                                               final SubscriptionState subscriptions) {
+        final ConsumerMetadata metadata,
+        final SubscriptionState subscriptions) {
         for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsetsAndMetadata.entrySet()) {
             final TopicPartition tp = entry.getKey();
             final OffsetAndMetadata offsetAndMetadata = entry.getValue();
@@ -203,15 +203,15 @@ public final class ConsumerUtils {
                 if (subscriptions.isAssigned(tp)) {
                     final ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(tp);
                     final SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
-                            offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(),
-                            leaderAndEpoch);
+                        offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(),
+                        leaderAndEpoch);
 
                     subscriptions.seekUnvalidated(tp, position);
 
                     log.info("Setting offset for partition {} to the committed offset {}", tp, position);
                 } else {
                     log.info("Ignoring the returned {} since its partition {} is no longer assigned",
-                            offsetAndMetadata, tp);
+                        offsetAndMetadata, tp);
                 }
             }
         }

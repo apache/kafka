@@ -96,7 +96,7 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
                 isMap || isArray ? schema.valueSchema() : null
         );
         log.trace("Applying SetSchemaMetadata SMT. Original schema: {}, updated schema: {}",
-            schema, updatedSchema);
+                schema, updatedSchema);
         return newRecord(record, updatedSchema);
     }
 

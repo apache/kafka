@@ -54,6 +54,6 @@ public class AssignReplicasToDirsResponse extends AbstractResponse {
 
     public static AssignReplicasToDirsResponse parse(Readable readable, short version) {
         return new AssignReplicasToDirsResponse(new AssignReplicasToDirsResponseData(
-                readable, version));
+            readable, version));
     }
 }

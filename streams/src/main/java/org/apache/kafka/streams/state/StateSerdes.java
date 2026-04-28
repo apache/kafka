@@ -71,8 +71,8 @@ public final class StateSerdes<K, V> {
      * @throws IllegalArgumentException if key or value serde is null
      */
     public StateSerdes(final String topic,
-                       final Serde<K> keySerde,
-                       final Serde<V> valueSerde) {
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde) {
         Objects.requireNonNull(topic, "topic cannot be null");
         Objects.requireNonNull(keySerde, "key serde cannot be null");
         Objects.requireNonNull(valueSerde, "value serde cannot be null");
@@ -215,8 +215,8 @@ public final class StateSerdes<K, V> {
             final String keyClass = key == null ? "unknown because key is null" : key.getClass().getName();
             throw new StreamsException(
                 String.format("A serializer (%s) is not compatible to the actual key type " +
-                        "(key type: %s). Change the default Serdes in StreamConfig or " +
-                        "provide correct Serdes via method parameters.",
+                    "(key type: %s). Change the default Serdes in StreamConfig or " +
+                    "provide correct Serdes via method parameters.",
                     keySerializer().getClass().getName(),
                     keyClass),
                 e);
@@ -257,8 +257,8 @@ public final class StateSerdes<K, V> {
             }
             throw new StreamsException(
                 String.format("A serializer (%s) is not compatible to the actual value type " +
-                        "(value type: %s). Change the default Serdes in StreamConfig or " +
-                        "provide correct Serdes via method parameters.",
+                    "(value type: %s). Change the default Serdes in StreamConfig or " +
+                    "provide correct Serdes via method parameters.",
                     serializerClass.getName(),
                     valueClass),
                 e);

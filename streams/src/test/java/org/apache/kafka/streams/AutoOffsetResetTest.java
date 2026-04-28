@@ -68,7 +68,7 @@ class AutoOffsetResetTest {
         final AutoOffsetReset latest1 = AutoOffsetReset.latest();
         final AutoOffsetReset latest2 = AutoOffsetReset.latest();
         final AutoOffsetReset earliest1 = AutoOffsetReset.earliest();
-        final  AutoOffsetReset earliest2 = AutoOffsetReset.earliest();
+        final AutoOffsetReset earliest2 = AutoOffsetReset.earliest();
         final AutoOffsetReset custom1 = AutoOffsetReset.byDuration(Duration.ofSeconds(5));
         final AutoOffsetReset custom2 = AutoOffsetReset.byDuration(Duration.ofSeconds(5));
         final AutoOffsetReset customDifferent = AutoOffsetReset.byDuration(Duration.ofSeconds(10));

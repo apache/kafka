@@ -44,8 +44,8 @@ public class AlterPartitionReassignmentsRequest extends AbstractRequest {
         public AlterPartitionReassignmentsRequest build(short version) {
             if (!data.allowReplicationFactorChange() && version < 1) {
                 throw new UnsupportedVersionException("The broker does not support the AllowReplicationFactorChange " +
-                        "option for the AlterPartitionReassignments API. Consider re-sending the request without the " +
-                        "option or updating the server version");
+                    "option for the AlterPartitionReassignments API. Consider re-sending the request without the " +
+                    "option or updating the server version");
             }
             return new AlterPartitionReassignmentsRequest(data, version);
         }
@@ -79,23 +79,23 @@ public class AlterPartitionReassignmentsRequest extends AbstractRequest {
 
         for (ReassignableTopic topic : data.topics()) {
             List<ReassignablePartitionResponse> partitionResponses = topic.partitions().stream().map(partition ->
-                    new ReassignablePartitionResponse()
-                            .setPartitionIndex(partition.partitionIndex())
-                            .setErrorCode(apiError.error().code())
-                            .setErrorMessage(apiError.message())
+                new ReassignablePartitionResponse()
+                    .setPartitionIndex(partition.partitionIndex())
+                    .setErrorCode(apiError.error().code())
+                    .setErrorMessage(apiError.message())
             ).collect(Collectors.toList());
             topicResponses.add(
-                    new ReassignableTopicResponse()
-                            .setName(topic.name())
-                            .setPartitions(partitionResponses)
+                new ReassignableTopicResponse()
+                    .setName(topic.name())
+                    .setPartitions(partitionResponses)
             );
         }
 
         AlterPartitionReassignmentsResponseData responseData = new AlterPartitionReassignmentsResponseData()
-                .setResponses(topicResponses)
-                .setErrorCode(apiError.error().code())
-                .setErrorMessage(apiError.message())
-                .setThrottleTimeMs(throttleTimeMs);
+            .setResponses(topicResponses)
+            .setErrorCode(apiError.error().code())
+            .setErrorMessage(apiError.message())
+            .setThrottleTimeMs(throttleTimeMs);
         return new AlterPartitionReassignmentsResponse(responseData);
     }
 }

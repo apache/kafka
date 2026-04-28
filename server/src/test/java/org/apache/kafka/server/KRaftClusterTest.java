@@ -145,11 +145,11 @@ public class KRaftClusterTest {
     @Test
     public void testCreateClusterAndClose() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build())
-            .build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(1)
+                     .setNumControllerNodes(1)
+                     .build())
+                 .build()) {
             cluster.format();
             cluster.startup();
         }
@@ -158,11 +158,11 @@ public class KRaftClusterTest {
     @Test
     public void testCreateClusterAndRestartBrokerNode() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build())
-            .build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(1)
+                     .setNumControllerNodes(1)
+                     .build())
+                 .build()) {
             cluster.format();
             cluster.startup();
             var broker = cluster.brokers().values().iterator().next();
@@ -174,12 +174,12 @@ public class KRaftClusterTest {
     @Test
     public void testClusterWithLowerCaseListeners() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setBrokerListenerName(new ListenerName("external"))
-                .setNumControllerNodes(3)
-                .build())
-            .build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(1)
+                     .setBrokerListenerName(new ListenerName("external"))
+                     .setNumControllerNodes(3)
+                     .build())
+                 .build()) {
             cluster.format();
             cluster.startup();
             cluster.brokers().forEach((brokerId, broker) -> {
@@ -201,11 +201,11 @@ public class KRaftClusterTest {
     @Test
     public void testCreateClusterAndWaitForBrokerInRunningState() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build())
-            .build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(1)
+                     .setNumControllerNodes(1)
+                     .build())
+                 .build()) {
             cluster.format();
             cluster.startup();
             TestUtils.waitForCondition(() -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
@@ -222,16 +222,16 @@ public class KRaftClusterTest {
     @Test
     public void testRemoteLogManagerInstantiation() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build())
-            .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true)
-            .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
-                "org.apache.kafka.server.log.remote.storage.NoOpRemoteLogMetadataManager")
-            .setConfigProp(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
-                "org.apache.kafka.server.log.remote.storage.NoOpRemoteStorageManager")
-            .build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(1)
+                     .setNumControllerNodes(1)
+                     .build())
+                 .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true)
+                 .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
+                     "org.apache.kafka.server.log.remote.storage.NoOpRemoteLogMetadataManager")
+                 .setConfigProp(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
+                     "org.apache.kafka.server.log.remote.storage.NoOpRemoteStorageManager")
+                 .build()) {
             cluster.format();
             cluster.startup();
             cluster.brokers().forEach((brokerId, broker) -> {
@@ -243,10 +243,10 @@ public class KRaftClusterTest {
     @Test
     public void testAuthorizerFailureFoundInControllerStartup() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumControllerNodes(3).build())
-            .setConfigProp("authorizer.class.name", BadAuthorizer.class.getName())
-            .build()) {
+                 new TestKitNodes.Builder()
+                     .setNumControllerNodes(3).build())
+                 .setConfigProp("authorizer.class.name", BadAuthorizer.class.getName())
+                 .build()) {
             cluster.format();
             ExecutionException exception = assertThrows(ExecutionException.class,
                 cluster::startup);
@@ -260,14 +260,14 @@ public class KRaftClusterTest {
     @ValueSource(booleans = {false, true})
     public void testReconfigureControllerClientQuotas(boolean combinedController) throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setCombined(combinedController)
-                .setNumControllerNodes(1)
-                .build())
-            .setConfigProp("client.quota.callback.class", DummyClientQuotaCallback.class.getName())
-            .setConfigProp(DummyClientQuotaCallback.DUMMY_CLIENT_QUOTA_CALLBACK_VALUE_CONFIG_KEY, "0")
-            .build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(1)
+                     .setCombined(combinedController)
+                     .setNumControllerNodes(1)
+                     .build())
+                 .setConfigProp("client.quota.callback.class", DummyClientQuotaCallback.class.getName())
+                 .setConfigProp(DummyClientQuotaCallback.DUMMY_CLIENT_QUOTA_CALLBACK_VALUE_CONFIG_KEY, "0")
+                 .build()) {
             cluster.format();
             cluster.startup();
             cluster.waitForReadyBrokers();
@@ -278,7 +278,7 @@ public class KRaftClusterTest {
                     Map.of(new ConfigResource(Type.BROKER, ""),
                         List.of(new AlterConfigOp(
                             new ConfigEntry(DummyClientQuotaCallback.DUMMY_CLIENT_QUOTA_CALLBACK_VALUE_CONFIG_KEY, "1"), OpType.SET))))
-                        .all().get();
+                    .all().get();
             }
             assertConfigValue(cluster, 1);
         }
@@ -300,13 +300,13 @@ public class KRaftClusterTest {
     @ValueSource(booleans = {false, true})
     public void testReconfigureControllerAuthorizer(boolean combinedMode) throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setCombined(combinedMode)
-                .setNumControllerNodes(1)
-                .build())
-            .setConfigProp("authorizer.class.name", FakeConfigurableAuthorizer.class.getName())
-            .build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(1)
+                     .setCombined(combinedMode)
+                     .setNumControllerNodes(1)
+                     .build())
+                 .setConfigProp("authorizer.class.name", FakeConfigurableAuthorizer.class.getName())
+                 .build()) {
             cluster.format();
             cluster.startup();
             cluster.waitForReadyBrokers();
@@ -340,10 +340,10 @@ public class KRaftClusterTest {
     @Test
     public void testCreateClusterAndCreateListDeleteTopic() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(3)
-                .setNumControllerNodes(3)
-                .build()).build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(3)
+                     .setNumControllerNodes(3)
+                     .build()).build()) {
             cluster.format();
             cluster.startup();
             cluster.waitForReadyBrokers();
@@ -373,10 +373,10 @@ public class KRaftClusterTest {
     @Test
     public void testCreateClusterAndCreateAndManyTopics() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(3)
-                .setNumControllerNodes(3)
-                .build()).build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(3)
+                     .setNumControllerNodes(3)
+                     .build()).build()) {
             cluster.format();
             cluster.startup();
             cluster.waitForReadyBrokers();
@@ -422,10 +422,10 @@ public class KRaftClusterTest {
     @Test
     public void testClientQuotas() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build()).build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(1)
+                     .setNumControllerNodes(1)
+                     .build()).build()) {
             cluster.format();
             cluster.startup();
             TestUtils.waitForCondition(() -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
@@ -510,10 +510,10 @@ public class KRaftClusterTest {
     @Test
     public void testDefaultClientQuotas() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build()).build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(1)
+                     .setNumControllerNodes(1)
+                     .build()).build()) {
             cluster.format();
             cluster.startup();
             TestUtils.waitForCondition(() -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
@@ -564,11 +564,11 @@ public class KRaftClusterTest {
         doOnStartedKafkaCluster(nodes, cluster ->
             sendDescribeClusterRequestToBoundPortUntilAllBrokersPropagated(cluster.nodes().brokerListenerName(), Duration.ofSeconds(15), cluster)
                 .nodes().values().forEach(broker -> {
-                    assertEquals("localhost", broker.host(),
-                        "Did not advertise configured advertised host");
-                    assertEquals(cluster.brokers().get(broker.id()).socketServer().boundPort(cluster.nodes().brokerListenerName()), broker.port(),
-                        "Did not advertise bound socket port");
-                })
+                assertEquals("localhost", broker.host(),
+                    "Did not advertise configured advertised host");
+                assertEquals(cluster.brokers().get(broker.id()).socketServer().boundPort(cluster.nodes().brokerListenerName()), broker.port(),
+                    "Did not advertise bound socket port");
+            })
         );
     }
 
@@ -589,9 +589,9 @@ public class KRaftClusterTest {
         doOnStartedKafkaCluster(nodes, cluster ->
             sendDescribeClusterRequestToBoundPortUntilAllBrokersPropagated(cluster.nodes().brokerListenerName(), Duration.ofSeconds(15), cluster)
                 .nodes().values().forEach(broker -> {
-                    assertEquals("advertised-host-" + broker.id(), broker.host(), "Did not advertise configured advertised host");
-                    assertEquals(broker.id() + 100, broker.port(), "Did not advertise configured advertised port");
-                })
+                assertEquals("advertised-host-" + broker.id(), broker.host(), "Did not advertise configured advertised host");
+                assertEquals(broker.id() + 100, broker.port(), "Did not advertise configured advertised port");
+            })
         );
     }
 
@@ -653,10 +653,10 @@ public class KRaftClusterTest {
     @ValueSource(booleans = {true, false})
     public void testUnregisterBroker(boolean usingBootstrapControllers) throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(3)
-                .setNumControllerNodes(3)
-                .build()).build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(3)
+                     .setNumControllerNodes(3)
+                     .build()).build()) {
             cluster.format();
             cluster.startup();
             cluster.waitForReadyBrokers();
@@ -698,10 +698,10 @@ public class KRaftClusterTest {
     @Test
     public void testCreateClusterAndPerformReassignment() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(4)
-                .setNumControllerNodes(3)
-                .build()).build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(4)
+                     .setNumControllerNodes(3)
+                     .build()).build()) {
             cluster.format();
             cluster.startup();
             cluster.waitForReadyBrokers();
@@ -794,10 +794,10 @@ public class KRaftClusterTest {
     @Test
     public void testIncrementalAlterConfigs() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(3)
-                .setNumControllerNodes(3)
-                .build()).build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(3)
+                     .setNumControllerNodes(3)
+                     .build()).build()) {
             cluster.format();
             cluster.startup();
             cluster.waitForReadyBrokers();
@@ -831,8 +831,8 @@ public class KRaftClusterTest {
                 ), false);
 
                 assertListEquals(List.of(ApiError.NONE,
-                    new ApiError(Errors.INVALID_CONFIG, "Unknown topic config name: not.a.real.topic.config"),
-                    new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, "The topic 'baz' does not exist.")),
+                        new ApiError(Errors.INVALID_CONFIG, "Unknown topic config name: not.a.real.topic.config"),
+                        new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, "The topic 'baz' does not exist.")),
                     incrementalAlter(admin, Map.of(
                         new ConfigResource(Type.TOPIC, "foo"),
                         List.of(new AlterConfigOp(new ConfigEntry("segment.jitter.ms", "345"), AlterConfigOp.OpType.SET)),
@@ -913,10 +913,10 @@ public class KRaftClusterTest {
     @Test
     public void testSetLog4jConfigurations() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(3)
-                .setNumControllerNodes(3)
-                .build()).build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(3)
+                     .setNumControllerNodes(3)
+                     .build()).build()) {
             cluster.format();
             cluster.startup();
             cluster.waitForReadyBrokers();
@@ -930,7 +930,7 @@ public class KRaftClusterTest {
                 var initialLog4j = validateConfigs(admin, Map.of(broker1, Map.of()), false);
 
                 assertListEquals(List.of(ApiError.NONE,
-                    new ApiError(Errors.INVALID_REQUEST, "APPEND operation is not allowed for the BROKER_LOGGER resource")),
+                        new ApiError(Errors.INVALID_REQUEST, "APPEND operation is not allowed for the BROKER_LOGGER resource")),
                     incrementalAlter(admin, Map.of(
                         broker1, List.of(
                             new AlterConfigOp(new ConfigEntry(LOG.getName(), "TRACE"), OpType.SET),
@@ -943,13 +943,13 @@ public class KRaftClusterTest {
 
                 validateConfigs(admin, Map.of(
                     broker1, Map.of(
-                        LOG.getName(), "TRACE",
-                        LOG_2.getName(), "TRACE"
-                    )
+                    LOG.getName(), "TRACE",
+                    LOG_2.getName(), "TRACE"
+                )
                 ), false);
 
                 assertListEquals(List.of(ApiError.NONE,
-                    new ApiError(Errors.INVALID_REQUEST, "SUBTRACT operation is not allowed for the BROKER_LOGGER resource")),
+                        new ApiError(Errors.INVALID_REQUEST, "SUBTRACT operation is not allowed for the BROKER_LOGGER resource")),
                     incrementalAlter(admin, Map.of(
                         broker1, List.of(
                             new AlterConfigOp(new ConfigEntry(LOG.getName(), ""), OpType.DELETE),
@@ -962,9 +962,9 @@ public class KRaftClusterTest {
 
                 validateConfigs(admin, Map.of(
                     broker1, Map.of(
-                        LOG.getName(), initialLog4j.get(broker1).get(LOG.getName()),
-                        LOG_2.getName(), initialLog4j.get(broker1).get(LOG_2.getName())
-                    )
+                    LOG.getName(), initialLog4j.get(broker1).get(LOG.getName()),
+                    LOG_2.getName(), initialLog4j.get(broker1).get(LOG_2.getName())
+                )
                 ), false);
             }
         }
@@ -987,11 +987,11 @@ public class KRaftClusterTest {
     @ValueSource(strings = {"3.7-IV0", "3.7-IV2"})
     public void testCreatePartitions(String metadataVersionString) throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(3)
-                .setBootstrapMetadataVersion(MetadataVersion.fromVersionString(metadataVersionString, true))
-                .setNumControllerNodes(3)
-                .build()).build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(3)
+                     .setBootstrapMetadataVersion(MetadataVersion.fromVersionString(metadataVersionString, true))
+                     .setNumControllerNodes(3)
+                     .build()).build()) {
             cluster.format();
             cluster.startup();
             cluster.waitForReadyBrokers();
@@ -1018,10 +1018,10 @@ public class KRaftClusterTest {
     @Test
     public void testDescribeQuorumRequestToBrokers() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(3)
-                .setNumControllerNodes(3)
-                .build()).build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(3)
+                     .setNumControllerNodes(3)
+                     .build()).build()) {
             cluster.format();
             cluster.startup();
             cluster.waitForReadyBrokers();
@@ -1084,10 +1084,10 @@ public class KRaftClusterTest {
     @Test
     public void testDescribeQuorumRequestToControllers() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(3)
-                .setNumControllerNodes(3)
-                .build()).build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(3)
+                     .setNumControllerNodes(3)
+                     .build()).build()) {
             cluster.format();
             cluster.startup();
             cluster.waitForReadyBrokers();
@@ -1128,11 +1128,11 @@ public class KRaftClusterTest {
     @Test
     public void testUpdateMetadataVersion() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setBootstrapMetadataVersion(MetadataVersion.MINIMUM_VERSION)
-                .setNumBrokerNodes(3)
-                .setNumControllerNodes(3)
-                .build()).build()) {
+                 new TestKitNodes.Builder()
+                     .setBootstrapMetadataVersion(MetadataVersion.MINIMUM_VERSION)
+                     .setNumBrokerNodes(3)
+                     .setNumControllerNodes(3)
+                     .build()).build()) {
             cluster.format();
             cluster.startup();
             cluster.waitForReadyBrokers();
@@ -1154,12 +1154,12 @@ public class KRaftClusterTest {
     @ValueSource(booleans = {false, true})
     public void testDescribeKRaftVersion(boolean usingBootstrapControllers) throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build())
-            .setStandalone(true)
-            .build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(1)
+                     .setNumControllerNodes(1)
+                     .build())
+                 .setStandalone(true)
+                 .build()) {
             cluster.format();
             cluster.startup();
             cluster.waitForReadyBrokers();
@@ -1177,16 +1177,16 @@ public class KRaftClusterTest {
     @Test
     public void testCreateClusterAndCreateTopicWithRemoteLogManagerInstantiation() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build())
-            .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true")
-            .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
-                "org.apache.kafka.server.log.remote.storage.NoOpRemoteLogMetadataManager")
-            .setConfigProp(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
-                "org.apache.kafka.server.log.remote.storage.NoOpRemoteStorageManager")
-            .build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(1)
+                     .setNumControllerNodes(1)
+                     .build())
+                 .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true")
+                 .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
+                     "org.apache.kafka.server.log.remote.storage.NoOpRemoteLogMetadataManager")
+                 .setConfigProp(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
+                     "org.apache.kafka.server.log.remote.storage.NoOpRemoteStorageManager")
+                 .build()) {
             cluster.format();
             cluster.startup();
             cluster.waitForReadyBrokers();
@@ -1216,10 +1216,10 @@ public class KRaftClusterTest {
     @Test
     public void testCreateClusterAndRestartControllerNode() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(3)
-                .build()).build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(1)
+                     .setNumControllerNodes(3)
+                     .build()).build()) {
             cluster.format();
             cluster.startup();
             var controller = cluster.controllers().values().stream()
@@ -1240,7 +1240,7 @@ public class KRaftClusterTest {
             // restart controller
             controller.startup();
             TestUtils.waitForCondition(() -> cluster.controllers().values().stream()
-                .anyMatch(c -> c.controller().isActive()),
+                    .anyMatch(c -> c.controller().isActive()),
                 "Timeout waiting for new controller election");
         }
     }
@@ -1248,13 +1248,13 @@ public class KRaftClusterTest {
     @Test
     public void testSnapshotCount() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(0)
-                .setNumControllerNodes(1)
-                .build())
-            .setConfigProp("metadata.log.max.snapshot.interval.ms", "500")
-            .setConfigProp("metadata.max.idle.interval.ms", "50") // Set this low to generate metadata
-            .build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(0)
+                     .setNumControllerNodes(1)
+                     .build())
+                 .setConfigProp("metadata.log.max.snapshot.interval.ms", "500")
+                 .setConfigProp("metadata.max.idle.interval.ms", "50") // Set this low to generate metadata
+                 .build()) {
             cluster.format();
             cluster.startup();
             var metaLog = FileSystems.getDefault().getPath(
@@ -1290,11 +1290,11 @@ public class KRaftClusterTest {
     @Test
     public void testSingleControllerSingleBrokerCluster() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setBootstrapMetadataVersion(MetadataVersion.MINIMUM_VERSION)
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build()).build()) {
+                 new TestKitNodes.Builder()
+                     .setBootstrapMetadataVersion(MetadataVersion.MINIMUM_VERSION)
+                     .setNumBrokerNodes(1)
+                     .setNumControllerNodes(1)
+                     .build()).build()) {
             cluster.format();
             cluster.startup();
             cluster.waitForReadyBrokers();
@@ -1304,10 +1304,10 @@ public class KRaftClusterTest {
     @Test
     public void testOverlyLargeCreateTopics() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build()).build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(1)
+                     .setNumControllerNodes(1)
+                     .build()).build()) {
             cluster.format();
             cluster.startup();
             try (Admin admin = cluster.admin()) {
@@ -1328,13 +1328,13 @@ public class KRaftClusterTest {
     @Test
     public void testTimedOutHeartbeats() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(3)
-                .setNumControllerNodes(1)
-                .build())
-            .setConfigProp(KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG, "10")
-            .setConfigProp(KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG, "1000")
-            .build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(3)
+                     .setNumControllerNodes(1)
+                     .build())
+                 .setConfigProp(KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG, "10")
+                 .setConfigProp(KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG, "1000")
+                 .build()) {
             cluster.format();
             cluster.startup();
             var controller = cluster.controllers().values().iterator().next();
@@ -1366,11 +1366,11 @@ public class KRaftClusterTest {
     @Test
     public void testRegisteredControllerEndpoints() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(3)
-                .build())
-            .build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(1)
+                     .setNumControllerNodes(3)
+                     .build())
+                 .build()) {
             cluster.format();
             cluster.startup();
             TestUtils.retryOnExceptionWithTimeout(60000, () -> {
@@ -1388,12 +1388,12 @@ public class KRaftClusterTest {
     @Test
     public void testDirectToControllerCommunicationFailsOnOlderMetadataVersion() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setBootstrapMetadataVersion(MetadataVersion.IBP_3_6_IV2)
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build())
-            .build()) {
+                 new TestKitNodes.Builder()
+                     .setBootstrapMetadataVersion(MetadataVersion.IBP_3_6_IV2)
+                     .setNumBrokerNodes(1)
+                     .setNumControllerNodes(1)
+                     .build())
+                 .build()) {
             cluster.format();
             cluster.startup();
             try (Admin admin = cluster.admin(Map.of(), true)) {
@@ -1417,11 +1417,11 @@ public class KRaftClusterTest {
                 .setName("num.io.threads")
                 .setValue("9"), (short) 0));
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder(BootstrapMetadata.fromRecords(bootstrapRecords, "testRecords"))
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build())
-            .build()) {
+                 new TestKitNodes.Builder(BootstrapMetadata.fromRecords(bootstrapRecords, "testRecords"))
+                     .setNumBrokerNodes(1)
+                     .setNumControllerNodes(1)
+                     .build())
+                 .build()) {
             cluster.format();
             cluster.startup();
             var controller = cluster.controllers().values().iterator().next();
@@ -1435,12 +1435,12 @@ public class KRaftClusterTest {
     @Test
     public void testTopicDeletedAndRecreatedWhileBrokerIsDown() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setBootstrapMetadataVersion(MetadataVersion.IBP_3_6_IV2)
-                .setNumBrokerNodes(3)
-                .setNumControllerNodes(1)
-                .build())
-            .build()) {
+                 new TestKitNodes.Builder()
+                     .setBootstrapMetadataVersion(MetadataVersion.IBP_3_6_IV2)
+                     .setNumBrokerNodes(3)
+                     .setNumControllerNodes(1)
+                     .build())
+                 .build()) {
             cluster.format();
             cluster.startup();
             try (Admin admin = cluster.admin()) {
@@ -1484,13 +1484,13 @@ public class KRaftClusterTest {
     @Test
     public void testAbandonedFutureReplicaRecovered_mainReplicaInOfflineLogDir() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV2)
-                .setNumBrokerNodes(3)
-                .setNumDisksPerBroker(2)
-                .setNumControllerNodes(1)
-                .build())
-            .build()) {
+                 new TestKitNodes.Builder()
+                     .setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV2)
+                     .setNumBrokerNodes(3)
+                     .setNumDisksPerBroker(2)
+                     .setNumControllerNodes(1)
+                     .build())
+                 .build()) {
             cluster.format();
             cluster.startup();
             try (Admin admin = cluster.admin()) {
@@ -1502,7 +1502,7 @@ public class KRaftClusterTest {
                     new NewTopic("foo", 3, (short) 3))).all().get();
 
                 // Wait until foo-0 is created on broker0.
-                TestUtils.retryOnExceptionWithTimeout(60000, () -> 
+                TestUtils.retryOnExceptionWithTimeout(60000, () ->
                     assertTrue(broker0.logManager().getLog(foo0, false).isPresent()));
 
                 // Shut down broker0 and wait until the ISR of foo-0 is set to [1, 2]
@@ -1534,13 +1534,13 @@ public class KRaftClusterTest {
     @Test
     public void testAbandonedFutureReplicaRecovered_mainReplicaInOnlineLogDir() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV2)
-                .setNumBrokerNodes(3)
-                .setNumDisksPerBroker(2)
-                .setNumControllerNodes(1)
-                .build())
-            .build()) {
+                 new TestKitNodes.Builder()
+                     .setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV2)
+                     .setNumBrokerNodes(3)
+                     .setNumDisksPerBroker(2)
+                     .setNumControllerNodes(1)
+                     .build())
+                 .build()) {
             cluster.format();
             cluster.startup();
             try (Admin admin = cluster.admin()) {
@@ -1609,9 +1609,9 @@ public class KRaftClusterTest {
     @Test
     public void testControllerFailover() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(3).build()).build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(1)
+                     .setNumControllerNodes(3).build()).build()) {
             cluster.format();
             cluster.startup();
             cluster.waitForReadyBrokers();
@@ -1646,13 +1646,13 @@ public class KRaftClusterTest {
     public void testOldBootstrapMetadataFile() throws Exception {
         var baseDirectory = TestUtils.tempDirectory().toPath();
         try (var cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .setBaseDirectory(baseDirectory)
-                .build())
-            .setDeleteOnClose(false)
-            .build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(1)
+                     .setNumControllerNodes(1)
+                     .setBaseDirectory(baseDirectory)
+                     .build())
+                 .setDeleteOnClose(false)
+                 .build()) {
             cluster.format();
             cluster.startup();
             cluster.waitForReadyBrokers();
@@ -1670,12 +1670,12 @@ public class KRaftClusterTest {
         // Since we do not need to use the bootstrap metadata, the fact that
         // it specifies an obsolete metadata.version should not be a problem.
         try (var cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .setBaseDirectory(baseDirectory)
-                .setBootstrapMetadata(oldBootstrapMetadata)
-                .build()).build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(1)
+                     .setNumControllerNodes(1)
+                     .setBaseDirectory(baseDirectory)
+                     .setBootstrapMetadata(oldBootstrapMetadata)
+                     .build()).build()) {
             cluster.startup();
             cluster.waitForReadyBrokers();
         }
@@ -1684,11 +1684,11 @@ public class KRaftClusterTest {
     @Test
     public void testIncreaseNumIoThreads() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1).build())
-            .setConfigProp(ServerConfigs.NUM_IO_THREADS_CONFIG, "4")
-            .build()) {
+                 new TestKitNodes.Builder()
+                     .setNumBrokerNodes(1)
+                     .setNumControllerNodes(1).build())
+                 .setConfigProp(ServerConfigs.NUM_IO_THREADS_CONFIG, "4")
+                 .build()) {
             cluster.format();
             cluster.startup();
             cluster.waitForReadyBrokers();
@@ -1722,13 +1722,13 @@ public class KRaftClusterTest {
 
         @Override
         public List<? extends CompletionStage<AclCreateResult>> createAcls(AuthorizableRequestContext requestContext,
-            List<AclBinding> aclBindings) {
+                                                                           List<AclBinding> aclBindings) {
             return null;
         }
 
         @Override
         public List<? extends CompletionStage<AclDeleteResult>> deleteAcls(AuthorizableRequestContext requestContext,
-            List<AclBindingFilter> aclBindingFilters) {
+                                                                           List<AclBindingFilter> aclBindingFilters) {
             return null;
         }
 
@@ -1844,7 +1844,7 @@ public class KRaftClusterTest {
 
         @Override
         public List<AuthorizationResult> authorize(AuthorizableRequestContext requestContext,
-            List<Action> actions
+                                                   List<Action> actions
         ) {
             return actions.stream()
                 .map(action -> AuthorizationResult.ALLOWED)

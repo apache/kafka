@@ -81,28 +81,28 @@ public final class KafkaAuthorizerServerInfo implements AuthorizerServerInfo {
         if (o == null || (!(o.getClass().equals(KafkaAuthorizerServerInfo.class)))) return false;
         KafkaAuthorizerServerInfo other = (KafkaAuthorizerServerInfo) o;
         return clusterResource.equals(other.clusterResource) &&
-                brokerId == other.brokerId &&
-                endpoints.equals(other.endpoints) &&
-                interbrokerEndpoint.equals(other.interbrokerEndpoint) &&
-                earlyStartListeners.equals(other.earlyStartListeners);
+            brokerId == other.brokerId &&
+            endpoints.equals(other.endpoints) &&
+            interbrokerEndpoint.equals(other.interbrokerEndpoint) &&
+            earlyStartListeners.equals(other.earlyStartListeners);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(clusterResource,
-                brokerId,
-                endpoints,
-                interbrokerEndpoint,
-                earlyStartListeners);
+            brokerId,
+            endpoints,
+            interbrokerEndpoint,
+            earlyStartListeners);
     }
 
     @Override
     public String toString() {
         return "KafkaAuthorizerServerInfo(" +
-                "clusterResource=" + clusterResource +
-                ", brokerId=" + brokerId +
-                ", endpoints=" + endpoints +
-                ", earlyStartListeners=" + earlyStartListeners +
-                ")";
+            "clusterResource=" + clusterResource +
+            ", brokerId=" + brokerId +
+            ", endpoints=" + endpoints +
+            ", earlyStartListeners=" + earlyStartListeners +
+            ")";
     }
 }

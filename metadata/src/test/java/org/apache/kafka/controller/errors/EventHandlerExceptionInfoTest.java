@@ -72,8 +72,8 @@ public class EventHandlerExceptionInfoTest {
     @Test
     public void testTopicExistsExceptionInfo() {
         assertEquals(new EventHandlerExceptionInfo(false, false,
-            new TopicExistsException("Topic exists.")),
-                TOPIC_EXISTS);
+                new TopicExistsException("Topic exists.")),
+            TOPIC_EXISTS);
     }
 
     @Test
@@ -85,9 +85,9 @@ public class EventHandlerExceptionInfoTest {
     @Test
     public void testRejectedExecutionExceptionInfo() {
         assertEquals(new EventHandlerExceptionInfo(false, false,
-            new RejectedExecutionException(),
-            new TimeoutException("The controller is shutting down.", new RejectedExecutionException())),
-                REJECTED_EXECUTION);
+                new RejectedExecutionException(),
+                new TimeoutException("The controller is shutting down.", new RejectedExecutionException())),
+            REJECTED_EXECUTION);
     }
 
     @Test
@@ -100,37 +100,37 @@ public class EventHandlerExceptionInfoTest {
     @Test
     public void testBoundedListTooLongExceptionInfo() {
         assertEquals(new EventHandlerExceptionInfo(false, false,
-            new BoundedListTooLongException("too long"),
-            new PolicyViolationException("Unable to perform excessively large batch operation.")),
-                BOUNDED_LIST_TOO_LONG);
+                new BoundedListTooLongException("too long"),
+                new PolicyViolationException("Unable to perform excessively large batch operation.")),
+            BOUNDED_LIST_TOO_LONG);
     }
 
     @Test
     public void testBoundedListTooLongExceptionFailureMessage() {
         assertEquals("event failed with BoundedListTooLongException (treated as PolicyViolationException) " +
             "in 234 microseconds. Exception message: too long",
-                BOUNDED_LIST_TOO_LONG.failureMessage(123, OptionalLong.of(234L), true, 456L));
+            BOUNDED_LIST_TOO_LONG.failureMessage(123, OptionalLong.of(234L), true, 456L));
     }
 
     @Test
     public void testPeriodicControlTaskExceptionInfo() {
         assertEquals(new EventHandlerExceptionInfo(true, false,
-            new PeriodicControlTaskException("foo: task failed: null pointer.", new NullPointerException())),
-                PERIODIC_FAILURE);
+                new PeriodicControlTaskException("foo: task failed: null pointer.", new NullPointerException())),
+            PERIODIC_FAILURE);
     }
 
     @Test
     public void testPeriodicControlTaskExceptionFailureMessage() {
         assertEquals("event failed with PeriodicControlTaskException in 234 microseconds.",
-                PERIODIC_FAILURE.failureMessage(123, OptionalLong.of(234L), true, 456L));
+            PERIODIC_FAILURE.failureMessage(123, OptionalLong.of(234L), true, 456L));
     }
 
     @Test
     public void testInterruptedExceptionInfo() {
         assertEquals(new EventHandlerExceptionInfo(true, true,
-            new InterruptedException(),
-            new UnknownServerException("The controller was interrupted.")),
-                INTERRUPTED);
+                new InterruptedException(),
+                new UnknownServerException("The controller was interrupted.")),
+            INTERRUPTED);
     }
 
     @Test
@@ -145,15 +145,15 @@ public class EventHandlerExceptionInfoTest {
     public void testInterruptedExceptionFailureMessageWhenInactive() {
         assertEquals("event unable to start processing because of InterruptedException (treated as " +
             "UnknownServerException) at epoch 123. The controller is already in standby mode.",
-                INTERRUPTED.failureMessage(123, OptionalLong.empty(), false, 456L));
+            INTERRUPTED.failureMessage(123, OptionalLong.empty(), false, 456L));
     }
 
     @Test
     public void testNullPointerExceptionInfo() {
         assertEquals(new EventHandlerExceptionInfo(true, true,
-            new NullPointerException(),
-            new UnknownServerException(new NullPointerException())),
-                NULL_POINTER);
+                new NullPointerException(),
+                new UnknownServerException(new NullPointerException())),
+            NULL_POINTER);
     }
 
     @Test
@@ -161,22 +161,22 @@ public class EventHandlerExceptionInfoTest {
         assertEquals("event failed with NullPointerException (treated as UnknownServerException) " +
             "at epoch 123 in 40 microseconds. Renouncing leadership and reverting to the last " +
             "committed offset 456.",
-                NULL_POINTER.failureMessage(123, OptionalLong.of(40L), true, 456L));
+            NULL_POINTER.failureMessage(123, OptionalLong.of(40L), true, 456L));
     }
 
     @Test
     public void testNullPointerExceptionFailureMessageWhenInactive() {
         assertEquals("event failed with NullPointerException (treated as UnknownServerException) " +
             "at epoch 123 in 40 microseconds. The controller is already in standby mode.",
-                NULL_POINTER.failureMessage(123, OptionalLong.of(40L), false, 456L));
+            NULL_POINTER.failureMessage(123, OptionalLong.of(40L), false, 456L));
     }
 
     @Test
     public void testNotLeaderExceptionInfo() {
         assertEquals(new EventHandlerExceptionInfo(false, true,
-            new NotLeaderException("Append failed"),
-            new NotControllerException("The active controller appears to be node 2.")),
-                NOT_LEADER);
+                new NotLeaderException("Append failed"),
+                new NotControllerException("The active controller appears to be node 2.")),
+            NOT_LEADER);
     }
 
     @Test
@@ -190,12 +190,12 @@ public class EventHandlerExceptionInfoTest {
     @Test
     public void testFaultExceptionFailureMessage() {
         EventHandlerExceptionInfo faultExceptionInfo = EventHandlerExceptionInfo.fromInternal(
-                new KafkaException("Custom kafka exception message"),
-                () -> OptionalInt.of(1));
+            new KafkaException("Custom kafka exception message"),
+            () -> OptionalInt.of(1));
         String failureMessage = faultExceptionInfo.failureMessage(123, OptionalLong.of(90L), true, 456L);
         assertEquals("event failed with KafkaException (treated as UnknownServerException) " +
-                "at epoch 123 in 90 microseconds. Renouncing leadership and reverting " +
-                "to the last committed offset 456.", failureMessage);
+            "at epoch 123 in 90 microseconds. Renouncing leadership and reverting " +
+            "to the last committed offset 456.", failureMessage);
     }
 
     @Test
@@ -212,8 +212,8 @@ public class EventHandlerExceptionInfoTest {
     @Test
     public void testIsTimeoutException() {
         EventHandlerExceptionInfo timeoutExceptionInfo = EventHandlerExceptionInfo.fromInternal(
-                new TimeoutException(),
-                () -> OptionalInt.of(1));
+            new TimeoutException(),
+            () -> OptionalInt.of(1));
         assertTrue(timeoutExceptionInfo.isTimeoutException());
     }
 }

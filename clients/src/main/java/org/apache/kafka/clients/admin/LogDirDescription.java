@@ -98,11 +98,11 @@ public class LogDirDescription {
     @Override
     public String toString() {
         return "LogDirDescription(" +
-                "replicaInfos=" + replicaInfos +
-                ", error=" + error +
-                ", totalBytes=" + totalBytes +
-                ", usableBytes=" + usableBytes +
-                ", isCordoned=" + isCordoned +
-                ')';
+            "replicaInfos=" + replicaInfos +
+            ", error=" + error +
+            ", totalBytes=" + totalBytes +
+            ", usableBytes=" + usableBytes +
+            ", isCordoned=" + isCordoned +
+            ')';
     }
 }

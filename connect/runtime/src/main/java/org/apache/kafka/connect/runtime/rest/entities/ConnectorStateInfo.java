@@ -24,10 +24,10 @@ import java.util.List;
 import java.util.Objects;
 
 public record ConnectorStateInfo(
-    @JsonProperty String name,
-    @JsonProperty ConnectorState connector,
-    @JsonProperty List<TaskState> tasks,
-    @JsonProperty ConnectorType type
+@JsonProperty String name,
+@JsonProperty ConnectorState connector,
+@JsonProperty List<TaskState> tasks,
+@JsonProperty ConnectorType type
 ) {
 
     public abstract static class AbstractState {
@@ -69,9 +69,9 @@ public record ConnectorStateInfo(
     public static class ConnectorState extends AbstractState {
         @JsonCreator
         public ConnectorState(@JsonProperty("state") String state,
-                              @JsonProperty("worker_id") String worker,
-                              @JsonProperty("msg") String msg,
-                              @JsonProperty("version") String version) {
+                @JsonProperty("worker_id") String worker,
+                @JsonProperty("msg") String msg,
+                @JsonProperty("version") String version) {
             super(state, worker, msg, version);
         }
     }
@@ -81,10 +81,10 @@ public record ConnectorStateInfo(
 
         @JsonCreator
         public TaskState(@JsonProperty("id") int id,
-                         @JsonProperty("state") String state,
-                         @JsonProperty("worker_id") String worker,
-                         @JsonProperty("msg") String msg,
-                         @JsonProperty("version") String version) {
+                @JsonProperty("state") String state,
+                @JsonProperty("worker_id") String worker,
+                @JsonProperty("msg") String msg,
+                @JsonProperty("version") String version) {
             super(state, worker, msg, version);
             this.id = id;
         }

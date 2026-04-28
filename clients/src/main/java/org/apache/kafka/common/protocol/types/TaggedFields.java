@@ -46,7 +46,7 @@ public class TaggedFields extends DocumentedType {
                 "number of parameters.");
         }
         TreeMap<Integer, Field> newFields = new TreeMap<>();
-        for (int i = 0; i < fields.length; i += 2) {
+        for (int i = 0;i < fields.length;i += 2) {
             Integer tag = (Integer) fields[i];
             Field field = (Field) fields[i + 1];
             newFields.put(tag, field);
@@ -86,7 +86,7 @@ public class TaggedFields extends DocumentedType {
         }
         NavigableMap<Integer, Object> objects = new TreeMap<>();
         int prevTag = -1;
-        for (int i = 0; i < numTaggedFields; i++) {
+        for (int i = 0;i < numTaggedFields;i++) {
             int tag = ByteUtils.readUnsignedVarint(buffer);
             if (tag <= prevTag) {
                 throw new RuntimeException("Invalid or out-of-order tag " + tag);

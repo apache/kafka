@@ -57,7 +57,7 @@ public class KafkaMetricsGroup {
     }
 
     private static MetricName explicitMetricName(String group, String typeName,
-                                                String name, Map<String, String> tags) {
+                                                 String name, Map<String, String> tags) {
         StringBuilder nameBuilder = new StringBuilder(100);
         nameBuilder.append(group);
         nameBuilder.append(":type=");
@@ -140,12 +140,12 @@ public class KafkaMetricsGroup {
 
     private static Optional<String> toMBeanName(Map<String, String> tags) {
         List<Map.Entry<String, String>> filteredTags = tags.entrySet().stream()
-                .filter(entry -> !entry.getValue().isEmpty())
-                .toList();
+            .filter(entry -> !entry.getValue().isEmpty())
+            .toList();
         if (!filteredTags.isEmpty()) {
             String tagsString = filteredTags.stream()
-                    .map(entry -> entry.getKey() + "=" + Sanitizer.jmxSanitize(entry.getValue()))
-                    .collect(Collectors.joining(","));
+                .map(entry -> entry.getKey() + "=" + Sanitizer.jmxSanitize(entry.getValue()))
+                .collect(Collectors.joining(","));
             return Optional.of(tagsString);
         } else {
             return Optional.empty();
@@ -154,14 +154,14 @@ public class KafkaMetricsGroup {
 
     private static Optional<String> toScope(Map<String, String> tags) {
         List<Map.Entry<String, String>> filteredTags = tags.entrySet().stream()
-                .filter(entry -> !entry.getValue().isEmpty())
-                .toList();
+            .filter(entry -> !entry.getValue().isEmpty())
+            .toList();
         if (!filteredTags.isEmpty()) {
             // convert dot to _ since reporters like Graphite typically use dot to represent hierarchy
             String tagsString = filteredTags.stream()
-                    .sorted(Map.Entry.comparingByKey())
-                    .map(entry -> entry.getKey() + "." + entry.getValue().replaceAll("\\.", "_"))
-                    .collect(Collectors.joining("."));
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> entry.getKey() + "." + entry.getValue().replaceAll("\\.", "_"))
+                .collect(Collectors.joining("."));
             return Optional.of(tagsString);
         } else {
             return Optional.empty();

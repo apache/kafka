@@ -92,20 +92,20 @@ public final class NioEchoServer extends Thread {
     private int nextConnectionIndex = 0;
 
     public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
-                         String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache, Time time) throws Exception {
+        String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache, Time time) throws Exception {
         this(listenerName, securityProtocol, config, serverHost, channelBuilder, credentialCache, 100, time);
     }
 
     public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
-                         String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache,
-                         int failedAuthenticationDelayMs, Time time) throws Exception {
+        String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache,
+        int failedAuthenticationDelayMs, Time time) throws Exception {
         this(listenerName, securityProtocol, config, serverHost, channelBuilder, credentialCache, failedAuthenticationDelayMs, time,
-                new DelegationTokenCache(ScramMechanism.mechanismNames()));
+            new DelegationTokenCache(ScramMechanism.mechanismNames()));
     }
 
     public NioEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol, AbstractConfig config,
-            String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache,
-            int failedAuthenticationDelayMs, Time time, DelegationTokenCache tokenCache) throws Exception {
+        String serverHost, ChannelBuilder channelBuilder, CredentialCache credentialCache,
+        int failedAuthenticationDelayMs, Time time, DelegationTokenCache tokenCache) throws Exception {
         super("echoserver");
         setDaemon(true);
         ServerSocketChannel serverSocketChannel = null;
@@ -128,11 +128,11 @@ public final class NioEchoServer extends Thread {
             LogContext logContext = new LogContext();
             if (channelBuilder == null)
                 channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false,
-                        securityProtocol, config, credentialCache, tokenCache, time, logContext,
-                        version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.BROKER));
+                    securityProtocol, config, credentialCache, tokenCache, time, logContext,
+                    version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.BROKER));
             this.metrics = new Metrics();
             this.selector = new Selector(10000, failedAuthenticationDelayMs, metrics, time,
-                    "MetricGroup", channelBuilder, logContext);
+                "MetricGroup", channelBuilder, logContext);
             acceptorThread = new AcceptorThread();
             this.time = time;
         } catch (Exception e) {
@@ -164,22 +164,22 @@ public final class NioEchoServer extends Thread {
     }
 
     public void verifyAuthenticationMetrics(int successfulAuthentications, final int failedAuthentications)
-            throws InterruptedException {
+        throws InterruptedException {
         waitForMetrics("successful-authentication", successfulAuthentications,
-                EnumSet.of(MetricType.TOTAL, MetricType.RATE));
+            EnumSet.of(MetricType.TOTAL, MetricType.RATE));
         waitForMetrics("failed-authentication", failedAuthentications, EnumSet.of(MetricType.TOTAL, MetricType.RATE));
     }
 
     public void verifyReauthenticationMetrics(int successfulReauthentications, final int failedReauthentications)
-            throws InterruptedException {
+        throws InterruptedException {
         waitForMetrics("successful-reauthentication", successfulReauthentications,
-                EnumSet.of(MetricType.TOTAL, MetricType.RATE));
+            EnumSet.of(MetricType.TOTAL, MetricType.RATE));
         waitForMetrics("failed-reauthentication", failedReauthentications,
-                EnumSet.of(MetricType.TOTAL, MetricType.RATE));
+            EnumSet.of(MetricType.TOTAL, MetricType.RATE));
         waitForMetrics("successful-authentication-no-reauth", 0, EnumSet.of(MetricType.TOTAL));
         if (!(time instanceof MockTime)) {
             waitForMetrics("reauthentication-latency", Math.signum(successfulReauthentications),
-                    EnumSet.of(MetricType.MAX, MetricType.AVG));
+                EnumSet.of(MetricType.MAX, MetricType.AVG));
         }
     }
 
@@ -188,7 +188,7 @@ public final class NioEchoServer extends Thread {
     }
 
     public void waitForMetrics(String namePrefix, final double expectedValue, Set<MetricType> metricTypes)
-            throws InterruptedException {
+        throws InterruptedException {
         long maxAggregateWaitMs = 15000;
         long startMs = time.milliseconds();
         for (MetricType metricType : metricTypes) {
@@ -204,12 +204,12 @@ public final class NioEchoServer extends Thread {
                     " expected:<" + expectedValue + "> but was:<" + metricValue(metricName) + ">");
             } else if (metricType == MetricType.TOTAL)
                 TestUtils.waitForCondition(() -> Math.abs(metricValue(metricName) - expectedValue) <= EPS,
-                        thisMaxWaitMs, () -> "Metric not updated " + metricName + " expected:<" + expectedValue
-                                + "> but was:<" + metricValue(metricName) + ">");
+                    thisMaxWaitMs, () -> "Metric not updated " + metricName + " expected:<" + expectedValue
+                        + "> but was:<" + metricValue(metricName) + ">");
             else
                 TestUtils.waitForCondition(() -> metricValue(metricName) > 0.0, thisMaxWaitMs,
                     () -> "Metric not updated " + metricName + " expected:<a positive number> but was:<"
-                                + metricValue(metricName) + ">");
+                        + metricValue(metricName) + ">");
         }
     }
 
@@ -321,7 +321,7 @@ public final class NioEchoServer extends Thread {
             @Override
             public long write(ByteBuffer[] srcs, int offset, int length) throws IOException {
                 long result = 0;
-                for (int i = offset; i < offset + length; ++i)
+                for (int i = offset;i < offset + length;++i)
                     result += write(srcs[i]);
                 return result;
             }
@@ -382,6 +382,7 @@ public final class NioEchoServer extends Thread {
         public AcceptorThread() {
             setName("acceptor");
         }
+
         @Override
         public void run() {
             java.nio.channels.Selector acceptSelector = null;

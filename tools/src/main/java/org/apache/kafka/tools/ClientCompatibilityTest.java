@@ -146,8 +146,8 @@ public class ClientCompatibilityTest {
             .dest("expectRecordTooLargeException")
             .metavar("EXPECT_RECORD_TOO_LARGE_EXCEPTION")
             .help("True if we should expect a RecordTooLargeException when trying to read from a topic " +
-                  "that contains a message that is bigger than " + ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG +
-                  ".  This is pre-KIP-74 behavior.");
+                "that contains a message that is bigger than " + ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG +
+                ".  This is pre-KIP-74 behavior.");
         parser.addArgument("--num-cluster-nodes")
             .action(store())
             .required(true)
@@ -297,7 +297,7 @@ public class ClientCompatibilityTest {
                         throw e.getCause();
                     }
                 },
-                () ->  createTopicsResultTest(client, Set.of("newtopic"))
+                () -> createTopicsResultTest(client, Set.of("newtopic"))
             );
 
             while (true) {
@@ -349,7 +349,7 @@ public class ClientCompatibilityTest {
     }
 
     private void createTopicsResultTest(Admin client, Collection<String> topics)
-            throws InterruptedException, ExecutionException {
+        throws InterruptedException, ExecutionException {
         while (true) {
             try {
                 client.describeTopics(topics).allTopicNames().get();
@@ -485,13 +485,13 @@ public class ClientCompatibilityTest {
                 log.debug("Found first message...");
             } catch (RuntimeException e) {
                 throw new RuntimeException("The first message in this topic was not ours. Please use a new topic when " +
-                        "running this program.");
+                    "running this program.");
             }
             try {
                 next = iter.next();
                 if (testConfig.expectRecordTooLargeException) {
                     throw new RuntimeException("Expected to get a RecordTooLargeException when reading a record " +
-                            "bigger than " + ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG);
+                        "bigger than " + ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG);
                 }
                 try {
                     compareArrays(message2, next);
@@ -520,11 +520,12 @@ public class ClientCompatibilityTest {
     }
 
     private void tryFeature(String featureName, boolean supported, Invoker invoker) throws Throwable {
-        tryFeature(featureName, supported, invoker, () -> { });
+        tryFeature(featureName, supported, invoker, () -> {
+        });
     }
 
     private void tryFeature(String featureName, boolean supported, Invoker invoker, ResultTester resultTester)
-            throws Throwable {
+        throws Throwable {
         try {
             invoker.invoke();
             log.info("Successfully used feature {}", featureName);

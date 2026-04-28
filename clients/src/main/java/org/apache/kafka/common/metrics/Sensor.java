@@ -135,7 +135,7 @@ public final class Sensor {
     private final RecordingLevel recordingLevel;
 
     Sensor(Metrics registry, String name, Sensor[] parents, MetricConfig config, Time time,
-           long inactiveSensorExpirationTimeSeconds, RecordingLevel recordingLevel) {
+        long inactiveSensorExpirationTimeSeconds, RecordingLevel recordingLevel) {
         super();
         this.registry = registry;
         this.name = Objects.requireNonNull(name);

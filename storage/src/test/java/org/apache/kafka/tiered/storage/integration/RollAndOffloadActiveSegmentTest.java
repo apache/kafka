@@ -49,7 +49,7 @@ public class RollAndOffloadActiveSegmentTest extends TieredStorageTestHarness {
 
         // Create topicA with 1 partition, 1 RF and enabled with remote storage.
         builder.createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment, replicaAssignment,
-                        enableRemoteLogStorage)
+                enableRemoteLogStorage)
                 // update the topic config such that it triggers the rolling of the active segment
                 .updateTopicConfig(topicA, configsToBeAdded(), List.of())
                 // produce events to partition 0 and expect all the 4 segments to be offloaded

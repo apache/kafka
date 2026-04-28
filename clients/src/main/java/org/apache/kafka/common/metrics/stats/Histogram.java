@@ -44,7 +44,7 @@ public class Histogram {
             return Float.NEGATIVE_INFINITY;
         float sum = 0.0f;
         float quant = (float) quantile;
-        for (int i = 0; i < this.hist.length - 1; i++) {
+        for (int i = 0;i < this.hist.length - 1;i++) {
             sum += this.hist[i];
             if (sum / count > quant)
                 return binScheme.fromBin(i);
@@ -64,7 +64,7 @@ public class Histogram {
     @Override
     public String toString() {
         StringBuilder b = new StringBuilder("{");
-        for (int i = 0; i < this.hist.length - 1; i++) {
+        for (int i = 0;i < this.hist.length - 1;i++) {
             b.append(String.format("%.10f", binScheme.fromBin(i)));
             b.append(':');
             b.append(String.format("%.0f", this.hist[i]));

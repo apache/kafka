@@ -88,16 +88,16 @@ public class FetchSessionBenchmark {
             fetches.put(tp, partitionData);
             builder.add(tp, partitionData);
             respMap.put(new TopicIdPartition(id, tp), new FetchResponseData.PartitionData()
-                            .setPartitionIndex(tp.partition())
-                            .setLastStableOffset(0)
-                            .setLogStartOffset(0));
+                    .setPartitionIndex(tp.partition())
+                    .setLastStableOffset(0)
+                    .setLogStartOffset(0));
         }
         builder.build();
         // build and handle an initial response so that the next fetch will be incremental
         handler.handleResponse(FetchResponse.of(Errors.NONE, 0, 1, respMap, List.of()), ApiKeys.FETCH.latestVersion());
 
         int counter = 0;
-        for (TopicPartition topicPartition: new ArrayList<>(fetches.keySet())) {
+        for (TopicPartition topicPartition : new ArrayList<>(fetches.keySet())) {
             if (updatedPercentage != 0 && counter % (100 / updatedPercentage) == 0) {
                 // reorder in fetch session, and update log start offset
                 fetches.remove(topicPartition);
@@ -117,7 +117,7 @@ public class FetchSessionBenchmark {
         else
             builder = handler.newBuilder();
 
-        for (Map.Entry<TopicPartition, FetchRequest.PartitionData> entry: fetches.entrySet()) {
+        for (Map.Entry<TopicPartition, FetchRequest.PartitionData> entry : fetches.entrySet()) {
             TopicPartition topicPartition = entry.getKey();
             builder.add(topicPartition, entry.getValue());
         }

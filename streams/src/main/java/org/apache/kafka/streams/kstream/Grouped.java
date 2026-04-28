@@ -34,8 +34,8 @@ public class Grouped<K, V> implements NamedOperation<Grouped<K, V>> {
     protected final String name;
 
     private Grouped(final String name,
-                    final Serde<K> keySerde,
-                    final Serde<V> valueSerde) {
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde) {
         this.name = name;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
@@ -125,8 +125,8 @@ public class Grouped<K, V> implements NamedOperation<Grouped<K, V>> {
      * @see KTable#groupBy(KeyValueMapper, Grouped)
      */
     public static <K, V> Grouped<K, V> with(final String name,
-                                            final Serde<K> keySerde,
-                                            final Serde<V> valueSerde) {
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde) {
         return new Grouped<>(name, keySerde, valueSerde);
     }
 
@@ -150,7 +150,7 @@ public class Grouped<K, V> implements NamedOperation<Grouped<K, V>> {
      * @see KTable#groupBy(KeyValueMapper, Grouped)
      */
     public static <K, V> Grouped<K, V> with(final Serde<K> keySerde,
-                                            final Serde<V> valueSerde) {
+        final Serde<V> valueSerde) {
         return new Grouped<>(null, keySerde, valueSerde);
     }
 

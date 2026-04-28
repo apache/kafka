@@ -45,11 +45,11 @@ class KRaftCoordinatorMetadataImageTest {
         long imageVersion = 123L;
 
         MetadataImage metadataImage = new MetadataImageBuilder()
-            .addTopic(topicId, topicName, partitionCount)
-            .addTopic(topicId2, topicName2, partitionCount2)
-            .addTopic(noPartitionTopicId, noPartitionTopic, 0)
-            .addRacks()
-            .build(imageVersion);
+                .addTopic(topicId, topicName, partitionCount)
+                .addTopic(topicId2, topicName2, partitionCount2)
+                .addTopic(noPartitionTopicId, noPartitionTopic, 0)
+                .addRacks()
+                .build(imageVersion);
 
         KRaftCoordinatorMetadataImage image = new KRaftCoordinatorMetadataImage(metadataImage);
 
@@ -57,48 +57,48 @@ class KRaftCoordinatorMetadataImageTest {
         assertEquals(Set.of(topicId, topicId2, noPartitionTopicId), image.topicIds());
 
         image.topicMetadata(topicName).ifPresentOrElse(
-            topicMetadata -> {
-                assertEquals(topicName, topicMetadata.name());
-                assertEquals(topicId, topicMetadata.id());
-                assertEquals(partitionCount, topicMetadata.partitionCount());
-                List<String> racks0 = topicMetadata.partitionRacks(0);
-                List<String> racks1 = topicMetadata.partitionRacks(1);
-                assertEquals(2, racks0.size());
-                assertEquals(2, racks1.size());
-                assertEquals("rack0", racks0.get(0));
-                assertEquals("rack1", racks0.get(1));
-                assertEquals("rack1", racks1.get(0));
-                assertEquals("rack2", racks1.get(1));
-            },
-            () -> fail("Expected topic metadata for " + topicName)
+                topicMetadata -> {
+                    assertEquals(topicName, topicMetadata.name());
+                    assertEquals(topicId, topicMetadata.id());
+                    assertEquals(partitionCount, topicMetadata.partitionCount());
+                    List<String> racks0 = topicMetadata.partitionRacks(0);
+                    List<String> racks1 = topicMetadata.partitionRacks(1);
+                    assertEquals(2, racks0.size());
+                    assertEquals(2, racks1.size());
+                    assertEquals("rack0", racks0.get(0));
+                    assertEquals("rack1", racks0.get(1));
+                    assertEquals("rack1", racks1.get(0));
+                    assertEquals("rack2", racks1.get(1));
+                },
+                () -> fail("Expected topic metadata for " + topicName)
         );
 
         image.topicMetadata(topicName2).ifPresentOrElse(
-            topicMetadata -> {
-                assertEquals(topicName2, topicMetadata.name());
-                assertEquals(topicId2, topicMetadata.id());
-                assertEquals(partitionCount2, topicMetadata.partitionCount());
-                List<String> racks0 = topicMetadata.partitionRacks(0);
-                List<String> racks1 = topicMetadata.partitionRacks(1);
-                assertEquals(2, racks0.size());
-                assertEquals(2, racks1.size());
-                assertEquals("rack0", racks0.get(0));
-                assertEquals("rack1", racks0.get(1));
-                assertEquals("rack1", racks1.get(0));
-                assertEquals("rack2", racks1.get(1));
-            },
-            () -> fail("Expected topic metadata for " + topicName)
+                topicMetadata -> {
+                    assertEquals(topicName2, topicMetadata.name());
+                    assertEquals(topicId2, topicMetadata.id());
+                    assertEquals(partitionCount2, topicMetadata.partitionCount());
+                    List<String> racks0 = topicMetadata.partitionRacks(0);
+                    List<String> racks1 = topicMetadata.partitionRacks(1);
+                    assertEquals(2, racks0.size());
+                    assertEquals(2, racks1.size());
+                    assertEquals("rack0", racks0.get(0));
+                    assertEquals("rack1", racks0.get(1));
+                    assertEquals("rack1", racks1.get(0));
+                    assertEquals("rack2", racks1.get(1));
+                },
+                () -> fail("Expected topic metadata for " + topicName)
         );
 
         image.topicMetadata(noPartitionTopic).ifPresentOrElse(
-            topicMetadata -> {
-                assertEquals(noPartitionTopic, topicMetadata.name());
-                assertEquals(noPartitionTopicId, topicMetadata.id());
-                assertEquals(0, topicMetadata.partitionCount());
-                List<String> racks = topicMetadata.partitionRacks(0);
-                assertEquals(0, racks.size());
-            },
-            () -> fail("Expected topic metadata for " + topicName)
+                topicMetadata -> {
+                    assertEquals(noPartitionTopic, topicMetadata.name());
+                    assertEquals(noPartitionTopicId, topicMetadata.id());
+                    assertEquals(0, topicMetadata.partitionCount());
+                    List<String> racks = topicMetadata.partitionRacks(0);
+                    assertEquals(0, racks.size());
+                },
+                () -> fail("Expected topic metadata for " + topicName)
         );
 
         assertNotNull(image.emptyDelta());
@@ -120,17 +120,17 @@ class KRaftCoordinatorMetadataImageTest {
         long imageVersion = 123L;
 
         MetadataImage metadataImage = new MetadataImageBuilder()
-            .addTopic(topicId, topicName, partitionCount)
-            .addRacks()
-            .build(imageVersion);
+                .addTopic(topicId, topicName, partitionCount)
+                .addRacks()
+                .build(imageVersion);
 
         KRaftCoordinatorMetadataImage coordinatorMetadataImage = new KRaftCoordinatorMetadataImage(metadataImage);
         KRaftCoordinatorMetadataImage coordinatorMetadataImageCopy = new KRaftCoordinatorMetadataImage(metadataImage);
 
         MetadataImage metadataImage2 = new MetadataImageBuilder()
-            .addTopic(topicId2, topicName2, partitionCount2)
-            .addRacks()
-            .build(imageVersion);
+                .addTopic(topicId2, topicName2, partitionCount2)
+                .addRacks()
+                .build(imageVersion);
 
         KRaftCoordinatorMetadataImage coordinatorMetadataImage2 = new KRaftCoordinatorMetadataImage(metadataImage2);
 

@@ -206,9 +206,9 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
     }
 
     private void assertNumSizeAndTimestamp(final TimeOrderedKeyValueBuffer<String, String, String> buffer,
-                                           final int num,
-                                           final long time,
-                                           final long size) {
+        final int num,
+        final long time,
+        final long size) {
         assertThat(buffer.numRecords(), equalTo(num));
         assertThat(buffer.minTimestamp(), equalTo(time));
         assertThat(buffer.bufferSize(), equalTo(size));

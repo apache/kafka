@@ -74,12 +74,12 @@ public final class DefaultTaskManager implements TaskManager {
     }
 
     public DefaultTaskManager(final Time time,
-                              final String clientId,
-                              final TasksRegistry tasks,
-                              final TaskExecutorCreator executorCreator,
-                              final TaskExecutionMetadata taskExecutionMetadata,
-                              final int numExecutors
-                              ) {
+        final String clientId,
+        final TasksRegistry tasks,
+        final TaskExecutorCreator executorCreator,
+        final TaskExecutionMetadata taskExecutionMetadata,
+        final int numExecutors
+    ) {
         final String logPrefix = String.format("%s ", clientId);
         final LogContext logContext = new LogContext(logPrefix);
         this.log = logContext.logger(DefaultTaskManager.class);
@@ -369,17 +369,17 @@ public final class DefaultTaskManager implements TaskManager {
     }
 
     public void startTaskExecutors() {
-        for (final TaskExecutor t: taskExecutors) {
+        for (final TaskExecutor t : taskExecutors) {
             t.start();
         }
     }
 
     public void shutdown(final Duration duration) {
-        for (final TaskExecutor t: taskExecutors) {
+        for (final TaskExecutor t : taskExecutors) {
             t.requestShutdown();
         }
         signalTaskExecutors();
-        for (final TaskExecutor t: taskExecutors) {
+        for (final TaskExecutor t : taskExecutors) {
             t.awaitShutdown(duration);
         }
     }

@@ -78,34 +78,34 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
     private final Runnable postProducerCheck;
 
     public ExactlyOnceWorkerSourceTask(ConnectorTaskId id,
-                                       SourceTask task,
-                                       TaskStatus.Listener statusListener,
-                                       TargetState initialState,
-                                       Plugin<Converter> keyConverterPlugin,
-                                       Plugin<Converter> valueConverterPlugin,
-                                       Plugin<HeaderConverter> headerConverterPlugin,
-                                       TransformationChain<SourceRecord, SourceRecord> transformationChain,
-                                       Producer<byte[], byte[]> producer,
-                                       TopicAdmin admin,
-                                       Map<String, TopicCreationGroup> topicGroups,
-                                       CloseableOffsetStorageReader offsetReader,
-                                       OffsetStorageWriter offsetWriter,
-                                       ConnectorOffsetBackingStore offsetStore,
-                                       WorkerConfig workerConfig,
-                                       ClusterConfigState configState,
-                                       ConnectMetrics connectMetrics,
-                                       ErrorHandlingMetrics errorMetrics,
-                                       ClassLoader loader,
-                                       Time time,
-                                       RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
-                                       StatusBackingStore statusBackingStore,
-                                       SourceConnectorConfig sourceConfig,
-                                       Executor closeExecutor,
-                                       Runnable preProducerCheck,
-                                       Runnable postProducerCheck,
-                                       Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier,
-                                       TaskPluginsMetadata pluginsMetadata,
-                                       Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
+            SourceTask task,
+            TaskStatus.Listener statusListener,
+            TargetState initialState,
+            Plugin<Converter> keyConverterPlugin,
+            Plugin<Converter> valueConverterPlugin,
+            Plugin<HeaderConverter> headerConverterPlugin,
+            TransformationChain<SourceRecord, SourceRecord> transformationChain,
+            Producer<byte[], byte[]> producer,
+            TopicAdmin admin,
+            Map<String, TopicCreationGroup> topicGroups,
+            CloseableOffsetStorageReader offsetReader,
+            OffsetStorageWriter offsetWriter,
+            ConnectorOffsetBackingStore offsetStore,
+            WorkerConfig workerConfig,
+            ClusterConfigState configState,
+            ConnectMetrics connectMetrics,
+            ErrorHandlingMetrics errorMetrics,
+            ClassLoader loader,
+            Time time,
+            RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
+            StatusBackingStore statusBackingStore,
+            SourceConnectorConfig sourceConfig,
+            Executor closeExecutor,
+            Runnable preProducerCheck,
+            Runnable postProducerCheck,
+            Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier,
+            TaskPluginsMetadata pluginsMetadata,
+            Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
         super(id, task, statusListener, initialState, configState, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, transformationChain,
                 buildTransactionContext(sourceConfig),
                 producer, admin, topicGroups, offsetReader, offsetWriter, offsetStore, workerConfig, connectMetrics, errorMetrics,
@@ -358,26 +358,26 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
 
     private static boolean isPossibleTransactionTimeoutError(Throwable error) {
         return error instanceof InvalidProducerEpochException
-            || error.getCause() instanceof InvalidProducerEpochException;
+                || error.getCause() instanceof InvalidProducerEpochException;
     }
 
     private ConnectException wrapTransactionTimeoutError(Throwable error) {
         return new ConnectException(
-            "The task " + id + " was unable to finish writing records to Kafka before its producer transaction expired. "
-                + "It may be necessary to reconfigure this connector in order for it to run healthily with exactly-once support. "
-                + "Options for this include: tune the connector's producer configuration for higher throughput, "
-                + "increase the transaction timeout for the connector's producers, "
-                + "decrease the offset commit interval (if using interval-based transaction boundaries), "
-                + "or use the 'poll' transaction boundary (if the connector is not already configured to use it).",
-            error
+                "The task " + id + " was unable to finish writing records to Kafka before its producer transaction expired. "
+                        + "It may be necessary to reconfigure this connector in order for it to run healthily with exactly-once support. "
+                        + "Options for this include: tune the connector's producer configuration for higher throughput, "
+                        + "increase the transaction timeout for the connector's producers, "
+                        + "decrease the offset commit interval (if using interval-based transaction boundaries), "
+                        + "or use the 'poll' transaction boundary (if the connector is not already configured to use it).",
+                error
         );
     }
 
     @Override
     public String toString() {
         return "ExactlyOnceWorkerSourceTask{" +
-            "id=" + id +
-            '}';
+                "id=" + id +
+                '}';
     }
 
     private abstract class TransactionBoundaryManager {

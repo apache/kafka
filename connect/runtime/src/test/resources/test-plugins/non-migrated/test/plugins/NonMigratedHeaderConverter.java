@@ -32,28 +32,28 @@ import java.util.Map;
  */
 public class NonMigratedHeaderConverter implements HeaderConverter {
 
-  @Override
-  public SchemaAndValue toConnectHeader(String topic, String headerKey, byte[] value) {
-    return null;
-  }
+    @Override
+    public SchemaAndValue toConnectHeader(String topic, String headerKey, byte[] value) {
+        return null;
+    }
 
-  @Override
-  public byte[] fromConnectHeader(String topic, String headerKey, Schema schema, Object value) {
-    return new byte[0];
-  }
+    @Override
+    public byte[] fromConnectHeader(String topic, String headerKey, Schema schema, Object value) {
+        return new byte[0];
+    }
 
-  @Override
-  public ConfigDef config() {
-    return null;
-  }
+    @Override
+    public ConfigDef config() {
+        return null;
+    }
 
-  @Override
-  public void close() throws IOException {
-  }
+    @Override
+    public void close() throws IOException {
+    }
 
-  @Override
-  public void configure(Map<String, ?> configs) {
-  }
+    @Override
+    public void configure(Map<String, ?> configs) {
+    }
 
     @Override
     public String version() {

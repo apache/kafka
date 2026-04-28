@@ -76,19 +76,19 @@ public class AddPartitionsToTxnResponseTest {
         topicResult.setName(topicOne);
 
         topicResult.resultsByPartition().add(new AddPartitionsToTxnPartitionResult()
-                                      .setPartitionErrorCode(errorOne.code())
-                                      .setPartitionIndex(partitionOne));
+            .setPartitionErrorCode(errorOne.code())
+            .setPartitionIndex(partitionOne));
 
         topicResult.resultsByPartition().add(new AddPartitionsToTxnPartitionResult()
-                                      .setPartitionErrorCode(errorTwo.code())
-                                      .setPartitionIndex(partitionTwo));
+            .setPartitionErrorCode(errorTwo.code())
+            .setPartitionIndex(partitionTwo));
 
         topicCollection.add(topicResult);
-            
+
         if (version < 4) {
             AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData()
-                    .setResultsByTopicV3AndBelow(topicCollection)
-                    .setThrottleTimeMs(throttleTimeMs);
+                .setResultsByTopicV3AndBelow(topicCollection)
+                .setThrottleTimeMs(throttleTimeMs);
             AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(data);
 
             AddPartitionsToTxnResponse parsedResponse = AddPartitionsToTxnResponse.parse(response.serialize(version), version);
@@ -98,21 +98,21 @@ public class AddPartitionsToTxnResponseTest {
         } else {
             AddPartitionsToTxnResultCollection results = new AddPartitionsToTxnResultCollection();
             results.add(new AddPartitionsToTxnResult().setTransactionalId("txn1").setTopicResults(topicCollection));
-            
+
             // Create another transaction with new name and errorOne for a single partition.
             Map<TopicPartition, Errors> txnTwoExpectedErrors = Collections.singletonMap(tp2, errorOne);
             results.add(AddPartitionsToTxnResponse.resultForTransaction("txn2", txnTwoExpectedErrors));
 
             AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData()
-                    .setResultsByTransaction(results)
-                    .setThrottleTimeMs(throttleTimeMs);
+                .setResultsByTransaction(results)
+                .setThrottleTimeMs(throttleTimeMs);
             AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(data);
 
             Map<Errors, Integer> newExpectedErrorCounts = new EnumMap<>(Errors.class);
             newExpectedErrorCounts.put(Errors.NONE, 1); // top level error
             newExpectedErrorCounts.put(errorOne, 2);
             newExpectedErrorCounts.put(errorTwo, 1);
-            
+
             AddPartitionsToTxnResponse parsedResponse = AddPartitionsToTxnResponse.parse(response.serialize(version), version);
             assertEquals(txnTwoExpectedErrors, errorsForTransaction(response.getTransactionTopicResults("txn2")));
             assertEquals(newExpectedErrorCounts, parsedResponse.errorCounts());
@@ -120,24 +120,24 @@ public class AddPartitionsToTxnResponseTest {
             assertTrue(parsedResponse.shouldClientThrottle(version));
         }
     }
-    
+
     @Test
     public void testBatchedErrors() {
         Map<TopicPartition, Errors> txn1Errors = Collections.singletonMap(tp1, errorOne);
         Map<TopicPartition, Errors> txn2Errors = Collections.singletonMap(tp1, errorOne);
-        
+
         AddPartitionsToTxnResult transaction1 = AddPartitionsToTxnResponse.resultForTransaction("txn1", txn1Errors);
         AddPartitionsToTxnResult transaction2 = AddPartitionsToTxnResponse.resultForTransaction("txn2", txn2Errors);
-        
+
         AddPartitionsToTxnResultCollection results = new AddPartitionsToTxnResultCollection();
         results.add(transaction1);
         results.add(transaction2);
-        
+
         AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(new AddPartitionsToTxnResponseData().setResultsByTransaction(results));
-        
+
         assertEquals(txn1Errors, errorsForTransaction(response.getTransactionTopicResults("txn1")));
         assertEquals(txn2Errors, errorsForTransaction(response.getTransactionTopicResults("txn2")));
-        
+
         Map<String, Map<TopicPartition, Errors>> expectedErrors = new HashMap<>();
         expectedErrors.put("txn1", txn1Errors);
         expectedErrors.put("txn2", txn2Errors);

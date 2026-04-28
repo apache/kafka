@@ -33,9 +33,9 @@ public class VersionedKeyValueStoreBuilder<K, V>
     private final VersionedBytesStoreSupplier storeSupplier;
 
     public VersionedKeyValueStoreBuilder(final VersionedBytesStoreSupplier storeSupplier,
-                                         final Serde<K> keySerde,
-                                         final Serde<V> valueSerde,
-                                         final Time time) {
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde,
+        final Time time) {
         super(
             storeSupplier.name(),
             keySerde,

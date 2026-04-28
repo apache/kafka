@@ -63,8 +63,8 @@ public final class FeaturesDelta {
                 metadataVersionChange = MetadataVersion.fromFeatureLevel(record.featureLevel());
             } catch (IllegalArgumentException e) {
                 throw new IllegalArgumentException("Unsupported metadata version - if you are currently upgrading your cluster, "
-                        + "please ensure the metadata version is set to " + MetadataVersion.MINIMUM_VERSION + " (or higher) before "
-                        + "updating the software version. The metadata version can be updated via the `kafka-features` command-line tool.", e);
+                    + "please ensure the metadata version is set to " + MetadataVersion.MINIMUM_VERSION + " (or higher) before "
+                    + "updating the software version. The metadata version can be updated via the `kafka-features` command-line tool.", e);
             }
         } else if (record.name().equals(KRaftVersion.FEATURE_NAME)) {
             // KAFKA-18979 - Skip any feature level record for kraft.version. This has two benefits:

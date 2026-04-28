@@ -65,9 +65,9 @@ public class ShareAcknowledgeResponse extends AbstractResponse {
         Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
         updateErrorCounts(counts, Errors.forCode(data.errorCode()));
         data.responses().forEach(
-                topic -> topic.partitions().forEach(
-                        partition -> updateErrorCounts(counts, Errors.forCode(partition.errorCode()))
-                )
+            topic -> topic.partitions().forEach(
+                partition -> updateErrorCounts(counts, Errors.forCode(partition.errorCode()))
+            )
         );
         return counts;
     }
@@ -84,7 +84,7 @@ public class ShareAcknowledgeResponse extends AbstractResponse {
 
     public static ShareAcknowledgeResponse parse(Readable readable, short version) {
         return new ShareAcknowledgeResponse(
-                new ShareAcknowledgeResponseData(readable, version)
+            new ShareAcknowledgeResponseData(readable, version)
         );
     }
 
@@ -100,20 +100,20 @@ public class ShareAcknowledgeResponse extends AbstractResponse {
 
     public static ShareAcknowledgeResponseData.PartitionData partitionResponse(int partition, Errors error) {
         return new ShareAcknowledgeResponseData.PartitionData()
-                .setPartitionIndex(partition)
-                .setErrorCode(error.code());
+            .setPartitionIndex(partition)
+            .setErrorCode(error.code());
     }
 
     public static ShareAcknowledgeResponse of(Errors error,
-                                              int throttleTimeMs,
-                                              LinkedHashMap<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> responseData,
-                                              List<Node> nodeEndpoints, int acquisitionLockTimeout) {
+        int throttleTimeMs,
+        LinkedHashMap<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> responseData,
+        List<Node> nodeEndpoints, int acquisitionLockTimeout) {
         return new ShareAcknowledgeResponse(toMessage(error, throttleTimeMs, responseData.entrySet().iterator(), nodeEndpoints, acquisitionLockTimeout));
     }
 
     public static ShareAcknowledgeResponseData toMessage(Errors error, int throttleTimeMs,
-                                                         Iterator<Map.Entry<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> partIterator,
-                                                         List<Node> nodeEndpoints, int acquisitionLockTimeout) {
+        Iterator<Map.Entry<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> partIterator,
+        List<Node> nodeEndpoints, int acquisitionLockTimeout) {
         ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponseCollection topicResponses = new ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponseCollection();
         while (partIterator.hasNext()) {
             Map.Entry<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> entry = partIterator.next();
@@ -124,8 +124,8 @@ public class ShareAcknowledgeResponse extends AbstractResponse {
             ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponse topicResponse = topicResponses.find(entry.getKey().topicId());
             if (topicResponse == null) {
                 topicResponse = new ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponse()
-                        .setTopicId(entry.getKey().topicId())
-                        .setPartitions(new ArrayList<>());
+                    .setTopicId(entry.getKey().topicId())
+                    .setPartitions(new ArrayList<>());
                 topicResponses.add(topicResponse);
             }
             topicResponse.partitions().add(partitionData);
@@ -133,14 +133,14 @@ public class ShareAcknowledgeResponse extends AbstractResponse {
         ShareAcknowledgeResponseData data = new ShareAcknowledgeResponseData();
         // KafkaApis should only pass in node endpoints on error, otherwise this should be an empty list
         nodeEndpoints.forEach(endpoint -> data.nodeEndpoints().add(
-                new ShareAcknowledgeResponseData.NodeEndpoint()
-                        .setNodeId(endpoint.id())
-                        .setHost(endpoint.host())
-                        .setPort(endpoint.port())
-                        .setRack(endpoint.rack())));
+            new ShareAcknowledgeResponseData.NodeEndpoint()
+                .setNodeId(endpoint.id())
+                .setHost(endpoint.host())
+                .setPort(endpoint.port())
+                .setRack(endpoint.rack())));
         return data.setThrottleTimeMs(throttleTimeMs)
-                .setErrorCode(error.code())
-                .setAcquisitionLockTimeoutMs(acquisitionLockTimeout)
-                .setResponses(topicResponses);
+            .setErrorCode(error.code())
+            .setAcquisitionLockTimeoutMs(acquisitionLockTimeout)
+            .setResponses(topicResponses);
     }
 }

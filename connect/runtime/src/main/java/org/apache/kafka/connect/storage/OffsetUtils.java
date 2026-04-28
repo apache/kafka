@@ -79,7 +79,7 @@ public class OffsetUtils {
      */
     @SuppressWarnings("unchecked")
     public static void processPartitionKey(byte[] partitionKey, byte[] offsetValue, Converter keyConverter,
-                                           Map<String, Set<Map<String, Object>>> connectorPartitions) {
+            Map<String, Set<Map<String, Object>>> connectorPartitions) {
 
         // The key is expected to always be of the form [connectorName, partition] where connectorName is a
         // string value and partition is a Map<String, Object>

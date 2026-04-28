@@ -68,7 +68,7 @@ public class TimeIndex extends AbstractIndex {
         this.lastEntry = lastEntryFromIndexFile();
 
         log.debug("Loaded index file {} with maxEntries = {}, maxIndexSize = {}, entries = {}, lastOffset = {}, file position = {}",
-            file.getAbsolutePath(), maxEntries(), maxIndexSize, entries(), lastEntry.offset(), mmap().position());
+                file.getAbsolutePath(), maxEntries(), maxIndexSize, entries(), lastEntry.offset(), mmap().position());
     }
 
     @Override
@@ -79,15 +79,15 @@ public class TimeIndex extends AbstractIndex {
         inRemapReadLock(() -> {
             if (entries() != 0 && lastTimestamp < timestamp(mmap(), 0))
                 throw new CorruptIndexException("Corrupt time index found, time index file (" + file().getAbsolutePath() + ") has "
-                    + "non-zero size but the last timestamp is " + lastTimestamp + " which is less than the first timestamp "
-                    + timestamp(mmap(), 0));
+                        + "non-zero size but the last timestamp is " + lastTimestamp + " which is less than the first timestamp "
+                        + timestamp(mmap(), 0));
         });
         if (entries() != 0 && lastOffset < baseOffset())
             throw new CorruptIndexException("Corrupt time index found, time index file (" + file().getAbsolutePath() + ") has "
-                + "non-zero size but the last offset is " + lastOffset + " which is less than the first offset " + baseOffset());
+                    + "non-zero size but the last offset is " + lastOffset + " which is less than the first offset " + baseOffset());
         if (length() % ENTRY_SIZE != 0)
             throw new CorruptIndexException("Time index file " + file().getAbsolutePath() + " is corrupt, found " + length()
-                + " bytes which is neither positive nor a multiple of " + ENTRY_SIZE);
+                    + " bytes which is neither positive nor a multiple of " + ENTRY_SIZE);
     }
 
     /**
@@ -136,7 +136,7 @@ public class TimeIndex extends AbstractIndex {
         return inRemapReadLock(() -> {
             if (n >= entries())
                 throw new IllegalArgumentException("Attempt to fetch the " + n + "th entry from time index "
-                    + file().getAbsolutePath() + " which has size " + entries());
+                        + file().getAbsolutePath() + " which has size " + entries());
             return parseEntry(mmap(), n);
         });
     }
@@ -192,10 +192,10 @@ public class TimeIndex extends AbstractIndex {
             // 2. LogSegment.onBecomeInactiveSegment() is called when an active log segment is rolled.
             if (entries() != 0 && offset < lastEntry.offset())
                 throw new InvalidOffsetException("Attempt to append an offset (" + offset + ") to slot " + entries()
-                    + " no larger than the last offset appended (" + lastEntry.offset() + ") to " + file().getAbsolutePath());
+                        + " no larger than the last offset appended (" + lastEntry.offset() + ") to " + file().getAbsolutePath());
             if (entries() != 0 && timestamp < lastEntry.timestamp())
                 throw new IllegalStateException("Attempt to append a timestamp (" + timestamp + ") to slot " + entries()
-                    + " no larger than the last timestamp appended (" + lastEntry.timestamp() + ") to " + file().getAbsolutePath());
+                        + " no larger than the last timestamp appended (" + lastEntry.timestamp() + ") to " + file().getAbsolutePath());
 
             // We only append to the time index when the timestamp is greater than the last inserted timestamp.
             // If all the messages are in message format v0, the timestamp will always be NoTimestamp. In that case, the time
@@ -269,7 +269,7 @@ public class TimeIndex extends AbstractIndex {
             super.truncateToEntries0(entries);
             this.lastEntry = lastEntryFromIndexFile();
             log.debug("Truncated index {} to {} entries; position is now {} and last entry is now {}",
-                file().getAbsolutePath(), entries, mmap().position(), lastEntry.offset());
+                    file().getAbsolutePath(), entries, mmap().position(), lastEntry.offset());
         });
     }
 }

@@ -64,8 +64,8 @@ public class JavaTest {
     public void testLoadKerberosLoginModule() throws ClassNotFoundException {
         // IBM Semeru JDKs use the OpenJDK security providers
         String clazz = Java.isIbmJdk() && !Java.isIbmJdkSemeru()
-                ? "com.ibm.security.auth.module.Krb5LoginModule"
-                : "com.sun.security.auth.module.Krb5LoginModule";
+            ? "com.ibm.security.auth.module.Krb5LoginModule"
+            : "com.sun.security.auth.module.Krb5LoginModule";
         Class.forName(clazz);
     }
 }

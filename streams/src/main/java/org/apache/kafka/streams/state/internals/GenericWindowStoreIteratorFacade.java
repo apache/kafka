@@ -34,7 +34,7 @@ class GenericWindowStoreIteratorFacade<InV, OutV> implements WindowStoreIterator
     private final Function<InV, OutV> valueConverter;
 
     GenericWindowStoreIteratorFacade(final KeyValueIterator<Long, InV> innerIterator,
-                                     final Function<InV, OutV> valueConverter) {
+        final Function<InV, OutV> valueConverter) {
         this.innerIterator = innerIterator;
         this.valueConverter = valueConverter;
     }

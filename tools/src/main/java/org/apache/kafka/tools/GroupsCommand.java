@@ -100,16 +100,16 @@ public class GroupsCommand {
 
         public void listGroups(GroupsCommandOptions opts) throws Exception {
             Collection<GroupListing> resources = adminClient.listGroups()
-                    .all().get(30, TimeUnit.SECONDS);
+                .all().get(30, TimeUnit.SECONDS);
             printGroupDetails(resources, opts.groupType(), opts.protocol(), opts.hasConsumerOption(), opts.hasShareOption(), opts.hasStreamsOption());
         }
 
         private void printGroupDetails(Collection<GroupListing> groups,
-                                       Optional<GroupType> groupTypeFilter,
-                                       Optional<String> protocolFilter,
-                                       boolean consumerGroupFilter,
-                                       boolean shareGroupFilter,
-                                       boolean streamsGroupFilter) {
+            Optional<GroupType> groupTypeFilter,
+            Optional<String> protocolFilter,
+            boolean consumerGroupFilter,
+            boolean shareGroupFilter,
+            boolean streamsGroupFilter) {
             List<List<String>> lineItems = new ArrayList<>();
             int maxLen = 20;
             for (GroupListing group : groups) {
@@ -140,11 +140,11 @@ public class GroupsCommand {
         }
 
         private boolean combinedFilter(GroupListing group,
-                                       Optional<GroupType> groupTypeFilter,
-                                       Optional<String> protocolFilter,
-                                       boolean consumerGroupFilter,
-                                       boolean shareGroupFilter,
-                                       boolean streamsGroupFilter) {
+            Optional<GroupType> groupTypeFilter,
+            Optional<String> protocolFilter,
+            boolean consumerGroupFilter,
+            boolean shareGroupFilter,
+            boolean streamsGroupFilter) {
             boolean pass = true;
             Optional<GroupType> groupType = group.type();
             String protocol = group.protocol();
@@ -195,30 +195,30 @@ public class GroupsCommand {
         public GroupsCommandOptions(String[] args) {
             super(args);
             bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: The Kafka server to connect to.")
-                    .withRequiredArg()
-                    .describedAs("server to connect to")
-                    .required()
-                    .ofType(String.class);
+                .withRequiredArg()
+                .describedAs("server to connect to")
+                .required()
+                .ofType(String.class);
             commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client.")
-                    .withRequiredArg()
-                    .describedAs("command config property file")
-                    .ofType(String.class);
+                .withRequiredArg()
+                .describedAs("command config property file")
+                .ofType(String.class);
 
             listOpt = parser.accepts("list", "List the groups.");
 
             groupTypeOpt = parser.accepts("group-type", "Filter the groups based on group type. "
-                            + "Valid types are: 'classic', 'consumer', 'share' and 'streams'.")
-                    .withRequiredArg()
-                    .describedAs("type")
-                    .ofType(String.class);
+                + "Valid types are: 'classic', 'consumer', 'share' and 'streams'.")
+                .withRequiredArg()
+                .describedAs("type")
+                .ofType(String.class);
 
             protocolOpt = parser.accepts("protocol", "Filter the groups based on protocol type.")
-                    .withRequiredArg()
-                    .describedAs("protocol")
-                    .ofType(String.class);
+                .withRequiredArg()
+                .describedAs("protocol")
+                .ofType(String.class);
 
             consumerOpt = parser.accepts("consumer", "Filter the groups to show all kinds of consumer groups, including classic and simple consumer groups. "
-                            + "This matches group type 'consumer', and group type 'classic' where the protocol type is 'consumer' or empty.");
+                + "This matches group type 'consumer', and group type 'classic' where the protocol type is 'consumer' or empty.");
             shareOpt = parser.accepts("share", "Filter the groups to show share groups.");
             streamsOpt = parser.accepts("streams", "Filter the groups to show streams groups.");
 

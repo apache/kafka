@@ -58,13 +58,13 @@ public class AssignmentConfigs {
     }
 
     public AssignmentConfigs(final long acceptableRecoveryLag,
-                             final int maxWarmupReplicas,
-                             final int numStandbyReplicas,
-                             final long probingRebalanceIntervalMs,
-                             final List<String> rackAwareAssignmentTags,
-                             final OptionalInt rackAwareTrafficCost,
-                             final OptionalInt rackAwareNonOverlapCost,
-                             final String rackAwareAssignmentStrategy) {
+        final int maxWarmupReplicas,
+        final int numStandbyReplicas,
+        final long probingRebalanceIntervalMs,
+        final List<String> rackAwareAssignmentTags,
+        final OptionalInt rackAwareTrafficCost,
+        final OptionalInt rackAwareNonOverlapCost,
+        final String rackAwareAssignmentStrategy) {
         this.acceptableRecoveryLag = validated(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, acceptableRecoveryLag);
         this.maxWarmupReplicas = validated(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, maxWarmupReplicas);
         this.numStandbyReplicas = validated(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas);
@@ -82,24 +82,24 @@ public class AssignmentConfigs {
     }
 
     public AssignmentConfigs(final long acceptableRecoveryLag,
-                             final int maxWarmupReplicas,
-                             final int numStandbyReplicas,
-                             final long probingRebalanceIntervalMs,
-                             final List<String> rackAwareAssignmentTags,
-                             final int rackAwareTrafficCost,
-                             final int rackAwareNonOverlapCost,
-                             final String rackAwareAssignmentStrategy) {
+        final int maxWarmupReplicas,
+        final int numStandbyReplicas,
+        final long probingRebalanceIntervalMs,
+        final List<String> rackAwareAssignmentTags,
+        final int rackAwareTrafficCost,
+        final int rackAwareNonOverlapCost,
+        final String rackAwareAssignmentStrategy) {
         this(acceptableRecoveryLag, maxWarmupReplicas, numStandbyReplicas, probingRebalanceIntervalMs, rackAwareAssignmentTags,
             OptionalInt.of(rackAwareTrafficCost), OptionalInt.of(rackAwareNonOverlapCost), rackAwareAssignmentStrategy);
     }
 
     public AssignmentConfigs(final Long acceptableRecoveryLag,
-                             final Integer maxWarmupReplicas,
-                             final Integer numStandbyReplicas,
-                             final Long probingRebalanceIntervalMs,
-                             final List<String> rackAwareAssignmentTags) {
+        final Integer maxWarmupReplicas,
+        final Integer numStandbyReplicas,
+        final Long probingRebalanceIntervalMs,
+        final List<String> rackAwareAssignmentTags) {
         this(acceptableRecoveryLag, maxWarmupReplicas, numStandbyReplicas, probingRebalanceIntervalMs, rackAwareAssignmentTags,
-             OptionalInt.empty(), OptionalInt.empty(), StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE);
+            OptionalInt.empty(), OptionalInt.empty(), StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE);
     }
 
     /**
@@ -177,15 +177,15 @@ public class AssignmentConfigs {
     @Override
     public String toString() {
         return "AssignmentConfigs{" +
-               "\n  acceptableRecoveryLag=" + acceptableRecoveryLag +
-               "\n  maxWarmupReplicas=" + maxWarmupReplicas +
-               "\n  numStandbyReplicas=" + numStandbyReplicas +
-               "\n  probingRebalanceIntervalMs=" + probingRebalanceIntervalMs +
-               "\n  rackAwareAssignmentTags=" + rackAwareAssignmentTags +
-               "\n  rackAwareTrafficCost=" + rackAwareTrafficCost +
-               "\n  rackAwareNonOverlapCost=" + rackAwareNonOverlapCost +
-               "\n  rackAwareAssignmentStrategy=" + rackAwareAssignmentStrategy +
-               "\n}";
+            "\n  acceptableRecoveryLag=" + acceptableRecoveryLag +
+            "\n  maxWarmupReplicas=" + maxWarmupReplicas +
+            "\n  numStandbyReplicas=" + numStandbyReplicas +
+            "\n  probingRebalanceIntervalMs=" + probingRebalanceIntervalMs +
+            "\n  rackAwareAssignmentTags=" + rackAwareAssignmentTags +
+            "\n  rackAwareTrafficCost=" + rackAwareTrafficCost +
+            "\n  rackAwareNonOverlapCost=" + rackAwareNonOverlapCost +
+            "\n  rackAwareAssignmentStrategy=" + rackAwareAssignmentStrategy +
+            "\n}";
     }
 
     private static OptionalInt defaultRackAwareTrafficCost(final OptionalInt rackAwareTrafficCost) {

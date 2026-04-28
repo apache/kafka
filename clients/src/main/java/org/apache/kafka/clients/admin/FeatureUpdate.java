@@ -67,8 +67,8 @@ public class FeatureUpdate {
     public FeatureUpdate(final short maxVersionLevel, final UpgradeType upgradeType) {
         if (maxVersionLevel == 0 && upgradeType.equals(UpgradeType.UPGRADE)) {
             throw new IllegalArgumentException(String.format(
-                    "The upgradeType flag should be set to SAFE_DOWNGRADE or UNSAFE_DOWNGRADE when the provided maxVersionLevel:%d is < 1.",
-                    maxVersionLevel));
+                "The upgradeType flag should be set to SAFE_DOWNGRADE or UNSAFE_DOWNGRADE when the provided maxVersionLevel:%d is < 1.",
+                maxVersionLevel));
         }
         if (maxVersionLevel < 0) {
             throw new IllegalArgumentException("Cannot specify a negative version level.");

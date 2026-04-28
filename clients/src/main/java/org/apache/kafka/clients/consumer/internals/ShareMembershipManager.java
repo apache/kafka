@@ -82,36 +82,36 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
     protected final String rackId;
 
     public ShareMembershipManager(LogContext logContext,
-                                  String groupId,
-                                  String rackId,
-                                  SubscriptionState subscriptions,
-                                  Metadata metadata,
-                                  Time time,
-                                  Metrics metrics) {
+        String groupId,
+        String rackId,
+        SubscriptionState subscriptions,
+        Metadata metadata,
+        Time time,
+        Metrics metrics) {
         this(logContext,
-                groupId,
-                rackId,
-                subscriptions,
-                metadata,
-                time,
-                new ShareRebalanceMetricsManager(metrics));
+            groupId,
+            rackId,
+            subscriptions,
+            metadata,
+            time,
+            new ShareRebalanceMetricsManager(metrics));
     }
 
     // Visible for testing
     ShareMembershipManager(LogContext logContext,
-                           String groupId,
-                           String rackId,
-                           SubscriptionState subscriptions,
-                           Metadata metadata,
-                           Time time,
-                           ShareRebalanceMetricsManager metricsManager) {
+        String groupId,
+        String rackId,
+        SubscriptionState subscriptions,
+        Metadata metadata,
+        Time time,
+        ShareRebalanceMetricsManager metricsManager) {
         super(groupId,
-                subscriptions,
-                metadata,
-                logContext.logger(ShareMembershipManager.class),
-                time,
-                metricsManager,
-                false);
+            subscriptions,
+            metadata,
+            logContext.logger(ShareMembershipManager.class),
+            time,
+            metricsManager,
+            false);
         this.rackId = rackId;
     }
 
@@ -130,31 +130,31 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
         ShareGroupHeartbeatResponseData responseData = response.data();
         if (responseData.errorCode() != Errors.NONE.code()) {
             String errorMessage = String.format(
-                    "Unexpected error in Heartbeat response. Expected no error, but received: %s",
-                    Errors.forCode(responseData.errorCode())
+                "Unexpected error in Heartbeat response. Expected no error, but received: %s",
+                Errors.forCode(responseData.errorCode())
             );
             throw new IllegalArgumentException(errorMessage);
         }
         MemberState state = state();
         if (state == MemberState.LEAVING) {
             log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} is " +
-                    "already leaving the group.", memberId, memberEpoch);
+                "already leaving the group.", memberId, memberEpoch);
             return;
         }
         if (state == MemberState.UNSUBSCRIBED && responseData.memberEpoch() < 0 && maybeCompleteLeaveInProgress()) {
             log.debug("Member {} with epoch {} received a successful response to the heartbeat " +
-                    "to leave the group and completed the leave operation. ", memberId, memberEpoch);
+                "to leave the group and completed the leave operation. ", memberId, memberEpoch);
             return;
         }
         if (isNotInGroup()) {
             log.debug("Ignoring heartbeat response received from broker. Member {} is in {} state" +
-                    " so it's not a member of the group. ", memberId, state);
+                " so it's not a member of the group. ", memberId, state);
             return;
         }
         if (responseData.memberEpoch() < 0) {
             log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} " +
-                    "is in {} state and the member epoch is invalid: {}. ", memberId, memberEpoch, state,
-                    responseData.memberEpoch());
+                "is in {} state and the member epoch is invalid: {}. ", memberId, memberEpoch, state,
+                responseData.memberEpoch());
             maybeCompleteLeaveInProgress();
             return;
         }
@@ -168,7 +168,7 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
                 // New assignment received but member is in a state where it cannot take new
                 // assignments (ex. preparing to leave the group)
                 log.debug("Ignoring new assignment {} received from server because member is in {} state.",
-                        assignment, state);
+                    assignment, state);
                 return;
             }
 
@@ -185,7 +185,7 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
      */
     @Override
     protected CompletableFuture<Void> signalPartitionsAssigned(TopicIdPartitionSet assignedPartitions,
-                                                               SortedSet<TopicPartition> addedPartitions) {
+        SortedSet<TopicPartition> addedPartitions) {
         subscriptions.assignFromSubscribedAwaitingCallback(assignedPartitions.topicPartitions(), addedPartitions);
         notifyAssignmentChange(assignedPartitions.topicPartitions());
         return CompletableFuture.completedFuture(null);

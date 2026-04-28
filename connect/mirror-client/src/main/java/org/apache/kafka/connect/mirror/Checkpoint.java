@@ -43,17 +43,17 @@ public class Checkpoint {
     public static final short VERSION = 0;
 
     public static final Schema VALUE_SCHEMA_V0 = new Schema(
-            new Field(UPSTREAM_OFFSET_KEY, Type.INT64),
-            new Field(DOWNSTREAM_OFFSET_KEY, Type.INT64),
-            new Field(METADATA_KEY, Type.STRING));
+        new Field(UPSTREAM_OFFSET_KEY, Type.INT64),
+        new Field(DOWNSTREAM_OFFSET_KEY, Type.INT64),
+        new Field(METADATA_KEY, Type.STRING));
 
     public static final Schema KEY_SCHEMA = new Schema(
-            new Field(CONSUMER_GROUP_ID_KEY, Type.STRING),
-            new Field(TOPIC_KEY, Type.STRING),
-            new Field(PARTITION_KEY, Type.INT32));
+        new Field(CONSUMER_GROUP_ID_KEY, Type.STRING),
+        new Field(TOPIC_KEY, Type.STRING),
+        new Field(PARTITION_KEY, Type.INT32));
 
     public static final Schema HEADER_SCHEMA = new Schema(
-            new Field(VERSION_KEY, Type.INT16));
+        new Field(VERSION_KEY, Type.INT16));
 
     private final String consumerGroupId;
     private final TopicPartition topicPartition;
@@ -62,7 +62,7 @@ public class Checkpoint {
     private final String metadata;
 
     public Checkpoint(String consumerGroupId, TopicPartition topicPartition, long upstreamOffset,
-            long downstreamOffset, String metadata) {
+        long downstreamOffset, String metadata) {
         this.consumerGroupId = consumerGroupId;
         this.topicPartition = topicPartition;
         this.upstreamOffset = upstreamOffset;

@@ -132,13 +132,13 @@ class ShareFetchMetricsManagerTest {
         // Define all sensor names that should be created and removed
         String[] sensorNames = {
             "fetch-throttle-time",
-            "bytes-fetched", 
+            "bytes-fetched",
             "records-fetched",
             "fetch-latency",
             "sent-acknowledgements",
             "failed-acknowledgements"
         };
-        
+
         // Verify that sensors exist before closing
         for (String sensorName : sensorNames) {
             assertNotNull(metrics.getSensor(sensorName), "Sensor " + sensorName + " should exist before closing");

@@ -60,21 +60,21 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
         super(metrics, CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
 
         rebalanceLatencyAvg = createMetric("rebalance-latency-avg",
-                "The average time in ms taken for a group to complete a rebalance");
+            "The average time in ms taken for a group to complete a rebalance");
         rebalanceLatencyMax = createMetric("rebalance-latency-max",
-                "The max time in ms taken for a group to complete a rebalance");
+            "The max time in ms taken for a group to complete a rebalance");
         rebalanceLatencyTotal = createMetric("rebalance-latency-total",
-                "The total number of milliseconds spent in rebalances");
+            "The total number of milliseconds spent in rebalances");
         rebalanceTotal = createMetric("rebalance-total",
-                "The total number of rebalance events");
+            "The total number of rebalance events");
         rebalanceRatePerHour = createMetric("rebalance-rate-per-hour",
-                "The number of rebalance events per hour");
+            "The number of rebalance events per hour");
         failedRebalanceTotal = createMetric("failed-rebalance-total",
-                "The total number of failed rebalance events");
+            "The total number of failed rebalance events");
         failedRebalanceRate = createMetric("failed-rebalance-rate-per-hour",
-                "The number of failed rebalance events per hour");
+            "The number of failed rebalance events per hour");
         assignedPartitionsCount = createMetric("assigned-partitions",
-                "The number of partitions currently assigned to this consumer");
+            "The number of partitions currently assigned to this consumer");
         registerAssignedPartitionCount(subscriptions);
 
         successfulRebalanceSensor = metrics.sensor("rebalance-latency");
@@ -95,8 +95,8 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
                 return TimeUnit.SECONDS.convert(now - lastRebalanceEndMs, TimeUnit.MILLISECONDS);
         };
         lastRebalanceSecondsAgo = createMetric(
-                "last-rebalance-seconds-ago",
-                "The number of seconds since the last rebalance event");
+            "last-rebalance-seconds-ago",
+            "The number of seconds since the last rebalance event");
         metrics.addMetric(lastRebalanceSecondsAgo, lastRebalance);
     }
 

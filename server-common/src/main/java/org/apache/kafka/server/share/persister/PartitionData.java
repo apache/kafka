@@ -25,8 +25,8 @@ import java.util.Objects;
  * reflect the ways in which a subset of the data can be accessed for different purposes.
  */
 public class PartitionData implements
-        PartitionIdData, PartitionStateData, PartitionErrorData, PartitionStateErrorData,
-        PartitionStateBatchData, PartitionIdLeaderEpochData, PartitionAllData, PartitionStateSummaryData {
+    PartitionIdData, PartitionStateData, PartitionErrorData, PartitionStateErrorData,
+    PartitionStateBatchData, PartitionIdLeaderEpochData, PartitionAllData, PartitionStateSummaryData {
     private final int partition;
     private final int stateEpoch;
     private final long startOffset;
@@ -86,13 +86,13 @@ public class PartitionData implements
         if (o == null || getClass() != o.getClass()) return false;
         PartitionData that = (PartitionData) o;
         return Objects.equals(partition, that.partition) &&
-                Objects.equals(stateEpoch, that.stateEpoch) &&
-                Objects.equals(startOffset, that.startOffset) &&
-                Objects.equals(deliveryCompleteCount, that.deliveryCompleteCount) &&
-                Objects.equals(errorCode, that.errorCode) &&
-                Objects.equals(errorMessage, that.errorMessage) &&
-                Objects.equals(leaderEpoch, that.leaderEpoch) &&
-                Objects.equals(stateBatches, that.stateBatches);
+            Objects.equals(stateEpoch, that.stateEpoch) &&
+            Objects.equals(startOffset, that.startOffset) &&
+            Objects.equals(deliveryCompleteCount, that.deliveryCompleteCount) &&
+            Objects.equals(errorCode, that.errorCode) &&
+            Objects.equals(errorMessage, that.errorMessage) &&
+            Objects.equals(leaderEpoch, that.leaderEpoch) &&
+            Objects.equals(stateBatches, that.stateBatches);
     }
 
     @Override
@@ -158,14 +158,14 @@ public class PartitionData implements
     @Override
     public String toString() {
         return "PartitionData(" +
-                "partition=" + partition + "," +
-                "stateEpoch=" + stateEpoch + "," +
-                "startOffset=" + startOffset + "," +
-                "deliveryCompleteCount=" + deliveryCompleteCount + "," +
-                "errorCode=" + errorCode + "," +
-                "errorMessage=" + errorMessage + "," +
-                "leaderEpoch=" + leaderEpoch + "," +
-                "stateBatches=" + stateBatches +
-                ")";
+            "partition=" + partition + "," +
+            "stateEpoch=" + stateEpoch + "," +
+            "startOffset=" + startOffset + "," +
+            "deliveryCompleteCount=" + deliveryCompleteCount + "," +
+            "errorCode=" + errorCode + "," +
+            "errorMessage=" + errorMessage + "," +
+            "leaderEpoch=" + leaderEpoch + "," +
+            "stateBatches=" + stateBatches +
+            ")";
     }
 }

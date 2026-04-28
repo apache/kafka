@@ -147,7 +147,7 @@ public class CheckerTestUtils {
         File file = Files.createTempFile("MetadataSchemaCheckerToolTest", null).toFile();
         file.deleteOnExit();
         MessageSpec messageSpec = MessageGenerator.JSON_SERDE.
-                readValue(input.replaceAll("'", "\""), MessageSpec.class);
+            readValue(input.replaceAll("'", "\""), MessageSpec.class);
         MessageGenerator.JSON_SERDE.writeValue(file, messageSpec);
         return file.getAbsolutePath();
     }

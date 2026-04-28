@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class HostInfoTest {
-    
+
     @Test
     public void shouldCreateHostInfo() {
         final String endPoint = "host:9090";

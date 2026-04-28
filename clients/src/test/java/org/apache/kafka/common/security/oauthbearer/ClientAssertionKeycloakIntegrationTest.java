@@ -381,7 +381,7 @@ public class ClientAssertionKeycloakIntegrationTest extends OAuthBearerTest {
         assertTrue(body.contains("grant_type=client_credentials"),
             "Body must contain grant_type=client_credentials");
         assertTrue(body.contains(
-            "client_assertion_type=urn%3Aietf%3Aparams%3Aoauth%3Aclient-assertion-type%3Ajwt-bearer"),
+                "client_assertion_type=urn%3Aietf%3Aparams%3Aoauth%3Aclient-assertion-type%3Ajwt-bearer"),
             "Body must contain URL-encoded client_assertion_type per RFC 7521");
         assertTrue(body.contains("client_assertion="),
             "Body must contain client_assertion parameter");
@@ -1046,9 +1046,9 @@ public class ClientAssertionKeycloakIntegrationTest extends OAuthBearerTest {
     // ==================== Helper: Config Builders ====================
 
     private Map<String, Object> createAssertionConfigs(File privateKeyFile,
-                                                       String algorithm,
-                                                       String clientId,
-                                                       String audience) {
+        String algorithm,
+        String clientId,
+        String audience) {
         Map<String, Object> configs = new HashMap<>(getSaslConfigs());
         configs.put(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, audience);
         configs.put(SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE, privateKeyFile.getAbsolutePath());
@@ -1072,7 +1072,7 @@ public class ClientAssertionKeycloakIntegrationTest extends OAuthBearerTest {
             "JWT should have 3 parts (header.payload.signature), got: " + parts.length);
 
         Base64.Decoder decoder = Base64.getUrlDecoder();
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0;i < 3;i++) {
             final int idx = i;
             assertDoesNotThrow(() -> decoder.decode(parts[idx]),
                 "JWT part " + idx + " should be valid Base64URL");
@@ -1187,7 +1187,7 @@ public class ClientAssertionKeycloakIntegrationTest extends OAuthBearerTest {
     // ==================== Helper: Signed Assertion Generation ====================
 
     private static String generateSignedAssertion(KeyPair keyPair, String algorithm,
-                                                  String clientId, String audience) throws Exception {
+        String clientId, String audience) throws Exception {
         long nowSeconds = System.currentTimeMillis() / 1000;
 
         Map<String, Object> header = Map.of("alg", algorithm, "typ", "JWT");
@@ -1204,7 +1204,7 @@ public class ClientAssertionKeycloakIntegrationTest extends OAuthBearerTest {
     }
 
     private static String generateExpiredAssertion(KeyPair keyPair, String algorithm,
-                                                   String clientId, String audience) throws Exception {
+        String clientId, String audience) throws Exception {
         long nowSeconds = System.currentTimeMillis() / 1000;
 
         Map<String, Object> header = Map.of("alg", algorithm, "typ", "JWT");
@@ -1220,7 +1220,7 @@ public class ClientAssertionKeycloakIntegrationTest extends OAuthBearerTest {
     }
 
     private static String signJwt(Map<String, Object> header, Map<String, Object> payload,
-                                  KeyPair keyPair, String algorithm) throws Exception {
+        KeyPair keyPair, String algorithm) throws Exception {
         Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
         String headerB64 = encoder.encodeToString(
             OBJECT_MAPPER.writeValueAsBytes(header));

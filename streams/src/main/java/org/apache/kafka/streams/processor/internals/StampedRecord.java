@@ -33,9 +33,9 @@ public class StampedRecord extends Stamped<ConsumerRecord<?, ?>> {
     }
 
     public StampedRecord(final ConsumerRecord<?, ?> record,
-                         final long timestamp,
-                         final byte[] rawKey,
-                         final byte[] rawValue) {
+        final long timestamp,
+        final byte[] rawKey,
+        final byte[] rawValue) {
         super(record, timestamp);
         this.rawKey = rawKey;
         this.rawValue = rawValue;

@@ -123,8 +123,8 @@ public class StaticBrokerConfigTest {
     @ClusterTest(types = {Type.KRAFT})
     public void testInternalConfigsDoNotReturnForDescribeConfigs(ClusterInstance cluster) throws Exception {
         try (
-                Admin admin = cluster.admin();
-                Admin controllerAdmin = cluster.admin(Map.of(), true)
+            Admin admin = cluster.admin();
+            Admin controllerAdmin = cluster.admin(Map.of(), true)
         ) {
             ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "0");
             ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, TOPIC);
@@ -135,7 +135,7 @@ public class StaticBrokerConfigTest {
             // make sure the topic metadata exist
             cluster.waitTopicCreation(TOPIC, 1);
             Map<ConfigResource, Config> configResourceMap = admin.describeConfigs(
-                    List.of(brokerResource, topicResource, groupResource, clientMetricsResource)).all().get();
+                List.of(brokerResource, topicResource, groupResource, clientMetricsResource)).all().get();
 
             // test for case ConfigResource.Type == BROKER
             // Notice: since the testing framework actively sets three internal configurations when starting the
@@ -143,9 +143,9 @@ public class StaticBrokerConfigTest {
             // so the API `describeConfigs` will also return these three configurations. However, other internal
             // configurations will not be returned
             Set<String> ignoreConfigNames = Set.of(
-                    ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG,
-                    ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG,
-                    KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG);
+                ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG,
+                ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG,
+                KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG);
             Config brokerConfig = configResourceMap.get(brokerResource);
             assertNotContainsInternalConfig(brokerConfig, KafkaConfig.configDef().configKeys(), ignoreConfigNames);
 

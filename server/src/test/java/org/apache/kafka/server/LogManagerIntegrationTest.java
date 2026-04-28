@@ -68,9 +68,9 @@ public class LogManagerIntegrationTest {
 
         // Produce some data into the topic
         Map<String, Object> producerConfigs = Map.of(
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers(),
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()
+            ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers(),
+            ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()
         );
 
         try (Producer<String, String> producer = new KafkaProducer<>(producerConfigs)) {
@@ -81,9 +81,9 @@ public class LogManagerIntegrationTest {
         var broker = cluster.brokers().get(0);
 
         File timeIndexFile = broker.logManager()
-                .getLog(new TopicPartition("foo", 0), false).get()
-                .activeSegment()
-                .timeIndexFile();
+            .getLog(new TopicPartition("foo", 0), false).get()
+            .activeSegment()
+            .timeIndexFile();
 
         // Set read only so that we throw an IOException on shutdown
         assertTrue(timeIndexFile.exists());
@@ -110,17 +110,17 @@ public class LogManagerIntegrationTest {
         try (Admin admin = cluster.admin()) {
             TestUtils.waitForCondition(() -> {
                 List<TopicPartitionInfo> partitionInfos = admin.describeTopics(List.of("foo"))
-                        .topicNameValues().get("foo").get().partitions();
+                    .topicNameValues().get("foo").get().partitions();
                 return partitionInfos.get(0).leader().id() == 0;
             }, "Partition does not have a leader assigned");
         }
 
         // Ensure that sanity check does not fail
         broker.logManager()
-                .getLog(new TopicPartition("foo", 0), false).get()
-                .activeSegment()
-                .timeIndex()
-                .sanityCheck();
+            .getLog(new TopicPartition("foo", 0), false).get()
+            .activeSegment()
+            .timeIndex()
+            .sanityCheck();
     }
 
     @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 3)
@@ -132,15 +132,15 @@ public class LogManagerIntegrationTest {
         cluster.waitTopicCreation("foo", 1);
 
         Optional<PartitionMetadataFile> partitionMetadataFile = cluster.brokers().get(0).logManager()
-                .getLog(new TopicPartition("foo", 0), false).get()
-                .partitionMetadataFile();
+            .getLog(new TopicPartition("foo", 0), false).get()
+            .partitionMetadataFile();
         assertTrue(partitionMetadataFile.isPresent());
 
         cluster.brokers().get(0).shutdown();
         try (Admin admin = cluster.admin()) {
             TestUtils.waitForCondition(() -> {
                 List<TopicPartitionInfo> partitionInfos = admin.describeTopics(List.of("foo"))
-                        .topicNameValues().get("foo").get().partitions();
+                    .topicNameValues().get("foo").get().partitions();
                 return partitionInfos.get(0).isr().size() == 2;
             }, "isr size is not shrink to 2");
         }
@@ -154,16 +154,16 @@ public class LogManagerIntegrationTest {
         try (Admin admin = cluster.admin()) {
             TestUtils.waitForCondition(() -> {
                 List<TopicPartitionInfo> partitionInfos = admin.describeTopics(List.of("foo"))
-                        .topicNameValues().get("foo").get().partitions();
+                    .topicNameValues().get("foo").get().partitions();
                 return partitionInfos.get(0).isr().size() == 3;
             }, "isr size is not expand to 3");
         }
 
         // make sure topic still work fine
         Map<String, Object> producerConfigs = Map.of(
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers(),
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()
+            ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers(),
+            ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()
         );
 
         try (Producer<String, String> producer = new KafkaProducer<>(producerConfigs)) {
@@ -172,10 +172,10 @@ public class LogManagerIntegrationTest {
         }
 
         Map<String, Object> consumerConfigs = Map.of(
-                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers(),
-                ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString(),
-                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
-                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()
+            ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers(),
+            ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString(),
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()
         );
 
         try (Consumer<String, String> consumer = new KafkaConsumer<>(consumerConfigs)) {

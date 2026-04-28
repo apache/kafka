@@ -60,7 +60,7 @@ public class UnattachedStateTest {
     }
 
     @ParameterizedTest
-    @CsvSource({ "true,false", "false,true", "false,false" })
+    @CsvSource({"true,false", "false,true", "false,false"})
     public void testElectionStateAndElectionTimeout(boolean hasVotedKey, boolean hasLeaderId) {
         OptionalInt leader = hasLeaderId ? OptionalInt.of(3) : OptionalInt.empty();
         Optional<ReplicaKey> votedKey = hasVotedKey ? Optional.of(this.votedKey) : Optional.empty();

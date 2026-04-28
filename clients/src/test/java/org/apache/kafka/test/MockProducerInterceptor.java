@@ -73,7 +73,7 @@ public class MockProducerInterceptor implements ClusterResourceListener, Produce
     public ProducerRecord<String, String> onSend(ProducerRecord<String, String> record) {
         ONSEND_COUNT.incrementAndGet();
         return new ProducerRecord<>(
-                record.topic(), record.partition(), record.key(), record.value().concat(appendStr));
+            record.topic(), record.partition(), record.key(), record.value().concat(appendStr));
     }
 
     @Override

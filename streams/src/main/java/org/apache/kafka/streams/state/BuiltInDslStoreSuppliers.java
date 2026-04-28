@@ -142,10 +142,10 @@ public class BuiltInDslStoreSuppliers {
         @Override
         public WindowBytesStoreSupplier windowStore(final DslWindowParams params) {
             return Stores.inMemoryWindowStore(
-                    params.name(),
-                    params.retentionPeriod(),
-                    params.windowSize(),
-                    params.retainDuplicates()
+                params.name(),
+                params.retentionPeriod(),
+                params.windowSize(),
+                params.retainDuplicates()
             );
         }
 

@@ -29,7 +29,7 @@ class LeaderAndEpochTest {
     @Test
     void testConstructorWithValidLeaderId() {
         LeaderAndEpoch leaderAndEpoch = new LeaderAndEpoch(OptionalInt.of(1), 5);
-        
+
         assertEquals(OptionalInt.of(1), leaderAndEpoch.leaderId());
         assertEquals(5, leaderAndEpoch.epoch());
     }
@@ -37,7 +37,7 @@ class LeaderAndEpochTest {
     @Test
     void testConstructorWithEmptyLeaderId() {
         LeaderAndEpoch leaderAndEpoch = new LeaderAndEpoch(OptionalInt.empty(), 3);
-        
+
         assertEquals(OptionalInt.empty(), leaderAndEpoch.leaderId());
         assertEquals(3, leaderAndEpoch.epoch());
     }
@@ -45,7 +45,7 @@ class LeaderAndEpochTest {
     @Test
     void testConstructorThrowsExceptionWhenLeaderIdIsNull() {
         Executable executable = () -> new LeaderAndEpoch(null, 1);
-        
+
         assertThrows(NullPointerException.class, executable);
     }
 }

@@ -80,9 +80,9 @@ import static org.hamcrest.Matchers.is;
 public class HighAvailabilityTaskAssignorIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3,
         new Properties(), mkMap(
-            mkEntry(0, mkMap(mkEntry(ServerConfigs.BROKER_RACK_CONFIG, AssignmentTestUtils.RACK_0))),
-            mkEntry(1, mkMap(mkEntry(ServerConfigs.BROKER_RACK_CONFIG, AssignmentTestUtils.RACK_1))),
-            mkEntry(2, mkMap(mkEntry(ServerConfigs.BROKER_RACK_CONFIG, AssignmentTestUtils.RACK_2)))
+        mkEntry(0, mkMap(mkEntry(ServerConfigs.BROKER_RACK_CONFIG, AssignmentTestUtils.RACK_0))),
+        mkEntry(1, mkMap(mkEntry(ServerConfigs.BROKER_RACK_CONFIG, AssignmentTestUtils.RACK_1))),
+        mkEntry(2, mkMap(mkEntry(ServerConfigs.BROKER_RACK_CONFIG, AssignmentTestUtils.RACK_2)))
     ));
 
     @BeforeAll
@@ -120,8 +120,8 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
     }
 
     private void shouldScaleOutWithWarmupTasks(final Function<String, Materialized<Object, Object, KeyValueStore<Bytes, byte[]>>> materializedFunction,
-                                               final TestInfo testInfo,
-                                               final String rackAwareStrategy) throws InterruptedException {
+        final TestInfo testInfo,
+        final String rackAwareStrategy) throws InterruptedException {
         // Replace "balance_subtopology" with shorter name since max name length is 249
         final String testId = safeUniqueTestName(testInfo).replaceAll("balance_subtopology", "balance");
         final String appId = "appId_" + System.currentTimeMillis() + "_" + testId;
@@ -189,16 +189,16 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
             kafkaStreams1.setGlobalStateRestoreListener(new StateRestoreListener() {
                 @Override
                 public void onRestoreStart(final TopicPartition topicPartition,
-                                           final String storeName,
-                                           final long startingOffset,
-                                           final long endingOffset) {
+                    final String storeName,
+                    final long startingOffset,
+                    final long endingOffset) {
                 }
 
                 @Override
                 public void onBatchRestored(final TopicPartition topicPartition,
-                                            final String storeName,
-                                            final long batchEndOffset,
-                                            final long numRestored) {
+                    final String storeName,
+                    final long batchEndOffset,
+                    final long numRestored) {
                     instance1NumRestored.accumulateAndGet(
                         numRestored,
                         (prev, restored) -> prev == -1 ? restored : prev + restored
@@ -207,8 +207,8 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
 
                 @Override
                 public void onRestoreEnd(final TopicPartition topicPartition,
-                                         final String storeName,
-                                         final long totalRestored) {
+                    final String storeName,
+                    final long totalRestored) {
                     instance1TotalRestored.accumulateAndGet(
                         totalRestored,
                         (prev, restored) -> prev == -1 ? restored : prev + restored
@@ -236,13 +236,13 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
                     }
                 },
                 120_000L,
-                    () -> "Never saw a first assignment after scale out: " + assignmentsCompleted.get()
+                () -> "Never saw a first assignment after scale out: " + assignmentsCompleted.get()
             );
 
             TestUtils.waitForCondition(
                 assignmentStable::get,
                 120_000L,
-                    () -> "Assignment hasn't become stable: " + assignmentsCompleted.get() +
+                () -> "Assignment hasn't become stable: " + assignmentsCompleted.get() +
                     " Note, if this does fail, check and see if the new instance just failed to catch up within" +
                     " the probing rebalance interval. A full minute should be long enough to read ~500 records" +
                     " in any test environment, but you never know..."
@@ -278,12 +278,12 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
 
     private static Properties getConsumerProperties() {
         return mkProperties(
-                mkMap(
-                    mkEntry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-                    mkEntry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()),
-                    mkEntry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName())
-                )
-            );
+            mkMap(
+                mkEntry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+                mkEntry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()),
+                mkEntry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName())
+            )
+        );
     }
 
     private static String getKiloByteValue() {
@@ -301,9 +301,9 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
     }
 
     private static Properties streamsProperties(final String appId,
-                                                final AssignmentListener configuredAssignmentListener,
-                                                final String rackAwareStrategy,
-                                                final String rack) {
+        final AssignmentListener configuredAssignmentListener,
+        final String rackAwareStrategy,
+        final String rack) {
         return mkObjectProperties(
             mkMap(
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
@@ -327,7 +327,7 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
     }
 
     private static long getEndOffsetSum(final Set<TopicPartition> changelogTopicPartitions,
-                                        final Consumer<String, String> consumer) {
+        final Consumer<String, String> consumer) {
         long sum = 0;
         final Collection<Long> values = consumer.endOffsets(changelogTopicPartitions).values();
         for (final Long value : values) {

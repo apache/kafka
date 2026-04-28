@@ -74,16 +74,16 @@ public class KTableFilterTest {
     private final Predicate<String, Integer> predicate = (key, value) -> (value % 2) == 0;
 
     private void doTestKTable(final StreamsBuilder builder,
-                              final KTable<String, Integer> table2,
-                              final KTable<String, Integer> table3,
-                              final String topic) {
+        final KTable<String, Integer> table2,
+        final KTable<String, Integer> table3,
+        final String topic) {
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
         table3.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, Integer> inputTopic =
-                    driver.createInputTopic(topic, new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic, new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             inputTopic.pipeInput("A", 1, 10L);
             inputTopic.pipeInput("B", 2, 5L);
             inputTopic.pipeInput("C", 3, 8L);
@@ -145,9 +145,9 @@ public class KTableFilterTest {
     }
 
     private void doTestValueGetter(final StreamsBuilder builder,
-                                   final KTableImpl<String, Integer, Integer> table2,
-                                   final KTableImpl<String, Integer, Integer> table3,
-                                   final String topic1) {
+        final KTableImpl<String, Integer, Integer> table2,
+        final KTableImpl<String, Integer, Integer> table3,
+        final String topic1) {
 
         final Topology topology = builder.build();
 
@@ -160,7 +160,7 @@ public class KTableFilterTest {
 
         try (final TopologyTestDriverWrapper driver = new TopologyTestDriverWrapper(topology, props)) {
             final TestInputTopic<String, Integer> inputTopic =
-                    driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
             final KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
             final KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
@@ -239,9 +239,9 @@ public class KTableFilterTest {
     }
 
     private void doTestNotSendingOldValue(final StreamsBuilder builder,
-                                          final KTableImpl<String, Integer, Integer> table1,
-                                          final KTableImpl<String, Integer, Integer> table2,
-                                          final String topic1) {
+        final KTableImpl<String, Integer, Integer> table1,
+        final KTableImpl<String, Integer, Integer> table2,
+        final String topic1) {
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
 
         builder.build().addProcessor("proc1", supplier, table1.name);
@@ -249,7 +249,7 @@ public class KTableFilterTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, Integer> inputTopic =
-                    driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
             inputTopic.pipeInput("A", 1, 5L);
             inputTopic.pipeInput("B", 1, 10L);
@@ -333,9 +333,9 @@ public class KTableFilterTest {
     }
 
     private void doTestSendingOldValue(final StreamsBuilder builder,
-                                       final KTableImpl<String, Integer, Integer> table1,
-                                       final KTableImpl<String, Integer, Integer> table2,
-                                       final String topic1) {
+        final KTableImpl<String, Integer, Integer> table1,
+        final KTableImpl<String, Integer, Integer> table2,
+        final String topic1) {
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final Topology topology = builder.build();
 
@@ -346,7 +346,7 @@ public class KTableFilterTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
             final TestInputTopic<String, Integer> inputTopic =
-                    driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
             inputTopic.pipeInput("A", 1, 5L);
             inputTopic.pipeInput("B", 1, 10L);
@@ -458,10 +458,10 @@ public class KTableFilterTest {
     }
 
     private void doTestSkipNullOnMaterialization(final StreamsBuilder builder,
-                                                 final KTableImpl<String, String, String> table1,
-                                                 final KTableImpl<String, String, String> table2,
-                                                 final String topic1,
-                                                 final boolean shouldSkip) {
+        final KTableImpl<String, String, String> table1,
+        final KTableImpl<String, String, String> table2,
+        final String topic1,
+        final boolean shouldSkip) {
         final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final Topology topology = builder.build();
 
@@ -470,7 +470,7 @@ public class KTableFilterTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
             final TestInputTopic<String, String> stringinputTopic =
-                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
             stringinputTopic.pipeInput("A", "reject", 5L);
             stringinputTopic.pipeInput("B", "reject", 10L);

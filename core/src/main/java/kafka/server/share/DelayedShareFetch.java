@@ -128,13 +128,13 @@ public class DelayedShareFetch extends DelayedOperation {
      * @param remoteFetchMaxWaitMs The max wait time for a share fetch request having remote storage fetch.
      */
     public DelayedShareFetch(
-            ShareFetch shareFetch,
-            ReplicaManager replicaManager,
-            BiConsumer<SharePartitionKey, Throwable> exceptionHandler,
-            LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions,
-            ShareGroupMetrics shareGroupMetrics,
-            Time time,
-            long remoteFetchMaxWaitMs
+        ShareFetch shareFetch,
+        ReplicaManager replicaManager,
+        BiConsumer<SharePartitionKey, Throwable> exceptionHandler,
+        LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions,
+        ShareGroupMetrics shareGroupMetrics,
+        Time time,
+        long remoteFetchMaxWaitMs
     ) {
         this(shareFetch,
             replicaManager,
@@ -221,7 +221,7 @@ public class DelayedShareFetch extends DelayedOperation {
         } else if (pendingRemoteFetchesOpt.isPresent()) {
             if (maybeRegisterCallbackPendingRemoteFetch()) {
                 log.trace("Registered remote storage fetch callback for group {}, member {}, "
-                        + "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
+                    + "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
                     partitionsAcquired.keySet());
                 return;
             }
@@ -361,13 +361,13 @@ public class DelayedShareFetch extends DelayedOperation {
                     return forceComplete();
                 } else {
                     log.debug("minBytes is not satisfied for the share fetch request for group {}, member {}, " +
-                            "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
+                        "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
                         sharePartitions.keySet());
                     releasePartitionLocks(topicPartitionData.keySet());
                 }
             } else {
                 log.trace("Can't acquire any partitions in the share fetch request for group {}, member {}, " +
-                        "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
+                    "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
                     sharePartitions.keySet());
             }
             // At this point, there could be delayed requests sitting in the purgatory which are waiting on
@@ -706,7 +706,7 @@ public class DelayedShareFetch extends DelayedOperation {
             pendingFetch.invokeCallbackOnCompletion(((ignored, throwable) -> {
                 timerTask.cancel();
                 log.trace("Invoked remote storage fetch callback for group {}, member {}, "
-                        + "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
+                    + "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
                     partitionsAcquired.keySet());
                 if (throwable != null) {
                     log.error("Remote storage fetch failed for group {}, member {}, topic partitions {}",
@@ -999,7 +999,7 @@ public class DelayedShareFetch extends DelayedOperation {
         @Override
         public void run() {
             log.trace("Expired remote storage fetch callback for group {}, member {}, "
-                    + "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
+                + "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
                 partitionsAcquired.keySet());
             expiredRequestMeter.mark();
             completeRemoteShareFetchRequestOutsidePurgatory();

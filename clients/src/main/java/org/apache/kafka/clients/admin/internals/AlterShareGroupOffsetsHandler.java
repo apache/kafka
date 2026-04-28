@@ -76,12 +76,12 @@ public class AlterShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coord
             var topic = data.topics().find(tp.topic());
             if (topic == null) {
                 topic = new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
-                        .setTopicName(tp.topic());
+                    .setTopicName(tp.topic());
                 data.topics().add(topic);
             }
             topic.partitions().add(new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
-                    .setPartitionIndex(tp.partition())
-                    .setStartOffset(offset));
+                .setPartitionIndex(tp.partition())
+                .setStartOffset(offset));
         });
         return new AlterShareGroupOffsetsRequest.Builder(data);
     }
@@ -147,13 +147,13 @@ public class AlterShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coord
             case COORDINATOR_LOAD_IN_PROGRESS:
             case REBALANCE_IN_PROGRESS:
                 log.debug("AlterShareGroupOffsets request for group id {} returned error {}. Will retry. {}",
-                        groupId.idValue, error, errorMessageToLog);
+                    groupId.idValue, error, errorMessageToLog);
                 groupsToRetry.add(groupId);
                 break;
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
                 log.debug("AlterShareGroupOffsets request for group id {} returned error {}. Will rediscover the coordinator and retry. {}",
-                        groupId.idValue, error, errorMessageToLog);
+                    groupId.idValue, error, errorMessageToLog);
                 groupsToUnmap.add(groupId);
                 break;
             case GROUP_ID_NOT_FOUND:
@@ -163,12 +163,12 @@ public class AlterShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coord
             case KAFKA_STORAGE_ERROR:
             case GROUP_AUTHORIZATION_FAILED:
                 log.debug("AlterShareGroupOffsets request for group id {} failed due to error {}. {}",
-                        groupId.idValue, error, errorMessageToLog);
+                    groupId.idValue, error, errorMessageToLog);
                 partitionResults.put(topicPartition, error.exception(errorMessage));
                 break;
             default:
                 log.error("AlterShareGroupOffsets request for group id {} failed due to unexpected error {}. {}",
-                        groupId.idValue, error, errorMessageToLog);
+                    groupId.idValue, error, errorMessageToLog);
                 partitionResults.put(topicPartition, error.exception(errorMessage));
         }
     }

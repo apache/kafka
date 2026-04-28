@@ -41,7 +41,7 @@ public class TestTrustManagerFactory extends TrustManagerFactorySpi {
 
     @Override
     protected TrustManager[] engineGetTrustManagers() {
-        return new TrustManager[] {new TestTrustManager()};
+        return new TrustManager[]{new TestTrustManager()};
     }
 
     public static class TestTrustManager extends X509ExtendedTrustManager {

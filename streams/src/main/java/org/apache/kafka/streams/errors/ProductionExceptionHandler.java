@@ -42,7 +42,7 @@ public interface ProductionExceptionHandler extends Configurable {
      */
     @Deprecated
     default ProductionExceptionHandlerResponse handle(final ProducerRecord<byte[], byte[]> record,
-                                                      final Exception exception) {
+        final Exception exception) {
         throw new UnsupportedOperationException();
     }
 
@@ -62,8 +62,8 @@ public interface ProductionExceptionHandler extends Configurable {
      */
     @Deprecated
     default ProductionExceptionHandlerResponse handle(final ErrorHandlerContext context,
-                                                      final ProducerRecord<byte[], byte[]> record,
-                                                      final Exception exception) {
+        final ProducerRecord<byte[], byte[]> record,
+        final Exception exception) {
         return handle(record, exception);
     }
 
@@ -81,8 +81,8 @@ public interface ProductionExceptionHandler extends Configurable {
      * @return a {@link Response} object
      */
     default Response handleError(final ErrorHandlerContext context,
-                                 final ProducerRecord<byte[], byte[]> record,
-                                 final Exception exception) {
+        final ProducerRecord<byte[], byte[]> record,
+        final Exception exception) {
         return new Response(Result.from(handle(context, record, exception)), Collections.emptyList());
     }
 
@@ -102,7 +102,7 @@ public interface ProductionExceptionHandler extends Configurable {
     @SuppressWarnings({"rawtypes", "unused"})
     @Deprecated
     default ProductionExceptionHandlerResponse handleSerializationException(final ProducerRecord record,
-                                                                            final Exception exception) {
+        final Exception exception) {
         return ProductionExceptionHandler.ProductionExceptionHandlerResponse.FAIL;
     }
 
@@ -126,9 +126,9 @@ public interface ProductionExceptionHandler extends Configurable {
     @SuppressWarnings("rawtypes")
     @Deprecated
     default ProductionExceptionHandlerResponse handleSerializationException(final ErrorHandlerContext context,
-                                                                            final ProducerRecord record,
-                                                                            final Exception exception,
-                                                                            final SerializationExceptionOrigin origin) {
+        final ProducerRecord record,
+        final Exception exception,
+        final SerializationExceptionOrigin origin) {
         return handleSerializationException(record, exception);
     }
 
@@ -149,9 +149,9 @@ public interface ProductionExceptionHandler extends Configurable {
      */
     @SuppressWarnings("rawtypes")
     default Response handleSerializationError(final ErrorHandlerContext context,
-                                              final ProducerRecord record,
-                                              final Exception exception,
-                                              final SerializationExceptionOrigin origin) {
+        final ProducerRecord record,
+        final Exception exception,
+        final SerializationExceptionOrigin origin) {
         return new Response(Result.from(handleSerializationException(context, record, exception, origin)), Collections.emptyList());
     }
 
@@ -192,7 +192,7 @@ public interface ProductionExceptionHandler extends Configurable {
         public final int id;
 
         ProductionExceptionHandlerResponse(final int id,
-                                           final String name) {
+            final String name) {
             this.id = id;
             this.name = name;
         }
@@ -291,7 +291,7 @@ public interface ProductionExceptionHandler extends Configurable {
          * @param deadLetterQueueRecords the list of records to be sent to the dead letter queue; may be {@code null}.
          */
         private Response(final Result result,
-                         final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
+            final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
             this.result = result;
             this.deadLetterQueueRecords = deadLetterQueueRecords;
         }

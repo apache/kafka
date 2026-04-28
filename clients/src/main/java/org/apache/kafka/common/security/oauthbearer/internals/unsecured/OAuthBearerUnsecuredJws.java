@@ -73,11 +73,11 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
      *             not "{@code none}")
      */
     public OAuthBearerUnsecuredJws(String compactSerialization, String principalClaimName, String scopeClaimName)
-            throws OAuthBearerIllegalTokenException {
+        throws OAuthBearerIllegalTokenException {
         this.compactSerialization = Objects.requireNonNull(compactSerialization);
         if (compactSerialization.contains(".."))
             throw new OAuthBearerIllegalTokenException(
-                    OAuthBearerValidationResult.newFailure("Malformed compact serialization contains '..'"));
+                OAuthBearerValidationResult.newFailure("Malformed compact serialization contains '..'"));
         this.splits = extractCompactSerializationSplits();
         this.header = toMap(splits().get(0));
         String claimsSplit = splits.get(1);
@@ -85,11 +85,11 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
         String alg = Objects.requireNonNull(header().get("alg"), "JWS header must have an Algorithm value").toString();
         if (!"none".equals(alg))
             throw new OAuthBearerIllegalTokenException(
-                    OAuthBearerValidationResult.newFailure("Unsecured JWS must have 'none' for an algorithm"));
+                OAuthBearerValidationResult.newFailure("Unsecured JWS must have 'none' for an algorithm"));
         String digitalSignatureSplit = splits.get(2);
         if (!digitalSignatureSplit.isEmpty())
             throw new OAuthBearerIllegalTokenException(
-                    OAuthBearerValidationResult.newFailure("Unsecured JWS must not contain a digital signature"));
+                OAuthBearerValidationResult.newFailure("Unsecured JWS must not contain a digital signature"));
         this.principalClaimName = Objects.requireNonNull(principalClaimName).trim();
         if (this.principalClaimName.isEmpty())
             throw new IllegalArgumentException("Must specify a non-blank principal claim name");
@@ -100,12 +100,12 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
         Number expirationTimeSeconds = expirationTime();
         if (expirationTimeSeconds == null)
             throw new OAuthBearerIllegalTokenException(
-                    OAuthBearerValidationResult.newFailure("No expiration time in JWT"));
+                OAuthBearerValidationResult.newFailure("No expiration time in JWT"));
         lifetime = convertClaimTimeInSecondsToMs(expirationTimeSeconds);
         String principalName = claim(this.principalClaimName, String.class);
         if (Utils.isBlank(principalName))
             throw new OAuthBearerIllegalTokenException(OAuthBearerValidationResult
-                    .newFailure("No principal name in JWT claim: " + this.principalClaimName));
+                .newFailure("No principal name in JWT claim: " + this.principalClaimName));
         this.principalName = principalName;
         this.startTimeMs = calculateStartTimeMs();
     }
@@ -220,8 +220,8 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
             return Objects.requireNonNull(type).cast(value);
         } catch (ClassCastException e) {
             throw new OAuthBearerIllegalTokenException(
-                    OAuthBearerValidationResult.newFailure(String.format("The '%s' claim was not of type %s: %s",
-                            claimName, type.getSimpleName(), value.getClass().getSimpleName())));
+                OAuthBearerValidationResult.newFailure(String.format("The '%s' claim was not of type %s: %s",
+                    claimName, type.getSimpleName(), value.getClass().getSimpleName())));
         }
     }
 
@@ -305,7 +305,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
         } catch (IllegalArgumentException e) {
             // potentially thrown by java.util.Base64.Decoder implementations
             throw new OAuthBearerIllegalTokenException(
-                    OAuthBearerValidationResult.newFailure("malformed Base64 URL encoded value"));
+                OAuthBearerValidationResult.newFailure("malformed Base64 URL encoded value"));
         } catch (IOException e) {
             throw new OAuthBearerIllegalTokenException(OAuthBearerValidationResult.newFailure("malformed JSON"));
         }
@@ -317,7 +317,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
             tmpSplits.add("");
         if (tmpSplits.size() != 3)
             throw new OAuthBearerIllegalTokenException(OAuthBearerValidationResult.newFailure(
-                    "Unsecured JWS compact serializations must have 3 dot-separated Base64URL-encoded values"));
+                "Unsecured JWS compact serializations must have 3 dot-separated Base64URL-encoded values"));
         return Collections.unmodifiableList(tmpSplits);
     }
 

@@ -176,6 +176,7 @@ public class AbstractProcessorContextTest {
             equalTo("user-supplied-value")
         );
     }
+
     @Test
     public void shouldThrowErrorIfSerdeDefaultNotSet() {
         final Properties config = getStreamsConfig();
@@ -188,6 +189,7 @@ public class AbstractProcessorContextTest {
 
     private static class TestProcessorContext extends AbstractProcessorContext<Object, Object> {
         static Properties config;
+
         static {
             config = getStreamsConfig();
             // Value must be a string to test className -> class conversion
@@ -217,33 +219,38 @@ public class AbstractProcessorContextTest {
 
         @Override
         public Cancellable schedule(final Duration interval,
-                                    final PunctuationType type,
-                                    final Punctuator callback) throws IllegalArgumentException {
+            final PunctuationType type,
+            final Punctuator callback) throws IllegalArgumentException {
             return null;
         }
 
         @Override
         public Cancellable schedule(final Instant startTime,
-                                    final Duration interval,
-                                    final PunctuationType type,
-                                    final Punctuator callback) {
+            final Duration interval,
+            final PunctuationType type,
+            final Punctuator callback) {
             return null;
         }
 
         @Override
-        public <K, V> void forward(final Record<K, V> record) {}
+        public <K, V> void forward(final Record<K, V> record) {
+        }
 
         @Override
-        public <K, V> void forward(final Record<K, V> record, final String childName) {}
+        public <K, V> void forward(final Record<K, V> record, final String childName) {
+        }
 
         @Override
-        public <K, V> void forward(final K key, final V value) {}
+        public <K, V> void forward(final K key, final V value) {
+        }
 
         @Override
-        public <K, V> void forward(final K key, final V value, final To to) {}
+        public <K, V> void forward(final K key, final V value, final To to) {
+        }
 
         @Override
-        public void commit() {}
+        public void commit() {
+        }
 
         @Override
         public long currentStreamTimeMs() {
@@ -252,11 +259,11 @@ public class AbstractProcessorContextTest {
 
         @Override
         public void logChange(final String storeName,
-                              final Bytes key,
-                              final byte[] value,
-                              final long timestamp,
-                              final Headers headers,
-                              final Position position) {
+            final Bytes key,
+            final byte[] value,
+            final long timestamp,
+            final Headers headers,
+            final Position position) {
         }
 
         @Override

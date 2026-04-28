@@ -63,7 +63,7 @@ public class DynamicAssertionJwtTemplateTest {
     public void testJtiUniqueness() throws IOException {
         List<String> jwtIds = new ArrayList<>();
 
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0;i < 10;i++) {
             try (AssertionJwtTemplate template = new DynamicAssertionJwtTemplate(time, "RSA", 1, 2, true)) {
                 Map<String, Object> payload = template.payload();
                 assertNotNull(payload);

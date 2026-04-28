@@ -24,7 +24,7 @@ public interface WindowedSerializer<T> extends Serializer<Windowed<T>> {
 
     byte[] serializeBaseKey(String topic, Windowed<T> data);
 
-    default byte[] serializeBaseKey(final String topic, final  Headers headers, final  Windowed<T> data) {
+    default byte[] serializeBaseKey(final String topic, final Headers headers, final Windowed<T> data) {
         return serializeBaseKey(topic, data);
     }
 }

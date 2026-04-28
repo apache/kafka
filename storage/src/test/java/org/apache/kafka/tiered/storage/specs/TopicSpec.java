@@ -31,7 +31,7 @@ import java.util.Map;
  * @param properties              Configuration of the topic customized for the purpose of tiered-storage tests.
  */
 public record TopicSpec(String topicName, int partitionCount, int replicationFactor, int maxBatchCountPerSegment,
-                        Map<Integer, List<Integer>> assignment, Map<String, String> properties) {
+Map<Integer, List<Integer>> assignment, Map<String, String> properties) {
 
     @Override
     public String toString() {

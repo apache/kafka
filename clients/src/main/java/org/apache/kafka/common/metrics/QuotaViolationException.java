@@ -49,12 +49,12 @@ public class QuotaViolationException extends KafkaException {
     @Override
     public String toString() {
         return getClass().getName()
-                + ": '"
-                + metric.metricName()
-                + "' violated quota. Actual: "
-                + value
-                + ", Threshold: "
-                + bound;
+            + ": '"
+            + metric.metricName()
+            + "' violated quota. Actual: "
+            + value
+            + ", Threshold: "
+            + bound;
     }
 
     /* avoid the expensive and stack trace for quota violation exceptions */

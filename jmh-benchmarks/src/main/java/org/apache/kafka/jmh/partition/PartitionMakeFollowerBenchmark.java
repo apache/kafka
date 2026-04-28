@@ -82,7 +82,7 @@ public class PartitionMakeFollowerBenchmark {
     private final KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
     private final int[] replicas = {0, 1, 2};
     private final OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
-    private final DelayedOperations delayedOperations  = Mockito.mock(DelayedOperations.class);
+    private final DelayedOperations delayedOperations = Mockito.mock(DelayedOperations.class);
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     private Option<Uuid> topicId;
     private Partition partition;
@@ -99,22 +99,22 @@ public class PartitionMakeFollowerBenchmark {
         BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
         LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
         logManager = new LogManagerBuilder().
-            setLogDirs(List.of(logDir)).
-            setInitialOfflineDirs(List.of()).
-            setConfigRepository(new MockConfigRepository()).
-            setInitialDefaultConfig(logConfig).
-            setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false)).
-            setRecoveryThreadsPerDataDir(1).
-            setFlushCheckMs(1000L).
-            setFlushRecoveryOffsetCheckpointMs(10000L).
-            setFlushStartOffsetCheckpointMs(10000L).
-            setRetentionCheckMs(1000L).
-            setProducerStateManagerConfig(60000, false).
-            setScheduler(scheduler).
-            setBrokerTopicStats(brokerTopicStats).
-            setLogDirFailureChannel(logDirFailureChannel).
-            setTime(Time.SYSTEM).
-            build();
+                setLogDirs(List.of(logDir)).
+                setInitialOfflineDirs(List.of()).
+                setConfigRepository(new MockConfigRepository()).
+                setInitialDefaultConfig(logConfig).
+                setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false)).
+                setRecoveryThreadsPerDataDir(1).
+                setFlushCheckMs(1000L).
+                setFlushRecoveryOffsetCheckpointMs(10000L).
+                setFlushStartOffsetCheckpointMs(10000L).
+                setRetentionCheckMs(1000L).
+                setProducerStateManagerConfig(60000, false).
+                setScheduler(scheduler).
+                setBrokerTopicStats(brokerTopicStats).
+                setLogDirFailureChannel(logDirFailureChannel).
+                setTime(Time.SYSTEM).
+                build();
 
         TopicPartition tp = new TopicPartition("topic", 0);
         topicId = OptionConverters.toScala(Optional.of(Uuid.randomUuid()));
@@ -123,17 +123,17 @@ public class PartitionMakeFollowerBenchmark {
         AlterPartitionListener alterPartitionListener = Mockito.mock(AlterPartitionListener.class);
         AlterPartitionManager alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
         partition = new Partition(tp, 100, 0, () -> -1, Time.SYSTEM,
-            alterPartitionListener, delayedOperations,
-            Mockito.mock(MetadataCache.class), logManager, alterPartitionManager, topicId);
+                alterPartitionListener, delayedOperations,
+                Mockito.mock(MetadataCache.class), logManager, alterPartitionManager, topicId);
         partition.createLogIfNotExists(true, false, offsetCheckpoints, topicId, Option.empty());
         executorService.submit((Runnable) () -> {
-            SimpleRecord[] simpleRecords = new SimpleRecord[] {
-                new SimpleRecord(1L, "foo".getBytes(StandardCharsets.UTF_8), "1".getBytes(StandardCharsets.UTF_8)),
-                new SimpleRecord(2L, "bar".getBytes(StandardCharsets.UTF_8), "2".getBytes(StandardCharsets.UTF_8))
+            SimpleRecord[] simpleRecords = new SimpleRecord[]{
+                    new SimpleRecord(1L, "foo".getBytes(StandardCharsets.UTF_8), "1".getBytes(StandardCharsets.UTF_8)),
+                    new SimpleRecord(2L, "bar".getBytes(StandardCharsets.UTF_8), "2".getBytes(StandardCharsets.UTF_8))
             };
             int initialOffSet = 0;
             while (true) {
-                MemoryRecords memoryRecords =  MemoryRecords.withRecords(initialOffSet, Compression.NONE, 0, simpleRecords);
+                MemoryRecords memoryRecords = MemoryRecords.withRecords(initialOffSet, Compression.NONE, 0, simpleRecords);
                 partition.appendRecordsToFollowerOrFutureReplica(memoryRecords, false, Integer.MAX_VALUE);
                 initialOffSet = initialOffSet + 2;
             }
@@ -151,14 +151,14 @@ public class PartitionMakeFollowerBenchmark {
     @Benchmark
     public boolean testMakeFollower() {
         PartitionRegistration partitionRegistration = new PartitionRegistration.Builder()
-            .setLeader(0)
-            .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
-            .setLeaderEpoch(0)
-            .setIsr(replicas)
-            .setPartitionEpoch(1)
-            .setReplicas(replicas)
-            .setDirectories(DirectoryId.unassignedArray(replicas.length))
-            .build();
+                .setLeader(0)
+                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
+                .setLeaderEpoch(0)
+                .setIsr(replicas)
+                .setPartitionEpoch(1)
+                .setReplicas(replicas)
+                .setDirectories(DirectoryId.unassignedArray(replicas.length))
+                .build();
         return partition.makeFollower(partitionRegistration, true, offsetCheckpoints, topicId, Option.empty());
     }
 }

@@ -37,14 +37,14 @@ import java.util.stream.Collectors;
  * in the delete records operation purgatory
  */
 public class DelayedDeleteRecords extends DelayedOperation {
-    
+
     private static final Logger LOG = LoggerFactory.getLogger(DelayedDeleteRecords.class);
-    
+
     //  migration from kafka.server.DelayedDeleteRecordsMetrics
     private static final KafkaMetricsGroup METRICS_GROUP = new KafkaMetricsGroup("kafka.server", "DelayedDeleteRecordsMetrics");
     private static final Meter AGGREGATE_EXPIRATION_METER = METRICS_GROUP.newMeter("ExpiresPerSec", "requests",
-            TimeUnit.SECONDS);
-    
+        TimeUnit.SECONDS);
+
     private final Map<TopicPartition, DeleteRecordsPartitionStatus> deleteRecordsStatus;
     private final BiConsumer<TopicPartition, DeleteRecordsPartitionStatus> onAcksPending;
     private final Consumer<Map<TopicPartition, DeleteRecordsPartitionResult>> responseCallback;
@@ -67,7 +67,7 @@ public class DelayedDeleteRecords extends DelayedOperation {
             } else {
                 status.setAcksPending(false);
             }
-            
+
             LOG.trace("Initial partition status for {} is {}", topicPartition, status);
         });
     }
@@ -104,6 +104,6 @@ public class DelayedDeleteRecords extends DelayedOperation {
     @Override
     public void onComplete() {
         responseCallback.accept(deleteRecordsStatus.entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().responseStatus())));
+            .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().responseStatus())));
     }
 }

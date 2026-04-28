@@ -190,8 +190,8 @@ public class PlaintextConsumerCallbackTest {
     }
 
     private void testOnPartitionsAssignedCalledWithExpectedPartitions(
-            Consumer<byte[], byte[]> consumer,
-            boolean expectNewPartitionsOnlyInCallback) throws InterruptedException {
+        Consumer<byte[], byte[]> consumer,
+        boolean expectNewPartitionsOnlyInCallback) throws InterruptedException {
         subscribeAndExpectOnPartitionsAssigned(consumer, List.of(topic), List.of(tp));
         assertEquals(Set.of(tp), consumer.assignment());
 
@@ -209,9 +209,9 @@ public class PlaintextConsumerCallbackTest {
         // to contain partitions from both topics, but the onPartitionsAssigned parameters may containing
         // the full new assignment or just the newly added partitions depending on the case.
         subscribeAndExpectOnPartitionsAssigned(
-                consumer,
-                List.of(topic, newTopic),
-                expectedPartitionsInCallback);
+            consumer,
+            List.of(topic, newTopic),
+            expectedPartitionsInCallback);
         assertEquals(Set.of(tp, addedPartition), consumer.assignment());
     }
 
@@ -233,13 +233,13 @@ public class PlaintextConsumerCallbackTest {
             }
         });
         ClientsTestUtils.pollUntilTrue(
-                consumer,
-                partitionsAssigned::get,
-                "Timed out before expected rebalance completed"
+            consumer,
+            partitionsAssigned::get,
+            "Timed out before expected rebalance completed"
         );
         // These are different types, so comparing values instead
         assertTrue(expectedPartitionsInCallback.containsAll(partitionsFromCallback.get()) && partitionsFromCallback.get().containsAll(expectedPartitionsInCallback),
-                "Expected partitions " + expectedPartitionsInCallback + " as parameter for onPartitionsAssigned, but got " + partitionsFromCallback.get());
+            "Expected partitions " + expectedPartitionsInCallback + " as parameter for onPartitionsAssigned, but got " + partitionsFromCallback.get());
     }
 
     @ClusterTest
@@ -313,8 +313,8 @@ public class PlaintextConsumerCallbackTest {
             }
         });
         ClientsTestUtils.pollUntilTrue(
-            consumer, 
-            partitionsAssigned::get, 
+            consumer,
+            partitionsAssigned::get,
             "Timed out before expected rebalance completed"
         );
     }
@@ -363,9 +363,9 @@ public class PlaintextConsumerCallbackTest {
 
     private Consumer<byte[], byte[]> createClassicConsumerCooperativeProtocol() {
         return cluster.consumer(Map.of(
-                GROUP_PROTOCOL_CONFIG, CLASSIC.name.toLowerCase(Locale.ROOT),
-                ENABLE_AUTO_COMMIT_CONFIG, "false",
-                ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "org.apache.kafka.clients.consumer.CooperativeStickyAssignor"
+            GROUP_PROTOCOL_CONFIG, CLASSIC.name.toLowerCase(Locale.ROOT),
+            ENABLE_AUTO_COMMIT_CONFIG, "false",
+            ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "org.apache.kafka.clients.consumer.CooperativeStickyAssignor"
         ));
     }
 }

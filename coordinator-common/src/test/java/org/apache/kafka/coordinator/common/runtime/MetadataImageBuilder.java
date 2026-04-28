@@ -35,14 +35,14 @@ public class MetadataImageBuilder {
 
     public MetadataImageBuilder(MetadataImage image) {
         this.delta = new MetadataDelta.Builder()
-            .setImage(image)
-            .build();
+                .setImage(image)
+                .build();
     }
 
     public MetadataImageBuilder addTopic(
-        Uuid topicId,
-        String topicName,
-        int numPartitions
+            Uuid topicId,
+            String topicName,
+            int numPartitions
     ) {
         // For testing purposes, the following criteria are used:
         // - Number of replicas for each partition: 2
@@ -50,9 +50,9 @@ public class MetadataImageBuilder {
         delta.replay(new TopicRecord().setTopicId(topicId).setName(topicName));
         for (int i = 0; i < numPartitions; i++) {
             delta.replay(new PartitionRecord()
-                .setTopicId(topicId)
-                .setPartitionId(i)
-                .setReplicas(Arrays.asList(i % 4, (i + 1) % 4)));
+                    .setTopicId(topicId)
+                    .setPartitionId(i)
+                    .setReplicas(Arrays.asList(i % 4, (i + 1) % 4)));
         }
         return this;
     }

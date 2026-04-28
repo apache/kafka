@@ -27,9 +27,9 @@ public class InMemoryWindowBytesStoreSupplier implements WindowBytesStoreSupplie
     private final boolean retainDuplicates;
 
     public InMemoryWindowBytesStoreSupplier(final String name,
-                                            final long retentionPeriod,
-                                            final long windowSize,
-                                            final boolean retainDuplicates) {
+        final long retentionPeriod,
+        final long windowSize,
+        final boolean retainDuplicates) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.windowSize = windowSize;
@@ -44,10 +44,10 @@ public class InMemoryWindowBytesStoreSupplier implements WindowBytesStoreSupplie
     @Override
     public WindowStore<Bytes, byte[]> get() {
         return new InMemoryWindowStore(name,
-                                       retentionPeriod,
-                                       windowSize,
-                                       retainDuplicates,
-                                       metricsScope());
+            retentionPeriod,
+            windowSize,
+            retainDuplicates,
+            metricsScope());
     }
 
     @Override

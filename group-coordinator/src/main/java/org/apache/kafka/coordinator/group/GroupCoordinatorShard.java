@@ -302,7 +302,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         private final DeleteShareGroupStateParameters deleteStateRequestParameters;
 
         DeleteShareGroupOffsetsResultHolder(short topLevelErrorCode, String topLevelErrorMessage) {
-            this(topLevelErrorCode, topLevelErrorMessage, null,  null);
+            this(topLevelErrorCode, topLevelErrorMessage, null, null);
         }
 
         DeleteShareGroupOffsetsResultHolder(
@@ -366,7 +366,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param id    The topic ID.
      * @param name  The topic name.
      */
-    public record DeletedTopic(Uuid id, String name) { }
+    public record DeletedTopic(Uuid id, String name) {
+    }
 
     /**
      * The group/offsets expiration key to schedule a timer task.

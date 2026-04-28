@@ -65,9 +65,9 @@ public class QuorumControllerIntegrationTestUtils {
     ) {
         BrokerRegistrationRequestData.FeatureCollection features = new BrokerRegistrationRequestData.FeatureCollection();
         features.add(new BrokerRegistrationRequestData.Feature()
-                         .setName(MetadataVersion.FEATURE_NAME)
-                         .setMinSupportedVersion(minVersion.featureLevel())
-                         .setMaxSupportedVersion(maxVersion.featureLevel()));
+            .setName(MetadataVersion.FEATURE_NAME)
+            .setMinSupportedVersion(minVersion.featureLevel())
+            .setMaxSupportedVersion(maxVersion.featureLevel()));
         return features;
     }
 
@@ -79,15 +79,15 @@ public class QuorumControllerIntegrationTestUtils {
      * @param featureMaxVersions    The features and their max supported versions.
      */
     static BrokerRegistrationRequestData.FeatureCollection brokerFeaturesPlusFeatureVersions(
-            MetadataVersion minVersion,
-            MetadataVersion maxVersion,
-            Map<String, Short> featureMaxVersions
+        MetadataVersion minVersion,
+        MetadataVersion maxVersion,
+        Map<String, Short> featureMaxVersions
     ) {
         BrokerRegistrationRequestData.FeatureCollection features = new BrokerRegistrationRequestData.FeatureCollection();
         features.add(new BrokerRegistrationRequestData.Feature()
-                .setName(MetadataVersion.FEATURE_NAME)
-                .setMinSupportedVersion(minVersion.featureLevel())
-                .setMaxSupportedVersion(maxVersion.featureLevel()));
+            .setName(MetadataVersion.FEATURE_NAME)
+            .setMinSupportedVersion(minVersion.featureLevel())
+            .setMaxSupportedVersion(maxVersion.featureLevel()));
         featureMaxVersions.forEach((key, value) -> {
             features.add(new BrokerRegistrationRequestData.Feature()
                 .setName(key)
@@ -128,8 +128,8 @@ public class QuorumControllerIntegrationTestUtils {
                                 .setName("PLAINTEXT")
                                 .setHost("localhost")
                                 .setPort(9092 + brokerId)
-                            )
                         )
+                    )
                     )
             ).get();
             brokerEpochs.put(brokerId, reply.epoch());

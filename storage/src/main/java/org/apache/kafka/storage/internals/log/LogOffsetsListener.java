@@ -27,10 +27,12 @@ public interface LogOffsetsListener {
     /**
      * A default no op offsets listener.
      */
-    LogOffsetsListener NO_OP_OFFSETS_LISTENER = new LogOffsetsListener() { };
+    LogOffsetsListener NO_OP_OFFSETS_LISTENER = new LogOffsetsListener() {
+    };
 
     /**
      * Called when the Log increments its high watermark.
      */
-    default void onHighWatermarkUpdated(long offset) {}
+    default void onHighWatermarkUpdated(long offset) {
+    }
 }

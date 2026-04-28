@@ -90,7 +90,7 @@ public class CoordinatorStrategyTest {
         strategy.disableBatch();
 
         assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(
-                Set.of(CoordinatorKey.byTransactionalId("txnid"))));
+            Set.of(CoordinatorKey.byTransactionalId("txnid"))));
     }
 
     @Test
@@ -148,18 +148,18 @@ public class CoordinatorStrategyTest {
 
         FindCoordinatorResponseData responseData = new FindCoordinatorResponseData()
             .setCoordinators(Arrays.asList(
-                    new FindCoordinatorResponseData.Coordinator()
-                        .setKey("foo")
-                        .setErrorCode(Errors.NONE.code())
-                        .setHost("localhost")
-                        .setPort(9092)
-                        .setNodeId(1),
-                    new FindCoordinatorResponseData.Coordinator()
-                        .setKey("bar")
-                        .setErrorCode(Errors.NONE.code())
-                        .setHost("localhost")
-                        .setPort(9092)
-                        .setNodeId(2)));
+                new FindCoordinatorResponseData.Coordinator()
+                    .setKey("foo")
+                    .setErrorCode(Errors.NONE.code())
+                    .setHost("localhost")
+                    .setPort(9092)
+                    .setNodeId(1),
+                new FindCoordinatorResponseData.Coordinator()
+                    .setKey("bar")
+                    .setErrorCode(Errors.NONE.code())
+                    .setHost("localhost")
+                    .setPort(9092)
+                    .setNodeId(2)));
 
         AdminApiLookupStrategy.LookupResult<CoordinatorKey> result = runLookup(Set.of(group1, group2), responseData);
         Map<CoordinatorKey, Integer> expectedResult = new HashMap<>();
@@ -194,16 +194,16 @@ public class CoordinatorStrategyTest {
         CoordinatorKey group1 = CoordinatorKey.byGroupId("foo");
         CoordinatorKey group2 = CoordinatorKey.byGroupId("bar");
         FindCoordinatorResponseData responseData = new FindCoordinatorResponseData()
-                .setCoordinators(Arrays.asList(
-                        new FindCoordinatorResponseData.Coordinator()
-                            .setKey("foo")
-                            .setErrorCode(error.code()),
-                        new FindCoordinatorResponseData.Coordinator()
-                            .setKey("bar")
-                            .setErrorCode(Errors.NONE.code())
-                            .setHost("localhost")
-                            .setPort(9092)
-                            .setNodeId(2)));
+            .setCoordinators(Arrays.asList(
+                new FindCoordinatorResponseData.Coordinator()
+                    .setKey("foo")
+                    .setErrorCode(error.code()),
+                new FindCoordinatorResponseData.Coordinator()
+                    .setKey("bar")
+                    .setErrorCode(Errors.NONE.code())
+                    .setHost("localhost")
+                    .setPort(9092)
+                    .setNodeId(2)));
         AdminApiLookupStrategy.LookupResult<CoordinatorKey> result = runLookup(Set.of(group1, group2), responseData);
 
         assertEquals(emptyMap(), result.failedKeys);
@@ -254,10 +254,10 @@ public class CoordinatorStrategyTest {
         Errors error
     ) {
         FindCoordinatorResponseData responseData = new FindCoordinatorResponseData()
-                .setCoordinators(Collections.singletonList(
-                        new FindCoordinatorResponseData.Coordinator()
-                            .setKey(key.idValue)
-                            .setErrorCode(error.code())));
+            .setCoordinators(Collections.singletonList(
+                new FindCoordinatorResponseData.Coordinator()
+                    .setKey(key.idValue)
+                    .setErrorCode(error.code())));
         AdminApiLookupStrategy.LookupResult<CoordinatorKey> result = runLookup(singleton(key), responseData);
 
         assertEquals(emptyMap(), result.mappedKeys);

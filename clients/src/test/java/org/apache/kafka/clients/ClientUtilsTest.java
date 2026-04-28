@@ -187,7 +187,7 @@ public class ClientUtilsTest {
 
     @Test
     public void testResolveDnsLookup() throws UnknownHostException {
-        InetAddress[] addresses = new InetAddress[] {
+        InetAddress[] addresses = new InetAddress[]{
             InetAddress.getByName("198.51.100.0"), InetAddress.getByName("198.51.100.5")
         };
         HostResolver hostResolver = new AddressChangeHostResolver(addresses, addresses);

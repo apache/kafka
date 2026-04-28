@@ -1396,8 +1396,8 @@ public class Values {
                 }
             }
             return ignoreLeadingAndTrailingWhitespace
-                ? nextToken.trim().equals(expected)
-                : nextToken.equals(expected);
+                    ? nextToken.trim().equals(expected)
+                    : nextToken.equals(expected);
         }
     }
 }

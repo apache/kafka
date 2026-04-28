@@ -53,6 +53,7 @@ public final class Lz4BlockInputStream extends InputStream {
     private static final XXHash32 CHECKSUM = XXHashFactory.fastestInstance().hash32();
 
     private static final RuntimeException BROKEN_LZ4_EXCEPTION;
+
     // https://issues.apache.org/jira/browse/KAFKA-9203
     // detect buggy lz4 libraries on the classpath
     static {
@@ -286,7 +287,7 @@ public final class Lz4BlockInputStream extends InputStream {
 
         final byte[] compressed = new byte[compressor.maxCompressedLength(source.length)];
         final int compressedLength = compressor.compress(source, 0, source.length, compressed, 0,
-                                                         compressed.length);
+            compressed.length);
 
         // allocate an array-backed ByteBuffer with non-zero array-offset containing the compressed data
         // a buggy decompressor will read the data from the beginning of the underlying array instead of
@@ -303,11 +304,11 @@ public final class Lz4BlockInputStream extends InputStream {
             DECOMPRESSOR.decompress(nonZeroOffsetBuffer, 0, compressedLength, dest, 0, source.length);
         } catch (Exception e) {
             throw new RuntimeException("Kafka has detected a buggy lz4-java library (< 1.4.x) on the classpath."
-                                       + " If you are using Kafka client libraries, make sure your application does not"
-                                       + " accidentally override the version provided by Kafka or include multiple versions"
-                                       + " of the library on the classpath. The lz4-java version on the classpath should"
-                                       + " match the version the Kafka client libraries depend on. Adding -verbose:class"
-                                       + " to your JVM arguments may help understand which lz4-java version is getting loaded.", e);
+                + " If you are using Kafka client libraries, make sure your application does not"
+                + " accidentally override the version provided by Kafka or include multiple versions"
+                + " of the library on the classpath. The lz4-java version on the classpath should"
+                + " match the version the Kafka client libraries depend on. Adding -verbose:class"
+                + " to your JVM arguments may help understand which lz4-java version is getting loaded.", e);
         }
     }
 }

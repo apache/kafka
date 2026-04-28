@@ -27,7 +27,7 @@ public class EntityTypeTest {
 
     @Test
     public void testUnknownEntityType() {
-        for (FieldType type : new FieldType[] {
+        for (FieldType type : new FieldType[]{
             FieldType.StringFieldType.INSTANCE,
             FieldType.Int8FieldType.INSTANCE,
             FieldType.Int16FieldType.INSTANCE,
@@ -76,7 +76,7 @@ public class EntityTypeTest {
             verifyTypeMatches("groupIdField", FieldType.Int8FieldType.INSTANCE));
         expectException(() -> EntityType.TOPIC_NAME.
             verifyTypeMatches("topicNameField",
-                new FieldType.ArrayType(FieldType.Int64FieldType.INSTANCE)));
+            new FieldType.ArrayType(FieldType.Int64FieldType.INSTANCE)));
         expectException(() -> EntityType.BROKER_ID.
             verifyTypeMatches("brokerIdField", FieldType.Int64FieldType.INSTANCE));
     }

@@ -94,8 +94,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
 
         public HeartbeatState(final StreamsRebalanceData streamsRebalanceData,
-                              final StreamsMembershipManager membershipManager,
-                              final int rebalanceTimeoutMs) {
+            final StreamsMembershipManager membershipManager,
+            final int rebalanceTimeoutMs) {
             this.membershipManager = membershipManager;
             this.streamsRebalanceData = streamsRebalanceData;
             this.rebalanceTimeoutMs = rebalanceTimeoutMs;
@@ -139,8 +139,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 streamsRebalanceData.rackId().ifPresent(data::setRackId);
                 data.setClientTags(streamsRebalanceData.clientTags().entrySet().stream()
                     .map(entry -> new StreamsGroupHeartbeatRequestData.KeyValue()
-                        .setKey(entry.getKey())
-                        .setValue(entry.getValue())
+                            .setKey(entry.getKey())
+                            .setValue(entry.getValue())
                     )
                     .collect(Collectors.toList()));
                 data.setActiveTasks(fromStreamsToHeartbeatRequest(Set.of()));
@@ -185,7 +185,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         }
 
         private static StreamsGroupHeartbeatRequestData.Subtopology fromStreamsToHeartbeatRequest(final String subtopologyId,
-                                                                                                  final StreamsRebalanceData.Subtopology subtopology) {
+            final StreamsRebalanceData.Subtopology subtopology) {
             final StreamsGroupHeartbeatRequestData.Subtopology subtopologyData = new StreamsGroupHeartbeatRequestData.Subtopology();
             subtopologyData.setSubtopologyId(subtopologyId);
             ArrayList<String> sortedSourceTopics = new ArrayList<>(subtopology.sourceTopics());
@@ -202,7 +202,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         }
 
         private static List<StreamsGroupHeartbeatRequestData.CopartitionGroup> getCopartitionGroupsFromStreams(final Collection<Set<String>> copartitionGroups,
-                                                                                                               final StreamsGroupHeartbeatRequestData.Subtopology subtopologyData) {
+            final StreamsGroupHeartbeatRequestData.Subtopology subtopologyData) {
             final Map<String, Short> sourceTopicsMap =
                 IntStream.range(0, subtopologyData.sourceTopics().size())
                     .boxed()
@@ -221,8 +221,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         }
 
         private static StreamsGroupHeartbeatRequestData.CopartitionGroup getCopartitionGroupFromStreams(final Set<String> topicNames,
-                                                                                                        final Map<String, Short> sourceTopicsMap,
-                                                                                                        final Map<String, Short> repartitionSourceTopics) {
+            final Map<String, Short> sourceTopicsMap,
+            final Map<String, Short> repartitionSourceTopics) {
             StreamsGroupHeartbeatRequestData.CopartitionGroup copartitionGroup = new StreamsGroupHeartbeatRequestData.CopartitionGroup();
 
             topicNames.forEach(topicName -> {
@@ -299,13 +299,13 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     private final Timer pollTimer;
 
     public StreamsGroupHeartbeatRequestManager(final LogContext logContext,
-                                               final Time time,
-                                               final ConsumerConfig config,
-                                               final CoordinatorRequestManager coordinatorRequestManager,
-                                               final StreamsMembershipManager membershipManager,
-                                               final BackgroundEventHandler backgroundEventHandler,
-                                               final Metrics metrics,
-                                               final StreamsRebalanceData streamsRebalanceData) {
+        final Time time,
+        final ConsumerConfig config,
+        final CoordinatorRequestManager coordinatorRequestManager,
+        final StreamsMembershipManager membershipManager,
+        final BackgroundEventHandler backgroundEventHandler,
+        final Metrics metrics,
+        final StreamsRebalanceData streamsRebalanceData) {
         this.logger = logContext.logger(getClass());
         this.coordinatorRequestManager = Objects.requireNonNull(
             coordinatorRequestManager,
@@ -449,7 +449,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         pollTimer.update(pollMs);
         if (pollTimer.isExpired()) {
             logger.warn("Time between subsequent calls to poll() was longer than the configured " +
-                    "max.poll.interval.ms, exceeded approximately by {} ms. Member {} will rejoin the group now.",
+                "max.poll.interval.ms, exceeded approximately by {} ms. Member {} will rejoin the group now.",
                 pollTimer.isExpiredBy(), membershipManager.memberId());
             membershipManager.maybeRejoinStaleMember();
         }
@@ -586,7 +586,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             case COORDINATOR_LOAD_IN_PROGRESS:
                 logInfo(
                     String.format("StreamsGroupHeartbeatRequest failed because the group coordinator %s is still loading. " +
-                    "Will retry", coordinatorRequestManager.coordinator()),
+                        "Will retry", coordinatorRequestManager.coordinator()),
                     response,
                     currentTimeMs
                 );
@@ -654,8 +654,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     }
 
     private void logInfo(final String message,
-                         final StreamsGroupHeartbeatResponse response,
-                         final long currentTimeMs) {
+        final StreamsGroupHeartbeatResponse response,
+        final long currentTimeMs) {
         logger.info("{} in {}ms: {}",
             message,
             heartbeatRequestState.remainingBackoffMs(currentTimeMs),
@@ -692,7 +692,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     }
 
     private static Map<StreamsRebalanceData.HostInfo, StreamsRebalanceData.EndpointPartitions> convertHostInfoMap(
-            final StreamsGroupHeartbeatResponseData data) {
+        final StreamsGroupHeartbeatResponseData data) {
         Map<StreamsRebalanceData.HostInfo, StreamsRebalanceData.EndpointPartitions> partitionsByHost = new HashMap<>();
         data.partitionsByUserEndpoint().forEach(endpoint -> {
             List<TopicPartition> activeTopicPartitions = getTopicPartitionList(endpoint.activePartitions());
@@ -706,9 +706,9 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     static List<TopicPartition> getTopicPartitionList(List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions) {
         return topicPartitions.stream()
-                .flatMap(partition ->
-                        partition.partitions().stream().map(partitionId -> new TopicPartition(partition.topic(), partitionId)))
-                .collect(Collectors.toList());
+            .flatMap(partition ->
+                partition.partitions().stream().map(partitionId -> new TopicPartition(partition.topic(), partitionId)))
+            .collect(Collectors.toList());
     }
 
 }

@@ -282,10 +282,10 @@ public class ConfigurationUtils {
     }
 
     public static <T> T getConfiguredInstance(Map<String, ?> configs,
-                                              String saslMechanism,
-                                              List<AppConfigurationEntry> jaasConfigEntries,
-                                              String configName,
-                                              Class<T> expectedClass) {
+        String saslMechanism,
+        List<AppConfigurationEntry> jaasConfigEntries,
+        String configName,
+        Class<T> expectedClass) {
         Object configValue = configs.get(configName);
         Object o;
 
@@ -395,10 +395,10 @@ public class ConfigurationUtils {
     }
 
     private void throwIfResourceIsNotAllowed(String resourceType,
-                                             String configName,
-                                             String configValue,
-                                             String propertyName,
-                                             String propertyDefault) {
+        String configName,
+        String configValue,
+        String propertyName,
+        String propertyDefault) {
         String[] allowedArray = System.getProperty(propertyName, propertyDefault).split(",");
         Set<String> allowed = Arrays.stream(allowedArray)
             .map(String::trim)

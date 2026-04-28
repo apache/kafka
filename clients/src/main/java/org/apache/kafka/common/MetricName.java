@@ -127,6 +127,6 @@ public final class MetricName {
     @Override
     public String toString() {
         return "MetricName [name=" + name + ", group=" + group + ", description="
-                + description + ", tags=" + tags + "]";
+            + description + ", tags=" + tags + "]";
     }
 }

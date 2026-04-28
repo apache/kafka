@@ -660,5 +660,5 @@ public abstract class AbstractKeyValueStoreTest {
                 iter.next();
             }
         }
-    }                  
+    }
 }

@@ -64,7 +64,8 @@ public class MirrorRestServer extends RestServer {
     private class Binder extends AbstractBinder {
         @Override
         protected void configure() {
-            bind(herders).to(new TypeLiteral<Map<SourceAndTarget, Herder>>() { });
+            bind(herders).to(new TypeLiteral<Map<SourceAndTarget, Herder>>() {
+            });
             bind(restClient).to(RestClient.class);
         }
     }

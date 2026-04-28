@@ -25,7 +25,8 @@ import java.util.stream.Collectors;
 
 public final class AdminUtils {
 
-    private AdminUtils() {}
+    private AdminUtils() {
+    }
 
     public static Set<AclOperation> validAclOperations(final int authorizedOperations) {
         if (authorizedOperations == MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED) {

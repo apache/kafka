@@ -100,7 +100,8 @@ import javax.management.ObjectName;
 
 public final class Utils {
 
-    private Utils() {}
+    private Utils() {
+    }
 
     // This matches URIs of formats: host:port and protocol://host:port
     // IPv6 is supported with [ip] pattern
@@ -112,14 +113,14 @@ public final class Utils {
     private static final DecimalFormat TWO_DIGIT_FORMAT = new DecimalFormat("0.##",
         DecimalFormatSymbols.getInstance(Locale.ENGLISH));
 
-    private static final String[] BYTE_SCALE_SUFFIXES = new String[] {"B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"};
+    private static final String[] BYTE_SCALE_SUFFIXES = new String[]{"B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"};
 
     public static final String NL = System.lineSeparator();
 
     private static final Logger log = LoggerFactory.getLogger(Utils.class);
 
     private static final VarHandle INT_HANDLE =
-            MethodHandles.byteArrayViewVarHandle(int[].class, ByteOrder.LITTLE_ENDIAN);
+        MethodHandles.byteArrayViewVarHandle(int[].class, ByteOrder.LITTLE_ENDIAN);
 
     /**
      * Get a sorted list representation of a collection.
@@ -243,7 +244,7 @@ public final class Utils {
      */
     public static int utf8Length(CharSequence s) {
         int count = 0;
-        for (int i = 0, len = s.length(); i < len; i++) {
+        for (int i = 0, len = s.length();i < len;i++) {
             char ch = s.charAt(i);
             if (ch <= 0x7F) {
                 count++;
@@ -380,7 +381,7 @@ public final class Utils {
 
         // time-constant comparison that always compares all characters in first array
         boolean matches = first.length == second.length;
-        for (int i = 0; i < first.length; ++i) {
+        for (int i = 0;i < first.length;++i) {
             int j = i < second.length ? i : 0;
             if (first[i] != second[j]) {
                 matches = false;
@@ -468,12 +469,12 @@ public final class Utils {
      * @throws ClassNotFoundException   If there was a problem constructing the object.
      */
     public static <T> T newParameterizedInstance(String className, Object... params)
-            throws ClassNotFoundException {
+        throws ClassNotFoundException {
         Class<?>[] argTypes = new Class<?>[params.length / 2];
         Object[] args = new Object[params.length / 2];
         try {
             Class<?> c = Utils.loadClass(className, Object.class);
-            for (int i = 0; i < params.length / 2; i++) {
+            for (int i = 0;i < params.length / 2;i++) {
                 argTypes[i] = (Class<?>) params[2 * i];
                 args[i] = params[(2 * i) + 1];
             }
@@ -512,7 +513,7 @@ public final class Utils {
         int h = seed ^ length;
         int length4 = length >> 2;
 
-        for (int i = 0; i < length4; i++) {
+        for (int i = 0;i < length4;i++) {
             final int i4 = i << 2;
             int k = (int) INT_HANDLE.get(data, i4);
             k *= m;
@@ -579,8 +580,8 @@ public final class Utils {
      */
     public static String formatAddress(String host, Integer port) {
         return host.contains(":")
-                ? "[" + host + "]:" + port // IPv6
-                : host + ":" + port;
+            ? "[" + host + "]:" + port // IPv6
+            : host + ":" + port;
     }
 
     /**
@@ -615,13 +616,13 @@ public final class Utils {
      *          => "|START|key=hello,keyTwo=hi|END|"}
      */
     public static <K, V> String mkString(Map<K, V> map, String begin, String end,
-                                         String keyValueSeparator, String elementSeparator) {
+        String keyValueSeparator, String elementSeparator) {
         StringBuilder bld = new StringBuilder();
         bld.append(begin);
         String prefix = "";
         for (Map.Entry<K, V> entry : map.entrySet()) {
             bld.append(prefix).append(entry.getKey()).
-                    append(keyValueSeparator).append(entry.getValue());
+                append(keyValueSeparator).append(entry.getValue());
             prefix = elementSeparator;
         }
         bld.append(end);
@@ -1041,7 +1042,7 @@ public final class Utils {
      * Run the supplied code. If an exception is thrown, it is swallowed and registered to the firstException parameter.
      */
     public static void swallow(final Logger log, final Level level, final String errorMessage, final SwallowAction code,
-                               final AtomicReference<Throwable> firstException) {
+        final AtomicReference<Throwable> firstException) {
         if (code != null) {
             try {
                 code.run();
@@ -1127,16 +1128,16 @@ public final class Utils {
     }
 
     /**
-    * Closes {@code closeable} and if an exception is thrown, it is registered to the firstException parameter.
-    * <b>Be cautious when passing method references as an argument.</b> For example:
-    * <p>
-    * {@code closeQuietly(task::stop, "source task");}
-    * <p>
-    * Although this method gracefully handles null {@link AutoCloseable} objects, attempts to take a method
-    * reference from a null object will result in a {@link NullPointerException}. In the example code above,
-    * it would be the caller's responsibility to ensure that {@code task} was non-null before attempting to
-    * use a method reference from it.
-    */
+     * Closes {@code closeable} and if an exception is thrown, it is registered to the firstException parameter.
+     * <b>Be cautious when passing method references as an argument.</b> For example:
+     * <p>
+     * {@code closeQuietly(task::stop, "source task");}
+     * <p>
+     * Although this method gracefully handles null {@link AutoCloseable} objects, attempts to take a method
+     * reference from a null object will result in a {@link NullPointerException}. In the example code above,
+     * it would be the caller's responsibility to ensure that {@code task} was non-null before attempting to
+     * use a method reference from it.
+     */
     public static void closeQuietly(AutoCloseable closeable, String name, AtomicReference<Throwable> firstException) {
         if (closeable != null) {
             try {
@@ -1234,7 +1235,7 @@ public final class Utils {
      * possible exceptions
      */
     public static void readFullyOrFail(FileChannel channel, ByteBuffer destinationBuffer, long position,
-                                       String description) throws IOException {
+        String description) throws IOException {
         if (position < 0) {
             throw new IllegalArgumentException("The file channel position cannot be negative, but it is " + position);
         }
@@ -1242,8 +1243,8 @@ public final class Utils {
         readFully(channel, destinationBuffer, position);
         if (destinationBuffer.hasRemaining()) {
             throw new EOFException(String.format("Failed to read `%s` from file channel `%s`. Expected to read %d bytes, " +
-                    "but reached end of file after reading %d bytes. Started read from position %d.",
-                    description, channel, expectedReadBytes, expectedReadBytes - destinationBuffer.remaining(), position));
+                "but reached end of file after reading %d bytes. Started read from position %d.",
+                description, channel, expectedReadBytes, expectedReadBytes - destinationBuffer.remaining(), position));
         }
     }
 
@@ -1315,9 +1316,9 @@ public final class Utils {
      * @throws IOException If an I/O error occurs
      */
     public static int tryWriteTo(TransferableChannel destChannel,
-                                  int position,
-                                  int length,
-                                  ByteBuffer sourceBuffer) throws IOException {
+        int position,
+        int length,
+        ByteBuffer sourceBuffer) throws IOException {
 
         ByteBuffer dup = sourceBuffer.duplicate();
         dup.position(position);
@@ -1338,7 +1339,7 @@ public final class Utils {
             out.write(buffer.array(), buffer.position() + buffer.arrayOffset(), length);
         } else {
             int pos = buffer.position();
-            for (int i = pos; i < length + pos; i++)
+            for (int i = pos;i < length + pos;i++)
                 out.writeByte(buffer.get(i));
         }
     }
@@ -1382,7 +1383,7 @@ public final class Utils {
 
     public static Set<Byte> from32BitField(final int intValue) {
         Set<Byte> result = new HashSet<>();
-        for (int itr = intValue, count = 0; itr != 0; itr >>>= 1) {
+        for (int itr = intValue, count = 0;itr != 0;itr >>>= 1) {
             if ((itr & 1) != 0)
                 result.add((byte) count);
             count++;
@@ -1584,8 +1585,8 @@ public final class Utils {
         }
 
         return Stream.of(enumClass.getEnumConstants())
-                .map(Object::toString)
-                .toArray(String[]::new);
+            .map(Object::toString)
+            .toArray(String[]::new);
     }
 
     /**
@@ -1608,11 +1609,11 @@ public final class Utils {
 
         if (Modifier.isAbstract(klass.getModifiers())) {
             String childClassNames = Stream.of(klass.getClasses())
-                    .filter(baseClass::isAssignableFrom)
-                    .filter(c -> !Modifier.isAbstract(c.getModifiers()))
-                    .filter(c -> Modifier.isPublic(c.getModifiers()))
-                    .map(Class::getName)
-                    .collect(Collectors.joining(", "));
+                .filter(baseClass::isAssignableFrom)
+                .filter(c -> !Modifier.isAbstract(c.getModifiers()))
+                .filter(c -> Modifier.isPublic(c.getModifiers()))
+                .map(Class::getName)
+                .collect(Collectors.joining(", "));
             String message = "This class is abstract and cannot be created.";
             if (!Utils.isBlank(childClassNames))
                 message += " Did you mean " + childClassNames + "?";

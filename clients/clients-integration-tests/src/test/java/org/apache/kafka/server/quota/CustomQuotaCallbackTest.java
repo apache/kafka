@@ -61,21 +61,21 @@ public class CustomQuotaCallbackTest {
         try (Admin admin = cluster.admin(Map.of())) {
             admin.createTopics(List.of(new NewTopic("topic", 1, (short) 1)));
             TestUtils.waitForCondition(
-                () -> CustomQuotaCallback.COUNTERS.size() == 3 
-                        && CustomQuotaCallback.COUNTERS.values().stream().allMatch(counter -> counter.get() > 0), 
-                    "The CustomQuotaCallback not triggered in all controllers. "
+                () -> CustomQuotaCallback.COUNTERS.size() == 3
+                    && CustomQuotaCallback.COUNTERS.values().stream().allMatch(counter -> counter.get() > 0),
+                "The CustomQuotaCallback not triggered in all controllers. "
             );
-            
+
             // Reset the counters, and we expect the callback to be triggered again in all controllers
             CustomQuotaCallback.COUNTERS.clear();
-            
+
             admin.deleteTopics(List.of("topic"));
             TestUtils.waitForCondition(
                 () -> CustomQuotaCallback.COUNTERS.size() == 3
-                        && CustomQuotaCallback.COUNTERS.values().stream().allMatch(counter -> counter.get() > 0), 
-                    "The CustomQuotaCallback not triggered in all controllers. "
+                    && CustomQuotaCallback.COUNTERS.values().stream().allMatch(counter -> counter.get() > 0),
+                "The CustomQuotaCallback not triggered in all controllers. "
             );
-        
+
         }
     }
 
@@ -169,7 +169,7 @@ public class CustomQuotaCallbackTest {
     }
 
     public static class MonitorableCustomQuotaCallback extends CustomQuotaCallback implements Monitorable {
-        
+
         private static final String METRIC_NAME = "monitorable-custom-quota-callback-name";
         private static final String METRIC_DESCRIPTION = "monitorable-custom-quota-callback-description";
 
@@ -178,6 +178,6 @@ public class CustomQuotaCallbackTest {
             MetricName metricName = metrics.metricName(METRIC_NAME, METRIC_DESCRIPTION, new LinkedHashMap<>());
             metrics.addMetric(metricName, (Gauge<Integer>) (config, now) -> 1);
         }
-        
+
     }
 }

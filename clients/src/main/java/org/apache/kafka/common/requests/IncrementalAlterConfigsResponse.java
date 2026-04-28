@@ -33,7 +33,7 @@ import java.util.Map;
 public class IncrementalAlterConfigsResponse extends AbstractResponse {
 
     public IncrementalAlterConfigsResponse(final int requestThrottleMs,
-                                           final Map<ConfigResource, ApiError> results) {
+        final Map<ConfigResource, ApiError> results) {
         super(ApiKeys.INCREMENTAL_ALTER_CONFIGS);
         final List<AlterConfigsResourceResponse> newResults = new ArrayList<>(results.size());
         results.forEach(
@@ -46,15 +46,15 @@ public class IncrementalAlterConfigsResponse extends AbstractResponse {
         );
 
         this.data = new IncrementalAlterConfigsResponseData()
-                        .setResponses(newResults)
-                        .setThrottleTimeMs(requestThrottleMs);
+            .setResponses(newResults)
+            .setThrottleTimeMs(requestThrottleMs);
     }
 
     public static Map<ConfigResource, ApiError> fromResponseData(final IncrementalAlterConfigsResponseData data) {
         Map<ConfigResource, ApiError> map = new HashMap<>();
         for (AlterConfigsResourceResponse response : data.responses()) {
             map.put(new ConfigResource(ConfigResource.Type.forId(response.resourceType()), response.resourceName()),
-                    new ApiError(Errors.forCode(response.errorCode()), response.errorMessage()));
+                new ApiError(Errors.forCode(response.errorCode()), response.errorMessage()));
         }
         return map;
     }

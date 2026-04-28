@@ -49,6 +49,7 @@ public class DescribeTransactionsResult {
         }
         return future;
     }
+
     /**
      * Get a future which returns a map of the transaction descriptions requested in the respective
      * call to {@link Admin#describeTransactions(Collection, DescribeTransactionsOptions)}.

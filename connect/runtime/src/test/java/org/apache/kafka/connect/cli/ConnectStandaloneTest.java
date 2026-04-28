@@ -39,6 +39,7 @@ public class ConnectStandaloneTest {
 
     private static final String CONNECTOR_NAME = "test-connector";
     private static final Map<String, String> CONNECTOR_CONFIG = new HashMap<>();
+
     static {
         CONNECTOR_CONFIG.put(NAME_CONFIG, CONNECTOR_NAME);
         CONNECTOR_CONFIG.put("key1", "val1");
@@ -83,9 +84,9 @@ public class ConnectStandaloneTest {
     @Test
     public void testParseJsonFileWithCreateConnectorRequest() throws Exception {
         CreateConnectorRequest requestToWrite = new CreateConnectorRequest(
-            CONNECTOR_NAME,
-            CONNECTOR_CONFIG,
-            CreateConnectorRequest.InitialState.STOPPED
+                CONNECTOR_NAME,
+                CONNECTOR_CONFIG,
+                CreateConnectorRequest.InitialState.STOPPED
         );
 
         try (FileWriter writer = new FileWriter(connectorConfigurationFile)) {

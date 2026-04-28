@@ -56,19 +56,19 @@ public class RackAwareTaskAssignor {
     @FunctionalInterface
     public interface MoveStandbyTaskPredicate {
         boolean canMove(final ClientState source,
-                        final ClientState destination,
-                        final TaskId taskId,
-                        final Map<ProcessId, ClientState> clientStateMap);
+            final ClientState destination,
+            final TaskId taskId,
+            final Map<ProcessId, ClientState> clientStateMap);
     }
 
     @FunctionalInterface
     public interface CostFunction {
         int getCost(final TaskId taskId,
-                    final ProcessId processId,
-                    final boolean inCurrentAssignment,
-                    final int trafficCost,
-                    final int nonOverlapCost,
-                    final boolean isStandby);
+            final ProcessId processId,
+            final boolean inCurrentAssignment,
+            final int trafficCost,
+            final int nonOverlapCost,
+            final boolean isStandby);
     }
 
     // For stateless tasks, it's ok to move them around. So we have 0 non_overlap_cost
@@ -94,13 +94,13 @@ public class RackAwareTaskAssignor {
     private Boolean canEnable = null;
 
     public RackAwareTaskAssignor(final Cluster fullMetadata,
-                                 final Map<TaskId, Set<TopicPartition>> partitionsForTask,
-                                 final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask,
-                                 final Map<Subtopology, Set<TaskId>> tasksForTopicGroup,
-                                 final Map<ProcessId, Map<String, Optional<String>>> racksForProcessConsumer,
-                                 final InternalTopicManager internalTopicManager,
-                                 final AssignmentConfigs assignmentConfigs,
-                                 final Time time) {
+        final Map<TaskId, Set<TopicPartition>> partitionsForTask,
+        final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask,
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup,
+        final Map<ProcessId, Map<String, Optional<String>>> racksForProcessConsumer,
+        final InternalTopicManager internalTopicManager,
+        final AssignmentConfigs assignmentConfigs,
+        final Time time) {
         this.fullMetadata = fullMetadata;
         this.partitionsForTask = partitionsForTask;
         this.changelogPartitionsForTask = changelogPartitionsForTask;
@@ -227,8 +227,8 @@ public class RackAwareTaskAssignor {
      * @return true if the validation was successful, and false otherwise.
      */
     public static boolean validateClientRack(final Map<ProcessId, Map<String, Optional<String>>> racksForProcessConsumer,
-                                             final AssignmentConfigs assignmentConfigs,
-                                             final Map<ProcessId, String> rackForProcess) {
+        final AssignmentConfigs assignmentConfigs,
+        final Map<ProcessId, String> rackForProcess) {
         if (racksForProcessConsumer == null) {
             return false;
         }
@@ -317,9 +317,9 @@ public class RackAwareTaskAssignor {
      * Compute the cost for the provided {@code activeTasks}. The passed in active tasks must be contained in {@code clientState}.
      */
     long activeTasksCost(final SortedSet<TaskId> activeTasks,
-                         final SortedMap<ProcessId, ClientState> clientStates,
-                         final int trafficCost,
-                         final int nonOverlapCost) {
+        final SortedMap<ProcessId, ClientState> clientStates,
+        final int trafficCost,
+        final int nonOverlapCost) {
         return tasksCost(activeTasks, clientStates, trafficCost, nonOverlapCost, ClientState::hasActiveTask, false, false);
     }
 
@@ -327,19 +327,19 @@ public class RackAwareTaskAssignor {
      * Compute the cost for the provided {@code standbyTasks}. The passed in standby tasks must be contained in {@code clientState}.
      */
     long standByTasksCost(final SortedSet<TaskId> standbyTasks,
-                          final SortedMap<ProcessId, ClientState> clientStates,
-                          final int trafficCost,
-                          final int nonOverlapCost) {
+        final SortedMap<ProcessId, ClientState> clientStates,
+        final int trafficCost,
+        final int nonOverlapCost) {
         return tasksCost(standbyTasks, clientStates, trafficCost, nonOverlapCost, ClientState::hasStandbyTask, true, true);
     }
 
     private long tasksCost(final SortedSet<TaskId> tasks,
-                           final SortedMap<ProcessId, ClientState> clientStates,
-                           final int trafficCost,
-                           final int nonOverlapCost,
-                           final BiPredicate<ClientState, TaskId> hasAssignedTask,
-                           final boolean hasReplica,
-                           final boolean isStandby) {
+        final SortedMap<ProcessId, ClientState> clientStates,
+        final int trafficCost,
+        final int nonOverlapCost,
+        final BiPredicate<ClientState, TaskId> hasAssignedTask,
+        final boolean hasReplica,
+        final boolean isStandby) {
         if (tasks.isEmpty()) {
             return 0;
         }
@@ -378,9 +378,9 @@ public class RackAwareTaskAssignor {
      * @return Total cost after optimization
      */
     public long optimizeActiveTasks(final SortedSet<TaskId> activeTasks,
-                                    final SortedMap<ProcessId, ClientState> clientStates,
-                                    final int trafficCost,
-                                    final int nonOverlapCost) {
+        final SortedMap<ProcessId, ClientState> clientStates,
+        final int trafficCost,
+        final int nonOverlapCost) {
         if (activeTasks.isEmpty()) {
             return 0;
         }
@@ -420,9 +420,9 @@ public class RackAwareTaskAssignor {
     }
 
     public long optimizeStandbyTasks(final SortedMap<ProcessId, ClientState> clientStates,
-                                     final int trafficCost,
-                                     final int nonOverlapCost,
-                                     final MoveStandbyTaskPredicate moveStandbyTask) {
+        final int trafficCost,
+        final int nonOverlapCost,
+        final MoveStandbyTaskPredicate moveStandbyTask) {
         final BiFunction<ClientState, ClientState, List<TaskId>> getMovableTasks = (source, destination) -> source.standbyTasks().stream()
             .filter(task -> !destination.hasAssignedTask(task))
             .filter(task -> moveStandbyTask.canMove(source, destination, task, clientStates))
@@ -465,13 +465,13 @@ public class RackAwareTaskAssignor {
                     }
 
                     final List<TaskId> taskIdList = Stream.concat(movable1.stream(),
-                            movable2.stream())
+                        movable2.stream())
                         .sorted()
                         .collect(Collectors.toList());
 
                     final List<ProcessId> clients = Stream.of(clientList.get(i), clientList.get(j))
                         .sorted().collect(
-                            Collectors.toList());
+                        Collectors.toList());
 
                     final Map<TaskId, ProcessId> taskClientMap = new HashMap<>();
                     final Map<ProcessId, Integer> originalAssignedTaskNumber = new HashMap<>();

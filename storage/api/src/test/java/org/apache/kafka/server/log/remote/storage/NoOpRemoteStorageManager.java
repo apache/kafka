@@ -26,26 +26,26 @@ import java.util.Optional;
 public class NoOpRemoteStorageManager implements RemoteStorageManager {
     @Override
     public Optional<CustomMetadata> copyLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
-                                                       LogSegmentData logSegmentData) {
+           LogSegmentData logSegmentData) {
         return Optional.empty();
     }
 
     @Override
     public InputStream fetchLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
-                                       int startPosition) {
+           int startPosition) {
         return new ByteArrayInputStream(new byte[0]);
     }
 
     @Override
     public InputStream fetchLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
-                                       int startPosition,
-                                       int endPosition) {
+           int startPosition,
+           int endPosition) {
         return new ByteArrayInputStream(new byte[0]);
     }
 
     @Override
     public InputStream fetchIndex(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
-                                  IndexType indexType) {
+           IndexType indexType) {
         return new ByteArrayInputStream(new byte[0]);
     }
 

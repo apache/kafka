@@ -110,7 +110,7 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @return a CompletableFuture which will complete once this operation is finished.
      */
     CompletableFuture<Void> updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate remoteLogSegmentMetadataUpdate)
-            throws RemoteStorageException;
+           throws RemoteStorageException;
 
     /**
      * Returns {@link RemoteLogSegmentMetadata} if it exists for the given topic partition containing the offset with
@@ -123,9 +123,9 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @throws RemoteStorageException if there are any storage related errors occurred.
      */
     Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(TopicIdPartition topicIdPartition,
-                                                                int epochForOffset,
-                                                                long offset)
-            throws RemoteStorageException;
+           int epochForOffset,
+           long offset)
+           throws RemoteStorageException;
 
     /**
      * Returns the highest log offset of topic partition for the given leader epoch in remote storage. This is used by
@@ -138,7 +138,7 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @throws RemoteStorageException if there are any storage related errors occurred.
      */
     Optional<Long> highestOffsetForEpoch(TopicIdPartition topicIdPartition,
-                                         int leaderEpoch) throws RemoteStorageException;
+           int leaderEpoch) throws RemoteStorageException;
 
     /**
      * This method is used to update the metadata about remote partition delete event asynchronously. Currently, it allows updating the
@@ -160,7 +160,7 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @return a CompletableFuture which will complete once this operation is finished.
      */
     CompletableFuture<Void> putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata)
-            throws RemoteStorageException;
+           throws RemoteStorageException;
 
     /**
      * Returns all the remote log segment metadata of the given topicIdPartition.
@@ -171,7 +171,7 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @return Iterator of all the remote log segment metadata for the given topic partition.
      */
     Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicIdPartition topicIdPartition)
-            throws RemoteStorageException;
+           throws RemoteStorageException;
 
     /**
      * Returns iterator of remote log segment metadata, sorted by {@link RemoteLogSegmentMetadata#startOffset()} in
@@ -183,7 +183,7 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @return Iterator of remote segments, sorted by start offset in ascending order.
      */
     Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicIdPartition topicIdPartition,
-                                                             int leaderEpoch) throws RemoteStorageException;
+           int leaderEpoch) throws RemoteStorageException;
 
     /**
      * This method is invoked only when there are changes in leadership of the topic partitions that this broker is
@@ -193,7 +193,7 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @param followerPartitions partitions that have become followers on this broker.
      */
     void onPartitionLeadershipChanges(Set<TopicIdPartition> leaderPartitions,
-                                      Set<TopicIdPartition> followerPartitions);
+           Set<TopicIdPartition> followerPartitions);
 
     /**
      * This method is invoked only when the topic partitions are stopped on this broker. This can happen when a
@@ -228,8 +228,8 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @throws RemoteStorageException if there are any storage related errors occurred.
      */
     default Optional<RemoteLogSegmentMetadata> nextSegmentWithTxnIndex(TopicIdPartition topicIdPartition,
-                                                                       int epoch,
-                                                                       long offset) throws RemoteStorageException {
+           int epoch,
+           long offset) throws RemoteStorageException {
         return remoteLogSegmentMetadata(topicIdPartition, epoch, offset);
     }
 

@@ -19,5 +19,6 @@ package kafka.examples;
 public class KafkaProperties {
     public static final String BOOTSTRAP_SERVERS = "localhost:9092";
 
-    private KafkaProperties() {}
+    private KafkaProperties() {
+    }
 }

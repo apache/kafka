@@ -42,7 +42,7 @@ class FieldSpecPair {
     @Override
     public String toString() {
         return "FieldSpecPair(field1=" + field1.name() +
-                ", field2=" + field2.name() +
-                ")";
+            ", field2=" + field2.name() +
+            ")";
     }
 }

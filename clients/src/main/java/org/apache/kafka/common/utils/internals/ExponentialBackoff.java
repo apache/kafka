@@ -49,7 +49,7 @@ public class ExponentialBackoff {
         }
         this.jitter = jitter;
         this.expMax = maxInterval > initialInterval ?
-                Math.log(maxInterval / (double) Math.max(initialInterval, 1)) / Math.log(multiplier) : 0;
+            Math.log(maxInterval / (double) Math.max(initialInterval, 1)) / Math.log(multiplier) : 0;
     }
 
     public long initialInterval() {
@@ -71,10 +71,10 @@ public class ExponentialBackoff {
     @Override
     public String toString() {
         return "ExponentialBackoff{" +
-                "multiplier=" + multiplier +
-                ", expMax=" + expMax +
-                ", initialInterval=" + initialInterval +
-                ", jitter=" + jitter +
-                '}';
+            "multiplier=" + multiplier +
+            ", expMax=" + expMax +
+            ", initialInterval=" + initialInterval +
+            ", jitter=" + jitter +
+            '}';
     }
 }

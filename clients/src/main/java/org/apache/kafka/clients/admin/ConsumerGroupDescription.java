@@ -52,11 +52,11 @@ public class ConsumerGroupDescription {
     @SuppressWarnings("removal")
     @Deprecated(since = "4.0", forRemoval = true)
     public ConsumerGroupDescription(String groupId,
-                                    boolean isSimpleConsumerGroup,
-                                    Collection<MemberDescription> members,
-                                    String partitionAssignor,
-                                    ConsumerGroupState state,
-                                    Node coordinator) {
+        boolean isSimpleConsumerGroup,
+        Collection<MemberDescription> members,
+        String partitionAssignor,
+        ConsumerGroupState state,
+        Node coordinator) {
         this(groupId, isSimpleConsumerGroup, members, partitionAssignor, state, coordinator, Collections.emptySet());
     }
 
@@ -66,12 +66,12 @@ public class ConsumerGroupDescription {
     @SuppressWarnings("removal")
     @Deprecated(since = "4.0", forRemoval = true)
     public ConsumerGroupDescription(String groupId,
-                                    boolean isSimpleConsumerGroup,
-                                    Collection<MemberDescription> members,
-                                    String partitionAssignor,
-                                    ConsumerGroupState state,
-                                    Node coordinator,
-                                    Set<AclOperation> authorizedOperations) {
+        boolean isSimpleConsumerGroup,
+        Collection<MemberDescription> members,
+        String partitionAssignor,
+        ConsumerGroupState state,
+        Node coordinator,
+        Set<AclOperation> authorizedOperations) {
         this(groupId, isSimpleConsumerGroup, members, partitionAssignor, GroupType.CLASSIC, state, coordinator, authorizedOperations);
     }
 
@@ -81,13 +81,13 @@ public class ConsumerGroupDescription {
     @SuppressWarnings("removal")
     @Deprecated(since = "4.0", forRemoval = true)
     public ConsumerGroupDescription(String groupId,
-                                    boolean isSimpleConsumerGroup,
-                                    Collection<MemberDescription> members,
-                                    String partitionAssignor,
-                                    GroupType type,
-                                    ConsumerGroupState state,
-                                    Node coordinator,
-                                    Set<AclOperation> authorizedOperations) {
+        boolean isSimpleConsumerGroup,
+        Collection<MemberDescription> members,
+        String partitionAssignor,
+        GroupType type,
+        ConsumerGroupState state,
+        Node coordinator,
+        Set<AclOperation> authorizedOperations) {
         this.groupId = groupId == null ? "" : groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
         this.members = members == null ? Collections.emptyList() : List.copyOf(members);
@@ -101,15 +101,15 @@ public class ConsumerGroupDescription {
     }
 
     public ConsumerGroupDescription(String groupId,
-                                    boolean isSimpleConsumerGroup,
-                                    Collection<MemberDescription> members,
-                                    String partitionAssignor,
-                                    GroupType type,
-                                    GroupState groupState,
-                                    Node coordinator,
-                                    Set<AclOperation> authorizedOperations,
-                                    Optional<Integer> groupEpoch,
-                                    Optional<Integer> targetAssignmentEpoch) {
+        boolean isSimpleConsumerGroup,
+        Collection<MemberDescription> members,
+        String partitionAssignor,
+        GroupType type,
+        GroupState groupState,
+        Node coordinator,
+        Set<AclOperation> authorizedOperations,
+        Optional<Integer> groupEpoch,
+        Optional<Integer> targetAssignmentEpoch) {
         this.groupId = groupId == null ? "" : groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
         this.members = members == null ? Collections.emptyList() : List.copyOf(members);

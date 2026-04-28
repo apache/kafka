@@ -37,9 +37,9 @@ public class SourceNode<KIn, VIn> extends ProcessorNode<KIn, VIn, KIn, VIn> {
     private Sensor processAtSourceSensor;
 
     public SourceNode(final String name,
-                      final TimestampExtractor timestampExtractor,
-                      final Deserializer<KIn> keyDeserializer,
-                      final Deserializer<VIn> valDeserializer) {
+        final TimestampExtractor timestampExtractor,
+        final Deserializer<KIn> keyDeserializer,
+        final Deserializer<VIn> valDeserializer) {
         super(name);
         this.timestampExtractor = timestampExtractor;
         this.keyDeserializer = keyDeserializer;
@@ -47,8 +47,8 @@ public class SourceNode<KIn, VIn> extends ProcessorNode<KIn, VIn, KIn, VIn> {
     }
 
     public SourceNode(final String name,
-                      final Deserializer<KIn> keyDeserializer,
-                      final Deserializer<VIn> valDeserializer) {
+        final Deserializer<KIn> keyDeserializer,
+        final Deserializer<VIn> valDeserializer) {
         this(name, null, keyDeserializer, valDeserializer);
     }
 

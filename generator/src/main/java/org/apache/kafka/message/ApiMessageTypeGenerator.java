@@ -369,19 +369,19 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
             VersionConditional.forVersions(spec.flexibleVersions(),
                 spec.validVersions()).
                 ifMember(__ -> {
-                    if (type.equals("request")) {
-                        buffer.printf("return (short) 2;%n");
-                    } else {
-                        buffer.printf("return (short) 1;%n");
-                    }
-                }).
+                if (type.equals("request")) {
+                    buffer.printf("return (short) 2;%n");
+                } else {
+                    buffer.printf("return (short) 1;%n");
+                }
+            }).
                 ifNotMember(__ -> {
-                    if (type.equals("request")) {
-                        buffer.printf("return (short) 1;%n");
-                    } else {
-                        buffer.printf("return (short) 0;%n");
-                    }
-                }).generate(buffer);
+                if (type.equals("request")) {
+                    buffer.printf("return (short) 1;%n");
+                } else {
+                    buffer.printf("return (short) 0;%n");
+                }
+            }).generate(buffer);
             buffer.decrementIndent();
         }
         buffer.printf("default:%n");

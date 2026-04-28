@@ -63,10 +63,10 @@ public class ConsumerConfig extends AbstractConfig {
     // a list contains all the assignor names that only assign subscribed topics to consumer. Should be updated when new assignor added.
     // This is to help optimize ConsumerCoordinator#performAssignment method
     public static final List<String> ASSIGN_FROM_SUBSCRIBED_ASSIGNORS = List.of(
-            RANGE_ASSIGNOR_NAME,
-            ROUNDROBIN_ASSIGNOR_NAME,
-            STICKY_ASSIGNOR_NAME,
-            COOPERATIVE_STICKY_ASSIGNOR_NAME
+        RANGE_ASSIGNOR_NAME,
+        ROUNDROBIN_ASSIGNOR_NAME,
+        STICKY_ASSIGNOR_NAME,
+        COOPERATIVE_STICKY_ASSIGNOR_NAME
     );
 
     /*
@@ -117,8 +117,8 @@ public class ConsumerConfig extends AbstractConfig {
         "supported values are <code>classic</code> or <code>consumer</code>. The default value is <code>classic</code>.";
 
     /**
-    * <code>group.remote.assignor</code>
-    */
+     * <code>group.remote.assignor</code>
+     */
     public static final String GROUP_REMOTE_ASSIGNOR_CONFIG = "group.remote.assignor";
     public static final String DEFAULT_GROUP_REMOTE_ASSIGNOR = null;
     public static final String GROUP_REMOTE_ASSIGNOR_DOC = "The name of the server-side assignor to use. " +
@@ -170,15 +170,15 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String AUTO_OFFSET_RESET_CONFIG = "auto.offset.reset";
     public static final String AUTO_OFFSET_RESET_DOC = "What to do when there is no initial offset in Kafka or if the current offset does not exist any more on the server " +
-            "(e.g. because that data has been deleted): " +
-            "<ul><li>earliest: automatically reset the offset to the earliest offset</li>" +
-            "<li>latest: automatically reset the offset to the latest offset</li>" +
-            "<li>by_duration:&lt;duration&gt;: automatically reset the offset to a configured &lt;duration&gt; from the current timestamp. &lt;duration&gt; must be specified in ISO8601 format (PnDTnHnMn.nS). " +
-            "Negative duration is not allowed.</li>" +
-            "<li>none: throw exception to the consumer if no previous offset is found for the consumer's group</li>" +
-            "<li>anything else: throw exception to the consumer.</li></ul>" +
-            "<p>Note that altering partition numbers while setting this config to latest may cause message delivery loss since " +
-            "producers could start to send messages to newly added partitions (i.e. no initial offsets exist yet) before consumers reset their offsets.";
+        "(e.g. because that data has been deleted): " +
+        "<ul><li>earliest: automatically reset the offset to the earliest offset</li>" +
+        "<li>latest: automatically reset the offset to the latest offset</li>" +
+        "<li>by_duration:&lt;duration&gt;: automatically reset the offset to a configured &lt;duration&gt; from the current timestamp. &lt;duration&gt; must be specified in ISO8601 format (PnDTnHnMn.nS). " +
+        "Negative duration is not allowed.</li>" +
+        "<li>none: throw exception to the consumer if no previous offset is found for the consumer's group</li>" +
+        "<li>anything else: throw exception to the consumer.</li></ul>" +
+        "<p>Note that altering partition numbers while setting this config to latest may cause message delivery loss since " +
+        "producers could start to send messages to newly added partitions (i.e. no initial offsets exist yet) before consumers reset their offsets.";
 
     /**
      * <code>fetch.min.bytes</code>
@@ -192,11 +192,11 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String FETCH_MAX_BYTES_CONFIG = "fetch.max.bytes";
     private static final String FETCH_MAX_BYTES_DOC = "The maximum amount of data the server should return for a fetch request. " +
-            "Records are fetched in batches by the consumer, and if the first record batch in the first non-empty partition of the fetch is larger than " +
-            "this value, the record batch will still be returned to ensure that the consumer can make progress. As such, this is not a absolute maximum. " +
-            "The maximum record batch size accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
-            "<code>max.message.bytes</code> (topic config). A fetch request consists of many partitions, and there is another setting that controls how much " +
-            "data is returned for each partition in a fetch request - see <code>max.partition.fetch.bytes</code>. Note that the consumer performs multiple fetches in parallel.";
+        "Records are fetched in batches by the consumer, and if the first record batch in the first non-empty partition of the fetch is larger than " +
+        "this value, the record batch will still be returned to ensure that the consumer can make progress. As such, this is not a absolute maximum. " +
+        "The maximum record batch size accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
+        "<code>max.message.bytes</code> (topic config). A fetch request consists of many partitions, and there is another setting that controls how much " +
+        "data is returned for each partition in a fetch request - see <code>max.partition.fetch.bytes</code>. Note that the consumer performs multiple fetches in parallel.";
     public static final int DEFAULT_FETCH_MAX_BYTES = 50 * 1024 * 1024;
 
     /**
@@ -204,9 +204,9 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String FETCH_MAX_WAIT_MS_CONFIG = "fetch.max.wait.ms";
     private static final String FETCH_MAX_WAIT_MS_DOC = "The maximum amount of time the server will block before " +
-            "answering the fetch request there isn't sufficient data to immediately satisfy the requirement given by " +
-            "fetch.min.bytes. This config is used only for local log fetch. To tune the remote fetch maximum wait " +
-            "time, please refer to 'remote.fetch.max.wait.ms' broker config";
+        "answering the fetch request there isn't sufficient data to immediately satisfy the requirement given by " +
+        "fetch.min.bytes. This config is used only for local log fetch. To tune the remote fetch maximum wait " +
+        "time, please refer to 'remote.fetch.max.wait.ms' broker config";
     public static final int DEFAULT_FETCH_MAX_WAIT_MS = 500;
 
     /** <code>metadata.max.age.ms</code> */
@@ -217,11 +217,11 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String MAX_PARTITION_FETCH_BYTES_CONFIG = "max.partition.fetch.bytes";
     private static final String MAX_PARTITION_FETCH_BYTES_DOC = "The maximum amount of data per-partition the server " +
-            "will return. Records are fetched in batches by the consumer. If the first record batch in the first non-empty " +
-            "partition of the fetch is larger than this limit, the " +
-            "batch will still be returned to ensure that the consumer can make progress. The maximum record batch size " +
-            "accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
-            "<code>max.message.bytes</code> (topic config). See " + FETCH_MAX_BYTES_CONFIG + " for limiting the consumer request size.";
+        "will return. Records are fetched in batches by the consumer. If the first record batch in the first non-empty " +
+        "partition of the fetch is larger than this limit, the " +
+        "batch will still be returned to ensure that the consumer can make progress. The maximum record batch size " +
+        "accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
+        "<code>max.message.bytes</code> (topic config). See " + FETCH_MAX_BYTES_CONFIG + " for limiting the consumer request size.";
     public static final int DEFAULT_MAX_PARTITION_FETCH_BYTES = 1 * 1024 * 1024;
 
     /** <code>send.buffer.bytes</code> */
@@ -320,14 +320,14 @@ public class ConsumerConfig extends AbstractConfig {
     /** <code>interceptor.classes</code> */
     public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
     public static final String INTERCEPTOR_CLASSES_DOC = "A list of classes to use as interceptors. "
-                                                        + "Implementing the <code>org.apache.kafka.clients.consumer.ConsumerInterceptor</code> interface allows you to intercept (and possibly mutate) records "
-                                                        + "received by the consumer. By default, there are no interceptors.";
+        + "Implementing the <code>org.apache.kafka.clients.consumer.ConsumerInterceptor</code> interface allows you to intercept (and possibly mutate) records "
+        + "received by the consumer. By default, there are no interceptors.";
 
 
     /** <code>exclude.internal.topics</code> */
     public static final String EXCLUDE_INTERNAL_TOPICS_CONFIG = "exclude.internal.topics";
     private static final String EXCLUDE_INTERNAL_TOPICS_DOC = "Whether internal topics matching a subscribed pattern should " +
-            "be excluded from the subscription. It is always possible to explicitly subscribe to an internal topic.";
+        "be excluded from the subscription. It is always possible to explicitly subscribe to an internal topic.";
     public static final boolean DEFAULT_EXCLUDE_INTERNAL_TOPICS = true;
 
     /**
@@ -347,20 +347,20 @@ public class ConsumerConfig extends AbstractConfig {
     /** <code>isolation.level</code> */
     public static final String ISOLATION_LEVEL_CONFIG = "isolation.level";
     public static final String ISOLATION_LEVEL_DOC = "Controls how to read messages written transactionally. If set to <code>read_committed</code>, consumer.poll() will only return" +
-            " transactional messages which have been committed. If set to <code>read_uncommitted</code> (the default), consumer.poll() will return all messages, even transactional messages" +
-            " which have been aborted. Non-transactional messages will be returned unconditionally in either mode. <p>Messages will always be returned in offset order. Hence, in " +
-            " <code>read_committed</code> mode, consumer.poll() will only return messages up to the last stable offset (LSO), which is the one less than the offset of the first open transaction." +
-            " In particular any messages appearing after messages belonging to ongoing transactions will be withheld until the relevant transaction has been completed. As a result, <code>read_committed</code>" +
-            " consumers will not be able to read up to the high watermark when there are in flight transactions.</p><p> Further, when in <code>read_committed</code> the seekToEnd method will" +
-            " return the LSO</p>";
+        " transactional messages which have been committed. If set to <code>read_uncommitted</code> (the default), consumer.poll() will return all messages, even transactional messages" +
+        " which have been aborted. Non-transactional messages will be returned unconditionally in either mode. <p>Messages will always be returned in offset order. Hence, in " +
+        " <code>read_committed</code> mode, consumer.poll() will only return messages up to the last stable offset (LSO), which is the one less than the offset of the first open transaction." +
+        " In particular any messages appearing after messages belonging to ongoing transactions will be withheld until the relevant transaction has been completed. As a result, <code>read_committed</code>" +
+        " consumers will not be able to read up to the high watermark when there are in flight transactions.</p><p> Further, when in <code>read_committed</code> the seekToEnd method will" +
+        " return the LSO</p>";
 
     public static final String DEFAULT_ISOLATION_LEVEL = IsolationLevel.READ_UNCOMMITTED.toString();
 
     /** <code>allow.auto.create.topics</code> */
     public static final String ALLOW_AUTO_CREATE_TOPICS_CONFIG = "allow.auto.create.topics";
     private static final String ALLOW_AUTO_CREATE_TOPICS_DOC = "Allow automatic topic creation on the broker when" +
-            " subscribing to or assigning a topic. A topic being subscribed to will be automatically created only if the" +
-            " broker allows for it using <code>auto.create.topics.enable</code> broker configuration.";
+        " subscribing to or assigning a topic. A topic being subscribed to will be automatically created only if the" +
+        " broker allows for it using <code>auto.create.topics.enable</code> broker configuration.";
     public static final boolean DEFAULT_ALLOW_AUTO_CREATE_TOPICS = true;
 
     /**
@@ -374,20 +374,20 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String SHARE_ACKNOWLEDGEMENT_MODE_CONFIG = "share.acknowledgement.mode";
     private static final String SHARE_ACKNOWLEDGEMENT_MODE_DOC = "Controls the acknowledgement mode for a share consumer." +
-            " If set to <code>implicit</code>, the acknowledgement mode of the consumer is implicit and it must not" +
-            " use <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records. Instead," +
-            " delivery is acknowledged implicitly on the next call to poll or commit." +
-            " If set to <code>explicit</code>, the acknowledgement mode of the consumer is explicit and it must use" +
-            " <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records.";
+        " If set to <code>implicit</code>, the acknowledgement mode of the consumer is implicit and it must not" +
+        " use <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records. Instead," +
+        " delivery is acknowledged implicitly on the next call to poll or commit." +
+        " If set to <code>explicit</code>, the acknowledgement mode of the consumer is explicit and it must use" +
+        " <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records.";
 
     /**
      * <code>share.acquire.mode</code>
      */
     public static final String SHARE_ACQUIRE_MODE_CONFIG = "share.acquire.mode";
     private static final String SHARE_ACQUIRE_MODE_DOC = "Controls the acquire mode for a share consumer." +
-            " If set to <code>record_limit</code>, the number of records returned in each poll() will not exceed the value of <code>max.poll.records</code>." +
-            " If set to <code>batch_optimized</code>, the number of records returned in each poll() call may exceed <code>max.poll.records</code>" +
-            " to align with batch boundaries for optimization.";
+        " If set to <code>record_limit</code>, the number of records returned in each poll() will not exceed the value of <code>max.poll.records</code>." +
+        " If set to <code>batch_optimized</code>, the number of records returned in each poll() call may exceed <code>max.poll.records</code>" +
+        " to align with batch boundaries for optimization.";
     public static final String DEFAULT_SHARE_ACQUIRE_MODE = ShareAcquireMode.BATCH_OPTIMIZED.name();
 
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
@@ -396,322 +396,322 @@ public class ConsumerConfig extends AbstractConfig {
      * A list of configuration keys not supported for CLASSIC protocol.
      */
     private static final List<String> CLASSIC_PROTOCOL_UNSUPPORTED_CONFIGS = List.of(
-            GROUP_REMOTE_ASSIGNOR_CONFIG,
-            SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
-            SHARE_ACQUIRE_MODE_CONFIG
+        GROUP_REMOTE_ASSIGNOR_CONFIG,
+        SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
+        SHARE_ACQUIRE_MODE_CONFIG
     );
 
     /**
      * A list of configuration keys not supported for CONSUMER protocol.
      */
     private static final List<String> CONSUMER_PROTOCOL_UNSUPPORTED_CONFIGS = List.of(
-            PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
-            HEARTBEAT_INTERVAL_MS_CONFIG,
-            SESSION_TIMEOUT_MS_CONFIG,
-            SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
-            SHARE_ACQUIRE_MODE_CONFIG
+        PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
+        HEARTBEAT_INTERVAL_MS_CONFIG,
+        SESSION_TIMEOUT_MS_CONFIG,
+        SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
+        SHARE_ACQUIRE_MODE_CONFIG
     );
 
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
-                                        Type.LIST,
-                                        ConfigDef.NO_DEFAULT_VALUE,
-                                        ConfigDef.ValidList.anyNonDuplicateValues(false, false),
-                                        Importance.HIGH,
-                                        CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
-                                .define(CLIENT_DNS_LOOKUP_CONFIG,
-                                        Type.STRING,
-                                        ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
-                                        in(ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
-                                           ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
-                                        Importance.MEDIUM,
-                                        CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
-                                .define(GROUP_ID_CONFIG, Type.STRING, null, Importance.HIGH, GROUP_ID_DOC)
-                                .define(GROUP_INSTANCE_ID_CONFIG,
-                                        Type.STRING,
-                                        null,
-                                        new ConfigDef.NonEmptyString(),
-                                        Importance.MEDIUM,
-                                        GROUP_INSTANCE_ID_DOC)
-                                .define(SESSION_TIMEOUT_MS_CONFIG,
-                                        Type.INT,
-                                        45000,
-                                        Importance.HIGH,
-                                        SESSION_TIMEOUT_MS_DOC)
-                                .define(HEARTBEAT_INTERVAL_MS_CONFIG,
-                                        Type.INT,
-                                        3000,
-                                        Importance.HIGH,
-                                        HEARTBEAT_INTERVAL_MS_DOC)
-                                .define(PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
-                                        Type.LIST,
-                                        List.of(RangeAssignor.class, CooperativeStickyAssignor.class),
-                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                                        Importance.MEDIUM,
-                                        PARTITION_ASSIGNMENT_STRATEGY_DOC)
-                                .define(METADATA_MAX_AGE_CONFIG,
-                                        Type.LONG,
-                                        5 * 60 * 1000,
-                                        atLeast(0),
-                                        Importance.LOW,
-                                        CommonClientConfigs.METADATA_MAX_AGE_DOC)
-                                .define(ENABLE_AUTO_COMMIT_CONFIG,
-                                        Type.BOOLEAN,
-                                        true,
-                                        Importance.MEDIUM,
-                                        ENABLE_AUTO_COMMIT_DOC)
-                                .define(AUTO_COMMIT_INTERVAL_MS_CONFIG,
-                                        Type.INT,
-                                        5000,
-                                        atLeast(0),
-                                        Importance.LOW,
-                                        AUTO_COMMIT_INTERVAL_MS_DOC)
-                                .define(CLIENT_ID_CONFIG,
-                                        Type.STRING,
-                                        "",
-                                        Importance.LOW,
-                                        CommonClientConfigs.CLIENT_ID_DOC)
-                                .define(CLIENT_RACK_CONFIG,
-                                        Type.STRING,
-                                        DEFAULT_CLIENT_RACK,
-                                        Importance.LOW,
-                                        CommonClientConfigs.CLIENT_RACK_DOC)
-                                .define(MAX_PARTITION_FETCH_BYTES_CONFIG,
-                                        Type.INT,
-                                        DEFAULT_MAX_PARTITION_FETCH_BYTES,
-                                        atLeast(0),
-                                        Importance.HIGH,
-                                        MAX_PARTITION_FETCH_BYTES_DOC)
-                                .define(SEND_BUFFER_CONFIG,
-                                        Type.INT,
-                                        128 * 1024,
-                                        atLeast(CommonClientConfigs.SEND_BUFFER_LOWER_BOUND),
-                                        Importance.MEDIUM,
-                                        CommonClientConfigs.SEND_BUFFER_DOC)
-                                .define(RECEIVE_BUFFER_CONFIG,
-                                        Type.INT,
-                                        64 * 1024,
-                                        atLeast(CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND),
-                                        Importance.MEDIUM,
-                                        CommonClientConfigs.RECEIVE_BUFFER_DOC)
-                                .define(FETCH_MIN_BYTES_CONFIG,
-                                        Type.INT,
-                                        DEFAULT_FETCH_MIN_BYTES,
-                                        atLeast(0),
-                                        Importance.HIGH,
-                                        FETCH_MIN_BYTES_DOC)
-                                .define(FETCH_MAX_BYTES_CONFIG,
-                                        Type.INT,
-                                        DEFAULT_FETCH_MAX_BYTES,
-                                        atLeast(0),
-                                        Importance.MEDIUM,
-                                        FETCH_MAX_BYTES_DOC)
-                                .define(FETCH_MAX_WAIT_MS_CONFIG,
-                                        Type.INT,
-                                        DEFAULT_FETCH_MAX_WAIT_MS,
-                                        atLeast(0),
-                                        Importance.LOW,
-                                        FETCH_MAX_WAIT_MS_DOC)
-                                .define(RECONNECT_BACKOFF_MS_CONFIG,
-                                        Type.LONG,
-                                        50L,
-                                        atLeast(0L),
-                                        Importance.LOW,
-                                        CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
-                                .define(RECONNECT_BACKOFF_MAX_MS_CONFIG,
-                                        Type.LONG,
-                                        1000L,
-                                        atLeast(0L),
-                                        Importance.LOW,
-                                        CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
-                                .define(RETRY_BACKOFF_MS_CONFIG,
-                                        Type.LONG,
-                                        CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
-                                        atLeast(0L),
-                                        Importance.LOW,
-                                        CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
-                                .define(RETRY_BACKOFF_MAX_MS_CONFIG,
-                                        Type.LONG,
-                                        CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS,
-                                        atLeast(0L),
-                                        Importance.LOW,
-                                        CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC)
-                                .define(ENABLE_METRICS_PUSH_CONFIG,
-                                        Type.BOOLEAN,
-                                        true,
-                                        Importance.LOW,
-                                        ENABLE_METRICS_PUSH_DOC)
-                                .define(AUTO_OFFSET_RESET_CONFIG,
-                                        Type.STRING,
-                                        AutoOffsetResetStrategy.LATEST.name(),
-                                        new AutoOffsetResetStrategy.Validator(),
-                                        Importance.MEDIUM,
-                                        AUTO_OFFSET_RESET_DOC)
-                                .define(CHECK_CRCS_CONFIG,
-                                        Type.BOOLEAN,
-                                        true,
-                                        Importance.LOW,
-                                        CHECK_CRCS_DOC)
-                                .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
-                                        Type.LONG,
-                                        30000,
-                                        atLeast(0),
-                                        Importance.LOW,
-                                        CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
-                                .define(METRICS_NUM_SAMPLES_CONFIG,
-                                        Type.INT,
-                                        2,
-                                        atLeast(1),
-                                        Importance.LOW,
-                                        CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
-                                .define(METRICS_RECORDING_LEVEL_CONFIG,
-                                        Type.STRING,
-                                        Sensor.RecordingLevel.INFO.toString(),
-                                        in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString(), Sensor.RecordingLevel.TRACE.toString()),
-                                        Importance.LOW,
-                                        CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
-                                .define(METRIC_REPORTER_CLASSES_CONFIG,
-                                        Type.LIST,
-                                        JmxReporter.class.getName(),
-                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                                        Importance.LOW,
-                                        CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
-                                .define(KEY_DESERIALIZER_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        Importance.HIGH,
-                                        KEY_DESERIALIZER_CLASS_DOC)
-                                .define(VALUE_DESERIALIZER_CLASS_CONFIG,
-                                        Type.CLASS,
-                                        Importance.HIGH,
-                                        VALUE_DESERIALIZER_CLASS_DOC)
-                                .define(REQUEST_TIMEOUT_MS_CONFIG,
-                                        Type.INT,
-                                        30000,
-                                        atLeast(0),
-                                        Importance.MEDIUM,
-                                        REQUEST_TIMEOUT_MS_DOC)
-                                .define(DEFAULT_API_TIMEOUT_MS_CONFIG,
-                                        Type.INT,
-                                        60 * 1000,
-                                        atLeast(0),
-                                        Importance.MEDIUM,
-                                        CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_DOC)
-                                .define(SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG,
-                                        Type.LONG,
-                                        CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MS,
-                                        Importance.MEDIUM,
-                                        CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC)
-                                .define(SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG,
-                                        Type.LONG,
-                                        CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS,
-                                        Importance.MEDIUM,
-                                        CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
-                                /* default is set to be a bit lower than the server default (10 min), to avoid both client and server closing connection at same time */
-                                .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
-                                        Type.LONG,
-                                        9 * 60 * 1000,
-                                        Importance.MEDIUM,
-                                        CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
-                                .define(INTERCEPTOR_CLASSES_CONFIG,
-                                        Type.LIST,
-                                        List.of(),
-                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                                        Importance.LOW,
-                                        INTERCEPTOR_CLASSES_DOC)
-                                .define(MAX_POLL_RECORDS_CONFIG,
-                                        Type.INT,
-                                        DEFAULT_MAX_POLL_RECORDS,
-                                        atLeast(1),
-                                        Importance.MEDIUM,
-                                        MAX_POLL_RECORDS_DOC)
-                                .define(MAX_POLL_INTERVAL_MS_CONFIG,
-                                        Type.INT,
-                                        300000,
-                                        atLeast(1),
-                                        Importance.MEDIUM,
-                                        MAX_POLL_INTERVAL_MS_DOC)
-                                .define(EXCLUDE_INTERNAL_TOPICS_CONFIG,
-                                        Type.BOOLEAN,
-                                        DEFAULT_EXCLUDE_INTERNAL_TOPICS,
-                                        Importance.MEDIUM,
-                                        EXCLUDE_INTERNAL_TOPICS_DOC)
-                                .defineInternal(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED,
-                                        Type.BOOLEAN,
-                                        false,
-                                        Importance.LOW)
-                                .define(ISOLATION_LEVEL_CONFIG,
-                                        Type.STRING,
-                                        DEFAULT_ISOLATION_LEVEL,
-                                        in(IsolationLevel.READ_COMMITTED.toString(), IsolationLevel.READ_UNCOMMITTED.toString()),
-                                        Importance.MEDIUM,
-                                        ISOLATION_LEVEL_DOC)
-                                .define(ALLOW_AUTO_CREATE_TOPICS_CONFIG,
-                                        Type.BOOLEAN,
-                                        DEFAULT_ALLOW_AUTO_CREATE_TOPICS,
-                                        Importance.MEDIUM,
-                                        ALLOW_AUTO_CREATE_TOPICS_DOC)
-                                .define(GROUP_PROTOCOL_CONFIG,
-                                        Type.STRING,
-                                        DEFAULT_GROUP_PROTOCOL,
-                                        ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(GroupProtocol.class)),
-                                        Importance.HIGH,
-                                        GROUP_PROTOCOL_DOC)
-                                .define(GROUP_REMOTE_ASSIGNOR_CONFIG,
-                                        Type.STRING,
-                                        DEFAULT_GROUP_REMOTE_ASSIGNOR,
-                                        Importance.MEDIUM,
-                                        GROUP_REMOTE_ASSIGNOR_DOC)
-                                // security support
-                                .define(SECURITY_PROVIDERS_CONFIG,
-                                        Type.STRING,
-                                        null,
-                                        Importance.LOW,
-                                        SECURITY_PROVIDERS_DOC)
-                                .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
-                                        Type.STRING,
-                                        CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
-                                        ConfigDef.CaseInsensitiveValidString
-                                                .in(Utils.enumOptions(SecurityProtocol.class)),
-                                        Importance.MEDIUM,
-                                        CommonClientConfigs.SECURITY_PROTOCOL_DOC)
-                                .withClientSslSupport()
-                                .withClientSaslSupport()
-                                .define(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG,
-                                        Type.STRING,
-                                        CommonClientConfigs.DEFAULT_METADATA_RECOVERY_STRATEGY,
-                                        ConfigDef.CaseInsensitiveValidString
-                                                .in(Utils.enumOptions(MetadataRecoveryStrategy.class)),
-                                        Importance.LOW,
-                                        CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC)
-                                .define(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG,
-                                        Type.LONG,
-                                        CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
-                                        atLeast(0),
-                                        Importance.LOW,
-                                        CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
-                                .define(CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
-                                        Type.BOOLEAN,
-                                        true,
-                                        Importance.LOW,
-                                        CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_DOC)
-                                .define(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
-                                        Type.STRING,
-                                        ShareAcknowledgementMode.IMPLICIT.name(),
-                                        new ShareAcknowledgementMode.Validator(),
-                                        Importance.MEDIUM,
-                                        ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_DOC)
-                                .define(ConsumerConfig.SHARE_ACQUIRE_MODE_CONFIG,
-                                        Type.STRING,
-                                        DEFAULT_SHARE_ACQUIRE_MODE,
-                                        new ShareAcquireMode.Validator(),
-                                        Importance.MEDIUM,
-                                        ConsumerConfig.SHARE_ACQUIRE_MODE_DOC)
-                                .define(CONFIG_PROVIDERS_CONFIG,
-                                        ConfigDef.Type.LIST,
-                                        List.of(),
-                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                                        ConfigDef.Importance.LOW,
-                                        CONFIG_PROVIDERS_DOC);
+            Type.LIST,
+            ConfigDef.NO_DEFAULT_VALUE,
+            ConfigDef.ValidList.anyNonDuplicateValues(false, false),
+            Importance.HIGH,
+            CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
+            .define(CLIENT_DNS_LOOKUP_CONFIG,
+                Type.STRING,
+                ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
+                in(ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
+                    ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
+                Importance.MEDIUM,
+                CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
+            .define(GROUP_ID_CONFIG, Type.STRING, null, Importance.HIGH, GROUP_ID_DOC)
+            .define(GROUP_INSTANCE_ID_CONFIG,
+                Type.STRING,
+                null,
+                new ConfigDef.NonEmptyString(),
+                Importance.MEDIUM,
+                GROUP_INSTANCE_ID_DOC)
+            .define(SESSION_TIMEOUT_MS_CONFIG,
+                Type.INT,
+                45000,
+                Importance.HIGH,
+                SESSION_TIMEOUT_MS_DOC)
+            .define(HEARTBEAT_INTERVAL_MS_CONFIG,
+                Type.INT,
+                3000,
+                Importance.HIGH,
+                HEARTBEAT_INTERVAL_MS_DOC)
+            .define(PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
+                Type.LIST,
+                List.of(RangeAssignor.class, CooperativeStickyAssignor.class),
+                ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                Importance.MEDIUM,
+                PARTITION_ASSIGNMENT_STRATEGY_DOC)
+            .define(METADATA_MAX_AGE_CONFIG,
+                Type.LONG,
+                5 * 60 * 1000,
+                atLeast(0),
+                Importance.LOW,
+                CommonClientConfigs.METADATA_MAX_AGE_DOC)
+            .define(ENABLE_AUTO_COMMIT_CONFIG,
+                Type.BOOLEAN,
+                true,
+                Importance.MEDIUM,
+                ENABLE_AUTO_COMMIT_DOC)
+            .define(AUTO_COMMIT_INTERVAL_MS_CONFIG,
+                Type.INT,
+                5000,
+                atLeast(0),
+                Importance.LOW,
+                AUTO_COMMIT_INTERVAL_MS_DOC)
+            .define(CLIENT_ID_CONFIG,
+                Type.STRING,
+                "",
+                Importance.LOW,
+                CommonClientConfigs.CLIENT_ID_DOC)
+            .define(CLIENT_RACK_CONFIG,
+                Type.STRING,
+                DEFAULT_CLIENT_RACK,
+                Importance.LOW,
+                CommonClientConfigs.CLIENT_RACK_DOC)
+            .define(MAX_PARTITION_FETCH_BYTES_CONFIG,
+                Type.INT,
+                DEFAULT_MAX_PARTITION_FETCH_BYTES,
+                atLeast(0),
+                Importance.HIGH,
+                MAX_PARTITION_FETCH_BYTES_DOC)
+            .define(SEND_BUFFER_CONFIG,
+                Type.INT,
+                128 * 1024,
+                atLeast(CommonClientConfigs.SEND_BUFFER_LOWER_BOUND),
+                Importance.MEDIUM,
+                CommonClientConfigs.SEND_BUFFER_DOC)
+            .define(RECEIVE_BUFFER_CONFIG,
+                Type.INT,
+                64 * 1024,
+                atLeast(CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND),
+                Importance.MEDIUM,
+                CommonClientConfigs.RECEIVE_BUFFER_DOC)
+            .define(FETCH_MIN_BYTES_CONFIG,
+                Type.INT,
+                DEFAULT_FETCH_MIN_BYTES,
+                atLeast(0),
+                Importance.HIGH,
+                FETCH_MIN_BYTES_DOC)
+            .define(FETCH_MAX_BYTES_CONFIG,
+                Type.INT,
+                DEFAULT_FETCH_MAX_BYTES,
+                atLeast(0),
+                Importance.MEDIUM,
+                FETCH_MAX_BYTES_DOC)
+            .define(FETCH_MAX_WAIT_MS_CONFIG,
+                Type.INT,
+                DEFAULT_FETCH_MAX_WAIT_MS,
+                atLeast(0),
+                Importance.LOW,
+                FETCH_MAX_WAIT_MS_DOC)
+            .define(RECONNECT_BACKOFF_MS_CONFIG,
+                Type.LONG,
+                50L,
+                atLeast(0L),
+                Importance.LOW,
+                CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
+            .define(RECONNECT_BACKOFF_MAX_MS_CONFIG,
+                Type.LONG,
+                1000L,
+                atLeast(0L),
+                Importance.LOW,
+                CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
+            .define(RETRY_BACKOFF_MS_CONFIG,
+                Type.LONG,
+                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
+                atLeast(0L),
+                Importance.LOW,
+                CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
+            .define(RETRY_BACKOFF_MAX_MS_CONFIG,
+                Type.LONG,
+                CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS,
+                atLeast(0L),
+                Importance.LOW,
+                CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC)
+            .define(ENABLE_METRICS_PUSH_CONFIG,
+                Type.BOOLEAN,
+                true,
+                Importance.LOW,
+                ENABLE_METRICS_PUSH_DOC)
+            .define(AUTO_OFFSET_RESET_CONFIG,
+                Type.STRING,
+                AutoOffsetResetStrategy.LATEST.name(),
+                new AutoOffsetResetStrategy.Validator(),
+                Importance.MEDIUM,
+                AUTO_OFFSET_RESET_DOC)
+            .define(CHECK_CRCS_CONFIG,
+                Type.BOOLEAN,
+                true,
+                Importance.LOW,
+                CHECK_CRCS_DOC)
+            .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
+                Type.LONG,
+                30000,
+                atLeast(0),
+                Importance.LOW,
+                CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
+            .define(METRICS_NUM_SAMPLES_CONFIG,
+                Type.INT,
+                2,
+                atLeast(1),
+                Importance.LOW,
+                CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
+            .define(METRICS_RECORDING_LEVEL_CONFIG,
+                Type.STRING,
+                Sensor.RecordingLevel.INFO.toString(),
+                in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString(), Sensor.RecordingLevel.TRACE.toString()),
+                Importance.LOW,
+                CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
+            .define(METRIC_REPORTER_CLASSES_CONFIG,
+                Type.LIST,
+                JmxReporter.class.getName(),
+                ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                Importance.LOW,
+                CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
+            .define(KEY_DESERIALIZER_CLASS_CONFIG,
+                Type.CLASS,
+                Importance.HIGH,
+                KEY_DESERIALIZER_CLASS_DOC)
+            .define(VALUE_DESERIALIZER_CLASS_CONFIG,
+                Type.CLASS,
+                Importance.HIGH,
+                VALUE_DESERIALIZER_CLASS_DOC)
+            .define(REQUEST_TIMEOUT_MS_CONFIG,
+                Type.INT,
+                30000,
+                atLeast(0),
+                Importance.MEDIUM,
+                REQUEST_TIMEOUT_MS_DOC)
+            .define(DEFAULT_API_TIMEOUT_MS_CONFIG,
+                Type.INT,
+                60 * 1000,
+                atLeast(0),
+                Importance.MEDIUM,
+                CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_DOC)
+            .define(SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG,
+                Type.LONG,
+                CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MS,
+                Importance.MEDIUM,
+                CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC)
+            .define(SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG,
+                Type.LONG,
+                CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS,
+                Importance.MEDIUM,
+                CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
+            /* default is set to be a bit lower than the server default (10 min), to avoid both client and server closing connection at same time */
+            .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
+                Type.LONG,
+                9 * 60 * 1000,
+                Importance.MEDIUM,
+                CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
+            .define(INTERCEPTOR_CLASSES_CONFIG,
+                Type.LIST,
+                List.of(),
+                ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                Importance.LOW,
+                INTERCEPTOR_CLASSES_DOC)
+            .define(MAX_POLL_RECORDS_CONFIG,
+                Type.INT,
+                DEFAULT_MAX_POLL_RECORDS,
+                atLeast(1),
+                Importance.MEDIUM,
+                MAX_POLL_RECORDS_DOC)
+            .define(MAX_POLL_INTERVAL_MS_CONFIG,
+                Type.INT,
+                300000,
+                atLeast(1),
+                Importance.MEDIUM,
+                MAX_POLL_INTERVAL_MS_DOC)
+            .define(EXCLUDE_INTERNAL_TOPICS_CONFIG,
+                Type.BOOLEAN,
+                DEFAULT_EXCLUDE_INTERNAL_TOPICS,
+                Importance.MEDIUM,
+                EXCLUDE_INTERNAL_TOPICS_DOC)
+            .defineInternal(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED,
+                Type.BOOLEAN,
+                false,
+                Importance.LOW)
+            .define(ISOLATION_LEVEL_CONFIG,
+                Type.STRING,
+                DEFAULT_ISOLATION_LEVEL,
+                in(IsolationLevel.READ_COMMITTED.toString(), IsolationLevel.READ_UNCOMMITTED.toString()),
+                Importance.MEDIUM,
+                ISOLATION_LEVEL_DOC)
+            .define(ALLOW_AUTO_CREATE_TOPICS_CONFIG,
+                Type.BOOLEAN,
+                DEFAULT_ALLOW_AUTO_CREATE_TOPICS,
+                Importance.MEDIUM,
+                ALLOW_AUTO_CREATE_TOPICS_DOC)
+            .define(GROUP_PROTOCOL_CONFIG,
+                Type.STRING,
+                DEFAULT_GROUP_PROTOCOL,
+                ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(GroupProtocol.class)),
+                Importance.HIGH,
+                GROUP_PROTOCOL_DOC)
+            .define(GROUP_REMOTE_ASSIGNOR_CONFIG,
+                Type.STRING,
+                DEFAULT_GROUP_REMOTE_ASSIGNOR,
+                Importance.MEDIUM,
+                GROUP_REMOTE_ASSIGNOR_DOC)
+            // security support
+            .define(SECURITY_PROVIDERS_CONFIG,
+                Type.STRING,
+                null,
+                Importance.LOW,
+                SECURITY_PROVIDERS_DOC)
+            .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
+                Type.STRING,
+                CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                ConfigDef.CaseInsensitiveValidString
+                    .in(Utils.enumOptions(SecurityProtocol.class)),
+                Importance.MEDIUM,
+                CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+            .withClientSslSupport()
+            .withClientSaslSupport()
+            .define(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG,
+                Type.STRING,
+                CommonClientConfigs.DEFAULT_METADATA_RECOVERY_STRATEGY,
+                ConfigDef.CaseInsensitiveValidString
+                    .in(Utils.enumOptions(MetadataRecoveryStrategy.class)),
+                Importance.LOW,
+                CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC)
+            .define(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG,
+                Type.LONG,
+                CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
+                atLeast(0),
+                Importance.LOW,
+                CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
+            .define(CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
+                Type.BOOLEAN,
+                true,
+                Importance.LOW,
+                CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_DOC)
+            .define(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
+                Type.STRING,
+                ShareAcknowledgementMode.IMPLICIT.name(),
+                new ShareAcknowledgementMode.Validator(),
+                Importance.MEDIUM,
+                ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_DOC)
+            .define(ConsumerConfig.SHARE_ACQUIRE_MODE_CONFIG,
+                Type.STRING,
+                DEFAULT_SHARE_ACQUIRE_MODE,
+                new ShareAcquireMode.Validator(),
+                Importance.MEDIUM,
+                ConsumerConfig.SHARE_ACQUIRE_MODE_DOC)
+            .define(CONFIG_PROVIDERS_CONFIG,
+                ConfigDef.Type.LIST,
+                List.of(),
+                ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                ConfigDef.Importance.LOW,
+                CONFIG_PROVIDERS_DOC);
     }
 
     @Override
@@ -740,8 +740,8 @@ public class ConsumerConfig extends AbstractConfig {
     }
 
     public static Map<String, Object> appendDeserializerToConfig(Map<String, Object> configs,
-                                                                 Deserializer<?> keyDeserializer,
-                                                                 Deserializer<?> valueDeserializer) {
+        Deserializer<?> keyDeserializer,
+        Deserializer<?> valueDeserializer) {
         // validate deserializer configuration, if the passed deserializer instance is null, the user must explicitly set a valid deserializer configuration value
         Map<String, Object> newConfigs = new HashMap<>(configs);
         if (keyDeserializer != null)
@@ -788,7 +788,7 @@ public class ConsumerConfig extends AbstractConfig {
             });
             if (!invalidConfigs.isEmpty()) {
                 throw new ConfigException(String.join(", ", invalidConfigs) +
-                        " cannot be set when " + GROUP_PROTOCOL_CONFIG + "=" + groupProtocol.name());
+                    " cannot be set when " + GROUP_PROTOCOL_CONFIG + "=" + groupProtocol.name());
             }
         }
     }

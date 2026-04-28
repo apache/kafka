@@ -72,7 +72,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
     private static final byte[] V_2_CHANGELOG_HEADER_VALUE = {(byte) 2};
     private static final byte[] V_3_CHANGELOG_HEADER_VALUE = {(byte) 3};
     static final RecordHeaders CHANGELOG_HEADERS =
-        new RecordHeaders(new Header[] {new RecordHeader("v", V_3_CHANGELOG_HEADER_VALUE)});
+        new RecordHeaders(new Header[]{new RecordHeader("v", V_3_CHANGELOG_HEADER_VALUE)});
     private static final String METRIC_SCOPE = "in-memory-suppression";
 
     private final Map<Bytes, BufferKey> index = new HashMap<>();
@@ -170,9 +170,9 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
     }
 
     private InMemoryTimeOrderedKeyValueChangeBuffer(final String storeName,
-                                                    final boolean loggingEnabled,
-                                                    final Serde<K> keySerde,
-                                                    final Serde<V> valueSerde) {
+        final boolean loggingEnabled,
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde) {
         this.storeName = storeName;
         this.loggingEnabled = loggingEnabled;
         this.keySerde = keySerde;
@@ -196,6 +196,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
         keySerde = keySerde == null ? (Serde<K>) getter.keySerde() : keySerde;
         valueSerde = valueSerde == null ? FullChangeSerde.wrap((Serde<V>) getter.valueSerde()) : valueSerde;
     }
+
     @Override
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         this.context = ProcessorContextUtils.asInternalProcessorContext(stateStoreContext);
@@ -381,7 +382,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
 
     @Override
     public void evictWhile(final Supplier<Boolean> predicate,
-                           final Consumer<Eviction<K, Change<V>>> callback) {
+        final Consumer<Eviction<K, Change<V>>> callback) {
         final Iterator<Map.Entry<BufferKey, BufferValue>> delegate = sortedMap.entrySet().iterator();
         int evictions = 0;
 
@@ -467,8 +468,8 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
 
     @Override
     public boolean put(final long time,
-                       final Record<K, Change<V>> record,
-                       final ProcessorRecordContext recordContext) {
+        final Record<K, Change<V>> record,
+        final ProcessorRecordContext recordContext) {
         requireNonNull(record.value(), "value cannot be null");
         requireNonNull(recordContext, "recordContext cannot be null");
 

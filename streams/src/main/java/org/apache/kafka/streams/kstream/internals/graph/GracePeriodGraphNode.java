@@ -26,8 +26,8 @@ public class GracePeriodGraphNode<K, V> extends ProcessorGraphNode<K, V> {
     private final long gracePeriod;
 
     public GracePeriodGraphNode(final String nodeName,
-                                final ProcessorParameters<K, V, ?, ?> processorParameters,
-                                final long gracePeriod) {
+        final ProcessorParameters<K, V, ?, ?> processorParameters,
+        final long gracePeriod) {
         super(nodeName, processorParameters);
         this.gracePeriod = gracePeriod;
     }

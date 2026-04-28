@@ -97,11 +97,11 @@ public class DeleteAclsResponse extends AbstractResponse {
         }
 
         final boolean unknown = filterResults().stream()
-                .flatMap(r -> r.matchingAcls().stream())
-                .anyMatch(matchingAcl -> matchingAcl.patternType() == PatternType.UNKNOWN.code()
-                    || matchingAcl.resourceType() == ResourceType.UNKNOWN.code()
-                    || matchingAcl.permissionType() == AclPermissionType.UNKNOWN.code()
-                    || matchingAcl.operation() == AclOperation.UNKNOWN.code());
+            .flatMap(r -> r.matchingAcls().stream())
+            .anyMatch(matchingAcl -> matchingAcl.patternType() == PatternType.UNKNOWN.code()
+                || matchingAcl.resourceType() == ResourceType.UNKNOWN.code()
+                || matchingAcl.permissionType() == AclPermissionType.UNKNOWN.code()
+                || matchingAcl.operation() == AclOperation.UNKNOWN.code());
         if (unknown)
             throw new IllegalArgumentException("DeleteAclsMatchingAcls contain UNKNOWN elements");
     }

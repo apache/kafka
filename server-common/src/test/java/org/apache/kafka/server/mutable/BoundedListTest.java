@@ -79,12 +79,12 @@ public class BoundedListTest {
         assertTrue(list.add(789));
         assertEquals("Cannot add another element to the list because it would exceed the " +
             "maximum length of 2",
-                assertThrows(BoundedListTooLongException.class,
-                    () -> list.add(912)).getMessage());
+            assertThrows(BoundedListTooLongException.class,
+                () -> list.add(912)).getMessage());
         assertEquals("Cannot add another element to the list because it would exceed the " +
             "maximum length of 2",
-                assertThrows(BoundedListTooLongException.class,
-                    () -> list.add(0, 912)).getMessage());
+            assertThrows(BoundedListTooLongException.class,
+                () -> list.add(0, 912)).getMessage());
     }
 
     @Test
@@ -152,8 +152,8 @@ public class BoundedListTest {
         list.add(1);
         list.add(2);
         list.add(3);
-        assertArrayEquals(new Integer[] {1, 2, 3}, list.toArray());
-        assertArrayEquals(new Integer[] {1, 2, 3}, list.toArray(new Integer[3]));
+        assertArrayEquals(new Integer[]{1, 2, 3}, list.toArray());
+        assertArrayEquals(new Integer[]{1, 2, 3}, list.toArray(new Integer[3]));
     }
 
     @Test
@@ -164,12 +164,12 @@ public class BoundedListTest {
         list.add("c");
         assertEquals("Cannot add another 3 element(s) to the list because it would exceed the " +
             "maximum length of 5",
-                assertThrows(BoundedListTooLongException.class,
-                        () -> list.addAll(List.of("d", "e", "f"))).getMessage());
+            assertThrows(BoundedListTooLongException.class,
+                () -> list.addAll(List.of("d", "e", "f"))).getMessage());
         assertEquals("Cannot add another 3 element(s) to the list because it would exceed the " +
             "maximum length of 5",
-                assertThrows(BoundedListTooLongException.class,
-                        () -> list.addAll(0, List.of("d", "e", "f"))).getMessage());
+            assertThrows(BoundedListTooLongException.class,
+                () -> list.addAll(0, List.of("d", "e", "f"))).getMessage());
         list.addAll(List.of("d", "e"));
         assertEquals(List.of("a", "b", "c", "d", "e"), list);
     }

@@ -86,13 +86,13 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private long lastPollTimeMs = 0L;
 
     public ConsumerNetworkThread(LogContext logContext,
-                                 Time time,
-                                 BlockingQueue<ApplicationEvent> applicationEventQueue,
-                                 CompletableEventReaper applicationEventReaper,
-                                 Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
-                                 Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-                                 Supplier<RequestManagers> requestManagersSupplier,
-                                 AsyncConsumerMetrics asyncConsumerMetrics) {
+        Time time,
+        BlockingQueue<ApplicationEvent> applicationEventQueue,
+        CompletableEventReaper applicationEventReaper,
+        Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
+        Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
+        Supplier<RequestManagers> requestManagersSupplier,
+        AsyncConsumerMetrics asyncConsumerMetrics) {
         super(BACKGROUND_THREAD_NAME, true);
         this.time = time;
         this.log = logContext.logger(getClass());
@@ -306,8 +306,8 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      */
     // Visible for testing
     static void runAtClose(final Collection<RequestManager> requestManagers,
-                           final NetworkClientDelegate networkClientDelegate,
-                           final long currentTimeMs) {
+        final NetworkClientDelegate networkClientDelegate,
+        final long currentTimeMs) {
         // These are the optional outgoing requests at the time of closing the consumer
         for (RequestManager rm : requestManagers) {
             NetworkClientDelegate.PollResult pollResult = rm.pollOnClose(currentTimeMs);
@@ -350,8 +350,8 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         Objects.requireNonNull(timeout, "Close timeout for consumer network thread must be non-null");
 
         closer.close(
-                () -> closeInternal(timeout),
-                () -> log.warn("The consumer network thread was already closed")
+            () -> closeInternal(timeout),
+            () -> log.warn("The consumer network thread was already closed")
         );
     }
 

@@ -100,7 +100,7 @@ public class TopicAdminTest {
             assertTrue(admin.createOrFindTopics(newTopic).isEmpty());
         }
     }
-    
+
     @Test
     public void returnEmptyWithClusterAuthorizationFailureOnCreate() {
         final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
@@ -224,10 +224,10 @@ public class TopicAdminTest {
     @Test
     public void shouldCreateTopicWithDefaultPartitionsAndReplicationFactorWhenItDoesNotExist() {
         NewTopic newTopic = TopicAdmin.defineTopic("my-topic")
-                                      .defaultPartitions()
-                                      .defaultReplicationFactor()
-                                      .compacted()
-                                      .build();
+                .defaultPartitions()
+                .defaultReplicationFactor()
+                .compacted()
+                .build();
 
         for (int numBrokers = 1; numBrokers < 10; ++numBrokers) {
             int expectedReplicas = Math.min(3, numBrokers);
@@ -380,10 +380,10 @@ public class TopicAdminTest {
     public void describeTopicConfigShouldReturnTopicConfigWhenTopicExists() {
         String topicName = "myTopic";
         NewTopic newTopic = TopicAdmin.defineTopic(topicName)
-                                      .config(Map.of("foo", "bar"))
-                                      .partitions(1)
-                                      .compacted()
-                                      .build();
+                .config(Map.of("foo", "bar"))
+                .partitions(1)
+                .compacted()
+                .build();
         Cluster cluster = createCluster(1);
         try (MockAdminClient mockAdminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
             TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), List.of());
@@ -534,7 +534,7 @@ public class TopicAdminTest {
 
             TopicAdmin admin = new TopicAdmin(env.adminClient());
             ConnectException exception = assertThrows(ConnectException.class, () ->
-                admin.retryEndOffsets(tps, Duration.ofMillis(100), 1)
+                    admin.retryEndOffsets(tps, Duration.ofMillis(100), 1)
             );
 
             Throwable cause = exception.getCause();
@@ -604,8 +604,8 @@ public class TopicAdminTest {
         Long offset = null; // response should use error
         Cluster cluster = createCluster(1, topicName, 1);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(
-            new MockTime(), cluster, AdminClientConfig.RETRIES_CONFIG, "0"
-        )) {
+                     new MockTime(), cluster, AdminClientConfig.RETRIES_CONFIG, "0"
+             )) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
             env.kafkaClient().prepareResponse(listOffsetsResultWithTimeout(tp1, offset));
@@ -731,7 +731,7 @@ public class TopicAdminTest {
         for (String topic : cluster.topics()) {
             List<MetadataResponseData.MetadataResponsePartition> pms = new ArrayList<>();
             for (PartitionInfo pInfo : cluster.availablePartitionsForTopic(topic)) {
-                MetadataResponseData.MetadataResponsePartition pm  = new MetadataResponseData.MetadataResponsePartition()
+                MetadataResponseData.MetadataResponsePartition pm = new MetadataResponseData.MetadataResponsePartition()
                         .setErrorCode(partitionError.code())
                         .setPartitionIndex(pInfo.partition())
                         .setLeaderId(pInfo.leader().id())
@@ -839,9 +839,9 @@ public class TopicAdminTest {
         CreateTopicsResponseData response = new CreateTopicsResponseData();
         for (NewTopic topic : topics) {
             response.topics().add(new CreatableTopicResult().
-                setName(topic.name()).
-                setErrorCode(error.error().code()).
-                setErrorMessage(error.message()));
+                    setName(topic.name()).
+                    setErrorCode(error.error().code()).
+                    setErrorMessage(error.message()));
         }
         return new CreateTopicsResponse(response);
     }
@@ -906,10 +906,10 @@ public class TopicAdminTest {
         DescribeTopicPartitionsResponseData response = new DescribeTopicPartitionsResponseData();
         for (NewTopic topic : topics) {
             response.topics().add(new DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponseTopic()
-                .setErrorCode(error.error().code())
-                .setTopicId(Uuid.ZERO_UUID)
-                .setName(topic.name())
-                .setIsInternal(false)
+                    .setErrorCode(error.error().code())
+                    .setTopicId(Uuid.ZERO_UUID)
+                    .setName(topic.name())
+                    .setIsInternal(false)
             );
         }
         return new DescribeTopicPartitionsResponse(response);
@@ -917,18 +917,18 @@ public class TopicAdminTest {
 
     private DescribeClusterResponse describeClusterResponse(Cluster cluster) {
         DescribeClusterResponseData data = new DescribeClusterResponseData()
-            .setErrorCode(Errors.NONE.code())
-            .setThrottleTimeMs(0)
-            .setControllerId(cluster.nodes().get(0).id())
-            .setClusterId(cluster.clusterResource().clusterId())
-            .setClusterAuthorizedOperations(MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
+                .setErrorCode(Errors.NONE.code())
+                .setThrottleTimeMs(0)
+                .setControllerId(cluster.nodes().get(0).id())
+                .setClusterId(cluster.clusterResource().clusterId())
+                .setClusterAuthorizedOperations(MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
 
         cluster.nodes().forEach(broker ->
-            data.brokers().add(new DescribeClusterResponseData.DescribeClusterBroker()
-                .setHost(broker.host())
-                .setPort(broker.port())
-                .setBrokerId(broker.id())
-                .setRack(broker.rack())));
+                data.brokers().add(new DescribeClusterResponseData.DescribeClusterBroker()
+                        .setHost(broker.host())
+                        .setPort(broker.port())
+                        .setBrokerId(broker.id())
+                        .setRack(broker.rack())));
 
         return new DescribeClusterResponse(data);
     }

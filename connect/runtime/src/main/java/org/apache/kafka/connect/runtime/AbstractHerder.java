@@ -148,12 +148,12 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     private final CachedConnectors cachedConnectors;
 
     public AbstractHerder(Worker worker,
-                          String workerId,
-                          String kafkaClusterId,
-                          StatusBackingStore statusBackingStore,
-                          ConfigBackingStore configBackingStore,
-                          ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
-                          Time time) {
+            String workerId,
+            String kafkaClusterId,
+            StatusBackingStore statusBackingStore,
+            ConfigBackingStore configBackingStore,
+            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+            Time time) {
         this.worker = worker;
         this.worker.herder = this;
         this.workerId = workerId;
@@ -339,10 +339,10 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         Map<String, String> config = configState.rawConnectorConfig(connector);
 
         return new ConnectorInfo(
-            connector,
-            config,
-            configState.tasks(connector),
-            connectorType(config)
+                connector,
+                config,
+                configState.tasks(connector),
+                connectorType(config)
         );
     }
 
@@ -437,11 +437,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
      *                       may not be null
      * @param defaultProperties any default properties to include in the configuration that will be used for
      *                          the plugin; may be null
-
+     
      * @return a {@link ConfigInfos} object containing validation results for the plugin in the connector config,
      * or null if either no custom validation was performed (possibly because no custom plugin was defined in the
      * connector config), or if custom validation failed
-
+     
      * @param <T> the plugin class to perform validation for
      */
     @SuppressWarnings("unchecked")
@@ -677,7 +677,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     protected boolean connectorUsesProducer(org.apache.kafka.connect.health.ConnectorType connectorType, Map<String, String> connProps) {
         return connectorType == org.apache.kafka.connect.health.ConnectorType.SOURCE
-            || SinkConnectorConfig.hasDlqTopicConfig(connProps);
+                || SinkConnectorConfig.hasDlqTopicConfig(connProps);
     }
 
     private ConfigInfos validateClientOverrides(
@@ -905,25 +905,25 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     private static ConfigInfos validateClientOverrides(String connName,
-                                                      String prefix,
-                                                      AbstractConfig connectorConfig,
-                                                      ConfigDef configDef,
-                                                      Class<? extends Connector> connectorClass,
-                                                      org.apache.kafka.connect.health.ConnectorType connectorType,
-                                                      ConnectorClientConfigRequest.ClientType clientType,
-                                                      Plugin<ConnectorClientConfigOverridePolicy> connectorClientConfigOverridePolicyPlugin) {
+            String prefix,
+            AbstractConfig connectorConfig,
+            ConfigDef configDef,
+            Class<? extends Connector> connectorClass,
+            org.apache.kafka.connect.health.ConnectorType connectorType,
+            ConnectorClientConfigRequest.ClientType clientType,
+            Plugin<ConnectorClientConfigOverridePolicy> connectorClientConfigOverridePolicyPlugin) {
         Map<String, Object> clientConfigs = new HashMap<>();
         for (Map.Entry<String, Object> rawClientConfig : connectorConfig.originalsWithPrefix(prefix).entrySet()) {
             String configName = rawClientConfig.getKey();
             Object rawConfigValue = rawClientConfig.getValue();
             ConfigKey configKey = configDef.configKeys().get(configName);
             Object parsedConfigValue = configKey != null
-                ? ConfigDef.parseType(configName, rawConfigValue, configKey.type)
-                : rawConfigValue;
+                    ? ConfigDef.parseType(configName, rawConfigValue, configKey.type)
+                    : rawConfigValue;
             clientConfigs.put(configName, parsedConfigValue);
         }
         ConnectorClientConfigRequest connectorClientConfigRequest = new ConnectorClientConfigRequest(
-            connName, connectorType, connectorClass, clientConfigs, clientType);
+                connName, connectorType, connectorClass, clientConfigs, clientType);
         List<ConfigValue> configValues = connectorClientConfigOverridePolicyPlugin.get().validate(connectorClientConfigRequest);
 
         return prefixedConfigInfos(configDef.configKeys(), configValues, prefix);
@@ -965,7 +965,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         List<ConfigInfo> configInfoList = new LinkedList<>();
 
         Map<String, ConfigValue> configValueMap = new HashMap<>();
-        for (ConfigValue configValue: configValues) {
+        for (ConfigValue configValue : configValues) {
             String configName = configValue.name();
             configValueMap.put(configName, configValue);
             if (!configKeys.containsKey(configName)) {
@@ -1021,7 +1021,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         List<String> recommendedValues = new LinkedList<>();
 
         if (type == Type.LIST) {
-            for (Object object: configValue.recommendedValues()) {
+            for (Object object : configValue.recommendedValues()) {
                 recommendedValues.add(ConfigDef.convertToString(object, Type.STRING));
             }
         } else {
@@ -1064,26 +1064,26 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
      * @return true if errors were found in the config
      */
     protected final boolean maybeAddConfigErrors(
-        ConfigInfos configInfos,
-        Callback<Created<ConnectorInfo>> callback
+            ConfigInfos configInfos,
+            Callback<Created<ConnectorInfo>> callback
     ) {
         int errors = configInfos.errorCount();
         boolean hasErrors = errors > 0;
         if (hasErrors) {
             StringBuilder messages = new StringBuilder();
             messages.append("Connector configuration is invalid and contains the following ")
-                .append(errors).append(" error(s):");
+                    .append(errors).append(" error(s):");
             for (ConfigInfo configInfo : configInfos.configs()) {
                 for (String msg : configInfo.configValue().errors()) {
                     messages.append('\n').append(msg);
                 }
             }
             callback.onCompletion(
-                new BadRequestException(
-                    messages.append(
-                        "\nYou can also find the above list of errors at the endpoint `/connector-plugins/{connectorType}/config/validate`"
-                    ).toString()
-                ), null
+                    new BadRequestException(
+                            messages.append(
+                                    "\nYou can also find the above list of errors at the endpoint `/connector-plugins/{connectorType}/config/validate`"
+                            ).toString()
+                    ), null
             );
         }
         return hasErrors;
@@ -1099,8 +1099,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
      * Performs a reverse transformation on a set of task configs, by replacing values with variable references.
      */
     public static List<Map<String, String>> reverseTransform(String connName,
-                                                             ClusterConfigState configState,
-                                                             List<Map<String, String>> configs) {
+            ClusterConfigState configState,
+            List<Map<String, String>> configs) {
 
         // Find the config keys in the raw connector config that have variable references
         Map<String, String> rawConnConfig = configState.rawConnectorConfig(connName);

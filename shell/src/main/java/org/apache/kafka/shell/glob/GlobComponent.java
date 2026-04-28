@@ -76,7 +76,7 @@ public final class GlobComponent {
                         char next = glob.charAt(i);
                         i++;
                         if (isGlobSpecialCharacter(next) ||
-                                isRegularExpressionSpecialCharacter(next)) {
+                            isRegularExpressionSpecialCharacter(next)) {
                             output.append('\\');
                         }
                         output.append(next);

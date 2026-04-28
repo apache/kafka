@@ -40,16 +40,16 @@ import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativ
  */
 public enum ConnectProtocolCompatibility {
     EAGER {
-        @Override
-        public String protocol() {
-            return "default";
-        }
+    @Override
+    public String protocol() {
+        return "default";
+    }
 
-        @Override
-        public short protocolVersion() {
-            return CONNECT_PROTOCOL_V0;
-        }
-    },
+    @Override
+    public short protocolVersion() {
+        return CONNECT_PROTOCOL_V0;
+    }
+},
 
     COMPATIBLE {
         @Override

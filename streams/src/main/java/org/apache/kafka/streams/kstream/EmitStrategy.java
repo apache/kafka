@@ -59,7 +59,7 @@ public interface EmitStrategy {
             for (final StrategyType type : StrategyType.values()) {
                 if (TYPE_TO_STRATEGY.put(type.code(), type.strategy()) != null)
                     throw new IllegalStateException("Code " + type.code() + " for type " +
-                            type + " has already been used");
+                        type + " has already been used");
             }
         }
 

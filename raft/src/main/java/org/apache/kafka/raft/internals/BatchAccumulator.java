@@ -119,7 +119,7 @@ public class BatchAccumulator<T> implements Closeable {
         int numberOfCompletedBatches = completed.size();
         if (epoch < this.epoch) {
             throw new NotLeaderException("Append failed because the given epoch " + epoch + " is stale. " +
-                    "Current leader epoch = " + this.epoch());
+                "Current leader epoch = " + this.epoch());
         } else if (epoch > this.epoch) {
             throw new IllegalArgumentException("Attempt to append from epoch " + epoch +
                 " which is larger than the current epoch " + this.epoch);

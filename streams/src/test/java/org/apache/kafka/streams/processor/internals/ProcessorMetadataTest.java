@@ -37,7 +37,7 @@ public class ProcessorMetadataTest {
         final long value = 100L;
 
         metadata.put(key, value);
-        final Long actualValue =  metadata.get(key);
+        final Long actualValue = metadata.get(key);
 
         assertThat(actualValue, is(value));
 

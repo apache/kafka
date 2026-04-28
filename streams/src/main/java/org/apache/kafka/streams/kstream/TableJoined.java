@@ -35,8 +35,8 @@ public class TableJoined<K, KO> implements NamedOperation<TableJoined<K, KO>> {
     protected final String name;
 
     private TableJoined(final StreamPartitioner<K, Void> partitioner,
-                        final StreamPartitioner<KO, Void> otherPartitioner,
-                        final String name) {
+        final StreamPartitioner<KO, Void> otherPartitioner,
+        final String name) {
         this.partitioner = partitioner;
         this.otherPartitioner = otherPartitioner;
         this.name = name;
@@ -69,7 +69,7 @@ public class TableJoined<K, KO> implements NamedOperation<TableJoined<K, KO>> {
      * @return new {@code TableJoined} instance with the provided partitioners
      */
     public static <K, KO> TableJoined<K, KO> with(final StreamPartitioner<K, Void> partitioner,
-                                                  final StreamPartitioner<KO, Void> otherPartitioner) {
+        final StreamPartitioner<KO, Void> otherPartitioner) {
         return new TableJoined<>(partitioner, otherPartitioner, null);
     }
 

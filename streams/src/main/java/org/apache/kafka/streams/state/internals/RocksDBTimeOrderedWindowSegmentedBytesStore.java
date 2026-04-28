@@ -61,9 +61,9 @@ public class RocksDBTimeOrderedWindowSegmentedBytesStore<S extends Segment> exte
     }
 
     RocksDBTimeOrderedWindowSegmentedBytesStore(final String name,
-                                                final long retention,
-                                                final boolean withIndex,
-                                                final AbstractSegments<S> segments) {
+        final long retention,
+        final boolean withIndex,
+        final AbstractSegments<S> segments) {
         super(
             name,
             retention,

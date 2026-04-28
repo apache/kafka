@@ -35,10 +35,10 @@ public class SnapshottableCoordinatorTest {
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         SnapshottableCoordinator<MockCoordinatorShard, String> coordinator = new SnapshottableCoordinator<>(
-            logContext,
-            snapshotRegistry,
-            new MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
-            new TopicPartition("test-topic", 0)
+                logContext,
+                snapshotRegistry,
+                new MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
+                new TopicPartition("test-topic", 0)
         );
 
         assertTrue(coordinator.snapshotRegistry().hasSnapshot(0L));
@@ -53,10 +53,10 @@ public class SnapshottableCoordinatorTest {
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         SnapshottableCoordinator<MockCoordinatorShard, String> coordinator = new SnapshottableCoordinator<>(
-            logContext,
-            snapshotRegistry,
-            new MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
-            new TopicPartition("test-topic", 0)
+                logContext,
+                snapshotRegistry,
+                new MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
+                new TopicPartition("test-topic", 0)
         );
 
         assertEquals(0L, coordinator.lastWrittenOffset());
@@ -69,10 +69,10 @@ public class SnapshottableCoordinatorTest {
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         SnapshottableCoordinator<MockCoordinatorShard, String> coordinator = new SnapshottableCoordinator<>(
-            logContext,
-            snapshotRegistry,
-            new MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
-            new TopicPartition("test-topic", 0)
+                logContext,
+                snapshotRegistry,
+                new MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
+                new TopicPartition("test-topic", 0)
         );
 
         coordinator.updateLastWrittenOffset(100L);
@@ -92,10 +92,10 @@ public class SnapshottableCoordinatorTest {
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         SnapshottableCoordinator<MockCoordinatorShard, String> coordinator = new SnapshottableCoordinator<>(
-            logContext,
-            snapshotRegistry,
-            new MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
-            new TopicPartition("test-topic", 0)
+                logContext,
+                snapshotRegistry,
+                new MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
+                new TopicPartition("test-topic", 0)
         );
 
         assertEquals(0, coordinator.lastWrittenOffset());
@@ -108,10 +108,10 @@ public class SnapshottableCoordinatorTest {
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         SnapshottableCoordinator<MockCoordinatorShard, String> coordinator = new SnapshottableCoordinator<>(
-            logContext,
-            snapshotRegistry,
-            new MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
-            new TopicPartition("test-topic", 0)
+                logContext,
+                snapshotRegistry,
+                new MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
+                new TopicPartition("test-topic", 0)
         );
 
         coordinator.updateLastWrittenOffset(100L);
@@ -129,10 +129,10 @@ public class SnapshottableCoordinatorTest {
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         SnapshottableCoordinator<MockCoordinatorShard, String> coordinator = new SnapshottableCoordinator<>(
-            logContext,
-            snapshotRegistry,
-            new MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
-            new TopicPartition("test-topic", 0)
+                logContext,
+                snapshotRegistry,
+                new MockCoordinatorShard(snapshotRegistry, new MockCoordinatorTimer<>(new MockTime())),
+                new TopicPartition("test-topic", 0)
         );
 
         coordinator.updateLastWrittenOffset(100L);

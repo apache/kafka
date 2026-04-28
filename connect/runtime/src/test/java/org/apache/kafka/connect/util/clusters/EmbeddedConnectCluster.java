@@ -169,10 +169,10 @@ public class EmbeddedConnectCluster extends EmbeddedConnect {
     @Override
     public String toString() {
         return String.format("EmbeddedConnectCluster(name= %s, numBrokers= %d, numInitialWorkers= %d, workerProps= %s)",
-            connectClusterName,
-            numBrokers,
-            numInitialWorkers,
-            workerProps);
+                connectClusterName,
+                numBrokers,
+                numInitialWorkers,
+                workerProps);
     }
 
     public String getName() {

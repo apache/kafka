@@ -174,7 +174,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
     }
 
     private String[] getArgs(String group, String topic) {
-        return new String[] {
+        return new String[]{
             "--bootstrap-server", clusterInstance.bootstrapServers(),
             "--delete-offsets",
             "--group", group,
@@ -190,10 +190,10 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
     }
 
     private Runnable getValidateRunnable(String inputTopic,
-                                         String inputGroup,
-                                         int inputPartition,
-                                         int expectedPartition,
-                                         Errors expectedError) {
+        String inputGroup,
+        int inputPartition,
+        int expectedPartition,
+        Errors expectedError) {
         return () -> {
             String topic = inputPartition >= 0 ? inputTopic + ":" + inputPartition : inputTopic;
             try (ConsumerGroupCommand.ConsumerGroupService consumerGroupService = consumerGroupService(getArgs(inputGroup, topic))) {
@@ -212,11 +212,12 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
             }
         };
     }
+
     private void testWithConsumerGroup(String inputTopic,
-                                       String inputGroup,
-                                       GroupProtocol groupProtocol,
-                                       boolean isStable,
-                                       Runnable validateRunnable) {
+        String inputGroup,
+        GroupProtocol groupProtocol,
+        boolean isStable,
+        Runnable validateRunnable) {
         produceRecord(inputTopic);
         try (Consumer<byte[], byte[]> consumer = createConsumer(inputGroup, groupProtocol)) {
             consumer.subscribe(List.of(inputTopic));

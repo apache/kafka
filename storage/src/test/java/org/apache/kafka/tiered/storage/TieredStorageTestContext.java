@@ -148,24 +148,24 @@ public final class TieredStorageTestContext implements AutoCloseable {
     }
 
     public void updateTopicConfig(String topic,
-                                  Map<String, String> configsToBeAdded,
-                                  List<String> configsToBeDeleted)
+            Map<String, String> configsToBeAdded,
+            List<String> configsToBeDeleted)
             throws ExecutionException, InterruptedException, TimeoutException {
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
         updateResource(configResource, configsToBeAdded, configsToBeDeleted);
     }
 
     public void updateBrokerConfig(Integer brokerId,
-                                   Map<String, String> configsToBeAdded,
-                                   List<String> configsToBeDeleted)
+            Map<String, String> configsToBeAdded,
+            List<String> configsToBeDeleted)
             throws ExecutionException, InterruptedException, TimeoutException {
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.toString());
         updateResource(configResource, configsToBeAdded, configsToBeDeleted);
     }
 
     private void updateResource(ConfigResource configResource,
-                                Map<String, String> configsToBeAdded,
-                                List<String> configsToBeDeleted)
+            Map<String, String> configsToBeAdded,
+            List<String> configsToBeDeleted)
             throws ExecutionException, InterruptedException, TimeoutException {
         List<AlterConfigOp> alterEntries = new ArrayList<>();
         configsToBeDeleted.forEach(k ->
@@ -201,8 +201,8 @@ public final class TieredStorageTestContext implements AutoCloseable {
     }
 
     public List<ConsumerRecord<String, String>> consume(TopicPartition topicPartition,
-                                                        Integer expectedTotalCount,
-                                                        Long fetchOffset) {
+            Integer expectedTotalCount,
+            Long fetchOffset) {
         consumer.assign(List.of(topicPartition));
         consumer.seek(topicPartition, fetchOffset);
 
@@ -261,8 +261,8 @@ public final class TieredStorageTestContext implements AutoCloseable {
     }
 
     public void eraseBrokerStorage(int brokerId,
-                                   FilenameFilter filter,
-                                   boolean isStopped) throws IOException {
+            FilenameFilter filter,
+            boolean isStopped) throws IOException {
         BrokerLocalStorage brokerLocalStorage;
         if (isStopped) {
             brokerLocalStorage = TieredStorageTestHarness.localStorages(harness.brokers())

@@ -39,17 +39,17 @@ public class PredicateDoc {
     }
 
     private static final List<DocInfo> PREDICATES = new Plugins(Map.of()).predicates().stream()
-        .map(p -> {
-            try {
-                String overviewDoc = (String) p.pluginClass().getDeclaredField("OVERVIEW_DOC").get(null);
-                ConfigDef configDef = (ConfigDef) p.pluginClass().getDeclaredField("CONFIG_DEF").get(null);
-                return new DocInfo(p.pluginClass(), overviewDoc, configDef);
-            } catch (ReflectiveOperationException e) {
-                throw new RuntimeException("Predicate class " + p.pluginClass().getName() + " lacks either a `public static final String OVERVIEW_DOC` or `public static final ConfigDef CONFIG_DEF`");
-            }
-        })
-        .sorted(Comparator.comparing(docInfo -> docInfo.predicateName))
-        .toList();
+            .map(p -> {
+                try {
+                    String overviewDoc = (String) p.pluginClass().getDeclaredField("OVERVIEW_DOC").get(null);
+                    ConfigDef configDef = (ConfigDef) p.pluginClass().getDeclaredField("CONFIG_DEF").get(null);
+                    return new DocInfo(p.pluginClass(), overviewDoc, configDef);
+                } catch (ReflectiveOperationException e) {
+                    throw new RuntimeException("Predicate class " + p.pluginClass().getName() + " lacks either a `public static final String OVERVIEW_DOC` or `public static final ConfigDef CONFIG_DEF`");
+                }
+            })
+            .sorted(Comparator.comparing(docInfo -> docInfo.predicateName))
+            .toList();
 
     private static String toHtml() {
         StringBuilder b = new StringBuilder();

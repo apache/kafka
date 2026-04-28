@@ -88,7 +88,7 @@ public class Percentiles extends SampledStat implements CompoundStat {
             return Double.NaN;
         float sum = 0.0f;
         float quant = (float) quantile;
-        for (int b = 0; b < buckets; b++) {
+        for (int b = 0;b < buckets;b++) {
             for (Sample s : this.samples) {
                 HistogramSample sample = (HistogramSample) s;
                 float[] hist = sample.histogram.counts();
@@ -115,11 +115,11 @@ public class Percentiles extends SampledStat implements CompoundStat {
         final double boundedValue;
         if (value > max) {
             log.debug("Received value {} which is greater than max recordable value {}, will be pinned to the max value",
-                     value, max);
+                value, max);
             boundedValue = max;
         } else if (value < min) {
             log.debug("Received value {} which is less than min recordable value {}, will be pinned to the min value",
-                     value, min);
+                value, min);
             boundedValue = min;
         } else {
             boundedValue = value;

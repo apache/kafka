@@ -87,7 +87,7 @@ import java.util.NoSuchElementException;
  * values.
  */
 class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEpoch>
-        extends BaseHashTable<T> implements Revertable {
+    extends BaseHashTable<T> implements Revertable {
 
     /**
      * A special epoch value that represents the latest data.
@@ -96,6 +96,7 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
 
     interface ElementWithStartEpoch {
         void setStartEpoch(long startEpoch);
+
         long startEpoch();
     }
 

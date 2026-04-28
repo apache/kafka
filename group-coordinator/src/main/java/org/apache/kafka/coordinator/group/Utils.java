@@ -50,7 +50,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class Utils {
-    private Utils() {}
+    private Utils() {
+    }
 
     /**
      * @return An OptionalInt containing the value iff the value is different from
@@ -264,7 +265,7 @@ public class Utils {
             } else {
                 if (epochs != null) {
                     log.error("[GroupId {}] Size of assignment epochs {} is not equal to partitions {} for topic {}. " +
-                            "Using default epoch {} for all partitions.",
+                        "Using default epoch {} for all partitions.",
                         groupId, epochs.size(), partitions.size(), tp.topicId(), adjustedDefaultEpoch);
                 }
                 for (Integer partition : partitions) {
@@ -315,11 +316,11 @@ public class Utils {
      * @return a map of topic id and partition set.
      */
     public static Map<Uuid, Set<Integer>> assignmentFromShareGroupTopicPartitions(
-            List<ShareGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitionsList
+        List<ShareGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitionsList
     ) {
         return topicPartitionsList.stream().collect(Collectors.toMap(
-                ShareGroupCurrentMemberAssignmentValue.TopicPartitions::topicId,
-                topicPartitions -> Collections.unmodifiableSet(new HashSet<>(topicPartitions.partitions()))));
+            ShareGroupCurrentMemberAssignmentValue.TopicPartitions::topicId,
+            topicPartitions -> Collections.unmodifiableSet(new HashSet<>(topicPartitions.partitions()))));
     }
 
     /**

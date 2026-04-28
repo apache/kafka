@@ -48,22 +48,22 @@ public class DescribeFeaturesTest {
                 id = 3000,
                 key = "unstable.api.versions.enable",
                 value = "true"
-                ),
+            ),
             @ClusterConfigProperty(
                 id = 3001,
                 key = "unstable.api.versions.enable",
                 value = "false"
-                ),
+            ),
             @ClusterConfigProperty(
                 id = 0,
                 key = "unstable.feature.versions.enable",
                 value = "true"
-                ),
+            ),
             @ClusterConfigProperty(
                 id = 1,
                 key = "unstable.feature.versions.enable",
                 value = "false"
-                )
+            )
         }
     )
     public void testUnstableApiVersions(ClusterInstance clusterInstance) {

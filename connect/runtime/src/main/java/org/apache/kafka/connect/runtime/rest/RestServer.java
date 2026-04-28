@@ -506,9 +506,9 @@ public abstract class RestServer {
     protected final void registerRestExtensions(Herder herder, ResourceConfig resourceConfig) {
         connectRestExtensionPlugins = Plugin.wrapInstances(
                 herder.plugins().newPlugins(
-                    config.restExtensions(),
-                    config,
-                    ConnectRestExtension.class
+                        config.restExtensions(),
+                        config,
+                        ConnectRestExtension.class
                 ),
                 herder.connectMetrics().metrics(),
                 RestServerConfig.REST_EXTENSION_CLASSES_CONFIG);
@@ -522,14 +522,14 @@ public abstract class RestServer {
         }
 
         ConnectClusterDetails connectClusterDetails = new ConnectClusterDetailsImpl(
-            herder.kafkaClusterId()
+                herder.kafkaClusterId()
         );
 
         ConnectRestExtensionContext connectRestExtensionContext =
-            new ConnectRestExtensionContextImpl(
-                new ConnectRestConfigurable(resourceConfig),
-                new ConnectClusterStateImpl(herderRequestTimeoutMs, connectClusterDetails, herder)
-            );
+                new ConnectRestExtensionContextImpl(
+                        new ConnectRestConfigurable(resourceConfig),
+                        new ConnectClusterStateImpl(herderRequestTimeoutMs, connectClusterDetails, herder)
+                );
         for (Plugin<ConnectRestExtension> connectRestExtensionPlugin : connectRestExtensionPlugins) {
             connectRestExtensionPlugin.get().register(connectRestExtensionContext);
         }

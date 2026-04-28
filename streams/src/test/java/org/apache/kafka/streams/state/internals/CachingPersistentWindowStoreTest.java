@@ -150,9 +150,9 @@ public class CachingPersistentWindowStoreTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final StoreBuilder<WindowStore<String, String>> storeBuilder = Stores.windowStoreBuilder(
-                Stores.persistentWindowStore("store-name", ofHours(1L), ofMinutes(1L), false),
-                Serdes.String(),
-                Serdes.String())
+            Stores.persistentWindowStore("store-name", ofHours(1L), ofMinutes(1L), false),
+            Serdes.String(),
+            Serdes.String())
             .withCachingEnabled();
 
         builder.addStateStore(storeBuilder);
@@ -261,7 +261,8 @@ public class CachingPersistentWindowStoreTest {
 
     @Test
     public void shouldMatchPositionAfterPutWithFlushListener() {
-        cachingStore.setFlushListener(record -> { }, false);
+        cachingStore.setFlushListener(record -> {
+        }, false);
         shouldMatchPositionAfterPut();
     }
 
@@ -300,8 +301,8 @@ public class CachingPersistentWindowStoreTest {
     }
 
     private void verifyKeyValue(final KeyValue<Long, byte[]> next,
-                                final long expectedKey,
-                                final String expectedValue) {
+        final long expectedKey,
+        final String expectedValue) {
         assertThat(next.key, equalTo(expectedKey));
         assertThat(next.value, equalTo(bytesValue(expectedValue)));
     }
@@ -615,9 +616,9 @@ public class CachingPersistentWindowStoreTest {
         final int added = addItemsToCache();
         // all dirty entries should have been flushed
         try (final KeyValueIterator<Bytes, byte[]> iter = bytesStore.fetch(
-            Bytes.wrap("0".getBytes(StandardCharsets.UTF_8)),
-            DEFAULT_TIMESTAMP,
-            DEFAULT_TIMESTAMP)) {
+                 Bytes.wrap("0".getBytes(StandardCharsets.UTF_8)),
+                 DEFAULT_TIMESTAMP,
+                 DEFAULT_TIMESTAMP)) {
             final KeyValue<Bytes, byte[]> next = iter.next();
             assertEquals(DEFAULT_TIMESTAMP, keySchema.segmentTimestamp(next.key));
             assertArrayEquals("0".getBytes(), next.value);

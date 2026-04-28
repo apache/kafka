@@ -141,7 +141,8 @@ public class CachingInMemorySessionStoreTest {
 
     @Test
     public void shouldMatchPositionAfterPutWithFlushListener() {
-        cachingStore.setFlushListener(record -> { }, false);
+        cachingStore.setFlushListener(record -> {
+        }, false);
         shouldMatchPositionAfterPut();
     }
 
@@ -439,9 +440,9 @@ public class CachingInMemorySessionStoreTest {
     public void shouldQueryItemsInCacheAndStore() {
         final List<KeyValue<Windowed<Bytes>, byte[]>> added = addSessionsUntilOverflow("a");
         final List<KeyValue<Windowed<Bytes>, byte[]>> actual = toListAndCloseIterator(cachingStore.findSessions(
-                Bytes.wrap("a".getBytes(StandardCharsets.UTF_8)),
-                0,
-                added.size() * 10L));
+            Bytes.wrap("a".getBytes(StandardCharsets.UTF_8)),
+            0,
+            added.size() * 10L));
         verifyKeyValueList(added, actual);
     }
 
@@ -491,7 +492,7 @@ public class CachingInMemorySessionStoreTest {
 
     @Test
     public void shouldBackwardFetchCorrectlyAcrossSegments() {
-        final Windowed<Bytes> a1 = new Windowed<>(keyA, new SessionWindow(0,  0));
+        final Windowed<Bytes> a1 = new Windowed<>(keyA, new SessionWindow(0, 0));
         final Windowed<Bytes> a2 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL, SEGMENT_INTERVAL));
         final Windowed<Bytes> a3 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 2, SEGMENT_INTERVAL * 2));
         final Windowed<Bytes> a4 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 3, SEGMENT_INTERVAL * 3));
@@ -853,7 +854,7 @@ public class CachingInMemorySessionStoreTest {
         final List<KeyValueTimestamp<K, Change<V>>> forwarded = new LinkedList<>();
 
         CacheFlushListenerStub(final Deserializer<K> keyDeserializer,
-                               final Deserializer<V> valueDeserializer) {
+            final Deserializer<V> valueDeserializer) {
             this.keyDeserializer = keyDeserializer;
             this.valueDeserializer = valueDeserializer;
         }

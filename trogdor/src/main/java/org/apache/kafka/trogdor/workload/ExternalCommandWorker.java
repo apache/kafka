@@ -135,7 +135,7 @@ public class ExternalCommandWorker implements TaskWorker {
 
     @Override
     public void start(Platform platform, WorkerStatusTracker status,
-                      KafkaFutureImpl<String> doneFuture) throws Exception {
+        KafkaFutureImpl<String> doneFuture) throws Exception {
         if (!running.compareAndSet(false, true)) {
             throw new IllegalStateException("ConsumeBenchWorker is already running.");
         }
@@ -193,7 +193,7 @@ public class ExternalCommandWorker implements TaskWorker {
         public void run() {
             log.trace("{}: starting stdout monitor.", id);
             try (BufferedReader br = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                     new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while (true) {
                     try {
@@ -237,7 +237,7 @@ public class ExternalCommandWorker implements TaskWorker {
         public void run() {
             log.trace("{}: starting stderr monitor.", id);
             try (BufferedReader br = new BufferedReader(
-                new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
+                     new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while (true) {
                     try {
@@ -302,7 +302,7 @@ public class ExternalCommandWorker implements TaskWorker {
         private final Future<?> terminatorFuture;
 
         ExitMonitor(Process process, Future<?> stdoutFuture, Future<?> stderrFuture,
-                    Future<?> terminatorFuture) {
+            Future<?> terminatorFuture) {
             this.process = process;
             this.stdoutFuture = stdoutFuture;
             this.stderrFuture = stderrFuture;

@@ -49,8 +49,8 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V, VS> implements K
      * @param forward       The direction of iteration. True for forward, false for reverse.
      */
     AbstractMergedSortedCacheStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
-                                           final KeyValueIterator<KS, VS> storeIterator,
-                                           final boolean forward) {
+        final KeyValueIterator<KS, VS> storeIterator,
+        final boolean forward) {
         this.cacheIterator = cacheIterator;
         this.storeIterator = storeIterator;
         this.forward = forward;
@@ -198,8 +198,8 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V, VS> implements K
      * @return The next key-value pair.
      */
     private KeyValue<K, V> chooseNextValue(final Bytes nextCacheKey,
-                                           final KS nextStoreKey,
-                                           final int comparison) {
+        final KS nextStoreKey,
+        final int comparison) {
         if (forward) {
             if (comparison > 0) {
                 return nextStoreValue(nextStoreKey);
@@ -302,8 +302,8 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V, VS> implements K
      * @return The next key to return from the merged iteration.
      */
     private K chooseNextKey(final Bytes nextCacheKey,
-                            final KS nextStoreKey,
-                            final int comparison) {
+        final KS nextStoreKey,
+        final int comparison) {
         if (forward) {
             if (comparison > 0) {
                 return deserializeStoreKey(nextStoreKey);

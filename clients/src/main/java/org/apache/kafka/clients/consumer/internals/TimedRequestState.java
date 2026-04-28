@@ -29,21 +29,21 @@ public class TimedRequestState extends RequestState {
     private final Timer timer;
 
     public TimedRequestState(final LogContext logContext,
-                             final String owner,
-                             final long retryBackoffMs,
-                             final long retryBackoffMaxMs,
-                             final Timer timer) {
+        final String owner,
+        final long retryBackoffMs,
+        final long retryBackoffMaxMs,
+        final Timer timer) {
         super(logContext, owner, retryBackoffMs, retryBackoffMaxMs);
         this.timer = timer;
     }
 
     public TimedRequestState(final LogContext logContext,
-                             final String owner,
-                             final long retryBackoffMs,
-                             final int retryBackoffExpBase,
-                             final long retryBackoffMaxMs,
-                             final double jitter,
-                             final Timer timer) {
+        final String owner,
+        final long retryBackoffMs,
+        final int retryBackoffExpBase,
+        final long retryBackoffMaxMs,
+        final double jitter,
+        final Timer timer) {
         super(logContext, owner, retryBackoffMs, retryBackoffExpBase, retryBackoffMaxMs, jitter);
         this.timer = timer;
     }

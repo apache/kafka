@@ -31,7 +31,8 @@ public interface CloseableIterator<T> extends Iterator<T>, Closeable {
     static <R> CloseableIterator<R> wrap(Iterator<R> inner) {
         return new CloseableIterator<>() {
             @Override
-            public void close() {}
+            public void close() {
+            }
 
             @Override
             public boolean hasNext() {

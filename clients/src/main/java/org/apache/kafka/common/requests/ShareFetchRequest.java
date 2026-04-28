@@ -44,10 +44,10 @@ public class ShareFetchRequest extends AbstractRequest {
         }
 
         public static Builder forConsumer(String groupId, ShareRequestMetadata metadata,
-                                          int maxWait, int minBytes, int maxBytes, int maxRecords,
-                                          int batchSize, byte shareAcquireMode, boolean isRenewAck,
-                                          List<TopicIdPartition> send, List<TopicIdPartition> forget,
-                                          Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementsMap) {
+            int maxWait, int minBytes, int maxBytes, int maxRecords,
+            int batchSize, byte shareAcquireMode, boolean isRenewAck,
+            List<TopicIdPartition> send, List<TopicIdPartition> forget,
+            Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementsMap) {
             ShareFetchRequestData data = new ShareFetchRequestData();
             data.setGroupId(groupId);
             boolean isClosingShareSession = false;
@@ -75,8 +75,8 @@ public class ShareFetchRequest extends AbstractRequest {
                     ShareFetchRequestData.FetchTopic fetchTopic = fetchTopics.find(tip.topicId());
                     if (fetchTopic == null) {
                         fetchTopic = new ShareFetchRequestData.FetchTopic()
-                                .setTopicId(tip.topicId())
-                                .setPartitions(new ShareFetchRequestData.FetchPartitionCollection());
+                            .setTopicId(tip.topicId())
+                            .setPartitions(new ShareFetchRequestData.FetchPartitionCollection());
                         fetchTopics.add(fetchTopic);
                     }
                     ShareFetchRequestData.FetchPartition fetchPartition = fetchTopic.partitions().find(tip.partition());
@@ -95,14 +95,14 @@ public class ShareFetchRequest extends AbstractRequest {
                 ShareFetchRequestData.FetchTopic fetchTopic = fetchTopics.find(tip.topicId());
                 if (fetchTopic == null) {
                     fetchTopic = new ShareFetchRequestData.FetchTopic()
-                            .setTopicId(tip.topicId())
-                            .setPartitions(new ShareFetchRequestData.FetchPartitionCollection());
+                        .setTopicId(tip.topicId())
+                        .setPartitions(new ShareFetchRequestData.FetchPartitionCollection());
                     fetchTopics.add(fetchTopic);
                 }
                 ShareFetchRequestData.FetchPartition fetchPartition = fetchTopic.partitions().find(tip.partition());
                 if (fetchPartition == null) {
                     fetchPartition = new ShareFetchRequestData.FetchPartition()
-                            .setPartitionIndex(tip.partition());
+                        .setPartitionIndex(tip.partition());
                     fetchTopic.partitions().add(fetchPartition);
                 }
                 fetchPartition.setAcknowledgementBatches(acknowledgeEntry.getValue());
@@ -129,8 +129,8 @@ public class ShareFetchRequest extends AbstractRequest {
             }
             forgetMap.forEach((topicId, partList) -> {
                 ShareFetchRequestData.ForgottenTopic forgetTopic = new ShareFetchRequestData.ForgottenTopic()
-                        .setTopicId(topicId)
-                        .setPartitions(new ArrayList<>());
+                    .setTopicId(topicId)
+                    .setPartitions(new ArrayList<>());
                 partList.forEach(index -> forgetTopic.partitions().add(index));
                 data.forgottenTopicsData().add(forgetTopic);
             });
@@ -183,8 +183,8 @@ public class ShareFetchRequest extends AbstractRequest {
 
     public static ShareFetchRequest parse(Readable readable, short version) {
         return new ShareFetchRequest(
-                new ShareFetchRequestData(readable, version),
-                version
+            new ShareFetchRequestData(readable, version),
+            version
         );
     }
 

@@ -63,7 +63,7 @@ public final class WorkerUtils {
      * @throws KafkaException   A wrapped version of the exception.
      */
     public static void abort(Logger log, String what, Throwable exception,
-            KafkaFutureImpl<String> doneFuture) throws KafkaException {
+        KafkaFutureImpl<String> doneFuture) throws KafkaException {
         log.warn("{} caught an exception", what, exception);
         if (exception.getMessage() == null || exception.getMessage().isEmpty()) {
             doneFuture.complete(exception.getClass().getCanonicalName());
@@ -108,7 +108,7 @@ public final class WorkerUtils {
     private static final int CREATE_TOPICS_CALL_TIMEOUT = 180000;
     private static final int MAX_CREATE_TOPICS_BATCH_SIZE = 10;
 
-            //Map<String, Map<Integer, List<Integer>>> topics) throws Throwable {
+    //Map<String, Map<Integer, List<Integer>>> topics) throws Throwable {
 
     /**
      * Create some Kafka topics.
@@ -176,7 +176,7 @@ public final class WorkerUtils {
      * @throws Throwable if creation of one or more topics fails (except for topic exists case).
      */
     private static Collection<String> createTopics(Logger log, Admin adminClient,
-                                                   Collection<NewTopic> topics) throws Throwable {
+        Collection<NewTopic> topics) throws Throwable {
         long startMs = Time.SYSTEM.milliseconds();
         int tries = 0;
         List<String> existingTopics = new ArrayList<>();
@@ -192,7 +192,7 @@ public final class WorkerUtils {
             while (!topicsToCreate.isEmpty()) {
                 List<NewTopic> newTopicsBatch = new ArrayList<>();
                 for (int i = 0; (i < MAX_CREATE_TOPICS_BATCH_SIZE) &&
-                                !topicsToCreate.isEmpty(); i++) {
+                    !topicsToCreate.isEmpty(); i++) {
                     String topicName = topicsToCreate.remove(0);
                     newTopicsBatch.add(newTopics.get(topicName));
                 }
@@ -210,7 +210,7 @@ public final class WorkerUtils {
                     if ((e.getCause() instanceof TimeoutException)
                         || (e.getCause() instanceof NotEnoughReplicasException)) {
                         log.warn("Attempt to create topic `{}` failed: {}", topicName,
-                                 e.getCause().getMessage());
+                            e.getCause().getMessage());
                         topicsToCreate.add(topicName);
                     } else if (e.getCause() instanceof TopicExistsException) {
                         log.info("Topic {} already exists.", topicName);
@@ -226,7 +226,7 @@ public final class WorkerUtils {
             }
             if (Time.SYSTEM.milliseconds() > startMs + CREATE_TOPICS_CALL_TIMEOUT) {
                 String str = "Unable to create topic(s): " +
-                             String.join(", ", topicsToCreate) + "after " + tries + " attempt(s)";
+                    String.join(", ", topicsToCreate) + "after " + tries + " attempt(s)";
                 log.warn(str);
                 throw new TimeoutException(str);
             }
@@ -254,16 +254,16 @@ public final class WorkerUtils {
         Collection<String> topicsToVerify, Map<String, NewTopic> topicsInfo, int retryCount, long retryBackoffMs) throws Throwable {
 
         Map<String, TopicDescription> topicDescriptionMap = topicDescriptions(topicsToVerify, adminClient,
-                retryCount, retryBackoffMs);
+            retryCount, retryBackoffMs);
 
-        for (TopicDescription desc: topicDescriptionMap.values()) {
+        for (TopicDescription desc : topicDescriptionMap.values()) {
             // map will always contain the topic since all topics in 'topicsExists' are in given
             // 'topics' map
             int partitions = topicsInfo.get(desc.name()).numPartitions();
             if (partitions != CreateTopicsRequest.NO_NUM_PARTITIONS && desc.partitions().size() != partitions) {
                 String str = "Topic '" + desc.name() + "' exists, but has "
-                             + desc.partitions().size() + " partitions, while requested "
-                             + " number of partitions is " + partitions;
+                    + desc.partitions().size() + " partitions, while requested "
+                    + " number of partitions is " + partitions;
                 log.warn(str);
                 throw new RuntimeException(str);
             }
@@ -271,14 +271,14 @@ public final class WorkerUtils {
     }
 
     private static Map<String, TopicDescription> topicDescriptions(Collection<String> topicsToVerify,
-                                                                   Admin adminClient,
-                                                                   int retryCount, long retryBackoffMs)
-            throws ExecutionException, InterruptedException {
+        Admin adminClient,
+        int retryCount, long retryBackoffMs)
+        throws ExecutionException, InterruptedException {
         UnknownTopicOrPartitionException lastException = null;
         for (int i = 0; i < retryCount; i++) {
             try {
                 DescribeTopicsResult topicsResult = adminClient.describeTopics(
-                        topicsToVerify, new DescribeTopicsOptions().timeoutMs(ADMIN_REQUEST_TIMEOUT));
+                    topicsToVerify, new DescribeTopicsOptions().timeoutMs(ADMIN_REQUEST_TIMEOUT));
                 return topicsResult.allTopicNames().get();
             } catch (ExecutionException exception) {
                 if (exception.getCause() instanceof UnknownTopicOrPartitionException) {
@@ -310,7 +310,7 @@ public final class WorkerUtils {
         ListTopicsResult res = adminClient.listTopics(
             new ListTopicsOptions().timeoutMs(ADMIN_REQUEST_TIMEOUT));
         Map<String, TopicListing> topicListingMap = res.namesToListings().get();
-        for (Map.Entry<String, TopicListing> topicListingEntry: topicListingMap.entrySet()) {
+        for (Map.Entry<String, TopicListing> topicListingEntry : topicListingMap.entrySet()) {
             if (!topicListingEntry.getValue().isInternal()
                 && topicNamePattern.matcher(topicListingEntry.getKey()).matches()) {
                 matchedTopics.add(topicListingEntry.getKey());
@@ -322,9 +322,9 @@ public final class WorkerUtils {
         DescribeTopicsResult topicsResult = adminClient.describeTopics(
             matchedTopics, new DescribeTopicsOptions().timeoutMs(ADMIN_REQUEST_TIMEOUT));
         Map<String, TopicDescription> topicDescriptionMap = topicsResult.allTopicNames().get();
-        for (TopicDescription desc: topicDescriptionMap.values()) {
+        for (TopicDescription desc : topicDescriptionMap.values()) {
             List<TopicPartitionInfo> partitions = desc.partitions();
-            for (TopicPartitionInfo info: partitions) {
+            for (TopicPartitionInfo info : partitions) {
                 if ((info.partition() >= startPartition) && (info.partition() <= endPartition)) {
                     out.add(new TopicPartition(desc.name(), info.partition()));
                 }

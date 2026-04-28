@@ -34,7 +34,8 @@ public class ControllerRequestContextUtil {
     public static final String QUOTA_EXCEEDED_IN_TEST_MSG = "Quota exceeded in test";
 
     public static ControllerRequestContext anonymousContextFor(ApiKeys apiKeys) {
-        return anonymousContextFor(apiKeys, apiKeys.latestVersion(), __ -> { });
+        return anonymousContextFor(apiKeys, apiKeys.latestVersion(), __ -> {
+        });
     }
 
     public static ControllerRequestContext anonymousContextWithMutationQuotaExceededFor(ApiKeys apiKeys) {
@@ -47,7 +48,8 @@ public class ControllerRequestContextUtil {
         ApiKeys apiKeys,
         short version
     ) {
-        return anonymousContextFor(apiKeys, version, __ -> { });
+        return anonymousContextFor(apiKeys, version, __ -> {
+        });
     }
 
     public static ControllerRequestContext anonymousContextFor(

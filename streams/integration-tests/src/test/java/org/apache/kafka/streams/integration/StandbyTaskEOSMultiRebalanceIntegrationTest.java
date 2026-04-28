@@ -137,15 +137,15 @@ public class StandbyTaskEOSMultiRebalanceIntegrationTest {
         final int secondBulk = 60000;
 
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-                inputTopic,
-                IntStream.range(0, initialBulk).boxed().map(i -> new KeyValue<>(i, i)).collect(Collectors.toList()),
-                TestUtils.producerConfig(
-                        CLUSTER.bootstrapServers(),
-                        IntegerSerializer.class,
-                        IntegerSerializer.class,
-                        Utils.mkProperties(Collections.singletonMap(ProducerConfig.ACKS_CONFIG, "all"))
-                ),
-                10L + time
+            inputTopic,
+            IntStream.range(0, initialBulk).boxed().map(i -> new KeyValue<>(i, i)).collect(Collectors.toList()),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                IntegerSerializer.class,
+                IntegerSerializer.class,
+                Utils.mkProperties(Collections.singletonMap(ProducerConfig.ACKS_CONFIG, "all"))
+            ),
+            10L + time
         );
 
         streamInstanceOne = buildWithUniqueIdAssignmentTopology(base + "-1");
@@ -155,44 +155,44 @@ public class StandbyTaskEOSMultiRebalanceIntegrationTest {
         LOG.info("start first instance and wait for completed processing");
         startApplicationAndWaitUntilRunning(Collections.singletonList(streamInstanceOne), Duration.ofSeconds(30));
         IntegrationTestUtils.waitUntilMinRecordsReceived(
-                TestUtils.consumerConfig(
-                        CLUSTER.bootstrapServers(),
-                        UUID.randomUUID().toString(),
-                        IntegerDeserializer.class,
-                        IntegerDeserializer.class,
-                        readCommitted
-                ),
-                outputTopic,
-                initialBulk
+            TestUtils.consumerConfig(
+                CLUSTER.bootstrapServers(),
+                UUID.randomUUID().toString(),
+                IntegerDeserializer.class,
+                IntegerDeserializer.class,
+                readCommitted
+            ),
+            outputTopic,
+            initialBulk
         );
         LOG.info("Finished reading the initial bulk");
 
         LOG.info("start second instance and wait for standby replication");
         startApplicationAndWaitUntilRunning(Collections.singletonList(streamInstanceTwo), Duration.ofSeconds(30));
         waitForCondition(
-                () -> streamInstanceTwo.store(
-                        StoreQueryParameters.fromNameAndType(
-                                storeName,
-                                QueryableStoreTypes.<Integer, Integer>keyValueStore()
-                        ).enableStaleStores()
-                ).get(0) != null,
-                TWO_MINUTE_TIMEOUT,
-                "Could not get key from standby store"
+            () -> streamInstanceTwo.store(
+                StoreQueryParameters.fromNameAndType(
+                    storeName,
+                    QueryableStoreTypes.<Integer, Integer>keyValueStore()
+                ).enableStaleStores()
+            ).get(0) != null,
+            TWO_MINUTE_TIMEOUT,
+            "Could not get key from standby store"
         );
         LOG.info("Second stream have some data in the state store");
 
 
         LOG.info("Produce the second bulk");
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-                inputTopic,
-                IntStream.range(initialBulk, initialBulk + secondBulk).boxed().map(i -> new KeyValue<>(i, i)).collect(Collectors.toList()),
-                TestUtils.producerConfig(
-                        CLUSTER.bootstrapServers(),
-                        IntegerSerializer.class,
-                        IntegerSerializer.class,
-                        new Properties()
-                ),
-                1000L + time
+            inputTopic,
+            IntStream.range(initialBulk, initialBulk + secondBulk).boxed().map(i -> new KeyValue<>(i, i)).collect(Collectors.toList()),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                IntegerSerializer.class,
+                IntegerSerializer.class,
+                new Properties()
+            ),
+            1000L + time
         );
 
         LOG.info("Start stream three which will introduce a re-balancing event and hopefully some redistribution of tasks.");
@@ -200,16 +200,16 @@ public class StandbyTaskEOSMultiRebalanceIntegrationTest {
 
         LOG.info("Wait for the processing to be completed");
         final List<ConsumerRecord<Integer, Integer>> outputRecords = IntegrationTestUtils.waitUntilMinRecordsReceived(
-                TestUtils.consumerConfig(
-                        CLUSTER.bootstrapServers(),
-                        UUID.randomUUID().toString(),
-                        IntegerDeserializer.class,
-                        IntegerDeserializer.class,
-                        readCommitted
-                ),
-                outputTopic,
-                initialBulk + secondBulk,
-                Duration.ofMinutes(10L).toMillis()
+            TestUtils.consumerConfig(
+                CLUSTER.bootstrapServers(),
+                UUID.randomUUID().toString(),
+                IntegerDeserializer.class,
+                IntegerDeserializer.class,
+                readCommitted
+            ),
+            outputTopic,
+            initialBulk + secondBulk,
+            Duration.ofMinutes(10L).toMillis()
         );
         LOG.info("Processing completed");
 
@@ -229,55 +229,55 @@ public class StandbyTaskEOSMultiRebalanceIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.addStateStore(Stores.keyValueStoreBuilder(
-                Stores.persistentKeyValueStore(storeName),
-                Serdes.Integer(),
-                Serdes.Integer())
+            Stores.persistentKeyValueStore(storeName),
+            Serdes.Integer(),
+            Serdes.Integer())
         );
         builder.addStateStore(Stores.keyValueStoreBuilder(
-                Stores.persistentKeyValueStore(counterName),
-                Serdes.Integer(),
-                Serdes.Integer()).withCachingEnabled()
+            Stores.persistentKeyValueStore(counterName),
+            Serdes.Integer(),
+            Serdes.Integer()).withCachingEnabled()
         );
         builder.<Integer, Integer>stream(inputTopic)
-                .process(
-                        () -> new Processor<Integer, Integer, Integer, Integer>() {
-                            private KeyValueStore<Integer, Integer> store;
-                            private KeyValueStore<Integer, Integer> counter;
-                            private ProcessorContext<Integer, Integer> context;
+            .process(
+                () -> new Processor<Integer, Integer, Integer, Integer>() {
+                    private KeyValueStore<Integer, Integer> store;
+                    private KeyValueStore<Integer, Integer> counter;
+                    private ProcessorContext<Integer, Integer> context;
 
-                            @Override
-                            public void init(final ProcessorContext<Integer, Integer> context) {
-                                this.context = context;
-                                store = context.getStateStore(storeName);
-                                counter = context.getStateStore(counterName);
-                            }
+                    @Override
+                    public void init(final ProcessorContext<Integer, Integer> context) {
+                        this.context = context;
+                        store = context.getStateStore(storeName);
+                        counter = context.getStateStore(counterName);
+                    }
 
-                            @Override
-                            public void process(final Record<Integer, Integer> record) {
-                                final Integer key = record.key();
-                                final Integer unused = record.value();
-                                assertThat("Key and value mus be equal", key.equals(unused));
-                                Integer id = store.get(key);
-                                // Only assign a new id if the value have not been observed before
-                                if (id == null) {
-                                    final int counterKey = 0;
-                                    final Integer lastCounter = counter.get(counterKey);
-                                    final int newCounter = lastCounter == null ? 0 : lastCounter + 1;
-                                    counter.put(counterKey, newCounter);
-                                    // Partitions assign ids from their own id space
-                                    id = newCounter * partitionCount + context.recordMetadata().get().partition();
-                                    store.put(key, id);
-                                }
-                                context.forward(record.withKey(id));
-                            }
+                    @Override
+                    public void process(final Record<Integer, Integer> record) {
+                        final Integer key = record.key();
+                        final Integer unused = record.value();
+                        assertThat("Key and value mus be equal", key.equals(unused));
+                        Integer id = store.get(key);
+                        // Only assign a new id if the value have not been observed before
+                        if (id == null) {
+                            final int counterKey = 0;
+                            final Integer lastCounter = counter.get(counterKey);
+                            final int newCounter = lastCounter == null ? 0 : lastCounter + 1;
+                            counter.put(counterKey, newCounter);
+                            // Partitions assign ids from their own id space
+                            id = newCounter * partitionCount + context.recordMetadata().get().partition();
+                            store.put(key, id);
+                        }
+                        context.forward(record.withKey(id));
+                    }
 
-                            @Override
-                            public void close() {
-                            }
-                        },
-                        storeName, counterName
-                )
-                .to(outputTopic);
+                    @Override
+                    public void close() {
+                    }
+                },
+                storeName, counterName
+            )
+            .to(outputTopic);
         return new KafkaStreams(builder.build(), props(stateDirPath));
     }
 

@@ -98,7 +98,7 @@ public final class Agent {
      * @param resource      The AgentRestResource to use.
      */
     public Agent(Platform platform, Scheduler scheduler,
-                 JsonRestServer restServer, AgentRestResource resource) {
+        JsonRestServer restServer, AgentRestResource resource) {
         this.platform = platform;
         this.time = scheduler.time();
         this.serverStartMs = time.milliseconds();

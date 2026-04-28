@@ -46,7 +46,7 @@ public class MetadataVersionIntegrationTest {
             // Update to new version
             short updateVersion = MetadataVersion.IBP_3_7_IV1.featureLevel();
             var updateResult = admin.updateFeatures(
-                    Map.of("metadata.version", new FeatureUpdate(updateVersion, FeatureUpdate.UpgradeType.UPGRADE)));
+                Map.of("metadata.version", new FeatureUpdate(updateVersion, FeatureUpdate.UpgradeType.UPGRADE)));
             updateResult.all().get();
 
             // Verify that new version is visible on broker
@@ -67,7 +67,7 @@ public class MetadataVersionIntegrationTest {
         try (var admin = clusterInstance.admin()) {
             short updateVersion = MetadataVersion.IBP_3_9_IV0.featureLevel();
             var updateResult = admin.updateFeatures(
-                    Map.of("metadata.version", new FeatureUpdate(updateVersion, FeatureUpdate.UpgradeType.UPGRADE)));
+                Map.of("metadata.version", new FeatureUpdate(updateVersion, FeatureUpdate.UpgradeType.UPGRADE)));
             updateResult.all().get();
         }
     }
@@ -78,7 +78,7 @@ public class MetadataVersionIntegrationTest {
             var describeResult = admin.describeFeatures();
             var ff = describeResult.featureMetadata().get().finalizedFeatures().get(MetadataVersion.FEATURE_NAME);
             assertEquals(MetadataVersion.latestTesting().featureLevel(), ff.minVersionLevel(),
-                    "If this test fails, check the default MetadataVersion in the @ClusterTest annotation");
+                "If this test fails, check the default MetadataVersion in the @ClusterTest annotation");
             assertEquals(MetadataVersion.latestTesting().featureLevel(), ff.maxVersionLevel());
         }
     }

@@ -119,7 +119,7 @@ public class FutureUtilsTest {
         FutureUtils.chainFuture(sourceFuture, destinationFuture);
         sourceFuture.completeExceptionally(new RuntimeException("source failed"));
         Throwable cause = assertThrows(ExecutionException.class,
-                () -> destinationFuture.get()).getCause();
+            () -> destinationFuture.get()).getCause();
         assertEquals(RuntimeException.class, cause.getClass());
         assertEquals("source failed", cause.getMessage());
     }

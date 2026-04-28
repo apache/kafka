@@ -104,6 +104,7 @@ public class OAuthBearerExtensionsValidatorCallback implements Callback {
             throw new IllegalArgumentException(String.format("Extension %s was not found in the original extensions", extensionName));
         validatedExtensions.put(extensionName, inputExtensions.map().get(extensionName));
     }
+
     /**
      * Set the error value for a specific extension key-value pair if validation has failed
      *

@@ -141,9 +141,9 @@ public class PartitionChangeBuilder {
     public PartitionChangeBuilder setTargetIsrWithBrokerStates(List<BrokerState> targetIsrWithEpoch) {
         return setTargetIsr(
             targetIsrWithEpoch
-              .stream()
-              .map(BrokerState::brokerId)
-              .collect(Collectors.toList())
+                .stream()
+                .map(BrokerState::brokerId)
+                .collect(Collectors.toList())
         );
     }
 
@@ -286,12 +286,12 @@ public class PartitionChangeBuilder {
     private boolean canElectLastKnownLeader() {
         if (!eligibleLeaderReplicasEnabled || !useLastKnownLeaderInBalancedRecovery) {
             log.trace("Try to elect last known leader for {}-{} but elrEnabled={}, useLastKnownLeaderInBalancedRecovery={}",
-                    topicId, partitionId, eligibleLeaderReplicasEnabled, useLastKnownLeaderInBalancedRecovery);
+                topicId, partitionId, eligibleLeaderReplicasEnabled, useLastKnownLeaderInBalancedRecovery);
             return false;
         }
         if (!targetElr.isEmpty() || !targetIsr.isEmpty()) {
             log.trace("Try to elect last known leader for {}-{} but ELR/ISR is not empty. ISR={}, ELR={}",
-                    topicId, partitionId, targetIsr, targetElr);
+                topicId, partitionId, targetIsr, targetElr);
             return false;
         }
 
@@ -304,12 +304,12 @@ public class PartitionChangeBuilder {
         //    refer to the lastKnownElr.
         if (partition.lastKnownElr.length != 1) {
             log.trace("Try to elect last known leader for {}-{} but lastKnownElr does not only have 1 member. lastKnownElr={}",
-                    topicId, partitionId, Arrays.toString(partition.lastKnownElr));
+                topicId, partitionId, Arrays.toString(partition.lastKnownElr));
             return false;
         }
         if (!isAcceptableLeader.test(partition.lastKnownElr[0])) {
             log.trace("Try to elect last known leader for {}-{} but last known leader is not alive. last known leader={}",
-                    topicId, partitionId, partition.lastKnownElr[0]);
+                topicId, partitionId, partition.lastKnownElr[0]);
             return false;
         }
         return true;
@@ -332,7 +332,7 @@ public class PartitionChangeBuilder {
                 targetElr = targetElr.stream().filter(replica -> replica != electionResult.node)
                     .collect(Collectors.toList());
                 log.info("Setting new leader for topicId {}, partition {} to {} using ELR. Previous partition: {}, change record: {}",
-                        topicId, partitionId, electionResult.node, partition, record);
+                    topicId, partitionId, electionResult.node, partition, record);
             } else if (electionResult.unclean) {
                 log.info("Setting new leader for topicId {}, partition {} to {} using an unclean election. Previous partition: {}, change record: {}",
                     topicId, partitionId, electionResult.node, partition, record);
@@ -514,7 +514,7 @@ public class PartitionChangeBuilder {
         }
 
         if (useLastKnownLeaderInBalancedRecovery && partition.lastKnownElr.length == 1 &&
-                (record.leader() == NO_LEADER || record.leader() == NO_LEADER_CHANGE && partition.leader == NO_LEADER)) {
+            (record.leader() == NO_LEADER || record.leader() == NO_LEADER_CHANGE && partition.leader == NO_LEADER)) {
             // If the last known leader is stored in the lastKnownElr, the last known elr should not be updated when
             // the partition does not have a leader.
             targetLastKnownElr = Replicas.toList(partition.lastKnownElr);

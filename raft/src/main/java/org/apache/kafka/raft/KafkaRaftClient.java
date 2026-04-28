@@ -165,7 +165,7 @@ import static org.apache.kafka.snapshot.Snapshots.BOOTSTRAP_SNAPSHOT_ID;
  *    as FileRecords, but we use {@link UnalignedRecords} in FetchSnapshotResponse because the records
  *    are not necessarily offset-aligned.
  */
-@SuppressWarnings({ "ClassDataAbstractionCoupling", "ClassFanOutComplexity", "ParameterNumber", "NPathComplexity", "JavaNCSS" })
+@SuppressWarnings({"ClassDataAbstractionCoupling", "ClassFanOutComplexity", "ParameterNumber", "NPathComplexity", "JavaNCSS"})
 public final class KafkaRaftClient<T> implements RaftClient<T> {
     private static final int MAX_NUMBER_OF_BATCHES = 10;
     private static final int MAX_FETCH_WAIT_MS = 500;
@@ -403,7 +403,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 // log.
                 if (nextExpectedOffset < highWatermark &&
                     (nextExpectedOffset == ListenerContext.STARTING_NEXT_OFFSET ||
-                     nextExpectedOffset < log.startOffset()) &&
+                        nextExpectedOffset < log.startOffset()) &&
                     latestSnapshot().isPresent()
                 ) {
                     listenerContext.fireHandleSnapshot(latestSnapshot().get());
@@ -420,7 +420,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     throw new IllegalStateException(
                         String.format(
                             "Snapshot expected since next offset of %s is %d, log start offset " +
-                            "is %d and high-watermark is %d",
+                                "is %d and high-watermark is %d",
                             listenerContext.listenerName(),
                             nextExpectedOffset,
                             log.startOffset(),
@@ -785,7 +785,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             throw new IllegalArgumentException(
                 String.format(
                     "Unknown leader endpoints (%s) after request or response with leader (%s) and " +
-                    "the voters %s",
+                        "the voters %s",
                     endpoints,
                     leaderId,
                     partitionState.lastVoterSet()
@@ -896,7 +896,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         if (!isValidVoterKey(voterKey)) {
             logger.info(
                 "A replica {} sent a voter key ({}) in the VOTE request that doesn't match the " +
-                "local key ({}, {}); rejecting the vote",
+                    "local key ({}, {}); rejecting the vote",
                 replicaId,
                 voterKey,
                 nodeId,
@@ -954,7 +954,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         if (topLevelError == Errors.UNSUPPORTED_VERSION && quorum.isProspective()) {
             logger.info(
                 "Prospective received unsupported version error in vote response in epoch {}, " +
-                "transitioning to Candidate state immediately since at least one voter doesn't support PreVote.",
+                    "transitioning to Candidate state immediately since at least one voter doesn't support PreVote.",
                 quorum.epoch()
             );
             transitionToCandidate(currentTimeMs);
@@ -1015,7 +1015,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             } else {
                 logger.debug(
                     "Ignoring vote response {} since we are no longer a NomineeState " +
-                    "(Prospective or Candidate) in epoch {}",
+                        "(Prospective or Candidate) in epoch {}",
                     partitionResponse,
                     quorum.epoch()
                 );
@@ -1141,7 +1141,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         if (!isValidVoterKey(voterKey)) {
             logger.info(
                 "Leader sent a voter key ({}) in the BEGIN_QUORUM_EPOCH request that doesn't " +
-                "match the local key ({}, {}); returning INVALID_VOTER_KEY",
+                    "match the local key ({}, {}); returning INVALID_VOTER_KEY",
                 voterKey,
                 nodeId,
                 nodeDirectoryId
@@ -1302,7 +1302,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 long electionBackoffMs = endEpochElectionBackoff(preferredCandidates);
                 logger.debug(
                     "Overriding follower fetch timeout to {} after receiving EndQuorumEpoch " +
-                    "request from leader {} in epoch {}",
+                        "request from leader {} in epoch {}",
                     electionBackoffMs,
                     requestLeaderId,
                     requestEpoch
@@ -1763,7 +1763,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 // Update the internal listener to the new end offset
                 partitionState.truncateNewEntries(truncationOffset);
             } else if (partitionResponse.snapshotId().epoch() >= 0 ||
-                       partitionResponse.snapshotId().endOffset() >= 0) {
+                partitionResponse.snapshotId().endOffset() >= 0) {
                 // The leader is asking us to fetch a snapshot
 
                 if (partitionResponse.snapshotId().epoch() < 0) {
@@ -1799,7 +1799,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     } else {
                         logger.info(
                             "Leader {} returned a snapshot {} in the FETCH response which is " +
-                            "already stored",
+                                "already stored",
                             quorum.leaderIdOrSentinel(),
                             snapshotId
                         );
@@ -2677,7 +2677,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             // receiver's replica key
             logger.info(
                 "Voter key for VOTE or BEGIN_QUORUM_EPOCH request didn't match the receiver's " +
-                "replica key: {}",
+                    "replica key: {}",
                 source
             );
             return Optional.of(true);
@@ -2783,6 +2783,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             })
             .orElse(true);
     }
+
     /**
      * Validate a request which is intended for the current quorum leader.
      * If an error is present in the returned value, it should be returned
@@ -2863,7 +2864,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         long currentTimeMs,
         Node destination,
         Supplier<ApiMessage> requestSupplier
-    )  {
+    ) {
         var requestSent = false;
 
         if (requestManager.isBackingOff(destination, currentTimeMs)) {
@@ -2946,7 +2947,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         Function<ReplicaKey, ApiMessage> requestSupplier
     ) {
         long minBackoffMs = Long.MAX_VALUE;
-        for (ReplicaKey voter: remoteVoters) {
+        for (ReplicaKey voter : remoteVoters) {
             long backoffMs = maybeSendRequest(
                 currentTimeMs,
                 destinationSupplier.apply(voter.id()),
@@ -3263,7 +3264,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         } else if (state.hasElectionTimeoutExpired(currentTimeMs)) {
             logger.info(
                 "Election timed out before receiving sufficient vote responses to become candidate. " +
-                "Current epoch election state: {}",
+                    "Current epoch election state: {}",
                 state.epochElection()
             );
             prospectiveTransitionAfterElectionLoss(state, currentTimeMs);

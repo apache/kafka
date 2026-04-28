@@ -86,9 +86,9 @@ public class JsonConverterTest {
         assertEquals(new SchemaAndValue(Schema.BOOLEAN_SCHEMA, true), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"boolean\" }, \"payload\": true }".getBytes()));
         assertEquals(new SchemaAndValue(Schema.OPTIONAL_BOOLEAN_SCHEMA, null), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"boolean\", \"optional\": true }, \"payload\": null }".getBytes()));
         assertEquals(new SchemaAndValue(SchemaBuilder.bool().defaultValue(true).build(), true),
-                converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"boolean\", \"default\": true }, \"payload\": null }".getBytes()));
+            converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"boolean\", \"default\": true }, \"payload\": null }".getBytes()));
         assertEquals(new SchemaAndValue(SchemaBuilder.bool().required().name("bool").version(2).doc("the documentation").parameter("foo", "bar").build(), true),
-                converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"boolean\", \"optional\": false, \"name\": \"bool\", \"version\": 2, \"doc\": \"the documentation\", \"parameters\": { \"foo\": \"bar\" }}, \"payload\": true }".getBytes()));
+            converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"boolean\", \"optional\": false, \"name\": \"bool\", \"version\": 2, \"doc\": \"the documentation\", \"parameters\": { \"foo\": \"bar\" }}, \"payload\": true }".getBytes()));
     }
 
     // Schema types
@@ -486,7 +486,7 @@ public class JsonConverterTest {
         converted = parse(converter.fromConnectData(TOPIC, SchemaBuilder.bool().required().name("bool").version(3).doc("the documentation").parameter("foo", "bar").build(), true));
         validateEnvelope(converted);
         assertEquals(parse("{ \"type\": \"boolean\", \"optional\": false, \"name\": \"bool\", \"version\": 3, \"doc\": \"the documentation\", \"parameters\": { \"foo\": \"bar\" }}"),
-                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+            converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         assertTrue(converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).booleanValue());
     }
 
@@ -574,7 +574,7 @@ public class JsonConverterTest {
         validateEnvelope(converted);
         assertEquals(parse("{ \"type\": \"bytes\", \"optional\": false }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         assertEquals(ByteBuffer.wrap("test-string".getBytes()),
-                ByteBuffer.wrap(converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).binaryValue()));
+            ByteBuffer.wrap(converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).binaryValue()));
     }
 
     @Test
@@ -591,9 +591,9 @@ public class JsonConverterTest {
         JsonNode converted = parse(converter.fromConnectData(TOPIC, int32Array, List.of(1, 2, 3)));
         validateEnvelope(converted);
         assertEquals(parse("{ \"type\": \"array\", \"items\": { \"type\": \"int32\", \"optional\": false }, \"optional\": false }"),
-                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+            converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         assertEquals(JsonNodeFactory.instance.arrayNode().add(1).add(2).add(3),
-                converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
+            converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
     }
 
     @Test
@@ -605,9 +605,9 @@ public class JsonConverterTest {
         JsonNode converted = parse(converter.fromConnectData(TOPIC, stringIntMap, input));
         validateEnvelope(converted);
         assertEquals(parse("{ \"type\": \"map\", \"keys\": { \"type\" : \"string\", \"optional\": false }, \"values\": { \"type\" : \"int32\", \"optional\": false }, \"optional\": false }"),
-                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+            converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         assertEquals(JsonNodeFactory.instance.objectNode().put("key1", 12).put("key2", 15),
-                converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
+            converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
     }
 
     @Test
@@ -619,7 +619,7 @@ public class JsonConverterTest {
         JsonNode converted = parse(converter.fromConnectData(TOPIC, intIntMap, input));
         validateEnvelope(converted);
         assertEquals(parse("{ \"type\": \"map\", \"keys\": { \"type\" : \"int32\", \"optional\": false }, \"values\": { \"type\" : \"int32\", \"optional\": false }, \"optional\": false }"),
-                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+            converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
 
         assertTrue(converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).isArray());
         ArrayNode payload = (ArrayNode) converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME);
@@ -628,8 +628,8 @@ public class JsonConverterTest {
         for (JsonNode elem : payload)
             payloadEntries.add(elem);
         assertEquals(Set.of(JsonNodeFactory.instance.arrayNode().add(1).add(12),
-                        JsonNodeFactory.instance.arrayNode().add(2).add(15)),
-                payloadEntries
+                JsonNodeFactory.instance.arrayNode().add(2).add(15)),
+            payloadEntries
         );
     }
 
@@ -640,25 +640,25 @@ public class JsonConverterTest {
         JsonNode converted = parse(converter.fromConnectData(TOPIC, schema, input));
         validateEnvelope(converted);
         assertEquals(parse("{ \"type\": \"struct\", \"optional\": false, \"fields\": [{ \"field\": \"field1\", \"type\": \"boolean\", \"optional\": false }, { \"field\": \"field2\", \"type\": \"string\", \"optional\": false }, { \"field\": \"field3\", \"type\": \"string\", \"optional\": false }, { \"field\": \"field4\", \"type\": \"boolean\", \"optional\": false }] }"),
-                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+            converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         assertEquals(JsonNodeFactory.instance.objectNode()
-                        .put("field1", true)
-                        .put("field2", "string2")
-                        .put("field3", "string3")
-                        .put("field4", false),
-                converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
+                .put("field1", true)
+                .put("field2", "string2")
+                .put("field3", "string3")
+                .put("field4", false),
+            converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
     }
 
     @Test
     public void structSchemaIdentical() {
         Schema schema = SchemaBuilder.struct().field("field1", Schema.BOOLEAN_SCHEMA)
-                                              .field("field2", Schema.STRING_SCHEMA)
-                                              .field("field3", Schema.STRING_SCHEMA)
-                                              .field("field4", Schema.BOOLEAN_SCHEMA).build();
+            .field("field2", Schema.STRING_SCHEMA)
+            .field("field3", Schema.STRING_SCHEMA)
+            .field("field4", Schema.BOOLEAN_SCHEMA).build();
         Schema inputSchema = SchemaBuilder.struct().field("field1", Schema.BOOLEAN_SCHEMA)
-                                                   .field("field2", Schema.STRING_SCHEMA)
-                                                   .field("field3", Schema.STRING_SCHEMA)
-                                                   .field("field4", Schema.BOOLEAN_SCHEMA).build();
+            .field("field2", Schema.STRING_SCHEMA)
+            .field("field3", Schema.STRING_SCHEMA)
+            .field("field4", Schema.BOOLEAN_SCHEMA).build();
         Struct input = new Struct(inputSchema).put("field1", true).put("field2", "string2").put("field3", "string3").put("field4", false);
         assertStructSchemaEqual(schema, input);
     }
@@ -669,7 +669,7 @@ public class JsonConverterTest {
         JsonNode converted = parse(converter.fromConnectData(TOPIC, Decimal.schema(2), new BigDecimal(new BigInteger("156"), 2)));
         validateEnvelope(converted);
         assertEquals(parse("{ \"type\": \"bytes\", \"optional\": false, \"name\": \"org.apache.kafka.connect.data.Decimal\", \"version\": 1, \"parameters\": { \"scale\": \"2\" } }"),
-                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+            converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         assertTrue(converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).isTextual(), "expected node to be base64 text");
         assertArrayEquals(new byte[]{0, -100}, converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).binaryValue());
     }
@@ -714,7 +714,7 @@ public class JsonConverterTest {
         JsonNode converted = parse(converter.fromConnectData(TOPIC, Date.SCHEMA, date));
         validateEnvelope(converted);
         assertEquals(parse("{ \"type\": \"int32\", \"optional\": false, \"name\": \"org.apache.kafka.connect.data.Date\", \"version\": 1 }"),
-                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+            converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         JsonNode payload = converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME);
         assertTrue(payload.isInt());
         assertEquals(10000, payload.intValue());
@@ -730,7 +730,7 @@ public class JsonConverterTest {
         JsonNode converted = parse(converter.fromConnectData(TOPIC, Time.SCHEMA, date));
         validateEnvelope(converted);
         assertEquals(parse("{ \"type\": \"int32\", \"optional\": false, \"name\": \"org.apache.kafka.connect.data.Time\", \"version\": 1 }"),
-                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+            converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         JsonNode payload = converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME);
         assertTrue(payload.isInt());
         assertEquals(14400000, payload.longValue());
@@ -747,7 +747,7 @@ public class JsonConverterTest {
         JsonNode converted = parse(converter.fromConnectData(TOPIC, Timestamp.SCHEMA, date));
         validateEnvelope(converted);
         assertEquals(parse("{ \"type\": \"int64\", \"optional\": false, \"name\": \"org.apache.kafka.connect.data.Timestamp\", \"version\": 1 }"),
-                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+            converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         JsonNode payload = converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME);
         assertTrue(payload.isLong());
         assertEquals(4000000000L, payload.longValue());
@@ -771,7 +771,7 @@ public class JsonConverterTest {
         validateEnvelopeNullSchema(converted);
         assertTrue(converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME).isNull());
         assertEquals(JsonNodeFactory.instance.arrayNode().add(1).add("string").add(true),
-                converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
+            converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
     }
 
     @Test
@@ -786,7 +786,7 @@ public class JsonConverterTest {
         validateEnvelopeNullSchema(converted);
         assertTrue(converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME).isNull());
         assertEquals(JsonNodeFactory.instance.objectNode().put("key1", 12).put("key2", "string").put("key3", true),
-                converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
+            converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
     }
 
     @Test
@@ -807,9 +807,9 @@ public class JsonConverterTest {
         for (JsonNode elem : payload)
             payloadEntries.add(elem);
         assertEquals(Set.of(JsonNodeFactory.instance.arrayNode().add("string").add(12),
-                        JsonNodeFactory.instance.arrayNode().add(52).add("string"),
-                        JsonNodeFactory.instance.arrayNode().add(false).add(true)),
-                payloadEntries
+                JsonNodeFactory.instance.arrayNode().add(52).add("string"),
+                JsonNodeFactory.instance.arrayNode().add(false).add(true)),
+            payloadEntries
         );
     }
 
@@ -877,7 +877,7 @@ public class JsonConverterTest {
         File propFile = new File(url.toURI());
         String workerPropsFile = propFile.getAbsolutePath();
         Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
-                Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Map.of();
+            Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Map.of();
 
         JsonConverter rc = new JsonConverter();
         rc.configure(workerProps, false);
@@ -1027,8 +1027,8 @@ public class JsonConverterTest {
     public void testNullSchemaContentWithWrongConnectDataValue(String value) {
         converter.configure(Map.of(), false);
         assertThrows(
-                DataException.class,
-                () -> converter.toConnectData(TOPIC, value.getBytes()));
+            DataException.class,
+            () -> converter.toConnectData(TOPIC, value.getBytes()));
     }
 
     private JsonNode parse(byte[] json) {
@@ -1066,7 +1066,7 @@ public class JsonConverterTest {
         assertTrue(env.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME).isNull());
         assertTrue(env.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
     }
-    
+
     private void assertStructSchemaEqual(Schema schema, Struct struct) {
         converter.fromConnectData(TOPIC, schema, struct);
         assertEquals(schema, struct.schema());

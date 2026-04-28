@@ -75,10 +75,10 @@ public class CoordinatorRequestManager implements RequestManager {
         this.log = logContext.logger(this.getClass());
         this.groupId = groupId;
         this.coordinatorRequestState = new RequestState(
-                logContext,
-                CoordinatorRequestManager.class.getSimpleName(),
-                retryBackoffMs,
-                retryBackoffMaxMs
+            logContext,
+            CoordinatorRequestManager.class.getSimpleName(),
+            retryBackoffMs,
+            retryBackoffMaxMs
         );
     }
 
@@ -113,8 +113,8 @@ public class CoordinatorRequestManager implements RequestManager {
     NetworkClientDelegate.UnsentRequest makeFindCoordinatorRequest(final long currentTimeMs) {
         coordinatorRequestState.onSendAttempt(currentTimeMs);
         FindCoordinatorRequestData data = new FindCoordinatorRequestData()
-                .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
-                .setKey(this.groupId);
+            .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
+            .setKey(this.groupId);
         NetworkClientDelegate.UnsentRequest unsentRequest = new NetworkClientDelegate.UnsentRequest(
             new FindCoordinatorRequest.Builder(data),
             Optional.empty()
@@ -189,9 +189,9 @@ public class CoordinatorRequestManager implements RequestManager {
         // for the coordinator in the underlying network client layer
         int coordinatorConnectionId = Integer.MAX_VALUE - coordinator.nodeId();
         this.coordinator = new Node(
-                coordinatorConnectionId,
-                coordinator.host(),
-                coordinator.port());
+            coordinatorConnectionId,
+            coordinator.host(),
+            coordinator.port());
         log.info("Discovered group coordinator {}", coordinator);
         coordinatorRequestState.onSuccessfulAttempt(currentTimeMs);
     }
@@ -252,7 +252,7 @@ public class CoordinatorRequestManager implements RequestManager {
     public Optional<Node> coordinator() {
         return Optional.ofNullable(this.coordinator);
     }
-    
+
     public Optional<Throwable> getAndClearFatalError() {
         Optional<Throwable> fatalError = this.fatalError;
         this.fatalError = Optional.empty();

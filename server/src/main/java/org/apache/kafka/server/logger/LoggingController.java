@@ -85,10 +85,10 @@ public class LoggingController implements LoggingControllerMBean {
     @Override
     public List<String> getLoggers() {
         return LoggingController.loggers()
-                .entrySet()
-                .stream()
-                .map(entry -> entry.getKey() + "=" + entry.getValue())
-                .toList();
+            .entrySet()
+            .stream()
+            .map(entry -> entry.getKey() + "=" + entry.getValue())
+            .toList();
     }
 
     @Override

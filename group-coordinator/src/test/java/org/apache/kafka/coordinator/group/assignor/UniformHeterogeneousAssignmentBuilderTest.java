@@ -332,7 +332,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             .build();
 
 
-
         Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(

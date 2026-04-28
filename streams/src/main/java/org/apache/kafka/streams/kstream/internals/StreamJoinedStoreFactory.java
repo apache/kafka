@@ -49,10 +49,10 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
     }
 
     public StreamJoinedStoreFactory(
-            final String name,
-            final JoinWindows windows,
-            final StreamJoinedInternal<K, V1, V2> joinedInternal,
-            final Type type
+        final String name,
+        final JoinWindows windows,
+        final StreamJoinedInternal<K, V1, V2> joinedInternal,
+        final Type type
     ) {
         super(joinedInternal.dslStoreSuppliers(), DslStoreFormat.PLAIN);
         this.name = name + "-store";
@@ -83,21 +83,21 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
     @Override
     public StoreBuilder<?> builder() {
         final WindowBytesStoreSupplier supplier = storeSupplier == null
-                ? dslStoreSuppliers().windowStore(new DslWindowParams(
-                        this.name,
-                        Duration.ofMillis(retentionPeriod()),
-                        Duration.ofMillis(windows.size()),
-                        true,
-                        EmitStrategy.onWindowUpdate(),
-                        false,
-                        dslStoreFormat()
-                ))
-                : storeSupplier;
+            ? dslStoreSuppliers().windowStore(new DslWindowParams(
+            this.name,
+            Duration.ofMillis(retentionPeriod()),
+            Duration.ofMillis(windows.size()),
+            true,
+            EmitStrategy.onWindowUpdate(),
+            false,
+            dslStoreFormat()
+        ))
+            : storeSupplier;
 
         final StoreBuilder<? extends WindowStore<K, ?>> builder = Stores.timestampedWindowStoreWithHeadersBuilder(
-                supplier,
-                joinedInternal.keySerde(),
-                valueSerde
+            supplier,
+            joinedInternal.keySerde(),
+            valueSerde
         );
 
 
@@ -118,7 +118,7 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
     @Override
     public long historyRetention() {
         throw new IllegalStateException(
-                "historyRetention is not supported when not a versioned store");
+            "historyRetention is not supported when not a versioned store");
     }
 
     @Override
@@ -161,6 +161,6 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
     @Override
     public boolean isCompatibleWith(final StoreFactory storeFactory) {
         return storeFactory instanceof StreamJoinedStoreFactory
-                && ((StreamJoinedStoreFactory<?, ?, ?>) storeFactory).joinedInternal.equals(joinedInternal);
+            && ((StreamJoinedStoreFactory<?, ?, ?>) storeFactory).joinedInternal.equals(joinedInternal);
     }
 }

@@ -33,7 +33,7 @@ import java.util.Optional;
 public class RocksDBTimeOrderedKeyValueBytesStore extends AbstractRocksDBTimeOrderedSegmentedBytesStore<KeyValueSegment> {
 
     RocksDBTimeOrderedKeyValueBytesStore(final String name,
-                                         final String metricsScope) {
+        final String metricsScope) {
         super(name,
             Long.MAX_VALUE,
             new TimeFirstWindowKeySchema(),

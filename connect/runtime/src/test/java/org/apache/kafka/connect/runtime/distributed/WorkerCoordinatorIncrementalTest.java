@@ -113,8 +113,8 @@ public class WorkerCoordinatorIncrementalTest {
     // - Expected metadata size
     static Stream<Arguments> mode() {
         return Stream.of(
-            Arguments.of(ConnectProtocolCompatibility.COMPATIBLE, 2),
-            Arguments.of(ConnectProtocolCompatibility.SESSIONED, 3)
+                Arguments.of(ConnectProtocolCompatibility.COMPATIBLE, 2),
+                Arguments.of(ConnectProtocolCompatibility.SESSIONED, 3)
         );
     }
 
@@ -127,7 +127,7 @@ public class WorkerCoordinatorIncrementalTest {
         this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Map.of("topic", 1)));
         this.node = metadata.fetch().nodes().get(0);
         this.consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time,
-            retryBackoffMs, requestTimeoutMs, heartbeatIntervalMs);
+                retryBackoffMs, requestTimeoutMs, heartbeatIntervalMs);
         this.metrics = new Metrics(time);
         this.rebalanceListener = new MockRebalanceListener();
 
@@ -143,24 +143,24 @@ public class WorkerCoordinatorIncrementalTest {
         this.configStorageCalls = 0;
 
         this.rebalanceConfig = new GroupRebalanceConfig(sessionTimeoutMs,
-            rebalanceTimeoutMs,
-            heartbeatIntervalMs,
-            groupId,
-            Optional.empty(),
-            null,
-            retryBackoffMs,
-            retryBackoffMaxMs);
+                rebalanceTimeoutMs,
+                heartbeatIntervalMs,
+                groupId,
+                Optional.empty(),
+                null,
+                retryBackoffMs,
+                retryBackoffMaxMs);
         this.coordinator = new WorkerCoordinator(rebalanceConfig,
-            loggerFactory,
-            consumerClient,
-            metrics,
-            "worker" + groupId,
-            time,
-            expectedUrl(leaderId),
-            configStorage,
-            rebalanceListener,
-            compatibility,
-            rebalanceDelay);
+                loggerFactory,
+                consumerClient,
+                metrics,
+                "worker" + groupId,
+                time,
+                expectedUrl(leaderId),
+                configStorage,
+                rebalanceListener,
+                compatibility,
+                rebalanceDelay);
 
         configState1 = clusterConfigState(offset, 2, 4);
     }
@@ -303,21 +303,21 @@ public class WorkerCoordinatorIncrementalTest {
         //Equally distributing tasks across member
         leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
-            List.of(), 0,
-            List.of(), 1,
-            leaderAssignment);
+                List.of(), 0,
+                List.of(), 1,
+                leaderAssignment);
 
         memberAssignment = deserializeAssignment(result, memberId);
         assertAssignment(leaderId, offset,
-            List.of(), 0,
-            List.of(), 1,
-            memberAssignment);
+                List.of(), 0,
+                List.of(), 1,
+                memberAssignment);
 
         ExtendedAssignment anotherMemberAssignment = deserializeAssignment(result, anotherMemberId);
         assertAssignment(leaderId, offset,
-            List.of(), 0,
-            List.of(), 0,
-            anotherMemberAssignment);
+                List.of(), 0,
+                List.of(), 0,
+                anotherMemberAssignment);
 
         verify(configStorage, times(configStorageCalls)).snapshot();
     }
@@ -564,27 +564,28 @@ public class WorkerCoordinatorIncrementalTest {
         }
 
         @Override
-        public void onPollTimeoutExpiry() {}
+        public void onPollTimeoutExpiry() {
+        }
     }
 
     private static ExtendedAssignment deserializeAssignment(Map<String, ByteBuffer> assignment,
-                                                           String member) {
+            String member) {
         return IncrementalCooperativeConnectProtocol.deserializeAssignment(assignment.get(member));
     }
 
 
     private void addJoinGroupResponseMember(List<JoinGroupResponseMember> responseMembers,
-                                            String member,
-                                            long offset,
-                                            ExtendedAssignment assignment,
-                                            ConnectProtocolCompatibility compatibility) {
+            String member,
+            long offset,
+            ExtendedAssignment assignment,
+            ConnectProtocolCompatibility compatibility) {
         responseMembers.add(new JoinGroupResponseMember()
                 .setMemberId(member)
                 .setMetadata(
-                    IncrementalCooperativeConnectProtocol.serializeMetadata(
-                        new ExtendedWorkerState(expectedUrl(member), offset, assignment),
-                        compatibility != COMPATIBLE
-                    ).array()
+                        IncrementalCooperativeConnectProtocol.serializeMetadata(
+                                new ExtendedWorkerState(expectedUrl(member), offset, assignment),
+                                compatibility != COMPATIBLE
+                        ).array()
                 )
         );
     }

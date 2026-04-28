@@ -90,14 +90,14 @@ public class SSLUtilsTest {
         assertEquals("file://" + keystorePath, ssl.getKeyStorePath());
         assertEquals("file://" + truststorePath, ssl.getTrustStorePath());
         assertEquals("SunJSSE", ssl.getProvider());
-        assertArrayEquals(new String[] {"SSL_RSA_WITH_RC4_128_SHA", "SSL_RSA_WITH_RC4_128_MD5"}, ssl.getIncludeCipherSuites());
+        assertArrayEquals(new String[]{"SSL_RSA_WITH_RC4_128_SHA", "SSL_RSA_WITH_RC4_128_MD5"}, ssl.getIncludeCipherSuites());
         assertEquals("SHA1PRNG", ssl.getSecureRandomAlgorithm());
         assertTrue(ssl.getNeedClientAuth());
         assertFalse(ssl.getWantClientAuth());
         assertEquals("JKS", ssl.getKeyStoreType());
         assertEquals("JKS", ssl.getTrustStoreType());
         assertEquals("TLS", ssl.getProtocol());
-        assertArrayEquals(new String[] {"TLSv1.2", "TLSv1.1", "TLSv1"}, ssl.getIncludeProtocols());
+        assertArrayEquals(new String[]{"TLSv1.2", "TLSv1.1", "TLSv1"}, ssl.getIncludeProtocols());
         assertEquals("SunX509", ssl.getKeyManagerFactoryAlgorithm());
         assertEquals("PKIX", ssl.getTrustManagerFactoryAlgorithm());
     }
@@ -128,12 +128,12 @@ public class SSLUtilsTest {
         assertEquals("file://" + keystorePath, ssl.getKeyStorePath());
         assertEquals("file://" + truststorePath, ssl.getTrustStorePath());
         assertEquals("SunJSSE", ssl.getProvider());
-        assertArrayEquals(new String[] {"SSL_RSA_WITH_RC4_128_SHA", "SSL_RSA_WITH_RC4_128_MD5"}, ssl.getIncludeCipherSuites());
+        assertArrayEquals(new String[]{"SSL_RSA_WITH_RC4_128_SHA", "SSL_RSA_WITH_RC4_128_MD5"}, ssl.getIncludeCipherSuites());
         assertEquals("SHA1PRNG", ssl.getSecureRandomAlgorithm());
         assertEquals("JKS", ssl.getKeyStoreType());
         assertEquals("JKS", ssl.getTrustStoreType());
         assertEquals("TLS", ssl.getProtocol());
-        assertArrayEquals(new String[] {"TLSv1.2", "TLSv1.1", "TLSv1"}, ssl.getIncludeProtocols());
+        assertArrayEquals(new String[]{"TLSv1.2", "TLSv1.1", "TLSv1"}, ssl.getIncludeProtocols());
         assertEquals("SunX509", ssl.getKeyManagerFactoryAlgorithm());
         assertEquals("PKIX", ssl.getTrustManagerFactoryAlgorithm());
     }

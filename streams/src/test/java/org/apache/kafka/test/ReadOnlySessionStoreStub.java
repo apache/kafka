@@ -186,7 +186,8 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
     }
 
     @Override
-    public void init(StateStoreContext stateStoreContext, StateStore root) {}
+    public void init(StateStoreContext stateStoreContext, StateStore root) {
+    }
 
     @Override
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {

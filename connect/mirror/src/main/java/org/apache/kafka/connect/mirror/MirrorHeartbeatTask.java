@@ -70,11 +70,11 @@ public class MirrorHeartbeatTask extends SourceTask {
         long timestamp = System.currentTimeMillis();
         Heartbeat heartbeat = new Heartbeat(sourceClusterAlias, targetClusterAlias, timestamp);
         SourceRecord record = new SourceRecord(
-            heartbeat.connectPartition(), MirrorUtils.wrapOffset(0),
-            heartbeatsTopic, 0,
-            Schema.BYTES_SCHEMA, heartbeat.recordKey(),
-            Schema.BYTES_SCHEMA, heartbeat.recordValue(),
-            timestamp);
+                heartbeat.connectPartition(), MirrorUtils.wrapOffset(0),
+                heartbeatsTopic, 0,
+                Schema.BYTES_SCHEMA, heartbeat.recordKey(),
+                Schema.BYTES_SCHEMA, heartbeat.recordValue(),
+                timestamp);
         return List.of(record);
     }
 

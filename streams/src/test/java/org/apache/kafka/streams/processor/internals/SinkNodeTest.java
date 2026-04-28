@@ -45,7 +45,7 @@ public class SinkNodeTest {
     private final RecordCollector recordCollector = new MockRecordCollector();
     private final InternalMockProcessorContext<Void, Void> context = new InternalMockProcessorContext<>(anyStateSerde, recordCollector);
     private final SinkNode<byte[], byte[]> sink = new SinkNode<>("anyNodeName",
-            new StaticTopicNameExtractor<>("any-output-topic"), anySerializer, anySerializer, null);
+        new StaticTopicNameExtractor<>("any-output-topic"), anySerializer, anySerializer, null);
 
     // Used to verify that the correct exceptions are thrown if the compiler checks are bypassed
     @SuppressWarnings("unchecked")

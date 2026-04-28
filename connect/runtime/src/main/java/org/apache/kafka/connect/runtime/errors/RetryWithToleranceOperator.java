@@ -67,6 +67,7 @@ public class RetryWithToleranceOperator<T> implements AutoCloseable {
     public static final long RETRIES_DELAY_MIN_MS = 300;
 
     private static final Map<Stage, Class<? extends Exception>> TOLERABLE_EXCEPTIONS = new HashMap<>();
+
     static {
         TOLERABLE_EXCEPTIONS.put(Stage.TRANSFORMATION, Exception.class);
         TOLERABLE_EXCEPTIONS.put(Stage.HEADER_CONVERTER, Exception.class);
@@ -86,13 +87,13 @@ public class RetryWithToleranceOperator<T> implements AutoCloseable {
     private List<ErrorReporter<T>> reporters;
 
     public RetryWithToleranceOperator(long errorRetryTimeout, long errorMaxDelayInMillis,
-                                      ToleranceType toleranceType, Time time, ErrorHandlingMetrics errorHandlingMetrics) {
+            ToleranceType toleranceType, Time time, ErrorHandlingMetrics errorHandlingMetrics) {
         this(errorRetryTimeout, errorMaxDelayInMillis, toleranceType, time, errorHandlingMetrics, new CountDownLatch(1));
     }
 
     RetryWithToleranceOperator(long errorRetryTimeout, long errorMaxDelayInMillis,
-                               ToleranceType toleranceType, Time time, ErrorHandlingMetrics errorHandlingMetrics,
-                               CountDownLatch stopRequestedLatch) {
+            ToleranceType toleranceType, Time time, ErrorHandlingMetrics errorHandlingMetrics,
+            CountDownLatch stopRequestedLatch) {
         this.errorRetryTimeout = errorRetryTimeout;
         this.errorMaxDelayInMillis = errorMaxDelayInMillis;
         this.errorToleranceType = toleranceType;

@@ -250,9 +250,9 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         metricConfig.recordLevel(Sensor.RecordingLevel.DEBUG);
         final String threadId = Thread.currentThread().getName();
         this.metrics = new StreamsMetricsImpl(
-                new Metrics(metricConfig),
-                threadId,
-                Time.SYSTEM
+            new Metrics(metricConfig),
+            threadId,
+            Time.SYSTEM
         );
         TaskMetrics.droppedRecordsSensor(threadId, taskId.toString(), metrics);
     }
@@ -329,10 +329,10 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public void setRecordMetadata(final String topic,
-                                  final int partition,
-                                  final long offset,
-                                  final Headers headers,
-                                  final long timestamp) {
+        final int partition,
+        final long offset,
+        final Headers headers,
+        final long timestamp) {
         this.topic = topic;
         this.partition = partition;
         this.offset = offset;
@@ -457,7 +457,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallbackIsIgnoredInMock) {
+        final StateRestoreCallback stateRestoreCallbackIsIgnoredInMock) {
         stateStores.put(store.name(), store);
     }
 
@@ -469,21 +469,22 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     public Cancellable schedule(final Duration interval,
-                                final PunctuationType type,
-                                final Punctuator callback) throws IllegalArgumentException {
+        final PunctuationType type,
+        final Punctuator callback) throws IllegalArgumentException {
         final long intervalMs = ApiUtils.validateMillisecondDuration(interval, "interval");
         if (intervalMs < 1) {
             throw new IllegalArgumentException("The minimum supported scheduling interval is 1 millisecond.");
         }
         final CapturedPunctuator capturedPunctuator = new CapturedPunctuator(intervalMs, type, callback);
         punctuators.add(capturedPunctuator);
-        return capturedPunctuator::cancel;    }
+        return capturedPunctuator::cancel;
+    }
 
     @Override
     public Cancellable schedule(final Instant startTime,
-                                final Duration interval,
-                                final PunctuationType type,
-                                final Punctuator callback) throws IllegalArgumentException {
+        final Duration interval,
+        final PunctuationType type,
+        final Punctuator callback) throws IllegalArgumentException {
         final long intervalMs = ApiUtils.validateMillisecondDuration(interval, "interval");
         if (intervalMs < 1) {
             throw new IllegalArgumentException("The minimum supported scheduling interval is 1 millisecond.");

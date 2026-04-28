@@ -71,7 +71,7 @@ public class GenericInMemoryTimestampedKeyValueStoreWithHeaders<K extends Compar
 
     @Override
     public boolean setFlushListener(final CacheFlushListener<K, ValueTimestampHeaders<V>> listener,
-                                    final boolean sendOldValues) {
+        final boolean sendOldValues) {
         return false;
     }
 
@@ -92,7 +92,7 @@ public class GenericInMemoryTimestampedKeyValueStoreWithHeaders<K extends Compar
 
     @Override
     public synchronized void put(final K key,
-                                 final ValueTimestampHeaders<V> value) {
+        final ValueTimestampHeaders<V> value) {
         if (value == null) {
             map.remove(key);
         } else {
@@ -102,7 +102,7 @@ public class GenericInMemoryTimestampedKeyValueStoreWithHeaders<K extends Compar
 
     @Override
     public synchronized ValueTimestampHeaders<V> putIfAbsent(final K key,
-                                                             final ValueTimestampHeaders<V> value) {
+        final ValueTimestampHeaders<V> value) {
         final ValueTimestampHeaders<V> originalValue = get(key);
         if (originalValue == null) {
             put(key, value);
@@ -124,7 +124,7 @@ public class GenericInMemoryTimestampedKeyValueStoreWithHeaders<K extends Compar
 
     @Override
     public synchronized KeyValueIterator<K, ValueTimestampHeaders<V>> range(final K from,
-                                                                            final K to) {
+        final K to) {
         final TreeMap<K, ValueTimestampHeaders<V>> copy = new TreeMap<>(map.subMap(from, true, to, true));
         return new DelegatingPeekingKeyValueIterator<>(name, new GenericInMemoryKeyValueIterator<>(copy.entrySet().iterator()));
     }

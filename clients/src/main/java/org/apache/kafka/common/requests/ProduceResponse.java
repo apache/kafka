@@ -125,11 +125,11 @@ public class ProduceResponse extends AbstractResponse {
                         .collect(Collectors.toList())));
         });
         nodeEndpoints.forEach(endpoint -> data.nodeEndpoints()
-                .add(new ProduceResponseData.NodeEndpoint()
-                        .setNodeId(endpoint.id())
-                        .setHost(endpoint.host())
-                        .setPort(endpoint.port())
-                        .setRack(endpoint.rack())));
+            .add(new ProduceResponseData.NodeEndpoint()
+                .setNodeId(endpoint.id())
+                .setHost(endpoint.host())
+                .setPort(endpoint.port())
+                .setRack(endpoint.rack())));
         return data;
     }
 
@@ -208,12 +208,12 @@ public class ProduceResponse extends AbstractResponse {
             if (o == null || getClass() != o.getClass()) return false;
             PartitionResponse that = (PartitionResponse) o;
             return baseOffset == that.baseOffset &&
-                    logAppendTime == that.logAppendTime &&
-                    logStartOffset == that.logStartOffset &&
-                    error == that.error &&
-                    Objects.equals(recordErrors, that.recordErrors) &&
-                    Objects.equals(errorMessage, that.errorMessage) &&
-                    Objects.equals(currentLeader, that.currentLeader);
+                logAppendTime == that.logAppendTime &&
+                logStartOffset == that.logStartOffset &&
+                error == that.error &&
+                Objects.equals(recordErrors, that.recordErrors) &&
+                Objects.equals(errorMessage, that.errorMessage) &&
+                Objects.equals(currentLeader, that.currentLeader);
         }
 
         @Override
@@ -268,7 +268,7 @@ public class ProduceResponse extends AbstractResponse {
             if (o == null || getClass() != o.getClass()) return false;
             RecordError that = (RecordError) o;
             return batchIndex == that.batchIndex &&
-                    Objects.equals(message, that.message);
+                Objects.equals(message, that.message);
         }
 
         @Override
@@ -279,9 +279,9 @@ public class ProduceResponse extends AbstractResponse {
         @Override
         public String toString() {
             return "RecordError("
-                    + "batchIndex=" + batchIndex
-                    + ", message=" + ((message == null) ? "null" : "'" + message + "'")
-                    + ")";
+                + "batchIndex=" + batchIndex
+                + ", message=" + ((message == null) ? "null" : "'" + message + "'")
+                + ")";
         }
     }
 

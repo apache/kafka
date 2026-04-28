@@ -51,10 +51,10 @@ public class HighAvailabilityTaskAssignor implements LegacyTaskAssignor {
 
     @Override
     public boolean assign(final Map<ProcessId, ClientState> clients,
-                          final Set<TaskId> allTaskIds,
-                          final Set<TaskId> statefulTaskIds,
-                          final RackAwareTaskAssignor rackAwareTaskAssignor,
-                          final AssignmentConfigs configs) {
+        final Set<TaskId> allTaskIds,
+        final Set<TaskId> statefulTaskIds,
+        final RackAwareTaskAssignor rackAwareTaskAssignor,
+        final AssignmentConfigs configs) {
         final SortedSet<TaskId> statefulTasks = new TreeSet<>(statefulTaskIds);
         final TreeMap<ProcessId, ClientState> clientStates = new TreeMap<>(clients);
 
@@ -106,18 +106,18 @@ public class HighAvailabilityTaskAssignor implements LegacyTaskAssignor {
         final boolean probingRebalanceNeeded = neededActiveTaskMovements + neededStandbyTaskMovements > 0;
 
         log.info("Decided on assignment: " +
-                 clientStates +
-                 " with" +
-                 (probingRebalanceNeeded ? "" : " no") +
-                 " followup probing rebalance.");
+            clientStates +
+            " with" +
+            (probingRebalanceNeeded ? "" : " no") +
+            " followup probing rebalance.");
 
         return probingRebalanceNeeded;
     }
 
     private static void assignActiveStatefulTasks(final SortedMap<ProcessId, ClientState> clientStates,
-                                                  final SortedSet<TaskId> statefulTasks,
-                                                  final RackAwareTaskAssignor rackAwareTaskAssignor,
-                                                  final AssignmentConfigs configs) {
+        final SortedSet<TaskId> statefulTasks,
+        final RackAwareTaskAssignor rackAwareTaskAssignor,
+        final AssignmentConfigs configs) {
         Iterator<ClientState> clientStateIterator = null;
         for (final TaskId task : statefulTasks) {
             if (clientStateIterator == null || !clientStateIterator.hasNext()) {
@@ -142,10 +142,10 @@ public class HighAvailabilityTaskAssignor implements LegacyTaskAssignor {
     }
 
     private void assignStandbyReplicaTasks(final TreeMap<ProcessId, ClientState> clientStates,
-                                           final Set<TaskId> allTaskIds,
-                                           final Set<TaskId> statefulTasks,
-                                           final RackAwareTaskAssignor rackAwareTaskAssignor,
-                                           final AssignmentConfigs configs) {
+        final Set<TaskId> allTaskIds,
+        final Set<TaskId> statefulTasks,
+        final RackAwareTaskAssignor rackAwareTaskAssignor,
+        final AssignmentConfigs configs) {
         if (configs.numStandbyReplicas() == 0) {
             return;
         }
@@ -170,10 +170,10 @@ public class HighAvailabilityTaskAssignor implements LegacyTaskAssignor {
     }
 
     private static void balanceTasksOverThreads(final SortedMap<ProcessId, ClientState> clientStates,
-                                                final Function<ClientState, Set<TaskId>> currentAssignmentAccessor,
-                                                final BiConsumer<ClientState, TaskId> taskUnassignor,
-                                                final BiConsumer<ClientState, TaskId> taskAssignor,
-                                                final BiPredicate<ClientState, ClientState> taskMovementAttemptPredicate) {
+        final Function<ClientState, Set<TaskId>> currentAssignmentAccessor,
+        final BiConsumer<ClientState, TaskId> taskUnassignor,
+        final BiConsumer<ClientState, TaskId> taskAssignor,
+        final BiPredicate<ClientState, ClientState> taskMovementAttemptPredicate) {
         boolean keepBalancing = true;
         while (keepBalancing) {
             keepBalancing = false;
@@ -193,9 +193,9 @@ public class HighAvailabilityTaskAssignor implements LegacyTaskAssignor {
                     while (shouldMoveATask(sourceClientState, destinationClientState) && sourceIterator.hasNext()) {
                         final TaskId taskToMove = sourceIterator.next();
                         final boolean canMove = !destinationClientState.hasAssignedTask(taskToMove)
-                                                // When ClientTagAwareStandbyTaskAssignor is used, we need to make sure that
-                                                // sourceClient tags matches destinationClient tags.
-                                                && taskMovementAttemptPredicate.test(sourceClientState, destinationClientState);
+                            // When ClientTagAwareStandbyTaskAssignor is used, we need to make sure that
+                            // sourceClient tags matches destinationClient tags.
+                            && taskMovementAttemptPredicate.test(sourceClientState, destinationClientState);
                         if (canMove) {
                             taskUnassignor.accept(sourceClientState, taskToMove);
                             taskAssignor.accept(destinationClientState, taskToMove);
@@ -208,7 +208,7 @@ public class HighAvailabilityTaskAssignor implements LegacyTaskAssignor {
     }
 
     private static boolean shouldMoveATask(final ClientState sourceClientState,
-                                           final ClientState destinationClientState) {
+        final ClientState destinationClientState) {
         final double skew = sourceClientState.assignedTaskLoad() - destinationClientState.assignedTaskLoad();
 
         if (skew <= 0) {
@@ -230,8 +230,8 @@ public class HighAvailabilityTaskAssignor implements LegacyTaskAssignor {
     }
 
     private static void assignStatelessActiveTasks(final TreeMap<ProcessId, ClientState> clientStates,
-                                                   final Iterable<TaskId> statelessTasks,
-                                                   final RackAwareTaskAssignor rackAwareTaskAssignor) {
+        final Iterable<TaskId> statelessTasks,
+        final RackAwareTaskAssignor rackAwareTaskAssignor) {
         final ConstrainedPrioritySet statelessActiveTaskClientsByTaskLoad = new ConstrainedPrioritySet(
             (client, task) -> true,
             client -> clientStates.get(client).activeTaskLoad()
@@ -254,8 +254,8 @@ public class HighAvailabilityTaskAssignor implements LegacyTaskAssignor {
     }
 
     private static Map<TaskId, SortedSet<ProcessId>> tasksToCaughtUpClients(final Set<TaskId> statefulTasks,
-                                                                       final Map<ProcessId, ClientState> clientStates,
-                                                                       final long acceptableRecoveryLag) {
+        final Map<ProcessId, ClientState> clientStates,
+        final long acceptableRecoveryLag) {
         final Map<TaskId, SortedSet<ProcessId>> taskToCaughtUpClients = new HashMap<>();
 
         for (final TaskId task : statefulTasks) {
@@ -274,11 +274,11 @@ public class HighAvailabilityTaskAssignor implements LegacyTaskAssignor {
     }
 
     private static Map<TaskId, SortedSet<ProcessId>> tasksToClientByLag(final Set<TaskId> statefulTasks,
-                                                              final Map<ProcessId, ClientState> clientStates) {
+        final Map<ProcessId, ClientState> clientStates) {
         final Map<TaskId, SortedSet<ProcessId>> tasksToClientByLag = new HashMap<>();
         for (final TaskId task : statefulTasks) {
             final SortedSet<ProcessId> clientLag = new TreeSet<>(Comparator.<ProcessId>comparingLong(a ->
-                    clientStates.get(a).lagFor(task)).thenComparing(a -> a));
+                clientStates.get(a).lagFor(task)).thenComparing(a -> a));
             clientLag.addAll(clientStates.keySet());
             tasksToClientByLag.put(task, clientLag);
         }

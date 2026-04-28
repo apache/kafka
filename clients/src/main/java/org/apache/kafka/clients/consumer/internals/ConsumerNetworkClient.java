@@ -82,12 +82,12 @@ public class ConsumerNetworkClient implements Closeable {
     private final AtomicBoolean wakeup = new AtomicBoolean(false);
 
     public ConsumerNetworkClient(LogContext logContext,
-                                 KafkaClient client,
-                                 Metadata metadata,
-                                 Time time,
-                                 long retryBackoffMs,
-                                 int requestTimeoutMs,
-                                 int maxPollTimeoutMs) {
+        KafkaClient client,
+        Metadata metadata,
+        Time time,
+        long retryBackoffMs,
+        int requestTimeoutMs,
+        int maxPollTimeoutMs) {
         this.log = logContext.logger(ConsumerNetworkClient.class);
         this.client = client;
         this.metadata = metadata;
@@ -124,8 +124,8 @@ public class ConsumerNetworkClient implements Closeable {
      * @return A future which indicates the result of the send.
      */
     public RequestFuture<ClientResponse> send(Node node,
-                                              AbstractRequest.Builder<?> requestBuilder,
-                                              int requestTimeoutMs) {
+        AbstractRequest.Builder<?> requestBuilder,
+        int requestTimeoutMs) {
         long now = time.milliseconds();
         RequestFutureCompletionHandler completionHandler = new RequestFutureCompletionHandler();
         ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now, true,
@@ -449,8 +449,8 @@ public class ConsumerNetworkClient implements Closeable {
                     RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
                     AuthenticationException authenticationException = client.authenticationException(node);
                     handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().latestAllowedVersion()),
-                            request.callback(), request.destination(), request.createdTimeMs(), now, true,
-                            null, authenticationException, null));
+                        request.callback(), request.destination(), request.createdTimeMs(), now, true,
+                        null, authenticationException, null));
                 }
             }
         }
@@ -609,7 +609,7 @@ public class ConsumerNetworkClient implements Closeable {
                 future.raise(response.authenticationException());
             } else if (response.wasDisconnected()) {
                 log.debug("Cancelled request with header {} due to node {} being disconnected",
-                        response.requestHeader(), response.destination());
+                    response.requestHeader(), response.destination());
                 future.raise(DisconnectException.INSTANCE);
             } else if (response.versionMismatch() != null) {
                 future.raise(response.versionMismatch());

@@ -139,8 +139,8 @@ public class KeyValueTimestampedHeaderStoreToKeyValueTimestampStoreAdapter<K, V>
     public void putAll(final List<KeyValue<K, ValueTimestampHeaders<V>>> entries) {
         wrapped().putAll(
             entries.stream().map(keyValuePair -> KeyValue.pair(
-                keyValuePair.key,
-                ValueAndTimestamp.make(keyValuePair.value.value(), keyValuePair.value.timestamp()))
+                    keyValuePair.key,
+                    ValueAndTimestamp.make(keyValuePair.value.value(), keyValuePair.value.timestamp()))
             )
             .collect(Collectors.toList())
         );

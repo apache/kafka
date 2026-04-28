@@ -29,9 +29,9 @@ public class KeyValueStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, KeyVa
     private final KeyValueBytesStoreSupplier storeSupplier;
 
     public KeyValueStoreBuilder(final KeyValueBytesStoreSupplier storeSupplier,
-                                final Serde<K> keySerde,
-                                final Serde<V> valueSerde,
-                                final Time time) {
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde,
+        final Time time) {
         super(storeSupplier.name(), keySerde, valueSerde, time);
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
         Objects.requireNonNull(storeSupplier.metricsScope(), "storeSupplier's metricsScope can't be null");

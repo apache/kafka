@@ -41,9 +41,9 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
     private boolean sendOldValues = false;
 
     KTableKTableJoinMerger(final KTableProcessorSupplier<K, ?, K, V> parent1,
-                           final KTableProcessorSupplier<K, ?, K, V> parent2,
-                           final String queryableName,
-                           final StoreFactory storeFactory) {
+        final KTableProcessorSupplier<K, ?, K, V> parent2,
+        final String queryableName,
+        final StoreFactory storeFactory) {
         this.parent1 = parent1;
         this.parent2 = parent2;
         this.queryableName = queryableName;
@@ -62,8 +62,8 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
     @Override
     public Set<StoreBuilder<?>> stores() {
         return storeFactory == null
-                ? null
-                : Set.of(new StoreFactory.FactoryWrappingStoreBuilder<>(storeFactory));
+            ? null
+            : Set.of(new StoreFactory.FactoryWrappingStoreBuilder<>(storeFactory));
     }
 
     @Override
@@ -102,14 +102,14 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
     }
 
     public static <K, V> KTableKTableJoinMerger<K, V> of(final KTableProcessorSupplier<K, ?, K, V> parent1,
-                                                         final KTableProcessorSupplier<K, ?, K, V> parent2) {
+        final KTableProcessorSupplier<K, ?, K, V> parent2) {
         return of(parent1, parent2, null, null);
     }
 
     public static <K, V> KTableKTableJoinMerger<K, V> of(final KTableProcessorSupplier<K, ?, K, V> parent1,
-                                                         final KTableProcessorSupplier<K, ?, K, V> parent2,
-                                                         final String queryableName,
-                                                         final StoreFactory stores) {
+        final KTableProcessorSupplier<K, ?, K, V> parent2,
+        final String queryableName,
+        final StoreFactory stores) {
         return new KTableKTableJoinMerger<>(parent1, parent2, queryableName, stores);
     }
 

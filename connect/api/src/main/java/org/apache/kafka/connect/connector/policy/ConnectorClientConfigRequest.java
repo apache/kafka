@@ -31,11 +31,11 @@ public class ConnectorClientConfigRequest {
     private final Class<? extends Connector> connectorClass;
 
     public ConnectorClientConfigRequest(
-        String connectorName,
-        ConnectorType connectorType,
-        Class<? extends Connector> connectorClass,
-        Map<String, Object> clientProps,
-        ClientType clientType) {
+            String connectorName,
+            ConnectorType connectorType,
+            Class<? extends Connector> connectorClass,
+            Map<String, Object> clientProps,
+            ClientType clientType) {
         this.clientProps = clientProps;
         this.clientType = clientType;
         this.connectorName = connectorName;

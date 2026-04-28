@@ -60,7 +60,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
     public abstract static class TestConnector extends Connector {
     }
 
-    public static class SimpleTransformation<R extends ConnectRecord<R>> implements Transformation<R>  {
+    public static class SimpleTransformation<R extends ConnectRecord<R>> implements Transformation<R> {
 
         int magicNumber = 0;
 
@@ -205,9 +205,10 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms.a.type", AbstractTransformation.class.getName());
         ConfigException ex = assertThrows(ConfigException.class, () -> new ConnectorConfig(MOCK_PLUGINS, props));
         assertTrue(
-            ex.getMessage().contains("This class is abstract and cannot be created.")
+                ex.getMessage().contains("This class is abstract and cannot be created.")
         );
     }
+
     @Test
     public void abstractKeyValueTransform() {
         Map<String, String> props = new HashMap<>();
@@ -217,13 +218,13 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms.a.type", AbstractKeyValueTransformation.class.getName());
         ConfigException ex = assertThrows(ConfigException.class, () -> new ConnectorConfig(MOCK_PLUGINS, props));
         assertTrue(
-            ex.getMessage().contains("This class is abstract and cannot be created.")
+                ex.getMessage().contains("This class is abstract and cannot be created.")
         );
         assertTrue(
-            ex.getMessage().contains(AbstractKeyValueTransformation.Key.class.getName())
+                ex.getMessage().contains(AbstractKeyValueTransformation.Key.class.getName())
         );
         assertTrue(
-            ex.getMessage().contains(AbstractKeyValueTransformation.Value.class.getName())
+                ex.getMessage().contains(AbstractKeyValueTransformation.Value.class.getName())
         );
     }
 
@@ -370,11 +371,12 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         assertTrue(e.getMessage().contains("there is no config 'transforms.a.predicate' defining a predicate to be negated"));
     }
 
-    public static class TestPredicate<R extends ConnectRecord<R>> implements Predicate<R>  {
+    public static class TestPredicate<R extends ConnectRecord<R>> implements Predicate<R> {
 
         int param;
 
-        public TestPredicate() { }
+        public TestPredicate() {
+        }
 
         @Override
         public ConfigDef config() {
@@ -405,11 +407,12 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
             return "1.0";
         }
 
-        public AbstractTestPredicate() { }
+        public AbstractTestPredicate() {
+        }
 
     }
 
-    public abstract static class AbstractTransformation<R extends ConnectRecord<R>> implements Transformation<R>  {
+    public abstract static class AbstractTransformation<R extends ConnectRecord<R>> implements Transformation<R> {
 
         @Override
         public String version() {
@@ -418,7 +421,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
     }
 
-    public abstract static class AbstractKeyValueTransformation<R extends ConnectRecord<R>> implements Transformation<R>  {
+    public abstract static class AbstractKeyValueTransformation<R extends ConnectRecord<R>> implements Transformation<R> {
         @Override
         public R apply(R record) {
             return null;

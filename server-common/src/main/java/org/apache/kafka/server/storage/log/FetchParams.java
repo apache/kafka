@@ -86,13 +86,13 @@ public class FetchParams {
         if (o == null || getClass() != o.getClass()) return false;
         FetchParams that = (FetchParams) o;
         return replicaId == that.replicaId
-                && replicaEpoch == that.replicaEpoch
-                && maxWaitMs == that.maxWaitMs
-                && minBytes == that.minBytes
-                && maxBytes == that.maxBytes
-                && isolation.equals(that.isolation)
-                && clientMetadata.equals(that.clientMetadata)
-                && shareFetchRequest == that.shareFetchRequest;
+            && replicaEpoch == that.replicaEpoch
+            && maxWaitMs == that.maxWaitMs
+            && minBytes == that.minBytes
+            && maxBytes == that.maxBytes
+            && isolation.equals(that.isolation)
+            && clientMetadata.equals(that.clientMetadata)
+            && shareFetchRequest == that.shareFetchRequest;
     }
 
     @Override
@@ -111,14 +111,14 @@ public class FetchParams {
     @Override
     public String toString() {
         return "FetchParams(" +
-                "replicaId=" + replicaId +
-                ", replicaEpoch=" + replicaEpoch +
-                ", maxWaitMs=" + maxWaitMs +
-                ", minBytes=" + minBytes +
-                ", maxBytes=" + maxBytes +
-                ", isolation=" + isolation +
-                ", clientMetadata=" + clientMetadata +
-                ", shareFetchRequest=" + shareFetchRequest +
-                ')';
+            "replicaId=" + replicaId +
+            ", replicaEpoch=" + replicaEpoch +
+            ", maxWaitMs=" + maxWaitMs +
+            ", minBytes=" + minBytes +
+            ", maxBytes=" + maxBytes +
+            ", isolation=" + isolation +
+            ", clientMetadata=" + clientMetadata +
+            ", shareFetchRequest=" + shareFetchRequest +
+            ')';
     }
 }

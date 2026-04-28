@@ -46,6 +46,7 @@ import java.util.concurrent.TimeUnit;
 public class ShareRoundTripWorker extends RoundTripWorkerBase {
     private static final Logger log = LoggerFactory.getLogger(ShareRoundTripWorker.class);
     KafkaShareConsumer<byte[], byte[]> consumer;
+
     ShareRoundTripWorker(String id, RoundTripWorkloadSpec spec) {
         this.id = id;
         this.spec = spec;
@@ -73,7 +74,7 @@ public class ShareRoundTripWorker extends RoundTripWorkerBase {
         }
 
         consumer = new KafkaShareConsumer<>(props, new ByteArrayDeserializer(),
-                new ByteArrayDeserializer());
+            new ByteArrayDeserializer());
         consumer.subscribe(spec.activeTopics().materialize().keySet());
     }
 
@@ -92,12 +93,12 @@ public class ShareRoundTripWorker extends RoundTripWorkerBase {
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, groupId);
         Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
         alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
-                GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, newValue), AlterConfigOp.OpType.SET)));
+            GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, newValue), AlterConfigOp.OpType.SET)));
         AlterConfigsOptions alterOptions = new AlterConfigsOptions();
         try {
             adminClient.incrementalAlterConfigs(alterEntries, alterOptions)
-                    .all()
-                    .get(60, TimeUnit.SECONDS);
+                .all()
+                .get(60, TimeUnit.SECONDS);
         } catch (Exception e) {
             throw new RuntimeException("Exception was thrown while attempting to set share.auto.offset.reset config: ", e);
         }

@@ -58,7 +58,7 @@ public class ByteBufferAccessor implements Readable, Writable {
         int remaining = buf.remaining();
         if (size > remaining) {
             throw new RuntimeException("Error reading byte array of " + size + " byte(s): only " + remaining +
-                    " byte(s) available");
+                " byte(s) available");
         }
         byte[] arr = new byte[size];
         buf.get(arr);

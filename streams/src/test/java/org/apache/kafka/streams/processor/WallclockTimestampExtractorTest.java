@@ -54,10 +54,12 @@ public class WallclockTimestampExtractorTest {
         }
 
         @Override
-        public void describeMismatch(final Object item, final Description mismatchDescription) {}
+        public void describeMismatch(final Object item, final Description mismatchDescription) {
+        }
 
         @Override
-        public void describeTo(final Description description) {}
+        public void describeTo(final Description description) {
+        }
     }
 
 }

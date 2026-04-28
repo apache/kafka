@@ -45,7 +45,7 @@ public class DefaultKafkaPrincipalBuilderTest {
     public void testReturnAnonymousPrincipalForPlaintext() throws Exception {
         DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(null, null);
         assertEquals(KafkaPrincipal.ANONYMOUS, builder.build(
-                new PlaintextAuthenticationContext(InetAddress.getLocalHost(), SecurityProtocol.PLAINTEXT.name())));
+            new PlaintextAuthenticationContext(InetAddress.getLocalHost(), SecurityProtocol.PLAINTEXT.name())));
     }
 
     @Test
@@ -57,7 +57,7 @@ public class DefaultKafkaPrincipalBuilderTest {
         DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(null, null);
 
         KafkaPrincipal principal = builder.build(
-                new SslAuthenticationContext(session, InetAddress.getLocalHost(), SecurityProtocol.PLAINTEXT.name()));
+            new SslAuthenticationContext(session, InetAddress.getLocalHost(), SecurityProtocol.PLAINTEXT.name()));
         assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
         assertEquals("foo", principal.getName());
 
@@ -73,7 +73,7 @@ public class DefaultKafkaPrincipalBuilderTest {
         DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(null, null);
 
         KafkaPrincipal principal = builder.build(
-                new SslAuthenticationContext(session, InetAddress.getLocalHost(), SecurityProtocol.PLAINTEXT.name()));
+            new SslAuthenticationContext(session, InetAddress.getLocalHost(), SecurityProtocol.PLAINTEXT.name()));
         assertEquals(KafkaPrincipal.ANONYMOUS, principal);
 
         verify(session, atLeastOnce()).getPeerPrincipal();
@@ -85,9 +85,9 @@ public class DefaultKafkaPrincipalBuilderTest {
         SSLSession session = mock(SSLSession.class);
 
         when(session.getPeerPrincipal()).thenReturn(new X500Principal("CN=Duke, OU=ServiceUsers, O=Org, C=US"))
-                                        .thenReturn(new X500Principal("CN=Duke, OU=SME, O=mycp, L=Fulton, ST=MD, C=US"))
-                                        .thenReturn(new X500Principal("CN=duke, OU=JavaSoft, O=Sun Microsystems"))
-                                        .thenReturn(new X500Principal("OU=JavaSoft, O=Sun Microsystems, C=US"));
+            .thenReturn(new X500Principal("CN=Duke, OU=SME, O=mycp, L=Fulton, ST=MD, C=US"))
+            .thenReturn(new X500Principal("CN=duke, OU=JavaSoft, O=Sun Microsystems"))
+            .thenReturn(new X500Principal("OU=JavaSoft, O=Sun Microsystems, C=US"));
 
         String rules = String.join(", ",
             "RULE:^CN=(.*),OU=ServiceUsers.*$/$1/L",
@@ -126,7 +126,7 @@ public class DefaultKafkaPrincipalBuilderTest {
         DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(null, null);
 
         KafkaPrincipal principal = builder.build(new SaslAuthenticationContext(server,
-                SecurityProtocol.SASL_PLAINTEXT, InetAddress.getLocalHost(), SecurityProtocol.SASL_PLAINTEXT.name()));
+            SecurityProtocol.SASL_PLAINTEXT, InetAddress.getLocalHost(), SecurityProtocol.SASL_PLAINTEXT.name()));
         assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
         assertEquals("foo", principal.getName());
 
@@ -146,7 +146,7 @@ public class DefaultKafkaPrincipalBuilderTest {
         DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(kerberosShortNamer, null);
 
         KafkaPrincipal principal = builder.build(new SaslAuthenticationContext(server,
-                SecurityProtocol.SASL_PLAINTEXT, InetAddress.getLocalHost(), SecurityProtocol.SASL_PLAINTEXT.name()));
+            SecurityProtocol.SASL_PLAINTEXT, InetAddress.getLocalHost(), SecurityProtocol.SASL_PLAINTEXT.name()));
         assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
         assertEquals("foo", principal.getName());
 

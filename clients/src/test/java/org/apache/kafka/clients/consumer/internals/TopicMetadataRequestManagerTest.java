@@ -125,8 +125,8 @@ public class TopicMetadataRequestManagerTest {
         this.time.sleep(100);
         NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
         res.unsentRequests.get(0).future().complete(buildAllTopicsMetadataClientResponse(
-                res.unsentRequests.get(0),
-                error));
+            res.unsentRequests.get(0),
+            error));
         List<TopicMetadataRequestManager.TopicMetadataRequestState> inflights = this.topicMetadataRequestManager.inflightRequests();
 
         if (shouldRetry) {
@@ -222,30 +222,30 @@ public class TopicMetadataRequestManagerTest {
     }
 
     private ClientResponse buildTopicMetadataClientResponse(
-            final NetworkClientDelegate.UnsentRequest request,
-            final String topic,
-            final Errors error) {
+        final NetworkClientDelegate.UnsentRequest request,
+        final String topic,
+        final Errors error) {
         AbstractRequest abstractRequest = request.requestBuilder().build();
         assertInstanceOf(MetadataRequest.class, abstractRequest);
         MetadataRequest metadataRequest = (MetadataRequest) abstractRequest;
         Cluster cluster = mockCluster(3, 0);
         List<MetadataResponse.TopicMetadata> topics = new ArrayList<>();
         topics.add(new MetadataResponse.TopicMetadata(error, topic, false,
-                Collections.emptyList()));
+            Collections.emptyList()));
         final MetadataResponse metadataResponse = RequestTestUtils.metadataResponse(cluster.nodes(),
-                cluster.clusterResource().clusterId(),
-                cluster.controller().id(),
-                topics);
+            cluster.clusterResource().clusterId(),
+            cluster.controller().id(),
+            topics);
         return new ClientResponse(
-                new RequestHeader(ApiKeys.METADATA, metadataRequest.version(), "mockClientId", 1),
-                request.handler(),
-                "-1",
-                time.milliseconds(),
-                time.milliseconds(),
-                false,
-                null,
-                null,
-                metadataResponse);
+            new RequestHeader(ApiKeys.METADATA, metadataRequest.version(), "mockClientId", 1),
+            request.handler(),
+            "-1",
+            time.milliseconds(),
+            time.milliseconds(),
+            false,
+            null,
+            null,
+            metadataResponse);
     }
 
     private ClientResponse buildAllTopicsMetadataClientResponse(
@@ -278,7 +278,7 @@ public class TopicMetadataRequestManagerTest {
 
     private static Cluster mockCluster(final int numNodes, final int controllerIndex) {
         HashMap<Integer, Node> nodes = new HashMap<>();
-        for (int i = 0; i < numNodes; i++)
+        for (int i = 0;i < numNodes;i++)
             nodes.put(i, new Node(i, "localhost", 8121 + i));
         return new Cluster("mockClusterId", nodes.values(),
             Collections.emptySet(), Collections.emptySet(),
@@ -297,9 +297,9 @@ public class TopicMetadataRequestManagerTest {
 
     private static Collection<Arguments> hardFailureExceptionProvider() {
         return Arrays.asList(
-                Arguments.of(new TimeoutException("timeout")),
-                Arguments.of(new KafkaException("non-retriable exception")),
-                Arguments.of(new NetworkException("retriable-exception")));
+            Arguments.of(new TimeoutException("timeout")),
+            Arguments.of(new KafkaException("non-retriable exception")),
+            Arguments.of(new NetworkException("retriable-exception")));
     }
 
 }

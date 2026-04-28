@@ -93,29 +93,29 @@ public abstract class PluginScanner {
         // Apply here what java.sql.DriverManager does to discover and register classes
         // implementing the java.sql.Driver interface.
         SecurityManagerCompatibility.get().doPrivileged(
-            () -> {
-                ServiceLoader<Driver> loadedDrivers = ServiceLoader.load(
-                        Driver.class,
-                        loader
-                );
-                Iterator<Driver> driversIterator = loadedDrivers.iterator();
-                try {
-                    while (driversIterator.hasNext()) {
-                        Driver driver = driversIterator.next();
+                () -> {
+                    ServiceLoader<Driver> loadedDrivers = ServiceLoader.load(
+                            Driver.class,
+                            loader
+                    );
+                    Iterator<Driver> driversIterator = loadedDrivers.iterator();
+                    try {
+                        while (driversIterator.hasNext()) {
+                            Driver driver = driversIterator.next();
+                            log.debug(
+                                    "Registered java.sql.Driver: {} to java.sql.DriverManager",
+                                    driver
+                            );
+                        }
+                    } catch (Throwable t) {
                         log.debug(
-                                "Registered java.sql.Driver: {} to java.sql.DriverManager",
-                                driver
+                                "Ignoring java.sql.Driver classes listed in resources but not"
+                                        + " present in class loader's classpath: ",
+                                t
                         );
                     }
-                } catch (Throwable t) {
-                    log.debug(
-                            "Ignoring java.sql.Driver classes listed in resources but not"
-                                    + " present in class loader's classpath: ",
-                            t
-                    );
+                    return null;
                 }
-                return null;
-            }
         );
     }
 
@@ -187,7 +187,7 @@ public abstract class PluginScanner {
             }
         }
         log.error("Received excessive ServiceLoader errors: assuming the runtime ServiceLoader implementation cannot " +
-                        "skip faulty implementations. Use a different JRE, or resolve LinkageErrors for plugins in {}",
+                "skip faulty implementations. Use a different JRE, or resolve LinkageErrors for plugins in {}",
                 source, lastError);
         throw lastError;
     }

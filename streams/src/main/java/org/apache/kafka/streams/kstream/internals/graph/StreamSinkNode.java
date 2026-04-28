@@ -32,8 +32,8 @@ public class StreamSinkNode<K, V> extends GraphNode {
     private final ProducedInternal<K, V> producedInternal;
 
     public StreamSinkNode(final String nodeName,
-                          final TopicNameExtractor<K, V> topicNameExtractor,
-                          final ProducedInternal<K, V> producedInternal) {
+        final TopicNameExtractor<K, V> topicNameExtractor,
+        final ProducedInternal<K, V> producedInternal) {
 
         super(nodeName);
 
@@ -45,9 +45,9 @@ public class StreamSinkNode<K, V> extends GraphNode {
     @Override
     public String toString() {
         return "StreamSinkNode{" +
-               "topicNameExtractor=" + topicNameExtractor +
-               ", producedInternal=" + producedInternal +
-               "} " + super.toString();
+            "topicNameExtractor=" + topicNameExtractor +
+            ", producedInternal=" + producedInternal +
+            "} " + super.toString();
     }
 
     @Override

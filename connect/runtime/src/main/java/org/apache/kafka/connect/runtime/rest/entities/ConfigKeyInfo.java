@@ -21,16 +21,16 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 public record ConfigKeyInfo(
-    @JsonProperty("name") String name,
-    @JsonProperty("type") String type,
-    @JsonProperty("required") boolean required,
-    @JsonProperty("default_value") String defaultValue,
-    @JsonProperty("importance") String importance,
-    @JsonProperty("documentation") String documentation,
-    @JsonProperty("group") String group,
-    @JsonProperty("order_in_group") int orderInGroup,
-    @JsonProperty("width") String width,
-    @JsonProperty("display_name") String displayName,
-    @JsonProperty("dependents") List<String> dependents
+@JsonProperty("name") String name,
+@JsonProperty("type") String type,
+@JsonProperty("required") boolean required,
+@JsonProperty("default_value") String defaultValue,
+@JsonProperty("importance") String importance,
+@JsonProperty("documentation") String documentation,
+@JsonProperty("group") String group,
+@JsonProperty("order_in_group") int orderInGroup,
+@JsonProperty("width") String width,
+@JsonProperty("display_name") String displayName,
+@JsonProperty("dependents") List<String> dependents
 ) {
 }

@@ -268,10 +268,10 @@ public final class RaftClientTestContext {
 
         Builder withEmptySnapshot(OffsetAndEpoch snapshotId) {
             try (RecordsSnapshotWriter<?> snapshot = new RecordsSnapshotWriter.Builder()
-                    .setTime(time)
-                    .setKraftVersion(KRaftVersion.KRAFT_VERSION_0)
-                    .setRawSnapshotWriter(log.createNewSnapshotUnchecked(snapshotId).get())
-                    .build(SERDE)
+                     .setTime(time)
+                     .setKraftVersion(KRaftVersion.KRAFT_VERSION_0)
+                     .setRawSnapshotWriter(log.createNewSnapshotUnchecked(snapshotId).get())
+                     .build(SERDE)
             ) {
                 snapshot.freeze();
             }
@@ -940,8 +940,8 @@ public final class RaftClientTestContext {
     }
 
     private ApiMessage roundTripApiMessage(ApiMessage message, short version) {
-        ObjectSerializationCache cache =  new ObjectSerializationCache();
-        ByteArrayOutputStream  buffer = new ByteArrayOutputStream(message.size(cache, version));
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream(message.size(cache, version));
 
         // Encode the message to a byte array with the given version
         DataOutputStreamWritable writer = new DataOutputStreamWritable(new DataOutputStream(buffer));
@@ -1102,7 +1102,7 @@ public final class RaftClientTestContext {
             partitionError,
             Errors.forCode(partitionResponse.errorCode()),
             "Leader Id: " + leaderId +
-            " Partition response leader Id: " + partitionResponse.leaderId()
+                " Partition response leader Id: " + partitionResponse.leaderId()
         );
 
         if (raftProtocol.isReconfigSupported() && leaderId.isPresent()) {
@@ -1726,14 +1726,14 @@ public final class RaftClientTestContext {
         boolean preVote
     ) {
         return RaftUtil.singletonVoteRequest(
-                metadataPartition,
-                clusterId,
-                epoch,
-                candidateKey,
-                voterKey,
-                lastEpoch,
-                lastEpochOffset,
-                preVote
+            metadataPartition,
+            clusterId,
+            epoch,
+            candidateKey,
+            voterKey,
+            lastEpoch,
+            lastEpochOffset,
+            preVote
         );
     }
 
@@ -2434,7 +2434,7 @@ public final class RaftClientTestContext {
         boolean isHwmInFetchSupported() {
             return isAtLeast(KIP_1166_PROTOCOL);
         }
-      
+
         boolean isAutoJoinSupported() {
             return isAtLeast(KIP_1186_PROTOCOL);
         }

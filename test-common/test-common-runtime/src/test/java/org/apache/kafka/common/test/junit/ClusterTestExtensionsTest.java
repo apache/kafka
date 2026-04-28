@@ -109,10 +109,10 @@ public class ClusterTestExtensionsTest {
         Map<String, String> serverProperties = new HashMap<>();
         serverProperties.put("foo", "bar");
         return List.of(ClusterConfig.defaultBuilder()
-                .setTypes(Set.of(Type.KRAFT))
-                .setServerProperties(serverProperties)
-                .setTags(List.of("Generated Test"))
-                .build());
+            .setTypes(Set.of(Type.KRAFT))
+            .setServerProperties(serverProperties)
+            .setTags(List.of("Generated Test"))
+            .build());
     }
 
     // With no params, configuration comes from the annotation defaults as well as @ClusterTestDefaults (if present)
@@ -173,7 +173,7 @@ public class ClusterTestExtensionsTest {
         // In KRaft cluster non-combined mode, assert the controller server 3000 contains the property queued.max.requests 300
         if (clusterInstance.type() == Type.KRAFT) {
             try (Admin admin = Admin.create(Map.of(
-                    AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, clusterInstance.bootstrapControllers()))) {
+                     AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, clusterInstance.bootstrapControllers()))) {
                 ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "3000");
                 Map<ConfigResource, Config> configs = admin.describeConfigs(List.of(configResource)).all().get();
                 assertEquals(1, configs.size());
@@ -243,7 +243,6 @@ public class ClusterTestExtensionsTest {
     }
 
 
-
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, brokers = 3)
     public void testCreateTopic(ClusterInstance clusterInstance) throws Exception {
         String topicName = "test";
@@ -254,7 +253,7 @@ public class ClusterTestExtensionsTest {
         try (Admin admin = clusterInstance.admin()) {
             Assertions.assertTrue(admin.listTopics().listings().get().stream().anyMatch(s -> s.name().equals(topicName)));
             List<TopicPartitionInfo> partitions = admin.describeTopics(Set.of(topicName)).allTopicNames().get()
-                    .get(topicName).partitions();
+                .get(topicName).partitions();
             assertEquals(numPartition, partitions.size());
             Assertions.assertTrue(partitions.stream().allMatch(partition -> partition.replicas().size() == numReplicas));
         }
@@ -302,7 +301,7 @@ public class ClusterTestExtensionsTest {
             admin.deleteTopics(List.of(testTopic));
             clusterInstance.waitTopicDeletion(testTopic);
             Assertions.assertTrue(admin.listTopics().listings().get().stream().noneMatch(
-                    topic -> topic.name().equals(testTopic)
+                topic -> topic.name().equals(testTopic)
             ));
         }
     }

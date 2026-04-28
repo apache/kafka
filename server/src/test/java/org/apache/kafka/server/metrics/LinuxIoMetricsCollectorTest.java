@@ -80,12 +80,12 @@ public class LinuxIoMetricsCollectorTest {
 
         void writeProcFile(long readBytes, long writeBytes) throws IOException {
             String bld = "rchar: 0\n" +
-                         "wchar: 0\n" +
-                         "syschr: 0\n" +
-                         "syscw: 0\n" +
-                         "read_bytes: " + readBytes + "\n" +
-                         "write_bytes: " + writeBytes + "\n" +
-                         "cancelled_write_bytes: 0\n";
+                "wchar: 0\n" +
+                "syschr: 0\n" +
+                "syscw: 0\n" +
+                "read_bytes: " + readBytes + "\n" +
+                "write_bytes: " + writeBytes + "\n" +
+                "cancelled_write_bytes: 0\n";
             Files.writeString(selfDir.resolve("io"), bld);
         }
     }

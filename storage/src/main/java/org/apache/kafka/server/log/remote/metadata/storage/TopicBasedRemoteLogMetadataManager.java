@@ -92,7 +92,7 @@ public class TopicBasedRemoteLogMetadataManager implements BrokerReadyCallback, 
     }
 
     TopicBasedRemoteLogMetadataManager(Function<Integer, RemoteLogMetadataTopicPartitioner> partitionerFunction,
-                                       Supplier<RemotePartitionMetadataStore> metadataStoreSupplier) {
+            Supplier<RemotePartitionMetadataStore> metadataStoreSupplier) {
         this.partitionerFunction = partitionerFunction;
         this.remotePartitionMetadataStore = metadataStoreSupplier.get();
     }
@@ -174,15 +174,15 @@ public class TopicBasedRemoteLogMetadataManager implements BrokerReadyCallback, 
 
     @Override
     public Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(TopicIdPartition topicIdPartition,
-                                                                       int epochForOffset,
-                                                                       long offset) throws RemoteStorageException {
+            int epochForOffset,
+            long offset) throws RemoteStorageException {
         return withReadLockAndEnsureInitialized(
                 () -> remotePartitionMetadataStore.remoteLogSegmentMetadata(topicIdPartition, offset, epochForOffset));
     }
 
     @Override
     public Optional<Long> highestOffsetForEpoch(TopicIdPartition topicIdPartition,
-                                                int leaderEpoch)
+            int leaderEpoch)
             throws RemoteStorageException {
         return withReadLockAndEnsureInitialized(
                 () -> remotePartitionMetadataStore.highestLogOffset(topicIdPartition, leaderEpoch));
@@ -206,11 +206,11 @@ public class TopicBasedRemoteLogMetadataManager implements BrokerReadyCallback, 
 
     @Override
     public void onPartitionLeadershipChanges(Set<TopicIdPartition> leaderPartitions,
-                                             Set<TopicIdPartition> followerPartitions) {
+            Set<TopicIdPartition> followerPartitions) {
         Objects.requireNonNull(leaderPartitions, "leaderPartitions can not be null");
         Objects.requireNonNull(followerPartitions, "followerPartitions can not be null");
         log.info("Received leadership notifications with leader partitions {} and follower partitions {}",
-                 leaderPartitions, followerPartitions);
+                leaderPartitions, followerPartitions);
         lock.readLock().lock();
         try {
             if (closing.get()) {
@@ -277,8 +277,8 @@ public class TopicBasedRemoteLogMetadataManager implements BrokerReadyCallback, 
 
     @Override
     public Optional<RemoteLogSegmentMetadata> nextSegmentWithTxnIndex(TopicIdPartition topicIdPartition,
-                                                                      int epoch,
-                                                                      long offset) throws RemoteStorageException {
+            int epoch,
+            long offset) throws RemoteStorageException {
         return withReadLockAndEnsureInitialized(
                 () -> remotePartitionMetadataStore.nextSegmentWithTxnIndex(topicIdPartition, epoch, offset));
     }
@@ -412,8 +412,8 @@ public class TopicBasedRemoteLogMetadataManager implements BrokerReadyCallback, 
     }
 
     private boolean isPartitionsCountSameAsConfigured(Admin admin,
-                                                      String topicName,
-                                                      int metadataTopicPartitionCount) throws InterruptedException, ExecutionException {
+            String topicName,
+            int metadataTopicPartitionCount) throws InterruptedException, ExecutionException {
         log.debug("Getting topic details to check for partition count and replication factor.");
         TopicDescription topicDescription = admin
                 .describeTopics(Set.of(topicName))
@@ -423,7 +423,7 @@ public class TopicBasedRemoteLogMetadataManager implements BrokerReadyCallback, 
         int topicPartitionsSize = topicDescription.partitions().size();
         if (topicPartitionsSize != metadataTopicPartitionCount) {
             log.error("Existing topic partition count {} is not same as the expected partition count {}",
-                      topicPartitionsSize, metadataTopicPartitionCount);
+                    topicPartitionsSize, metadataTopicPartitionCount);
             return false;
         }
         return true;
@@ -436,8 +436,8 @@ public class TopicBasedRemoteLogMetadataManager implements BrokerReadyCallback, 
         topicConfigs.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false");
         topicConfigs.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, Short.toString(rlmmConfig.metadataTopicMinIsr()));
         return new NewTopic(rlmmConfig.remoteLogMetadataTopicName(),
-                            rlmmConfig.metadataTopicPartitionsCount(),
-                            rlmmConfig.metadataTopicReplicationFactor()).configs(topicConfigs);
+                rlmmConfig.metadataTopicPartitionsCount(),
+                rlmmConfig.metadataTopicReplicationFactor()).configs(topicConfigs);
     }
 
     /**
@@ -484,7 +484,7 @@ public class TopicBasedRemoteLogMetadataManager implements BrokerReadyCallback, 
     private void ensureInitializedAndNotClosed() {
         if (closing.get() || !initialized.get()) {
             throw new IllegalStateException("This instance is in invalid state, initialized: " + initialized +
-                                                    " close: " + closing);
+                    " close: " + closing);
         }
     }
 

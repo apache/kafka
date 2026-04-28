@@ -31,16 +31,16 @@ public class WindowKeyQuery<K, V> implements Query<WindowStoreIterator<V>> {
     private final Optional<Instant> timeTo;
 
     private WindowKeyQuery(final K key,
-                           final Optional<Instant> timeTo,
-                           final Optional<Instant> timeFrom) {
+        final Optional<Instant> timeTo,
+        final Optional<Instant> timeFrom) {
         this.key = key;
         this.timeFrom = timeFrom;
         this.timeTo = timeTo;
     }
 
     public static <K, V> WindowKeyQuery<K, V> withKeyAndWindowStartRange(final K key,
-                                                                         final Instant timeFrom,
-                                                                         final Instant timeTo) {
+        final Instant timeFrom,
+        final Instant timeTo) {
         return new WindowKeyQuery<>(key, Optional.of(timeFrom), Optional.of(timeTo));
     }
 

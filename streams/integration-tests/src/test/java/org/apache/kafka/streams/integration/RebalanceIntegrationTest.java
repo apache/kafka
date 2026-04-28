@@ -107,7 +107,7 @@ public class RebalanceIntegrationTest {
     }
 
     private void checkResultPerKey(final List<KeyValue<Long, Long>> result,
-                                   final List<KeyValue<Long, Long>> expectedResult) {
+        final List<KeyValue<Long, Long>> expectedResult) {
         final Set<Long> allKeys = new HashSet<>();
         addAllKeys(allKeys, result);
         addAllKeys(allKeys, expectedResult);
@@ -143,6 +143,7 @@ public class RebalanceIntegrationTest {
         builder.<Long, Long>stream(MULTI_PARTITION_INPUT_TOPIC)
             .process(() -> new Processor<Long, Long, Long, Long>() {
                 ProcessorContext<Long, Long> context;
+
                 @Override
                 public void init(final ProcessorContext<Long, Long> context) {
                     this.context = context;

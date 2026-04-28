@@ -42,8 +42,8 @@ public class UniformRandomPayloadGenerator implements PayloadGenerator {
 
     @JsonCreator
     public UniformRandomPayloadGenerator(@JsonProperty("size") int size,
-                                         @JsonProperty("seed") long seed,
-                                         @JsonProperty("padding") int padding) {
+        @JsonProperty("seed") long seed,
+        @JsonProperty("padding") int padding) {
         this.size = size;
         this.seed = seed;
         this.padding = padding;

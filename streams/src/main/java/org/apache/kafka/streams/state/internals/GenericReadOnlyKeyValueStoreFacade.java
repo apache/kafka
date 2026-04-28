@@ -35,7 +35,7 @@ public class GenericReadOnlyKeyValueStoreFacade<K, InV, OutV> implements ReadOnl
     private final Function<InV, OutV> valueConverter;
 
     public GenericReadOnlyKeyValueStoreFacade(final ReadOnlyKeyValueStore<K, InV> inner,
-                                              final Function<InV, OutV> valueConverter) {
+        final Function<InV, OutV> valueConverter) {
         this.inner = inner;
         this.valueConverter = valueConverter;
     }
@@ -57,7 +57,7 @@ public class GenericReadOnlyKeyValueStoreFacade<K, InV, OutV> implements ReadOnl
 
     @Override
     public <PS extends Serializer<P>, P> KeyValueIterator<K, OutV> prefixScan(final P prefix,
-                                                                               final PS prefixKeySerializer) {
+        final PS prefixKeySerializer) {
         return new GenericKeyValueIteratorFacade<>(inner.prefixScan(prefix, prefixKeySerializer), valueConverter);
     }
 

@@ -160,7 +160,7 @@ public class StandbyTaskEOSIntegrationTest {
     }
 
     private KafkaStreams buildStreamWithDirtyStateDir(final String stateDirPath,
-                                                      final CountDownLatch recordProcessLatch) throws Exception {
+        final CountDownLatch recordProcessLatch) throws Exception {
 
         final StreamsBuilder builder = new StreamsBuilder();
         final TaskId taskId = new TaskId(0, 0);
@@ -174,14 +174,14 @@ public class StandbyTaskEOSIntegrationTest {
             .write(Collections.singletonMap(new TopicPartition("unknown-topic", 0), 5L));
 
         assertTrue(new File(stateDirectory.getOrCreateDirectoryForTask(taskId),
-                            "rocksdb/KSTREAM-AGGREGATE-STATE-STORE-0000000001").mkdirs());
+            "rocksdb/KSTREAM-AGGREGATE-STATE-STORE-0000000001").mkdirs());
 
         builder.stream(inputTopic,
-                       Consumed.with(Serdes.Integer(), Serdes.Integer()))
-               .groupByKey()
-               .count()
-               .toStream()
-               .peek((key, value) -> recordProcessLatch.countDown());
+            Consumed.with(Serdes.Integer(), Serdes.Integer()))
+            .groupByKey()
+            .count()
+            .toStream()
+            .peek((key, value) -> recordProcessLatch.countDown());
 
         return new KafkaStreams(builder.build(), props);
     }
@@ -317,7 +317,7 @@ public class StandbyTaskEOSIntegrationTest {
         );
         waitForCondition(
             () -> streamInstanceOneRecovery.state() == KafkaStreams.State.ERROR,
-                () -> "Stream instance 1 did not go into error state. Is in " + streamInstanceOneRecovery.state() + " state."
+            () -> "Stream instance 1 did not go into error state. Is in " + streamInstanceOneRecovery.state() + " state."
         );
     }
 

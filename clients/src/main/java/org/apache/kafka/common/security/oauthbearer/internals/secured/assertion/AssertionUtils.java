@@ -78,8 +78,8 @@ public class AssertionUtils {
      * visible to reuse directly.
      */
     public static PrivateKey privateKey(byte[] privateKeyContents,
-                                        String signingAlgorithm,
-                                        Optional<String> passphrase) throws GeneralSecurityException, IOException {
+        String signingAlgorithm,
+        Optional<String> passphrase) throws GeneralSecurityException, IOException {
         byte[] decodedKeyBytes = Base64.getDecoder().decode(privateKeyContents);
         PKCS8EncodedKeySpec keySpec;
         if (passphrase.isPresent()) {

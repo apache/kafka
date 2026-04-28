@@ -96,7 +96,7 @@ public class MetadataLoaderMetricsTest {
                 );
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
-                    Set.of());
+                Set.of());
         } finally {
             registry.shutdown();
         }
@@ -264,6 +264,7 @@ public class MetadataLoaderMetricsTest {
             registry.shutdown();
         }
     }
+
     @Test
     public void testAvgIdleRatio() {
         final double delta = 0.001;

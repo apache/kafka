@@ -220,7 +220,7 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
         log.debug("ListOffsets response received successfully - {}", clientResponse);
         // Reset retry attempts on success
         pendingRequest.backoffManager().resetAttempts();
-        
+
         ListOffsetsResponse response = (ListOffsetsResponse) clientResponse.responseBody();
         Map<TopicPartition, CompletableFuture<OffsetResponse>> partitionFutures = pendingRequest.futures();
 
@@ -252,7 +252,7 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
         Map<TopicPartition, CompletableFuture<OffsetResponse>> partitionFutures = pendingRequest.futures();
         Errors error;
         boolean shouldRetry = false;
-        
+
         if (clientResponse == null) {
             log.error("Response for ListOffsets for topicPartitions: {} is null", partitionFutures.keySet());
             error = Errors.UNKNOWN_SERVER_ERROR;
@@ -308,8 +308,8 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
                           ListOffsetsRequest.Builder requestBuilder,
                           ExponentialBackoffManager backoffManager) {
         PendingRequest(Node node,
-                      Map<TopicPartition, CompletableFuture<OffsetResponse>> futures,
-                      ListOffsetsRequest.Builder requestBuilder) {
+                       Map<TopicPartition, CompletableFuture<OffsetResponse>> futures,
+                       ListOffsetsRequest.Builder requestBuilder) {
             this(node, futures, requestBuilder, new ExponentialBackoffManager(
                 MAX_RETRY_ATTEMPTS,
                 REQUEST_BACKOFF_MS,

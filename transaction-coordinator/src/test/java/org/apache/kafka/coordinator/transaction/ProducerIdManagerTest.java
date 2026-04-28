@@ -70,14 +70,14 @@ public class ProducerIdManagerTest {
         private boolean hasNoResponse;
 
         MockProducerIdManager(int brokerId,
-                              long idStart,
-                              int idLen,
-                              Queue<Errors> errorQueue,
-                              boolean isErroneousBlock,
-                              Time time,
-                              boolean hasAuthenticationException,
-                              boolean hasVersionMismatch,
-                              boolean hasNoResponse) {
+            long idStart,
+            int idLen,
+            Queue<Errors> errorQueue,
+            boolean isErroneousBlock,
+            Time time,
+            boolean hasAuthenticationException,
+            boolean hasVersionMismatch,
+            boolean hasNoResponse) {
             super(brokerId, time, () -> 1L, brokerToController);
             this.idStart = idStart;
             this.idLen = idLen;
@@ -89,12 +89,12 @@ public class ProducerIdManagerTest {
         }
 
         private ClientResponse createClientResponse(
-                AuthenticationException authenticationException,
-                UnsupportedVersionException versionException,
-                AllocateProducerIdsResponse response
+            AuthenticationException authenticationException,
+            UnsupportedVersionException versionException,
+            AllocateProducerIdsResponse response
         ) {
             return new ClientResponse(null, null, null, time.milliseconds(), time.milliseconds(),
-                    false, versionException, authenticationException, response);
+                false, versionException, authenticationException, response);
         }
 
         @Override
@@ -118,23 +118,23 @@ public class ProducerIdManagerTest {
                 Errors error = errorQueue.poll();
                 if (error == null || error == Errors.NONE) {
                     handleAllocateProducerIdsResponse(createClientResponse(
-                            null,
-                            null,
-                            new AllocateProducerIdsResponse(
-                                    new AllocateProducerIdsResponseData()
-                                            .setProducerIdStart(idStart)
-                                            .setProducerIdLen(idLen)
-                            )));
+                        null,
+                        null,
+                        new AllocateProducerIdsResponse(
+                            new AllocateProducerIdsResponseData()
+                                .setProducerIdStart(idStart)
+                                .setProducerIdLen(idLen)
+                        )));
                     if (!isErroneousBlock) {
                         idStart += idLen;
                     }
                 } else {
                     handleAllocateProducerIdsResponse(createClientResponse(
-                            null,
-                            null,
-                            new AllocateProducerIdsResponse(
-                                    new AllocateProducerIdsResponseData().setErrorCode(error.code())
-                            )));
+                        null,
+                        null,
+                        new AllocateProducerIdsResponse(
+                            new AllocateProducerIdsResponseData().setErrorCode(error.code())
+                        )));
                 }
             }, 0);
         }
@@ -155,7 +155,7 @@ public class ProducerIdManagerTest {
         var numThreads = 5;
         var latch = new CountDownLatch(idBlockLen * 3);
         var manager = new MockProducerIdManager(0, 0, idBlockLen,
-                new ConcurrentLinkedQueue<>(), false, Time.SYSTEM, false, false, false);
+            new ConcurrentLinkedQueue<>(), false, Time.SYSTEM, false, false, false);
         var requestHandlerThreadPool = Executors.newFixedThreadPool(numThreads);
         Map<Long, Integer> pidMap = new ConcurrentHashMap<>();
 
@@ -269,12 +269,12 @@ public class ProducerIdManagerTest {
         manager.currentProducerIdBlock.set(new ProducerIdsBlock(0, firstId, length));
 
         AllocateProducerIdsResponseData staleData = new AllocateProducerIdsResponseData()
-                .setProducerIdStart(199)
-                .setProducerIdLen(100)
-                .setErrorCode((Errors.NONE.code()));
+            .setProducerIdStart(199)
+            .setProducerIdLen(100)
+            .setErrorCode((Errors.NONE.code()));
         AllocateProducerIdsResponse staleResponse = new AllocateProducerIdsResponse(staleData);
         ClientResponse clientResponse = new ClientResponse(null, null, null,
-                time.milliseconds(), time.milliseconds(), false, null, null, staleResponse);
+            time.milliseconds(), time.milliseconds(), false, null, null, staleResponse);
 
         manager.handleAllocateProducerIdsResponse(clientResponse);
 
@@ -302,8 +302,8 @@ public class ProducerIdManagerTest {
     }
 
     private void verifyNewBlockAndProducerId(MockProducerIdManager manager,
-                                             ProducerIdsBlock expectedBlock,
-                                             long expectedPid
+        ProducerIdsBlock expectedBlock,
+        long expectedPid
     ) throws Exception {
         assertThrows(CoordinatorLoadInProgressException.class, manager::generateProducerId);
         TestUtils.waitForCondition(() -> {

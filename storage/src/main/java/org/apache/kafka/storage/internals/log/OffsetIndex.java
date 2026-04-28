@@ -72,17 +72,17 @@ public final class OffsetIndex extends AbstractIndex {
         lastOffset = lastEntry().offset();
 
         log.debug("Loaded index file {} with maxEntries = {}, maxIndexSize = {}, entries = {}, lastOffset = {}, file position = {}",
-            file.getAbsolutePath(), maxEntries(), maxIndexSize, entries(), lastOffset, mmap().position());
+                file.getAbsolutePath(), maxEntries(), maxIndexSize, entries(), lastOffset, mmap().position());
     }
 
     @Override
     public void sanityCheck() {
         if (entries() != 0 && lastOffset < baseOffset())
             throw new CorruptIndexException("Corrupt index found, index file " + file().getAbsolutePath() + " has non-zero size " +
-                "but the last offset is " + lastOffset + " which is less than the base offset " + baseOffset());
+                    "but the last offset is " + lastOffset + " which is less than the base offset " + baseOffset());
         if (length() % entrySize() != 0)
             throw new CorruptIndexException("Index file " + file().getAbsolutePath() + " is corrupt, found " + length() +
-                " bytes which is neither positive nor a multiple of " + ENTRY_SIZE);
+                    " bytes which is neither positive nor a multiple of " + ENTRY_SIZE);
     }
 
     /**
@@ -114,7 +114,7 @@ public final class OffsetIndex extends AbstractIndex {
         return inRemapReadLock(() -> {
             if (n >= entries())
                 throw new IllegalArgumentException("Attempt to fetch the " + n + "th entry from index " +
-                    file().getAbsolutePath() + ", which has size " + entries());
+                        file().getAbsolutePath() + ", which has size " + entries());
             return parseEntry(mmap(), n);
         });
     }
@@ -155,7 +155,7 @@ public final class OffsetIndex extends AbstractIndex {
                     throw new IllegalStateException(entries() + " entries but file position in index is " + mmap().position());
             } else
                 throw new InvalidOffsetException("Attempt to append an offset " + offset + " to position " + entries() +
-                    " no larger than the last offset appended (" + lastOffset + ") to " + file().getAbsolutePath());
+                        " no larger than the last offset appended (" + lastOffset + ") to " + file().getAbsolutePath());
         });
     }
 
@@ -216,7 +216,7 @@ public final class OffsetIndex extends AbstractIndex {
             super.truncateToEntries0(entries);
             this.lastOffset = lastEntry().offset();
             log.debug("Truncated index {} to {} entries; position is now {} and last offset is now {}",
-                file().getAbsolutePath(), entries, mmap().position(), lastOffset);
+                    file().getAbsolutePath(), entries, mmap().position(), lastOffset);
         });
     }
 

@@ -58,21 +58,21 @@ public class ImageDowngradeTest {
     }
 
     static final List<ApiMessageAndVersion> TEST_RECORDS = List.of(
-            new ApiMessageAndVersion(new TopicRecord().
-                    setName("foo").
-                    setTopicId(Uuid.fromString("5JPuABiJTPu2pQjpZWM6_A")), (short) 0),
-            new ApiMessageAndVersion(new PartitionRecord().
-                    setTopicId(Uuid.fromString("5JPuABiJTPu2pQjpZWM6_A")).
-                    setReplicas(List.of(0, 1)).
-                    setIsr(List.of(0, 1)).
-                    setLeader(0).
-                    setLeaderEpoch(1).
-                    setPartitionEpoch(2), (short) 0));
+        new ApiMessageAndVersion(new TopicRecord().
+            setName("foo").
+            setTopicId(Uuid.fromString("5JPuABiJTPu2pQjpZWM6_A")), (short) 0),
+        new ApiMessageAndVersion(new PartitionRecord().
+            setTopicId(Uuid.fromString("5JPuABiJTPu2pQjpZWM6_A")).
+            setReplicas(List.of(0, 1)).
+            setIsr(List.of(0, 1)).
+            setLeader(0).
+            setLeaderEpoch(1).
+            setPartitionEpoch(2), (short) 0));
 
     static ApiMessageAndVersion metadataVersionRecord(MetadataVersion metadataVersion) {
         return new ApiMessageAndVersion(new FeatureLevelRecord().
-                setName(MetadataVersion.FEATURE_NAME).
-                setFeatureLevel(metadataVersion.featureLevel()), (short) 0);
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(metadataVersion.featureLevel()), (short) 0);
     }
 
     /**
@@ -116,7 +116,7 @@ public class ImageDowngradeTest {
         PartitionRecord testPartitionRecord = (PartitionRecord) TEST_RECORDS.get(1).message();
         writeWithExpectedLosses(outputMetadataVersion,
             List.of(
-                    "the directory assignment state of one or more replicas"),
+                "the directory assignment state of one or more replicas"),
             List.of(
                 metadataVersionRecord(inputMetadataVersion),
                 TEST_RECORDS.get(0),
@@ -146,8 +146,8 @@ public class ImageDowngradeTest {
         MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
         RecordListWriter writer = new RecordListWriter();
         image.write(writer, new ImageWriterOptions.Builder(metadataVersion).
-                setLossHandler(lossConsumer).
-                build());
+            setLossHandler(lossConsumer).
+            build());
         assertEquals(expectedLosses, lossConsumer.losses, "Failed to get expected metadata losses.");
         assertEquals(expectedOutputs, writer.records(), "Failed to get expected output records.");
     }

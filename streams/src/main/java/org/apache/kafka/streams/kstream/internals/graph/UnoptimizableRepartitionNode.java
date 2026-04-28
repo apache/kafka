@@ -28,14 +28,14 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 public class UnoptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> {
 
     private UnoptimizableRepartitionNode(final String nodeName,
-                                         final String sourceName,
-                                         final ProcessorParameters<K, V, K, V> processorParameters,
-                                         final Serde<K> keySerde,
-                                         final Serde<V> valueSerde,
-                                         final String sinkName,
-                                         final String repartitionTopic,
-                                         final StreamPartitioner<K, V> partitioner,
-                                         final InternalTopicProperties internalTopicProperties) {
+        final String sourceName,
+        final ProcessorParameters<K, V, K, V> processorParameters,
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde,
+        final String sinkName,
+        final String repartitionTopic,
+        final StreamPartitioner<K, V> partitioner,
+        final InternalTopicProperties internalTopicProperties) {
         super(
             nodeName,
             sourceName,
@@ -87,14 +87,14 @@ public class UnoptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V
         @Override
         public UnoptimizableRepartitionNode<K, V> build() {
             return new UnoptimizableRepartitionNode<>(nodeName,
-                                                      sourceName,
-                                                      processorParameters,
-                                                      keySerde,
-                                                      valueSerde,
-                                                      sinkName,
-                                                      repartitionTopic,
-                                                      partitioner,
-                                                      internalTopicProperties);
+                sourceName,
+                processorParameters,
+                keySerde,
+                valueSerde,
+                sinkName,
+                repartitionTopic,
+                partitioner,
+                internalTopicProperties);
         }
     }
 }

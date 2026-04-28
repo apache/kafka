@@ -52,7 +52,7 @@ public class ImageWriterOptionsTest {
     public void testDefaultLossHandler() {
         ImageWriterOptions options = new ImageWriterOptions.Builder(MetadataVersion.latestProduction()).build();
         assertEquals("stuff", assertThrows(UnwritableMetadataException.class,
-                () -> options.handleLoss("stuff")).loss());
+            () -> options.handleLoss("stuff")).loss());
     }
 
     @Test
@@ -66,8 +66,8 @@ public class ImageWriterOptionsTest {
             String formattedMessage = String.format("Metadata has been lost because the following could not be represented in metadata.version %s: %s", version, expectedMessage);
             Consumer<UnwritableMetadataException> customLossHandler = e -> assertEquals(formattedMessage, e.getMessage());
             ImageWriterOptions options = new ImageWriterOptions.Builder(version)
-                    .setLossHandler(customLossHandler)
-                    .build();
+                .setLossHandler(customLossHandler)
+                .build();
             options.handleLoss(expectedMessage);
         }
     }
@@ -90,8 +90,8 @@ public class ImageWriterOptionsTest {
         featuresDelta.replay(new FeatureLevelRecord().
             setName(EligibleLeaderReplicasVersion.FEATURE_NAME).
             setFeatureLevel(isElrEnabled ?
-                EligibleLeaderReplicasVersion.ELRV_1.featureLevel() : EligibleLeaderReplicasVersion.ELRV_0.featureLevel()
-            )
+            EligibleLeaderReplicasVersion.ELRV_1.featureLevel() : EligibleLeaderReplicasVersion.ELRV_0.featureLevel()
+        )
         );
         featuresDelta.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).

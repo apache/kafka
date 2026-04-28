@@ -63,10 +63,10 @@ public class Named implements NamedOperation<Named> {
             throw new TopologyException("Name cannot be \".\" or \"..\"");
         if (name.length() > MAX_NAME_LENGTH)
             throw new TopologyException("Name is illegal, it can't be longer than " + MAX_NAME_LENGTH +
-                    " characters, name: " + name);
+                " characters, name: " + name);
         if (!containsValidPattern(name))
             throw new TopologyException("Name \"" + name + "\" is illegal, it contains a character other than " +
-                    "ASCII alphanumerics, '.', '_' and '-'");
+                "ASCII alphanumerics, '.', '_' and '-'");
     }
 
     /**

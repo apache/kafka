@@ -34,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-class PartitionMetadataFileTest  {
+class PartitionMetadataFileTest {
     private final File dir = TestUtils.tempDirectory();
     private final File file = PartitionMetadataFile.newFile(dir);
 

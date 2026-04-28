@@ -21,7 +21,7 @@ public class LongSerializer implements Serializer<Long> {
         if (data == null)
             return null;
 
-        return new byte[] {
+        return new byte[]{
             (byte) (data >>> 56),
             (byte) (data >>> 48),
             (byte) (data >>> 40),

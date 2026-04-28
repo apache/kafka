@@ -34,8 +34,8 @@ public interface StandbyUpdateListener {
      * @param startingOffset the offset from which the standby task begins consuming from the changelog
      */
     void onUpdateStart(final TopicPartition topicPartition,
-                       final String storeName,
-                       final long startingOffset);
+        final String storeName,
+        final long startingOffset);
 
     /**
      * Method called after loading a batch of records. In this case the maximum size of the batch is whatever
@@ -53,11 +53,11 @@ public interface StandbyUpdateListener {
      * @param currentEndOffset the current end offset of the changelog topic partition.
      */
     void onBatchLoaded(final TopicPartition topicPartition,
-                       final String storeName,
-                       final TaskId taskId,
-                       final long batchEndOffset,
-                       final long batchSize,
-                       final long currentEndOffset);
+        final String storeName,
+        final TaskId taskId,
+        final long batchEndOffset,
+        final long batchSize,
+        final long currentEndOffset);
 
     /**
      * This method is called when the corresponding standby task stops updating, for the provided reason.
@@ -78,8 +78,8 @@ public interface StandbyUpdateListener {
      * @param reason is the reason why the standby task was suspended.
      */
     void onUpdateSuspended(final TopicPartition topicPartition,
-                           final String storeName,
-                           final long storeOffset,
-                           final long currentEndOffset,
-                           final SuspendReason reason);
+        final String storeName,
+        final long storeOffset,
+        final long currentEndOffset,
+        final SuspendReason reason);
 }

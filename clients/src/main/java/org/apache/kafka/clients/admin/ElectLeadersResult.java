@@ -55,19 +55,19 @@ public final class ElectLeadersResult {
         final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
 
         partitions().whenComplete(
-                (topicPartitions, throwable) -> {
-                    if (throwable != null) {
-                        result.completeExceptionally(throwable);
-                    } else {
-                        for (Optional<Throwable> exception : topicPartitions.values()) {
-                            if (exception.isPresent()) {
-                                result.completeExceptionally(exception.get());
-                                return;
-                            }
+            (topicPartitions, throwable) -> {
+                if (throwable != null) {
+                    result.completeExceptionally(throwable);
+                } else {
+                    for (Optional<Throwable> exception : topicPartitions.values()) {
+                        if (exception.isPresent()) {
+                            result.completeExceptionally(exception.get());
+                            return;
                         }
-                        result.complete(null);
                     }
-                });
+                    result.complete(null);
+                }
+            });
 
         return result;
     }

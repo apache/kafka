@@ -37,8 +37,8 @@ public class NetworkPartitionFaultSpec extends TaskSpec {
 
     @JsonCreator
     public NetworkPartitionFaultSpec(@JsonProperty("startMs") long startMs,
-                         @JsonProperty("durationMs") long durationMs,
-                         @JsonProperty("partitions") List<List<String>> partitions) {
+        @JsonProperty("durationMs") long durationMs,
+        @JsonProperty("partitions") List<List<String>> partitions) {
         super(startMs, durationMs);
         this.partitions = partitions == null ? new ArrayList<>() : partitions;
     }

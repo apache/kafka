@@ -46,9 +46,9 @@ public class DeleteShareGroupStateResponse extends AbstractResponse {
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new HashMap<>();
         data.results().forEach(
-                result -> result.partitions().forEach(
-                        partitionResult -> updateErrorCounts(counts, Errors.forCode(partitionResult.errorCode()))
-                )
+            result -> result.partitions().forEach(
+                partitionResult -> updateErrorCounts(counts, Errors.forCode(partitionResult.errorCode()))
+            )
         );
         return counts;
     }
@@ -65,7 +65,7 @@ public class DeleteShareGroupStateResponse extends AbstractResponse {
 
     public static DeleteShareGroupStateResponse parse(Readable readable, short version) {
         return new DeleteShareGroupStateResponse(
-                new DeleteShareGroupStateResponseData(readable, version)
+            new DeleteShareGroupStateResponseData(readable, version)
         );
     }
 
@@ -116,7 +116,7 @@ public class DeleteShareGroupStateResponse extends AbstractResponse {
         request.topics().forEach(topicData -> {
             List<DeleteShareGroupStateResponseData.PartitionResult> partitionResults = new ArrayList<>();
             topicData.partitions().forEach(partitionData -> partitionResults.add(
-                toErrorResponsePartitionResult(partitionData.partition(), error, error.message()))
+                    toErrorResponsePartitionResult(partitionData.partition(), error, error.message()))
             );
             deleteStateResults.add(toResponseDeleteStateResult(topicData.topicId(), partitionResults));
         });

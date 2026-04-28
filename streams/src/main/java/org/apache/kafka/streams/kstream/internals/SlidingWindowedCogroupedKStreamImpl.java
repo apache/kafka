@@ -40,12 +40,12 @@ public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K,
     private final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns;
 
     SlidingWindowedCogroupedKStreamImpl(final SlidingWindows windows,
-                                        final InternalStreamsBuilder builder,
-                                        final Set<String> subTopologySourceNodes,
-                                        final String name,
-                                        final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder,
-                                        final GraphNode graphNode,
-                                        final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns) {
+        final InternalStreamsBuilder builder,
+        final Set<String> subTopologySourceNodes,
+        final String name,
+        final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder,
+        final GraphNode graphNode,
+        final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns) {
         super(name, null, null, subTopologySourceNodes, graphNode, builder);
         //keySerde and valueSerde are null because there are many different groupStreams that they could be from
         this.windows = windows;
@@ -60,20 +60,20 @@ public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K,
 
     @Override
     public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
-                                            final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized) {
+        final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized) {
         return aggregate(initializer, NamedInternal.empty(), materialized);
     }
 
     @Override
     public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
-                                            final Named named) {
+        final Named named) {
         return aggregate(initializer, named, Materialized.with(null, null));
     }
 
     @Override
     public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
-                                            final Named named,
-                                            final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized) {
+        final Named named,
+        final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(named, "named can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");

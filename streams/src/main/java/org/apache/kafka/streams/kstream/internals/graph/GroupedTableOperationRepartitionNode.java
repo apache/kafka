@@ -30,12 +30,12 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
 
 
     private GroupedTableOperationRepartitionNode(final String nodeName,
-                                                 final Serde<K> keySerde,
-                                                 final Serde<V> valueSerde,
-                                                 final String sinkName,
-                                                 final String sourceName,
-                                                 final String repartitionTopic,
-                                                 final ProcessorParameters<K, V, K, V> processorParameters) {
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde,
+        final String sinkName,
+        final String sourceName,
+        final String repartitionTopic,
+        final ProcessorParameters<K, V, K, V> processorParameters) {
         super(
             nodeName,
             sourceName,

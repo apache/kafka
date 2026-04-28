@@ -219,7 +219,7 @@ public class RocksDBMetricsRecorderGaugesTest {
 
     private void runAndVerifyBlockCacheMetricsWithMultipleCaches(final String propertyName) throws Exception {
         final StreamsMetricsImpl streamsMetrics =
-                new StreamsMetricsImpl(new Metrics(), "test-client", new MockTime());
+            new StreamsMetricsImpl(new Metrics(), "test-client", new MockTime());
         final RocksDBMetricsRecorder recorder = new RocksDBMetricsRecorder(METRICS_SCOPE, STORE_NAME);
 
         recorder.init(streamsMetrics, TASK_ID);
@@ -251,8 +251,8 @@ public class RocksDBMetricsRecorderGaugesTest {
     }
 
     private void verifyMetrics(final StreamsMetricsImpl streamsMetrics,
-                               final String propertyName,
-                               final long expectedValue) {
+        final String propertyName,
+        final long expectedValue) {
 
         final Map<MetricName, ? extends Metric> metrics = streamsMetrics.metrics();
         final Map<String, String> tagMap = mkMap(

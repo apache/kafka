@@ -48,13 +48,13 @@ public class ThreadMetadataImpl implements ThreadMetadata {
     private final String adminClientId;
 
     public ThreadMetadataImpl(final String threadName,
-                              final String threadState,
-                              final String mainConsumerClientId,
-                              final String restoreConsumerClientId,
-                              final String producerClientIds,
-                              final String adminClientId,
-                              final Set<TaskMetadata> activeTasks,
-                              final Set<TaskMetadata> standbyTasks) {
+        final String threadState,
+        final String mainConsumerClientId,
+        final String restoreConsumerClientId,
+        final String producerClientIds,
+        final String adminClientId,
+        final Set<TaskMetadata> activeTasks,
+        final Set<TaskMetadata> standbyTasks) {
         this.mainConsumerClientId = mainConsumerClientId;
         this.restoreConsumerClientId = restoreConsumerClientId;
         this.producerClientIds = Collections.singleton(producerClientIds);
@@ -109,13 +109,13 @@ public class ThreadMetadataImpl implements ThreadMetadata {
         }
         final ThreadMetadataImpl that = (ThreadMetadataImpl) o;
         return Objects.equals(threadName, that.threadName) &&
-               Objects.equals(threadState, that.threadState) &&
-               Objects.equals(activeTasks, that.activeTasks) &&
-               Objects.equals(standbyTasks, that.standbyTasks) &&
-               mainConsumerClientId.equals(that.mainConsumerClientId) &&
-               restoreConsumerClientId.equals(that.restoreConsumerClientId) &&
-               Objects.equals(producerClientIds, that.producerClientIds) &&
-               adminClientId.equals(that.adminClientId);
+            Objects.equals(threadState, that.threadState) &&
+            Objects.equals(activeTasks, that.activeTasks) &&
+            Objects.equals(standbyTasks, that.standbyTasks) &&
+            mainConsumerClientId.equals(that.mainConsumerClientId) &&
+            restoreConsumerClientId.equals(that.restoreConsumerClientId) &&
+            Objects.equals(producerClientIds, that.producerClientIds) &&
+            adminClientId.equals(that.adminClientId);
     }
 
     @Override
@@ -134,14 +134,14 @@ public class ThreadMetadataImpl implements ThreadMetadata {
     @Override
     public String toString() {
         return "ThreadMetadata{" +
-                "threadName=" + threadName +
-                ", threadState=" + threadState +
-                ", activeTasks=" + activeTasks +
-                ", standbyTasks=" + standbyTasks +
-                ", consumerClientId=" + mainConsumerClientId +
-                ", restoreConsumerClientId=" + restoreConsumerClientId +
-                ", producerClientIds=" + producerClientIds +
-                ", adminClientId=" + adminClientId +
-                '}';
+            "threadName=" + threadName +
+            ", threadState=" + threadState +
+            ", activeTasks=" + activeTasks +
+            ", standbyTasks=" + standbyTasks +
+            ", consumerClientId=" + mainConsumerClientId +
+            ", restoreConsumerClientId=" + restoreConsumerClientId +
+            ", producerClientIds=" + producerClientIds +
+            ", adminClientId=" + adminClientId +
+            '}';
     }
 }

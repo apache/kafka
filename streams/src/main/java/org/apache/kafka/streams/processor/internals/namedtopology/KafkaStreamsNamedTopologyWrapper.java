@@ -178,7 +178,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
         } else if (getTopologyByName(newTopology.name()).isPresent()) {
             future.completeExceptionally(
                 new IllegalArgumentException("Unable to add the new NamedTopology " + newTopology.name() +
-                                                   " as another of the same name already exists")
+                    " as another of the same name already exists")
             );
         } else {
             topologyMetadata.registerAndBuildNewTopology(future, newTopology.internalTopologyBuilder());
@@ -209,15 +209,15 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
         if (hasStartedOrFinishedShuttingDown()) {
             log.error("Attempted to remove topology {} from while the Kafka Streams was in state {}, "
-                          + "topologies cannot be modified if the application has begun or completed shutting down.",
-                      topologyToRemove, state
+                + "topologies cannot be modified if the application has begun or completed shutting down.",
+                topologyToRemove, state
             );
             removeTopologyFuture.completeExceptionally(
                 new IllegalStateException("Cannot remove a NamedTopology while the state is " + super.state)
             );
         } else if (getTopologyByName(topologyToRemove).isEmpty()) {
             log.error("Attempted to remove unknown topology {}. This application currently contains the"
-                          + "following topologies: {}.", topologyToRemove, topologyMetadata.namedTopologiesView()
+                + "following topologies: {}.", topologyToRemove, topologyMetadata.namedTopologiesView()
             );
             removeTopologyFuture.completeExceptionally(
                 new UnknownTopologyException("Unable to remove topology", topologyToRemove)
@@ -241,8 +241,8 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
 
         if (resetOffsets && !skipResetForUnstartedApplication && !partitionsToReset.isEmpty()) {
             log.info("Resetting offsets for the following partitions of {} removed NamedTopology {}: {}",
-                     removeTopologyFuture.isCompletedExceptionally() ? "unsuccessfully" : "successfully",
-                     topologyToRemove, partitionsToReset
+                removeTopologyFuture.isCompletedExceptionally() ? "unsuccessfully" : "successfully",
+                topologyToRemove, partitionsToReset
             );
             return new RemoveNamedTopologyResult(
                 removeTopologyFuture,
@@ -284,7 +284,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * @return  true iff the application is still in CREATED and the future was completed
      */
     private boolean maybeCompleteFutureIfStillInCREATED(final KafkaFutureImpl<Void> updateTopologyFuture,
-                                                        final String operation) {
+        final String operation) {
         if (state == State.CREATED && !updateTopologyFuture.isDone()) {
             updateTopologyFuture.complete(null);
             log.info("Completed {} since application has not been started", operation);
@@ -419,9 +419,9 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
      * See {@link KafkaStreams#queryMetadataForKey(String, Object, Serializer)}
      */
     public <K> KeyQueryMetadata queryMetadataForKey(final String storeName,
-                                                    final K key,
-                                                    final Serializer<K> keySerializer,
-                                                    final String topologyName) {
+        final K key,
+        final Serializer<K> keySerializer,
+        final String topologyName) {
         verifyTopologyStateStore(topologyName, storeName);
         validateIsRunningOrRebalancing();
         return streamsMetadataState.keyQueryMetadataForKey(storeName, key, keySerializer, topologyName);
@@ -433,7 +433,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     public Map<String, Map<Integer, LagInfo>> allLocalStorePartitionLagsForTopology(final String topologyName) {
         if (getTopologyByName(topologyName).isEmpty()) {
             log.error("Can't get local store partition lags since topology {} does not exist in this application",
-                      topologyName);
+                topologyName);
             throw new UnknownTopologyException("Can't get local store partition lags", topologyName);
         }
         final List<Task> allTopologyTasks = new ArrayList<>();

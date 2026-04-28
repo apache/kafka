@@ -51,7 +51,7 @@ public class LeftOrRightValueDeserializer<V1, V2> implements WrappingNullableDes
 
     @Override
     public void configure(final Map<String, ?> configs,
-                          final boolean isKey) {
+        final boolean isKey) {
         leftDeserializer.configure(configs, isKey);
         rightDeserializer.configure(configs, isKey);
     }

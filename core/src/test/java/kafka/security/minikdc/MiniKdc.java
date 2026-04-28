@@ -137,7 +137,7 @@ public class MiniKdc {
      */
     public MiniKdc(Properties config, File workDir) {
         Set<String> requiredProperties = Set.of(ORG_NAME, ORG_DOMAIN, KDC_BIND_ADDRESS, KDC_PORT,
-                INSTANCE, TRANSPORT, MAX_TICKET_LIFETIME, MAX_RENEWABLE_LIFETIME);
+            INSTANCE, TRANSPORT, MAX_TICKET_LIFETIME, MAX_RENEWABLE_LIFETIME);
         if (!config.keySet().containsAll(requiredProperties)) {
             throw new IllegalArgumentException("Missing required properties: " + requiredProperties);
         }
@@ -221,20 +221,20 @@ public class MiniKdc {
         miniKdc.start();
         miniKdc.createPrincipal(keytabFile, principals);
         String infoMessage = String.format(
+            "\n" +
+                "Standalone MiniKdc Running\n" +
+                "---------------------------------------------------\n" +
+                "  Realm           : %s\n" +
+                "  Running at      : %s:%d\n" +
+                "  krb5conf        : %s\n" +
                 "\n" +
-                        "Standalone MiniKdc Running\n" +
-                        "---------------------------------------------------\n" +
-                        "  Realm           : %s\n" +
-                        "  Running at      : %s:%d\n" +
-                        "  krb5conf        : %s\n" +
-                        "\n" +
-                        "  created keytab  : %s\n" +
-                        "  with principals : %s\n" +
-                        "\n" +
-                        "Hit <CTRL-C> or kill <PID> to stop it\n" +
-                        "---------------------------------------------------\n",
-                miniKdc.getRealm(), miniKdc.getHost(), miniKdc.getPort(), miniKdc.getKrb5conf().getAbsolutePath(),
-                keytabFile.getAbsolutePath(), String.join(", ", principals)
+                "  created keytab  : %s\n" +
+                "  with principals : %s\n" +
+                "\n" +
+                "Hit <CTRL-C> or kill <PID> to stop it\n" +
+                "---------------------------------------------------\n",
+            miniKdc.getRealm(), miniKdc.getHost(), miniKdc.getPort(), miniKdc.getKrb5conf().getAbsolutePath(),
+            keytabFile.getAbsolutePath(), String.join(", ", principals)
         );
         System.out.println(infoMessage);
         Exit.addShutdownHook("minikdc-shutdown-hook", miniKdc::stop);
@@ -265,7 +265,7 @@ public class MiniKdc {
                 System.clearProperty(SUN_SECURITY_KRB5_DEBUG);
 
                 // Close kdc acceptors and wait for them to terminate, ensuring that sockets are closed before returning.
-                for (Transport transport: kdc.getTransports()) {
+                for (Transport transport : kdc.getTransports()) {
                     IoAcceptor acceptor = transport.getAcceptor();
                     if (acceptor != null) acceptor.dispose(true);
                 }
@@ -432,7 +432,7 @@ public class MiniKdc {
     private void writeKrb5Conf() throws IOException {
         StringBuilder stringBuilder = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(getResourceAsStream("minikdc-krb5.conf"), StandardCharsets.UTF_8))) {
+                 new InputStreamReader(getResourceAsStream("minikdc-krb5.conf"), StandardCharsets.UTF_8))) {
             reader.lines().forEach(line -> stringBuilder.append(line).append("{3}"));
         }
         String output = MessageFormat.format(stringBuilder.toString(), realm, host, String.valueOf(port), System.lineSeparator());
@@ -450,7 +450,7 @@ public class MiniKdc {
 
     private InputStream getResourceAsStream(String resourceName) throws IOException {
         ClassLoader cl = Optional.of(Thread.currentThread().getContextClassLoader())
-                .orElse(MiniKdc.class.getClassLoader());
+            .orElse(MiniKdc.class.getClassLoader());
         InputStream resourceStream = cl.getResourceAsStream(resourceName);
         if (resourceStream == null) {
             throw new IOException("Can not read resource file " + resourceName);
@@ -468,18 +468,18 @@ public class MiniKdc {
      */
     private void createPrincipal(String principal, String password) throws LdapException, IOException {
         String ldifContent = "dn: uid=" + principal + ",ou=users,dc=" + orgName + ",dc=" + orgDomain + "\n" +
-                "objectClass: top\n" +
-                "objectClass: person\n" +
-                "objectClass: organizationalPerson\n" +
-                "objectClass: inetOrgPerson\n" +
-                "objectClass: krb5principal\n" +
-                "objectClass: krb5kdcentry\n" +
-                "cn: " + principal + "\n" +
-                "sn: " + principal + "\n" +
-                "uid: " + principal + "\n" +
-                "userPassword: " + password + "\n" +
-                "krb5PrincipalName: " + principal + "@" + realm + "\n" +
-                "krb5KeyVersionNumber: 0\n";
+            "objectClass: top\n" +
+            "objectClass: person\n" +
+            "objectClass: organizationalPerson\n" +
+            "objectClass: inetOrgPerson\n" +
+            "objectClass: krb5principal\n" +
+            "objectClass: krb5kdcentry\n" +
+            "cn: " + principal + "\n" +
+            "sn: " + principal + "\n" +
+            "uid: " + principal + "\n" +
+            "userPassword: " + password + "\n" +
+            "krb5PrincipalName: " + principal + "@" + realm + "\n" +
+            "krb5KeyVersionNumber: 0\n";
 
         addEntriesToDirectoryService(ldifContent);
     }

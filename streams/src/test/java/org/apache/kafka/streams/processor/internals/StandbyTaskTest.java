@@ -473,8 +473,8 @@ public class StandbyTaskTest {
     }
 
     private KafkaMetric getMetric(final String operation,
-                                  final String nameFormat,
-                                  final String taskId) {
+        final String nameFormat,
+        final String taskId) {
         final String descriptionIsNotVerified = "";
         return metrics.metrics().get(metrics.metricName(
             String.format(nameFormat, operation),

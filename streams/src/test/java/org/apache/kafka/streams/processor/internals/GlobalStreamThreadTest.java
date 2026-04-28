@@ -110,7 +110,7 @@ public class GlobalStreamThreadTest {
             };
 
         final StoreFactory storeFactory =
-                new KeyValueStoreMaterializer<>(materialized).withLoggingDisabled();
+            new KeyValueStoreMaterializer<>(materialized).withLoggingDisabled();
         final StoreBuilder<?> storeBuilder = new StoreFactory.FactoryWrappingStoreBuilder<>(storeFactory);
         builder.addGlobalStore(
             "sourceName",
@@ -136,7 +136,8 @@ public class GlobalStreamThreadTest {
             time,
             "clientId",
             stateRestoreListener,
-            e -> { }
+            e -> {
+            }
         );
     }
 
@@ -173,7 +174,8 @@ public class GlobalStreamThreadTest {
             time,
             "clientId",
             stateRestoreListener,
-            e -> { }
+            e -> {
+            }
         );
 
         try {
@@ -413,16 +415,17 @@ public class GlobalStreamThreadTest {
         };
         final StateStore globalStore = builder.globalStateStores().get(GLOBAL_STORE_NAME);
         globalStreamThread = new GlobalStreamThread(
-                builder.buildGlobalStateTopology(),
-                config,
-                consumer,
-                new StateDirectory(config, time, true, false),
-                0,
-                new StreamsMetricsImpl(new Metrics(), "test-client", time),
-                time,
-                "clientId",
-                stateRestoreListener,
-                e -> { }
+            builder.buildGlobalStateTopology(),
+            config,
+            consumer,
+            new StateDirectory(config, time, true, false),
+            0,
+            new StreamsMetricsImpl(new Metrics(), "test-client", time),
+            time,
+            "clientId",
+            stateRestoreListener,
+            e -> {
+            }
         );
 
         try {

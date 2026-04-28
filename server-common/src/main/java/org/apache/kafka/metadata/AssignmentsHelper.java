@@ -41,18 +41,18 @@ public class AssignmentsHelper {
             Uuid directoryId = entry.getValue();
             AssignReplicasToDirsRequestData.DirectoryData directory = directoryMap.computeIfAbsent(directoryId, d -> new AssignReplicasToDirsRequestData.DirectoryData().setId(directoryId));
             AssignReplicasToDirsRequestData.TopicData topic = topicMap.computeIfAbsent(directoryId, d -> new HashMap<>())
-                    .computeIfAbsent(topicPartition.topicId(), topicId -> {
-                        AssignReplicasToDirsRequestData.TopicData data = new AssignReplicasToDirsRequestData.TopicData().setTopicId(topicId);
-                        directory.topics().add(data);
-                        return data;
-                    });
+                .computeIfAbsent(topicPartition.topicId(), topicId -> {
+                    AssignReplicasToDirsRequestData.TopicData data = new AssignReplicasToDirsRequestData.TopicData().setTopicId(topicId);
+                    directory.topics().add(data);
+                    return data;
+                });
             AssignReplicasToDirsRequestData.PartitionData partition = new AssignReplicasToDirsRequestData.PartitionData().setPartitionIndex(topicPartition.partitionId());
             topic.partitions().add(partition);
         }
         return new AssignReplicasToDirsRequestData()
-                .setBrokerId(brokerId)
-                .setBrokerEpoch(brokerEpoch)
-                .setDirectories(new ArrayList<>(directoryMap.values()));
+            .setBrokerId(brokerId)
+            .setBrokerEpoch(brokerEpoch)
+            .setDirectories(new ArrayList<>(directoryMap.values()));
     }
 
     /**
@@ -68,20 +68,20 @@ public class AssignmentsHelper {
                 TopicIdPartition topicPartition = partitionEntry.getKey();
                 Errors error = partitionEntry.getValue();
                 AssignReplicasToDirsResponseData.TopicData topic = topicMap.computeIfAbsent(directoryId, d -> new HashMap<>())
-                        .computeIfAbsent(topicPartition.topicId(), topicId -> {
-                            AssignReplicasToDirsResponseData.TopicData data = new AssignReplicasToDirsResponseData.TopicData().setTopicId(topicId);
-                            directory.topics().add(data);
-                            return data;
-                        });
+                    .computeIfAbsent(topicPartition.topicId(), topicId -> {
+                        AssignReplicasToDirsResponseData.TopicData data = new AssignReplicasToDirsResponseData.TopicData().setTopicId(topicId);
+                        directory.topics().add(data);
+                        return data;
+                    });
                 AssignReplicasToDirsResponseData.PartitionData partition = new AssignReplicasToDirsResponseData.PartitionData()
-                        .setPartitionIndex(topicPartition.partitionId()).setErrorCode(error.code());
+                    .setPartitionIndex(topicPartition.partitionId()).setErrorCode(error.code());
                 topic.partitions().add(partition);
             }
         }
         return new AssignReplicasToDirsResponseData()
-                .setErrorCode(errorCode)
-                .setThrottleTimeMs(throttleTimeMs)
-                .setDirectories(new ArrayList<>(directoryMap.values()));
+            .setErrorCode(errorCode)
+            .setThrottleTimeMs(throttleTimeMs)
+            .setDirectories(new ArrayList<>(directoryMap.values()));
     }
 
     /**

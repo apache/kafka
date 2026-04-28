@@ -375,7 +375,7 @@ public class JmxToolTest {
             }
         };
         return err ? ToolsTestUtils.captureStandardErr(runnable)
-                    : ToolsTestUtils.captureStandardOut(runnable);
+            : ToolsTestUtils.captureStandardOut(runnable);
     }
 
     private void assertNormalExit() {
@@ -412,6 +412,7 @@ public class JmxToolTest {
 
     public interface MetricsMBean {
         double getFifteenMinuteRate();
+
         double getFiveMinuteRate();
     }
 

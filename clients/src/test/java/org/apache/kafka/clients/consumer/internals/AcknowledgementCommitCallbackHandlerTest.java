@@ -153,6 +153,7 @@ class AcknowledgementCommitCallbackHandlerTest {
     private static class TopicPartitionAndOffset {
         TopicIdPartition topicIdPartition;
         Long offset;
+
         TopicPartitionAndOffset(TopicIdPartition topicIdPartition, Long offset) {
             this.topicIdPartition = topicIdPartition;
             this.offset = offset;
@@ -164,7 +165,7 @@ class AcknowledgementCommitCallbackHandlerTest {
             if (o == null || getClass() != o.getClass()) return false;
             TopicPartitionAndOffset that = (TopicPartitionAndOffset) o;
             return Objects.equals(topicIdPartition, that.topicIdPartition) &&
-                    Objects.equals(offset, that.offset);
+                Objects.equals(offset, that.offset);
         }
 
         @Override

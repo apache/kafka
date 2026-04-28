@@ -51,8 +51,8 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @ClusterTestDefaults(
-        types = {Type.KRAFT},
-        brokers = 3
+    types = {Type.KRAFT},
+    brokers = 3
 )
 public class ConcurrentListOffsetsRequestTest {
     private static final String TOPIC = "topic";
@@ -73,11 +73,11 @@ public class ConcurrentListOffsetsRequestTest {
         clusterInstance.waitForReadyBrokers();
         clusterInstance.createTopic(TOPIC, PARTITION, REPLICAS);
         Map<String, Object> props = Map.of(
-                "default.api.timeout.ms", TIMEOUT,
-                "request.timeout.ms", TIMEOUT,
-                CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
+            "default.api.timeout.ms", TIMEOUT,
+            "request.timeout.ms", TIMEOUT,
+            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
         adminClient = KafkaAdminClient.createInternal(new AdminClientConfig(clusterInstance.setClientSaslConfig(props), true),
-                null, new TestHostResolver());
+            null, new TestHostResolver());
 
         networkClient = TestUtils.fieldValue(adminClient, KafkaAdminClient.class, "client");
     }

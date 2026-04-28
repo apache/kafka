@@ -192,7 +192,8 @@ public class TopologyTest {
         try {
             topology.addSource("source", "topic-2");
             fail("Should throw TopologyException for duplicate source name");
-        } catch (final TopologyException expected) { }
+        } catch (final TopologyException expected) {
+        }
     }
 
     @Test
@@ -201,7 +202,8 @@ public class TopologyTest {
         try {
             topology.addSource("source-2", "topic-1");
             fail("Should throw TopologyException for already used topic");
-        } catch (final TopologyException expected) { }
+        } catch (final TopologyException expected) {
+        }
     }
 
     @Test
@@ -210,7 +212,8 @@ public class TopologyTest {
         try {
             topology.addSource("source-2", Pattern.compile("f.*"));
             fail("Should have thrown TopologyException for overlapping pattern with already registered topic");
-        } catch (final TopologyException expected) { }
+        } catch (final TopologyException expected) {
+        }
     }
 
     @Test
@@ -219,7 +222,8 @@ public class TopologyTest {
         try {
             topology.addSource("source-2", "foo");
             fail("Should have thrown TopologyException for overlapping topic with already registered pattern");
-        } catch (final TopologyException expected) { }
+        } catch (final TopologyException expected) {
+        }
     }
 
     @Test
@@ -229,7 +233,8 @@ public class TopologyTest {
         try {
             topology.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
             fail("Should throw TopologyException for duplicate processor name");
-        } catch (final TopologyException expected) { }
+        } catch (final TopologyException expected) {
+        }
     }
 
     @Test
@@ -238,7 +243,8 @@ public class TopologyTest {
         try {
             topology.addProcessor("processor", new MockApiProcessorSupplier<>());
             fail("Should throw TopologyException for processor without at least one parent node");
-        } catch (final TopologyException expected) { }
+        } catch (final TopologyException expected) {
+        }
     }
 
     @Test
@@ -247,7 +253,8 @@ public class TopologyTest {
         try {
             topology.addProcessor("processor", new MockApiProcessorSupplier<>(), (String) null);
             fail("Should throw NullPointerException for processor when null parent names are provided");
-        } catch (final NullPointerException expected) { }
+        } catch (final NullPointerException expected) {
+        }
     }
 
     @Test
@@ -267,7 +274,8 @@ public class TopologyTest {
         try {
             topology.addSink("sink", "topic-3", "source");
             fail("Should throw TopologyException for duplicate sink name");
-        } catch (final TopologyException expected) { }
+        } catch (final TopologyException expected) {
+        }
     }
 
     @Test
@@ -277,7 +285,8 @@ public class TopologyTest {
         try {
             topology.addSink("sink", "topic-2");
             fail("Should throw TopologyException for sink without at least one parent node");
-        } catch (final TopologyException expected) { }
+        } catch (final TopologyException expected) {
+        }
     }
 
     @Test
@@ -287,7 +296,8 @@ public class TopologyTest {
         try {
             topology.addSink("sink", "topic-2", (String) null);
             fail("Should throw NullPointerException for sink when null parent names are provided");
-        } catch (final NullPointerException expected) { }
+        } catch (final NullPointerException expected) {
+        }
     }
 
     @Test
@@ -307,7 +317,8 @@ public class TopologyTest {
         try {
             topology.addSink("sink-2", "topic-3", "sink-1");
             fail("Should throw TopologyException for using sink as parent");
-        } catch (final TopologyException expected) { }
+        } catch (final TopologyException expected) {
+        }
     }
 
     @Test
@@ -323,7 +334,8 @@ public class TopologyTest {
         try {
             topology.addStateStore(storeBuilder, "source-1");
             fail("Should have thrown TopologyException for adding store to source node");
-        } catch (final TopologyException expected) { }
+        } catch (final TopologyException expected) {
+        }
     }
 
     @Test
@@ -334,7 +346,8 @@ public class TopologyTest {
         try {
             topology.addStateStore(storeBuilder, "sink-1");
             fail("Should have thrown TopologyException for adding store to sink node");
-        } catch (final TopologyException expected) { }
+        } catch (final TopologyException expected) {
+        }
     }
 
     private void mockStoreBuilder() {
@@ -351,7 +364,8 @@ public class TopologyTest {
         try {
             topology.addStateStore(otherStoreBuilder);
             fail("Should have thrown TopologyException for same store name with different StoreBuilder");
-        } catch (final TopologyException expected) { }
+        } catch (final TopologyException expected) {
+        }
     }
 
     @Test
@@ -420,7 +434,8 @@ public class TopologyTest {
                 }
 
                 @Override
-                public void process(final Record<Object, Object> record) { }
+                public void process(final Record<Object, Object> record) {
+                }
             };
         }
     }
@@ -465,7 +480,7 @@ public class TopologyTest {
 
         expectedDescription.addSubtopology(
             new SubtopologyDescription(0,
-                                       Collections.singleton(expectedSourceNode)));
+                Collections.singleton(expectedSourceNode)));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
         assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
@@ -477,7 +492,7 @@ public class TopologyTest {
 
         expectedDescription.addSubtopology(
             new SubtopologyDescription(0,
-                                       Collections.singleton(expectedSourceNode)));
+                Collections.singleton(expectedSourceNode)));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
         assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
@@ -489,7 +504,7 @@ public class TopologyTest {
 
         expectedDescription.addSubtopology(
             new SubtopologyDescription(0,
-                                       Collections.singleton(expectedSourceNode)));
+                Collections.singleton(expectedSourceNode)));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
         assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
@@ -500,17 +515,17 @@ public class TopologyTest {
         final TopologyDescription.Source expectedSourceNode1 = addSource("source1", "topic1");
         expectedDescription.addSubtopology(
             new SubtopologyDescription(0,
-                                       Collections.singleton(expectedSourceNode1)));
+                Collections.singleton(expectedSourceNode1)));
 
         final TopologyDescription.Source expectedSourceNode2 = addSource("source2", "topic2");
         expectedDescription.addSubtopology(
             new SubtopologyDescription(1,
-                                       Collections.singleton(expectedSourceNode2)));
+                Collections.singleton(expectedSourceNode2)));
 
         final TopologyDescription.Source expectedSourceNode3 = addSource("source3", "topic3");
         expectedDescription.addSubtopology(
             new SubtopologyDescription(2,
-                                       Collections.singleton(expectedSourceNode3)));
+                Collections.singleton(expectedSourceNode3)));
 
         assertThat(topology.describe(), equalTo(expectedDescription));
         assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
@@ -533,7 +548,7 @@ public class TopologyTest {
     @Test
     public void sourceAndProcessorWithStateShouldHaveSingleSubtopology() {
         final TopologyDescription.Source expectedSourceNode = addSource("source", "topic");
-        final String[] store = new String[] {"store"};
+        final String[] store = new String[]{"store"};
         final TopologyDescription.Processor expectedProcessorNode =
             addProcessorWithNewStore("processor", store, expectedSourceNode);
 
@@ -550,7 +565,7 @@ public class TopologyTest {
     @Test
     public void sourceAndProcessorWithMultipleStatesShouldHaveSingleSubtopology() {
         final TopologyDescription.Source expectedSourceNode = addSource("source", "topic");
-        final String[] stores = new String[] {"store1", "store2"};
+        final String[] stores = new String[]{"store1", "store2"};
         final TopologyDescription.Processor expectedProcessorNode =
             addProcessorWithNewStore("processor", stores, expectedSourceNode);
 
@@ -689,9 +704,9 @@ public class TopologyTest {
 
     @Test
     public void processorsWithSharedStateShouldHaveSameSubtopology() {
-        final String[] store1 = new String[] {"store1"};
-        final String[] store2 = new String[] {"store2"};
-        final String[] bothStores = new String[] {store1[0], store2[0]};
+        final String[] store1 = new String[]{"store1"};
+        final String[] store2 = new String[]{"store2"};
+        final String[] bothStores = new String[]{store1[0], store2[0]};
 
         final TopologyDescription.Source expectedSourceNode1 = addSource("source", "topic");
         final TopologyDescription.Processor expectedProcessorNode1 =
@@ -736,7 +751,7 @@ public class TopologyTest {
     @SuppressWarnings("deprecation")
     @Test
     public void streamStreamJoinTopologyWithDefaultStoresNames() {
-        final StreamsBuilder builder  = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
 
@@ -779,7 +794,7 @@ public class TopologyTest {
     @SuppressWarnings("deprecation")
     @Test
     public void streamStreamJoinTopologyWithCustomStoresNames() {
-        final StreamsBuilder builder  = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
 
@@ -823,7 +838,7 @@ public class TopologyTest {
     @SuppressWarnings("deprecation")
     @Test
     public void streamStreamJoinTopologyWithCustomStoresSuppliers() {
-        final StreamsBuilder builder  = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
 
@@ -877,7 +892,7 @@ public class TopologyTest {
 
     @Test
     public void streamStreamLeftJoinTopologyWithDefaultStoresNames() {
-        final StreamsBuilder builder  = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
 
@@ -919,7 +934,7 @@ public class TopologyTest {
 
     @Test
     public void streamStreamLeftJoinTopologyWithCustomStoresNames() {
-        final StreamsBuilder builder  = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
 
@@ -962,7 +977,7 @@ public class TopologyTest {
 
     @Test
     public void streamStreamLeftJoinTopologyWithCustomStoresSuppliers() {
-        final StreamsBuilder builder  = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
 
@@ -1016,7 +1031,7 @@ public class TopologyTest {
 
     @Test
     public void streamStreamOuterJoinTopologyWithDefaultStoresNames() {
-        final StreamsBuilder builder  = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
 
@@ -1058,7 +1073,7 @@ public class TopologyTest {
 
     @Test
     public void streamStreamOuterJoinTopologyWithCustomStoresNames() {
-        final StreamsBuilder builder  = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
 
@@ -1101,7 +1116,7 @@ public class TopologyTest {
 
     @Test
     public void streamStreamOuterJoinTopologyWithCustomStoresSuppliers() {
-        final StreamsBuilder builder  = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
 
@@ -1155,7 +1170,7 @@ public class TopologyTest {
 
     @Test
     public void topologyWithDynamicRoutingShouldDescribeExtractorClass() {
-        final StreamsBuilder builder  = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final TopicNameExtractor<Object, Object> topicNameExtractor = new TopicNameExtractor<>() {
             @Override
@@ -1172,13 +1187,13 @@ public class TopologyTest {
         final TopologyDescription describe = builder.build().describe();
 
         assertEquals(
-                "Topologies:\n" +
+            "Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
                 "      --> KSTREAM-SINK-0000000001\n" +
                 "    Sink: KSTREAM-SINK-0000000001 (extractor class: anonymous topic name extractor. topic is [recordContext.topic()]-[key])\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
-                describe.toString());
+            describe.toString());
     }
 
     @Test
@@ -2272,14 +2287,14 @@ public class TopologyTest {
     }
 
     private TopologyDescription.Source addSource(final String sourceName,
-                                                 final String... sourceTopic) {
+        final String... sourceTopic) {
         topology.addSource((AutoOffsetReset) null, sourceName, null, null, null, sourceTopic);
         return new InternalTopologyBuilder.Source(sourceName, Set.of(sourceTopic), null);
     }
 
     @SuppressWarnings("deprecation")
     private TopologyDescription.Source addSource(final String sourceName,
-                                                 final Pattern sourcePattern) {
+        final Pattern sourcePattern) {
         // we still test the old `Topology.AutoOffsetReset` here, to increase test coverage
         // (cf `addSource` about which used the new one)
         // When can rewrite this to the new one, when the old one is removed
@@ -2288,26 +2303,26 @@ public class TopologyTest {
     }
 
     private TopologyDescription.Processor addProcessor(final String processorName,
-                                                       final TopologyDescription.Node... parents) {
+        final TopologyDescription.Node... parents) {
         return addProcessorWithNewStore(processorName, new String[0], parents);
     }
 
     private TopologyDescription.Processor addProcessorWithNewStore(final String processorName,
-                                                                   final String[] storeNames,
-                                                                   final TopologyDescription.Node... parents) {
+        final String[] storeNames,
+        final TopologyDescription.Node... parents) {
         return addProcessorWithStore(processorName, storeNames, true, parents);
     }
 
     private TopologyDescription.Processor addProcessorWithExistingStore(final String processorName,
-                                                                        final String[] storeNames,
-                                                                        final TopologyDescription.Node... parents) {
+        final String[] storeNames,
+        final TopologyDescription.Node... parents) {
         return addProcessorWithStore(processorName, storeNames, false, parents);
     }
 
     private TopologyDescription.Processor addProcessorWithStore(final String processorName,
-                                                                final String[] storeNames,
-                                                                final boolean newStores,
-                                                                final TopologyDescription.Node... parents) {
+        final String[] storeNames,
+        final boolean newStores,
+        final TopologyDescription.Node... parents) {
         final String[] parentNames = new String[parents.length];
         for (int i = 0; i < parents.length; ++i) {
             parentNames[i] = parents[i].name();
@@ -2335,8 +2350,8 @@ public class TopologyTest {
     }
 
     private TopologyDescription.Sink addSink(final String sinkName,
-                                             final String sinkTopic,
-                                             final TopologyDescription.Node... parents) {
+        final String sinkTopic,
+        final TopologyDescription.Node... parents) {
         final String[] parentNames = new String[parents.length];
         for (int i = 0; i < parents.length; ++i) {
             parentNames[i] = parents[i].name();
@@ -2355,10 +2370,10 @@ public class TopologyTest {
     }
 
     private void addGlobalStoreToTopologyAndExpectedDescription(final String globalStoreName,
-                                                                final String sourceName,
-                                                                final String globalTopicName,
-                                                                final String processorName,
-                                                                final int id) {
+        final String sourceName,
+        final String globalTopicName,
+        final String processorName,
+        final int id) {
         final KeyValueStoreBuilder<?, ?> globalStoreBuilder = mock(KeyValueStoreBuilder.class);
         when(globalStoreBuilder.name()).thenReturn(globalStoreName);
         topology.addGlobalStore(
@@ -2391,14 +2406,14 @@ public class TopologyTest {
         final KeyValueStoreBuilder<?, ?> storeBuilder = mock(KeyValueStoreBuilder.class);
         when(storeBuilder.name()).thenReturn(storeName);
         topology.addReadOnlyStateStore(
-                storeBuilder,
-                sourceName,
-                null,
-                null,
-                null,
-                topicName,
-                processorName,
-                new MockProcessorSupplier<>());
+            storeBuilder,
+            sourceName,
+            null,
+            null,
+            null,
+            topicName,
+            processorName,
+            new MockProcessorSupplier<>());
 
         final TopologyDescription.Source expectedSource = new InternalTopologyBuilder.Source(sourceName, Sets.newSet(topicName), null);
         final TopologyDescription.Processor expectedProcessor = new InternalTopologyBuilder.Processor(processorName, Sets.newSet(storeName));
@@ -2425,14 +2440,14 @@ public class TopologyTest {
         final KeyValueStoreBuilder<?, ?> storeBuilder = mock(KeyValueStoreBuilder.class);
         when(storeBuilder.name()).thenReturn(storeName);
         topology.addReadOnlyStateStore(
-                storeBuilder,
-                sourceName,
-                null,
-                null,
-                null,
-                topicName,
-                processorName,
-                new MockProcessorSupplier<>());
+            storeBuilder,
+            sourceName,
+            null,
+            null,
+            null,
+            topicName,
+            processorName,
+            new MockProcessorSupplier<>());
 
         final StoreFactory stateStoreFactory = topology.internalTopologyBuilder.stateStores().get(storeName);
         assertThat(stateStoreFactory.loggingEnabled(), equalTo(false));

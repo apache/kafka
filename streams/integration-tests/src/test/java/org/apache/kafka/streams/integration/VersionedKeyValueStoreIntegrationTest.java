@@ -444,8 +444,8 @@ public class VersionedKeyValueStoreIntegrationTest {
     @SuppressWarnings("varargs")
     @SafeVarargs
     private final int produceDataToTopic(final String topic,
-                                         final long timestamp,
-                                         final KeyValue<Integer, String>... keyValues) {
+        final long timestamp,
+        final KeyValue<Integer, String>... keyValues) {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             topic,
             Arrays.asList(keyValues),
@@ -470,9 +470,9 @@ public class VersionedKeyValueStoreIntegrationTest {
     @SuppressWarnings("varargs")
     @SafeVarargs
     private final int produceDataToTopic(final String topic,
-                                         final DataTracker dataTracker,
-                                         final long timestamp,
-                                         final KeyValue<Integer, String>... keyValues) {
+        final DataTracker dataTracker,
+        final long timestamp,
+        final KeyValue<Integer, String>... keyValues) {
         produceDataToTopic(topic, timestamp, keyValues);
 
         for (final KeyValue<Integer, String> keyValue : keyValues) {
@@ -512,7 +512,7 @@ public class VersionedKeyValueStoreIntegrationTest {
          *                     outside of this processor
          */
         VersionedStoreContentCheckerProcessor(final boolean writeToStore,
-                                              final DataTracker initialData) {
+            final DataTracker initialData) {
             this.writeToStore = writeToStore;
             this.data = initialData;
         }
@@ -581,8 +581,8 @@ public class VersionedKeyValueStoreIntegrationTest {
         }
 
         private static boolean contentsMatch(final VersionedRecord<String> versionedRecord,
-                                             final String expectedValue,
-                                             final long expectedTimestamp) {
+            final String expectedValue,
+            final long expectedTimestamp) {
             if (expectedValue == null) {
                 return versionedRecord == null;
             } else {
@@ -817,7 +817,8 @@ public class VersionedKeyValueStoreIntegrationTest {
             public void init(final StateStoreContext stateStoreContext, final StateStore root) {
                 stateStoreContext.register(
                     root,
-                    (key, value) -> { }
+                    (key, value) -> {
+                    }
                 );
             }
 

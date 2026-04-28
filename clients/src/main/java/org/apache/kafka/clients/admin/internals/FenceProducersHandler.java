@@ -78,7 +78,7 @@ public class FenceProducersHandler extends AdminApiHandler.Unbatched<Coordinator
     InitProducerIdRequest.Builder buildSingleRequest(int brokerId, CoordinatorKey key) {
         if (key.type != FindCoordinatorRequest.CoordinatorType.TRANSACTION) {
             throw new IllegalArgumentException("Invalid group coordinator key " + key +
-                    " when building `InitProducerId` request");
+                " when building `InitProducerId` request");
         }
         InitProducerIdRequestData data = new InitProducerIdRequestData()
             // Because we never include a producer epoch or ID in this request, we expect that some errors
@@ -121,23 +121,23 @@ public class FenceProducersHandler extends AdminApiHandler.Unbatched<Coordinator
         switch (error) {
             case CLUSTER_AUTHORIZATION_FAILED:
                 return ApiResult.failed(transactionalIdKey, new ClusterAuthorizationException(
-                        "InitProducerId request for transactionalId `" + transactionalIdKey.idValue + "` " +
-                                "failed due to cluster authorization failure"));
+                    "InitProducerId request for transactionalId `" + transactionalIdKey.idValue + "` " +
+                        "failed due to cluster authorization failure"));
 
             case TRANSACTIONAL_ID_AUTHORIZATION_FAILED:
                 return ApiResult.failed(transactionalIdKey, new TransactionalIdAuthorizationException(
-                        "InitProducerId request for transactionalId `" + transactionalIdKey.idValue + "` " +
-                                "failed due to transactional ID authorization failure"));
+                    "InitProducerId request for transactionalId `" + transactionalIdKey.idValue + "` " +
+                        "failed due to transactional ID authorization failure"));
 
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
                 log.debug("InitProducerId request for transactionalId `{}` failed because the " +
-                                "coordinator is still in the process of loading state. Will retry",
-                        transactionalIdKey.idValue);
+                    "coordinator is still in the process of loading state. Will retry",
+                    transactionalIdKey.idValue);
                 return ApiResult.empty();
             case CONCURRENT_TRANSACTIONS:
                 log.debug("InitProducerId request for transactionalId `{}` failed because of " +
-                                "a concurrent transaction. Will retry", transactionalIdKey.idValue);
+                    "a concurrent transaction. Will retry", transactionalIdKey.idValue);
                 return ApiResult.empty();
 
             case NOT_COORDINATOR:
@@ -145,7 +145,7 @@ public class FenceProducersHandler extends AdminApiHandler.Unbatched<Coordinator
                 // If the coordinator is unavailable or there was a coordinator change, then we unmap
                 // the key so that we retry the `FindCoordinator` request
                 log.debug("InitProducerId request for transactionalId `{}` returned error {}. Will attempt " +
-                        "to find the coordinator again and retry", transactionalIdKey.idValue, error);
+                    "to find the coordinator again and retry", transactionalIdKey.idValue, error);
                 return ApiResult.unmapped(Collections.singletonList(transactionalIdKey));
 
             // We intentionally omit cases for PRODUCER_FENCED, TRANSACTIONAL_ID_NOT_FOUND, and INVALID_PRODUCER_EPOCH
@@ -154,7 +154,7 @@ public class FenceProducersHandler extends AdminApiHandler.Unbatched<Coordinator
 
             default:
                 return ApiResult.failed(transactionalIdKey, error.exception("InitProducerId request for " +
-                        "transactionalId `" + transactionalIdKey.idValue + "` failed due to unexpected error"));
+                    "transactionalId `" + transactionalIdKey.idValue + "` failed due to unexpected error"));
         }
     }
 }

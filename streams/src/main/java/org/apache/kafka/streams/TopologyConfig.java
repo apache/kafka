@@ -110,23 +110,24 @@ public final class TopologyConfig extends AbstractConfig {
     }
 
     private static final ConfigDef CONFIG;
+
     static {
         CONFIG = new ConfigDef()
             .define(PROCESSOR_WRAPPER_CLASS_CONFIG,
-                    Type.CLASS,
-                    NoOpProcessorWrapper.class.getName(),
-                    Importance.LOW,
-                    PROCESSOR_WRAPPER_CLASS_DOC)
+                Type.CLASS,
+                NoOpProcessorWrapper.class.getName(),
+                Importance.LOW,
+                PROCESSOR_WRAPPER_CLASS_DOC)
             .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
                 Type.INT,
                 null,
                 Importance.LOW,
                 BUFFERED_RECORDS_PER_PARTITION_DOC)
             .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
-                    Type.LONG,
-                    null,
-                    Importance.MEDIUM,
-                    CACHE_MAX_BYTES_BUFFERING_DOC)
+                Type.LONG,
+                null,
+                Importance.MEDIUM,
+                CACHE_MAX_BYTES_BUFFERING_DOC)
             .define(STATESTORE_CACHE_MAX_BYTES_CONFIG,
                 Type.LONG,
                 null,
@@ -174,6 +175,7 @@ public final class TopologyConfig extends AbstractConfig {
                 Importance.HIGH,
                 ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_DOC);
     }
+
     private static final Logger log = LoggerFactory.getLogger(TopologyConfig.class);
 
     private final StreamsConfig globalAppConfigs;
@@ -227,33 +229,33 @@ public final class TopologyConfig extends AbstractConfig {
             if (stateStoreCacheMaxBytesOverridden && cacheMaxBytesBufferingOverridden) {
                 cacheSize = getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG);
                 log.info("Topology {} is using both deprecated config {} and new config {}, hence {} is ignored and the new config {} (value {}) is used",
-                        topologyName,
-                        CACHE_MAX_BYTES_BUFFERING_CONFIG,
-                        STATESTORE_CACHE_MAX_BYTES_CONFIG,
-                        CACHE_MAX_BYTES_BUFFERING_CONFIG,
-                        STATESTORE_CACHE_MAX_BYTES_CONFIG,
-                        cacheSize);
+                    topologyName,
+                    CACHE_MAX_BYTES_BUFFERING_CONFIG,
+                    STATESTORE_CACHE_MAX_BYTES_CONFIG,
+                    CACHE_MAX_BYTES_BUFFERING_CONFIG,
+                    STATESTORE_CACHE_MAX_BYTES_CONFIG,
+                    cacheSize);
             } else if (cacheMaxBytesBufferingOverridden) {
                 cacheSize = getLong(CACHE_MAX_BYTES_BUFFERING_CONFIG);
                 log.info("Topology {} is using only deprecated config {}, and will be used to set cache size to {}; " +
-                                "we suggest setting the new config {} instead as deprecated {} would be removed in the future.",
-                        topologyName,
-                        CACHE_MAX_BYTES_BUFFERING_CONFIG,
-                        cacheSize,
-                        STATESTORE_CACHE_MAX_BYTES_CONFIG,
-                        CACHE_MAX_BYTES_BUFFERING_CONFIG);
+                    "we suggest setting the new config {} instead as deprecated {} would be removed in the future.",
+                    topologyName,
+                    CACHE_MAX_BYTES_BUFFERING_CONFIG,
+                    cacheSize,
+                    STATESTORE_CACHE_MAX_BYTES_CONFIG,
+                    CACHE_MAX_BYTES_BUFFERING_CONFIG);
             } else {
                 cacheSize = getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG);
             }
 
             if (cacheSize != 0) {
                 log.warn("Topology {} is overriding cache size to {} but this will not have any effect as the "
-                                + "topology-level cache size config only controls whether record buffering is enabled "
-                                + "or disabled, thus the only valid override value is 0",
-                        topologyName, cacheSize);
+                    + "topology-level cache size config only controls whether record buffering is enabled "
+                    + "or disabled, thus the only valid override value is 0",
+                    topologyName, cacheSize);
             } else {
                 log.info("Topology {} is overriding cache size to {}, record buffering will be disabled",
-                        topologyName, cacheSize);
+                    topologyName, cacheSize);
             }
         }
 
@@ -363,12 +365,12 @@ public final class TopologyConfig extends AbstractConfig {
         public final boolean eosEnabled;
 
         private TaskConfig(final long maxTaskIdleMs,
-                           final long taskTimeoutMs,
-                           final int maxBufferedSize,
-                           final TimestampExtractor timestampExtractor,
-                           final DeserializationExceptionHandler deserializationExceptionHandler,
-                           final ProcessingExceptionHandler processingExceptionHandler,
-                           final boolean eosEnabled) {
+            final long taskTimeoutMs,
+            final int maxBufferedSize,
+            final TimestampExtractor timestampExtractor,
+            final DeserializationExceptionHandler deserializationExceptionHandler,
+            final ProcessingExceptionHandler processingExceptionHandler,
+            final boolean eosEnabled) {
             this.maxTaskIdleMs = maxTaskIdleMs;
             this.taskTimeoutMs = taskTimeoutMs;
             this.maxBufferedSize = maxBufferedSize;

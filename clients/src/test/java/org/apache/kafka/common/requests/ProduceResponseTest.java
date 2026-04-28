@@ -56,7 +56,7 @@ public class ProduceResponseTest {
         for (ProduceResponse produceResponse : arrResponse) {
             assertEquals(1, produceResponse.data().responses().size());
             ProduceResponseData.TopicProduceResponse topicProduceResponse = produceResponse.data().responses().iterator().next();
-            assertEquals(1, topicProduceResponse.partitionResponses().size());  
+            assertEquals(1, topicProduceResponse.partitionResponses().size());
             ProduceResponseData.PartitionProduceResponse partitionProduceResponse = topicProduceResponse.partitionResponses().iterator().next();
             assertEquals(100, partitionProduceResponse.logStartOffset());
             assertEquals(10000, partitionProduceResponse.baseOffset());
@@ -75,9 +75,9 @@ public class ProduceResponseTest {
         Uuid topicId = Uuid.fromString("4w0AQXe9TvBG5JkYABorYD");
         TopicIdPartition tp = new TopicIdPartition(topicId, 0, "test");
         ProduceResponse.PartitionResponse partResponse = new ProduceResponse.PartitionResponse(Errors.NONE,
-                10000, RecordBatch.NO_TIMESTAMP, 100,
-                Collections.singletonList(new ProduceResponse.RecordError(3, "Record error")),
-                "Produce failed");
+            10000, RecordBatch.NO_TIMESTAMP, 100,
+            Collections.singletonList(new ProduceResponse.RecordError(3, "Record error")),
+            "Produce failed");
         responseData.put(tp, partResponse);
 
         for (short version : PRODUCE.allVersions()) {

@@ -49,10 +49,10 @@ public class RocksDBRangeIteratorTest {
     private final String key4 = "d";
 
     private final String value = "value";
-    private final  Bytes key1Bytes = Bytes.wrap(key1.getBytes());
-    private final  Bytes key2Bytes = Bytes.wrap(key2.getBytes());
-    private final  Bytes key3Bytes = Bytes.wrap(key3.getBytes());
-    private final  Bytes key4Bytes = Bytes.wrap(key4.getBytes());
+    private final Bytes key1Bytes = Bytes.wrap(key1.getBytes());
+    private final Bytes key2Bytes = Bytes.wrap(key2.getBytes());
+    private final Bytes key3Bytes = Bytes.wrap(key3.getBytes());
+    private final Bytes key4Bytes = Bytes.wrap(key4.getBytes());
     private final byte[] valueBytes = value.getBytes();
 
     @Test
@@ -224,8 +224,8 @@ public class RocksDBRangeIteratorTest {
         // key range in state store: [c-f]
         final String from = "g";
         final String to = "h";
-        final  Bytes fromBytes = Bytes.wrap(from.getBytes());
-        final  Bytes toBytes = Bytes.wrap(to.getBytes());
+        final Bytes fromBytes = Bytes.wrap(from.getBytes());
+        final Bytes toBytes = Bytes.wrap(to.getBytes());
         final RocksIterator rocksIterator = mock(RocksIterator.class);
         doNothing().when(rocksIterator).seekForPrev(toBytes.get());
         when(rocksIterator.isValid())
@@ -387,7 +387,8 @@ public class RocksDBRangeIteratorTest {
             true,
             true
         );
-        rocksDBRangeIterator.onClose(() -> { });
+        rocksDBRangeIterator.onClose(() -> {
+        });
         rocksDBRangeIterator.close();
         verify(rocksIterator).close();
     }

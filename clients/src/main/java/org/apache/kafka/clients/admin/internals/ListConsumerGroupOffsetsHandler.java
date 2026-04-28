@@ -76,14 +76,14 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
         Set<CoordinatorKey> keys = coordinatorKeys(groupSpecs.keySet());
         if (!keys.containsAll(groupIds)) {
             throw new IllegalArgumentException("Received unexpected group ids " + groupIds +
-                    " (expected one of " + keys + ")");
+                " (expected one of " + keys + ")");
         }
     }
 
     private static Set<CoordinatorKey> coordinatorKeys(Collection<String> groupIds) {
         return groupIds.stream()
-           .map(CoordinatorKey::byGroupId)
-           .collect(Collectors.toSet());
+            .map(CoordinatorKey::byGroupId)
+            .collect(Collectors.toSet());
     }
 
     public OffsetFetchRequest.Builder buildBatchedRequest(Set<CoordinatorKey> groupIds) {

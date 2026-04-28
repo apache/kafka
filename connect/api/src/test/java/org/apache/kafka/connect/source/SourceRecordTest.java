@@ -48,14 +48,14 @@ public class SourceRecordTest {
     @BeforeEach
     public void beforeEach() {
         record = new SourceRecord(SOURCE_PARTITION, SOURCE_OFFSET, TOPIC_NAME, PARTITION_NUMBER, Schema.STRING_SCHEMA, "key",
-                                  Schema.BOOLEAN_SCHEMA, false, KAFKA_TIMESTAMP, null);
+                Schema.BOOLEAN_SCHEMA, false, KAFKA_TIMESTAMP, null);
     }
 
     @Test
     public void shouldCreateSinkRecordWithHeaders() {
         Headers headers = new ConnectHeaders().addString("h1", "hv1").addBoolean("h2", true);
         record = new SourceRecord(SOURCE_PARTITION, SOURCE_OFFSET, TOPIC_NAME, PARTITION_NUMBER, Schema.STRING_SCHEMA, "key",
-                                  Schema.BOOLEAN_SCHEMA, false, KAFKA_TIMESTAMP, headers);
+                Schema.BOOLEAN_SCHEMA, false, KAFKA_TIMESTAMP, headers);
         assertNotNull(record.headers());
         assertSame(headers, record.headers());
         assertFalse(record.headers().isEmpty());
@@ -79,7 +79,7 @@ public class SourceRecordTest {
     @Test
     public void shouldDuplicateRecordAndCloneHeaders() {
         SourceRecord duplicate = record.newRecord(TOPIC_NAME, PARTITION_NUMBER, Schema.STRING_SCHEMA, "key", Schema.BOOLEAN_SCHEMA, false,
-                                                  KAFKA_TIMESTAMP);
+                KAFKA_TIMESTAMP);
 
         assertEquals(SOURCE_PARTITION, duplicate.sourcePartition());
         assertEquals(SOURCE_OFFSET, duplicate.sourceOffset());
@@ -100,7 +100,7 @@ public class SourceRecordTest {
     public void shouldDuplicateRecordUsingNewHeaders() {
         Headers newHeaders = new ConnectHeaders().addString("h3", "hv3");
         SourceRecord duplicate = record.newRecord(TOPIC_NAME, PARTITION_NUMBER, Schema.STRING_SCHEMA, "key", Schema.BOOLEAN_SCHEMA, false,
-                                                  KAFKA_TIMESTAMP, newHeaders);
+                KAFKA_TIMESTAMP, newHeaders);
 
         assertEquals(SOURCE_PARTITION, duplicate.sourcePartition());
         assertEquals(SOURCE_OFFSET, duplicate.sourceOffset());

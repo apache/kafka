@@ -36,14 +36,14 @@ public class ServerLogConfigs {
     public static final int NUM_PARTITIONS_DEFAULT = 1;
     public static final String NUM_PARTITIONS_DOC =
         "The default number of log partitions per topic. This configuration affects the following paths:"
-        + "<ul>"
-        + "  <li>1. Auto topic creation</li>"
-        + "  <li>2. Internal streams topic creation</li>"
-        + "  <li>3. Topic creation via <code>AdminClient#createTopics</code> when the number of partition is set to -1</li>"
-        + "</ul>"
-        + "<p>For (1), the value from the broker configuration is used only when it is explicitly set. "
-        + "If it is not explicitly configured on the broker, the value from the controller configuration is used.<br/>"
-        + "For (2) and (3), the value from the controller configuration is always used.</p>";
+            + "<ul>"
+            + "  <li>1. Auto topic creation</li>"
+            + "  <li>2. Internal streams topic creation</li>"
+            + "  <li>3. Topic creation via <code>AdminClient#createTopics</code> when the number of partition is set to -1</li>"
+            + "</ul>"
+            + "<p>For (1), the value from the broker configuration is used only when it is explicitly set. "
+            + "If it is not explicitly configured on the broker, the value from the controller configuration is used.<br/>"
+            + "For (2) and (3), the value from the controller configuration is always used.</p>";
 
     public static final String LOG_DIRS_CONFIG = LOG_PREFIX + "dirs";
     public static final String LOG_DIR_CONFIG = LOG_PREFIX + "dir";
@@ -126,22 +126,22 @@ public class ServerLogConfigs {
     public static final String LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG);
     public static final String LOG_MESSAGE_TIMESTAMP_TYPE_DEFAULT = "CreateTime";
     public static final String LOG_MESSAGE_TIMESTAMP_TYPE_DOC = "Define whether the timestamp in the message is message create time or log append time. The value should be either " +
-            "<code>CreateTime</code> or <code>LogAppendTime</code>.";
+        "<code>CreateTime</code> or <code>LogAppendTime</code>.";
 
     public static final String LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG);
     public static final long LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_DEFAULT = Long.MAX_VALUE;
     public static final String LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_DOC = "This configuration sets the allowable timestamp difference between the " +
-            "broker's timestamp and the message timestamp. The message timestamp can be earlier than or equal to the broker's " +
-            "timestamp, with the maximum allowable difference determined by the value set in this configuration. " +
-            "If log.message.timestamp.type=CreateTime, the message will be rejected if the difference in timestamps exceeds " +
-            "this specified threshold. This configuration is ignored if log.message.timestamp.type=LogAppendTime.";
+        "broker's timestamp and the message timestamp. The message timestamp can be earlier than or equal to the broker's " +
+        "timestamp, with the maximum allowable difference determined by the value set in this configuration. " +
+        "If log.message.timestamp.type=CreateTime, the message will be rejected if the difference in timestamps exceeds " +
+        "this specified threshold. This configuration is ignored if log.message.timestamp.type=LogAppendTime.";
     public static final String LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG);
     public static final long LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DEFAULT = 3600000; // 1 hour
     public static final String LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_DOC = "This configuration sets the allowable timestamp difference between the " +
-            "message timestamp and the broker's timestamp. The message timestamp can be later than or equal to the broker's " +
-            "timestamp, with the maximum allowable difference determined by the value set in this configuration. " +
-            "If log.message.timestamp.type=CreateTime, the message will be rejected if the difference in timestamps exceeds " +
-            "this specified threshold. This configuration is ignored if log.message.timestamp.type=LogAppendTime.";
+        "message timestamp and the broker's timestamp. The message timestamp can be later than or equal to the broker's " +
+        "timestamp, with the maximum allowable difference determined by the value set in this configuration. " +
+        "If log.message.timestamp.type=CreateTime, the message will be rejected if the difference in timestamps exceeds " +
+        "this specified threshold. This configuration is ignored if log.message.timestamp.type=LogAppendTime.";
 
     public static final String NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG = "num.recovery.threads.per.data.dir";
     public static final int NUM_RECOVERY_THREADS_PER_DATA_DIR_DEFAULT = 2;
@@ -157,17 +157,17 @@ public class ServerLogConfigs {
 
     public static final String CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG = "create.topic.policy.class.name";
     public static final String CREATE_TOPIC_POLICY_CLASS_NAME_DOC = "The create topic policy class that should be used for validation. The class should " +
-            "implement the <code>org.apache.kafka.server.policy.CreateTopicPolicy</code> interface. " +
-            "<p>Note: This policy runs on the controller instead of the broker.</p>";
+        "implement the <code>org.apache.kafka.server.policy.CreateTopicPolicy</code> interface. " +
+        "<p>Note: This policy runs on the controller instead of the broker.</p>";
     public static final String ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG = "alter.config.policy.class.name";
     public static final String ALTER_CONFIG_POLICY_CLASS_NAME_DOC = "The alter configs policy class that should be used for validation. The class should " +
-            "implement the <code>org.apache.kafka.server.policy.AlterConfigPolicy</code> interface. " +
-            "<p>Note: This policy runs on the controller instead of the broker.</p>";
+        "implement the <code>org.apache.kafka.server.policy.AlterConfigPolicy</code> interface. " +
+        "<p>Note: This policy runs on the controller instead of the broker.</p>";
 
     public static final String LOG_INITIAL_TASK_DELAY_MS_CONFIG = LOG_PREFIX + "initial.task.delay.ms";
     public static final long LOG_INITIAL_TASK_DELAY_MS_DEFAULT = 30 * 1000L;
     public static final String LOG_INITIAL_TASK_DELAY_MS_DOC = "The initial task delay in millisecond when initializing " +
-            "tasks in LogManager. This should be used for testing only.";
+        "tasks in LogManager. This should be used for testing only.";
 
     public static final String LOG_DIR_FAILURE_TIMEOUT_MS_CONFIG = LOG_PREFIX + "dir.failure.timeout.ms";
     public static final Long LOG_DIR_FAILURE_TIMEOUT_MS_DEFAULT = 30000L;

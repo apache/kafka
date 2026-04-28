@@ -216,20 +216,20 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
             writer.accumulator.appendControlMessages((baseOffset, epoch, compression, buffer) -> {
                 long now = time.milliseconds();
                 try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
-                        buffer,
-                        RecordBatch.CURRENT_MAGIC_VALUE,
-                        compression,
-                        TimestampType.CREATE_TIME,
-                        baseOffset,
-                        now,
-                        RecordBatch.NO_PRODUCER_ID,
-                        RecordBatch.NO_PRODUCER_EPOCH,
-                        RecordBatch.NO_SEQUENCE,
-                        false, // isTransactional
-                        true,  // isControlBatch
-                        epoch,
-                        buffer.capacity()
-                    )
+                         buffer,
+                         RecordBatch.CURRENT_MAGIC_VALUE,
+                         compression,
+                         TimestampType.CREATE_TIME,
+                         baseOffset,
+                         now,
+                         RecordBatch.NO_PRODUCER_ID,
+                         RecordBatch.NO_PRODUCER_EPOCH,
+                         RecordBatch.NO_SEQUENCE,
+                         false, // isTransactional
+                         true,  // isControlBatch
+                         epoch,
+                         buffer.capacity()
+                     )
                 ) {
                     builder.appendSnapshotHeaderMessage(
                         now,

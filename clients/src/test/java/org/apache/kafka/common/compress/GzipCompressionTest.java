@@ -77,7 +77,7 @@ public class GzipCompressionTest {
     @Test
     public void testLevelValidator() {
         ConfigDef.Validator validator = GZIP.levelValidator();
-        for (int level = GZIP.minLevel(); level <= GZIP.maxLevel(); level++) {
+        for (int level = GZIP.minLevel();level <= GZIP.maxLevel();level++) {
             validator.ensureValid("", level);
         }
         validator.ensureValid("", GZIP.defaultLevel());

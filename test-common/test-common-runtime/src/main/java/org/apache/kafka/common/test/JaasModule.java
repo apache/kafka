@@ -40,7 +40,7 @@ public record JaasModule(String name, boolean debug, Map<String, String> entries
     @Override
     public String toString() {
         return String.format("%s required%n  debug=%b%n  %s;%n", name, debug, entries.entrySet().stream()
-                .map(e -> e.getKey() + "=\"" + e.getValue() + "\"")
-                .collect(Collectors.joining("\n  ")));
+            .map(e -> e.getKey() + "=\"" + e.getValue() + "\"")
+            .collect(Collectors.joining("\n  ")));
     }
 }

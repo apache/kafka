@@ -64,10 +64,10 @@ public final class MessageUtilTest {
     @Test
     public void testDuplicate() {
         assertNull(MessageUtil.duplicate(null));
-        assertArrayEquals(new byte[] {},
-            MessageUtil.duplicate(new byte[] {}));
-        assertArrayEquals(new byte[] {1, 2, 3},
-            MessageUtil.duplicate(new byte[] {1, 2, 3}));
+        assertArrayEquals(new byte[]{},
+            MessageUtil.duplicate(new byte[]{}));
+        assertArrayEquals(new byte[]{1, 2, 3},
+            MessageUtil.duplicate(new byte[]{1, 2, 3}));
     }
 
     @Test
@@ -76,17 +76,17 @@ public final class MessageUtilTest {
         assertTrue(MessageUtil.compareRawTaggedFields(null, Collections.emptyList()));
         assertTrue(MessageUtil.compareRawTaggedFields(Collections.emptyList(), null));
         assertFalse(MessageUtil.compareRawTaggedFields(Collections.emptyList(),
-            Collections.singletonList(new RawTaggedField(1, new byte[] {1}))));
+            Collections.singletonList(new RawTaggedField(1, new byte[]{1}))));
         assertFalse(MessageUtil.compareRawTaggedFields(null,
-            Collections.singletonList(new RawTaggedField(1, new byte[] {1}))));
+            Collections.singletonList(new RawTaggedField(1, new byte[]{1}))));
         assertFalse(MessageUtil.compareRawTaggedFields(
-            Collections.singletonList(new RawTaggedField(1, new byte[] {1})),
+            Collections.singletonList(new RawTaggedField(1, new byte[]{1})),
             Collections.emptyList()));
         assertTrue(MessageUtil.compareRawTaggedFields(
-            Arrays.asList(new RawTaggedField(1, new byte[] {1}),
-                new RawTaggedField(2, new byte[] {})),
-            Arrays.asList(new RawTaggedField(1, new byte[] {1}),
-                new RawTaggedField(2, new byte[] {}))));
+            Arrays.asList(new RawTaggedField(1, new byte[]{1}),
+                new RawTaggedField(2, new byte[]{})),
+            Arrays.asList(new RawTaggedField(1, new byte[]{1}),
+                new RawTaggedField(2, new byte[]{}))));
     }
 
     @Test
@@ -97,7 +97,7 @@ public final class MessageUtilTest {
 
     @Test
     public void testBinaryNode() throws IOException {
-        byte[] expected = new byte[] {5, 2, 9, 4, 1, 8, 7, 0, 3, 6};
+        byte[] expected = new byte[]{5, 2, 9, 4, 1, 8, 7, 0, 3, 6};
         StringWriter writer = new StringWriter();
         ObjectMapper mapper = new ObjectMapper();
 

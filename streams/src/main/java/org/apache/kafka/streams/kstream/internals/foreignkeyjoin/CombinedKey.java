@@ -57,8 +57,8 @@ public class CombinedKey<KRight, KLeft> {
     @Override
     public String toString() {
         return "CombinedKey{" +
-                "foreignKey=" + foreignKey +
-                ", primaryKey=" + primaryKey +
-                '}';
+            "foreignKey=" + foreignKey +
+            ", primaryKey=" + primaryKey +
+            '}';
     }
 }

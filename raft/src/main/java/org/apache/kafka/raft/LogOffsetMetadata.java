@@ -46,14 +46,14 @@ public class LogOffsetMetadata {
     @Override
     public String toString() {
         return "LogOffsetMetadata(offset=" + offset +
-                ", metadata=" + metadata + ")";
+            ", metadata=" + metadata + ")";
     }
 
     @Override
     public boolean equals(Object obj) {
         if (obj instanceof LogOffsetMetadata other) {
             return this.offset == other.offset &&
-                   this.metadata.equals(other.metadata);
+                this.metadata.equals(other.metadata);
         } else {
             return false;
         }

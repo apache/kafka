@@ -62,8 +62,8 @@ public class ErrantRecordSinkConnector extends TestableSinkConnector {
             for (SinkRecord rec : records) {
                 taskHandle.record();
                 TopicPartition tp = cachedTopicPartitions
-                    .computeIfAbsent(rec.topic(), v -> new HashMap<>())
-                    .computeIfAbsent(rec.kafkaPartition(), v -> new TopicPartition(rec.topic(), rec.kafkaPartition()));
+                        .computeIfAbsent(rec.topic(), v -> new HashMap<>())
+                        .computeIfAbsent(rec.kafkaPartition(), v -> new TopicPartition(rec.topic(), rec.kafkaPartition()));
                 committedOffsets.put(tp, committedOffsets.getOrDefault(tp, 0) + 1);
                 Throwable error = new Throwable();
                 // Test synchronous and asynchronous reporting, allowing for re-ordering the errant reports

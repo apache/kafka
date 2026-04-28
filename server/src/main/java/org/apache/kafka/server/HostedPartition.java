@@ -29,13 +29,18 @@ public sealed interface HostedPartition<T> {
     /**
      * This broker does not have any state for this partition locally.
      */
-    record None<T>() implements HostedPartition<T> { }
+    record None<T>() implements HostedPartition<T> {
+    }
+
     /**
      * This broker hosts the partition and it is online.
      */
-    record Online<T>(T partition) implements HostedPartition<T> { }
+    record Online<T>(T partition) implements HostedPartition<T> {
+    }
+
     /**
      * This broker hosts the partition, but it is in an offline log directory.
      */
-    record Offline<T>(Optional<T> partition) implements HostedPartition<T> { }
+    record Offline<T>(Optional<T> partition) implements HostedPartition<T> {
+    }
 }

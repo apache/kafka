@@ -58,13 +58,13 @@ public abstract class AbstractTask implements Task {
     protected final ProcessorStateManager stateMgr;
 
     AbstractTask(final TaskId id,
-                 final ProcessorTopology topology,
-                 final StateDirectory stateDirectory,
-                 final ProcessorStateManager stateMgr,
-                 final Set<TopicPartition> inputPartitions,
-                 final TaskConfig config,
-                 final String taskType,
-                 final Class<? extends AbstractTask> clazz) {
+        final ProcessorTopology topology,
+        final StateDirectory stateDirectory,
+        final ProcessorStateManager stateMgr,
+        final Set<TopicPartition> inputPartitions,
+        final TaskConfig config,
+        final String taskType,
+        final Class<? extends AbstractTask> clazz) {
         this.id = id;
         this.stateMgr = stateMgr;
         this.topology = topology;
@@ -154,7 +154,7 @@ public abstract class AbstractTask implements Task {
 
     @Override
     public void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
-                                            final Exception cause) {
+        final Exception cause) {
         if (deadlineMs == NO_DEADLINE) {
             deadlineMs = currentWallClockMs + config.taskTimeoutMs;
         } else if (currentWallClockMs > deadlineMs) {

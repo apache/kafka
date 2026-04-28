@@ -65,10 +65,10 @@ public class DescribeUserScramCredentialsResultTest {
         ScramMechanism scramSha256 = ScramMechanism.SCRAM_SHA_256;
         int iterations = 4096;
         dataFuture.complete(new DescribeUserScramCredentialsResponseData().setErrorCode(Errors.NONE.code()).setResults(Arrays.asList(
-                new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult().setUser(goodUser).setCredentialInfos(
-                        Collections.singletonList(new DescribeUserScramCredentialsResponseData.CredentialInfo().setMechanism(scramSha256.type()).setIterations(iterations))),
-                new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult().setUser(unknownUser).setErrorCode(Errors.RESOURCE_NOT_FOUND.code()),
-                new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult().setUser(failedUser).setErrorCode(Errors.DUPLICATE_RESOURCE.code()))));
+            new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult().setUser(goodUser).setCredentialInfos(
+                Collections.singletonList(new DescribeUserScramCredentialsResponseData.CredentialInfo().setMechanism(scramSha256.type()).setIterations(iterations))),
+            new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult().setUser(unknownUser).setErrorCode(Errors.RESOURCE_NOT_FOUND.code()),
+            new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult().setUser(failedUser).setErrorCode(Errors.DUPLICATE_RESOURCE.code()))));
         DescribeUserScramCredentialsResult results = new DescribeUserScramCredentialsResult(dataFuture);
         try {
             results.all().get();
@@ -101,8 +101,8 @@ public class DescribeUserScramCredentialsResultTest {
         ScramMechanism scramSha256 = ScramMechanism.SCRAM_SHA_256;
         int iterations = 4096;
         dataFuture.complete(new DescribeUserScramCredentialsResponseData().setErrorCode(Errors.NONE.code()).setResults(Collections.singletonList(
-                new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult().setUser(goodUser).setCredentialInfos(
-                        Collections.singletonList(new DescribeUserScramCredentialsResponseData.CredentialInfo().setMechanism(scramSha256.type()).setIterations(iterations))))));
+            new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult().setUser(goodUser).setCredentialInfos(
+                Collections.singletonList(new DescribeUserScramCredentialsResponseData.CredentialInfo().setMechanism(scramSha256.type()).setIterations(iterations))))));
         DescribeUserScramCredentialsResult results = new DescribeUserScramCredentialsResult(dataFuture);
         assertEquals(Collections.singletonList(goodUser), results.users().get(), "Expected 1 user with credentials");
         Map<String, UserScramCredentialsDescription> allResults = results.all().get();

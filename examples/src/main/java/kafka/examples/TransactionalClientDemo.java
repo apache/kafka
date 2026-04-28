@@ -102,7 +102,7 @@ public class TransactionalClientDemo {
                     producer.beginTransaction();
 
                     wordCountMap.forEach((key, value) ->
-                        producer.send(new ProducerRecord<>(OUTPUT_TOPIC, key, value.toString())));
+                            producer.send(new ProducerRecord<>(OUTPUT_TOPIC, key, value.toString())));
                     Utils.printOut("Produced %d word count records to output topic '%s'", wordCountMap.size(), OUTPUT_TOPIC);
 
                     Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
@@ -151,7 +151,7 @@ public class TransactionalClientDemo {
         Utils.printOut("Initializing Kafka consumer and producer");
         consumer = createKafkaConsumer();
         producer = createKafkaProducer();
-        
+
         producer.initTransactions();
         Utils.printOut("Producer initialized with transactions");
     }

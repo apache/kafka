@@ -59,9 +59,11 @@ import static org.mockito.Mockito.when;
 public class WorkerTaskTest {
 
     private static final Map<String, String> TASK_PROPS = new HashMap<>();
+
     static {
         TASK_PROPS.put(TaskConfig.TASK_CLASS_CONFIG, TestSinkTask.class.getName());
     }
+
     private static final TaskConfig TASK_CONFIG = new TaskConfig(TASK_PROPS);
 
     @Mock private TaskStatus.Listener statusListener;
@@ -294,11 +296,11 @@ public class WorkerTaskTest {
     private static class TestWorkerTask extends WorkerTask<Object, SourceRecord> {
 
         public TestWorkerTask(ConnectorTaskId id, Listener statusListener, TargetState initialState, ClassLoader loader,
-                              ConnectMetrics connectMetrics, ErrorHandlingMetrics errorHandlingMetrics,
-                              RetryWithToleranceOperator<Object> retryWithToleranceOperator,
-                              TransformationChain<Object, SourceRecord> transformationChain,
-                              Supplier<List<ErrorReporter<Object>>> errorReporterSupplier,
-                              Time time, StatusBackingStore statusBackingStore) {
+                ConnectMetrics connectMetrics, ErrorHandlingMetrics errorHandlingMetrics,
+                RetryWithToleranceOperator<Object> retryWithToleranceOperator,
+                TransformationChain<Object, SourceRecord> transformationChain,
+                Supplier<List<ErrorReporter<Object>>> errorReporterSupplier,
+                Time time, StatusBackingStore statusBackingStore) {
             super(id, statusListener, initialState, loader, connectMetrics, errorHandlingMetrics,
                     retryWithToleranceOperator, transformationChain, errorReporterSupplier, time, statusBackingStore, null, TestPlugins.noOpLoaderSwap());
         }

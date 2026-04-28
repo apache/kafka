@@ -108,7 +108,7 @@ public class SuppressScenarioTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             final TestInputTopic<String, String> inputTopic =
-                    driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
+                driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
             inputTopic.pipeInput("k1", "v1", 0L);
             inputTopic.pipeInput("k1", "v2", 1L);
             inputTopic.pipeInput("k2", "v1", 2L);
@@ -184,7 +184,7 @@ public class SuppressScenarioTest {
         final Topology topology = builder.build();
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             final TestInputTopic<String, String> inputTopic =
-                    driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
+                driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
             inputTopic.pipeInput("k1", "v1", 0L);
             inputTopic.pipeInput("k1", "v2", 1L);
             inputTopic.pipeInput("k2", "v1", 2L);
@@ -254,7 +254,7 @@ public class SuppressScenarioTest {
         System.out.println(topology.describe());
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             final TestInputTopic<String, String> inputTopic =
-                    driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
+                driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
             inputTopic.pipeInput("k1", "v1", 0L);
             inputTopic.pipeInput("k1", "v2", 1L);
             inputTopic.pipeInput("k2", "v1", 2L);
@@ -273,7 +273,7 @@ public class SuppressScenarioTest {
                     // consecutive updates to v1 get suppressed into only the latter.
                     new KeyValueTimestamp<>("v1", 0L, 1L),
                     new KeyValueTimestamp<>("v2", 1L, 1L)
-                    // the last update won't be evicted until another key comes along.
+                // the last update won't be evicted until another key comes along.
                 )
             );
             inputTopic.pipeInput("x", "x", 3L);
@@ -318,7 +318,7 @@ public class SuppressScenarioTest {
         System.out.println(topology.describe());
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             final TestInputTopic<String, String> inputTopic =
-                    driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
+                driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
             inputTopic.pipeInput("k1", "v1", 0L);
             inputTopic.pipeInput("k1", "v2", 1L);
             inputTopic.pipeInput("k2", "v1", 2L);
@@ -337,7 +337,7 @@ public class SuppressScenarioTest {
                     // consecutive updates to v1 get suppressed into only the latter.
                     new KeyValueTimestamp<>("v1", 0L, 1L),
                     new KeyValueTimestamp<>("v2", 1L, 1L)
-                    // the last update won't be evicted until another key comes along.
+                // the last update won't be evicted until another key comes along.
                 )
             );
             inputTopic.pipeInput("x", "x", 3L);
@@ -378,7 +378,7 @@ public class SuppressScenarioTest {
         System.out.println(topology.describe());
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             final TestInputTopic<String, String> inputTopic =
-                    driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
+                driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
             inputTopic.pipeInput("k1", "v1", 0L);
             inputTopic.pipeInput("k1", "v1", 1L);
             inputTopic.pipeInput("k1", "v1", 2L);
@@ -429,7 +429,7 @@ public class SuppressScenarioTest {
         System.out.println(topology.describe());
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             final TestInputTopic<String, String> inputTopic =
-                    driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
+                driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
             inputTopic.pipeInput("k1", "v1", 0L);
             inputTopic.pipeInput("k1", "v1", 1L);
             inputTopic.pipeInput("k1", "v1", 2L);
@@ -468,24 +468,24 @@ public class SuppressScenarioTest {
     public void shouldSupportFinalResultsForSlidingWindows() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Windowed<String>, Long> valueCounts = builder
-                .stream("input", Consumed.with(STRING_SERDE, STRING_SERDE))
-                .groupBy((String k, String v) -> k, Grouped.with(STRING_SERDE, STRING_SERDE))
-                .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(5L), ofMillis(15L)))
-                .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled().withKeySerde(STRING_SERDE));
+            .stream("input", Consumed.with(STRING_SERDE, STRING_SERDE))
+            .groupBy((String k, String v) -> k, Grouped.with(STRING_SERDE, STRING_SERDE))
+            .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(5L), ofMillis(15L)))
+            .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled().withKeySerde(STRING_SERDE));
         valueCounts
-                .suppress(untilWindowCloses(unbounded()))
-                .toStream()
-                .map((final Windowed<String> k, final Long v) -> new KeyValue<>(k.toString(), v))
-                .to("output-suppressed", Produced.with(STRING_SERDE, Serdes.Long()));
+            .suppress(untilWindowCloses(unbounded()))
+            .toStream()
+            .map((final Windowed<String> k, final Long v) -> new KeyValue<>(k.toString(), v))
+            .to("output-suppressed", Produced.with(STRING_SERDE, Serdes.Long()));
         valueCounts
-                .toStream()
-                .map((final Windowed<String> k, final Long v) -> new KeyValue<>(k.toString(), v))
-                .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
+            .toStream()
+            .map((final Windowed<String> k, final Long v) -> new KeyValue<>(k.toString(), v))
+            .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
         final Topology topology = builder.build();
         System.out.println(topology.describe());
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             final TestInputTopic<String, String> inputTopic =
-                    driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
+                driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
             inputTopic.pipeInput("k1", "v1", 10L);
             inputTopic.pipeInput("k1", "v1", 11L);
             inputTopic.pipeInput("k1", "v1", 10L);
@@ -575,7 +575,7 @@ public class SuppressScenarioTest {
         System.out.println(topology.describe());
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             final TestInputTopic<String, String> inputTopic =
-                    driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
+                driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
             // first window
             inputTopic.pipeInput("k1", "v1", 0L);
             inputTopic.pipeInput("k1", "v1", 5L);
@@ -655,7 +655,7 @@ public class SuppressScenarioTest {
             final TestInputTopic<String, String> inputTopicRight =
                 driver.createInputTopic("right", STRING_SERIALIZER, STRING_SERIALIZER);
             final TestInputTopic<String, String> inputTopicLeft =
-                    driver.createInputTopic("left", STRING_SERIALIZER, STRING_SERIALIZER);
+                driver.createInputTopic("left", STRING_SERIALIZER, STRING_SERIALIZER);
 
             inputTopicRight.pipeInput("B", "1", 0L);
             inputTopicRight.pipeInput("A", "1", 0L);
@@ -743,7 +743,7 @@ public class SuppressScenarioTest {
             final TestInputTopic<String, String> inputTopicRight =
                 driver.createInputTopic("right", STRING_SERIALIZER, STRING_SERIALIZER);
             final TestInputTopic<String, String> inputTopicLeft =
-                    driver.createInputTopic("left", STRING_SERIALIZER, STRING_SERIALIZER);
+                driver.createInputTopic("left", STRING_SERIALIZER, STRING_SERIALIZER);
 
             inputTopicLeft.pipeInput("B", "1", 0L);
             inputTopicLeft.pipeInput("A", "1", 0L);
@@ -849,7 +849,7 @@ public class SuppressScenarioTest {
     }
 
     private static <K, V> void verify(final List<TestRecord<K, V>> results,
-                                      final List<KeyValueTimestamp<K, V>> expectedResults) {
+        final List<KeyValueTimestamp<K, V>> expectedResults) {
         if (results.size() != expectedResults.size()) {
             throw new AssertionError(printRecords(results) + " != " + expectedResults);
         }
@@ -865,9 +865,9 @@ public class SuppressScenarioTest {
     }
 
     private static <K, V> List<TestRecord<K, V>> drainProducerRecords(final TopologyTestDriver driver,
-                                                                      final String topic,
-                                                                      final Deserializer<K> keyDeserializer,
-                                                                      final Deserializer<V> valueDeserializer) {
+        final String topic,
+        final Deserializer<K> keyDeserializer,
+        final Deserializer<V> valueDeserializer) {
         return driver.createOutputTopic(topic, keyDeserializer, valueDeserializer).readRecordsToList();
     }
 

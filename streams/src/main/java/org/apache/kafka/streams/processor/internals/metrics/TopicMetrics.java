@@ -42,10 +42,10 @@ public class TopicMetrics {
     private static final String RECORDS_PRODUCED_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + RECORDS_PRODUCED_DESCRIPTION;
 
     public static Sensor consumedSensor(final String threadId,
-                                        final String taskId,
-                                        final String processorNodeId,
-                                        final String topic,
-                                        final StreamsMetricsImpl streamsMetrics) {
+        final String taskId,
+        final String processorNodeId,
+        final String topic,
+        final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor = streamsMetrics.topicLevelSensor(
             threadId,
             taskId,
@@ -66,10 +66,10 @@ public class TopicMetrics {
     }
 
     public static Sensor producedSensor(final String threadId,
-                                        final String taskId,
-                                        final String processorNodeId,
-                                        final String topic,
-                                        final StreamsMetricsImpl streamsMetrics) {
+        final String taskId,
+        final String processorNodeId,
+        final String topic,
+        final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor = streamsMetrics.topicLevelSensor(
             threadId,
             taskId,

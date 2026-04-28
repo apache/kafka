@@ -23,7 +23,7 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData;
  * A class containing log offset metadata and fetch info for a topic partition.
  */
 public record FetchPartitionStatus(
-    LogOffsetMetadata startOffsetMetadata,
-    PartitionData fetchInfo
+LogOffsetMetadata startOffsetMetadata,
+PartitionData fetchInfo
 ) {
 }

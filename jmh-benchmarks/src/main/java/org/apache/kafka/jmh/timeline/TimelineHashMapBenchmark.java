@@ -59,7 +59,7 @@ public class TimelineHashMapBenchmark {
     public Map<Integer, String> testAddEntriesInTimelineMap() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         TimelineHashMap<Integer, String> map =
-            new TimelineHashMap<>(snapshotRegistry, NUM_ENTRIES);
+                new TimelineHashMap<>(snapshotRegistry, NUM_ENTRIES);
         for (int i = 0; i < NUM_ENTRIES; i++) {
             int key = (int) (0xffffffff & ((i * 2862933555777941757L) + 3037000493L));
             map.put(key, String.valueOf(key));
@@ -71,7 +71,7 @@ public class TimelineHashMapBenchmark {
     public Map<Integer, String> testAddEntriesWithSnapshots() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         TimelineHashMap<Integer, String> map =
-            new TimelineHashMap<>(snapshotRegistry, NUM_ENTRIES);
+                new TimelineHashMap<>(snapshotRegistry, NUM_ENTRIES);
         long epoch = 0;
         int j = 0;
         for (int i = 0; i < NUM_ENTRIES; i++) {

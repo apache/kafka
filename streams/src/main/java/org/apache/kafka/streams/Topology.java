@@ -137,7 +137,7 @@ public class Topology {
      * @see #addSource(String, Pattern)
      */
     public synchronized Topology addSource(final String name,
-                                           final String... topics) {
+        final String... topics) {
         internalTopologyBuilder.addSource(null, name, null, null, null, topics);
         return this;
     }
@@ -148,7 +148,7 @@ public class Topology {
      * <p>Takes a {@link Pattern} (cannot be {@code null}) to match topics to consumes from, instead of a list of topic names.
      */
     public synchronized Topology addSource(final String name,
-                                           final Pattern topicPattern) {
+        final Pattern topicPattern) {
         internalTopologyBuilder.addSource(null, name, null, null, null, topicPattern);
         return this;
     }
@@ -158,8 +158,8 @@ public class Topology {
      */
     @Deprecated
     public synchronized Topology addSource(final AutoOffsetReset offsetReset,
-                                           final String name,
-                                           final String... topics) {
+        final String name,
+        final String... topics) {
         internalTopologyBuilder.addSource(convertOldToNew(offsetReset), name, null, null, null, topics);
         return this;
     }
@@ -168,8 +168,8 @@ public class Topology {
      * See {@link #addSource(String, String...)}.
      */
     public synchronized Topology addSource(final org.apache.kafka.streams.AutoOffsetReset offsetReset,
-                                           final String name,
-                                           final String... topics) {
+        final String name,
+        final String... topics) {
         internalTopologyBuilder.addSource(
             offsetReset == null ? null : new AutoOffsetResetInternal(offsetReset),
             name,
@@ -186,8 +186,8 @@ public class Topology {
      */
     @Deprecated
     public synchronized Topology addSource(final AutoOffsetReset offsetReset,
-                                           final String name,
-                                           final Pattern topicPattern) {
+        final String name,
+        final Pattern topicPattern) {
         internalTopologyBuilder.addSource(convertOldToNew(offsetReset), name, null, null, null, topicPattern);
         return this;
     }
@@ -196,8 +196,8 @@ public class Topology {
      * See {@link #addSource(String, Pattern)}.
      */
     public synchronized Topology addSource(final org.apache.kafka.streams.AutoOffsetReset offsetReset,
-                                           final String name,
-                                           final Pattern topicPattern) {
+        final String name,
+        final Pattern topicPattern) {
         internalTopologyBuilder.addSource(
             offsetReset == null ? null : new AutoOffsetResetInternal(offsetReset),
             name,
@@ -213,8 +213,8 @@ public class Topology {
      * See {@link #addSource(String, String...)}.
      */
     public synchronized Topology addSource(final TimestampExtractor timestampExtractor,
-                                           final String name,
-                                           final String... topics) {
+        final String name,
+        final String... topics) {
         internalTopologyBuilder.addSource(null, name, timestampExtractor, null, null, topics);
         return this;
     }
@@ -223,8 +223,8 @@ public class Topology {
      * See {@link #addSource(String, Pattern)}.
      */
     public synchronized Topology addSource(final TimestampExtractor timestampExtractor,
-                                           final String name,
-                                           final Pattern topicPattern) {
+        final String name,
+        final Pattern topicPattern) {
         internalTopologyBuilder.addSource(null, name, timestampExtractor, null, null, topicPattern);
         return this;
     }
@@ -234,9 +234,9 @@ public class Topology {
      */
     @Deprecated
     public synchronized Topology addSource(final AutoOffsetReset offsetReset,
-                                           final TimestampExtractor timestampExtractor,
-                                           final String name,
-                                           final String... topics) {
+        final TimestampExtractor timestampExtractor,
+        final String name,
+        final String... topics) {
         internalTopologyBuilder.addSource(convertOldToNew(offsetReset), name, timestampExtractor, null, null, topics);
         return this;
     }
@@ -245,9 +245,9 @@ public class Topology {
      * See {@link #addSource(String, String...)}.
      */
     public synchronized Topology addSource(final org.apache.kafka.streams.AutoOffsetReset offsetReset,
-                                           final TimestampExtractor timestampExtractor,
-                                           final String name,
-                                           final String... topics) {
+        final TimestampExtractor timestampExtractor,
+        final String name,
+        final String... topics) {
         internalTopologyBuilder.addSource(
             offsetReset == null ? null : new AutoOffsetResetInternal(offsetReset),
             name,
@@ -264,9 +264,9 @@ public class Topology {
      */
     @Deprecated
     public synchronized Topology addSource(final AutoOffsetReset offsetReset,
-                                           final TimestampExtractor timestampExtractor,
-                                           final String name,
-                                           final Pattern topicPattern) {
+        final TimestampExtractor timestampExtractor,
+        final String name,
+        final Pattern topicPattern) {
         internalTopologyBuilder.addSource(convertOldToNew(offsetReset), name, timestampExtractor, null, null, topicPattern);
         return this;
     }
@@ -275,9 +275,9 @@ public class Topology {
      * See {@link #addSource(String, Pattern)}.
      */
     public synchronized Topology addSource(final org.apache.kafka.streams.AutoOffsetReset offsetReset,
-                                           final TimestampExtractor timestampExtractor,
-                                           final String name,
-                                           final Pattern topicPattern) {
+        final TimestampExtractor timestampExtractor,
+        final String name,
+        final Pattern topicPattern) {
         internalTopologyBuilder.addSource(
             offsetReset == null ? null : new AutoOffsetResetInternal(offsetReset),
             name,
@@ -293,9 +293,9 @@ public class Topology {
      * See {@link #addSource(String, String...)}.
      */
     public synchronized <K, V> Topology addSource(final String name,
-                                                  final Deserializer<K> keyDeserializer,
-                                                  final Deserializer<V> valueDeserializer,
-                                                  final String... topics) {
+        final Deserializer<K> keyDeserializer,
+        final Deserializer<V> valueDeserializer,
+        final String... topics) {
         internalTopologyBuilder.addSource(null, name, null, keyDeserializer, valueDeserializer, topics);
         return this;
     }
@@ -304,9 +304,9 @@ public class Topology {
      * See {@link #addSource(String, Pattern)}.
      */
     public synchronized <K, V> Topology addSource(final String name,
-                                                  final Deserializer<K> keyDeserializer,
-                                                  final Deserializer<V> valueDeserializer,
-                                                  final Pattern topicPattern) {
+        final Deserializer<K> keyDeserializer,
+        final Deserializer<V> valueDeserializer,
+        final Pattern topicPattern) {
         internalTopologyBuilder.addSource(null, name, null, keyDeserializer, valueDeserializer, topicPattern);
         return this;
     }
@@ -316,10 +316,10 @@ public class Topology {
      */
     @Deprecated
     public synchronized <K, V> Topology addSource(final AutoOffsetReset offsetReset,
-                                                  final String name,
-                                                  final Deserializer<K> keyDeserializer,
-                                                  final Deserializer<V> valueDeserializer,
-                                                  final String... topics) {
+        final String name,
+        final Deserializer<K> keyDeserializer,
+        final Deserializer<V> valueDeserializer,
+        final String... topics) {
         internalTopologyBuilder.addSource(convertOldToNew(offsetReset), name, null, keyDeserializer, valueDeserializer, topics);
         return this;
     }
@@ -328,10 +328,10 @@ public class Topology {
      * See {@link #addSource(String, String...)}.
      */
     public synchronized <K, V> Topology addSource(final org.apache.kafka.streams.AutoOffsetReset offsetReset,
-                                                  final String name,
-                                                  final Deserializer<K> keyDeserializer,
-                                                  final Deserializer<V> valueDeserializer,
-                                                  final String... topics) {
+        final String name,
+        final Deserializer<K> keyDeserializer,
+        final Deserializer<V> valueDeserializer,
+        final String... topics) {
         internalTopologyBuilder.addSource(
             offsetReset == null ? null : new AutoOffsetResetInternal(offsetReset),
             name,
@@ -348,10 +348,10 @@ public class Topology {
      */
     @Deprecated
     public synchronized <K, V> Topology addSource(final AutoOffsetReset offsetReset,
-                                                  final String name,
-                                                  final Deserializer<K> keyDeserializer,
-                                                  final Deserializer<V> valueDeserializer,
-                                                  final Pattern topicPattern) {
+        final String name,
+        final Deserializer<K> keyDeserializer,
+        final Deserializer<V> valueDeserializer,
+        final Pattern topicPattern) {
         internalTopologyBuilder.addSource(convertOldToNew(offsetReset), name, null, keyDeserializer, valueDeserializer, topicPattern);
         return this;
     }
@@ -360,10 +360,10 @@ public class Topology {
      * See {@link #addSource(String, Pattern)}.
      */
     public synchronized <K, V> Topology addSource(final org.apache.kafka.streams.AutoOffsetReset offsetReset,
-                                                  final String name,
-                                                  final Deserializer<K> keyDeserializer,
-                                                  final Deserializer<V> valueDeserializer,
-                                                  final Pattern topicPattern) {
+        final String name,
+        final Deserializer<K> keyDeserializer,
+        final Deserializer<V> valueDeserializer,
+        final Pattern topicPattern) {
         internalTopologyBuilder.addSource(
             offsetReset == null ? null : new AutoOffsetResetInternal(offsetReset),
             name,
@@ -380,11 +380,11 @@ public class Topology {
      */
     @Deprecated
     public synchronized <K, V> Topology addSource(final AutoOffsetReset offsetReset,
-                                                  final String name,
-                                                  final TimestampExtractor timestampExtractor,
-                                                  final Deserializer<K> keyDeserializer,
-                                                  final Deserializer<V> valueDeserializer,
-                                                  final String... topics) {
+        final String name,
+        final TimestampExtractor timestampExtractor,
+        final Deserializer<K> keyDeserializer,
+        final Deserializer<V> valueDeserializer,
+        final String... topics) {
         internalTopologyBuilder.addSource(convertOldToNew(offsetReset), name, timestampExtractor, keyDeserializer, valueDeserializer, topics);
         return this;
     }
@@ -393,11 +393,11 @@ public class Topology {
      * See {@link #addSource(String, String...)}.
      */
     public synchronized <K, V> Topology addSource(final org.apache.kafka.streams.AutoOffsetReset offsetReset,
-                                                  final String name,
-                                                  final TimestampExtractor timestampExtractor,
-                                                  final Deserializer<K> keyDeserializer,
-                                                  final Deserializer<V> valueDeserializer,
-                                                  final String... topics) {
+        final String name,
+        final TimestampExtractor timestampExtractor,
+        final Deserializer<K> keyDeserializer,
+        final Deserializer<V> valueDeserializer,
+        final String... topics) {
         internalTopologyBuilder.addSource(
             offsetReset == null ? null : new AutoOffsetResetInternal(offsetReset),
             name,
@@ -414,11 +414,11 @@ public class Topology {
      */
     @Deprecated
     public synchronized <K, V> Topology addSource(final AutoOffsetReset offsetReset,
-                                                  final String name,
-                                                  final TimestampExtractor timestampExtractor,
-                                                  final Deserializer<K> keyDeserializer,
-                                                  final Deserializer<V> valueDeserializer,
-                                                  final Pattern topicPattern) {
+        final String name,
+        final TimestampExtractor timestampExtractor,
+        final Deserializer<K> keyDeserializer,
+        final Deserializer<V> valueDeserializer,
+        final Pattern topicPattern) {
         internalTopologyBuilder.addSource(convertOldToNew(offsetReset), name, timestampExtractor, keyDeserializer, valueDeserializer, topicPattern);
         return this;
     }
@@ -427,11 +427,11 @@ public class Topology {
      * See {@link #addSource(String, Pattern)}.
      */
     public synchronized <K, V> Topology addSource(final org.apache.kafka.streams.AutoOffsetReset offsetReset,
-                                                  final String name,
-                                                  final TimestampExtractor timestampExtractor,
-                                                  final Deserializer<K> keyDeserializer,
-                                                  final Deserializer<V> valueDeserializer,
-                                                  final Pattern topicPattern) {
+        final String name,
+        final TimestampExtractor timestampExtractor,
+        final Deserializer<K> keyDeserializer,
+        final Deserializer<V> valueDeserializer,
+        final Pattern topicPattern) {
         internalTopologyBuilder.addSource(
             offsetReset == null ? null : new AutoOffsetResetInternal(offsetReset),
             name,
@@ -480,8 +480,8 @@ public class Topology {
      * @see #addSink(String, TopicNameExtractor, String...)
      */
     public synchronized Topology addSink(final String name,
-                                         final String topic,
-                                         final String... parentNames) {
+        final String topic,
+        final String... parentNames) {
         internalTopologyBuilder.addSink(name, topic, null, null, null, parentNames);
         return this;
     }
@@ -490,9 +490,9 @@ public class Topology {
      * See {@link #addSink(String, String, String...)}.
      */
     public synchronized <K, V> Topology addSink(final String name,
-                                                final String topic,
-                                                final StreamPartitioner<? super K, ? super V> partitioner,
-                                                final String... parentNames) {
+        final String topic,
+        final StreamPartitioner<? super K, ? super V> partitioner,
+        final String... parentNames) {
         internalTopologyBuilder.addSink(name, topic, null, null, partitioner, parentNames);
         return this;
     }
@@ -501,10 +501,10 @@ public class Topology {
      * See {@link #addSink(String, String, String...)}.
      */
     public synchronized <K, V> Topology addSink(final String name,
-                                                final String topic,
-                                                final Serializer<K> keySerializer,
-                                                final Serializer<V> valueSerializer,
-                                                final String... parentNames) {
+        final String topic,
+        final Serializer<K> keySerializer,
+        final Serializer<V> valueSerializer,
+        final String... parentNames) {
         internalTopologyBuilder.addSink(name, topic, keySerializer, valueSerializer, null, parentNames);
         return this;
     }
@@ -513,11 +513,11 @@ public class Topology {
      * See {@link #addSink(String, String, String...)}.
      */
     public synchronized <K, V> Topology addSink(final String name,
-                                                final String topic,
-                                                final Serializer<K> keySerializer,
-                                                final Serializer<V> valueSerializer,
-                                                final StreamPartitioner<? super K, ? super V> partitioner,
-                                                final String... parentNames) {
+        final String topic,
+        final Serializer<K> keySerializer,
+        final Serializer<V> valueSerializer,
+        final StreamPartitioner<? super K, ? super V> partitioner,
+        final String... parentNames) {
         internalTopologyBuilder.addSink(name, topic, keySerializer, valueSerializer, partitioner, parentNames);
         return this;
     }
@@ -533,8 +533,8 @@ public class Topology {
      * Returning {@code null} as topic name is invalid and will result in a runtime exception.
      */
     public synchronized <K, V> Topology addSink(final String name,
-                                                final TopicNameExtractor<? super K, ? super V> topicExtractor,
-                                                final String... parentNames) {
+        final TopicNameExtractor<? super K, ? super V> topicExtractor,
+        final String... parentNames) {
         internalTopologyBuilder.addSink(name, topicExtractor, null, null, null, parentNames);
         return this;
     }
@@ -543,9 +543,9 @@ public class Topology {
      * See {@link #addSink(String, String, String...)}.
      */
     public synchronized <K, V> Topology addSink(final String name,
-                                                final TopicNameExtractor<? super K, ? super V> topicExtractor,
-                                                final StreamPartitioner<? super K, ? super V> partitioner,
-                                                final String... parentNames) {
+        final TopicNameExtractor<? super K, ? super V> topicExtractor,
+        final StreamPartitioner<? super K, ? super V> partitioner,
+        final String... parentNames) {
         internalTopologyBuilder.addSink(name, topicExtractor, null, null, partitioner, parentNames);
         return this;
     }
@@ -554,10 +554,10 @@ public class Topology {
      * See {@link #addSink(String, String, String...)}.
      */
     public synchronized <K, V> Topology addSink(final String name,
-                                                final TopicNameExtractor<? super K, ? super V> topicExtractor,
-                                                final Serializer<K> keySerializer,
-                                                final Serializer<V> valueSerializer,
-                                                final String... parentNames) {
+        final TopicNameExtractor<? super K, ? super V> topicExtractor,
+        final Serializer<K> keySerializer,
+        final Serializer<V> valueSerializer,
+        final String... parentNames) {
         internalTopologyBuilder.addSink(name, topicExtractor, keySerializer, valueSerializer, null, parentNames);
         return this;
     }
@@ -566,11 +566,11 @@ public class Topology {
      * See {@link #addSink(String, String, String...)}.
      */
     public synchronized <K, V> Topology addSink(final String name,
-                                                final TopicNameExtractor<? super K, ? super V> topicExtractor,
-                                                final Serializer<K> keySerializer,
-                                                final Serializer<V> valueSerializer,
-                                                final StreamPartitioner<? super K, ? super V> partitioner,
-                                                final String... parentNames) {
+        final TopicNameExtractor<? super K, ? super V> topicExtractor,
+        final Serializer<K> keySerializer,
+        final Serializer<V> valueSerializer,
+        final StreamPartitioner<? super K, ? super V> partitioner,
+        final String... parentNames) {
         internalTopologyBuilder.addSink(name, topicExtractor, keySerializer, valueSerializer, partitioner, parentNames);
         return this;
     }
@@ -647,8 +647,8 @@ public class Topology {
      * @see org.apache.kafka.streams.processor.api.ContextualProcessor ContextualProcessor
      */
     public synchronized <KIn, VIn, KOut, VOut> Topology addProcessor(final String name,
-                                                                     final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier,
-                                                                     final String... parentNames) {
+        final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier,
+        final String... parentNames) {
         checkSupplier(processorSupplier);
         final ProcessorSupplier<KIn, VIn, KOut, VOut> wrapped = internalTopologyBuilder.wrapProcessorSupplier(name, processorSupplier);
         internalTopologyBuilder.addProcessor(name, wrapped, parentNames);
@@ -711,7 +711,7 @@ public class Topology {
      *         {@code parentNames} contains a {@code null} parent name
      */
     public synchronized <S extends StateStore> Topology addStateStore(final StoreBuilder<S> storeBuilder,
-                                                                      final String... processorNames) {
+        final String... processorNames) {
         internalTopologyBuilder.addStateStore(storeBuilder, processorNames);
         return this;
     }
@@ -968,7 +968,7 @@ public class Topology {
      *         contains a {@code null} state store name
      */
     public synchronized Topology connectProcessorAndStateStores(final String processorName,
-                                                                final String... stateStoreNames) {
+        final String... stateStoreNames) {
         internalTopologyBuilder.connectProcessorAndStateStores(processorName, stateStoreNames);
         return this;
     }

@@ -55,7 +55,7 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
 
     private final Optional<MetricsRegistry> registry;
     private final AtomicReference<MetadataVersion> currentMetadataVersion =
-            new AtomicReference<>(MetadataVersion.MINIMUM_VERSION);
+        new AtomicReference<>(MetadataVersion.MINIMUM_VERSION);
     private final Map<String, Short> finalizedFeatureLevels = new ConcurrentHashMap<>();
     private final AtomicInteger currentControllerId = new AtomicInteger(-1);
     private final AtomicLong handleLoadSnapshotCount = new AtomicLong(0);
@@ -274,7 +274,7 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
         for (int i = 1; i < words.length; i++) {
             final var word = words[i];
             builder.append(Character.toUpperCase(word.charAt(0)))
-                   .append(word.substring(1).toLowerCase(Locale.ROOT));
+                .append(word.substring(1).toLowerCase(Locale.ROOT));
         }
         return builder.toString();
     }

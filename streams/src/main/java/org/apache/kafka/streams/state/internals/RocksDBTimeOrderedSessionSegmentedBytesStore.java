@@ -51,9 +51,9 @@ public class RocksDBTimeOrderedSessionSegmentedBytesStore<S extends Segment> ext
     }
 
     RocksDBTimeOrderedSessionSegmentedBytesStore(final String name,
-                                                 final long retention,
-                                                 final boolean withIndex,
-                                                 final AbstractSegments<S> segments) {
+        final long retention,
+        final boolean withIndex,
+        final AbstractSegments<S> segments) {
         super(
             name,
             retention,
@@ -65,8 +65,8 @@ public class RocksDBTimeOrderedSessionSegmentedBytesStore<S extends Segment> ext
 
     @Override
     public byte[] fetchSession(final Bytes key,
-                               final long sessionStartTime,
-                               final long sessionEndTime) {
+        final long sessionStartTime,
+        final long sessionEndTime) {
         return get(TimeFirstSessionKeySchema.toBinary(
             key,
             sessionStartTime,
@@ -76,7 +76,7 @@ public class RocksDBTimeOrderedSessionSegmentedBytesStore<S extends Segment> ext
 
     @Override
     public KeyValueIterator<Bytes, byte[]> fetchSessions(final long earliestSessionEndTime,
-                                                         final long latestSessionEndTime) {
+        final long latestSessionEndTime) {
         final List<S> searchSpace = segments.segments(earliestSessionEndTime, latestSessionEndTime, true);
 
         // here we want [0, latestSE, FF] as the upper bound to cover any possible keys,
@@ -85,24 +85,24 @@ public class RocksDBTimeOrderedSessionSegmentedBytesStore<S extends Segment> ext
         final Bytes binaryTo = baseKeySchema.lowerRangeFixedSize(null, latestSessionEndTime + 1);
 
         return new SegmentIterator<>(
-                searchSpace.iterator(),
-                iterator -> {
-                    while (iterator.hasNext()) {
-                        final Bytes bytes = iterator.peekNextKey();
+            searchSpace.iterator(),
+            iterator -> {
+                while (iterator.hasNext()) {
+                    final Bytes bytes = iterator.peekNextKey();
 
-                        final Windowed<Bytes> windowedKey = TimeFirstSessionKeySchema.from(bytes);
-                        final long endTime = windowedKey.window().end();
+                    final Windowed<Bytes> windowedKey = TimeFirstSessionKeySchema.from(bytes);
+                    final long endTime = windowedKey.window().end();
 
-                        if (endTime <= latestSessionEndTime && endTime >= earliestSessionEndTime) {
-                            return true;
-                        }
-                        iterator.next();
+                    if (endTime <= latestSessionEndTime && endTime >= earliestSessionEndTime) {
+                        return true;
                     }
-                    return false;
-                },
-                binaryFrom,
-                binaryTo,
-                true);
+                    iterator.next();
+                }
+                return false;
+            },
+            binaryFrom,
+            binaryTo,
+            true);
     }
 
     @Override

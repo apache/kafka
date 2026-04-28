@@ -21,10 +21,10 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 public record ConfigValueInfo(
-    @JsonProperty("name") String name,
-    @JsonProperty("value") String value,
-    @JsonProperty("recommended_values") List<String> recommendedValues,
-    @JsonProperty("errors") List<String> errors,
-    @JsonProperty("visible") boolean visible
+@JsonProperty("name") String name,
+@JsonProperty("value") String value,
+@JsonProperty("recommended_values") List<String> recommendedValues,
+@JsonProperty("errors") List<String> errors,
+@JsonProperty("visible") boolean visible
 ) {
 }

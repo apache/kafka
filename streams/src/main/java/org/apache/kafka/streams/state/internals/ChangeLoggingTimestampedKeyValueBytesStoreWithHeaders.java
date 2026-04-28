@@ -46,7 +46,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders
 
     @Override
     public void put(final Bytes key,
-                    final byte[] valueTimestampHeaders) {
+        final byte[] valueTimestampHeaders) {
         wrapped().put(key, valueTimestampHeaders);
         log(
             key,
@@ -62,7 +62,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders
 
     @Override
     public byte[] putIfAbsent(final Bytes key,
-                              final byte[] valueTimestampHeaders) {
+        final byte[] valueTimestampHeaders) {
         final byte[] previous = wrapped().putIfAbsent(key, valueTimestampHeaders);
         if (previous == null) {
             // then it was absent

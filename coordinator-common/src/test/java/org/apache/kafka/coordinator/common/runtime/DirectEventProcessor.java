@@ -46,7 +46,8 @@ public class DirectEventProcessor implements CoordinatorEventProcessor {
     }
 
     @Override
-    public void close() {}
+    public void close() {
+    }
 
     private void processQueue() {
         if (inEvent) {

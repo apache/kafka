@@ -95,23 +95,23 @@ public class NodeApiVersions {
      */
     public static NodeApiVersions create(short apiKey, short minVersion, short maxVersion) {
         return create(Collections.singleton(new ApiVersion()
-                .setApiKey(apiKey)
-                .setMinVersion(minVersion)
-                .setMaxVersion(maxVersion)));
+            .setApiKey(apiKey)
+            .setMinVersion(minVersion)
+            .setMaxVersion(maxVersion)));
     }
 
     public NodeApiVersions(
-            Collection<ApiVersion> nodeApiVersions,
-            Collection<SupportedFeatureKey> nodeSupportedFeatures
+        Collection<ApiVersion> nodeApiVersions,
+        Collection<SupportedFeatureKey> nodeSupportedFeatures
     ) {
         this(nodeApiVersions, nodeSupportedFeatures, Collections.emptyList(), -1);
     }
 
     public NodeApiVersions(
-            Collection<ApiVersion> nodeApiVersions,
-            Collection<SupportedFeatureKey> nodeSupportedFeatures,
-            Collection<ApiVersionsResponseData.FinalizedFeatureKey> nodeFinalizedFeatures,
-            long finalizedFeaturesEpoch
+        Collection<ApiVersion> nodeApiVersions,
+        Collection<SupportedFeatureKey> nodeSupportedFeatures,
+        Collection<ApiVersionsResponseData.FinalizedFeatureKey> nodeFinalizedFeatures,
+        long finalizedFeaturesEpoch
     ) {
         for (ApiVersion nodeApiVersion : nodeApiVersions) {
             if (ApiKeys.hasId(nodeApiVersion.apiKey())) {
@@ -126,7 +126,7 @@ public class NodeApiVersions {
         Map<String, SupportedVersionRange> supportedFeaturesBuilder = new HashMap<>();
         for (SupportedFeatureKey supportedFeature : nodeSupportedFeatures) {
             supportedFeaturesBuilder.put(supportedFeature.name(),
-                    new SupportedVersionRange(supportedFeature.minVersion(), supportedFeature.maxVersion()));
+                new SupportedVersionRange(supportedFeature.minVersion(), supportedFeature.maxVersion()));
         }
         this.supportedFeatures = Collections.unmodifiableMap(supportedFeaturesBuilder);
         this.finalizedFeaturesEpoch = finalizedFeaturesEpoch;
@@ -194,7 +194,7 @@ public class NodeApiVersions {
         for (ApiKeys apiKey : ApiKeys.clientApis()) {
             if (!apiKeysText.containsKey(apiKey.id)) {
                 String bld = apiKey.name + "(" +
-                        apiKey.id + "): " + "UNSUPPORTED";
+                    apiKey.id + "): " + "UNSUPPORTED";
                 apiKeysText.put(apiKey.id, bld);
             }
         }

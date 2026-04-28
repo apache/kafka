@@ -90,10 +90,10 @@ public class KeyQueryMetadata {
     @Override
     public String toString() {
         return "KeyQueryMetadata {" +
-                "activeHost=" + activeHost +
-                ", standbyHosts=" + standbyHosts +
-                ", partition=" + partition +
-                '}';
+            "activeHost=" + activeHost +
+            ", standbyHosts=" + standbyHosts +
+            ", partition=" + partition +
+            '}';
     }
 
     @Override

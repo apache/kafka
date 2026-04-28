@@ -149,7 +149,7 @@ public class FileQuorumStateStoreTest {
     }
 
     @Test
-    void testReload()  throws IOException {
+    void testReload() throws IOException {
         final File stateFile = TestUtils.tempFile();
         FileQuorumStateStore stateStore = new FileQuorumStateStore(stateFile);
 
@@ -186,8 +186,8 @@ public class FileQuorumStateStoreTest {
     @Test
     public void testCantReadVersionQuorumState() throws IOException {
         String jsonString = "{\"leaderId\":9990,\"leaderEpoch\":3012,\"votedId\":-1," +
-                "\"appliedOffset\": 0,\"currentVoters\":[{\"voterId\":9990},{\"voterId\":9991},{\"voterId\":9992}]," +
-                "\"data_version\":2}";
+            "\"appliedOffset\": 0,\"currentVoters\":[{\"voterId\":9990},{\"voterId\":9991},{\"voterId\":9992}]," +
+            "\"data_version\":2}";
         final File stateFile = TestUtils.tempFile();
         writeToStateFile(stateFile, jsonString);
 
@@ -214,7 +214,7 @@ public class FileQuorumStateStoreTest {
     private void writeToStateFile(final File stateFile, String jsonString) {
         try (final FileOutputStream fileOutputStream = new FileOutputStream(stateFile);
              final BufferedWriter writer = new BufferedWriter(
-                     new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
+                 new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
             ObjectMapper mapper = new ObjectMapper();
             JsonNode node = mapper.readTree(jsonString);
 
@@ -224,8 +224,8 @@ public class FileQuorumStateStoreTest {
 
         } catch (IOException e) {
             throw new UncheckedIOException(
-                    String.format("Error while writing to Quorum state file %s",
-                            stateFile.getAbsolutePath()), e);
+                String.format("Error while writing to Quorum state file %s",
+                    stateFile.getAbsolutePath()), e);
         }
     }
 }

@@ -64,7 +64,7 @@ public final class ConfigurationsDelta {
         ConfigResource resource =
             new ConfigResource(Type.forId(record.resourceType()), record.resourceName());
         ConfigurationImage configImage = image.resourceData().getOrDefault(resource,
-                new ConfigurationImage(resource, Map.of()));
+            new ConfigurationImage(resource, Map.of()));
         ConfigurationDelta delta = changes.computeIfAbsent(resource,
             __ -> new ConfigurationDelta(configImage, supportedConfigChecker));
         delta.replay(record);

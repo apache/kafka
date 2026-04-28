@@ -76,7 +76,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
      * avoid transient failures due to slow or overloaded machines.
      */
     static void waitForCondition(final java.util.function.Supplier<Boolean> testCondition,
-                                        final String conditionDetails) throws InterruptedException {
+                                 final String conditionDetails) throws InterruptedException {
         var maxWaitMs = 15_000L;
         long endTime = System.currentTimeMillis() + maxWaitMs;
 
@@ -113,14 +113,14 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
     public List<Extension> getAdditionalExtensions() {
         RaftClusterInstance clusterInstance = new RaftClusterInstance(clusterConfig, isCombined);
         return List.of(
-                (BeforeEachCallback) context -> {
-                    clusterInstance.format();
-                    if (clusterConfig.isAutoStart()) {
-                        clusterInstance.start();
-                    }
-                },
-                (AfterTestExecutionCallback) context -> clusterInstance.stop(),
-                new ClusterInstanceParameterResolver(clusterInstance)
+            (BeforeEachCallback) context -> {
+                clusterInstance.format();
+                if (clusterConfig.isAutoStart()) {
+                    clusterInstance.start();
+                }
+            },
+            (AfterTestExecutionCallback) context -> clusterInstance.stop(),
+            new ClusterInstanceParameterResolver(clusterInstance)
         );
     }
 
@@ -201,9 +201,9 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 if (started.compareAndSet(false, true)) {
                     clusterTestKit.startup();
                     waitForCondition(
-                            () -> this.clusterTestKit.brokers().values().stream().allMatch(
-                                    brokers -> brokers.brokerState() == BrokerState.RUNNING
-                            ), "Broker never made it to RUNNING state.");
+                        () -> this.clusterTestKit.brokers().values().stream().allMatch(
+                            brokers -> brokers.brokerState() == BrokerState.RUNNING
+                        ), "Broker never made it to RUNNING state.");
                 }
             } catch (Exception e) {
                 throw new RuntimeException("Failed to start Raft server", e);
@@ -259,8 +259,8 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public Map<Integer, KafkaBroker> brokers() {
             return clusterTestKit.brokers().entrySet()
-                    .stream()
-                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                .stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
         }
 
         @Override
@@ -310,17 +310,17 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 }
 
                 TestKitNodes nodes = new TestKitNodes.Builder()
-                        .setBootstrapMetadata(BootstrapMetadata.fromVersions(clusterConfig.metadataVersion(), newFeatureLevels, "testkit"))
-                        .setCombined(isCombined)
-                        .setNumBrokerNodes(clusterConfig.numBrokers())
-                        .setNumDisksPerBroker(clusterConfig.numDisksPerBroker())
-                        .setPerServerProperties(clusterConfig.perServerOverrideProperties())
-                        .setNumControllerNodes(clusterConfig.numControllers())
-                        .setBrokerListenerName(listenerName)
-                        .setBrokerSecurityProtocol(clusterConfig.brokerSecurityProtocol())
-                        .setControllerListenerName(clusterConfig.controllerListenerName())
-                        .setControllerSecurityProtocol(clusterConfig.controllerSecurityProtocol())
-                        .build();
+                    .setBootstrapMetadata(BootstrapMetadata.fromVersions(clusterConfig.metadataVersion(), newFeatureLevels, "testkit"))
+                    .setCombined(isCombined)
+                    .setNumBrokerNodes(clusterConfig.numBrokers())
+                    .setNumDisksPerBroker(clusterConfig.numDisksPerBroker())
+                    .setPerServerProperties(clusterConfig.perServerOverrideProperties())
+                    .setNumControllerNodes(clusterConfig.numControllers())
+                    .setBrokerListenerName(listenerName)
+                    .setBrokerSecurityProtocol(clusterConfig.brokerSecurityProtocol())
+                    .setControllerListenerName(clusterConfig.controllerListenerName())
+                    .setControllerSecurityProtocol(clusterConfig.controllerSecurityProtocol())
+                    .build();
                 KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
                 // Copy properties into the TestKit builder
                 clusterConfig.serverProperties().forEach(builder::setConfigProp);
@@ -332,7 +332,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         private BrokerServer findBrokerOrThrow(int brokerId) {
             return Optional.ofNullable(clusterTestKit.brokers().get(brokerId))
-                    .orElseThrow(() -> new IllegalArgumentException("Unknown brokerId " + brokerId));
+                .orElseThrow(() -> new IllegalArgumentException("Unknown brokerId " + brokerId));
         }
 
     }

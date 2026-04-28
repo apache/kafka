@@ -88,7 +88,7 @@ public class TopicIdPartition {
         }
         TopicIdPartition that = (TopicIdPartition) o;
         return topicId.equals(that.topicId) &&
-               topicPartition.equals(that.topicPartition);
+            topicPartition.equals(that.topicPartition);
     }
 
     @Override

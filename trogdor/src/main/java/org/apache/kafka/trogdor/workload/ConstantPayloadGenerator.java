@@ -28,7 +28,7 @@ public class ConstantPayloadGenerator implements PayloadGenerator {
 
     @JsonCreator
     public ConstantPayloadGenerator(@JsonProperty("size") int size,
-                                    @JsonProperty("value") byte[] value) {
+        @JsonProperty("value") byte[] value) {
         this.size = size;
         this.value = (value == null || value.length == 0) ? new byte[size] : value;
     }

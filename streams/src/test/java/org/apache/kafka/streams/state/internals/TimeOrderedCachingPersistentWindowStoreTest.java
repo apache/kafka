@@ -283,7 +283,8 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
     @ValueSource(booleans = {true, false})
     public void shouldMatchPositionAfterPutWithFlushListener(final boolean hasIndex) {
         setUp(hasIndex);
-        cachingStore.setFlushListener(record -> { }, false);
+        cachingStore.setFlushListener(record -> {
+        }, false);
         shouldMatchPositionAfterPut();
     }
 
@@ -324,8 +325,8 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
     }
 
     private void verifyKeyValue(final KeyValue<Long, byte[]> next,
-                                final long expectedKey,
-                                final String expectedValue) {
+        final long expectedKey,
+        final String expectedValue) {
         assertThat(next.key, equalTo(expectedKey));
         assertThat(next.value, equalTo(bytesValue(expectedValue)));
     }
@@ -664,9 +665,9 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         final int added = addItemsToCache();
         // all dirty entries should have been flushed
         try (final KeyValueIterator<Bytes, byte[]> iter = bytesStore.fetch(
-            Bytes.wrap("0".getBytes(StandardCharsets.UTF_8)),
-            DEFAULT_TIMESTAMP,
-            DEFAULT_TIMESTAMP)) {
+                 Bytes.wrap("0".getBytes(StandardCharsets.UTF_8)),
+                 DEFAULT_TIMESTAMP,
+                 DEFAULT_TIMESTAMP)) {
             final KeyValue<Bytes, byte[]> next = iter.next();
             assertEquals(DEFAULT_TIMESTAMP, baseKeySchema.segmentTimestamp(next.key));
             assertArrayEquals("0".getBytes(), next.value);
@@ -1231,7 +1232,7 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         setUp(hasIndex);
         setUpCloseTests();
         doThrow(new RuntimeException("Simulating an error on flush2")).doNothing()
-                .when(cache).flush(CACHE_NAMESPACE);
+            .when(cache).flush(CACHE_NAMESPACE);
         assertThrows(RuntimeException.class, cachingStore::close);
         verifyAndTearDownCloseTests();
     }

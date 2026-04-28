@@ -66,17 +66,17 @@ class ActiveTaskCreator {
     private boolean isClosed = false;
 
     ActiveTaskCreator(final TopologyMetadata topologyMetadata,
-                      final StreamsConfig applicationConfig,
-                      final StreamsMetricsImpl streamsMetrics,
-                      final StateDirectory stateDirectory,
-                      final ThreadCache cache,
-                      final Time time,
-                      final KafkaClientSupplier clientSupplier,
-                      final String threadId,
-                      final int threadIdx,
-                      final UUID processId,
-                      final LogContext logContext,
-                      final boolean processingThreadsEnabled) {
+        final StreamsConfig applicationConfig,
+        final StreamsMetricsImpl streamsMetrics,
+        final StateDirectory stateDirectory,
+        final ThreadCache cache,
+        final Time time,
+        final KafkaClientSupplier clientSupplier,
+        final String threadId,
+        final int threadIdx,
+        final UUID processId,
+        final LogContext logContext,
+        final boolean processingThreadsEnabled) {
         this.topologyMetadata = topologyMetadata;
         this.applicationConfig = applicationConfig;
         this.streamsMetrics = streamsMetrics;
@@ -133,7 +133,7 @@ class ActiveTaskCreator {
     }
 
     public Collection<StreamTask> createTasks(final Consumer<byte[], byte[]> consumer,
-                                              final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
+        final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
         final List<StreamTask> createdTasks = new ArrayList<>();
 
         final String upgradeFromStr = applicationConfig.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
@@ -179,8 +179,8 @@ class ActiveTaskCreator {
     }
 
     private RecordCollector createRecordCollector(final TaskId taskId,
-                                                  final LogContext logContext,
-                                                  final ProcessorTopology topology) {
+        final LogContext logContext,
+        final ProcessorTopology topology) {
         return new RecordCollectorImpl(
             logContext,
             taskId,
@@ -197,8 +197,8 @@ class ActiveTaskCreator {
      *       we should always reuse the input partition and hence no need validations
      */
     StreamTask createActiveTaskFromStandby(final StandbyTask standbyTask,
-                                           final Set<TopicPartition> inputPartitions,
-                                           final Consumer<byte[], byte[]> consumer) {
+        final Set<TopicPartition> inputPartitions,
+        final Consumer<byte[], byte[]> consumer) {
         if (!inputPartitions.equals(standbyTask.inputPartitions)) {
             log.warn("Detected unmatched input partitions for task {} when recycling it from standby to active", standbyTask.id);
         }
@@ -230,12 +230,12 @@ class ActiveTaskCreator {
     }
 
     private StreamTask createActiveTask(final TaskId taskId,
-                                        final Set<TopicPartition> inputPartitions,
-                                        final Consumer<byte[], byte[]> consumer,
-                                        final LogContext logContext,
-                                        final ProcessorTopology topology,
-                                        final ProcessorStateManager stateManager,
-                                        final InternalProcessorContext<Object, Object> context) {
+        final Set<TopicPartition> inputPartitions,
+        final Consumer<byte[], byte[]> consumer,
+        final LogContext logContext,
+        final ProcessorTopology topology,
+        final ProcessorStateManager stateManager,
+        final InternalProcessorContext<Object, Object> context) {
         final RecordCollector recordCollector = createRecordCollector(taskId, logContext, topology);
 
         final StreamTask task = new StreamTask(

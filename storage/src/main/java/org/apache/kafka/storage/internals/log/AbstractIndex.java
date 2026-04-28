@@ -311,7 +311,7 @@ public abstract class AbstractIndex implements Closeable {
     public int relativeOffset(long offset) {
         OptionalInt relativeOffset = toRelative(offset);
         return relativeOffset.orElseThrow(() -> new IndexOffsetOverflowException(
-            "Integer overflow for offset: " + offset + " (" + file.getAbsoluteFile() + ")"));
+                "Integer overflow for offset: " + offset + " (" + file.getAbsoluteFile() + ")"));
     }
 
     /**
@@ -472,7 +472,7 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     private static MappedByteBuffer createMappedBuffer(RandomAccessFile raf, boolean newlyCreated, long length,
-                                                       boolean writable, int entrySize) throws IOException {
+            boolean writable, int entrySize) throws IOException {
         MappedByteBuffer idx;
         if (writable)
             idx = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, length);
@@ -493,7 +493,7 @@ public abstract class AbstractIndex implements Closeable {
      * Lookup lower or upper bounds for the given target.
      */
     private int indexSlotRangeFor(ByteBuffer idx, long target, IndexSearchType searchEntity,
-                                  SearchResultType searchResultType) {
+            SearchResultType searchResultType) {
         // check if the index is empty
         if (entries == 0)
             return -1;
@@ -502,7 +502,7 @@ public abstract class AbstractIndex implements Closeable {
         // check if the target offset is in the warm section of the index
         if (compareIndexEntry(parseEntry(idx, firstHotEntry), target, searchEntity) < 0) {
             return binarySearch(idx, target, searchEntity,
-                searchResultType, firstHotEntry, entries - 1);
+                    searchResultType, firstHotEntry, entries - 1);
         }
 
         // check if the target offset is smaller than the least offset
@@ -517,7 +517,7 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     private int binarySearch(ByteBuffer idx, long target, IndexSearchType searchEntity,
-                             SearchResultType searchResultType, int begin, int end) {
+            SearchResultType searchResultType, int begin, int end) {
         // binary search for the entry
         int lo = begin;
         int hi = end;

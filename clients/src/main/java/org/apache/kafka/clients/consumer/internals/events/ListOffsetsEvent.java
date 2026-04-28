@@ -37,8 +37,8 @@ public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicParti
     private final boolean requireTimestamps;
 
     public ListOffsetsEvent(Map<TopicPartition, Long> timestampToSearch,
-                            long deadlineMs,
-                            boolean requireTimestamps) {
+        long deadlineMs,
+        boolean requireTimestamps) {
         super(Type.LIST_OFFSETS, deadlineMs);
         this.timestampsToSearch = Collections.unmodifiableMap(timestampToSearch);
         this.requireTimestamps = requireTimestamps;
@@ -72,7 +72,7 @@ public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicParti
     @Override
     public String toStringBase() {
         return super.toStringBase() +
-                ", timestampsToSearch=" + timestampsToSearch +
-                ", requireTimestamps=" + requireTimestamps;
+            ", timestampsToSearch=" + timestampsToSearch +
+            ", requireTimestamps=" + requireTimestamps;
     }
 }

@@ -53,8 +53,8 @@ public class ControllerRegistrationTest {
             setIncarnationId(Uuid.fromString("ycRmGrOFQru7HXf6fOybZQ")).
             setZkMigrationReady(true).
             setListeners(doubleMap(
-                "PLAINTEXT", new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9107),
-                "SSL", new Endpoint("SSL", SecurityProtocol.SSL, "localhost", 9207))).
+            "PLAINTEXT", new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9107),
+            "SSL", new Endpoint("SSL", SecurityProtocol.SSL, "localhost", 9207))).
             setSupportedFeatures(Map.of(MetadataVersion.FEATURE_NAME, VersionRange.of(1, 10))).
             build(),
         new ControllerRegistration.Builder().
@@ -62,8 +62,8 @@ public class ControllerRegistrationTest {
             setIncarnationId(Uuid.fromString("ubT_wuD6R3uopZ_lV76dQg")).
             setZkMigrationReady(true).
             setListeners(doubleMap(
-                "PLAINTEXT", new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9108),
-                "SSL", new Endpoint("SSL", SecurityProtocol.SSL, "localhost", 9208))).
+            "PLAINTEXT", new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9108),
+            "SSL", new Endpoint("SSL", SecurityProtocol.SSL, "localhost", 9208))).
             setSupportedFeatures(Map.of(MetadataVersion.FEATURE_NAME, VersionRange.of(1, 10))).
             build(),
         new ControllerRegistration.Builder().
@@ -71,8 +71,8 @@ public class ControllerRegistrationTest {
             setIncarnationId(Uuid.fromString("muQS341gRIeNh9Ps7reDSw")).
             setZkMigrationReady(false).
             setListeners(doubleMap(
-                "PLAINTEXT", new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9109),
-                "SSL", new Endpoint("SSL", SecurityProtocol.SSL, "localhost", 9209))).
+            "PLAINTEXT", new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9109),
+            "SSL", new Endpoint("SSL", SecurityProtocol.SSL, "localhost", 9209))).
             setSupportedFeatures(Map.of(MetadataVersion.FEATURE_NAME, VersionRange.of(1, 10))).
             build()
     );

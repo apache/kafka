@@ -684,9 +684,9 @@ public final class Stores {
      * @return an instance of {@link StoreBuilder} that can build a {@link TimestampedWindowStoreWithHeaders}
      */
     public static <K, V> StoreBuilder<TimestampedWindowStoreWithHeaders<K, V>> timestampedWindowStoreWithHeadersBuilder(
-            final WindowBytesStoreSupplier supplier,
-            final Serde<K> keySerde,
-            final Serde<V> valueSerde
+        final WindowBytesStoreSupplier supplier,
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde
     ) {
         Objects.requireNonNull(supplier, "supplier cannot be null");
         return new TimestampedWindowStoreWithHeadersBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);

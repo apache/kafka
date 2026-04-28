@@ -272,8 +272,8 @@ public class KafkaShareConsumerTest {
     }
 
     private KafkaShareConsumer<String, String> newShareConsumer(String clientId,
-                                                                ShareConsumerMetadata metadata,
-                                                                KafkaClient client) {
+        ShareConsumerMetadata metadata,
+        KafkaClient client) {
         LogContext logContext = new LogContext();
         Deserializer<String> keyDeserializer = new StringDeserializer();
         Deserializer<String> valueDeserializer = new StringDeserializer();
@@ -377,8 +377,8 @@ public class KafkaShareConsumerTest {
     private ShareFetchResponse shareFetchResponse(TopicIdPartition tip, int count) {
         MemoryRecords records;
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), Compression.NONE,
-            TimestampType.CREATE_TIME, 0)) {
-            for (int i = 0; i < count; i++) {
+                 TimestampType.CREATE_TIME, 0)) {
+            for (int i = 0;i < count;i++) {
                 builder.append(0L, ("key-" + i).getBytes(), ("value-" + i).getBytes());
             }
             records = builder.build();

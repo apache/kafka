@@ -53,9 +53,9 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
     private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VOut> joinerThis;
 
     KStreamKStreamSelfJoin(final StoreFactory windowStoreFactory,
-                           final JoinWindowsInternal windows,
-                           final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VOut> joinerThis,
-                           final long retentionPeriod) {
+        final JoinWindowsInternal windows,
+        final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VOut> joinerThis,
+        final long retentionPeriod) {
         this.windowStoreFactory = windowStoreFactory;
         this.joinThisBeforeMs = windows.beforeMs;
         this.joinThisAfterMs = windows.afterMs;
@@ -117,7 +117,7 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
                     // Join this with other
                     context().forward(
                         record.withValue(joinerThis.apply(
-                                record.key(), record.value(), otherValue))
+                            record.key(), record.value(), otherValue))
                             .withTimestamp(Math.max(inputRecordTimestamp, otherRecordTimestamp)));
                 }
             }

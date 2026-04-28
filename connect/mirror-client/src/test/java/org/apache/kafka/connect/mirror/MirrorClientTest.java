@@ -58,7 +58,7 @@ public class MirrorClientTest {
 
         FakeMirrorClient() {
             this(List.of());
-        } 
+        }
 
         @Override
         protected Set<String> listTopics() {
@@ -135,7 +135,7 @@ public class MirrorClientTest {
         MirrorClient client = new FakeMirrorClient(List.of("topic1", "topic2", "heartbeats",
             "source1.heartbeats", "source1.source2.heartbeats", "source3.heartbeats"));
         assertEquals(1, client.replicationHops("source1"));
-        assertEquals(2, client.replicationHops("source2")); 
+        assertEquals(2, client.replicationHops("source2"));
         assertEquals(1, client.replicationHops("source3"));
         assertEquals(-1, client.replicationHops("source4"));
     }
@@ -256,12 +256,12 @@ public class MirrorClientTest {
         // Batch translation matches only mygroup0
         client.consumer = buildConsumer(checkpointTp, cp0, cp1, cp2, cp3);
         Map<String, Map<TopicPartition, OffsetAndMetadata>> offsets = client.remoteConsumerOffsets(
-                Pattern.compile(grp0), SOURCE, Duration.ofSeconds(10L));
+            Pattern.compile(grp0), SOURCE, Duration.ofSeconds(10L));
         Map<String, Map<TopicPartition, OffsetAndMetadata>> expectedOffsets = Map.of(
-                grp0, Map.of(
-                        t0p0, cp1.offsetAndMetadata(),
-                        t0p1, cp2.offsetAndMetadata()
-                )
+            grp0, Map.of(
+            t0p0, cp1.offsetAndMetadata(),
+            t0p1, cp2.offsetAndMetadata()
+        )
         );
         assertEquals(expectedOffsets, offsets);
 
@@ -269,13 +269,13 @@ public class MirrorClientTest {
         client.consumer = buildConsumer(checkpointTp, cp0, cp1, cp2, cp3);
         offsets = client.remoteConsumerOffsets(Pattern.compile(".*"), SOURCE, Duration.ofSeconds(10L));
         expectedOffsets = Map.of(
-                grp0, Map.of(
-                        t0p0, cp1.offsetAndMetadata(),
-                        t0p1, cp2.offsetAndMetadata()
-                ),
-                grp1, Map.of(
-                        t0p1, cp3.offsetAndMetadata()
-                )
+            grp0, Map.of(
+                t0p0, cp1.offsetAndMetadata(),
+                t0p1, cp2.offsetAndMetadata()
+            ),
+            grp1, Map.of(
+            t0p1, cp3.offsetAndMetadata()
+        )
         );
         assertEquals(expectedOffsets, offsets);
 
@@ -288,8 +288,8 @@ public class MirrorClientTest {
         client.consumer = buildConsumer(checkpointTp, cp0, cp1, cp2, cp3);
         Map<TopicPartition, OffsetAndMetadata> offsets2 = client.remoteConsumerOffsets(grp0, SOURCE, Duration.ofSeconds(10L));
         Map<TopicPartition, OffsetAndMetadata> expectedOffsets2 = Map.of(
-                t0p0, cp1.offsetAndMetadata(),
-                t0p1, cp2.offsetAndMetadata()
+            t0p0, cp1.offsetAndMetadata(),
+            t0p1, cp2.offsetAndMetadata()
         );
         assertEquals(expectedOffsets2, offsets2);
 

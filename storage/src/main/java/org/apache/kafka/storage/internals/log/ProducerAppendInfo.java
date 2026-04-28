@@ -71,10 +71,10 @@ public class ProducerAppendInfo {
      * @param verificationStateEntry The most recent entry used for verification if no append has been completed yet otherwise null
      */
     public ProducerAppendInfo(TopicPartition topicPartition,
-                              long producerId,
-                              ProducerStateEntry currentEntry,
-                              AppendOrigin origin,
-                              VerificationStateEntry verificationStateEntry) {
+            long producerId,
+            ProducerStateEntry currentEntry,
+            AppendOrigin origin,
+            VerificationStateEntry verificationStateEntry) {
         this.topicPartition = topicPartition;
         this.producerId = producerId;
         this.currentEntry = currentEntry;
@@ -133,7 +133,7 @@ public class ProducerAppendInfo {
                     producerEpoch == current &&
                     (updatedEntry.currentTxnFirstOffset().isEmpty() || producerEpoch == Short.MAX_VALUE)) {
                 log.info("Idempotent transaction marker retry detected for producer {} epoch {}. " +
-                                "Transaction already completed, allowing duplicate marker write.",
+                        "Transaction already completed, allowing duplicate marker write.",
                         producerId, producerEpoch);
                 return;
             }
@@ -156,10 +156,10 @@ public class ProducerAppendInfo {
     private void checkSequence(short producerEpoch, int appendFirstSeq, long offset) {
         // For transactions v2 idempotent producers, reject non-zero sequences when there is no producer ID state
         if (verificationStateEntry != null && verificationStateEntry.supportsEpochBump() &&
-            appendFirstSeq != 0 && currentEntry.isEmpty()) {
+                appendFirstSeq != 0 && currentEntry.isEmpty()) {
             throw new OutOfOrderSequenceException("Invalid sequence number for producer " + producerId + " at " +
-                "offset " + offset + " in partition " + topicPartition + ": " + appendFirstSeq +
-                " (incoming seq. number). Expected sequence 0 for transactions v2 idempotent producer with no existing state.");
+                    "offset " + offset + " in partition " + topicPartition + ": " + appendFirstSeq +
+                    " (incoming seq. number). Expected sequence 0 for transactions v2 idempotent producer with no existing state.");
         }
         if (verificationStateEntry != null && appendFirstSeq > verificationStateEntry.lowestSequence()) {
             throw new OutOfOrderSequenceException("Out of order sequence number for producer " + producerId + " at " +
@@ -221,12 +221,12 @@ public class ProducerAppendInfo {
     }
 
     public void appendDataBatch(short epoch,
-                                int firstSeq,
-                                int lastSeq,
-                                long lastTimestamp,
-                                LogOffsetMetadata firstOffsetMetadata,
-                                long lastOffset,
-                                boolean isTransactional) {
+            int firstSeq,
+            int lastSeq,
+            long lastTimestamp,
+            LogOffsetMetadata firstOffsetMetadata,
+            long lastOffset,
+            boolean isTransactional) {
         long firstOffset = firstOffsetMetadata.messageOffset;
         maybeValidateDataBatch(epoch, firstSeq, firstOffset);
         updatedEntry.addBatch(epoch, lastSeq, lastOffset, (int) (lastOffset - firstOffset), lastTimestamp);
@@ -257,10 +257,10 @@ public class ProducerAppendInfo {
     }
 
     public Optional<CompletedTxn> appendEndTxnMarker(EndTransactionMarker endTxnMarker,
-                                                     short producerEpoch,
-                                                     long offset,
-                                                     long timestamp,
-                                                     short transactionVersion) {
+            short producerEpoch,
+            long offset,
+            long timestamp,
+            short transactionVersion) {
         // For replication (REPLICATION origin), TV_UNKNOWN is allowed because:
         // 1. transactionVersion is not stored in MemoryRecords - it's only metadata in WriteTxnMarkersRequest
         // 2. When records are replicated, followers only see MemoryRecords without transactionVersion

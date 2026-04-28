@@ -36,6 +36,7 @@ public abstract class InternalTopicConfig {
     private Optional<Integer> numberOfPartitions = Optional.empty();
 
     static final Map<String, String> INTERNAL_TOPIC_DEFAULT_OVERRIDES = new HashMap<>();
+
     static {
         INTERNAL_TOPIC_DEFAULT_OVERRIDES.put(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime");
     }
@@ -48,9 +49,9 @@ public abstract class InternalTopicConfig {
     }
 
     InternalTopicConfig(final String name,
-                        final Map<String, String> topicConfigs,
-                        final int numberOfPartitions,
-                        final boolean enforceNumberOfPartitions) {
+        final Map<String, String> topicConfigs,
+        final int numberOfPartitions,
+        final boolean enforceNumberOfPartitions) {
         this.name = Objects.requireNonNull(name, "name can't be null");
         Topic.validate(name);
         validateNumberOfPartitions(numberOfPartitions);
@@ -99,9 +100,9 @@ public abstract class InternalTopicConfig {
     @Override
     public String toString() {
         return "InternalTopicConfig(" +
-                "name=" + name +
-                ", topicConfigs=" + topicConfigs +
-                ", enforceNumberOfPartitions=" + enforceNumberOfPartitions +
-                ")";
+            "name=" + name +
+            ", topicConfigs=" + topicConfigs +
+            ", enforceNumberOfPartitions=" + enforceNumberOfPartitions +
+            ")";
     }
 }

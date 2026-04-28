@@ -349,7 +349,7 @@ public abstract class TransactionsCommand {
                     "broker " + options.brokerId().getAsInt() :
                     "leader";
                 printErrorAndExit("Failed to describe producers for partition " +
-                        topicPartition + " on " + brokerClause, e.getCause());
+                    topicPartition + " on " + brokerClause, e.getCause());
                 return;
             }
 
@@ -474,16 +474,16 @@ public abstract class TransactionsCommand {
                 .help("list transactions");
 
             subparser.addArgument("--duration-filter")
-                    .help("Duration (in millis) to filter by: if < 0, all transactions will be returned; " +
-                            "otherwise, only transactions running longer than this duration will be returned")
-                    .action(store())
-                    .type(Long.class)
-                    .required(false);
+                .help("Duration (in millis) to filter by: if < 0, all transactions will be returned; " +
+                    "otherwise, only transactions running longer than this duration will be returned")
+                .action(store())
+                .type(Long.class)
+                .required(false);
             subparser.addArgument("--transactional-id-pattern")
-                    .help("Transactional id regular expression pattern to filter by")
-                    .action(store())
-                    .type(String.class)
-                    .required(false);
+                .help("Transactional id regular expression pattern to filter by")
+                .action(store())
+                .type(String.class)
+                .required(false);
         }
 
         @Override

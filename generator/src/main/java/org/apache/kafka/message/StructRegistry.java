@@ -71,7 +71,7 @@ public final class StructRegistry {
         for (StructSpec struct : message.commonStructs()) {
             if (!MessageGenerator.firstIsCapitalized(struct.name())) {
                 throw new RuntimeException("Can't process structure " + struct.name() +
-                        ": the first letter of structure names must be capitalized.");
+                    ": the first letter of structure names must be capitalized.");
             }
             if (structs.containsKey(struct.name())) {
                 throw new RuntimeException("Common struct " + struct.name() + " was specified twice.");
@@ -99,7 +99,7 @@ public final class StructRegistry {
                     // The fields should be specified in the commonStructs area.
                     if (!field.fields().isEmpty()) {
                         throw new RuntimeException("Can't re-specify the common struct " +
-                                typeName + " as an inline struct.");
+                            typeName + " as an inline struct.");
                     }
                 } else if (structs.containsKey(typeName)) {
                     // Inline structures should only appear once.
@@ -132,7 +132,7 @@ public final class StructRegistry {
             structFieldName = structType.typeName();
         } else {
             throw new RuntimeException("Field " + field.name() +
-                    " cannot be treated as a structure.");
+                " cannot be treated as a structure.");
         }
         return findStruct(structFieldName);
     }
@@ -141,7 +141,7 @@ public final class StructRegistry {
         StructInfo structInfo = structs.get(structFieldName);
         if (structInfo == null) {
             throw new RuntimeException("Unable to locate a specification for the structure " +
-                    structFieldName);
+                structFieldName);
         }
         return structInfo.spec;
     }
@@ -160,7 +160,7 @@ public final class StructRegistry {
         StructInfo structInfo = structs.get(arrayType.elementName());
         if (structInfo == null) {
             throw new RuntimeException("Unable to locate a specification for the structure " +
-                    arrayType.elementName());
+                arrayType.elementName());
         }
         return structInfo.spec.hasKeys();
     }

@@ -55,20 +55,21 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 class BrokerRegistrationRequestTest {
     private final ClusterInstance clusterInstance;
+
     public BrokerRegistrationRequestTest(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;
     }
-    
+
     @ClusterTest(types = {Type.KRAFT}, controllers = 1, metadataVersion = MetadataVersion.IBP_3_3_IV3)
     public void shouldRejectZkMigratingBrokerWhenFeatureLevelDoesNotSupportMigration() throws Exception {
         try (ChannelEnv env = openChannel()) {
             assertEquals(
-                    Errors.BROKER_ID_NOT_REGISTERED, 
-                    registerBroker(env.channelManager, 1L, 
-                            new BrokerRegistrationRequestData.Feature()
-                                    .setName(MetadataVersion.FEATURE_NAME)
-                                    .setMinSupportedVersion(MetadataVersionTestUtils.IBP_3_3_IV0_FEATURE_LEVEL)
-                                    .setMaxSupportedVersion(MetadataVersion.IBP_3_3_IV3.featureLevel()))
+                Errors.BROKER_ID_NOT_REGISTERED,
+                registerBroker(env.channelManager, 1L,
+                    new BrokerRegistrationRequestData.Feature()
+                        .setName(MetadataVersion.FEATURE_NAME)
+                        .setMinSupportedVersion(MetadataVersionTestUtils.IBP_3_3_IV0_FEATURE_LEVEL)
+                        .setMaxSupportedVersion(MetadataVersion.IBP_3_3_IV3.featureLevel()))
             );
         }
     }
@@ -77,8 +78,8 @@ class BrokerRegistrationRequestTest {
     public void shouldRejectRegistrationWithoutFeatureLevels() throws Exception {
         try (ChannelEnv env = openChannel()) {
             assertEquals(
-                    Errors.INVALID_REGISTRATION,
-                    registerBroker(env.channelManager, null, null)
+                Errors.INVALID_REGISTRATION,
+                registerBroker(env.channelManager, null, null)
             );
         }
     }
@@ -87,12 +88,12 @@ class BrokerRegistrationRequestTest {
     public void shouldRejectRegistrationWhenFeatureLevelTooHigh() throws Exception {
         try (ChannelEnv env = openChannel()) {
             assertEquals(
-                    Errors.UNSUPPORTED_VERSION,
-                    registerBroker(env.channelManager, null,
-                            new BrokerRegistrationRequestData.Feature()
-                                    .setName(MetadataVersion.FEATURE_NAME)
-                                    .setMinSupportedVersion(MetadataVersion.IBP_3_4_IV0.featureLevel())
-                                    .setMaxSupportedVersion(MetadataVersion.IBP_3_4_IV0.featureLevel()))
+                Errors.UNSUPPORTED_VERSION,
+                registerBroker(env.channelManager, null,
+                    new BrokerRegistrationRequestData.Feature()
+                        .setName(MetadataVersion.FEATURE_NAME)
+                        .setMinSupportedVersion(MetadataVersion.IBP_3_4_IV0.featureLevel())
+                        .setMaxSupportedVersion(MetadataVersion.IBP_3_4_IV0.featureLevel()))
             );
         }
     }
@@ -101,12 +102,12 @@ class BrokerRegistrationRequestTest {
     public void shouldRegisterWhenSupportedRangeAndNotMigrating() throws Exception {
         try (ChannelEnv env = openChannel()) {
             assertEquals(
-                    Errors.NONE,
-                    registerBroker(env.channelManager, null, 
-                            new BrokerRegistrationRequestData.Feature()
-                                    .setName(MetadataVersion.FEATURE_NAME)
-                                    .setMinSupportedVersion(MetadataVersion.IBP_3_3_IV3.featureLevel())
-                                    .setMaxSupportedVersion(MetadataVersion.IBP_3_4_IV0.featureLevel()))
+                Errors.NONE,
+                registerBroker(env.channelManager, null,
+                    new BrokerRegistrationRequestData.Feature()
+                        .setName(MetadataVersion.FEATURE_NAME)
+                        .setMinSupportedVersion(MetadataVersion.IBP_3_3_IV3.featureLevel())
+                        .setMaxSupportedVersion(MetadataVersion.IBP_3_4_IV0.featureLevel()))
             );
         }
     }
@@ -134,25 +135,25 @@ class BrokerRegistrationRequestTest {
 
     NodeToControllerChannelManager brokerToControllerChannelManager(ClusterInstance clusterInstance, Metrics metrics) {
         var controllerSocketServer = clusterInstance.controllers().values().stream()
-                .map(ControllerServer::socketServer)
-                .findFirst()
-                .orElseThrow();
+            .map(ControllerServer::socketServer)
+            .findFirst()
+            .orElseThrow();
 
         return new NodeToControllerChannelManagerImpl(
-                new TestControllerNodeProvider(clusterInstance),
-                Time.SYSTEM,
-                metrics,
-                controllerSocketServer.config(),
-                "heartbeat",
-                "test-heartbeat-",
-                10000L
+            new TestControllerNodeProvider(clusterInstance),
+            Time.SYSTEM,
+            metrics,
+            controllerSocketServer.config(),
+            "heartbeat",
+            "test-heartbeat-",
+            10000L
         );
     }
 
     @SuppressWarnings("unchecked")
     <T extends AbstractRequest, R extends AbstractResponse> R sendAndReceive(
-            NodeToControllerChannelManager channelManager,
-            AbstractRequest.Builder<T> reqBuilder
+        NodeToControllerChannelManager channelManager,
+        AbstractRequest.Builder<T> reqBuilder
     ) throws Exception {
         var responseFuture = new CompletableFuture<R>();
         channelManager.sendRequest(reqBuilder, new ControllerRequestCompletionHandler() {
@@ -170,9 +171,9 @@ class BrokerRegistrationRequestTest {
     }
 
     Errors registerBroker(
-            NodeToControllerChannelManager channelManager,
-            Long zkEpoch,
-            BrokerRegistrationRequestData.Feature featureLevelToSend
+        NodeToControllerChannelManager channelManager,
+        Long zkEpoch,
+        BrokerRegistrationRequestData.Feature featureLevelToSend
     ) throws Exception {
         var features = new BrokerRegistrationRequestData.FeatureCollection();
 
@@ -181,45 +182,45 @@ class BrokerRegistrationRequestTest {
         }
 
         Feature.PRODUCTION_FEATURES.stream()
-                .filter(feature -> !feature.featureName().equals(MetadataVersion.FEATURE_NAME))
-                .forEach(feature -> features.add(new BrokerRegistrationRequestData.Feature()
-                        .setName(feature.featureName())
-                        .setMinSupportedVersion(feature.minimumProduction())
-                        .setMaxSupportedVersion(feature.latestTesting())));
+            .filter(feature -> !feature.featureName().equals(MetadataVersion.FEATURE_NAME))
+            .forEach(feature -> features.add(new BrokerRegistrationRequestData.Feature()
+                .setName(feature.featureName())
+                .setMinSupportedVersion(feature.minimumProduction())
+                .setMaxSupportedVersion(feature.latestTesting())));
 
         var listener = new BrokerRegistrationRequestData.Listener()
-                .setName("EXTERNAL")
-                .setHost("example.com")
-                .setPort(8082)
-                .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id);
+            .setName("EXTERNAL")
+            .setHost("example.com")
+            .setPort(8082)
+            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id);
 
         var req = new BrokerRegistrationRequestData()
-                .setBrokerId(100)
-                .setLogDirs(List.of(Uuid.randomUuid()))
-                .setClusterId(clusterInstance.clusterId())
-                .setIncarnationId(Uuid.randomUuid())
-                .setIsMigratingZkBroker(zkEpoch != null)
-                .setFeatures(features)
-                .setListeners(new BrokerRegistrationRequestData.ListenerCollection(List.of(listener)));
+            .setBrokerId(100)
+            .setLogDirs(List.of(Uuid.randomUuid()))
+            .setClusterId(clusterInstance.clusterId())
+            .setIncarnationId(Uuid.randomUuid())
+            .setIsMigratingZkBroker(zkEpoch != null)
+            .setFeatures(features)
+            .setListeners(new BrokerRegistrationRequestData.ListenerCollection(List.of(listener)));
 
         BrokerRegistrationResponse resp = this.sendAndReceive(
-                channelManager,
-                new BrokerRegistrationRequest.Builder(req)
+            channelManager,
+            new BrokerRegistrationRequest.Builder(req)
         );
         return Errors.forCode(resp.data().errorCode());
     }
 
     record TestControllerNodeProvider(ClusterInstance clusterInstance)
-            implements Supplier<ControllerInformation> {
+        implements Supplier<ControllerInformation> {
 
         public Optional<Node> node() {
             return Optional.of(new Node(
-                    clusterInstance.controllers().keySet().iterator().next(),
-                    "127.0.0.1",
-                    clusterInstance.controllerBoundPorts().get(0)
+                clusterInstance.controllers().keySet().iterator().next(),
+                "127.0.0.1",
+                clusterInstance.controllerBoundPorts().get(0)
             ));
         }
-        
+
         public ListenerName listenerName() {
             return clusterInstance.controllerListenerName();
         }
@@ -235,10 +236,10 @@ class BrokerRegistrationRequestTest {
         @Override
         public ControllerInformation get() {
             return new ControllerInformation(
-                    node(),
-                    listenerName(),
-                    securityProtocol(),
-                    saslMechanism()
+                node(),
+                listenerName(),
+                securityProtocol(),
+                saslMechanism()
             );
         }
     }

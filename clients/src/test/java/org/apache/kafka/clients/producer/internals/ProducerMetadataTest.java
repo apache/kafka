@@ -48,7 +48,7 @@ public class ProducerMetadataTest {
     private final long refreshBackoffMaxMs = 1000;
     private final long metadataExpireMs = 1000;
     private final ProducerMetadata metadata = new ProducerMetadata(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, METADATA_IDLE_MS,
-            new LogContext(), new ClusterResourceListeners(), Time.SYSTEM);
+        new LogContext(), new ClusterResourceListeners(), Time.SYSTEM);
     private final AtomicReference<Exception> backgroundError = new AtomicReference<>();
 
     @AfterEach
@@ -196,7 +196,7 @@ public class ProducerMetadataTest {
         final String topic2 = "topic2";
         metadata.add(topic2, time);
         metadata.updateWithCurrentRequestVersion(responseWithCurrentTopics(), false, time);
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0;i < 3;i++) {
             time += METADATA_IDLE_MS / 2;
             metadata.updateWithCurrentRequestVersion(responseWithCurrentTopics(), false, time);
             assertTrue(metadata.containsTopic(topic2), "Topic expired even though in use");

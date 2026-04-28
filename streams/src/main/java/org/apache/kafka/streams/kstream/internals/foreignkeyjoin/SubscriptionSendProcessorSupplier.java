@@ -57,11 +57,11 @@ public class SubscriptionSendProcessorSupplier<KLeft, VLeft, KRight>
     private boolean useVersionedSemantics;
 
     public SubscriptionSendProcessorSupplier(final ForeignKeyExtractor<? super KLeft, ? super VLeft, ? extends KRight> foreignKeyExtractor,
-                                             final Supplier<String> foreignKeySerdeTopicSupplier,
-                                             final Supplier<String> valueSerdeTopicSupplier,
-                                             final Serde<KRight> foreignKeySerde,
-                                             final Serializer<VLeft> valueSerializer,
-                                             final boolean leftJoin) {
+        final Supplier<String> foreignKeySerdeTopicSupplier,
+        final Supplier<String> valueSerdeTopicSupplier,
+        final Serde<KRight> foreignKeySerde,
+        final Serializer<VLeft> valueSerializer,
+        final boolean leftJoin) {
         this.foreignKeyExtractor = foreignKeyExtractor;
         this.foreignKeySerdeTopicSupplier = foreignKeySerdeTopicSupplier;
         this.valueSerdeTopicSupplier = valueSerdeTopicSupplier;

@@ -73,13 +73,13 @@ public class TopicsImageSingleRecordChangeBenchmark {
         ArrayList<Integer> replicas = TopicsImageSnapshotLoadBenchmark.getReplicas(totalTopicCount, partitionsPerTopic, replicationFactor, numReplicasPerBroker, 0);
         ArrayList<Integer> isr = new ArrayList<>(replicas);
         PartitionRecord newPartitionRecord = new PartitionRecord().
-            setPartitionId(0).
-            setTopicId(newTopicUuid).
-            setReplicas(replicas).
-            setIsr(isr).
-            setRemovingReplicas(List.of()).
-            setAddingReplicas(List.of()).
-            setLeader(0);
+                setPartitionId(0).
+                setTopicId(newTopicUuid).
+                setReplicas(replicas).
+                setIsr(isr).
+                setRemovingReplicas(List.of()).
+                setAddingReplicas(List.of()).
+                setLeader(0);
         topicsDelta.replay(newPartitionRecord);
         System.out.print("(Adding a single topic to metadata having " + totalTopicCount + " total topics) ");
     }

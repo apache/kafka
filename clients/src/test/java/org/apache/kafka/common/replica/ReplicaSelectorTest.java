@@ -66,10 +66,10 @@ public class ReplicaSelectorTest {
 
     static List<ReplicaView> replicaInfoSet() {
         return Stream.of(
-                replicaInfo(new Node(0, "host0", 1234, "rack-a"), 4, 0),
-                replicaInfo(new Node(1, "host1", 1234, "rack-a"), 2, 5),
-                replicaInfo(new Node(2, "host2", 1234, "rack-b"), 3, 3),
-                replicaInfo(new Node(3, "host3", 1234, "rack-b"), 4, 2)
+            replicaInfo(new Node(0, "host0", 1234, "rack-a"), 4, 0),
+            replicaInfo(new Node(1, "host1", 1234, "rack-a"), 2, 5),
+            replicaInfo(new Node(2, "host2", 1234, "rack-b"), 3, 3),
+            replicaInfo(new Node(3, "host3", 1234, "rack-b"), 4, 2)
 
         ).collect(Collectors.toList());
     }
@@ -84,6 +84,6 @@ public class ReplicaSelectorTest {
 
     static ClientMetadata metadata(String rack) {
         return new ClientMetadata.DefaultClientMetadata(rack, "test-client",
-                InetAddress.getLoopbackAddress(), KafkaPrincipal.ANONYMOUS, "TEST");
+            InetAddress.getLoopbackAddress(), KafkaPrincipal.ANONYMOUS, "TEST");
     }
 }

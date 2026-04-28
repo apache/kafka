@@ -27,10 +27,21 @@ public interface DirectoryEventHandler {
      * A no-op implementation of {@link DirectoryEventHandler}.
      */
     DirectoryEventHandler NOOP = new DirectoryEventHandler() {
-        @Override public void handleAssignment(TopicIdPartition partition, Uuid directoryId, String reason, Runnable callback) {}
-        @Override public void handleFailure(Uuid directoryId) {}
-        @Override public void handleCordoned(Set<Uuid> directoryIds) {}
-        @Override public void handleUncordoned(Set<Uuid> directoryIds) {}
+        @Override
+        public void handleAssignment(TopicIdPartition partition, Uuid directoryId, String reason, Runnable callback) {
+        }
+
+        @Override
+        public void handleFailure(Uuid directoryId) {
+        }
+
+        @Override
+        public void handleCordoned(Set<Uuid> directoryIds) {
+        }
+
+        @Override
+        public void handleUncordoned(Set<Uuid> directoryIds) {
+        }
     };
 
     /**

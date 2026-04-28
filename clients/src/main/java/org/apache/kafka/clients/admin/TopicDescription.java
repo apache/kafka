@@ -75,7 +75,7 @@ public class TopicDescription {
      * @param authorizedOperations authorized operations for this topic, or empty set if this is not known.
      */
     public TopicDescription(String name, boolean internal, List<TopicPartitionInfo> partitions,
-                            Set<AclOperation> authorizedOperations) {
+        Set<AclOperation> authorizedOperations) {
         this(name, internal, partitions, authorizedOperations, Uuid.ZERO_UUID);
     }
 
@@ -90,7 +90,7 @@ public class TopicDescription {
      * @param topicId the topic id
      */
     public TopicDescription(String name, boolean internal, List<TopicPartitionInfo> partitions,
-                            Set<AclOperation> authorizedOperations, Uuid topicId) {
+        Set<AclOperation> authorizedOperations, Uuid topicId) {
         this.name = name;
         this.internal = internal;
         this.partitions = partitions;
@@ -128,13 +128,13 @@ public class TopicDescription {
     /**
      * authorized operations for this topic, or null if this is not known.
      */
-    public Set<AclOperation>  authorizedOperations() {
+    public Set<AclOperation> authorizedOperations() {
         return authorizedOperations;
     }
 
     @Override
     public String toString() {
         return "(name=" + name + ", internal=" + internal + ", partitions=" +
-                partitions.stream().map(TopicPartitionInfo::toString).collect(Collectors.joining(",")) + ", authorizedOperations=" + authorizedOperations + ")";
+            partitions.stream().map(TopicPartitionInfo::toString).collect(Collectors.joining(",")) + ", authorizedOperations=" + authorizedOperations + ")";
     }
 }

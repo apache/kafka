@@ -172,47 +172,47 @@ public class ClientMetricsTest {
     }
 
     private <K> void setUpAndVerifyMutableMetric(final String name,
-                                                 final String description,
-                                                 final Gauge<K> valueProvider,
-                                                 final Runnable metricAdder) {
+        final String description,
+        final Gauge<K> valueProvider,
+        final Runnable metricAdder) {
 
         metricAdder.run();
 
         verify(streamsMetrics).addClientLevelMutableMetric(
-                eq(name),
-                eq(description),
-                eq(RecordingLevel.INFO),
-                eq(valueProvider)
+            eq(name),
+            eq(description),
+            eq(RecordingLevel.INFO),
+            eq(valueProvider)
         );
     }
 
     private void setUpAndVerifyImmutableMetric(final String name,
-                                               final String description,
-                                               final String value,
-                                               final Runnable metricAdder) {
+        final String description,
+        final String value,
+        final Runnable metricAdder) {
 
         metricAdder.run();
 
         verify(streamsMetrics).addClientLevelImmutableMetric(
-                eq(name),
-                eq(description),
-                eq(RecordingLevel.INFO),
-                eq(value)
+            eq(name),
+            eq(description),
+            eq(RecordingLevel.INFO),
+            eq(value)
         );
     }
 
     private void setUpAndVerifyImmutableMetric(final String name,
-                                               final String description,
-                                               final int value,
-                                               final Runnable metricAdder) {
+        final String description,
+        final int value,
+        final Runnable metricAdder) {
 
         metricAdder.run();
 
         verify(streamsMetrics).addClientLevelImmutableMetric(
-                eq(name),
-                eq(description),
-                eq(RecordingLevel.INFO),
-                eq(value)
+            eq(name),
+            eq(description),
+            eq(RecordingLevel.INFO),
+            eq(value)
         );
     }
 }

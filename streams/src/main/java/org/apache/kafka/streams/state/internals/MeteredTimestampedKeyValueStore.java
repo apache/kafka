@@ -55,7 +55,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
  * @param <V>
  */
 public class MeteredTimestampedKeyValueStore<K, V>
-    extends MeteredKeyValueStore<K, ValueAndTimestamp<V>> 
+    extends MeteredKeyValueStore<K, ValueAndTimestamp<V>>
     implements TimestampedKeyValueStore<K, V> {
 
     MeteredTimestampedKeyValueStore(
@@ -126,6 +126,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
     static class RawAndDeserializedValue<ValueType> {
         final byte[] rawValue;
         final ValueAndTimestamp<ValueType> value;
+
         RawAndDeserializedValue(final byte[] rawValue, final ValueAndTimestamp<ValueType> value) {
             this.rawValue = rawValue;
             this.value = value;
@@ -239,7 +240,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
         final KeyQuery<K, V> typedKeyQuery = (KeyQuery<K, V>) query;
         final KeyQuery<Bytes, byte[]> rawKeyQuery = KeyQuery.withKey(serializeKey(typedKeyQuery.getKey()));
         final QueryResult<byte[]> rawResult =
-                wrapped().query(rawKeyQuery, positionBound, config);
+            wrapped().query(rawKeyQuery, positionBound, config);
         if (rawResult.isSuccess()) {
             final Function<byte[], ValueAndTimestamp<V>> deserializer = StoreQueryUtils.deserializeValue(serdes, wrapped());
             final ValueAndTimestamp<V> valueAndTimestamp = deserializer.apply(rawResult.getResult());
@@ -255,7 +256,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
     }
 
     @SuppressWarnings("unchecked")
-    private  <R> QueryResult<R> runRangeQuery(
+    private <R> QueryResult<R> runRangeQuery(
         final Query<R> query,
         final PositionBound positionBound,
         final QueryConfig config
@@ -309,9 +310,9 @@ public class MeteredTimestampedKeyValueStore<K, V>
         private final boolean returnPlainValue;
 
         private MeteredTimestampedKeyValueStoreIterator(final KeyValueIterator<Bytes, byte[]> iter,
-                                                        final Sensor sensor,
-                                                        final Function<byte[], ValueAndTimestamp<V>> valueAndTimestampDeserializer,
-                                                        final boolean returnPlainValue) {
+            final Sensor sensor,
+            final Function<byte[], ValueAndTimestamp<V>> valueAndTimestampDeserializer,
+            final boolean returnPlainValue) {
             this.iter = iter;
             this.sensor = sensor;
             this.valueAndTimestampDeserializer = valueAndTimestampDeserializer;
@@ -343,6 +344,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
                 valueAndTimestampDeserializer.apply(keyValue.value)
             );
         }
+
         @Override
         public void close() {
             try {

@@ -29,6 +29,7 @@ import java.util.Objects;
  */
 public class UnwindowedUnversionedChangelogTopicConfig extends InternalTopicConfig {
     private static final Map<String, String> UNWINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES;
+
     static {
         final Map<String, String> tempTopicDefaultOverrides = new HashMap<>(INTERNAL_TOPIC_DEFAULT_OVERRIDES);
         tempTopicDefaultOverrides.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
@@ -68,8 +69,8 @@ public class UnwindowedUnversionedChangelogTopicConfig extends InternalTopicConf
         }
         final UnwindowedUnversionedChangelogTopicConfig that = (UnwindowedUnversionedChangelogTopicConfig) o;
         return Objects.equals(name, that.name) &&
-               Objects.equals(topicConfigs, that.topicConfigs) &&
-               Objects.equals(enforceNumberOfPartitions, that.enforceNumberOfPartitions);
+            Objects.equals(topicConfigs, that.topicConfigs) &&
+            Objects.equals(enforceNumberOfPartitions, that.enforceNumberOfPartitions);
     }
 
     @Override
@@ -80,9 +81,9 @@ public class UnwindowedUnversionedChangelogTopicConfig extends InternalTopicConf
     @Override
     public String toString() {
         return "UnwindowedUnversionedChangelogTopicConfig(" +
-                "name=" + name +
-                ", topicConfigs=" + topicConfigs +
-                ", enforceNumberOfPartitions=" + enforceNumberOfPartitions +
-                ")";
+            "name=" + name +
+            ", topicConfigs=" + topicConfigs +
+            ", enforceNumberOfPartitions=" + enforceNumberOfPartitions +
+            ")";
     }
 }

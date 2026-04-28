@@ -79,7 +79,7 @@ public class JmxTool {
 
             Set<ObjectName> found = findObjects(options, conn, queries, hasPatternQueries);
             Map<ObjectName, Integer> numExpectedAttributes =
-                    findNumExpectedAttributes(conn, attributesInclude, hasPatternQueries, queries, found);
+                findNumExpectedAttributes(conn, attributesInclude, hasPatternQueries, queries, found);
 
             List<String> keys = new ArrayList<>();
             keys.add("time");
@@ -144,7 +144,7 @@ public class JmxTool {
                 connected = true;
             } catch (Exception e) {
                 System.err.printf("Could not connect to JMX url: %s. Exception: %s.%n",
-                        options.jmxServiceURL(), e.getMessage());
+                    options.jmxServiceURL(), e.getMessage());
                 e.printStackTrace();
                 TimeUnit.MILLISECONDS.sleep(100);
             }
@@ -152,15 +152,15 @@ public class JmxTool {
 
         if (!connected) {
             throw new TerseException(String.format("Could not connect to JMX url %s after %d ms.",
-                    options.jmxServiceURL(), connectTimeoutMs));
+                options.jmxServiceURL(), connectTimeoutMs));
         }
         return serverConn;
     }
 
     private static Set<ObjectName> findObjects(JmxToolOptions options,
-                                               MBeanServerConnection conn,
-                                               List<ObjectName> queries,
-                                               boolean hasPatternQueries) throws Exception {
+        MBeanServerConnection conn,
+        List<ObjectName> queries,
+        boolean hasPatternQueries) throws Exception {
         long waitTimeoutMs = 10_000;
         Set<ObjectName> result = new HashSet<>();
         Set<ObjectName> querySet = new HashSet<>(queries);
@@ -183,7 +183,7 @@ public class JmxTool {
     }
 
     private static Set<ObjectName> queryObjects(MBeanServerConnection conn,
-                                                List<ObjectName> queries) {
+        List<ObjectName> queries) {
         Set<ObjectName> result = new HashSet<>();
         queries.forEach(name -> {
             try {
@@ -196,10 +196,10 @@ public class JmxTool {
     }
 
     private static Map<ObjectName, Integer> findNumExpectedAttributes(MBeanServerConnection conn,
-                                                                      Optional<String[]> attributesInclude,
-                                                                      boolean hasPatternQueries,
-                                                                      List<ObjectName> queries,
-                                                                      Set<ObjectName> found) throws Exception {
+        Optional<String[]> attributesInclude,
+        boolean hasPatternQueries,
+        List<ObjectName> queries,
+        Set<ObjectName> found) throws Exception {
         Map<ObjectName, Integer> result = new HashMap<>();
         if (attributesInclude.isEmpty()) {
             found.forEach(objectName -> {
@@ -241,22 +241,22 @@ public class JmxTool {
     }
 
     private static Map<String, Object> queryAttributes(MBeanServerConnection conn,
-                                                       Set<ObjectName> objectNames,
-                                                       Optional<String[]> attributesInclude) throws Exception {
+        Set<ObjectName> objectNames,
+        Optional<String[]> attributesInclude) throws Exception {
         Map<String, Object> result = new HashMap<>();
         for (ObjectName objectName : objectNames) {
             MBeanInfo beanInfo = conn.getMBeanInfo(objectName);
             AttributeList attributes = conn.getAttributes(objectName,
-                    Arrays.stream(beanInfo.getAttributes()).map(MBeanFeatureInfo::getName).toArray(String[]::new));
+                Arrays.stream(beanInfo.getAttributes()).map(MBeanFeatureInfo::getName).toArray(String[]::new));
             for (Attribute attribute : attributes.asList()) {
                 if (attributesInclude.isPresent()) {
                     if (List.of(attributesInclude.get()).contains(attribute.getName())) {
                         result.put(String.format("%s:%s", objectName.toString(), attribute.getName()),
-                                attribute.getValue());
+                            attribute.getValue());
                     }
                 } else {
                     result.put(String.format("%s:%s", objectName.toString(), attribute.getName()),
-                            attribute.getValue());
+                        attribute.getValue());
                 }
             }
         }
@@ -303,18 +303,18 @@ public class JmxTool {
         public JmxToolOptions(String[] args) {
             super(args);
             objectNameOpt = parser.accepts("object-name", "A JMX object name to use as a query. This can contain wild cards, and this option " +
-                    "can be given multiple times to specify more than one query. If no objects are specified " +
-                    "all objects will be queried.")
+                "can be given multiple times to specify more than one query. If no objects are specified " +
+                "all objects will be queried.")
                 .withRequiredArg()
                 .describedAs("name")
                 .ofType(String.class);
             attributesOpt = parser.accepts("attributes", "The list of attributes to include in the query. This is a comma-separated list. If no " +
-                    "attributes are specified all objects will be queried.")
+                "attributes are specified all objects will be queried.")
                 .withRequiredArg()
                 .describedAs("name")
                 .ofType(String.class);
             reportingIntervalOpt = parser.accepts("reporting-interval", "Interval in MS with which to poll jmx stats; default value is 2 seconds. " +
-                    "Value of -1 equivalent to setting one-time to true")
+                "Value of -1 equivalent to setting one-time to true")
                 .withRequiredArg()
                 .describedAs("ms")
                 .ofType(Integer.class)
@@ -325,7 +325,7 @@ public class JmxTool {
                 .ofType(Boolean.class)
                 .defaultsTo(false);
             dateFormatOpt = parser.accepts("date-format", "The date format to use for formatting the time field. " +
-                    "See java.text.SimpleDateFormat for options.")
+                "See java.text.SimpleDateFormat for options.")
                 .withRequiredArg()
                 .describedAs("format")
                 .ofType(String.class);
@@ -340,7 +340,7 @@ public class JmxTool {
                 .ofType(String.class)
                 .defaultsTo("original");
             jmxAuthPropOpt = parser.accepts("jmx-auth-prop", "A mechanism to pass property in the form 'username=password' " +
-                    "when enabling remote JMX with password authentication.")
+                "when enabling remote JMX with password authentication.")
                 .withRequiredArg()
                 .describedAs("jmx-auth-prop")
                 .ofType(String.class);
@@ -369,7 +369,7 @@ public class JmxTool {
         public Optional<String[]> attributesInclude() {
             if (options.has(attributesOpt)) {
                 String[] attributes = Arrays.stream(options.valueOf(attributesOpt).split(","))
-                        .sequential().filter(s -> !s.isEmpty()).toArray(String[]::new);
+                    .sequential().filter(s -> !s.isEmpty()).toArray(String[]::new);
                 return Optional.of(attributes);
             } else {
                 return Optional.empty();
@@ -406,13 +406,13 @@ public class JmxTool {
         public List<ObjectName> queries() {
             if (options.has(objectNameOpt)) {
                 return options.valuesOf(objectNameOpt).stream()
-                        .map(s -> {
-                            try {
-                                return new ObjectName(s);
-                            } catch (MalformedObjectNameException e) {
-                                throw new RuntimeException(e);
-                            }
-                        }).collect(Collectors.toList());
+                    .map(s -> {
+                        try {
+                            return new ObjectName(s);
+                        } catch (MalformedObjectNameException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }).collect(Collectors.toList());
             } else {
                 List<ObjectName> listWithNull = new ArrayList<>();
                 listWithNull.add(null);

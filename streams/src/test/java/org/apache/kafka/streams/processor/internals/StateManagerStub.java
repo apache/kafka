@@ -35,14 +35,17 @@ public class StateManagerStub implements StateManager {
 
     @Override
     public void registerStore(final StateStore store,
-                              final StateRestoreCallback stateRestoreCallback,
-                              final CommitCallback checkpoint) {}
+        final StateRestoreCallback stateRestoreCallback,
+        final CommitCallback checkpoint) {
+    }
 
     @Override
-    public void commit() {}
+    public void commit() {
+    }
 
     @Override
-    public void close() {}
+    public void close() {
+    }
 
     @Override
     public StateStore store(final String name) {
@@ -60,7 +63,8 @@ public class StateManagerStub implements StateManager {
     }
 
     @Override
-    public void updateChangelogOffsets(final Map<TopicPartition, Long> writtenOffsets) {}
+    public void updateChangelogOffsets(final Map<TopicPartition, Long> writtenOffsets) {
+    }
 
     @Override
     public TaskType taskType() {

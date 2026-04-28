@@ -27,7 +27,8 @@ public enum TaskStateType {
     STOPPING(Constants.STOPPING_VALUE),
     DONE(Constants.DONE_VALUE);
 
-    TaskStateType(String stateType) {}
+    TaskStateType(String stateType) {
+    }
 
     public static class Constants {
         static final String PENDING_VALUE = "PENDING";

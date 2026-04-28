@@ -46,12 +46,12 @@ public class FilteringJmxReporter extends JmxReporter {
         getMetricsRegistry()
             .allMetrics()
             .forEach((name, metric) -> {
-                if (metricPredicate.test(name)) {
-                    super.onMetricAdded(name, metric);
-                } else {
-                    super.onMetricRemoved(name);
+                    if (metricPredicate.test(name)) {
+                        super.onMetricAdded(name, metric);
+                    } else {
+                        super.onMetricRemoved(name);
+                    }
                 }
-            }
             );
     }
 }

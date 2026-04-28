@@ -170,10 +170,10 @@ public class ReplicationQuotasTestRig {
 
             try {
                 cluster = new KafkaClusterTestKit.Builder(
-                        new TestKitNodes.Builder()
-                                .setNumControllerNodes(1)
-                                .setNumBrokerNodes(numBrokerNodes)
-                                .build()
+                    new TestKitNodes.Builder()
+                        .setNumControllerNodes(1)
+                        .setNumBrokerNodes(numBrokerNodes)
+                        .build()
                 ).build();
                 cluster.format();
                 cluster.startup();
@@ -201,7 +201,8 @@ public class ReplicationQuotasTestRig {
             IntSupplier nextReplicaRoundRobin = new IntSupplier() {
                 int count = 0;
 
-                @Override public int getAsInt() {
+                @Override
+                public int getAsInt() {
                     count++;
                     return (count + shift) % config.brokers;
                 }
@@ -216,13 +217,13 @@ public class ReplicationQuotasTestRig {
             adminClient.createTopics(Set.of(new NewTopic(TOPIC_NAME, replicas))).all().get();
 
             TestUtils.waitUntilTrue(
-                    () -> cluster.brokers().values().stream().allMatch(server -> {
-                        TopicImage image = server.metadataCache().currentImage().topics().getTopic(TOPIC_NAME);
-                        return image != null && image.partitions().values().stream().allMatch(PartitionRegistration::hasLeader);
-                    }),
-                    () -> "Timed out waiting for topic listing",
-                    DEFAULT_MAX_WAIT_MS,
-                    500L
+                () -> cluster.brokers().values().stream().allMatch(server -> {
+                    TopicImage image = server.metadataCache().currentImage().topics().getTopic(TOPIC_NAME);
+                    return image != null && image.partitions().values().stream().allMatch(PartitionRegistration::hasLeader);
+                }),
+                () -> "Timed out waiting for topic listing",
+                DEFAULT_MAX_WAIT_MS,
+                500L
             );
 
             System.out.println("Writing Data");
@@ -236,12 +237,12 @@ public class ReplicationQuotasTestRig {
 
             System.out.println("Generating Reassignment");
             Map<TopicPartition, List<Integer>> newAssignment = ReassignPartitionsCommand.generateAssignment(
-                    adminClient,
-                    json(TOPIC_NAME),
-                    cluster.brokers().values().stream()
-                            .map(server -> String.valueOf(server.replicaManager().localBrokerId()))
-                            .collect(Collectors.joining(",")),
-                    true
+                adminClient,
+                json(TOPIC_NAME),
+                cluster.brokers().values().stream()
+                    .map(server -> String.valueOf(server.replicaManager().localBrokerId()))
+                    .collect(Collectors.joining(",")),
+                true
             ).getKey();
 
             System.out.println("Starting Reassignment");
@@ -270,11 +271,11 @@ public class ReplicationQuotasTestRig {
             for (KafkaBroker broker : cluster.brokers().values()) {
                 for (int partitionId = 0; partitionId < config.partitions; partitionId++) {
                     long offset = broker.logManager().getLog(new TopicPartition(TOPIC_NAME, partitionId), false)
-                            .map(UnifiedLog::logEndOffset).orElse(-1L);
+                        .map(UnifiedLog::logEndOffset).orElse(-1L);
                     if (offset >= 0 && offset != config.msgsPerPartition) {
                         throw new RuntimeException(
                             "Run failed as offsets did not match for partition " + partitionId + " on broker " + broker.config().nodeId() + ". " +
-                            "Expected " + config.msgsPerPartition + " but was " + offset + "."
+                                "Expected " + config.msgsPerPartition + " but was " + offset + "."
                         );
                     }
                 }

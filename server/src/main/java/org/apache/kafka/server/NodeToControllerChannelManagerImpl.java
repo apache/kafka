@@ -75,61 +75,61 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
         this.channelName = channelName;
         this.retryTimeoutMs = retryTimeoutMs;
         this.logContext = new LogContext(String.format("[NodeToControllerChannelManager id=%s name=%s] ",
-                config.getInt(KRaftConfigs.NODE_ID_CONFIG), channelName));
+            config.getInt(KRaftConfigs.NODE_ID_CONFIG), channelName));
         String threadName = String.format("%sto-controller-%s-channel-manager", threadNamePrefix, channelName);
         ControllerInformation controllerInformation = controllerNodeProvider.get();
         this.requestThread = new NodeToControllerRequestThread(
-                buildNetworkClient(controllerInformation),
-                manualMetadataUpdater,
-                controllerNodeProvider,
-                config,
-                time,
-                threadName,
-                retryTimeoutMs
+            buildNetworkClient(controllerInformation),
+            manualMetadataUpdater,
+            controllerNodeProvider,
+            config,
+            time,
+            threadName,
+            retryTimeoutMs
         );
     }
 
     private KafkaClient buildNetworkClient(ControllerInformation controllerInfo) {
         ChannelBuilder channelBuilder = ChannelBuilders.clientChannelBuilder(
-                controllerInfo.securityProtocol(),
-                JaasContext.Type.SERVER,
-                config,
-                controllerInfo.listenerName(),
-                controllerInfo.saslMechanism(),
-                time,
-                logContext
+            controllerInfo.securityProtocol(),
+            JaasContext.Type.SERVER,
+            config,
+            controllerInfo.listenerName(),
+            controllerInfo.saslMechanism(),
+            time,
+            logContext
         );
         if (channelBuilder instanceof Reconfigurable reconfigurable) {
             config.addReconfigurable(reconfigurable);
         }
         Selector selector = new Selector(
-                NetworkReceive.UNLIMITED,
-                Selector.NO_IDLE_TIMEOUT_MS,
-                metrics,
-                time,
-                channelName,
-                Map.of("BrokerId", String.valueOf(config.brokerId())),
-                false,
-                channelBuilder,
-                logContext
+            NetworkReceive.UNLIMITED,
+            Selector.NO_IDLE_TIMEOUT_MS,
+            metrics,
+            time,
+            channelName,
+            Map.of("BrokerId", String.valueOf(config.brokerId())),
+            false,
+            channelBuilder,
+            logContext
         );
         return new NetworkClient(
-                selector,
-                manualMetadataUpdater,
-                String.valueOf(config.brokerId()),
-                1,
-                50,
-                50,
-                Selectable.USE_DEFAULT_BUFFER_SIZE,
-                Selectable.USE_DEFAULT_BUFFER_SIZE,
-                Math.min(Integer.MAX_VALUE, (int) Math.min(config.getInt(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG), retryTimeoutMs)), // request timeout should not exceed the provided retry timeout
-                config.getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
-                config.getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
-                time,
-                true,
-                apiVersions,
-                logContext,
-                MetadataRecoveryStrategy.NONE
+            selector,
+            manualMetadataUpdater,
+            String.valueOf(config.brokerId()),
+            1,
+            50,
+            50,
+            Selectable.USE_DEFAULT_BUFFER_SIZE,
+            Selectable.USE_DEFAULT_BUFFER_SIZE,
+            Math.min(Integer.MAX_VALUE, (int) Math.min(config.getInt(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG), retryTimeoutMs)), // request timeout should not exceed the provided retry timeout
+            config.getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
+            config.getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
+            time,
+            true,
+            apiVersions,
+            logContext,
+            MetadataRecoveryStrategy.NONE
         );
     }
 
@@ -147,7 +147,7 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
     @Override
     public Optional<NodeApiVersions> controllerApiVersions() {
         return requestThread.activeControllerAddress().flatMap(activeController ->
-                Optional.ofNullable(apiVersions.get(activeController.idString()))
+            Optional.ofNullable(apiVersions.get(activeController.idString()))
         );
     }
 
@@ -161,9 +161,9 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
     public void sendRequest(AbstractRequest.Builder<? extends AbstractRequest> request,
                             ControllerRequestCompletionHandler callback) {
         requestThread.enqueue(new NodeToControllerQueueItem(
-                time.milliseconds(),
-                request,
-                callback
+            time.milliseconds(),
+            request,
+            callback
         ));
     }
 

@@ -41,7 +41,7 @@ public class MultiRecordsSendTest {
         Queue<Send> sends = new LinkedList<>();
         ByteBuffer[] chunks = new ByteBuffer[numChunks];
 
-        for (int i = 0; i < numChunks; i++) {
+        for (int i = 0;i < numChunks;i++) {
             ByteBuffer buffer = ByteBuffer.wrap(TestUtils.randomBytes(chunkSize));
             chunks[i] = buffer;
             sends.add(new ByteBufferSend(buffer));
@@ -50,7 +50,7 @@ public class MultiRecordsSendTest {
         MultiRecordsSend send = new MultiRecordsSend(sends);
         assertEquals(totalSize, send.size());
 
-        for (int i = 0; i < numChunks; i++) {
+        for (int i = 0;i < numChunks;i++) {
             assertEquals(numChunks - i, send.numResidentSends());
             NonOverflowingByteBufferChannel out = new NonOverflowingByteBufferChannel(chunkSize);
             send.writeTo(out);

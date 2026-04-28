@@ -38,7 +38,7 @@ public final class JsonConverterConfig extends ConverterConfig {
 
     public static final String SCHEMA_CONTENT_CONFIG = "schema.content";
     public static final String SCHEMA_CONTENT_DEFAULT = null;
-    private static final String SCHEMA_CONTENT_DOC = "When set, this is used as the schema for all messages, and the schemas within each of the message will be ignored." 
+    private static final String SCHEMA_CONTENT_DOC = "When set, this is used as the schema for all messages, and the schemas within each of the message will be ignored."
         + "Otherwise, the schema will be included in the content of each message. This configuration applies only 'schemas.enable' is true, and it exclusively affects the sink connector.";
     private static final String SCHEMA_CONTENT_DISPLAY = "Schema Content";
 
@@ -65,11 +65,11 @@ public final class JsonConverterConfig extends ConverterConfig {
         int orderInGroup = 0;
         CONFIG = ConverterConfig.newConfigDef();
         CONFIG.define(SCHEMAS_ENABLE_CONFIG, Type.BOOLEAN, SCHEMAS_ENABLE_DEFAULT, Importance.HIGH, SCHEMAS_ENABLE_DOC, group,
-                      orderInGroup++, Width.MEDIUM, SCHEMAS_ENABLE_DISPLAY);
+            orderInGroup++, Width.MEDIUM, SCHEMAS_ENABLE_DISPLAY);
         CONFIG.define(SCHEMAS_CACHE_SIZE_CONFIG, Type.INT, SCHEMAS_CACHE_SIZE_DEFAULT, Importance.HIGH, SCHEMAS_CACHE_SIZE_DOC, group,
-                      orderInGroup++, Width.MEDIUM, SCHEMAS_CACHE_SIZE_DISPLAY);
+            orderInGroup++, Width.MEDIUM, SCHEMAS_CACHE_SIZE_DISPLAY);
         CONFIG.define(SCHEMA_CONTENT_CONFIG, Type.STRING, SCHEMA_CONTENT_DEFAULT, Importance.HIGH, SCHEMA_CONTENT_DOC, group,
-                      orderInGroup++, Width.MEDIUM, SCHEMA_CONTENT_DISPLAY);
+            orderInGroup++, Width.MEDIUM, SCHEMA_CONTENT_DISPLAY);
 
         group = "Serialization";
         orderInGroup = 0;
@@ -81,9 +81,9 @@ public final class JsonConverterConfig extends ConverterConfig {
             Importance.LOW, DECIMAL_FORMAT_DOC, group, orderInGroup++,
             Width.MEDIUM, DECIMAL_FORMAT_DISPLAY);
         CONFIG.define(
-                REPLACE_NULL_WITH_DEFAULT_CONFIG, Type.BOOLEAN, REPLACE_NULL_WITH_DEFAULT_DEFAULT,
-                Importance.LOW, REPLACE_NULL_WITH_DEFAULT_DOC, group, orderInGroup++,
-                Width.MEDIUM, REPLACE_NULL_WITH_DEFAULT_DISPLAY);
+            REPLACE_NULL_WITH_DEFAULT_CONFIG, Type.BOOLEAN, REPLACE_NULL_WITH_DEFAULT_DEFAULT,
+            Importance.LOW, REPLACE_NULL_WITH_DEFAULT_DOC, group, orderInGroup++,
+            Width.MEDIUM, REPLACE_NULL_WITH_DEFAULT_DISPLAY);
     }
 
     public static ConfigDef configDef() {
@@ -105,8 +105,8 @@ public final class JsonConverterConfig extends ConverterConfig {
         this.replaceNullWithDefault = getBoolean(REPLACE_NULL_WITH_DEFAULT_CONFIG);
         String schemaContentStr = getString(SCHEMA_CONTENT_CONFIG);
         this.schemaContent = (schemaContentStr == null || schemaContentStr.isEmpty())
-                ? null
-                : schemaContentStr.getBytes(StandardCharsets.UTF_8);
+            ? null
+            : schemaContentStr.getBytes(StandardCharsets.UTF_8);
     }
 
     /**

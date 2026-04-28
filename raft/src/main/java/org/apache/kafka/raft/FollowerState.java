@@ -246,7 +246,7 @@ public class FollowerState implements EpochState {
     public String toString() {
         return String.format(
             "FollowerState(fetchTimeoutMs=%d, epoch=%d, leader=%d, leaderEndpoints=%s, votedKey=%s, " +
-            "voters=%s, highWatermark=%s, fetchingSnapshot=%s)",
+                "voters=%s, highWatermark=%s, fetchingSnapshot=%s)",
             fetchTimeoutMs,
             epoch,
             leaderId,

@@ -180,11 +180,11 @@ public class StateDirectory implements AutoCloseable {
         final Path path = file.toPath();
         if (path.getFileSystem().supportedFileAttributeViews().contains("posix")) {
             final Set<PosixFilePermission> perms = EnumSet.of(
-                    PosixFilePermission.OWNER_READ,
-                    PosixFilePermission.OWNER_WRITE,
-                    PosixFilePermission.OWNER_EXECUTE,
-                    PosixFilePermission.GROUP_READ,
-                    PosixFilePermission.GROUP_EXECUTE
+                PosixFilePermission.OWNER_READ,
+                PosixFilePermission.OWNER_WRITE,
+                PosixFilePermission.OWNER_EXECUTE,
+                PosixFilePermission.GROUP_READ,
+                PosixFilePermission.GROUP_EXECUTE
             );
             if (config.getBoolean(StreamsConfig.ALLOW_OS_GROUP_WRITE_ACCESS_CONFIG)) {
                 perms.add(PosixFilePermission.GROUP_WRITE);
@@ -223,10 +223,10 @@ public class StateDirectory implements AutoCloseable {
     /**
      * @throws LockException If another process already locks any of StateDirectory
      * @throws ProcessorStateException if any of task directory does not exist and could not be created
-    */
+     */
     public void initializeStartupStores(final TopologyMetadata topologyMetadata,
-                                        final LogContext logContext,
-                                        final StreamsMetricsImpl metricsImpl) {
+        final LogContext logContext,
+        final StreamsMetricsImpl metricsImpl) {
         final List<TaskDirectory> nonEmptyTaskDirectories = listNonEmptyTaskDirectories();
         if (hasPersistentStores && !nonEmptyTaskDirectories.isEmpty()) {
             final boolean eosEnabled = StreamsConfigUtils.eosEnabled(config);
@@ -246,9 +246,9 @@ public class StateDirectory implements AutoCloseable {
                 // this therefore prevents us from creating unnecessary stores just because of some left-over state
                 if (subTopology.hasStateWithChangelogs()) {
                     final Set<TopicPartition> inputPartitions = topologyMetadata.nodeToSourceTopics(task).values().stream()
-                            .flatMap(Collection::stream)
-                            .map(t -> new TopicPartition(t, task.partition()))
-                            .collect(Collectors.toSet());
+                        .flatMap(Collection::stream)
+                        .map(t -> new TopicPartition(t, task.partition()))
+                        .collect(Collectors.toSet());
                     // Open a temporary state manager that will open the stores inside the subtopology
                     final ProcessorStateManager temporaryStateManager = ProcessorStateManager.createStartupTaskStateManager(
                         task,
@@ -300,8 +300,8 @@ public class StateDirectory implements AutoCloseable {
 
     public Map<TaskId, Long> taskOffsetSums(final Set<TaskId> tasks) {
         return taskOffsetSums.entrySet().stream()
-                .filter(e -> tasks.contains(e.getKey()))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+            .filter(e -> tasks.contains(e.getKey()))
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     public void updateTaskOffsets(final TaskId taskId, final Map<TopicPartition, Long> changelogOffsets) {
@@ -322,8 +322,8 @@ public class StateDirectory implements AutoCloseable {
             if (offset != OffsetCheckpoint.OFFSET_UNKNOWN) {
                 if (offset < 0) {
                     throw new StreamsException(
-                            new IllegalStateException("Expected not to get a sentinel offset, but got: " + changelogEntry),
-                            taskId);
+                        new IllegalStateException("Expected not to get a sentinel offset, but got: " + changelogEntry),
+                        taskId);
                 }
                 offsetSum += offset;
                 if (offsetSum < 0) {
@@ -346,8 +346,8 @@ public class StateDirectory implements AutoCloseable {
         if (!lockStateDirectory()) {
             log.error("Unable to obtain lock as state directory is already locked by another process");
             throw new StreamsException(String.format("Unable to initialize state, this can happen if multiple instances of " +
-                                           "Kafka Streams are running in the same state directory " +
-                                           "(current state directory is [%s]", stateDir.getAbsolutePath()));
+                "Kafka Streams are running in the same state directory " +
+                "(current state directory is [%s]", stateDir.getAbsolutePath()));
         }
 
         final File processFile = new File(stateDir, PROCESS_FILE_NAME);
@@ -437,7 +437,7 @@ public class StateDirectory implements AutoCloseable {
 
     private boolean taskDirIsEmpty(final File taskDir) {
         final File[] storeDirs = taskDir.listFiles(pathname ->
-                !pathname.getName().startsWith(LegacyCheckpointingStateStore.CHECKPOINT_FILE_NAME));
+            !pathname.getName().startsWith(LegacyCheckpointingStateStore.CHECKPOINT_FILE_NAME));
 
         boolean taskDirEmpty = true;
 
@@ -664,7 +664,7 @@ public class StateDirectory implements AutoCloseable {
                 final long lastModifiedMs = taskDir.file().lastModified();
                 if (now - dirMaxAgeMs > lastModifiedMs) {
                     log.info("Deleting outdated state directory {} as {}ms has elapsed from last update (max directory age is {}ms).",
-                            dirName, now - lastModifiedMs, dirMaxAgeMs);
+                        dirName, now - lastModifiedMs, dirMaxAgeMs);
                     Utils.delete(taskDir.file());
                 }
             } catch (final IOException exception) {
@@ -692,7 +692,7 @@ public class StateDirectory implements AutoCloseable {
 
         final AtomicReference<IOException> firstException = new AtomicReference<>(null);
         final File[] namedTopologyDirs = stateDir.listFiles(pathname ->
-                pathname.isDirectory() && NAMED_TOPOLOGY_DIR_PATH_NAME.matcher(pathname.getName()).matches()
+            pathname.isDirectory() && NAMED_TOPOLOGY_DIR_PATH_NAME.matcher(pathname.getName()).matches()
         );
         if (namedTopologyDirs != null) {
             for (final File namedTopologyDir : namedTopologyDirs) {
@@ -742,7 +742,7 @@ public class StateDirectory implements AutoCloseable {
         } catch (final IOException e) {
             log.error("Hit an unexpected error while clearing local state for topology " + topologyName, e);
             throw new StreamsException("Unable to delete state for the named topology " + topologyName,
-                                       e, new TaskId(-1, -1, topologyName)); // use dummy taskid to report source topology for this error
+                e, new TaskId(-1, -1, topologyName)); // use dummy taskid to report source topology for this error
         }
     }
 
@@ -822,7 +822,7 @@ public class StateDirectory implements AutoCloseable {
                     stateDir.listFiles(filter);
                 if (taskDirs != null) {
                     taskDirectories.addAll(Arrays.stream(taskDirs)
-                                               .map(f -> new TaskDirectory(f, null)).collect(Collectors.toList()));
+                        .map(f -> new TaskDirectory(f, null)).collect(Collectors.toList()));
                 }
             }
         }
@@ -831,7 +831,7 @@ public class StateDirectory implements AutoCloseable {
     }
 
     private List<File> listNamedTopologyDirs() {
-        final File[] namedTopologyDirectories = stateDir.listFiles(f -> f.getName().startsWith("__") &&  f.getName().endsWith("__"));
+        final File[] namedTopologyDirectories = stateDir.listFiles(f -> f.getName().startsWith("__") && f.getName().endsWith("__"));
         return namedTopologyDirectories != null ? Arrays.asList(namedTopologyDirectories) : Collections.emptyList();
     }
 

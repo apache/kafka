@@ -40,7 +40,7 @@ public class ByteBufferChannelTest {
         buffer.limit(limit);
 
         ByteBufferChannel channel = new ByteBufferChannel(buffer.remaining());
-        ByteBuffer[] buffers = new ByteBuffer[] {buffer};
+        ByteBuffer[] buffers = new ByteBuffer[]{buffer};
         channel.write(buffers);
         channel.close();
         ByteBuffer channelBuffer = channel.buffer();
@@ -50,7 +50,7 @@ public class ByteBufferChannelTest {
 
     @Test
     public void testWriteMultiplesByteBuffers() {
-        ByteBuffer[] buffers = new ByteBuffer[] {
+        ByteBuffer[] buffers = new ByteBuffer[]{
             ByteBuffer.wrap(Utils.utf8("hello")),
             ByteBuffer.wrap(Utils.utf8("world"))
         };

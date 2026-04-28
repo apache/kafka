@@ -112,7 +112,7 @@ public final class RemoteTopicPartitionDirectory {
      * provided topicPartition under the root directory of the local tiered storage.
      */
     public static RemoteTopicPartitionDirectory openTopicPartitionDirectory(final TopicIdPartition topicIdPartition,
-                                                                            final File storageDirectory) {
+            final File storageDirectory) {
 
 
         final File directory = new File(storageDirectory, toString(topicIdPartition));
@@ -132,7 +132,7 @@ public final class RemoteTopicPartitionDirectory {
      * {@link IllegalArgumentException} if the directory does not exist.
      */
     public static RemoteTopicPartitionDirectory openExistingTopicPartitionDirectory(final String dirname,
-                                                                                    final File storageDirectory) {
+            final File storageDirectory) {
         final Uuid uuid = Uuid.fromString(substr(dirname, GROUP_UUID));
         final String topic = substr(dirname, GROUP_TOPIC);
         final int partition;

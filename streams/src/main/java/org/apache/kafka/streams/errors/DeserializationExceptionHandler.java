@@ -51,8 +51,8 @@ public interface DeserializationExceptionHandler extends Configurable {
      */
     @Deprecated
     default DeserializationHandlerResponse handle(final ProcessorContext context,
-                                                  final ConsumerRecord<byte[], byte[]> record,
-                                                  final Exception exception) {
+        final ConsumerRecord<byte[], byte[]> record,
+        final Exception exception) {
         throw new UnsupportedOperationException();
     }
 
@@ -72,8 +72,8 @@ public interface DeserializationExceptionHandler extends Configurable {
      */
     @Deprecated
     default DeserializationHandlerResponse handle(final ErrorHandlerContext context,
-                                                  final ConsumerRecord<byte[], byte[]> record,
-                                                  final Exception exception) {
+        final ConsumerRecord<byte[], byte[]> record,
+        final Exception exception) {
         return handle(((DefaultErrorHandlerContext) context).processorContext().orElse(null), record, exception);
     }
 
@@ -92,6 +92,7 @@ public interface DeserializationExceptionHandler extends Configurable {
     default Response handleError(final ErrorHandlerContext context, final ConsumerRecord<byte[], byte[]> record, final Exception exception) {
         return new Response(Result.from(handle(context, record, exception)), Collections.emptyList());
     }
+
     /**
      * Enumeration that describes the response from the exception handler.
      */
@@ -183,7 +184,7 @@ public interface DeserializationExceptionHandler extends Configurable {
          * @param deadLetterQueueRecords the list of records to be sent to the dead letter queue; may be {@code null}.
          */
         private Response(final Result result,
-                         final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
+            final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
             this.result = result;
             this.deadLetterQueueRecords = deadLetterQueueRecords;
         }

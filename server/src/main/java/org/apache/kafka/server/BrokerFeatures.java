@@ -49,7 +49,7 @@ public class BrokerFeatures {
     public static BrokerFeatures createDefault(boolean unstableFeatureVersionsEnabled) {
         return new BrokerFeatures(defaultSupportedFeatures(unstableFeatureVersionsEnabled));
     }
-    
+
     // only for testing
     public static BrokerFeatures createDefault(boolean unstableFeatureVersionsEnabled, Features<SupportedVersionRange> newFeatures) {
         Map<String, SupportedVersionRange> combined = new HashMap<>(defaultSupportedFeatures(unstableFeatureVersionsEnabled).features());
@@ -59,18 +59,18 @@ public class BrokerFeatures {
 
     public static Map<String, VersionRange> createDefaultFeatureMap(BrokerFeatures features) {
         return features.supportedFeatures.features()
-                .entrySet()
-                .stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> VersionRange.of(e.getValue().min(), e.getValue().max())));
+            .entrySet()
+            .stream()
+            .collect(Collectors.toMap(Map.Entry::getKey, e -> VersionRange.of(e.getValue().min(), e.getValue().max())));
     }
 
     public static Features<SupportedVersionRange> defaultSupportedFeatures(boolean unstableFeatureVersionsEnabled) {
         Map<String, SupportedVersionRange> features = new HashMap<>();
         features.put(MetadataVersion.FEATURE_NAME,
-                new SupportedVersionRange(
-                        MetadataVersion.MINIMUM_VERSION.featureLevel(),
-                        unstableFeatureVersionsEnabled ? MetadataVersion.latestTesting().featureLevel()
-                                : MetadataVersion.latestProduction().featureLevel()));
+            new SupportedVersionRange(
+                MetadataVersion.MINIMUM_VERSION.featureLevel(),
+                unstableFeatureVersionsEnabled ? MetadataVersion.latestTesting().featureLevel()
+                    : MetadataVersion.latestProduction().featureLevel()));
         PRODUCTION_FEATURES.forEach(feature -> {
             int maxVersion = unstableFeatureVersionsEnabled ? feature.latestTesting() : feature.latestProduction();
             if (maxVersion > 0) {
@@ -104,9 +104,9 @@ public class BrokerFeatures {
      */
     public Map<String, Short> defaultFinalizedFeatures() {
         return supportedFeatures.features().entrySet()
-                .stream()
-                .collect(Collectors.toMap(Map.Entry::getKey,
-                        e -> e.getKey().equals(KRaftVersion.FEATURE_NAME) ? 0 : e.getValue().max()));
+            .stream()
+            .collect(Collectors.toMap(Map.Entry::getKey,
+                e -> e.getKey().equals(KRaftVersion.FEATURE_NAME) ? 0 : e.getValue().max()));
     }
 
     /**
@@ -146,7 +146,7 @@ public class BrokerFeatures {
                 incompatibleFeaturesInfo.put(feature, versionLevels);
                 if (logIncompatibilities) {
                     log.warn("Feature incompatibilities seen: {feature={}, reason='{} is incompatible with {}'}",
-                            feature, versionLevels, supportedVersions);
+                        feature, versionLevels, supportedVersions);
                 }
             }
         });

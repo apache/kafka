@@ -40,8 +40,8 @@ public abstract class ConverterConfig extends AbstractConfig {
      */
     public static ConfigDef newConfigDef() {
         return new ConfigDef().define(TYPE_CONFIG, Type.STRING, ConfigDef.NO_DEFAULT_VALUE,
-                                      in(ConverterType.KEY.getName(), ConverterType.VALUE.getName(), ConverterType.HEADER.getName()),
-                                      Importance.LOW, TYPE_DOC);
+                in(ConverterType.KEY.getName(), ConverterType.VALUE.getName(), ConverterType.HEADER.getName()),
+                Importance.LOW, TYPE_DOC);
     }
 
     protected ConverterConfig(ConfigDef configDef, Map<String, ?> props) {

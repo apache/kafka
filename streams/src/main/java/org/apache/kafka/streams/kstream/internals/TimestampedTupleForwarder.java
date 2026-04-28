@@ -38,16 +38,16 @@ class TimestampedTupleForwarder<K, V> {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     TimestampedTupleForwarder(final StateStore store,
-                              final ProcessorContext<K, Change<V>> context,
-                              final CacheFlushListener<K, ?> flushListener,
-                              final boolean sendOldValues) {
+        final ProcessorContext<K, Change<V>> context,
+        final CacheFlushListener<K, ?> flushListener,
+        final boolean sendOldValues) {
         this.context = (InternalProcessorContext<K, Change<V>>) context;
         this.sendOldValues = sendOldValues;
         cachingEnabled = ((WrappedStateStore) store).setFlushListener(flushListener, sendOldValues);
     }
 
     TimestampedTupleForwarder(final ProcessorContext<K, Change<V>> context,
-                              final boolean sendOldValues) {
+        final boolean sendOldValues) {
         this.context = (InternalProcessorContext<K, Change<V>>) context;
         this.sendOldValues = sendOldValues;
         cachingEnabled = false;

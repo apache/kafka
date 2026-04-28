@@ -39,11 +39,11 @@ public class HeartbeatRequestState extends RequestState {
     private long heartbeatIntervalMs;
 
     public HeartbeatRequestState(final LogContext logContext,
-                                 final Time time,
-                                 final long heartbeatIntervalMs,
-                                 final long retryBackoffMs,
-                                 final long retryBackoffMaxMs,
-                                 final double jitter) {
+        final Time time,
+        final long heartbeatIntervalMs,
+        final long retryBackoffMs,
+        final long retryBackoffMaxMs,
+        final double jitter) {
         super(
             logContext,
             HeartbeatRequestState.class.getName(),

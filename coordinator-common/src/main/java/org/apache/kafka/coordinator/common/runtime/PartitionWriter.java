@@ -36,8 +36,8 @@ public interface PartitionWriter {
      */
     interface Listener {
         void onHighWatermarkUpdated(
-            TopicPartition tp,
-            long offset
+                TopicPartition tp,
+                long offset
         );
     }
 
@@ -48,8 +48,8 @@ public interface PartitionWriter {
      * @param listener  The listener.
      */
     void registerListener(
-        TopicPartition tp,
-        Listener listener
+            TopicPartition tp,
+            Listener listener
     );
 
     /**
@@ -59,8 +59,8 @@ public interface PartitionWriter {
      * @param listener  The listener.
      */
     void deregisterListener(
-        TopicPartition tp,
-        Listener listener
+            TopicPartition tp,
+            Listener listener
     );
 
     /**
@@ -70,7 +70,7 @@ public interface PartitionWriter {
      * @return The LogConfig.
      */
     LogConfig config(
-        TopicPartition tp
+            TopicPartition tp
     );
 
     /**
@@ -84,10 +84,10 @@ public interface PartitionWriter {
      * @return The log end offset right after the written records.
      */
     long append(
-        TopicPartition tp,
-        VerificationGuard verificationGuard,
-        MemoryRecords records,
-        short transactionVersion
+            TopicPartition tp,
+            VerificationGuard verificationGuard,
+            MemoryRecords records,
+            short transactionVersion
     ) throws KafkaException;
 
     /**
@@ -104,11 +104,11 @@ public interface PartitionWriter {
      * @throws KafkaException Any KafkaException caught during the operation.
      */
     CompletableFuture<VerificationGuard> maybeStartTransactionVerification(
-        TopicPartition tp,
-        String transactionalId,
-        long producerId,
-        short producerEpoch,
-        int apiVersion
+            TopicPartition tp,
+            String transactionalId,
+            long producerId,
+            short producerEpoch,
+            int apiVersion
     ) throws KafkaException;
 
     /**
@@ -118,7 +118,7 @@ public interface PartitionWriter {
      * @throws KafkaException       Any KafkaException caught during the operation.
      */
     CompletableFuture<Void> deleteRecords(
-        TopicPartition tp,
-        long deleteBeforeOffset
+            TopicPartition tp,
+            long deleteBeforeOffset
     ) throws KafkaException;
 }

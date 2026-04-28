@@ -66,7 +66,8 @@ public abstract class JwtValidatorTest extends OAuthBearerTest {
     public void testMissingHeader() throws Exception {
         JwtValidator validator = createJwtValidator();
         String header = "";
-        String payload = createBase64JsonJwtSection(node -> { });
+        String payload = createBase64JsonJwtSection(node -> {
+        });
         String signature = "";
         String accessToken = String.format("%s.%s.%s", header, payload, signature);
         assertThrows(JwtValidatorException.class, () -> validator.validate(accessToken));
@@ -86,7 +87,8 @@ public abstract class JwtValidatorTest extends OAuthBearerTest {
     public void testMissingSignature() throws Exception {
         JwtValidator validator = createJwtValidator();
         String header = createBase64JsonJwtSection(node -> node.put(HeaderParameterNames.ALGORITHM, AlgorithmIdentifiers.NONE));
-        String payload = createBase64JsonJwtSection(node -> { });
+        String payload = createBase64JsonJwtSection(node -> {
+        });
         String signature = "";
         String accessToken = String.format("%s.%s.%s", header, payload, signature);
         assertThrows(JwtValidatorException.class, () -> validator.validate(accessToken));

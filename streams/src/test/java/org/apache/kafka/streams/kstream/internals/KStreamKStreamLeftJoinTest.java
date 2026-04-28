@@ -64,7 +64,7 @@ public class KStreamKStreamLeftJoinTest {
         setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final int[] expectedKeys = new int[] {0, 1, 2, 3};
+        final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
@@ -74,18 +74,18 @@ public class KStreamKStreamLeftJoinTest {
         stream2 = builder.stream(topic2, consumed);
 
         joined = stream1.leftJoin(
-                stream2,
-                MockValueJoiner.TOSTRING_JOINER,
-                JoinWindows.of(ofMillis(100L)),
-                StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
+            stream2,
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.of(ofMillis(100L)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(PROPS), PROPS)) {
             final TestInputTopic<Integer, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
-                    driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
 
             // Only 2 window stores should be available
@@ -100,8 +100,8 @@ public class KStreamKStreamLeftJoinTest {
                 inputTopic1.pipeInput(expectedKeys[i], "A" + expectedKeys[i]);
             }
             processor.checkAndClearProcessResult(
-                    new KeyValueTimestamp<>(0, "A0+null", 0L),
-                    new KeyValueTimestamp<>(1, "A1+null", 0L)
+                new KeyValueTimestamp<>(0, "A0+null", 0L),
+                new KeyValueTimestamp<>(1, "A1+null", 0L)
             );
 
             // push two items to the other stream; this should produce two items
@@ -113,8 +113,8 @@ public class KStreamKStreamLeftJoinTest {
                 inputTopic2.pipeInput(expectedKeys[i], "a" + expectedKeys[i]);
             }
             processor.checkAndClearProcessResult(
-                    new KeyValueTimestamp<>(0, "A0+a0", 0L),
-                    new KeyValueTimestamp<>(1, "A1+a1", 0L)
+                new KeyValueTimestamp<>(0, "A0+a0", 0L),
+                new KeyValueTimestamp<>(1, "A1+a1", 0L)
             );
         }
     }
@@ -134,18 +134,18 @@ public class KStreamKStreamLeftJoinTest {
         stream2 = builder.stream(topic2, consumed);
 
         joined = stream1.leftJoin(
-                stream2,
-                MockValueJoiner.TOSTRING_JOINER,
-                JoinWindows.of(ofMillis(100L)).grace(ofMillis(10L)),
-                StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
+            stream2,
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.of(ofMillis(100L)).grace(ofMillis(10L)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(PROPS), PROPS)) {
             final TestInputTopic<Integer, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
-                    driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
 
             // Only 2 window stores should be available
@@ -156,10 +156,10 @@ public class KStreamKStreamLeftJoinTest {
             inputTopic2.pipeInput(0, "a0", 0L);
 
             processor.checkAndClearProcessResult(
-                    new KeyValueTimestamp<>(0, "A0+null", 0L),
-                    new KeyValueTimestamp<>(0, "A0-0+null", 0L),
-                    new KeyValueTimestamp<>(0, "A0+a0", 0L),
-                    new KeyValueTimestamp<>(0, "A0-0+a0", 0L)
+                new KeyValueTimestamp<>(0, "A0+null", 0L),
+                new KeyValueTimestamp<>(0, "A0-0+null", 0L),
+                new KeyValueTimestamp<>(0, "A0+a0", 0L),
+                new KeyValueTimestamp<>(0, "A0-0+a0", 0L)
             );
         }
     }
@@ -450,7 +450,7 @@ public class KStreamKStreamLeftJoinTest {
         setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final int[] expectedKeys = new int[] {0, 1, 2, 3};
+        final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
@@ -458,7 +458,7 @@ public class KStreamKStreamLeftJoinTest {
         final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
-        
+
         joined = stream1.leftJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
@@ -477,13 +477,13 @@ public class KStreamKStreamLeftJoinTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
             final TestInputTopic<Integer, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
-                    driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
 
             processor.init(null);
-            
+
             // push four items with increasing timestamps to the primary stream; the other window is empty; 
             // this should emit the first three left-joined items;
             // A3 is not triggered yet
@@ -496,11 +496,11 @@ public class KStreamKStreamLeftJoinTest {
                 inputTopic1.pipeInput(expectedKeys[i], "A" + expectedKeys[i], time + i);
             }
             processor.checkAndClearProcessResult(
-                    new KeyValueTimestamp<>(0, "A0+null", 1000L),
-                    new KeyValueTimestamp<>(1, "A1+null", 1001L),
-                    new KeyValueTimestamp<>(2, "A2+null", 1002L)
+                new KeyValueTimestamp<>(0, "A0+null", 1000L),
+                new KeyValueTimestamp<>(1, "A1+null", 1001L),
+                new KeyValueTimestamp<>(2, "A2+null", 1002L)
             );
-            
+
             // push four items smaller timestamps (out of window) to the secondary stream; 
             // this should produce four joined items
             // w1 = { 0:A0 (ts: 1000), 1:A1 (ts: 1001), 2:A2 (ts: 1002), 3:A3 (ts: 1003) }
@@ -512,10 +512,10 @@ public class KStreamKStreamLeftJoinTest {
                 inputTopic2.pipeInput(expectedKey, "a" + expectedKey, time);
             }
             processor.checkAndClearProcessResult(
-                    new KeyValueTimestamp<>(0, "A0+a0", 1000L),
-                    new KeyValueTimestamp<>(1, "A1+a1", 1001L),
-                    new KeyValueTimestamp<>(2, "A2+a2", 1002L),
-                    new KeyValueTimestamp<>(3, "A3+a3", 1003L)
+                new KeyValueTimestamp<>(0, "A0+a0", 1000L),
+                new KeyValueTimestamp<>(1, "A1+a1", 1001L),
+                new KeyValueTimestamp<>(2, "A2+a2", 1002L),
+                new KeyValueTimestamp<>(3, "A3+a3", 1003L)
             );
 
             // push four items with increased timestamps to the secondary stream; 
@@ -530,10 +530,10 @@ public class KStreamKStreamLeftJoinTest {
                 inputTopic2.pipeInput(expectedKey, "b" + expectedKey, time);
             }
             processor.checkAndClearProcessResult(
-                    new KeyValueTimestamp<>(0, "A0+b0", 1000L),
-                    new KeyValueTimestamp<>(1, "A1+b1", 1001L),
-                    new KeyValueTimestamp<>(2, "A2+b2", 1002L),
-                    new KeyValueTimestamp<>(3, "A3+b3", 1003L)
+                new KeyValueTimestamp<>(0, "A0+b0", 1000L),
+                new KeyValueTimestamp<>(1, "A1+b1", 1001L),
+                new KeyValueTimestamp<>(2, "A2+b2", 1002L),
+                new KeyValueTimestamp<>(3, "A3+b3", 1003L)
             );
 
             // push four items with increased timestamps to the secondary stream; 
@@ -551,9 +551,9 @@ public class KStreamKStreamLeftJoinTest {
                 inputTopic2.pipeInput(expectedKey, "c" + expectedKey, time);
             }
             processor.checkAndClearProcessResult(
-                    new KeyValueTimestamp<>(1, "A1+c1", 1001L),
-                    new KeyValueTimestamp<>(2, "A2+c2", 1002L),
-                    new KeyValueTimestamp<>(3, "A3+c3", 1003L)
+                new KeyValueTimestamp<>(1, "A1+c1", 1001L),
+                new KeyValueTimestamp<>(2, "A2+c2", 1002L),
+                new KeyValueTimestamp<>(3, "A3+c3", 1003L)
             );
 
             // push four items with increased timestamps to the secondary stream;
@@ -573,8 +573,8 @@ public class KStreamKStreamLeftJoinTest {
                 inputTopic2.pipeInput(expectedKey, "d" + expectedKey, time);
             }
             processor.checkAndClearProcessResult(
-                    new KeyValueTimestamp<>(2, "A2+d2", 1002L),
-                    new KeyValueTimestamp<>(3, "A3+d3", 1003L)
+                new KeyValueTimestamp<>(2, "A2+d2", 1002L),
+                new KeyValueTimestamp<>(3, "A3+d3", 1003L)
             );
 
             // push four items with increased timestamps to the secondary stream; 
@@ -652,12 +652,12 @@ public class KStreamKStreamLeftJoinTest {
     }
 
     public void runLeftJoin(final StreamJoined<Integer, String, String> streamJoined,
-                            final JoinWindows joinWindows,
-                            final boolean withHeaders) {
+        final JoinWindows joinWindows,
+        final boolean withHeaders) {
         setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final int[] expectedKeys = new int[] {0, 1, 2, 3};
+        final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
@@ -682,9 +682,9 @@ public class KStreamKStreamLeftJoinTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
             final TestInputTopic<Integer, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
-                    driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
 
             // 2 window stores + 1 shared window store should be available
@@ -824,7 +824,7 @@ public class KStreamKStreamLeftJoinTest {
     public void testGracePeriod(final boolean withHeaders) {
         setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
-        final int[] expectedKeys = new int[] {0, 1, 2, 3};
+        final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
@@ -898,7 +898,7 @@ public class KStreamKStreamLeftJoinTest {
     public void testWindowing(final boolean withHeaders) {
         setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
-        final int[] expectedKeys = new int[] {0, 1, 2, 3};
+        final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
@@ -923,9 +923,9 @@ public class KStreamKStreamLeftJoinTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
             final TestInputTopic<Integer, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<Integer, String> inputTopic2 =
-                    driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
             final long time = 0L;
 
@@ -961,7 +961,7 @@ public class KStreamKStreamLeftJoinTest {
     public void shouldNotEmitLeftJoinResultForAsymmetricWindow(final boolean withHeaders) {
         setDslStoreFormat(withHeaders);
         final StreamsBuilder builder = new StreamsBuilder();
-        final int[] expectedKeys = new int[] {0, 1, 2, 3};
+        final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         final KStream<Integer, String> stream1;
         final KStream<Integer, String> stream2;
@@ -1023,14 +1023,14 @@ public class KStreamKStreamLeftJoinTest {
     }
 
     private void testUpperWindowBound(final int[] expectedKeys,
-                                      final TopologyTestDriver driver,
-                                      final MockApiProcessor<Integer, String, Void, Void> processor) {
+        final TopologyTestDriver driver,
+        final MockApiProcessor<Integer, String, Void, Void> processor) {
         long time;
 
         final TestInputTopic<Integer, String> inputTopic1 =
-                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
         final TestInputTopic<Integer, String> inputTopic2 =
-                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
         // push four items with larger and increasing timestamp (out of window) to the other stream; this should produce no items
         // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
@@ -1166,8 +1166,8 @@ public class KStreamKStreamLeftJoinTest {
     }
 
     private void testLowerWindowBound(final int[] expectedKeys,
-                                      final TopologyTestDriver driver,
-                                      final MockApiProcessor<Integer, String, Void, Void> processor) {
+        final TopologyTestDriver driver,
+        final MockApiProcessor<Integer, String, Void, Void> processor) {
         long time;
         final TestInputTopic<Integer, String> inputTopic1 = driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer());
 

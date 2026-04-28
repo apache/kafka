@@ -73,11 +73,11 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
     private boolean sendOldValues = false;
 
     public KStreamSessionWindowAggregate(final SessionWindows windows,
-                                         final StoreFactory storeFactory,
-                                         final EmitStrategy emitStrategy,
-                                         final Initializer<VAgg> initializer,
-                                         final Aggregator<? super KIn, ? super VIn, VAgg> aggregator,
-                                         final Merger<? super KIn, VAgg> sessionMerger) {
+        final StoreFactory storeFactory,
+        final EmitStrategy emitStrategy,
+        final Initializer<VAgg> initializer,
+        final Aggregator<? super KIn, ? super VIn, VAgg> aggregator,
+        final Merger<? super KIn, VAgg> sessionMerger) {
         this.windows = windows;
         this.storeName = storeFactory.storeName();
         this.storeFactory = storeFactory;
@@ -157,9 +157,9 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                     this.lastEmitWindowCloseTime = lastEmitWindowCloseTime;
                 }
                 final long emitInterval = StreamsConfig.InternalConfig.getLong(
-                        context.appConfigs(),
-                        EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION,
-                        1000L
+                    context.appConfigs(),
+                    EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION,
+                    1000L
                 );
                 timeTracker.setEmitInterval(emitInterval);
 
@@ -227,8 +227,8 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
         }
 
         private void maybeForwardUpdate(final Windowed<KIn> windowedkey,
-                                        final VAgg oldAgg,
-                                        final VAgg newAgg) {
+            final VAgg oldAgg,
+            final VAgg newAgg) {
             if (emitStrategy.type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE) {
                 return;
             }
@@ -292,9 +292,9 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
         }
 
         private void fetchAndEmit(final Record<KIn, VIn> record,
-                                  final long windowCloseTime,
-                                  final long emitRangeLowerBound,
-                                  final long emitRangeUpperBound) {
+            final long windowCloseTime,
+            final long emitRangeLowerBound,
+            final long emitRangeUpperBound) {
             final long startMs = time.milliseconds();
 
             int emittedCount = 0;
@@ -327,51 +327,51 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
             if (context().recordMetadata().isPresent()) {
                 final RecordMetadata recordMetadata = context().recordMetadata().get();
                 LOG.warn(
-                        "Skipping record due to null key. "
-                                + "topic=[{}] partition=[{}] offset=[{}]",
-                        recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
+                    "Skipping record due to null key. "
+                        + "topic=[{}] partition=[{}] offset=[{}]",
+                    recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
                 );
             } else {
                 LOG.warn(
-                        "Skipping record due to null key. Topic, partition, and offset not known."
+                    "Skipping record due to null key. Topic, partition, and offset not known."
                 );
             }
             droppedRecordsSensor.record();
         }
 
         private void logSkippedRecordForExpiredWindow(final long timestamp,
-                                                      final long windowExpire,
-                                                      final SessionWindow window) {
+            final long windowExpire,
+            final SessionWindow window) {
             final String windowString = "[" + window.start() + "," + window.end() + "]";
 
             if (context().recordMetadata().isPresent()) {
                 final RecordMetadata recordMetadata = context().recordMetadata().get();
                 LOG.warn("Skipping record for expired window. " +
-                                "topic=[{}] " +
-                                "partition=[{}] " +
-                                "offset=[{}] " +
-                                "timestamp=[{}] " +
-                                "window={} " +
-                                "expiration=[{}] " +
-                                "streamTime=[{}]",
-                        recordMetadata.topic(),
-                        recordMetadata.partition(),
-                        recordMetadata.offset(),
-                        timestamp,
-                        windowString,
-                        windowExpire,
-                        observedStreamTime
+                    "topic=[{}] " +
+                    "partition=[{}] " +
+                    "offset=[{}] " +
+                    "timestamp=[{}] " +
+                    "window={} " +
+                    "expiration=[{}] " +
+                    "streamTime=[{}]",
+                    recordMetadata.topic(),
+                    recordMetadata.partition(),
+                    recordMetadata.offset(),
+                    timestamp,
+                    windowString,
+                    windowExpire,
+                    observedStreamTime
                 );
             } else {
                 LOG.warn("Skipping record for expired window. Topic, partition, and offset not known. " +
-                                "timestamp=[{}] " +
-                                "window={} " +
-                                "expiration=[{}] " +
-                                "streamTime=[{}]",
-                        timestamp,
-                        windowString,
-                        windowExpire,
-                        observedStreamTime
+                    "timestamp=[{}] " +
+                    "window={} " +
+                    "expiration=[{}] " +
+                    "streamTime=[{}]",
+                    timestamp,
+                    windowString,
+                    windowExpire,
+                    observedStreamTime
                 );
             }
             droppedRecordsSensor.record();
@@ -402,7 +402,7 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
     private class KTableSessionWindowValueGetter implements KTableValueGetter<Windowed<KIn>, VAgg> {
 
         private SessionStore<KIn, AggregationWithHeaders<VAgg>> store;
-        
+
         @Override
         public void init(final ProcessorContext<?, ?> context) {
             try {

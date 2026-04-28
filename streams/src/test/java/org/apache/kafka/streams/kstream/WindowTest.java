@@ -35,7 +35,7 @@ public class WindowTest {
         }
     }
 
-    static class TestWindow2 extends  Window {
+    static class TestWindow2 extends Window {
         TestWindow2(final long startMs, final long endMs) {
             super(startMs, endMs);
         }

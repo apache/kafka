@@ -87,7 +87,7 @@ public final class ApiUtils {
         if (processorSupplier.get() == processorSupplier.get()) {
             final String supplierClass = processorSupplier.getClass().getName();
             throw new IllegalArgumentException(String.format("%s generates single reference." +
-                    " %s#get() must return a new object each time it is called.", supplierClass, supplierClass));
+                " %s#get() must return a new object each time it is called.", supplierClass, supplierClass));
         }
     }
 }

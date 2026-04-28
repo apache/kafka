@@ -39,9 +39,9 @@ public class Produced<K, V> implements NamedOperation<Produced<K, V>> {
     protected String processorName;
 
     private Produced(final Serde<K> keySerde,
-                     final Serde<V> valueSerde,
-                     final StreamPartitioner<? super K, ? super V> partitioner,
-                     final String processorName) {
+        final Serde<V> valueSerde,
+        final StreamPartitioner<? super K, ? super V> partitioner,
+        final String processorName) {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.partitioner = partitioner;
@@ -65,7 +65,7 @@ public class Produced<K, V> implements NamedOperation<Produced<K, V>> {
      * @see KStream#to(String, Produced)
      */
     public static <K, V> Produced<K, V> with(final Serde<K> keySerde,
-                                             final Serde<V> valueSerde) {
+        final Serde<V> valueSerde) {
         return new Produced<>(keySerde, valueSerde, null, null);
     }
 
@@ -83,8 +83,8 @@ public class Produced<K, V> implements NamedOperation<Produced<K, V>> {
      * @see KStream#to(String, Produced)
      */
     public static <K, V> Produced<K, V> with(final Serde<K> keySerde,
-                                             final Serde<V> valueSerde,
-                                             final StreamPartitioner<? super K, ? super V> partitioner) {
+        final Serde<V> valueSerde,
+        final StreamPartitioner<? super K, ? super V> partitioner) {
         return new Produced<>(keySerde, valueSerde, partitioner, null);
     }
 
@@ -180,8 +180,8 @@ public class Produced<K, V> implements NamedOperation<Produced<K, V>> {
         }
         final Produced<?, ?> produced = (Produced<?, ?>) o;
         return Objects.equals(keySerde, produced.keySerde) &&
-               Objects.equals(valueSerde, produced.valueSerde) &&
-               Objects.equals(partitioner, produced.partitioner);
+            Objects.equals(valueSerde, produced.valueSerde) &&
+            Objects.equals(partitioner, produced.partitioner);
     }
 
     @Override

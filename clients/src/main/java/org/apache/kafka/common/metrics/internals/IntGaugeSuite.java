@@ -145,10 +145,10 @@ public final class IntGaugeSuite<K> implements AutoCloseable {
     }
 
     public IntGaugeSuite(Logger log,
-                         String suiteName,
-                         Metrics metrics,
-                         Function<K, MetricName> metricNameCalculator,
-                         int maxEntries) {
+        String suiteName,
+        Metrics metrics,
+        Function<K, MetricName> metricNameCalculator,
+        int maxEntries) {
         this.log = log;
         this.suiteName = suiteName;
         this.metrics = metrics;
@@ -261,7 +261,7 @@ public final class IntGaugeSuite<K> implements AutoCloseable {
         }
         closed = true;
         int prevSize = 0;
-        for (Iterator<StoredIntGauge> iter = gauges.values().iterator(); iter.hasNext(); ) {
+        for (Iterator<StoredIntGauge> iter = gauges.values().iterator();iter.hasNext();) {
             pending.push(new PendingMetricsChange(iter.next().metricName, null));
             prevSize++;
             iter.remove();

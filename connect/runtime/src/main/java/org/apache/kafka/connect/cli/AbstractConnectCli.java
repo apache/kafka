@@ -73,8 +73,8 @@ public abstract class AbstractConnectCli<H extends Herder, T extends WorkerConfi
     }
 
     protected abstract H createHerder(T config, String workerId, Plugins plugins,
-                                           ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
-                                           RestServer restServer, RestClient restClient);
+            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+            RestServer restServer, RestClient restClient);
 
     protected abstract T createConfig(Map<String, String> workerProps);
 

@@ -30,6 +30,7 @@ public class LockUtils {
     public interface ThrowingSupplier<T, E extends Exception> {
         T get() throws E;
     }
+
     @FunctionalInterface
     public interface ThrowingRunnable<E extends Exception> {
         void run() throws E;

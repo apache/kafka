@@ -44,7 +44,7 @@ public class ApplyAssignmentEvent extends CompletableApplicationEvent<Void> {
     private final SortedSet<TopicPartition> addedPartitions;
 
     public ApplyAssignmentEvent(Set<TopicPartition> assignedPartitions,
-                                SortedSet<TopicPartition> addedPartitions) {
+        SortedSet<TopicPartition> addedPartitions) {
         super(Type.APPLY_ASSIGNMENT, Long.MAX_VALUE);
         this.assignedPartitions = Collections.unmodifiableSet(Objects.requireNonNull(assignedPartitions));
         this.addedPartitions = Collections.unmodifiableSortedSet(Objects.requireNonNull(addedPartitions));
@@ -61,7 +61,7 @@ public class ApplyAssignmentEvent extends CompletableApplicationEvent<Void> {
     @Override
     protected String toStringBase() {
         return super.toStringBase() +
-                ", assignedPartitions=" + assignedPartitions +
-                ", addedPartitions=" + addedPartitions;
+            ", assignedPartitions=" + assignedPartitions +
+            ", addedPartitions=" + addedPartitions;
     }
 }

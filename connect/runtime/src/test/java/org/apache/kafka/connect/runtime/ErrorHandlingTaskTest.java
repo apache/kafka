@@ -416,7 +416,7 @@ public class ErrorHandlingTaskTest {
     }
 
     private void createSinkTask(TargetState initialState, RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
-                                List<ErrorReporter<ConsumerRecord<byte[], byte[]>>> errorReporters) {
+            List<ErrorReporter<ConsumerRecord<byte[], byte[]>>> errorReporters) {
         JsonConverter converter = new JsonConverter();
         Map<String, Object> oo = workerConfig.originalsWithPrefix("value.converter.");
         oo.put("converter.type", "value");
@@ -427,14 +427,14 @@ public class ErrorHandlingTaskTest {
         TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> sinkTransforms =
                 new TransformationChain<>(List.of(new TransformationStage<>(transformationPlugin, "test", null, TestPlugins.noOpLoaderSwap())), retryWithToleranceOperator);
 
-        Plugin<Converter> keyConverterPlugin = metrics.wrap(converter, taskId,  true);
-        Plugin<Converter> valueConverterPlugin = metrics.wrap(converter, taskId,  false);
+        Plugin<Converter> keyConverterPlugin = metrics.wrap(converter, taskId, true);
+        Plugin<Converter> valueConverterPlugin = metrics.wrap(converter, taskId, false);
         Plugin<HeaderConverter> headerConverterPlugin = metrics.wrap(headerConverter, taskId);
         workerSinkTask = new WorkerSinkTask(
-            taskId, sinkTask, statusListener, initialState, workerConfig,
-            ClusterConfigState.EMPTY, metrics, keyConverterPlugin, valueConverterPlugin, errorHandlingMetrics,
+                taskId, sinkTask, statusListener, initialState, workerConfig,
+                ClusterConfigState.EMPTY, metrics, keyConverterPlugin, valueConverterPlugin, errorHandlingMetrics,
                 headerConverterPlugin, sinkTransforms, consumer, pluginLoader, time,
-            retryWithToleranceOperator, workerErrantRecordReporter,
+                retryWithToleranceOperator, workerErrantRecordReporter,
                 statusBackingStore, () -> errorReporters, null, TestPlugins.noOpLoaderSwap());
     }
 
@@ -458,16 +458,16 @@ public class ErrorHandlingTaskTest {
     }
 
     private void createSourceTask(TargetState initialState, RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
-                                  List<ErrorReporter<SourceRecord>> errorReporters, Converter converter) {
+            List<ErrorReporter<SourceRecord>> errorReporters, Converter converter) {
         Plugin<Transformation<SourceRecord>> transformationPlugin = metrics.wrap(new FaultyPassthrough<SourceRecord>(), taskId, "test");
         TransformationChain<SourceRecord, SourceRecord> sourceTransforms = new TransformationChain<>(List.of(
                 new TransformationStage<>(transformationPlugin, "test", null, TestPlugins.noOpLoaderSwap())), retryWithToleranceOperator);
 
-        Plugin<Converter> keyConverterPlugin = metrics.wrap(converter, taskId,  true);
-        Plugin<Converter> valueConverterPlugin = metrics.wrap(converter, taskId,  false);
+        Plugin<Converter> keyConverterPlugin = metrics.wrap(converter, taskId, true);
+        Plugin<Converter> valueConverterPlugin = metrics.wrap(converter, taskId, false);
         Plugin<HeaderConverter> headerConverterPlugin = metrics.wrap(headerConverter, taskId);
         workerSourceTask = spy(new WorkerSourceTask(
-            taskId, sourceTask, statusListener, initialState, keyConverterPlugin,
+                taskId, sourceTask, statusListener, initialState, keyConverterPlugin,
                 valueConverterPlugin, errorHandlingMetrics, headerConverterPlugin,
                 sourceTransforms, producer, admin,
                 TopicCreationGroup.configuredGroups(sourceConfig),

@@ -61,12 +61,12 @@ public final class Checksums {
         } else {
             // slow-path
             int start = buffer.position() + offset;
-            for (int i = start; i < start + length; i++) {
+            for (int i = start;i < start + length;i++) {
                 checksum.update(buffer.get(i));
             }
         }
     }
-    
+
     public static void updateInt(Checksum checksum, int input) {
         checksum.update((byte) (input >> 24));
         checksum.update((byte) (input >> 16));

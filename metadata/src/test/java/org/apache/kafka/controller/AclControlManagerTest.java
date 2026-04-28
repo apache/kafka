@@ -121,7 +121,7 @@ public class AclControlManagerTest {
     @Test
     public void testValidateAclWithBadPrincipal() {
         assertEquals("Could not parse principal from `invalid` (no colon is present " +
-                "separating the principal type from the principal name)",
+            "separating the principal type from the principal name)",
             assertThrows(InvalidRequestException.class, () ->
                 AclControlManager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", LITERAL),
@@ -135,12 +135,12 @@ public class AclControlManagerTest {
     @Test
     public void testValidateAclWithEmptyPrincipal() {
         assertEquals("Could not parse principal from `` (no colon is present " +
-                "separating the principal type from the principal name)",
+            "separating the principal type from the principal name)",
             assertThrows(InvalidRequestException.class, () ->
                 AclControlManager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", LITERAL),
                     new AccessControlEntry("", "*", ALTER, ALLOW)))).
-                        getMessage());
+                getMessage());
     }
 
     /**
@@ -249,7 +249,7 @@ public class AclControlManagerTest {
         Set<ApiMessageAndVersion> foundAcls = new HashSet<>();
         for (Map.Entry<Uuid, StandardAcl> entry : manager.idToAcl().entrySet()) {
             foundAcls.add(new ApiMessageAndVersion(
-                    new StandardAclWithId(entry.getKey(), entry.getValue()).toRecord(), (short) 0));
+                new StandardAclWithId(entry.getKey(), entry.getValue()).toRecord(), (short) 0));
         }
         assertEquals(loadedAcls, foundAcls);
 
@@ -316,10 +316,10 @@ public class AclControlManagerTest {
             manager.deleteAcls(List.of(
                 new AclBindingFilter(
                     new ResourcePatternFilter(ResourceType.ANY, null, LITERAL),
-                        AccessControlEntryFilter.ANY),
+                    AccessControlEntryFilter.ANY),
                 new AclBindingFilter(
                     new ResourcePatternFilter(ResourceType.UNKNOWN, null, LITERAL),
-                        AccessControlEntryFilter.ANY)));
+                    AccessControlEntryFilter.ANY)));
         assertEquals(2, deleteResult.response().size());
         Set<AclBinding> deleted = new HashSet<>();
         for (AclDeleteResult.AclBindingDeleteResult result :
@@ -329,7 +329,7 @@ public class AclControlManagerTest {
         }
         assertEquals(Set.of(
             TEST_ACLS.get(0).toBinding(),
-                TEST_ACLS.get(2).toBinding()), deleted);
+            TEST_ACLS.get(2).toBinding()), deleted);
         assertEquals(InvalidRequestException.class,
             deleteResult.response().get(1).exception().get().getClass());
         RecordTestUtils.replayAll(manager, deleteResult.records());
@@ -344,7 +344,7 @@ public class AclControlManagerTest {
         AclControlManager manager = new AclControlManager.Builder().build();
 
         AclBinding aclBinding = new AclBinding(new ResourcePattern(TOPIC, "topic-1", LITERAL),
-                new AccessControlEntry("User:user", "10.0.0.1", AclOperation.ALL, ALLOW));
+            new AccessControlEntry("User:user", "10.0.0.1", AclOperation.ALL, ALLOW));
 
         ControllerResult<List<AclCreateResult>> createResult = manager.createAcls(List.of(aclBinding, aclBinding));
         RecordTestUtils.replayAll(manager, createResult.records());
@@ -361,7 +361,7 @@ public class AclControlManagerTest {
         AclControlManager manager = new AclControlManager.Builder().build();
 
         AclBinding aclBinding = new AclBinding(new ResourcePattern(TOPIC, "topic-1", LITERAL),
-                new AccessControlEntry("User:user", "10.0.0.1", AclOperation.ALL, ALLOW));
+            new AccessControlEntry("User:user", "10.0.0.1", AclOperation.ALL, ALLOW));
 
         ControllerResult<List<AclCreateResult>> createResult = manager.createAcls(List.of(aclBinding));
         RecordTestUtils.replayAll(manager, createResult.records());

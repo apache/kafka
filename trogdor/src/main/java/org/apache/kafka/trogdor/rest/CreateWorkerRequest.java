@@ -32,8 +32,8 @@ public class CreateWorkerRequest extends Message {
 
     @JsonCreator
     public CreateWorkerRequest(@JsonProperty("workerId") long workerId,
-            @JsonProperty("taskId") String taskId,
-            @JsonProperty("spec") TaskSpec spec) {
+        @JsonProperty("taskId") String taskId,
+        @JsonProperty("spec") TaskSpec spec) {
         this.workerId = workerId;
         this.taskId = taskId;
         this.spec = spec;

@@ -40,7 +40,7 @@ public class LogTruncationException extends OffsetOutOfRangeException {
      * @param divergentOffsets The offsets where the consumer's log diverged from the broker's log
      */
     public LogTruncationException(Map<TopicPartition, Long> fetchOffsets,
-                                  Map<TopicPartition, OffsetAndMetadata> divergentOffsets) {
+        Map<TopicPartition, OffsetAndMetadata> divergentOffsets) {
         this("Truncated partitions detected with divergent offsets " + divergentOffsets, fetchOffsets, divergentOffsets);
     }
 
@@ -52,8 +52,8 @@ public class LogTruncationException extends OffsetOutOfRangeException {
      * @param divergentOffsets The offsets where the consumer's log diverged from the broker's log
      */
     public LogTruncationException(String message,
-                                  Map<TopicPartition, Long> fetchOffsets,
-                                  Map<TopicPartition, OffsetAndMetadata> divergentOffsets) {
+        Map<TopicPartition, Long> fetchOffsets,
+        Map<TopicPartition, OffsetAndMetadata> divergentOffsets) {
         super(message, fetchOffsets);
         this.divergentOffsets = Collections.unmodifiableMap(divergentOffsets);
     }

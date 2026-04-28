@@ -67,13 +67,13 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
     private final TimeTrackerSupplier sharedTimeTrackerSupplier;
 
     KStreamKStreamJoin(final JoinWindowsInternal windows,
-                       final ValueJoinerWithKey<? super K, ? super VThis, ? super VOther, ? extends VOut> joiner,
-                       final boolean outer,
-                       final long joinBeforeMs,
-                       final long joinAfterMs,
-                       final TimeTrackerSupplier sharedTimeTrackerSupplier,
-                       final StoreFactory otherWindowStoreFactory,
-                       final Optional<StoreFactory> outerJoinWindowStoreFactory) {
+        final ValueJoinerWithKey<? super K, ? super VThis, ? super VOther, ? extends VOut> joiner,
+        final boolean outer,
+        final long joinBeforeMs,
+        final long joinAfterMs,
+        final TimeTrackerSupplier sharedTimeTrackerSupplier,
+        final StoreFactory otherWindowStoreFactory,
+        final Optional<StoreFactory> outerJoinWindowStoreFactory) {
         this.otherWindowStoreFactory = otherWindowStoreFactory;
         this.joinBeforeMs = joinBeforeMs;
         this.joinAfterMs = joinAfterMs;
@@ -197,7 +197,7 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
         protected abstract VOther otherValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue);
 
         private void emitNonJoinedOuterRecords(final KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VLeft, VRight>> store,
-                                               final Record<K, VThis> record) {
+            final Record<K, VThis> record) {
 
             // calling `store.all()` creates an iterator what is an expensive operation on RocksDB;
             // to reduce runtime cost, we try to avoid paying those cost
@@ -270,15 +270,15 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
         }
 
         private void forwardNonJoinedOuterRecords(final Record<K, VThis> record,
-                                                  final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide,
-                                                  final LeftOrRightValue<VLeft, VRight> leftOrRightValue) {
+            final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide,
+            final LeftOrRightValue<VLeft, VRight> leftOrRightValue) {
             final K key = timestampedKeyAndJoinSide.key();
             final long timestamp = timestampedKeyAndJoinSide.timestamp();
             final VThis thisValue = thisValue(leftOrRightValue);
             final VOther otherValue = otherValue(leftOrRightValue);
             final VOut nullJoinedValue = joiner.apply(key, thisValue, otherValue);
             context().forward(
-                    record.withKey(key).withValue(nullJoinedValue).withTimestamp(timestamp)
+                record.withKey(key).withValue(nullJoinedValue).withTimestamp(timestamp)
             );
         }
 
@@ -298,7 +298,7 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
         }
 
         private void emitInnerJoin(final Record<K, VThis> thisRecord, final KeyValue<Long, VOther> otherRecord,
-                                   final long inputRecordTimestamp) {
+            final long inputRecordTimestamp) {
             outerJoinStore.ifPresent(store -> {
                 // use putIfAbsent to first read and see if there's any values for the key,
                 // if yes delete the key, otherwise do not issue a put;
@@ -310,8 +310,8 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
             });
 
             context().forward(
-                    thisRecord.withValue(joiner.apply(thisRecord.key(), thisRecord.value(), otherRecord.value))
-                            .withTimestamp(Math.max(inputRecordTimestamp, otherRecord.key)));
+                thisRecord.withValue(joiner.apply(thisRecord.key(), thisRecord.value(), otherRecord.value))
+                    .withTimestamp(Math.max(inputRecordTimestamp, otherRecord.key)));
         }
 
         private void putInOuterJoinStore(final Record<K, VThis> thisRecord) {

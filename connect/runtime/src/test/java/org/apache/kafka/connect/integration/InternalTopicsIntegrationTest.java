@@ -72,11 +72,11 @@ public class InternalTopicsIntegrationTest {
         int numWorkers = 1;
         int numBrokers = 3;
         connect = new EmbeddedConnectCluster.Builder().name("connect-cluster-1")
-                                                      .workerProps(workerProps)
-                                                      .numWorkers(numWorkers)
-                                                      .numBrokers(numBrokers)
-                                                      .brokerProps(brokerProps)
-                                                      .build();
+                .workerProps(workerProps)
+                .numWorkers(numWorkers)
+                .numBrokers(numBrokers)
+                .brokerProps(brokerProps)
+                .build();
 
         // Start the Connect cluster
         connect.start();
@@ -109,11 +109,11 @@ public class InternalTopicsIntegrationTest {
         int numWorkers = 1;
         int numBrokers = 2;
         connect = new EmbeddedConnectCluster.Builder().name("connect-cluster-1")
-                                                      .workerProps(workerProps)
-                                                      .numWorkers(numWorkers)
-                                                      .numBrokers(numBrokers)
-                                                      .brokerProps(brokerProps)
-                                                      .build();
+                .workerProps(workerProps)
+                .numWorkers(numWorkers)
+                .numBrokers(numBrokers)
+                .brokerProps(brokerProps)
+                .build();
 
         // Start the Connect cluster
         connect.start();
@@ -132,11 +132,11 @@ public class InternalTopicsIntegrationTest {
         int numWorkers = 0;
         int numBrokers = 1;
         connect = new EmbeddedConnectCluster.Builder().name("connect-cluster-1")
-                                                      .workerProps(workerProps)
-                                                      .numWorkers(numWorkers)
-                                                      .numBrokers(numBrokers)
-                                                      .brokerProps(brokerProps)
-                                                      .build();
+                .workerProps(workerProps)
+                .numWorkers(numWorkers)
+                .numBrokers(numBrokers)
+                .brokerProps(brokerProps)
+                .build();
 
         // Start the brokers and Connect, but Connect should fail to create config and offset topic
         connect.start();
@@ -185,11 +185,11 @@ public class InternalTopicsIntegrationTest {
         int numWorkers = 0;
         int numBrokers = 1;
         connect = new EmbeddedConnectCluster.Builder().name("connect-cluster-1")
-                                                      .workerProps(workerProps)
-                                                      .numWorkers(numWorkers)
-                                                      .numBrokers(numBrokers)
-                                                      .brokerProps(brokerProps)
-                                                      .build();
+                .workerProps(workerProps)
+                .numWorkers(numWorkers)
+                .numBrokers(numBrokers)
+                .brokerProps(brokerProps)
+                .build();
 
         // Start the brokers but not Connect
         log.info("Starting {} Kafka brokers, but no Connect workers yet", numBrokers);
@@ -258,11 +258,11 @@ public class InternalTopicsIntegrationTest {
         int numWorkers = 0;
         int numBrokers = 1;
         connect = new EmbeddedConnectCluster.Builder().name("connect-cluster-1")
-                                                      .workerProps(workerProps)
-                                                      .numWorkers(numWorkers)
-                                                      .numBrokers(numBrokers)
-                                                      .brokerProps(brokerProps)
-                                                      .build();
+                .workerProps(workerProps)
+                .numWorkers(numWorkers)
+                .numBrokers(numBrokers)
+                .brokerProps(brokerProps)
+                .build();
 
         // Start the brokers but not Connect
         log.info("Starting {} Kafka brokers, but no Connect workers yet", numBrokers);

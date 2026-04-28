@@ -182,8 +182,8 @@ public class StandaloneWorkerIntegrationTest {
                 newLevels,
                 e -> hasNamespace(e, namespace)
                         && (!level(e).equals(level)
-                            || (isModified(e) && lastModified(e) < requestTime)
-                        )
+                        || (isModified(e) && lastModified(e) < requestTime)
+                )
         );
         assertEquals(
                 Map.of(),
@@ -243,16 +243,16 @@ public class StandaloneWorkerIntegrationTest {
         connect.start();
 
         CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
-            CONNECTOR_NAME,
-            defaultSourceConnectorProps(TOPIC_NAME),
-            CreateConnectorRequest.InitialState.STOPPED
+                CONNECTOR_NAME,
+                defaultSourceConnectorProps(TOPIC_NAME),
+                CreateConnectorRequest.InitialState.STOPPED
         );
         connect.configureConnector(createConnectorRequest);
 
         // Verify that the connector's status is STOPPED and also that no tasks were spawned for the connector
         connect.assertions().assertConnectorIsStopped(
-            CONNECTOR_NAME,
-            "Connector was not created in a stopped state"
+                CONNECTOR_NAME,
+                "Connector was not created in a stopped state"
         );
         assertEquals(List.of(), connect.connectorInfo(CONNECTOR_NAME).tasks());
         assertEquals(List.of(), connect.taskConfigs(CONNECTOR_NAME));
@@ -260,9 +260,9 @@ public class StandaloneWorkerIntegrationTest {
         // Verify that a connector created in the STOPPED state can be resumed successfully
         connect.resumeConnector(CONNECTOR_NAME);
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
-            CONNECTOR_NAME,
-            NUM_TASKS,
-            "Connector or tasks did not start running healthily in time"
+                CONNECTOR_NAME,
+                NUM_TASKS,
+                "Connector or tasks did not start running healthily in time"
         );
     }
 

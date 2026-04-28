@@ -94,7 +94,7 @@ public class MockChangelogReader implements ChangelogReader {
 
     @Override
     public void unregister(final Collection<TopicPartition> partitions,
-                           final SuspendReason reason) {
+        final SuspendReason reason) {
         unregister(partitions);
     }
 

@@ -79,8 +79,8 @@ public class DeleteConsumerGroupOffsetsResult {
     }
 
     private boolean maybeCompleteExceptionally(Map<TopicPartition, Errors> partitionLevelErrors,
-                                               TopicPartition partition,
-                                               KafkaFutureImpl<Void> result) {
+        TopicPartition partition,
+        KafkaFutureImpl<Void> result) {
         Throwable exception = KafkaAdminClient.getSubLevelError(partitionLevelErrors, partition,
             "Offset deletion result for partition \"" + partition + "\" was not included in the response");
         if (exception != null) {

@@ -43,19 +43,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class JsonTest {
     private static final String JSON = "{\n" +
-            "  \"boolean\": false,\n" +
-            "  \"int\": 1234,\n" +
-            "  \"long\": 3000000000,\n" +
-            "  \"double\": 16.244355,\n" +
-            "  \"string\": \"string\",\n" +
-            "  \"number_as_string\": \"123\",\n" +
-            "  \"array\": [4.0, 11.1, 44.5],\n" +
-            "  \"object\": {\n" +
-            "    \"a\": true,\n" +
-            "    \"b\": false\n" +
-            "  },\n" +
-            "  \"null\": null\n" +
-            "}";
+        "  \"boolean\": false,\n" +
+        "  \"int\": 1234,\n" +
+        "  \"long\": 3000000000,\n" +
+        "  \"double\": 16.244355,\n" +
+        "  \"string\": \"string\",\n" +
+        "  \"number_as_string\": \"123\",\n" +
+        "  \"array\": [4.0, 11.1, 44.5],\n" +
+        "  \"object\": {\n" +
+        "    \"a\": true,\n" +
+        "    \"b\": false\n" +
+        "  },\n" +
+        "  \"null\": null\n" +
+        "}";
 
     private JsonValue parse(String s) {
         return Json.parseFull(s).orElseThrow(() -> new RuntimeException("Failed to parse json: " + s));
@@ -111,8 +111,8 @@ public class JsonTest {
         parse(JSON).asJsonObject().apply("array").asJsonArray().iterator().forEachRemaining(results::add);
 
         List<JsonValue> expected = Stream.of("4.0", "11.1", "44.5")
-                .map(this::parse)
-                .collect(Collectors.toList());
+            .map(this::parse)
+            .collect(Collectors.toList());
         assertEquals(expected, results);
     }
 
@@ -208,6 +208,7 @@ public class JsonTest {
         assertTo(Optional.of(1234), decodeJson, jsonObject -> jsonObject.get("int").get());
         assertToFails(DecodeJson.decodeOptional(new DecodeJson.DecodeString()), jsonObject -> jsonObject.get("int").get());
     }
+
     private <T> void assertTo(T expected, DecodeJson<T> decodeJson, Function<JsonObject, JsonValue> jsonValue) throws JsonMappingException {
         JsonValue parsed = jsonValue.apply(parse(JSON).asJsonObject());
         assertEquals(expected, parsed.to(decodeJson));

@@ -70,11 +70,11 @@ public class ApiMessageTypeTest {
             if (apiKey.hasValidVersion()) {
                 String requestName = type.newRequest().getClass().getSimpleName();
                 assertFalse(requestNames.contains(requestName),
-                        "found two ApiMessageType objects with requestName " + requestName);
+                    "found two ApiMessageType objects with requestName " + requestName);
                 requestNames.add(requestName);
                 String responseName = type.newResponse().getClass().getSimpleName();
                 assertFalse(responseNames.contains(responseName),
-                        "found two ApiMessageType objects with responseName " + responseName);
+                    "found two ApiMessageType objects with responseName " + responseName);
                 responseNames.add(responseName);
             } else
                 ++apiKeysWithNoValidVersionCount;
@@ -116,15 +116,15 @@ public class ApiMessageTypeTest {
             assertTrue(type.lowestSupportedVersion() >= 0);
 
             assertEquals(type.requestSchemas().length, type.responseSchemas().length,
-                    "request and response schemas must be the same length for " + type.name());
-            for (int i = 0; i < type.requestSchemas().length; ++i) {
+                "request and response schemas must be the same length for " + type.name());
+            for (int i = 0;i < type.requestSchemas().length;++i) {
                 Schema schema = type.requestSchemas()[i];
                 if (i >= type.lowestSupportedVersion())
                     assertNotNull(schema);
                 else
                     assertNull(schema);
             }
-            for (int i = 0; i < type.responseSchemas().length; ++i) {
+            for (int i = 0;i < type.responseSchemas().length;++i) {
                 Schema schema = type.responseSchemas()[i];
                 if (i >= type.lowestSupportedVersion())
                     assertNotNull(schema);

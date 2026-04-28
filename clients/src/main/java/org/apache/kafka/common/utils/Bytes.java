@@ -146,7 +146,7 @@ public class Bytes implements Comparable<Bytes> {
         if (off + len > b.length)
             len = b.length - off;
 
-        for (int i = off; i < off + len; ++i) {
+        for (int i = off;i < off + len;++i) {
             int ch = b[i] & 0xFF;
             if (ch >= ' ' && ch <= '~' && ch != '\\') {
                 result.append((char) ch);
@@ -191,7 +191,7 @@ public class Bytes implements Comparable<Bytes> {
     public interface ByteArrayComparator extends Comparator<byte[]>, Serializable {
 
         int compare(final byte[] buffer1, int offset1, int length1,
-                    final byte[] buffer2, int offset2, int length2);
+            final byte[] buffer2, int offset2, int length2);
     }
 
     private static class LexicographicByteArrayComparator extends ByteUtils.LexicographicByteArrayComparator implements ByteArrayComparator {

@@ -70,7 +70,7 @@ public class ShareGroupHeartbeatResponse extends AbstractResponse {
 
     public static ShareGroupHeartbeatResponse parse(Readable readable, short version) {
         return new ShareGroupHeartbeatResponse(new ShareGroupHeartbeatResponseData(
-                readable, version));
+            readable, version));
     }
 
     public static ShareGroupHeartbeatResponseData.Assignment createAssignment(

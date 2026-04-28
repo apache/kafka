@@ -61,10 +61,10 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
     private long lastCommittedOffset;
 
     public SnapshottableCoordinator(
-        LogContext logContext,
-        SnapshotRegistry snapshotRegistry,
-        S coordinator,
-        TopicPartition tp
+            LogContext logContext,
+            SnapshotRegistry snapshotRegistry,
+            S coordinator,
+            TopicPartition tp
     ) {
         this.log = logContext.logger(SnapshottableCoordinator.class);
         this.coordinator = coordinator;
@@ -83,11 +83,11 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
      * @param offset The offset to revert to.
      */
     synchronized void revertLastWrittenOffset(
-        long offset
+            long offset
     ) {
         if (offset > lastWrittenOffset) {
             throw new IllegalStateException("New offset " + offset + " of " + tp +
-                " must be smaller than " + lastWrittenOffset + ".");
+                    " must be smaller than " + lastWrittenOffset + ".");
         }
 
         log.debug("Revert last written offset of {} to {}.", tp, offset);
@@ -105,10 +105,10 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
      */
     @Override
     public synchronized void replay(
-        long offset,
-        long producerId,
-        short producerEpoch,
-        U record
+            long offset,
+            long producerId,
+            short producerEpoch,
+            U record
     ) {
         coordinator.replay(offset, producerId, producerEpoch, record);
     }
@@ -122,9 +122,9 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
      */
     @Override
     public synchronized void replayEndTransactionMarker(
-        long producerId,
-        short producerEpoch,
-        TransactionResult result
+            long producerId,
+            short producerEpoch,
+            TransactionResult result
     ) {
         coordinator.replayEndTransactionMarker(producerId, producerEpoch, result);
     }
@@ -139,7 +139,7 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
     public synchronized void updateLastWrittenOffset(long offset) {
         if (offset <= lastWrittenOffset) {
             throw new IllegalStateException("New last written offset " + offset + " of " + tp +
-                " must be greater than " + lastWrittenOffset + ".");
+                    " must be greater than " + lastWrittenOffset + ".");
         }
 
         lastWrittenOffset = offset;
@@ -158,12 +158,12 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
     public synchronized void updateLastCommittedOffset(long offset) {
         if (offset < lastCommittedOffset) {
             throw new IllegalStateException("New committed offset " + offset + " of " + tp +
-                " must be greater than or equal to " + lastCommittedOffset + ".");
+                    " must be greater than or equal to " + lastCommittedOffset + ".");
         }
 
         if (offset > lastWrittenOffset) {
             throw new IllegalStateException("New committed offset " + offset + " of " + tp +
-                " must be less than or equal to " + lastWrittenOffset + ".");
+                    " must be less than or equal to " + lastWrittenOffset + ".");
         }
 
         lastCommittedOffset = offset;
@@ -206,8 +206,8 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
      * @param newImage The new metadata image.
      */
     synchronized void onMetadataUpdate(
-        CoordinatorMetadataDelta delta,
-        CoordinatorMetadataImage newImage
+            CoordinatorMetadataDelta delta,
+            CoordinatorMetadataImage newImage
     ) {
         this.coordinator.onMetadataUpdate(delta, newImage);
     }

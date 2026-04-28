@@ -38,11 +38,11 @@ public abstract class AbstractStatus<T> {
     private final int generation;
 
     public AbstractStatus(T id,
-                          State state,
-                          String workerId,
-                          int generation,
-                          String trace,
-                          String version) {
+            State state,
+            String workerId,
+            int generation,
+            String trace,
+            String version) {
         this.id = id;
         this.state = state;
         this.workerId = workerId;
@@ -52,10 +52,10 @@ public abstract class AbstractStatus<T> {
     }
 
     public AbstractStatus(T id,
-                          State state,
-                          String workerId,
-                          int generation,
-                          String trace) {
+            State state,
+            String workerId,
+            int generation,
+            String trace) {
         this(id, state, workerId, generation, trace, null);
     }
 

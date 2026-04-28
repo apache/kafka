@@ -112,8 +112,8 @@ public class FetchCollectorTest {
         final OffsetAndMetadata nextOffsetAndMetadata = new OffsetAndMetadata(recordCount, Optional.empty(), "");
 
         CompletedFetch completedFetch = completedFetchBuilder
-                .recordCount(recordCount)
-                .build();
+            .recordCount(recordCount)
+            .build();
 
         // Validate that the buffer is empty until after we add the fetch data.
         assertTrue(fetchBuffer.isEmpty());
@@ -245,12 +245,12 @@ public class FetchCollectorTest {
 
         // Create a FetchCollector that fails on CompletedFetch initialization.
         fetchCollector = new FetchCollector<>(logContext,
-                metadata,
-                subscriptions,
-                fetchConfig,
-                deserializers,
-                metricsManager,
-                time) {
+            metadata,
+            subscriptions,
+            fetchConfig,
+            deserializers,
+            metricsManager,
+            time) {
 
             @Override
             protected CompletedFetch initialize(final CompletedFetch completedFetch) {
@@ -260,8 +260,8 @@ public class FetchCollectorTest {
 
         // Add the CompletedFetch to the FetchBuffer queue
         CompletedFetch completedFetch = completedFetchBuilder
-                .recordCount(recordCount)
-                .build();
+            .recordCount(recordCount)
+            .build();
         fetchBuffer.add(completedFetch);
 
         // At first, the queue is populated
@@ -323,8 +323,8 @@ public class FetchCollectorTest {
         assignAndSeek(topicAPartition0);
 
         CompletedFetch completedFetch = completedFetchBuilder
-                .error(error)
-                .build();
+            .error(error)
+            .build();
         fetchBuffer.add(completedFetch);
 
         // Set the preferred read replica and just to be safe, verify it was set.
@@ -357,9 +357,9 @@ public class FetchCollectorTest {
         assertEquals(new OffsetAndMetadata(DEFAULT_RECORD_COUNT, Optional.empty(), ""), fetch.nextOffsets().get(topicAPartition0));
         // Try to fetch more data and validate that we get an empty Fetch back.
         completedFetch = completedFetchBuilder
-                .fetchOffset(fetch.numRecords())
-                .error(Errors.OFFSET_OUT_OF_RANGE)
-                .build();
+            .fetchOffset(fetch.numRecords())
+            .error(Errors.OFFSET_OUT_OF_RANGE)
+            .build();
         fetchBuffer.add(completedFetch);
         fetch = fetchCollector.collectFetch(fetchBuffer);
         assertEquals(0, fetch.nextOffsets().size());
@@ -367,9 +367,9 @@ public class FetchCollectorTest {
 
         // Try to fetch more data and validate that we get an empty Fetch back.
         completedFetch = completedFetchBuilder
-                .fetchOffset(fetch.numRecords())
-                .error(Errors.OFFSET_OUT_OF_RANGE)
-                .build();
+            .fetchOffset(fetch.numRecords())
+            .error(Errors.OFFSET_OUT_OF_RANGE)
+            .build();
         fetchBuffer.add(completedFetch);
         fetch = fetchCollector.collectFetch(fetchBuffer);
         assertEquals(0, fetch.nextOffsets().size());
@@ -389,8 +389,8 @@ public class FetchCollectorTest {
         assertEquals(Optional.of(preferredReadReplicaId), subscriptions.preferredReadReplica(topicAPartition0, time.milliseconds()));
 
         CompletedFetch completedFetch = completedFetchBuilder
-                .error(Errors.OFFSET_OUT_OF_RANGE)
-                .build();
+            .error(Errors.OFFSET_OUT_OF_RANGE)
+            .build();
         fetchBuffer.add(completedFetch);
         Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
 
@@ -407,8 +407,8 @@ public class FetchCollectorTest {
 
         // Try to data and validate that we get an empty Fetch back.
         CompletedFetch completedFetch = completedFetchBuilder
-                .error(Errors.TOPIC_AUTHORIZATION_FAILED)
-                .build();
+            .error(Errors.TOPIC_AUTHORIZATION_FAILED)
+            .build();
         fetchBuffer.add(completedFetch);
         assertThrows(TopicAuthorizationException.class, () -> fetchCollector.collectFetch(fetchBuffer));
     }
@@ -420,8 +420,8 @@ public class FetchCollectorTest {
 
         // Try to data and validate that we get an empty Fetch back.
         CompletedFetch completedFetch = completedFetchBuilder
-                .error(Errors.UNKNOWN_LEADER_EPOCH)
-                .build();
+            .error(Errors.UNKNOWN_LEADER_EPOCH)
+            .build();
         fetchBuffer.add(completedFetch);
         Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
         assertEquals(0, fetch.nextOffsets().size());
@@ -435,8 +435,8 @@ public class FetchCollectorTest {
 
         // Try to data and validate that we get an empty Fetch back.
         CompletedFetch completedFetch = completedFetchBuilder
-                .error(Errors.UNKNOWN_SERVER_ERROR)
-                .build();
+            .error(Errors.UNKNOWN_SERVER_ERROR)
+            .build();
         fetchBuffer.add(completedFetch);
         Fetch<String, String> fetch = fetchCollector.collectFetch(fetchBuffer);
         assertEquals(0, fetch.nextOffsets().size());
@@ -450,8 +450,8 @@ public class FetchCollectorTest {
 
         // Try to data and validate that we get an empty Fetch back.
         CompletedFetch completedFetch = completedFetchBuilder
-                .error(Errors.CORRUPT_MESSAGE)
-                .build();
+            .error(Errors.CORRUPT_MESSAGE)
+            .build();
         fetchBuffer.add(completedFetch);
         assertThrows(KafkaException.class, () -> fetchCollector.collectFetch(fetchBuffer));
     }
@@ -463,8 +463,8 @@ public class FetchCollectorTest {
         assignAndSeek(topicAPartition0);
 
         CompletedFetch completedFetch = completedFetchBuilder
-                .error(error)
-                .build();
+            .error(error)
+            .build();
         fetchBuffer.add(completedFetch);
         assertThrows(IllegalStateException.class, () -> fetchCollector.collectFetch(fetchBuffer));
     }
@@ -777,22 +777,22 @@ public class FetchCollectorTest {
         metricsManager = createFetchMetricsManager(metrics);
         deserializers = new Deserializers<>(new StringDeserializer(), new StringDeserializer(), metrics);
         metadata = new ConsumerMetadata(
-                0,
-                1000,
-                10000,
-                false,
-                false,
-                subscriptions,
-                logContext,
-                new ClusterResourceListeners());
+            0,
+            1000,
+            10000,
+            false,
+            false,
+            subscriptions,
+            logContext,
+            new ClusterResourceListeners());
         fetchCollector = new FetchCollector<>(
-                logContext,
-                metadata,
-                subscriptions,
-                fetchConfig,
-                deserializers,
-                metricsManager,
-                time);
+            logContext,
+            metadata,
+            subscriptions,
+            fetchConfig,
+            deserializers,
+            metricsManager,
+            time);
         fetchBuffer = new FetchBuffer(logContext);
         completedFetchBuilder = new CompletedFetchBuilder();
     }
@@ -838,14 +838,14 @@ public class FetchCollectorTest {
      */
     private static Stream<Arguments> testFetchWithMetadataRefreshErrorsSource() {
         List<Errors> errors = Arrays.asList(
-                Errors.NOT_LEADER_OR_FOLLOWER,
-                Errors.REPLICA_NOT_AVAILABLE,
-                Errors.KAFKA_STORAGE_ERROR,
-                Errors.FENCED_LEADER_EPOCH,
-                Errors.OFFSET_NOT_AVAILABLE,
-                Errors.UNKNOWN_TOPIC_OR_PARTITION,
-                Errors.UNKNOWN_TOPIC_ID,
-                Errors.INCONSISTENT_TOPIC_ID
+            Errors.NOT_LEADER_OR_FOLLOWER,
+            Errors.REPLICA_NOT_AVAILABLE,
+            Errors.KAFKA_STORAGE_ERROR,
+            Errors.FENCED_LEADER_EPOCH,
+            Errors.OFFSET_NOT_AVAILABLE,
+            Errors.UNKNOWN_TOPIC_OR_PARTITION,
+            Errors.UNKNOWN_TOPIC_ID,
+            Errors.INCONSISTENT_TOPIC_ID
         );
 
         return errors.stream().map(Arguments::of);
@@ -857,20 +857,20 @@ public class FetchCollectorTest {
     private static Stream<Arguments> testFetchWithOtherErrorsSource() {
         List<Errors> errors = new ArrayList<>(Arrays.asList(Errors.values()));
         errors.removeAll(Arrays.asList(
-                Errors.NONE,
-                Errors.NOT_LEADER_OR_FOLLOWER,
-                Errors.REPLICA_NOT_AVAILABLE,
-                Errors.KAFKA_STORAGE_ERROR,
-                Errors.FENCED_LEADER_EPOCH,
-                Errors.OFFSET_NOT_AVAILABLE,
-                Errors.UNKNOWN_TOPIC_OR_PARTITION,
-                Errors.UNKNOWN_TOPIC_ID,
-                Errors.INCONSISTENT_TOPIC_ID,
-                Errors.OFFSET_OUT_OF_RANGE,
-                Errors.TOPIC_AUTHORIZATION_FAILED,
-                Errors.UNKNOWN_LEADER_EPOCH,
-                Errors.UNKNOWN_SERVER_ERROR,
-                Errors.CORRUPT_MESSAGE
+            Errors.NONE,
+            Errors.NOT_LEADER_OR_FOLLOWER,
+            Errors.REPLICA_NOT_AVAILABLE,
+            Errors.KAFKA_STORAGE_ERROR,
+            Errors.FENCED_LEADER_EPOCH,
+            Errors.OFFSET_NOT_AVAILABLE,
+            Errors.UNKNOWN_TOPIC_OR_PARTITION,
+            Errors.UNKNOWN_TOPIC_ID,
+            Errors.INCONSISTENT_TOPIC_ID,
+            Errors.OFFSET_OUT_OF_RANGE,
+            Errors.TOPIC_AUTHORIZATION_FAILED,
+            Errors.UNKNOWN_LEADER_EPOCH,
+            Errors.UNKNOWN_SERVER_ERROR,
+            Errors.CORRUPT_MESSAGE
         ));
 
         return errors.stream().map(Arguments::of);
@@ -882,10 +882,10 @@ public class FetchCollectorTest {
      */
     private static Stream<Arguments> testErrorInInitializeSource() {
         return Stream.of(
-                Arguments.of(10, new RuntimeException()),
-                Arguments.of(0, new RuntimeException()),
-                Arguments.of(10, new KafkaException()),
-                Arguments.of(0, new KafkaException())
+            Arguments.of(10, new RuntimeException()),
+            Arguments.of(0, new RuntimeException()),
+            Arguments.of(10, new KafkaException()),
+            Arguments.of(0, new KafkaException())
         );
     }
 
@@ -945,13 +945,13 @@ public class FetchCollectorTest {
 
             FetchMetricsAggregator metricsAggregator = new FetchMetricsAggregator(metricsManager, allPartitions);
             return new CompletedFetch(
-                    logContext.logger(CompletedFetch.class),
-                    subscriptions,
-                    BufferSupplier.create(),
-                    topicPartition,
-                    partitionData,
-                    metricsAggregator,
-                    fetchOffset);
+                logContext.logger(CompletedFetch.class),
+                subscriptions,
+                BufferSupplier.create(),
+                topicPartition,
+                partitionData,
+                metricsAggregator,
+                fetchOffset);
         }
     }
 
@@ -963,10 +963,10 @@ public class FetchCollectorTest {
         ByteBuffer allocate = ByteBuffer.allocate(1024);
 
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(allocate,
-            Compression.NONE,
-            TimestampType.CREATE_TIME,
-            0)) {
-            for (int i = 0; i < recordCount; i++)
+                 Compression.NONE,
+                 TimestampType.CREATE_TIME,
+                 0)) {
+            for (int i = 0;i < recordCount;i++)
                 builder.append(0L, "key".getBytes(), ("value-" + i).getBytes());
 
             return builder.build();
@@ -984,17 +984,17 @@ public class FetchCollectorTest {
         }
 
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer,
-            RecordBatch.CURRENT_MAGIC_VALUE,
-            Compression.NONE,
-            TimestampType.CREATE_TIME,
-            baseOffset,
-            time.milliseconds(),
-            PRODUCER_ID,
-            (short) 0,
-            0,
-            true,
-            0)) {
-            for (int i = 0; i < recordCount; i++)
+                 RecordBatch.CURRENT_MAGIC_VALUE,
+                 Compression.NONE,
+                 TimestampType.CREATE_TIME,
+                 baseOffset,
+                 time.milliseconds(),
+                 PRODUCER_ID,
+                 (short) 0,
+                 0,
+                 true,
+                 0)) {
+            for (int i = 0;i < recordCount;i++)
                 builder.append(new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
 
             builder.build();
@@ -1007,9 +1007,9 @@ public class FetchCollectorTest {
     }
 
     private void writeTransactionMarker(ByteBuffer buffer,
-                                        ControlRecordType controlRecordType,
-                                        int offset,
-                                        Time time) {
+        ControlRecordType controlRecordType,
+        int offset,
+        Time time) {
         MemoryRecords.writeEndTransactionalMarker(buffer,
             offset,
             time.milliseconds(),

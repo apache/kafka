@@ -84,7 +84,7 @@ public class HdrHistogramTest {
     private void testHdrHistogramVsYammerHistogram(List<Long> samples, String distributionLabel) {
         HdrHistogram hdrHistogram = new HdrHistogram(MAX_VALUE, NUM_SIGNIFICANT_DIGITS);
         Histogram yammerHistogram = new MetricsRegistry().newHistogram(new MetricName("", "", ""),
-            true);
+                true);
 
         Collections.sort(samples);
         double[] expectedQuantileValues = new double[QUANTILES.length];
@@ -100,7 +100,7 @@ public class HdrHistogramTest {
         }
 
         System.out.printf("Testing HdrHistogram vs Yammer histogram for %s distribution%n",
-            distributionLabel);
+                distributionLabel);
         long now = System.currentTimeMillis();
         int numYammerWins = 0;
         for (int i = 0; i < QUANTILES.length; i++) {
@@ -109,15 +109,15 @@ public class HdrHistogramTest {
             double yammerHistogramValue = yammerHistogram.getSnapshot().getValue(quantile);
             double expectedValue = expectedQuantileValues[i];
             System.out.printf(
-                "Values for quantile %f: HdrHistogram: %f, Yammer histogram: %f, Expected: %f%n",
-                quantile, hdrHistogramValue, yammerHistogramValue, expectedValue);
+                    "Values for quantile %f: HdrHistogram: %f, Yammer histogram: %f, Expected: %f%n",
+                    quantile, hdrHistogramValue, yammerHistogramValue, expectedValue);
             if (Math.abs(expectedValue - hdrHistogramValue) > Math.abs(
-                expectedValue - yammerHistogramValue)) {
+                    expectedValue - yammerHistogramValue)) {
                 numYammerWins++;
             }
         }
         System.out.printf("HdrHistogram was more accurate: %d out of %d times%n",
-            QUANTILES.length - numYammerWins, QUANTILES.length);
+                QUANTILES.length - numYammerWins, QUANTILES.length);
         assertTrue(numYammerWins <= QUANTILES.length / 2);
     }
 
@@ -125,7 +125,7 @@ public class HdrHistogramTest {
     public void testCount() throws Exception {
         int numUpdates = 100_000;
         HdrHistogram hdrHistogram = new HdrHistogram(
-            MAX_VALUE, NUM_SIGNIFICANT_DIGITS);
+                MAX_VALUE, NUM_SIGNIFICANT_DIGITS);
         ExecutorService executorService = Executors.newFixedThreadPool(5);
         for (int i = 0; i < numUpdates; i++) {
             executorService.submit(() -> hdrHistogram.record(1L));
@@ -207,9 +207,9 @@ public class HdrHistogramTest {
             long t1Count = t1Future.get();
             long t2Count = t2Future.get();
             assertTrue(
-                numEvents == t1Count && numEvents == t2Count,
-                String.format("Expected %d events in both threads, got %d in T1 and %d in T2",
-                    numEvents, t1Count, t2Count));
+                    numEvents == t1Count && numEvents == t2Count,
+                    String.format("Expected %d events in both threads, got %d in T1 and %d in T2",
+                            numEvents, t1Count, t2Count));
         }
         ThreadUtils.shutdownExecutorServiceQuietly(countExecutor, 500, TimeUnit.MILLISECONDS);
     }

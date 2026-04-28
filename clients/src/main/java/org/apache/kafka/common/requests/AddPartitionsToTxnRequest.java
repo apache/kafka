@@ -47,14 +47,14 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
 
     public static class Builder extends AbstractRequest.Builder<AddPartitionsToTxnRequest> {
         public final AddPartitionsToTxnRequestData data;
-        
+
         public static Builder forClient(String transactionalId,
-                                        long producerId,
-                                        short producerEpoch,
-                                        List<TopicPartition> partitions) {
+            long producerId,
+            short producerEpoch,
+            List<TopicPartition> partitions) {
 
             AddPartitionsToTxnTopicCollection topics = buildTxnTopicCollection(partitions);
-            
+
             return new Builder(ApiKeys.ADD_PARTITIONS_TO_TXN.oldestVersion(), LAST_CLIENT_VERSION,
                 new AddPartitionsToTxnRequestData()
                     .setV3AndBelowTransactionalId(transactionalId)
@@ -62,13 +62,13 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
                     .setV3AndBelowProducerEpoch(producerEpoch)
                     .setV3AndBelowTopics(topics));
         }
-        
+
         public static Builder forBroker(AddPartitionsToTxnTransactionCollection transactions) {
             return new Builder(EARLIEST_BROKER_VERSION, ApiKeys.ADD_PARTITIONS_TO_TXN.latestVersion(),
                 new AddPartitionsToTxnRequestData()
                     .setTransactions(transactions));
         }
-        
+
         private Builder(short minVersion, short maxVersion, AddPartitionsToTxnRequestData data) {
             super(ApiKeys.ADD_PARTITIONS_TO_TXN, minVersion, maxVersion);
 
@@ -173,14 +173,14 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
             .setTopics(data.v3AndBelowTopics()));
         return singleTxn;
     }
-    
+
     public AddPartitionsToTxnResult errorResponseForTransaction(String transactionalId, Errors e) {
         AddPartitionsToTxnResult txnResult = new AddPartitionsToTxnResult().setTransactionalId(transactionalId);
         AddPartitionsToTxnTopicResultCollection topicResults = errorResponseForTopics(data.transactions().find(transactionalId).topics(), e);
         txnResult.setTopicResults(topicResults);
         return txnResult;
     }
-    
+
     private AddPartitionsToTxnTopicResultCollection errorResponseForTopics(AddPartitionsToTxnTopicCollection topics, Errors e) {
         AddPartitionsToTxnTopicResultCollection topicResults = new AddPartitionsToTxnTopicResultCollection();
         for (AddPartitionsToTxnTopic topic : topics) {

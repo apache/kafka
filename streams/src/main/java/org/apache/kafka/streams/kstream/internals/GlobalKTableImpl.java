@@ -24,7 +24,7 @@ public class GlobalKTableImpl<K, V> implements GlobalKTable<K, V> {
     private final String queryableStoreName;
 
     GlobalKTableImpl(final KTableValueGetterSupplier<K, V> valueGetterSupplier,
-                     final String queryableStoreName) {
+        final String queryableStoreName) {
         this.valueGetterSupplier = valueGetterSupplier;
         this.queryableStoreName = queryableStoreName;
     }

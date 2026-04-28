@@ -32,13 +32,13 @@ public class CachedSharePartitionTest {
         int partition = 0;
 
         CachedSharePartition cachedSharePartitionWithIdAndName = new
-                CachedSharePartition(topicName, topicId, partition, false);
+            CachedSharePartition(topicName, topicId, partition, false);
         CachedSharePartition cachedSharePartitionWithIdAndNoName = new
-                CachedSharePartition(null, topicId, partition, false);
+            CachedSharePartition(null, topicId, partition, false);
         CachedSharePartition cachedSharePartitionWithDifferentIdAndName = new
-                CachedSharePartition(topicName, Uuid.randomUuid(), partition, false);
+            CachedSharePartition(topicName, Uuid.randomUuid(), partition, false);
         CachedSharePartition cachedSharePartitionWithZeroIdAndName = new
-                CachedSharePartition(topicName, Uuid.ZERO_UUID, partition, false);
+            CachedSharePartition(topicName, Uuid.ZERO_UUID, partition, false);
 
         // CachedSharePartitions with valid topic IDs will compare topic ID and partition but not topic name.
         assertEquals(cachedSharePartitionWithIdAndName, cachedSharePartitionWithIdAndNoName);

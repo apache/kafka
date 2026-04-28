@@ -63,10 +63,10 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     private volatile boolean open;
 
     AbstractDualSchemaRocksDBSegmentedBytesStore(final String name,
-                                                 final KeySchema baseKeySchema,
-                                                 final Optional<KeySchema> indexKeySchema,
-                                                 final AbstractSegments<S> segments,
-                                                 final long retentionPeriod) {
+        final KeySchema baseKeySchema,
+        final Optional<KeySchema> indexKeySchema,
+        final AbstractSegments<S> segments,
+        final long retentionPeriod) {
         this.name = name;
         this.baseKeySchema = baseKeySchema;
         this.indexKeySchema = indexKeySchema;
@@ -84,11 +84,11 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         final Bytes to = baseKeySchema.upperRange(null, Long.MAX_VALUE);
 
         return new SegmentIterator<>(
-                searchSpace.iterator(),
-                baseKeySchema.hasNextCondition(null, null, actualFrom, Long.MAX_VALUE, true),
-                from,
-                to,
-                true);
+            searchSpace.iterator(),
+            baseKeySchema.hasNextCondition(null, null, actualFrom, Long.MAX_VALUE, true),
+            from,
+            to,
+            true);
     }
 
     @Override
@@ -101,11 +101,11 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         final Bytes to = baseKeySchema.upperRange(null, Long.MAX_VALUE);
 
         return new SegmentIterator<>(
-                searchSpace.iterator(),
-                baseKeySchema.hasNextCondition(null, null, actualFrom, Long.MAX_VALUE, false),
-                from,
-                to,
-                false);
+            searchSpace.iterator(),
+            baseKeySchema.hasNextCondition(null, null, actualFrom, Long.MAX_VALUE, false),
+            from,
+            to,
+            false);
     }
 
     @Override
@@ -131,7 +131,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     // lead to no records being returned.
     protected long getActualFrom(final long from, final boolean isTimeFirstWindowSchema) {
         return isTimeFirstWindowSchema ? Math.max(from, observedStreamTime - retentionPeriod) :
-                Math.max(from, observedStreamTime - retentionPeriod + 1);
+            Math.max(from, observedStreamTime - retentionPeriod + 1);
 
     }
 
@@ -181,7 +181,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
 
     @Override
     public void put(final Bytes rawBaseKey,
-                    final byte[] value) {
+        final byte[] value) {
         final long timestamp = baseKeySchema.segmentTimestamp(rawBaseKey);
         observedStreamTime = Math.max(observedStreamTime, timestamp);
         final long segmentId = segments.segmentId(timestamp);
@@ -215,13 +215,13 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         if (baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema) {
             if (timestampFromRawKey < observedStreamTime - retentionPeriod) {
                 LOG.debug("Record with key {} is expired as timestamp from key ({}) < actual stream time ({})",
-                        rawKey.toString(), timestampFromRawKey, observedStreamTime - retentionPeriod);
+                    rawKey.toString(), timestampFromRawKey, observedStreamTime - retentionPeriod);
                 return null;
             }
         } else {
             if (timestampFromRawKey < observedStreamTime - retentionPeriod + 1) {
                 LOG.debug("Record with key {} is expired as timestamp from key ({}) < actual stream time ({})",
-                        rawKey.toString(), timestampFromRawKey, observedStreamTime - retentionPeriod + 1);
+                    rawKey.toString(), timestampFromRawKey, observedStreamTime - retentionPeriod + 1);
                 return null;
             }
         }

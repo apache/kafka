@@ -33,12 +33,12 @@ abstract class BaseJoinProcessorNode<K, V1, V2, VR> extends GraphNode {
     private final String otherJoinSideNodeName;
 
     BaseJoinProcessorNode(final String nodeName,
-                          final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VR> valueJoiner,
-                          final ProcessorParameters<K, V1, ?, ?> joinThisProcessorParameters,
-                          final ProcessorParameters<K, V2, ?, ?> joinOtherProcessorParameters,
-                          final ProcessorParameters<K, VR, ?, ?> joinMergeProcessorParameters,
-                          final String thisJoinSideNodeName,
-                          final String otherJoinSideNodeName) {
+        final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VR> valueJoiner,
+        final ProcessorParameters<K, V1, ?, ?> joinThisProcessorParameters,
+        final ProcessorParameters<K, V2, ?, ?> joinOtherProcessorParameters,
+        final ProcessorParameters<K, VR, ?, ?> joinMergeProcessorParameters,
+        final String thisJoinSideNodeName,
+        final String otherJoinSideNodeName) {
 
         super(nodeName);
 
@@ -75,12 +75,12 @@ abstract class BaseJoinProcessorNode<K, V1, V2, VR> extends GraphNode {
     @Override
     public String toString() {
         return "BaseJoinProcessorNode{" +
-               "joinThisProcessorParameters=" + joinThisProcessorParameters +
-               ", joinOtherProcessorParameters=" + joinOtherProcessorParameters +
-               ", joinMergeProcessorParameters=" + joinMergeProcessorParameters +
-               ", valueJoiner=" + valueJoiner +
-               ", thisJoinSideNodeName='" + thisJoinSideNodeName + '\'' +
-               ", otherJoinSideNodeName='" + otherJoinSideNodeName + '\'' +
-               "} " + super.toString();
+            "joinThisProcessorParameters=" + joinThisProcessorParameters +
+            ", joinOtherProcessorParameters=" + joinOtherProcessorParameters +
+            ", joinMergeProcessorParameters=" + joinMergeProcessorParameters +
+            ", valueJoiner=" + valueJoiner +
+            ", thisJoinSideNodeName='" + thisJoinSideNodeName + '\'' +
+            ", otherJoinSideNodeName='" + otherJoinSideNodeName + '\'' +
+            "} " + super.toString();
     }
 }

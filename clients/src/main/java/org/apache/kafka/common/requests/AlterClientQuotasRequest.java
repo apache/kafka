@@ -47,26 +47,26 @@ public class AlterClientQuotasRequest extends AbstractRequest {
                 List<EntityData> entityData = new ArrayList<>(entry.entity().entries().size());
                 for (Map.Entry<String, String> entityEntries : entry.entity().entries().entrySet()) {
                     entityData.add(new EntityData()
-                            .setEntityType(entityEntries.getKey())
-                            .setEntityName(entityEntries.getValue()));
+                        .setEntityType(entityEntries.getKey())
+                        .setEntityName(entityEntries.getValue()));
                 }
 
                 List<OpData> opData = new ArrayList<>(entry.ops().size());
                 for (ClientQuotaAlteration.Op op : entry.ops()) {
                     opData.add(new OpData()
-                            .setKey(op.key())
-                            .setValue(op.value() == null ? 0.0 : op.value())
-                            .setRemove(op.value() == null));
+                        .setKey(op.key())
+                        .setValue(op.value() == null ? 0.0 : op.value())
+                        .setRemove(op.value() == null));
                 }
 
                 entryData.add(new EntryData()
-                        .setEntity(entityData)
-                        .setOps(opData));
+                    .setEntity(entityData)
+                    .setOps(opData));
             }
 
             this.data = new AlterClientQuotasRequestData()
-                    .setEntries(entryData)
-                    .setValidateOnly(validateOnly);
+                .setEntries(entryData)
+                .setValidateOnly(validateOnly);
         }
 
         @Override
@@ -132,8 +132,8 @@ public class AlterClientQuotasRequest extends AbstractRequest {
                 .setErrorMessage(error.message()));
         }
         AlterClientQuotasResponseData responseData = new AlterClientQuotasResponseData()
-                .setThrottleTimeMs(throttleTimeMs)
-                .setEntries(responseEntries);
+            .setThrottleTimeMs(throttleTimeMs)
+            .setEntries(responseEntries);
         return new AlterClientQuotasResponse(responseData);
     }
 

@@ -115,10 +115,10 @@ public class RocksDBBlockCacheMetricsTest {
     public <T> void assertMetric(final StateStoreContext context, final String group, final String metricName, final T expected) {
         final StreamsMetricsImpl metrics = ProcessorContextUtils.metricsImpl(context);
         final MetricName name = metrics.metricsRegistry().metricName(
-                metricName,
-                group,
-                "Ignored",
-                storeLevelTagMap(TASK_ID.toString(), METRICS_SCOPE, STORE_NAME)
+            metricName,
+            group,
+            "Ignored",
+            storeLevelTagMap(TASK_ID.toString(), METRICS_SCOPE, STORE_NAME)
         );
         final KafkaMetric metric = (KafkaMetric) metrics.metrics().get(name);
         assertEquals(expected, metric.metricValue(), String.format("Value for metric '%s-%s' was incorrect", group, metricName));
@@ -137,8 +137,8 @@ public class RocksDBBlockCacheMetricsTest {
     }
 
     public Map<String, String> storeLevelTagMap(final String taskName,
-                                                final String storeType,
-                                                final String storeName) {
+        final String storeType,
+        final String storeName) {
         final Map<String, String> tagMap = taskLevelTagMap(Thread.currentThread().getName(), taskName);
         tagMap.put(storeType + "-" + STORE_ID_TAG, storeName);
         return tagMap;

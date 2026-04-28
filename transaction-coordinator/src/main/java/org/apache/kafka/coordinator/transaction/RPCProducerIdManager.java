@@ -60,15 +60,15 @@ public class RPCProducerIdManager implements ProducerIdManager {
     final AtomicReference<ProducerIdsBlock> nextProducerIdBlock = new AtomicReference<>(null);
     final AtomicReference<ProducerIdsBlock> currentProducerIdBlock = new AtomicReference<>(ProducerIdsBlock.EMPTY);
     private final AtomicBoolean requestInFlight = new AtomicBoolean(false);
-    
+
     // Setting the value of backoffDeadlineMs should be handled only in the response handler thread.
     // Otherwise, consider using compareAndSet() instead of set().
     private final AtomicLong backoffDeadlineMs = new AtomicLong(NO_RETRY);
 
     public RPCProducerIdManager(int brokerId,
-                                Time time,
-                                Supplier<Long> brokerEpochSupplier,
-                                NodeToControllerChannelManager controllerChannel
+        Time time,
+        Supplier<Long> brokerEpochSupplier,
+        NodeToControllerChannelManager controllerChannel
     ) {
         this.brokerId = brokerId;
         this.time = time;
@@ -87,7 +87,7 @@ public class RPCProducerIdManager implements ProducerIdManager {
                 long nextProducerId = claimNextId.get();
                 // Check if we need to prefetch the next block
                 var prefetchTarget = currentProducerIdBlock.get().firstProducerId() +
-                        (long) (currentProducerIdBlock.get().size() * PID_PREFETCH_THRESHOLD);
+                    (long) (currentProducerIdBlock.get().size() * PID_PREFETCH_THRESHOLD);
                 if (nextProducerId == prefetchTarget) {
                     maybeRequestNextBlock();
                 }
@@ -115,7 +115,7 @@ public class RPCProducerIdManager implements ProducerIdManager {
         if (retryTimestamp == NO_RETRY || time.milliseconds() >= retryTimestamp) {
             // Send a request only if we reached the retry deadline, or if no deadline was set.
             if (nextProducerIdBlock.get() == null &&
-                    requestInFlight.compareAndSet(false, true)) {
+                requestInFlight.compareAndSet(false, true)) {
                 sendRequest();
             }
         }
@@ -123,8 +123,8 @@ public class RPCProducerIdManager implements ProducerIdManager {
 
     protected void sendRequest() {
         var message = new AllocateProducerIdsRequestData()
-                .setBrokerEpoch(brokerEpochSupplier.get())
-                .setBrokerId(brokerId);
+            .setBrokerEpoch(brokerEpochSupplier.get())
+            .setBrokerId(brokerId);
         var request = new AllocateProducerIdsRequest.Builder(message);
         log.debug("{} Requesting next Producer ID block", logPrefix);
         controllerChannel.sendRequest(request, new ControllerRequestCompletionHandler() {

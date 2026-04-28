@@ -27,8 +27,8 @@ class FilteredCacheIterator implements PeekingKeyValueIterator<Bytes, LRUCacheEn
     private final PeekingKeyValueIterator<Bytes, LRUCacheEntry> wrappedIterator;
 
     FilteredCacheIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
-                          final HasNextCondition hasNextCondition,
-                          final CacheFunction cacheFunction) {
+        final HasNextCondition hasNextCondition,
+        final CacheFunction cacheFunction) {
         this.cacheIterator = cacheIterator;
         this.hasNextCondition = hasNextCondition;
         this.wrappedIterator = new PeekingKeyValueIterator<Bytes, LRUCacheEntry>() {

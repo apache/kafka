@@ -29,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TimestampRouterTest {
     private TimestampRouter<SourceRecord> xform;
+
     @BeforeEach
     public void setup() {
         xform = new TimestampRouter<>();

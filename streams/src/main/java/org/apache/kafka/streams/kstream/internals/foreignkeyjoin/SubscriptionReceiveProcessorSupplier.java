@@ -49,7 +49,7 @@ public class SubscriptionReceiveProcessorSupplier<KLeft, KRight>
     private final CombinedKeySchema<KRight, KLeft> keySchema;
 
     public SubscriptionReceiveProcessorSupplier(final StoreFactory subscriptionStoreFactory,
-                                                final CombinedKeySchema<KRight, KLeft> keySchema) {
+        final CombinedKeySchema<KRight, KLeft> keySchema) {
         this.subscriptionStoreFactory = subscriptionStoreFactory;
         this.keySchema = keySchema;
     }

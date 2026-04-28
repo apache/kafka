@@ -136,7 +136,7 @@ public class StreamsMetricsImplTest {
     private final MetricName metricName2 =
         new MetricName(METRIC_NAME1, CLIENT_LEVEL_GROUP, DESCRIPTION2, clientLevelTags);
     private final MockTime time = new MockTime(0);
-    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID,  time);
+    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, time);
 
     private static MetricConfig eqMetricConfig(final MetricConfig metricConfig) {
         final StringBuffer message = new StringBuffer();
@@ -145,14 +145,14 @@ public class StreamsMetricsImplTest {
             if (argument instanceof MetricConfig) {
                 final MetricConfig otherMetricConfig = argument;
                 final boolean equalsComparisons =
-                        (otherMetricConfig.quota() == metricConfig.quota() ||
-                                otherMetricConfig.quota().equals(metricConfig.quota())) &&
-                                otherMetricConfig.tags().equals(metricConfig.tags());
+                    (otherMetricConfig.quota() == metricConfig.quota() ||
+                        otherMetricConfig.quota().equals(metricConfig.quota())) &&
+                        otherMetricConfig.tags().equals(metricConfig.tags());
                 if (otherMetricConfig.eventWindow() == metricConfig.eventWindow() &&
-                        otherMetricConfig.recordLevel() == metricConfig.recordLevel() &&
-                        equalsComparisons &&
-                        otherMetricConfig.samples() == metricConfig.samples() &&
-                        otherMetricConfig.timeWindowMs() == metricConfig.timeWindowMs()) {
+                    otherMetricConfig.recordLevel() == metricConfig.recordLevel() &&
+                    equalsComparisons &&
+                    otherMetricConfig.samples() == metricConfig.samples() &&
+                    otherMetricConfig.timeWindowMs() == metricConfig.timeWindowMs()) {
 
                     return true;
                 } else {
@@ -471,7 +471,7 @@ public class StreamsMetricsImplTest {
     @Test
     public void shouldCreateNewStoreLevelMutableMetric() {
         final MetricName metricName =
-                new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
+            new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
         final MetricConfig metricConfig = new MetricConfig().recordLevel(INFO_RECORDING_LEVEL);
         try (Metrics metrics = new Metrics(metricConfig)) {
             assertNull(metrics.metric(metricName));
@@ -504,7 +504,7 @@ public class StreamsMetricsImplTest {
     @Test
     public void shouldReturnSameMetricIfAlreadyCreated() {
         final MetricName metricName =
-                new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
+            new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
         final MetricConfig metricConfig = new MetricConfig().recordLevel(INFO_RECORDING_LEVEL);
         try (Metrics metrics = new Metrics(metricConfig)) {
             assertNull(metrics.metric(metricName));
@@ -516,7 +516,7 @@ public class StreamsMetricsImplTest {
     @Test
     public void shouldCreateMetricOnceDuringConcurrentMetricCreationRequest() throws InterruptedException {
         final MetricName metricName =
-                new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
+            new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
         final MetricConfig metricConfig = new MetricConfig().recordLevel(INFO_RECORDING_LEVEL);
         try (Metrics metrics = new Metrics(metricConfig)) {
             assertNull(metrics.metric(metricName));
@@ -768,7 +768,7 @@ public class StreamsMetricsImplTest {
     }
 
     private void setupRemoveSensorsTest(final Metrics metrics,
-                                        final String level) {
+        final String level) {
         final String fullSensorNamePrefix = INTERNAL_PREFIX + SENSOR_PREFIX_DELIMITER + level + SENSOR_NAME_DELIMITER;
         doNothing().when(metrics).removeSensor(fullSensorNamePrefix + SENSOR_NAME_1);
         doNothing().when(metrics).removeSensor(fullSensorNamePrefix + SENSOR_NAME_2);
@@ -1044,15 +1044,15 @@ public class StreamsMetricsImplTest {
     }
 
     private void shouldAddCustomSensor(final Sensor sensor,
-                                       final StreamsMetricsImpl streamsMetrics,
-                                       final List<String> metricsNames) {
+        final StreamsMetricsImpl streamsMetrics,
+        final List<String> metricsNames) {
         final Map<String, String> tags = tags(streamsMetrics);
         shouldAddCustomSensorWithTags(sensor, metricsNames, tags);
     }
 
     private void shouldAddCustomSensorWithTags(final Sensor sensor,
-                                               final List<String> metricsNames,
-                                               final Map<String, String> tags) {
+        final List<String> metricsNames,
+        final Map<String, String> tags) {
         final String group = "stream-" + SCOPE_NAME + "-metrics";
         assertTrue(sensor.hasMetrics());
         assertThat(
@@ -1293,10 +1293,10 @@ public class StreamsMetricsImplTest {
     }
 
     private void verifyMetric(final String name,
-                              final String description,
-                              final double valueToRecord1,
-                              final double valueToRecord2,
-                              final double expectedMetricValue) {
+        final String description,
+        final double valueToRecord1,
+        final double valueToRecord2,
+        final double expectedMetricValue) {
         final KafkaMetric metric = metrics
             .metric(new MetricName(name, group, description, tags));
         assertThat(metric, is(notNullValue()));
@@ -1320,7 +1320,8 @@ public class StreamsMetricsImplTest {
         final Time time = mock(Time.class);
         when(time.nanoseconds()).thenReturn(startTime).thenReturn(endTime);
 
-        StreamsMetricsImpl.maybeMeasureLatency(() -> { }, time, sensor);
+        StreamsMetricsImpl.maybeMeasureLatency(() -> {
+        }, time, sensor);
     }
 
     @Test
@@ -1329,7 +1330,8 @@ public class StreamsMetricsImplTest {
         when(sensor.shouldRecord()).thenReturn(false);
         final Time time = mock(Time.class);
 
-        StreamsMetricsImpl.maybeMeasureLatency(() -> { }, time, sensor);
+        StreamsMetricsImpl.maybeMeasureLatency(() -> {
+        }, time, sensor);
     }
 
     @Test
@@ -1339,7 +1341,8 @@ public class StreamsMetricsImplTest {
         when(sensor.hasMetrics()).thenReturn(false);
         final Time time = mock(Time.class);
 
-        StreamsMetricsImpl.maybeMeasureLatency(() -> { }, time, sensor);
+        StreamsMetricsImpl.maybeMeasureLatency(() -> {
+        }, time, sensor);
     }
 
     @Test

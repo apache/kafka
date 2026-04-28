@@ -35,10 +35,10 @@ public class Action {
      * @param resourcePattern non-null resource pattern on which this action is being performed
      */
     public Action(AclOperation operation,
-                  ResourcePattern resourcePattern,
-                  int resourceReferenceCount,
-                  boolean logIfAllowed,
-                  boolean logIfDenied) {
+        ResourcePattern resourcePattern,
+        int resourceReferenceCount,
+        boolean logIfAllowed,
+        boolean logIfDenied) {
         this.operation = Objects.requireNonNull(operation, "operation can't be null");
         this.resourcePattern = Objects.requireNonNull(resourcePattern, "resourcePattern can't be null");
         this.logIfAllowed = logIfAllowed;

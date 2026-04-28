@@ -24,4 +24,5 @@ package org.apache.kafka.server.network;
  * Clients should know which security protocol to use from configuration.
  * This allows us to keep the wire protocol with the clients unchanged where the protocol is not needed.
  */
-public record BrokerEndPoint(int id, String host, int port) { }
+public record BrokerEndPoint(int id, String host, int port) {
+}

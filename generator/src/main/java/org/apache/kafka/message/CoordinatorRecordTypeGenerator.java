@@ -76,7 +76,7 @@ public class CoordinatorRecordTypeGenerator implements TypeClassGenerator {
             }
 
             default:
-                // Ignore
+            // Ignore
         }
     }
 

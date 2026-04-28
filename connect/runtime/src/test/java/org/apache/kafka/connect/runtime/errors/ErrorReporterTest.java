@@ -151,7 +151,7 @@ public class ErrorReporterTest {
     @Test
     public void testCloseDLQ() {
         DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(
-            producer, config(Map.of(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC)), TASK_ID, errorHandlingMetrics);
+                producer, config(Map.of(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC)), TASK_ID, errorHandlingMetrics);
 
         deadLetterQueueReporter.close();
         verify(producer).close();
@@ -220,8 +220,8 @@ public class ErrorReporterTest {
 
         String msg = logReporter.message(context);
         assertEquals("Error encountered in task job-0. Executing stage 'KEY_CONVERTER' with class " +
-            "'org.apache.kafka.connect.json.JsonConverter', where consumed record is {topic='test-topic', " +
-            "partition=5, offset=100}.", msg);
+                "'org.apache.kafka.connect.json.JsonConverter', where consumed record is {topic='test-topic', " +
+                "partition=5, offset=100}.", msg);
 
         Future<RecordMetadata> future = logReporter.report(context);
         assertInstanceOf(CompletableFuture.class, future);
@@ -309,7 +309,7 @@ public class ErrorReporterTest {
 
         deadLetterQueueReporter.populateContextHeaders(producerRecord, context);
         int appearances = 0;
-        for (Header header: producerRecord.headers()) {
+        for (Header header : producerRecord.headers()) {
             if (ERROR_HEADER_ORIG_TOPIC.equalsIgnoreCase(header.key())) {
                 appearances++;
             }

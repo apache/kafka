@@ -33,7 +33,8 @@ import java.nio.ByteBuffer;
 
 public class SnappyCompression implements Compression {
 
-    private SnappyCompression() {}
+    private SnappyCompression() {
+    }
 
     @Override
     public CompressionType type() {
@@ -55,9 +56,9 @@ public class SnappyCompression implements Compression {
         // SnappyInputStream allocates a new skip buffer every time, hence, we prefer our own implementation.
         try {
             return new ChunkedBytesStream(new SnappyInputStream(new ByteBufferInputStream(buffer)),
-                                          decompressionBufferSupplier,
-                                          decompressionOutputSize(),
-                                          false);
+                decompressionBufferSupplier,
+                decompressionOutputSize(),
+                false);
         } catch (Throwable e) {
             throw new KafkaException(e);
         }

@@ -279,7 +279,7 @@ public class AdminMetadataManager {
         if (RequestUtils.isFatalException(exception)) {
             log.warn("Fatal error during metadata update", exception);
             // avoid unchecked/unconfirmed cast to ApiException
-            if (exception instanceof  ApiException) {
+            if (exception instanceof ApiException) {
                 this.fatalException = (ApiException) exception;
             }
 

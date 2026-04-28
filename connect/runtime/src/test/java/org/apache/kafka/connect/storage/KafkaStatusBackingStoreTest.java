@@ -127,7 +127,7 @@ public class KafkaStatusBackingStoreTest {
             ((Callback) invocation.getArgument(2)).onCompletion(null, null);
             return null;
         })
-        .when(kafkaBasedLog).send(eq("status-connector-conn"), eq(value), any(Callback.class));
+                .when(kafkaBasedLog).send(eq("status-connector-conn"), eq(value), any(Callback.class));
 
         ConnectorStatus status = new ConnectorStatus(CONNECTOR, ConnectorStatus.State.RUNNING, WORKER_ID, 0);
         store.put(status);

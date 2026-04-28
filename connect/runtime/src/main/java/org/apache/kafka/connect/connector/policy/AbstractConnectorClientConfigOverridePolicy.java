@@ -45,7 +45,7 @@ public abstract class AbstractConnectorClientConfigOverridePolicy implements Con
 
     protected ConfigValue configValue(Map.Entry<String, Object> configEntry) {
         ConfigValue configValue =
-            new ConfigValue(configEntry.getKey(), configEntry.getValue(), new ArrayList<>(), new ArrayList<>());
+                new ConfigValue(configEntry.getKey(), configEntry.getValue(), new ArrayList<>(), new ArrayList<>());
         validate(configValue);
         return configValue;
     }
@@ -53,7 +53,7 @@ public abstract class AbstractConnectorClientConfigOverridePolicy implements Con
     protected void validate(ConfigValue configValue) {
         if (!isAllowed(configValue)) {
             configValue.addErrorMessage("The '" + policyName() + "' policy does not allow '" + configValue.name()
-                                        + "' to be overridden in the connector configuration.");
+                    + "' to be overridden in the connector configuration.");
         }
     }
 

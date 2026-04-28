@@ -29,7 +29,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 
 public class CoordinatorExecutorImpl<U> implements CoordinatorExecutor<U> {
-    private record TaskResult<R>(R result, Throwable exception) { }
+    private record TaskResult<R>(R result, Throwable exception) {
+    }
 
     private final Logger log;
     private final ExecutorService executor;
@@ -37,9 +38,9 @@ public class CoordinatorExecutorImpl<U> implements CoordinatorExecutor<U> {
     private final Map<String, TaskRunnable<?>> tasks = new ConcurrentHashMap<>();
 
     public CoordinatorExecutorImpl(
-        LogContext logContext,
-        ExecutorService executor,
-        CoordinatorShardScheduler<U> scheduler
+            LogContext logContext,
+            ExecutorService executor,
+            CoordinatorShardScheduler<U> scheduler
     ) {
         this.log = logContext.logger(CoordinatorExecutorImpl.class);
         this.executor = executor;
@@ -56,9 +57,9 @@ public class CoordinatorExecutorImpl<U> implements CoordinatorExecutor<U> {
 
     @Override
     public <R> boolean schedule(
-        String key,
-        TaskRunnable<R> task,
-        TaskOperation<U, R> operation
+            String key,
+            TaskRunnable<R> task,
+            TaskOperation<U, R> operation
     ) {
         // Put the task if the key is free. Otherwise, reject it.
         if (tasks.putIfAbsent(key, task) != null) return false;
@@ -74,17 +75,17 @@ public class CoordinatorExecutorImpl<U> implements CoordinatorExecutor<U> {
 
             // Schedule the operation.
             scheduler.scheduleWriteOperation(
-                key,
-                () -> {
-                    // If the task associated with the key is not us, it means
-                    // that the task was either replaced or cancelled. We stop.
-                    if (!tasks.remove(key, task)) {
-                        throw new RejectedExecutionException(String.format("Task %s was overridden or cancelled", key));
-                    }
+                    key,
+                    () -> {
+                        // If the task associated with the key is not us, it means
+                        // that the task was either replaced or cancelled. We stop.
+                        if (!tasks.remove(key, task)) {
+                            throw new RejectedExecutionException(String.format("Task %s was overridden or cancelled", key));
+                        }
 
-                    // Call the underlying write operation with the result of the task.
-                    return operation.onComplete(result.result(), result.exception());
-                }
+                        // Call the underlying write operation with the result of the task.
+                        return operation.onComplete(result.result(), result.exception());
+                    }
             ).exceptionally(exception -> {
                 // Exceptions may be wrapped in CompletionException when propagated
                 // through CompletableFuture chains, so we unwrap them before
@@ -96,13 +97,13 @@ public class CoordinatorExecutorImpl<U> implements CoordinatorExecutor<U> {
 
                 if (exception instanceof RejectedExecutionException) {
                     log.debug("The write event for the task {} was not executed because it was " +
-                        "cancelled or overridden.", key);
+                            "cancelled or overridden.", key);
                 } else if (exception instanceof NotCoordinatorException || exception instanceof CoordinatorLoadInProgressException) {
                     log.debug("The write event for the task {} failed due to {}. Ignoring it because " +
-                        "the coordinator is not active.", key, exception.getMessage());
+                            "the coordinator is not active.", key, exception.getMessage());
                 } else {
                     log.error("The write event for the task {} failed due to {}. Ignoring it. ",
-                        key, exception.getMessage(), exception);
+                            key, exception.getMessage(), exception);
                 }
 
                 return null;

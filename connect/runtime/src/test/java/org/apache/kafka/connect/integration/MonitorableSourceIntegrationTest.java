@@ -82,13 +82,13 @@ public class MonitorableSourceIntegrationTest {
         connect.kafka().createTopic("test-topic");
 
         Map<String, String> props = Map.of(
-            CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName(),
-            TASKS_MAX_CONFIG, "1",
-            TOPIC_CONFIG, "test-topic",
-            KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName(),
-            VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName(),
-            MESSAGES_PER_POLL_CONFIG, MESSAGES_PER_POLL,
-            MAX_MESSAGES_PER_SECOND_CONFIG, MESSAGES_PER_SECOND);
+                CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName(),
+                TASKS_MAX_CONFIG, "1",
+                TOPIC_CONFIG, "test-topic",
+                KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName(),
+                VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName(),
+                MESSAGES_PER_POLL_CONFIG, MESSAGES_PER_POLL,
+                MAX_MESSAGES_PER_SECOND_CONFIG, MESSAGES_PER_SECOND);
 
         // set expected records to successfully reach the task
         // expect all records to be consumed and committed by the task

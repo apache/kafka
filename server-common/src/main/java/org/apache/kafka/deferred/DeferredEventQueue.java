@@ -67,7 +67,7 @@ public class DeferredEventQueue {
         }
         if (log.isTraceEnabled()) {
             log.trace("completeUpTo({}): successfully completed {} deferred entries",
-                    offset, numCompleted);
+                offset, numCompleted);
         }
     }
 

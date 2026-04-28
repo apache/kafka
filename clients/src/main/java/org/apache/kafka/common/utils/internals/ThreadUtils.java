@@ -44,7 +44,7 @@ public class ThreadUtils {
      * @return              The new ThreadFactory.
      */
     public static ThreadFactory createThreadFactory(final String pattern,
-                                                    final boolean daemon) {
+        final boolean daemon) {
         return createThreadFactory(pattern, daemon, null);
     }
 
@@ -59,8 +59,8 @@ public class ThreadUtils {
      * @return              The new ThreadFactory.
      */
     public static ThreadFactory createThreadFactory(final String pattern,
-                                                    final boolean daemon,
-                                                    final UncaughtExceptionHandler ueh) {
+        final boolean daemon,
+        final UncaughtExceptionHandler ueh) {
         return new ThreadFactory() {
             private final AtomicLong threadEpoch = new AtomicLong(0);
 
@@ -93,8 +93,8 @@ public class ThreadUtils {
      * @param timeUnit        The time unit of the shutdown timeout.
      */
     public static void shutdownExecutorServiceQuietly(ExecutorService executorService,
-                                                      long timeout,
-                                                      TimeUnit timeUnit) {
+        long timeout,
+        TimeUnit timeUnit) {
         if (executorService == null) {
             return;
         }

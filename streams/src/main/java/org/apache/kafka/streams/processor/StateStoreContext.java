@@ -95,7 +95,7 @@ public interface StateStoreContext {
      * @throws StreamsException if the store's change log does not contain the partition
      */
     void register(final StateStore store,
-                  final StateRestoreCallback stateRestoreCallback);
+        final StateRestoreCallback stateRestoreCallback);
 
     /**
      * Registers and possibly restores the specified storage engine.
@@ -114,8 +114,8 @@ public interface StateStoreContext {
      */
     @Evolving
     void register(final StateStore store,
-                  final StateRestoreCallback stateRestoreCallback,
-                  final CommitCallback commitCallback);
+        final StateRestoreCallback stateRestoreCallback,
+        final CommitCallback commitCallback);
 
     /**
      * Returns all the application config properties as key/value pairs.

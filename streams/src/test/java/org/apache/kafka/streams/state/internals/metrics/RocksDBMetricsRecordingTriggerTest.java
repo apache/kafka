@@ -71,7 +71,7 @@ public class RocksDBMetricsRecordingTriggerTest {
     public void shouldThrowIfRecorderToAddHasBeenAlreadyAdded() {
         when(recorder1.storeName()).thenReturn(STORE_NAME1);
         when(recorder1.taskId()).thenReturn(TASK_ID1);
-        
+
         recordingTrigger.addMetricsRecorder(recorder1);
         assertThrows(
             IllegalStateException.class,

@@ -40,10 +40,10 @@ public class ElectLeadersResponse extends AbstractResponse {
     }
 
     public ElectLeadersResponse(
-            int throttleTimeMs,
-            short errorCode,
-            List<ReplicaElectionResult> electionResults,
-            short version) {
+        int throttleTimeMs,
+        short errorCode,
+        List<ReplicaElectionResult> electionResults,
+        short version) {
         super(ApiKeys.ELECT_LEADERS);
         this.data = new ElectLeadersResponseData();
         data.setThrottleTimeMs(throttleTimeMs);
@@ -100,7 +100,7 @@ public class ElectLeadersResponse extends AbstractResponse {
                 }
 
                 map.put(new TopicPartition(topicResults.topic(), partitionResult.partitionId()),
-                        value);
+                    value);
             }
         }
 

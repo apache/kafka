@@ -61,7 +61,7 @@ public class ProducerInterceptorsTest {
                 throw new KafkaException("Injected exception in AppendProducerInterceptor.onSend");
 
             return new ProducerRecord<>(
-                    record.topic(), record.partition(), record.key(), record.value().concat(appendStr));
+                record.topic(), record.partition(), record.key(), record.value().concat(appendStr));
         }
 
         @Override
@@ -117,7 +117,7 @@ public class ProducerInterceptorsTest {
                 throw new KafkaException("Injected exception in AppendNewProducerInterceptor.onSend");
 
             return new ProducerRecord<>(
-                    record.topic(), record.partition(), record.key(), record.value().concat(appendStr));
+                record.topic(), record.partition(), record.key(), record.value().concat(appendStr));
         }
 
         @Override
@@ -230,8 +230,8 @@ public class ProducerInterceptorsTest {
 
         // verify that metadata contains both topic and partition
         interceptors.onSendError(producerRecord,
-                                 new TopicPartition(producerRecord.topic(), producerRecord.partition()),
-                                 new KafkaException("Test"));
+            new TopicPartition(producerRecord.topic(), producerRecord.partition()),
+            new KafkaException("Test"));
         assertEquals(2, onErrorAckCount);
         assertEquals(2, onErrorAckWithTopicPartitionSetCount);
 
@@ -251,8 +251,8 @@ public class ProducerInterceptorsTest {
         // onSendError, then interceptor should get valid partition
         int reassignedPartition = producerRecord.partition() + 1;
         interceptors.onSendError(record2,
-                                 new TopicPartition(record2.topic(), reassignedPartition),
-                                 new KafkaException("Test"));
+            new TopicPartition(record2.topic(), reassignedPartition),
+            new KafkaException("Test"));
         assertEquals(8, onErrorAckCount);
         assertEquals(8, onErrorAckWithTopicSetCount);
         assertEquals(6, onErrorAckWithTopicPartitionSetCount);

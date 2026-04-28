@@ -53,9 +53,9 @@ public class MonitorablePluginsIntegrationTest {
             @ClusterConfigProperty(key = REPLICA_SELECTOR_CLASS_CONFIG, value = "org.apache.kafka.server.MonitorablePluginsIntegrationTest$MonitorableReplicaSelector"),
             @ClusterConfigProperty(key = REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, value = "true"),
             @ClusterConfigProperty(key = REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
-                    value = "org.apache.kafka.server.MonitorablePluginsIntegrationTest$MonitorableNoOpRemoteLogMetadataManager"),
+                value = "org.apache.kafka.server.MonitorablePluginsIntegrationTest$MonitorableNoOpRemoteLogMetadataManager"),
             @ClusterConfigProperty(key = REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
-                    value = "org.apache.kafka.server.MonitorablePluginsIntegrationTest$MonitorableNoOpRemoteStorageManager")
+                value = "org.apache.kafka.server.MonitorablePluginsIntegrationTest$MonitorableNoOpRemoteStorageManager")
         }
     )
     public void testMonitorableServerPlugins(ClusterInstance clusterInstance) {
@@ -66,32 +66,32 @@ public class MonitorablePluginsIntegrationTest {
 
     private void assertAuthorizerMetrics(ClusterInstance clusterInstance) {
         assertMetrics(
-                clusterInstance.brokers().get(0).metrics(),
-                4,
-                expectedTags(AUTHORIZER_CLASS_NAME_CONFIG, "StandardAuthorizer", Map.of("role", "broker")));
+            clusterInstance.brokers().get(0).metrics(),
+            4,
+            expectedTags(AUTHORIZER_CLASS_NAME_CONFIG, "StandardAuthorizer", Map.of("role", "broker")));
 
         assertMetrics(
-                clusterInstance.controllers().get(controllerId(clusterInstance.type())).metrics(),
-                4,
-                expectedTags(AUTHORIZER_CLASS_NAME_CONFIG, "StandardAuthorizer", Map.of("role", "controller")));
+            clusterInstance.controllers().get(controllerId(clusterInstance.type())).metrics(),
+            4,
+            expectedTags(AUTHORIZER_CLASS_NAME_CONFIG, "StandardAuthorizer", Map.of("role", "controller")));
     }
 
     private void assertRemoteLogManagerMetrics(ClusterInstance clusterInstance) {
         assertMetrics(
-                clusterInstance.brokers().get(0).metrics(),
-                MonitorableNoOpRemoteLogMetadataManager.METRICS_COUNT,
-                expectedTags(REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, MonitorableNoOpRemoteLogMetadataManager.class.getSimpleName()));
+            clusterInstance.brokers().get(0).metrics(),
+            MonitorableNoOpRemoteLogMetadataManager.METRICS_COUNT,
+            expectedTags(REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, MonitorableNoOpRemoteLogMetadataManager.class.getSimpleName()));
         assertMetrics(
-                clusterInstance.brokers().get(0).metrics(),
-                MonitorableNoOpRemoteStorageManager.METRICS_COUNT,
-                expectedTags(REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, MonitorableNoOpRemoteStorageManager.class.getSimpleName()));
+            clusterInstance.brokers().get(0).metrics(),
+            MonitorableNoOpRemoteStorageManager.METRICS_COUNT,
+            expectedTags(REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, MonitorableNoOpRemoteStorageManager.class.getSimpleName()));
     }
 
     private void assertReplicaSelectorMetrics(ClusterInstance clusterInstance) {
         assertMetrics(
-                clusterInstance.brokers().get(0).metrics(),
-                MonitorableReplicaSelector.METRICS_COUNT,
-                expectedTags(REPLICA_SELECTOR_CLASS_CONFIG, MonitorableReplicaSelector.class.getSimpleName()));
+            clusterInstance.brokers().get(0).metrics(),
+            MonitorableReplicaSelector.METRICS_COUNT,
+            expectedTags(REPLICA_SELECTOR_CLASS_CONFIG, MonitorableReplicaSelector.class.getSimpleName()));
     }
 
     private void assertMetrics(Metrics metrics, int expected, Map<String, String> expectedTags) {

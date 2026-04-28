@@ -88,11 +88,11 @@ public class RecordCollectorImpl implements RecordCollector {
      * @throws StreamsException fatal error that should cause the thread to die (from producer.initTxn)
      */
     public RecordCollectorImpl(final LogContext logContext,
-                               final TaskId taskId,
-                               final StreamsProducer streamsProducer,
-                               final ProductionExceptionHandler productionExceptionHandler,
-                               final StreamsMetricsImpl streamsMetrics,
-                               final ProcessorTopology topology) {
+        final TaskId taskId,
+        final StreamsProducer streamsProducer,
+        final ProductionExceptionHandler productionExceptionHandler,
+        final StreamsMetricsImpl streamsMetrics,
+        final ProcessorTopology topology) {
         this.log = logContext.logger(getClass());
         this.taskId = taskId;
         this.streamsProducer = streamsProducer;
@@ -131,15 +131,15 @@ public class RecordCollectorImpl implements RecordCollector {
      */
     @Override
     public <K, V> void send(final String topic,
-                            final K key,
-                            final V value,
-                            final Headers headers,
-                            final Long timestamp,
-                            final Serializer<K> keySerializer,
-                            final Serializer<V> valueSerializer,
-                            final String processorNodeId,
-                            final InternalProcessorContext<Void, Void> context,
-                            final StreamPartitioner<? super K, ? super V> partitioner) {
+        final K key,
+        final V value,
+        final Headers headers,
+        final Long timestamp,
+        final Serializer<K> keySerializer,
+        final Serializer<V> valueSerializer,
+        final String processorNodeId,
+        final InternalProcessorContext<Void, Void> context,
+        final StreamPartitioner<? super K, ? super V> partitioner) {
 
         if (partitioner != null) {
             final List<PartitionInfo> partitions;
@@ -168,10 +168,10 @@ public class RecordCollectorImpl implements RecordCollector {
                     if (multicastPartitions.isEmpty()) {
                         // If a record is not to be sent to any partition, mark it as a dropped record.
                         log.warn("Skipping record as partitioner returned empty partitions. "
-                                + "topic=[{}]", topic);
+                            + "topic=[{}]", topic);
                         droppedRecordsSensor.record();
                     } else {
-                        for (final int multicastPartition: multicastPartitions) {
+                        for (final int multicastPartition : multicastPartitions) {
                             send(topic, key, value, headers, multicastPartition, timestamp, keySerializer, valueSerializer, processorNodeId, context);
                         }
                     }
@@ -188,15 +188,15 @@ public class RecordCollectorImpl implements RecordCollector {
 
     @Override
     public <K, V> void send(final String topic,
-                            final K key,
-                            final V value,
-                            final Headers headers,
-                            final Integer partition,
-                            final Long timestamp,
-                            final Serializer<K> keySerializer,
-                            final Serializer<V> valueSerializer,
-                            final String processorNodeId,
-                            final InternalProcessorContext<Void, Void> context) {
+        final K key,
+        final V value,
+        final Headers headers,
+        final Integer partition,
+        final Long timestamp,
+        final Serializer<K> keySerializer,
+        final Serializer<V> valueSerializer,
+        final String processorNodeId,
+        final InternalProcessorContext<Void, Void> context) {
         checkForException();
 
         final byte[] keyBytes;
@@ -266,10 +266,10 @@ public class RecordCollectorImpl implements RecordCollector {
     }
 
     public <K, V> void send(final K key,
-                            final V value,
-                            final String processorNodeId,
-                            final InternalProcessorContext<?, ?> context,
-                            final ProducerRecord<byte[], byte[]> serializedRecord) {
+        final V value,
+        final String processorNodeId,
+        final InternalProcessorContext<?, ?> context,
+        final ProducerRecord<byte[], byte[]> serializedRecord) {
 
         streamsProducer.send(serializedRecord, (metadata, exception) -> {
             try {
@@ -330,15 +330,15 @@ public class RecordCollectorImpl implements RecordCollector {
     }
 
     private <K, V> void handleException(final ProductionExceptionHandler.SerializationExceptionOrigin origin,
-                                        final String topic,
-                                        final K key,
-                                        final V value,
-                                        final Headers headers,
-                                        final Integer partition,
-                                        final Long timestamp,
-                                        final String processorNodeId,
-                                        final InternalProcessorContext<?, ?> context,
-                                        final Exception serializationException) {
+        final String topic,
+        final K key,
+        final V value,
+        final Headers headers,
+        final Integer partition,
+        final Long timestamp,
+        final String processorNodeId,
+        final InternalProcessorContext<?, ?> context,
+        final Exception serializationException) {
         log.debug(String.format("Error serializing record for topic %s", topic), serializationException);
 
         final ProducerRecord<K, V> record = new ProducerRecord<>(topic, partition, timestamp, key, value, headers);
@@ -377,11 +377,11 @@ public class RecordCollectorImpl implements RecordCollector {
         if (!deadLetterQueueRecords.isEmpty()) {
             for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
                 this.send(
-                        deadLetterQueueRecord.key(),
-                        deadLetterQueueRecord.value(),
-                        processorNodeId,
-                        context,
-                        deadLetterQueueRecord
+                    deadLetterQueueRecord.key(),
+                    deadLetterQueueRecord.value(),
+                    processorNodeId,
+                    context,
+                    deadLetterQueueRecord
                 );
             }
         }
@@ -398,16 +398,16 @@ public class RecordCollectorImpl implements RecordCollector {
         }
 
         log.warn("Unable to serialize record, continue processing. " +
-                    "ProducerRecord(topic=[{}], partition=[{}], timestamp=[{}])",
-                topic,
-                partition,
-                timestamp);
+            "ProducerRecord(topic=[{}], partition=[{}], timestamp=[{}])",
+            topic,
+            partition,
+            timestamp);
 
         droppedRecordsSensor.record();
     }
 
     private DefaultErrorHandlerContext errorHandlerContext(final InternalProcessorContext<?, ?> context,
-                                                           final String processorNodeId) {
+        final String processorNodeId) {
         final RecordContext recordContext = context != null ? context.recordContext() : null;
 
         return recordContext != null ?
@@ -438,42 +438,42 @@ public class RecordCollectorImpl implements RecordCollector {
     }
 
     private <KV> StreamsException createStreamsExceptionForClassCastException(final ProductionExceptionHandler.SerializationExceptionOrigin origin,
-                                                                              final String topic,
-                                                                              final KV keyOrValue,
-                                                                              final Serializer<KV> keyOrValueSerializer,
-                                                                              final ClassCastException exception) {
+        final String topic,
+        final KV keyOrValue,
+        final Serializer<KV> keyOrValueSerializer,
+        final ClassCastException exception) {
         final String keyOrValueClass = keyOrValue == null
             ? String.format("unknown because %s is null", origin.toString().toLowerCase(Locale.ROOT)) : keyOrValue.getClass().getName();
 
         return new StreamsException(
             MessageFormat.format(
                 String.format(
-                        "ClassCastException while producing data to topic %s. " +
-                            "The {0} serializer %s is not compatible to the actual {0} type: %s. " +
-                            "Change the default {0} serde in StreamConfig or provide the correct {0} serde via method parameters " +
-                            "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with " +
-                            "`Produced.{0}Serde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).",
-                        topic,
-                        keyOrValueSerializer.getClass().getName(),
-                        keyOrValueClass),
+                    "ClassCastException while producing data to topic %s. " +
+                        "The {0} serializer %s is not compatible to the actual {0} type: %s. " +
+                        "Change the default {0} serde in StreamConfig or provide the correct {0} serde via method parameters " +
+                        "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with " +
+                        "`Produced.{0}Serde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).",
+                    topic,
+                    keyOrValueSerializer.getClass().getName(),
+                    keyOrValueClass),
                 origin.toString().toLowerCase(Locale.ROOT)),
-                exception);
+            exception);
     }
 
     private void recordSendError(final String topic,
-                                 final Exception productionException,
-                                 final ProducerRecord<byte[], byte[]> serializedRecord,
-                                 final InternalProcessorContext<?, ?> context,
-                                 final String processorNodeId) {
+        final Exception productionException,
+        final ProducerRecord<byte[], byte[]> serializedRecord,
+        final InternalProcessorContext<?, ?> context,
+        final String processorNodeId) {
         String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, productionException.toString());
 
         if (isFatalException(productionException)) {
             errorMessage += "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.";
             sendException.set(new StreamsException(errorMessage, productionException));
         } else if (productionException instanceof ProducerFencedException ||
-                productionException instanceof InvalidPidMappingException ||
-                productionException instanceof InvalidProducerEpochException ||
-                productionException instanceof OutOfOrderSequenceException) {
+            productionException instanceof InvalidPidMappingException ||
+            productionException instanceof InvalidProducerEpochException ||
+            productionException instanceof OutOfOrderSequenceException) {
             errorMessage += "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced, " +
                 "indicating the task may be migrated out";
             sendException.set(new TaskMigratedException(errorMessage, productionException));
@@ -506,7 +506,7 @@ public class RecordCollectorImpl implements RecordCollector {
                     "Fatal user code error in production error callback",
                     processorNodeId,
                     fatalUserException
-                    )
+                )
                 );
                 return;
             }
@@ -515,11 +515,11 @@ public class RecordCollectorImpl implements RecordCollector {
             if (!deadLetterQueueRecords.isEmpty()) {
                 for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
                     this.send(
-                            deadLetterQueueRecord.key(),
-                            deadLetterQueueRecord.value(),
-                            processorNodeId,
-                            context,
-                            deadLetterQueueRecord
+                        deadLetterQueueRecord.key(),
+                        deadLetterQueueRecord.value(),
+                        processorNodeId,
+                        context,
+                        deadLetterQueueRecord
                     );
                 }
             }

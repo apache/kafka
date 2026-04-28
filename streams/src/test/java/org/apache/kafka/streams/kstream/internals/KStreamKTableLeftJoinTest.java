@@ -130,7 +130,7 @@ public class KStreamKTableLeftJoinTest {
         // push two items to the primary stream. the table is empty
         pushToStream(2, "X");
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+null", 0),
-                new KeyValueTimestamp<>(1, "X1+null", 1));
+            new KeyValueTimestamp<>(1, "X1+null", 1));
     }
 
     @ParameterizedTest
@@ -140,7 +140,7 @@ public class KStreamKTableLeftJoinTest {
         // push two items to the primary stream. the table is empty
         pushToStream(2, "X");
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+null", 0),
-                new KeyValueTimestamp<>(1, "X1+null", 1));
+            new KeyValueTimestamp<>(1, "X1+null", 1));
 
         // push two items to the table. this should not produce any item.
         pushToTable(2, "Y");
@@ -149,9 +149,9 @@ public class KStreamKTableLeftJoinTest {
         // push all four items to the primary stream. this should produce four items.
         pushToStream(4, "X");
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+Y0", 0),
-                new KeyValueTimestamp<>(1, "X1+Y1", 1),
-                new KeyValueTimestamp<>(2, "X2+null", 2),
-                new KeyValueTimestamp<>(3, "X3+null", 3));
+            new KeyValueTimestamp<>(1, "X1+Y1", 1),
+            new KeyValueTimestamp<>(2, "X2+null", 2),
+            new KeyValueTimestamp<>(3, "X3+null", 3));
 
         // push all items to the table. this should not produce any item
         pushToTable(4, "YY");
@@ -160,9 +160,9 @@ public class KStreamKTableLeftJoinTest {
         // push all four items to the primary stream. this should produce four items.
         pushToStream(4, "X");
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+YY0", 0),
-                new KeyValueTimestamp<>(1, "X1+YY1", 1),
-                new KeyValueTimestamp<>(2, "X2+YY2", 2),
-                new KeyValueTimestamp<>(3, "X3+YY3", 3));
+            new KeyValueTimestamp<>(1, "X1+YY1", 1),
+            new KeyValueTimestamp<>(2, "X2+YY2", 2),
+            new KeyValueTimestamp<>(3, "X3+YY3", 3));
 
         // push all items to the table. this should not produce any item
         pushToTable(4, "YYY");
@@ -180,9 +180,9 @@ public class KStreamKTableLeftJoinTest {
         // push all four items to the primary stream. this should produce four items.
         pushToStream(4, "X");
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+Y0", 0),
-                new KeyValueTimestamp<>(1, "X1+Y1", 1),
-                new KeyValueTimestamp<>(2, "X2+null", 2),
-                new KeyValueTimestamp<>(3, "X3+null", 3));
+            new KeyValueTimestamp<>(1, "X1+Y1", 1),
+            new KeyValueTimestamp<>(2, "X2+null", 2),
+            new KeyValueTimestamp<>(3, "X3+null", 3));
 
     }
 
@@ -197,9 +197,9 @@ public class KStreamKTableLeftJoinTest {
         // push all four items to the primary stream. this should produce four items.
         pushToStream(4, "X");
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0+Y0", 0),
-                new KeyValueTimestamp<>(1, "X1+Y1", 1),
-                new KeyValueTimestamp<>(2, "X2+Y2", 2),
-                new KeyValueTimestamp<>(3, "X3+Y3", 3));
+            new KeyValueTimestamp<>(1, "X1+Y1", 1),
+            new KeyValueTimestamp<>(2, "X2+Y2", 2),
+            new KeyValueTimestamp<>(3, "X3+Y3", 3));
 
         // push two items with null to the table as deletes. this should not produce any item.
         pushNullValueToTable(2);
@@ -208,9 +208,9 @@ public class KStreamKTableLeftJoinTest {
         // push all four items to the primary stream. this should produce four items.
         pushToStream(4, "XX");
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "XX0+null", 0),
-                new KeyValueTimestamp<>(1, "XX1+null", 1),
-                new KeyValueTimestamp<>(2, "XX2+Y2", 2),
-                new KeyValueTimestamp<>(3, "XX3+Y3", 3));
+            new KeyValueTimestamp<>(1, "XX1+null", 1),
+            new KeyValueTimestamp<>(2, "XX2+Y2", 2),
+            new KeyValueTimestamp<>(3, "XX3+Y3", 3));
     }
 
     @ParameterizedTest

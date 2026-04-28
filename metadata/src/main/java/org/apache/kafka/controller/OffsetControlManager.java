@@ -78,9 +78,9 @@ class OffsetControlManager {
                 metrics = new QuorumControllerMetrics(Optional.empty(), time, 0);
             }
             return new OffsetControlManager(logContext,
-                    snapshotRegistry,
-                    metrics,
-                    time);
+                snapshotRegistry,
+                metrics,
+                time);
         }
     }
 
@@ -244,7 +244,7 @@ class OffsetControlManager {
         }
         if (newNextWriteOffset < 0) {
             throw new RuntimeException("Invalid negative newNextWriteOffset " +
-                    newNextWriteOffset + ".");
+                newNextWriteOffset + ".");
         }
         // Before switching to active, create an in-memory snapshot at the last committed
         // offset. This is required because the active controller assumes that there is always
@@ -266,7 +266,7 @@ class OffsetControlManager {
         this.nextWriteOffset = -1L;
         if (!snapshotRegistry.hasSnapshot(lastStableOffset)) {
             throw new RuntimeException("Unable to reset to last stable offset " + lastStableOffset +
-                    ". No in-memory snapshot found for this offset.");
+                ". No in-memory snapshot found for this offset.");
         }
         snapshotRegistry.revertToSnapshot(lastStableOffset);
     }
@@ -340,13 +340,13 @@ class OffsetControlManager {
     void beginLoadSnapshot(OffsetAndEpoch snapshotId) {
         if (currentSnapshotId != null) {
             throw new RuntimeException("Can't begin reading snapshot for " + snapshotId +
-                    ", because we are already reading " + currentSnapshotId);
+                ", because we are already reading " + currentSnapshotId);
         }
         this.currentSnapshotId = snapshotId;
         this.currentSnapshotName = Snapshots.filenameFromSnapshotId(snapshotId);
         log.info("Starting to load snapshot {}. Previous lastCommittedOffset was {}. Previous " +
-                "transactionStartOffset was {}.", currentSnapshotName, lastCommittedOffset,
-                transactionStartOffset);
+            "transactionStartOffset was {}.", currentSnapshotName, lastCommittedOffset,
+            transactionStartOffset);
         this.snapshotRegistry.reset();
         this.lastCommittedOffset = -1L;
         this.lastCommittedEpoch = -1;
@@ -363,7 +363,7 @@ class OffsetControlManager {
     void endLoadSnapshot(long timestamp) {
         if (currentSnapshotId == null) {
             throw new RuntimeException("Can't end loading snapshot, because there is no " +
-                    "current snapshot.");
+                "current snapshot.");
         }
         log.info("Successfully loaded snapshot {}.", currentSnapshotName);
         this.snapshotRegistry.idempotentCreateSnapshot(currentSnapshotId.offset());
@@ -398,7 +398,7 @@ class OffsetControlManager {
         }
         if (transactionStartOffset == -1L) {
             throw new RuntimeException("Can't replay an EndTransactionRecord at " + offset +
-                    " because there is no open transaction.");
+                " because there is no open transaction.");
         }
         transactionStartOffset = -1L;
         log.info("Replayed {} at offset {}.", message, offset);
@@ -410,12 +410,12 @@ class OffsetControlManager {
         }
         if (transactionStartOffset == -1L) {
             throw new RuntimeException("Can't replay an AbortTransactionRecord at " + offset +
-                    " because there is no open transaction.");
+                " because there is no open transaction.");
         }
         long preTransactionOffset = transactionStartOffset - 1;
         snapshotRegistry.revertToSnapshot(preTransactionOffset);
         transactionStartOffset = -1L;
         log.info("Replayed {} at offset {}. Reverted to offset {}.",
-                message, offset, preTransactionOffset);
+            message, offset, preTransactionOffset);
     }
 }

@@ -55,7 +55,7 @@ public class HistogramTest {
     @Test
     public void testHistogramPercentiles() {
         Histogram histogram = createHistogram(100, 1, 2, 3, 4, 5, 6, 80, 90);
-        float[] percentiles = new float[] {0.5f, 0.90f, 0.99f, 1f};
+        float[] percentiles = new float[]{0.5f, 0.90f, 0.99f, 1f};
         Histogram.Summary summary = histogram.summarize(percentiles);
         assertEquals(8, summary.numSamples());
         assertEquals(4, summary.percentiles().get(0).value());
@@ -66,18 +66,18 @@ public class HistogramTest {
         histogram.add(30);
         histogram.add(30);
 
-        summary = histogram.summarize(new float[] {0.5f});
+        summary = histogram.summarize(new float[]{0.5f});
         assertEquals(11, summary.numSamples());
         assertEquals(5, summary.percentiles().get(0).value());
 
         Histogram empty = createHistogram(100);
-        summary = empty.summarize(new float[] {0.5f});
+        summary = empty.summarize(new float[]{0.5f});
         assertEquals(0, summary.percentiles().get(0).value());
 
         histogram = createHistogram(1000);
         histogram.add(100);
         histogram.add(200);
-        summary = histogram.summarize(new float[] {0f, 0.5f, 1.0f});
+        summary = histogram.summarize(new float[]{0f, 0.5f, 1.0f});
         assertEquals(0, summary.percentiles().get(0).value());
         assertEquals(100, summary.percentiles().get(1).value());
         assertEquals(200, summary.percentiles().get(2).value());

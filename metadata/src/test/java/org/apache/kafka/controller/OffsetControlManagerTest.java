@@ -74,7 +74,7 @@ public class OffsetControlManagerTest {
         assertEquals("Can't activate already active OffsetControlManager.",
             assertThrows(RuntimeException.class,
                 () -> offsetControl.activate(2000L)).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -83,7 +83,7 @@ public class OffsetControlManagerTest {
         assertEquals("Invalid negative newNextWriteOffset -2.",
             assertThrows(RuntimeException.class,
                 () -> offsetControl.activate(-2)).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -154,8 +154,8 @@ public class OffsetControlManagerTest {
     public void testHandleLoadSnapshot() {
         TrackingSnapshotRegistry snapshotRegistry = new TrackingSnapshotRegistry(new LogContext());
         OffsetControlManager offsetControl = new OffsetControlManager.Builder().
-                setSnapshotRegistry(snapshotRegistry).
-                build();
+            setSnapshotRegistry(snapshotRegistry).
+            build();
 
         offsetControl.beginLoadSnapshot(new OffsetAndEpoch(4000L, 300));
         assertEquals(List.of("snapshot[-1]", "reset"), snapshotRegistry.operations());
@@ -186,7 +186,7 @@ public class OffsetControlManagerTest {
         assertEquals("BeginTransactionRecord cannot appear within a snapshot.",
             assertThrows(RuntimeException.class,
                 () -> offsetControl.replay(new BeginTransactionRecord(), 1000L)).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -196,7 +196,7 @@ public class OffsetControlManagerTest {
         assertEquals("EndTransactionRecord cannot appear within a snapshot.",
             assertThrows(RuntimeException.class,
                 () -> offsetControl.replay(new EndTransactionRecord(), 1000L)).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -206,7 +206,7 @@ public class OffsetControlManagerTest {
         assertEquals("AbortTransactionRecord cannot appear within a snapshot.",
             assertThrows(RuntimeException.class,
                 () -> offsetControl.replay(new AbortTransactionRecord(), 1000L)).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -215,7 +215,7 @@ public class OffsetControlManagerTest {
         assertEquals("Can't end loading snapshot, because there is no current snapshot.",
             assertThrows(RuntimeException.class,
                 () -> offsetControl.endLoadSnapshot(1000L)).
-                    getMessage());
+                getMessage());
     }
 
     @ParameterizedTest
@@ -263,6 +263,6 @@ public class OffsetControlManagerTest {
         offsetControl.beginLoadSnapshot(new OffsetAndEpoch(4000L, 300));
         assertEquals(-1L, offsetControl.transactionStartOffset());
         assertEquals(List.of("snapshot[-1]", "snapshot[1499]", "reset"),
-                snapshotRegistry.operations());
+            snapshotRegistry.operations());
     }
 }

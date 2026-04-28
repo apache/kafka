@@ -34,10 +34,10 @@ public class StreamTableJoinNode<K, V, VOut> extends GraphNode {
     private final Duration gracePeriod;
 
     public StreamTableJoinNode(final String nodeName,
-                               final ProcessorParameters<K, V, K, VOut> processorParameters,
-                               final String[] storeNames,
-                               final String otherJoinSideNodeName,
-                               final Duration gracePeriod) {
+        final ProcessorParameters<K, V, K, VOut> processorParameters,
+        final String[] storeNames,
+        final String otherJoinSideNodeName,
+        final Duration gracePeriod) {
         super(nodeName);
 
         // in the case of Stream-Table join the state stores associated with the KTable
@@ -50,10 +50,10 @@ public class StreamTableJoinNode<K, V, VOut> extends GraphNode {
     @Override
     public String toString() {
         return "StreamTableJoinNode{" +
-               "storeNames=" + Arrays.toString(storeNames) +
-               ", processorParameters=" + processorParameters +
-               ", otherJoinSideNodeName='" + otherJoinSideNodeName + '\'' +
-               "} " + super.toString();
+            "storeNames=" + Arrays.toString(storeNames) +
+            ", processorParameters=" + processorParameters +
+            ", otherJoinSideNodeName='" + otherJoinSideNodeName + '\'' +
+            "} " + super.toString();
     }
 
     @Override

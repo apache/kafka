@@ -114,7 +114,7 @@ public class RocksDBMetricsRecorder {
     private boolean singleCache = true;
 
     public RocksDBMetricsRecorder(final String metricsScope,
-                                  final String storeName) {
+        final String storeName) {
         this.metricsScope = metricsScope;
         this.storeName = storeName;
         final LogContext logContext = new LogContext(String.format("[RocksDB Metrics Recorder for %s] ", storeName));
@@ -133,7 +133,7 @@ public class RocksDBMetricsRecorder {
      * The initialisation of the metrics recorder is idempotent.
      */
     public void init(final StreamsMetricsImpl streamsMetrics,
-                     final TaskId taskId) {
+        final TaskId taskId) {
         Objects.requireNonNull(streamsMetrics, "Streams metrics must not be null");
         Objects.requireNonNull(taskId, "task ID must not be null");
         if (this.taskId != null && !this.taskId.equals(taskId)) {
@@ -154,9 +154,9 @@ public class RocksDBMetricsRecorder {
     }
 
     public void addValueProviders(final String segmentName,
-                                  final RocksDB db,
-                                  final Cache cache,
-                                  final Statistics statistics) {
+        final RocksDB db,
+        final Cache cache,
+        final Statistics statistics) {
         if (storeToValueProviders.isEmpty()) {
             logger.debug("Adding metrics recorder of task {} to metrics recording trigger", taskId);
             streamsMetrics.rocksDBMetricsRecordingTrigger().addMetricsRecorder(this);
@@ -171,9 +171,9 @@ public class RocksDBMetricsRecorder {
     }
 
     private void verifyDbAndCacheAndStatistics(final String segmentName,
-                                               final RocksDB db,
-                                               final Cache cache,
-                                               final Statistics statistics) {
+        final RocksDB db,
+        final Cache cache,
+        final Statistics statistics) {
         for (final DbAndCacheAndStatistics valueProviders : storeToValueProviders.values()) {
             verifyConsistencyOfValueProvidersAcrossSegments(segmentName, statistics, valueProviders.statistics, "statistics");
             verifyConsistencyOfValueProvidersAcrossSegments(segmentName, cache, valueProviders.cache, "cache");
@@ -193,9 +193,9 @@ public class RocksDBMetricsRecorder {
     }
 
     private void verifyConsistencyOfValueProvidersAcrossSegments(final String segmentName,
-                                                                 final Object newValueProvider,
-                                                                 final Object oldValueProvider,
-                                                                 final String valueProviderName) {
+        final Object newValueProvider,
+        final Object oldValueProvider,
+        final String valueProviderName) {
         if (newValueProvider == null && oldValueProvider != null ||
             newValueProvider != null && oldValueProvider == null) {
 
@@ -234,7 +234,7 @@ public class RocksDBMetricsRecorder {
     }
 
     private void initGauges(final StreamsMetricsImpl streamsMetrics,
-                            final RocksDBMetricContext metricContext) {
+        final RocksDBMetricContext metricContext) {
         RocksDBMetrics.addNumImmutableMemTableMetric(
             streamsMetrics,
             metricContext,

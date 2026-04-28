@@ -94,12 +94,12 @@ public class AbstractPartitionAssignorTest {
         List<MemberInfo> memberInfoList = new ArrayList<>();
         List<MemberInfo> staticMemberList = new ArrayList<>();
         List<MemberInfo> dynamicMemberList = new ArrayList<>();
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0;i < 100;i++) {
             // Need to make sure all the ids are defined as 3-digits otherwise
             // the comparison result will break.
             String id = Integer.toString(i + 100);
             Optional<String> groupInstanceId = rand.nextInt(bound) < bound / 2 ?
-                                                       Optional.of(id) : Optional.empty();
+                Optional.of(id) : Optional.empty();
             MemberInfo m = new MemberInfo(id, groupInstanceId);
             memberInfoList.add(m);
             if (m.groupInstanceId.isPresent()) {
@@ -116,12 +116,12 @@ public class AbstractPartitionAssignorTest {
     @Test
     public void testUseRackAwareAssignment() {
         AbstractPartitionAssignor assignor = new RangeAssignor();
-        String[] racks = new String[] {"a", "b", "c"};
+        String[] racks = new String[]{"a", "b", "c"};
         Set<String> allRacks = Set.of(racks);
         Set<String> twoRacks = Set.of("a", "b");
         Map<TopicPartition, Set<String>> partitionsOnAllRacks = new HashMap<>();
         Map<TopicPartition, Set<String>> partitionsOnSubsetOfRacks = new HashMap<>();
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0;i < 10;i++) {
             TopicPartition tp = new TopicPartition("topic", i);
             partitionsOnAllRacks.put(tp, allRacks);
             partitionsOnSubsetOfRacks.put(tp, Set.of(racks[i % racks.length]));
@@ -150,7 +150,7 @@ public class AbstractPartitionAssignorTest {
 
     public static List<String> racks(int numRacks) {
         List<String> racks = new ArrayList<>(numRacks);
-        for (int i = 0; i < numRacks; i++)
+        for (int i = 0;i < numRacks;i++)
             racks.add(ALL_RACKS[i % ALL_RACKS.length]);
         return racks;
     }
@@ -160,55 +160,55 @@ public class AbstractPartitionAssignorTest {
     }
 
     public static void verifyRackAssignment(AbstractPartitionAssignor assignor,
-                                            Map<String, Integer> numPartitionsPerTopic,
-                                            int replicationFactor,
-                                            List<String> brokerRacks,
-                                            List<String> consumerRacks,
-                                            List<List<String>> consumerTopics,
-                                            List<String> expectedAssignments,
-                                            int numPartitionsWithRackMismatch) {
+        Map<String, Integer> numPartitionsPerTopic,
+        int replicationFactor,
+        List<String> brokerRacks,
+        List<String> consumerRacks,
+        List<List<String>> consumerTopics,
+        List<String> expectedAssignments,
+        int numPartitionsWithRackMismatch) {
         verifyRackAssignment(assignor, numPartitionsPerTopic, replicationFactor,
-                brokerRacks, consumerRacks, consumerTopics, Collections.emptyList(),
-                expectedAssignments, numPartitionsWithRackMismatch);
+            brokerRacks, consumerRacks, consumerTopics, Collections.emptyList(),
+            expectedAssignments, numPartitionsWithRackMismatch);
 
     }
 
     public static void verifyRackAssignment(AbstractPartitionAssignor assignor,
-                                            Map<String, Integer> numPartitionsPerTopic,
-                                            int replicationFactor,
-                                            List<String> brokerRacks,
-                                            List<String> consumerRacks,
-                                            List<List<String>> consumerTopics,
-                                            List<String> consumerOwnedPartitions,
-                                            List<String> expectedAssignments,
-                                            int numPartitionsWithRackMismatch) {
+        Map<String, Integer> numPartitionsPerTopic,
+        int replicationFactor,
+        List<String> brokerRacks,
+        List<String> consumerRacks,
+        List<List<String>> consumerTopics,
+        List<String> consumerOwnedPartitions,
+        List<String> expectedAssignments,
+        int numPartitionsWithRackMismatch) {
         List<String> consumers = IntStream.range(0, consumerRacks.size()).mapToObj(i -> "consumer" + i).collect(Collectors.toList());
         List<Subscription> subscriptions = subscriptions(consumerTopics, consumerRacks, consumerOwnedPartitions);
         Map<String, List<PartitionInfo>> partitionsPerTopic = partitionsPerTopic(numPartitionsPerTopic, replicationFactor, brokerRacks);
 
         Map<String, Subscription> subscriptionsByConsumer = new HashMap<>(consumers.size());
-        for (int i = 0; i < subscriptions.size(); i++)
+        for (int i = 0;i < subscriptions.size();i++)
             subscriptionsByConsumer.put(consumers.get(i), subscriptions.get(i));
 
         Map<String, String> expectedAssignment = new HashMap<>(consumers.size());
-        for (int i = 0; i < consumers.size(); i++)
+        for (int i = 0;i < consumers.size();i++)
             expectedAssignment.put(consumers.get(i), expectedAssignments.get(i));
 
         Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic, subscriptionsByConsumer);
         Map<String, String> actualAssignment = assignment.entrySet().stream()
-                .collect(Collectors.toMap(Entry::getKey, e -> toSortedString(e.getValue())));
+            .collect(Collectors.toMap(Entry::getKey, e -> toSortedString(e.getValue())));
         assertEquals(expectedAssignment, actualAssignment);
 
         if (numPartitionsWithRackMismatch >= 0) {
             List<TopicPartition> numMismatched = new ArrayList<>();
-            for (int i = 0; i < consumers.size(); i++) {
+            for (int i = 0;i < consumers.size();i++) {
                 String rack = consumerRacks.get(i);
                 if (rack != null) {
                     List<TopicPartition> partitions = assignment.get(consumers.get(i));
                     for (TopicPartition tp : partitions) {
                         PartitionInfo partitionInfo = partitionsPerTopic.get(tp.topic()).stream()
-                                .filter(p -> p.topic().equals(tp.topic()) && p.partition() == tp.partition())
-                                .findFirst().get();
+                            .filter(p -> p.topic().equals(tp.topic()) && p.partition() == tp.partition())
+                            .findFirst().get();
                         if (Arrays.stream(partitionInfo.replicas()).noneMatch(n -> rack.equals(n.rack())))
                             numMismatched.add(tp);
                     }
@@ -223,20 +223,20 @@ public class AbstractPartitionAssignorTest {
     }
 
     private static List<Subscription> subscriptions(List<List<String>> consumerTopics,
-                                                    List<String> consumerRacks,
-                                                    List<String> consumerOwnedPartitions) {
+        List<String> consumerRacks,
+        List<String> consumerOwnedPartitions) {
         List<List<TopicPartition>> ownedPartitions = ownedPartitions(consumerOwnedPartitions, consumerTopics.size());
         List<Subscription> subscriptions = new ArrayList<>(consumerTopics.size());
-        for (int i = 0; i < consumerTopics.size(); i++) {
+        for (int i = 0;i < consumerTopics.size();i++) {
             subscriptions.add(new Subscription(consumerTopics.get(i), null, ownedPartitions.get(i),
-                    DEFAULT_GENERATION, Optional.ofNullable(consumerRacks.get(i))));
+                DEFAULT_GENERATION, Optional.ofNullable(consumerRacks.get(i))));
         }
         return subscriptions;
     }
 
     private static List<List<TopicPartition>> ownedPartitions(List<String> consumerOwnedPartitions, int numConsumers) {
         List<List<TopicPartition>> owedPartitions = new ArrayList<>(numConsumers);
-        for (int i = 0; i < numConsumers; i++) {
+        for (int i = 0;i < numConsumers;i++) {
             List<TopicPartition> owned = Collections.emptyList();
             if (consumerOwnedPartitions == null || consumerOwnedPartitions.size() <= i)
                 owedPartitions.add(owned);
@@ -255,8 +255,8 @@ public class AbstractPartitionAssignorTest {
     }
 
     private static Map<String, List<PartitionInfo>> partitionsPerTopic(Map<String, Integer> numPartitionsPerTopic,
-                                                                       int replicationFactor,
-                                                                       List<String> brokerRacks) {
+        int replicationFactor,
+        List<String> brokerRacks) {
         Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
         int nextIndex = 0;
         // Wrap with TreeMap to ensure deterministic iteration order, since nextIndex
@@ -273,13 +273,13 @@ public class AbstractPartitionAssignorTest {
     private static List<PartitionInfo> partitionInfos(String topic, int numberOfPartitions, int replicationFactor, List<String> brokerRacks, int nextNodeIndex) {
         int numBrokers = brokerRacks.size();
         List<Node> nodes = new ArrayList<>(numBrokers);
-        for (int i = 0; i < brokerRacks.size(); i++) {
+        for (int i = 0;i < brokerRacks.size();i++) {
             nodes.add(new Node(i, "", i, brokerRacks.get(i)));
         }
         List<PartitionInfo> partitionInfos = new ArrayList<>(numberOfPartitions);
-        for (int i = 0; i < numberOfPartitions; i++) {
+        for (int i = 0;i < numberOfPartitions;i++) {
             Node[] replicas = new Node[replicationFactor];
-            for (int j = 0; j < replicationFactor; j++) {
+            for (int j = 0;j < replicationFactor;j++) {
                 replicas[j] = nodes.get((i + j + nextNodeIndex) % nodes.size());
             }
             partitionInfos.add(new PartitionInfo(topic, i, replicas[0], replicas, replicas));
@@ -290,7 +290,7 @@ public class AbstractPartitionAssignorTest {
     public static List<PartitionInfo> partitionInfos(String topic, int numberOfPartitions, int replicationFactor, int numBrokerRacks, int nextNodeIndex) {
         int numBrokers = numBrokerRacks <= 0 ? replicationFactor : numBrokerRacks * replicationFactor;
         List<String> brokerRacks = new ArrayList<>(numBrokers);
-        for (int i = 0; i < numBrokers; i++) {
+        for (int i = 0;i < numBrokers;i++) {
             brokerRacks.add(numBrokerRacks <= 0 ? null : ALL_RACKS[i % numBrokerRacks]);
         }
         return partitionInfos(topic, numberOfPartitions, replicationFactor, brokerRacks, nextNodeIndex);

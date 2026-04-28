@@ -719,10 +719,10 @@ public class QuorumStateTest {
         assertEquals(otherNodeKey, votedState.votedKey().get());
 
         assertEquals(
-                ElectionState.withVotedCandidate(
-                    5,
-                    persistedVotedKey(otherNodeKey, kraftVersion),
-                    persistedVoters(voters.voterIds(), kraftVersion)
+            ElectionState.withVotedCandidate(
+                5,
+                persistedVotedKey(otherNodeKey, kraftVersion),
+                persistedVoters(voters.voterIds(), kraftVersion)
             ),
             store.readElectionState().get()
         );
@@ -2225,7 +2225,7 @@ public class QuorumStateTest {
 
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
-    public void testCandidateToLeader(KRaftVersion kraftVersion)  {
+    public void testCandidateToLeader(KRaftVersion kraftVersion) {
         VoterSet voters = localStandaloneVoterSet();
         assertEquals(Optional.empty(), store.readElectionState());
 

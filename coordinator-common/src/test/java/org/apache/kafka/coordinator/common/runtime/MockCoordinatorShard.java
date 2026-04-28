@@ -32,20 +32,20 @@ import java.util.stream.Collectors;
  */
 public class MockCoordinatorShard implements CoordinatorShard<String> {
     record RecordAndMetadata(
-        long offset,
-        long producerId,
-        short producerEpoch,
-        String record
+            long offset,
+            long producerId,
+            short producerEpoch,
+            String record
     ) {
         public RecordAndMetadata(
-            long offset,
-            String record
+                long offset,
+                String record
         ) {
             this(
-                offset,
-                RecordBatch.NO_PRODUCER_ID,
-                RecordBatch.NO_PRODUCER_EPOCH,
-                record
+                    offset,
+                    RecordBatch.NO_PRODUCER_ID,
+                    RecordBatch.NO_PRODUCER_EPOCH,
+                    record
             );
         }
     }
@@ -57,16 +57,16 @@ public class MockCoordinatorShard implements CoordinatorShard<String> {
     private final CoordinatorExecutor<String> executor;
 
     MockCoordinatorShard(
-        SnapshotRegistry snapshotRegistry,
-        CoordinatorTimer<String> timer
+            SnapshotRegistry snapshotRegistry,
+            CoordinatorTimer<String> timer
     ) {
         this(snapshotRegistry, timer, null);
     }
 
     MockCoordinatorShard(
-        SnapshotRegistry snapshotRegistry,
-        CoordinatorTimer<String> timer,
-        CoordinatorExecutor<String> executor
+            SnapshotRegistry snapshotRegistry,
+            CoordinatorTimer<String> timer,
+            CoordinatorExecutor<String> executor
     ) {
         this.snapshotRegistry = snapshotRegistry;
         this.records = new TimelineHashSet<>(snapshotRegistry, 0);
@@ -77,32 +77,32 @@ public class MockCoordinatorShard implements CoordinatorShard<String> {
 
     @Override
     public void replay(
-        long offset,
-        long producerId,
-        short producerEpoch,
-        String record
+            long offset,
+            long producerId,
+            short producerEpoch,
+            String record
     ) throws RuntimeException {
         RecordAndMetadata recordAndMetadata = new RecordAndMetadata(
-            offset,
-            producerId,
-            producerEpoch,
-            record
+                offset,
+                producerId,
+                producerEpoch,
+                record
         );
 
         if (producerId == RecordBatch.NO_PRODUCER_ID) {
             records.add(recordAndMetadata);
         } else {
             pendingRecords
-                .computeIfAbsent(producerId, __ -> new TimelineHashSet<>(snapshotRegistry, 0))
-                .add(recordAndMetadata);
+                    .computeIfAbsent(producerId, __ -> new TimelineHashSet<>(snapshotRegistry, 0))
+                    .add(recordAndMetadata);
         }
     }
 
     @Override
     public void replayEndTransactionMarker(
-        long producerId,
-        short producerEpoch,
-        TransactionResult result
+            long producerId,
+            short producerEpoch,
+            TransactionResult result
     ) throws RuntimeException {
         if (result == TransactionResult.COMMIT) {
             TimelineHashSet<RecordAndMetadata> pending = pendingRecords.remove(producerId);
@@ -125,9 +125,9 @@ public class MockCoordinatorShard implements CoordinatorShard<String> {
 
     List<RecordAndMetadata> fullRecords() {
         return records
-            .stream()
-            .sorted(Comparator.comparingLong(record -> record.offset))
-            .toList();
+                .stream()
+                .sorted(Comparator.comparingLong(record -> record.offset))
+                .toList();
     }
 
     CoordinatorTimer<String> timer() {

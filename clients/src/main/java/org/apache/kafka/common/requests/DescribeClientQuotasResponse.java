@@ -89,28 +89,28 @@ public class DescribeClientQuotasResponse extends AbstractResponse {
     }
 
     public static DescribeClientQuotasResponse fromQuotaEntities(Map<ClientQuotaEntity, Map<String, Double>> entities,
-                                                                 int throttleTimeMs) {
+        int throttleTimeMs) {
         List<EntryData> entries = new ArrayList<>(entities.size());
         for (Map.Entry<ClientQuotaEntity, Map<String, Double>> entry : entities.entrySet()) {
             ClientQuotaEntity quotaEntity = entry.getKey();
             List<EntityData> entityData = new ArrayList<>(quotaEntity.entries().size());
             for (Map.Entry<String, String> entityEntry : quotaEntity.entries().entrySet()) {
                 entityData.add(new EntityData()
-                        .setEntityType(entityEntry.getKey())
-                        .setEntityName(entityEntry.getValue()));
+                    .setEntityType(entityEntry.getKey())
+                    .setEntityName(entityEntry.getValue()));
             }
 
             Map<String, Double> quotaValues = entry.getValue();
             List<ValueData> valueData = new ArrayList<>(quotaValues.size());
             for (Map.Entry<String, Double> valuesEntry : entry.getValue().entrySet()) {
                 valueData.add(new ValueData()
-                        .setKey(valuesEntry.getKey())
-                        .setValue(valuesEntry.getValue()));
+                    .setKey(valuesEntry.getKey())
+                    .setValue(valuesEntry.getValue()));
             }
 
             entries.add(new EntryData()
-                    .setEntity(entityData)
-                    .setValues(valueData));
+                .setEntity(entityData)
+                .setValues(valueData));
         }
 
         return new DescribeClientQuotasResponse(new DescribeClientQuotasResponseData()

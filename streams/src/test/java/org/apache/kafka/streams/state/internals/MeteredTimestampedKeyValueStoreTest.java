@@ -95,7 +95,7 @@ public class MeteredTimestampedKeyValueStoreTest {
     private InternalProcessorContext<?, ?> context;
     private MockTime mockTime;
 
-    private static final Map<String, Object> CONFIGS =  mkMap(mkEntry(StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE, APPLICATION_ID));
+    private static final Map<String, Object> CONFIGS = mkMap(mkEntry(StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE, APPLICATION_ID));
 
     private MeteredTimestampedKeyValueStore<String, String> metered;
     private final KeyValue<Bytes, byte[]> byteKeyValueTimestampPair = KeyValue.pair(KEY_BYTES,
@@ -107,17 +107,17 @@ public class MeteredTimestampedKeyValueStoreTest {
     private void setUpWithoutContext() {
         mockTime = new MockTime();
         metered = new MeteredTimestampedKeyValueStore<>(
-                inner,
-                "scope",
-                mockTime,
-                Serdes.String(),
-                new ValueAndTimestampSerde<>(Serdes.String())
+            inner,
+            "scope",
+            mockTime,
+            Serdes.String(),
+            new ValueAndTimestampSerde<>(Serdes.String())
         );
         metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
         tags = mkMap(
-                mkEntry(THREAD_ID_TAG_KEY, threadId),
-                mkEntry("task-id", taskId.toString()),
-                mkEntry(STORE_TYPE + "-state-id", STORE_NAME)
+            mkEntry(THREAD_ID_TAG_KEY, threadId),
+            mkEntry("task-id", taskId.toString()),
+            mkEntry(STORE_TYPE + "-state-id", STORE_NAME)
         );
     }
 
@@ -131,7 +131,7 @@ public class MeteredTimestampedKeyValueStoreTest {
         when(inner.name()).thenReturn(STORE_NAME);
         when(context.appConfigs()).thenReturn(CONFIGS);
     }
-    
+
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void setUpWithExpectSerdes() {
         setUp();
@@ -218,6 +218,7 @@ public class MeteredTimestampedKeyValueStoreTest {
             STORE_NAME
         )));
     }
+
     @Test
     public void shouldWriteBytesToInnerStoreAndRecordPutMetric() {
         setUp();
@@ -355,7 +356,8 @@ public class MeteredTimestampedKeyValueStoreTest {
         assertTrue((Double) commitMetric.metricValue() > 0);
     }
 
-    private interface CachedKeyValueStore extends KeyValueStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> { }
+    private interface CachedKeyValueStore extends KeyValueStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> {
+    }
 
     @SuppressWarnings("unchecked")
     @Test

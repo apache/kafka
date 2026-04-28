@@ -61,7 +61,7 @@ public class OffsetSyncWriterTest {
         assertTrue(offsetSyncWriter.getDelayedOffsetSyncs().containsKey(topicPartition));
         assertEquals(1, offsetSyncWriter.partitionStates().get(topicPartition).lastSyncDownstreamOffset);
     }
-    
+
     @Test
     public void testFirePendingOffsetSyncs() {
         int maxOffsetLag = 1;

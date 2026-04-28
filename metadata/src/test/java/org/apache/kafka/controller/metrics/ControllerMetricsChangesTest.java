@@ -173,8 +173,8 @@ public class ControllerMetricsChangesTest {
         partitions.put(3, fakePartitionRegistration(NON_PREFERRED_LEADER));
         partitions.put(4, fakePartitionRegistration(OFFLINE));
         TopicImage topicImage = new TopicImage("foo",
-                Uuid.fromString("wXtW6pQbTS2CL6PjdRCqVw"),
-                partitions);
+            Uuid.fromString("wXtW6pQbTS2CL6PjdRCqVw"),
+            partitions);
         changes.handleDeletedTopic(topicImage);
         assertEquals(-1, changes.globalTopicsChange());
         assertEquals(-5, changes.globalPartitionsChange());
@@ -193,23 +193,23 @@ public class ControllerMetricsChangesTest {
         ImageWriterOptions options = new ImageWriterOptions.Builder(MetadataVersion.IBP_3_7_IV0).build(); // highest MV for PartitionRecord v0
         TOPIC_DELTA1 = new TopicDelta(new TopicImage("foo", FOO_ID, Map.of()));
         TOPIC_DELTA1.replay((PartitionRecord) fakePartitionRegistration(NORMAL).
-                toRecord(FOO_ID, 0, options).message());
+            toRecord(FOO_ID, 0, options).message());
         TOPIC_DELTA1.replay((PartitionRecord) fakePartitionRegistration(NORMAL).
-                toRecord(FOO_ID, 1, options).message());
+            toRecord(FOO_ID, 1, options).message());
         TOPIC_DELTA1.replay((PartitionRecord) fakePartitionRegistration(NORMAL).
-                toRecord(FOO_ID, 2, options).message());
+            toRecord(FOO_ID, 2, options).message());
         TOPIC_DELTA1.replay((PartitionRecord) fakePartitionRegistration(NON_PREFERRED_LEADER).
-                toRecord(FOO_ID, 3, options).message());
+            toRecord(FOO_ID, 3, options).message());
         TOPIC_DELTA1.replay((PartitionRecord) fakePartitionRegistration(NON_PREFERRED_LEADER).
-                toRecord(FOO_ID, 4, options).message());
+            toRecord(FOO_ID, 4, options).message());
 
         TOPIC_DELTA2 = new TopicDelta(TOPIC_DELTA1.apply());
         TOPIC_DELTA2.replay(new PartitionChangeRecord().
-                setPartitionId(1).
-                setTopicId(FOO_ID).
-                setLeader(1));
+            setPartitionId(1).
+            setTopicId(FOO_ID).
+            setLeader(1));
         TOPIC_DELTA2.replay((PartitionRecord) fakePartitionRegistration(NORMAL).
-                toRecord(FOO_ID, 5, options).message());
+            toRecord(FOO_ID, 5, options).message());
     }
 
     @Test

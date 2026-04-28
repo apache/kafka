@@ -168,7 +168,7 @@ public final class EventHandlerExceptionInfo {
         }
         bld.append(internalException.getClass().getSimpleName());
         externalException.ifPresent(e -> bld.append(" (treated as ")
-                .append(e.getClass().getSimpleName()).append(")"));
+            .append(e.getClass().getSimpleName()).append(")"));
         if (causesFailover()) {
             bld.append(" at epoch ").append(epoch);
         }
@@ -194,11 +194,11 @@ public final class EventHandlerExceptionInfo {
     @Override
     public int hashCode() {
         return Objects.hash(isFault,
-                causesFailover,
-                internalException.getClass().getCanonicalName(),
-                internalException.getMessage(),
-                externalException.orElse(internalException).getClass().getCanonicalName(),
-                externalException.orElse(internalException).getMessage());
+            causesFailover,
+            internalException.getClass().getCanonicalName(),
+            internalException.getMessage(),
+            externalException.orElse(internalException).getClass().getCanonicalName(),
+            externalException.orElse(internalException).getMessage());
     }
 
     @Override
@@ -206,10 +206,10 @@ public final class EventHandlerExceptionInfo {
         if (o == null || !(o.getClass().equals(EventHandlerExceptionInfo.class))) return false;
         EventHandlerExceptionInfo other = (EventHandlerExceptionInfo) o;
         return isFault == other.isFault &&
-                causesFailover == other.causesFailover &&
-                exceptionClassesAndMessagesMatch(internalException, other.internalException) &&
-                exceptionClassesAndMessagesMatch(externalException.orElse(null),
-                        other.externalException.orElse(null));
+            causesFailover == other.causesFailover &&
+            exceptionClassesAndMessagesMatch(internalException, other.internalException) &&
+            exceptionClassesAndMessagesMatch(externalException.orElse(null),
+                other.externalException.orElse(null));
     }
 
     @Override
@@ -219,7 +219,7 @@ public final class EventHandlerExceptionInfo {
             ", causesFailover=" + causesFailover +
             ", internalException.class=" + internalException.getClass().getCanonicalName() +
             ", externalException.class=" + (externalException.isPresent() ?
-                externalException.get().getClass().getCanonicalName() : "(none)") +
+            externalException.get().getClass().getCanonicalName() : "(none)") +
             ")";
     }
 }

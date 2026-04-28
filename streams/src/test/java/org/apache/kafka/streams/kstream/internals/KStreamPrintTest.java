@@ -63,10 +63,10 @@ public class KStreamPrintTest {
     @Test
     public void testPrintStreamWithProvidedKeyValueMapper() {
         final List<KeyValue<Integer, String>> inputRecords = Arrays.asList(
-                new KeyValue<>(0, "zero"),
-                new KeyValue<>(1, "one"),
-                new KeyValue<>(2, "two"),
-                new KeyValue<>(3, "three"));
+            new KeyValue<>(0, "zero"),
+            new KeyValue<>(1, "one"),
+            new KeyValue<>(2, "two"),
+            new KeyValue<>(3, "three"));
 
         final String[] expectedResult = {
             "[test-stream]: 0, zero",
@@ -74,7 +74,7 @@ public class KStreamPrintTest {
             "[test-stream]: 2, two",
             "[test-stream]: 3, three"};
 
-        for (final KeyValue<Integer, String> record: inputRecords) {
+        for (final KeyValue<Integer, String> record : inputRecords) {
             final Record<Integer, String> r = new Record<>(record.key, record.value, 0L);
             printProcessor.process(r);
         }

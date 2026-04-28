@@ -103,14 +103,19 @@ public class LogCleanerIntegrationTest {
 
     private final MockTime time = new MockTime(1400000000000L, 1000L);  // Tue May 13 16:53:20 UTC 2014
     private static final List<TopicPartition> TOPIC_PARTITIONS = List.of(
-        new TopicPartition("log", 0),
-        new TopicPartition("log", 1),
-        new TopicPartition("log", 2)
+            new TopicPartition("log", 0),
+            new TopicPartition("log", 1),
+            new TopicPartition("log", 2)
     );
 
-    private record KeyValueOffset(int key, String value, long firstOffset) { }
-    private record ValueAndRecords(String value, MemoryRecords records) { }
-    private record LogAndMessages(UnifiedLog log, List<KeyValueOffset> messages) { }
+    private record KeyValueOffset(int key, String value, long firstOffset) {
+    }
+
+    private record ValueAndRecords(String value, MemoryRecords records) {
+    }
+
+    private record LogAndMessages(UnifiedLog log, List<KeyValueOffset> messages) {
+    }
 
     @BeforeEach
     public void setup() {
@@ -135,9 +140,9 @@ public class LogCleanerIntegrationTest {
     public void cleanerTest(CompressionType compressionType) throws IOException, InterruptedException {
         Compression codec = Compression.of(compressionType).build();
         cleaner = makeCleaner(TOPIC_PARTITIONS,
-            CLEANER_BACKOFF_MS,
-            MIN_COMPACTION_LAG,
-            SEGMENT_SIZE);
+                CLEANER_BACKOFF_MS,
+                MIN_COMPACTION_LAG,
+                SEGMENT_SIZE);
         UnifiedLog theLog = cleaner.logs().get(TOPIC_PARTITIONS.get(0));
 
         // t = T0
@@ -180,11 +185,11 @@ public class LogCleanerIntegrationTest {
         log.debug("after cleaning the compacted size up to active segment at T0: {}", compactedSize);
         Long lastCleaned = cleaner.cleanerManager().allCleanerCheckpoints().get(new TopicPartition("log", 0));
         assertTrue(lastCleaned >= firstBlock1SegmentBaseOffset,
-            String.format("log cleaner should have processed up to offset %d, but lastCleaned=%d",
-                firstBlock1SegmentBaseOffset, lastCleaned));
+                String.format("log cleaner should have processed up to offset %d, but lastCleaned=%d",
+                        firstBlock1SegmentBaseOffset, lastCleaned));
         assertTrue(sizeUpToActiveSegmentAtT0 > compactedSize,
-            String.format("log should have been compacted: size up to offset of active segment at T0=%d compacted size=%d",
-                sizeUpToActiveSegmentAtT0, compactedSize));
+                String.format("log should have been compacted: size up to offset of active segment at T0=%d compacted size=%d",
+                        sizeUpToActiveSegmentAtT0, compactedSize));
     }
 
     @Test
@@ -206,9 +211,9 @@ public class LogCleanerIntegrationTest {
         Gauge<Long> uncleanableBytesGauge = getGauge("uncleanable-bytes", uncleanableDirectory);
 
         TestUtils.waitForCondition(
-            () -> uncleanablePartitionsCountGauge.value() == 2,
-            2000L,
-            "There should be 2 uncleanable partitions");
+                () -> uncleanablePartitionsCountGauge.value() == 2,
+                2000L,
+                "There should be 2 uncleanable partitions");
 
         List<LogSegment> logSegments = theLog.logSegments();
         LogSegment lastLogSegment = logSegments.get(logSegments.size() - 1);
@@ -216,12 +221,12 @@ public class LogCleanerIntegrationTest {
         LogSegment lastLog2Segment = log2Segments.get(log2Segments.size() - 1);
 
         long expectedTotalUncleanableBytes =
-            LogCleanerManager.calculateCleanableBytes(theLog, 0, lastLogSegment.baseOffset()).getValue() +
-            LogCleanerManager.calculateCleanableBytes(theLog2, 0, lastLog2Segment.baseOffset()).getValue();
+                LogCleanerManager.calculateCleanableBytes(theLog, 0, lastLogSegment.baseOffset()).getValue() +
+                        LogCleanerManager.calculateCleanableBytes(theLog2, 0, lastLog2Segment.baseOffset()).getValue();
         TestUtils.waitForCondition(
-            () -> uncleanableBytesGauge.value() == expectedTotalUncleanableBytes,
-            1000L,
-            "There should be " + expectedTotalUncleanableBytes + " uncleanable bytes");
+                () -> uncleanableBytesGauge.value() == expectedTotalUncleanableBytes,
+                1000L,
+                "There should be " + expectedTotalUncleanableBytes + " uncleanable bytes");
 
         Set<TopicPartition> uncleanablePartitions = cleaner.cleanerManager().uncleanablePartitions(uncleanableDirectory);
         assertTrue(uncleanablePartitions.contains(TOPIC_PARTITIONS.get(0)));
@@ -231,12 +236,12 @@ public class LogCleanerIntegrationTest {
         // Delete one partition
         cleaner.logs().remove(TOPIC_PARTITIONS.get(0));
         TestUtils.waitForCondition(
-            () -> {
-                time.sleep(1000);
-                return uncleanablePartitionsCountGauge.value() == 1;
-            },
-            2000L,
-            "There should be 1 uncleanable partition");
+                () -> {
+                    time.sleep(1000);
+                    return uncleanablePartitionsCountGauge.value() == 1;
+                },
+                2000L,
+                "There should be 1 uncleanable partition");
 
         Set<TopicPartition> uncleanablePartitions2 = cleaner.cleanerManager().uncleanablePartitions(uncleanableDirectory);
         assertFalse(uncleanablePartitions2.contains(TOPIC_PARTITIONS.get(0)));
@@ -247,7 +252,7 @@ public class LogCleanerIntegrationTest {
     @Test
     public void testMaxLogCompactionLag() throws Exception {
         cleaner = makeCleaner(TOPIC_PARTITIONS, CLEANER_BACKOFF_MS, MIN_COMPACTION_LAG, SEGMENT_SIZE,
-            MAX_COMPACTION_LAG, MIN_CLEANABLE_DIRTY_RATIO);
+                MAX_COMPACTION_LAG, MIN_CLEANABLE_DIRTY_RATIO);
         UnifiedLog theLog = cleaner.logs().get(TOPIC_PARTITIONS.get(0));
 
         long t0 = time.milliseconds();
@@ -282,7 +287,7 @@ public class LogCleanerIntegrationTest {
         List<int[]> read1 = readKeyValuePairsFromLog(theLog);
         Long lastCleaned = cleaner.cleanerManager().allCleanerCheckpoints().get(new TopicPartition("log", 0));
         assertTrue(lastCleaned >= firstBlockCleanableSegmentOffset,
-            "log cleaner should have processed at least to offset " + firstBlockCleanableSegmentOffset + ", but lastCleaned=" + lastCleaned);
+                "log cleaner should have processed at least to offset " + firstBlockCleanableSegmentOffset + ", but lastCleaned=" + lastCleaned);
 
         // minCleanableDirtyRatio will prevent second block of data from compacting
         assertNotEquals(appends1.size(), read1.size(), "log should still contain non-zero keys");
@@ -302,7 +307,7 @@ public class LogCleanerIntegrationTest {
         Long lastCleaned2 = cleaner.cleanerManager().allCleanerCheckpoints().get(new TopicPartition("log", 0));
         long secondBlockCleanableSegmentOffset = activeSegAtT1.baseOffset();
         assertTrue(lastCleaned2 >= secondBlockCleanableSegmentOffset,
-            "log cleaner should have processed at least to offset " + secondBlockCleanableSegmentOffset + ", but lastCleaned=" + lastCleaned2);
+                "log cleaner should have processed at least to offset " + secondBlockCleanableSegmentOffset + ", but lastCleaned=" + lastCleaned2);
     }
 
     @Test
@@ -314,8 +319,8 @@ public class LogCleanerIntegrationTest {
         cleaner.cleaners().forEach(Thread::interrupt);
         // wait until interruption is propagated to all the threads
         TestUtils.waitForCondition(
-            () -> cleaner.cleaners().stream().allMatch(ShutdownableThread::isThreadFailed),
-            "Threads didn't terminate unexpectedly");
+                () -> cleaner.cleaners().stream().allMatch(ShutdownableThread::isThreadFailed),
+                "Threads didn't terminate unexpectedly");
         assertEquals(cleaner.cleaners().size(), getGauge("DeadThreadCount").value());
         assertEquals(cleaner.cleaners().size(), cleaner.deadThreadCount());
     }
@@ -339,7 +344,7 @@ public class LogCleanerIntegrationTest {
         checkLastCleaned("log", 0, firstDirty);
         long compactedSize = theLog.logSegments().stream().mapToLong(LogSegment::size).sum();
         assertTrue(startSize > compactedSize,
-            "log should have been compacted: startSize=" + startSize + " compactedSize=" + compactedSize);
+                "log should have been compacted: startSize=" + startSize + " compactedSize=" + compactedSize);
 
         checkLogAfterAppendingDups(theLog, startSize, appends);
 
@@ -363,7 +368,7 @@ public class LogCleanerIntegrationTest {
         cleaner.logs().remove(TOPIC_PARTITIONS.get(0));
         cleaner.updateCheckpoints(logDir, Optional.of(TOPIC_PARTITIONS.get(0)));
         Map<TopicPartition, Long> checkpoints = new OffsetCheckpointFile(
-            new File(logDir, LogCleanerManager.OFFSET_CHECKPOINT_FILE), null).read();
+                new File(logDir, LogCleanerManager.OFFSET_CHECKPOINT_FILE), null).read();
         // we expect partition 0 to be gone
         assertFalse(checkpoints.containsKey(TOPIC_PARTITIONS.get(0)));
     }
@@ -383,8 +388,8 @@ public class LogCleanerIntegrationTest {
             segment.setLastModified(time.milliseconds() - (2L * retentionMs));
         }
         TestUtils.waitForCondition(
-            () -> theLog.logStartOffset() == theLog.logEndOffset() && theLog.numberOfSegments() == 1,
-            "Timed out waiting for deletion of old segments");
+                () -> theLog.logStartOffset() == theLog.logEndOffset() && theLog.numberOfSegments() == 1,
+                "Timed out waiting for deletion of old segments");
 
         cleaner.shutdown();
         closeLog(theLog);
@@ -397,7 +402,7 @@ public class LogCleanerIntegrationTest {
     }
 
     private LogAndMessages runCleanerAndCheckCompacted(int numKeys, CompressionType compressionType,
-                                                       Properties logProps) throws Exception {
+            Properties logProps) throws Exception {
         cleaner = makeCleaner(TOPIC_PARTITIONS.subList(0, 1), logProps, 100L);
         UnifiedLog theLog = cleaner.logs().get(TOPIC_PARTITIONS.get(0));
 
@@ -413,7 +418,7 @@ public class LogCleanerIntegrationTest {
         checkLastCleaned("log", 0, firstDirty);
         long compactedSize = theLog.logSegments().stream().mapToLong(LogSegment::size).sum();
         assertTrue(startSize > compactedSize,
-            "log should have been compacted: startSize=" + startSize + " compactedSize=" + compactedSize);
+                "log should have been compacted: startSize=" + startSize + " compactedSize=" + compactedSize);
         return new LogAndMessages(theLog, messages);
     }
 
@@ -450,7 +455,7 @@ public class LogCleanerIntegrationTest {
         checkLastCleaned("log", 0, firstDirty);
         long compactedSize = theLog.logSegments().stream().mapToLong(LogSegment::size).sum();
         assertTrue(startSize > compactedSize,
-            "log should have been compacted: startSize=" + startSize + " compactedSize=" + compactedSize);
+                "log should have been compacted: startSize=" + startSize + " compactedSize=" + compactedSize);
 
         checkLogAfterAppendingDups(theLog, startSize, appends1);
 
@@ -499,8 +504,8 @@ public class LogCleanerIntegrationTest {
 
         UnifiedLog theLog = cleaner.logs().get(TOPIC_PARTITIONS.get(0));
         LogConfig logConfig = new LogConfig(logConfigProperties(new Properties(), maxMessageSize,
-            DEFAULT_MIN_CLEANABLE_DIRTY_RATIO, DEFAULT_MIN_COMPACTION_LAG_MS,
-            DEFAULT_DELETE_DELAY, 256, DEFAULT_MAX_COMPACTION_LAG_MS));
+                DEFAULT_MIN_CLEANABLE_DIRTY_RATIO, DEFAULT_MIN_COMPACTION_LAG_MS,
+                DEFAULT_DELETE_DELAY, 256, DEFAULT_MAX_COMPACTION_LAG_MS));
         theLog.updateConfig(logConfig);
 
         // with compression enabled, these messages will be written as a single message containing all the individual messages
@@ -534,7 +539,7 @@ public class LogCleanerIntegrationTest {
         checkLastCleaned("log", 0, firstDirty);
         long compactedSize = theLog.logSegments().stream().mapToLong(LogSegment::size).sum();
         assertTrue(startSize > compactedSize,
-            "log should have been compacted: startSize=" + startSize + " compactedSize=" + compactedSize);
+                "log should have been compacted: startSize=" + startSize + " compactedSize=" + compactedSize);
 
         checkLogAfterAppendingDups(theLog, startSize, appends);
         checkLogAfterConvertingToV2(compressionType, theLog, logConfig.messageTimestampType, v0RecordKeysWithNoV1V2Updates);
@@ -564,8 +569,8 @@ public class LogCleanerIntegrationTest {
         assertTrue(cleaner.cleanerManager().allCleanerCheckpoints().isEmpty(), "Should not have cleaned");
 
         ConfigDef configDef = Utils.mergeConfigs(List.of(
-            CleanerConfig.CONFIG_DEF,
-            ServerConfigs.CONFIG_DEF
+                CleanerConfig.CONFIG_DEF,
+                ServerConfigs.CONFIG_DEF
         ));
 
         CleanerConfig currentConfig = cleaner.currentConfig();
@@ -591,7 +596,7 @@ public class LogCleanerIntegrationTest {
         checkLastCleaned("log", 0, firstDirty);
         long compactedSize = theLog.logSegments().stream().mapToLong(LogSegment::size).sum();
         assertTrue(startSize > compactedSize,
-            "log should have been compacted: startSize=" + startSize + " compactedSize=" + compactedSize);
+                "log should have been compacted: startSize=" + startSize + " compactedSize=" + compactedSize);
     }
 
     @Test
@@ -643,7 +648,7 @@ public class LogCleanerIntegrationTest {
         cleaner.awaitCleaned(topicPartition, firstDirty, 60000L);
         Long lastCleaned = cleaner.cleanerManager().allCleanerCheckpoints().get(topicPartition);
         assertTrue(lastCleaned >= firstDirty,
-            "log cleaner should have processed up to offset " + firstDirty + ", but lastCleaned=" + lastCleaned);
+                "log cleaner should have processed up to offset " + firstDirty + ", but lastCleaned=" + lastCleaned);
     }
 
     private void checkLogAfterAppendingDups(UnifiedLog log, long startSize, List<KeyValueOffset> appends) {
@@ -673,8 +678,8 @@ public class LogCleanerIntegrationTest {
     }
 
     private List<KeyValueOffset> writeDupsSingleMessageSet(int numKeys, int numDups, UnifiedLog log,
-                                                           Compression codec, int startKey,
-                                                           byte magicValue) throws IOException {
+            Compression codec, int startKey,
+            byte magicValue) throws IOException {
         List<KeyValueOffset> kvs = new ArrayList<>();
         List<SimpleRecord> records = new ArrayList<>();
         for (int i = 0; i < numDups; i++) {
@@ -683,15 +688,15 @@ public class LogCleanerIntegrationTest {
                 incCounter();
                 kvs.add(new KeyValueOffset(key, value, 0));
                 records.add(new SimpleRecord(
-                    time.milliseconds(),
-                    String.valueOf(key).getBytes(),
-                    value.getBytes()));
+                        time.milliseconds(),
+                        String.valueOf(key).getBytes(),
+                        value.getBytes()));
             }
         }
 
         LogAppendInfo appendInfo = log.appendAsLeaderWithRecordVersion(
-            MemoryRecords.withRecords(magicValue, codec, records.toArray(new SimpleRecord[0])),
-            0, RecordVersion.lookup(magicValue));
+                MemoryRecords.withRecords(magicValue, codec, records.toArray(new SimpleRecord[0])),
+                0, RecordVersion.lookup(magicValue));
         // move LSO forward to increase compaction bound
         log.updateHighWatermark(log.logEndOffset());
 
@@ -706,7 +711,7 @@ public class LogCleanerIntegrationTest {
     }
 
     private void checkLogAfterConvertingToV2(CompressionType compressionType, UnifiedLog log,
-                                             TimestampType timestampType, Set<String> keysForV0RecordsWithNoV1V2Updates) {
+            TimestampType timestampType, Set<String> keysForV0RecordsWithNoV1V2Updates) {
         for (LogSegment segment : log.logSegments()) {
             for (RecordBatch recordBatch : segment.log().batches()) {
                 // Uncompressed v0/v1 records are always converted into single record v2 batches via compaction if they are retained
@@ -733,10 +738,10 @@ public class LogCleanerIntegrationTest {
                     String recordKey = LogTestUtils.readString(record.key());
                     if (keysForV0RecordsWithNoV1V2Updates.contains(recordKey)) {
                         assertEquals(RecordBatch.NO_TIMESTAMP, record.timestamp(),
-                            "Record " + recordKey + " with unexpected timestamp ");
+                                "Record " + recordKey + " with unexpected timestamp ");
                     } else {
                         assertNotEquals(RecordBatch.NO_TIMESTAMP, record.timestamp(),
-                            "Record " + recordKey + " with unexpected timestamp " + RecordBatch.NO_TIMESTAMP);
+                                "Record " + recordKey + " with unexpected timestamp " + RecordBatch.NO_TIMESTAMP);
                     }
                 }
             }
@@ -804,19 +809,19 @@ public class LogCleanerIntegrationTest {
     }
 
     private List<int[]> writeKeyDups(int numKeys, int numDups, UnifiedLog log, Compression codec,
-                                     long timestamp, int startValue, int step) throws IOException {
+            long timestamp, int startValue, int step) throws IOException {
         List<int[]> result = new ArrayList<>();
         int valCounter = startValue;
         for (int i = 0; i < numDups; i++) {
             for (int key = 0; key < numKeys; key++) {
                 int curValue = valCounter;
                 log.appendAsLeader(
-                    LogTestUtils.singletonRecords(
-                        String.valueOf(curValue).getBytes(),
-                        codec,
-                        String.valueOf(key).getBytes(),
-                        timestamp),
-                    0);
+                        LogTestUtils.singletonRecords(
+                                String.valueOf(curValue).getBytes(),
+                                codec,
+                                String.valueOf(key).getBytes(),
+                                timestamp),
+                        0);
                 // move LSO forward to increase compaction bound
                 log.updateHighWatermark(log.logEndOffset());
                 valCounter += step;
@@ -827,18 +832,18 @@ public class LogCleanerIntegrationTest {
     }
 
     private Map<Integer, Integer> writeDupsWithTimestamp(int numKeys, int numDups, UnifiedLog log,
-                                                          Compression codec, long timestamp) throws IOException {
+            Compression codec, long timestamp) throws IOException {
         Map<Integer, Integer> result = new HashMap<>();
         for (int i = 0; i < numDups; i++) {
             for (int key = 0; key < numKeys; key++) {
                 int count = counter();
                 log.appendAsLeader(
-                    LogTestUtils.singletonRecords(
-                        String.valueOf(count).getBytes(),
-                        codec,
-                        String.valueOf(key).getBytes(),
-                        timestamp),
-                    0);
+                        LogTestUtils.singletonRecords(
+                                String.valueOf(count).getBytes(),
+                                codec,
+                                String.valueOf(key).getBytes(),
+                                timestamp),
+                        0);
                 // move LSO forward to increase compaction bound
                 log.updateHighWatermark(log.logEndOffset());
                 incCounter();
@@ -849,12 +854,12 @@ public class LogCleanerIntegrationTest {
     }
 
     private Properties logConfigProperties(Properties propertyOverrides,
-                                           int maxMessageSize,
-                                           float minCleanableDirtyRatio,
-                                           long minCompactionLagMs,
-                                           int deleteDelay,
-                                           int segmentSize,
-                                           long maxCompactionLagMs) {
+            int maxMessageSize,
+            float minCleanableDirtyRatio,
+            long minCompactionLagMs,
+            int deleteDelay,
+            int segmentSize,
+            long maxCompactionLagMs) {
         Properties props = new Properties();
         props.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, maxMessageSize);
         props.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, segmentSize);
@@ -870,21 +875,21 @@ public class LogCleanerIntegrationTest {
 
     private Properties logConfigProperties(int maxMessageSize) {
         return logConfigProperties(new Properties(), maxMessageSize,
-            DEFAULT_MIN_CLEANABLE_DIRTY_RATIO, DEFAULT_MIN_COMPACTION_LAG_MS,
-            DEFAULT_DELETE_DELAY, DEFAULT_SEGMENT_SIZE, DEFAULT_MAX_COMPACTION_LAG_MS);
+                DEFAULT_MIN_CLEANABLE_DIRTY_RATIO, DEFAULT_MIN_COMPACTION_LAG_MS,
+                DEFAULT_DELETE_DELAY, DEFAULT_SEGMENT_SIZE, DEFAULT_MAX_COMPACTION_LAG_MS);
     }
 
     private LogCleaner makeCleaner(Iterable<TopicPartition> partitions,
-                                   float minCleanableDirtyRatio,
-                                   int numThreads,
-                                   long backoffMs,
-                                   int maxMessageSize,
-                                   long minCompactionLagMs,
-                                   int deleteDelay,
-                                   int segmentSize,
-                                   long maxCompactionLagMs,
-                                   Integer cleanerIoBufferSize,
-                                   Properties propertyOverrides) throws IOException {
+            float minCleanableDirtyRatio,
+            int numThreads,
+            long backoffMs,
+            int maxMessageSize,
+            long minCompactionLagMs,
+            int deleteDelay,
+            int segmentSize,
+            long maxCompactionLagMs,
+            Integer cleanerIoBufferSize,
+            Properties propertyOverrides) throws IOException {
 
         ConcurrentMap<TopicPartition, UnifiedLog> logMap = new ConcurrentHashMap<>();
         for (TopicPartition partition : partitions) {
@@ -892,150 +897,150 @@ public class LogCleanerIntegrationTest {
             Files.createDirectories(dir.toPath());
 
             Properties props = logConfigProperties(propertyOverrides,
-                maxMessageSize,
-                minCleanableDirtyRatio,
-                minCompactionLagMs,
-                deleteDelay,
-                segmentSize,
-                maxCompactionLagMs);
+                    maxMessageSize,
+                    minCleanableDirtyRatio,
+                    minCompactionLagMs,
+                    deleteDelay,
+                    segmentSize,
+                    maxCompactionLagMs);
             LogConfig logConfig = new LogConfig(props);
 
             UnifiedLog log = UnifiedLog.create(
-                dir,
-                logConfig,
-                0L,
-                0L,
-                time.scheduler,
-                new BrokerTopicStats(),
-                time,
-                5 * 60 * 1000,
-                new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
-                TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
-                new LogDirFailureChannel(10),
-                true,
-                Optional.empty());
+                    dir,
+                    logConfig,
+                    0L,
+                    0L,
+                    time.scheduler,
+                    new BrokerTopicStats(),
+                    time,
+                    5 * 60 * 1000,
+                    new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
+                    TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+                    new LogDirFailureChannel(10),
+                    true,
+                    Optional.empty());
             logMap.put(partition, log);
             logs.add(log);
         }
 
         int ioBufferSize = cleanerIoBufferSize != null ? cleanerIoBufferSize : maxMessageSize / 2;
         CleanerConfig cleanerConfig = new CleanerConfig(
-            numThreads,
-            4 * 1024 * 1024L,
-            0.9,
-            ioBufferSize,
-            maxMessageSize,
-            Double.MAX_VALUE,
-            backoffMs,
-            true);
+                numThreads,
+                4 * 1024 * 1024L,
+                0.9,
+                ioBufferSize,
+                maxMessageSize,
+                Double.MAX_VALUE,
+                backoffMs,
+                true);
 
         return new LogCleaner(cleanerConfig,
-            List.of(logDir),
-            logMap,
-            new LogDirFailureChannel(1),
-            time);
+                List.of(logDir),
+                logMap,
+                new LogDirFailureChannel(1),
+                time);
     }
 
     private LogCleaner makeCleaner(Iterable<TopicPartition> partitions,
-                                   long backoffMs,
-                                   long minCompactionLagMs,
-                                   int segmentSize) throws IOException {
+            long backoffMs,
+            long minCompactionLagMs,
+            int segmentSize) throws IOException {
         return makeCleaner(partitions,
-            DEFAULT_MIN_CLEANABLE_DIRTY_RATIO,
-            1,
-            backoffMs,
-            DEFAULT_MAX_MESSAGE_SIZE,
-            minCompactionLagMs,
-            DEFAULT_DELETE_DELAY,
-            segmentSize,
-            DEFAULT_MAX_COMPACTION_LAG_MS,
-            null,
-            new Properties());
+                DEFAULT_MIN_CLEANABLE_DIRTY_RATIO,
+                1,
+                backoffMs,
+                DEFAULT_MAX_MESSAGE_SIZE,
+                minCompactionLagMs,
+                DEFAULT_DELETE_DELAY,
+                segmentSize,
+                DEFAULT_MAX_COMPACTION_LAG_MS,
+                null,
+                new Properties());
     }
 
     private LogCleaner makeCleaner(Iterable<TopicPartition> partitions,
-                                   int maxMessageSize,
-                                   long backoffMs) throws IOException {
+            int maxMessageSize,
+            long backoffMs) throws IOException {
         return makeCleaner(partitions,
-            DEFAULT_MIN_CLEANABLE_DIRTY_RATIO,
-            1,
-            backoffMs,
-            maxMessageSize,
-            DEFAULT_MIN_COMPACTION_LAG_MS,
-            DEFAULT_DELETE_DELAY,
-            DEFAULT_SEGMENT_SIZE,
-            DEFAULT_MAX_COMPACTION_LAG_MS,
-            null,
-            new Properties());
+                DEFAULT_MIN_CLEANABLE_DIRTY_RATIO,
+                1,
+                backoffMs,
+                maxMessageSize,
+                DEFAULT_MIN_COMPACTION_LAG_MS,
+                DEFAULT_DELETE_DELAY,
+                DEFAULT_SEGMENT_SIZE,
+                DEFAULT_MAX_COMPACTION_LAG_MS,
+                null,
+                new Properties());
     }
 
     private LogCleaner makeCleaner(Iterable<TopicPartition> partitions,
-                                   int maxMessageSize,
-                                   long backoffMs,
-                                   int segmentSize) throws IOException {
+            int maxMessageSize,
+            long backoffMs,
+            int segmentSize) throws IOException {
         return makeCleaner(partitions,
-            DEFAULT_MIN_CLEANABLE_DIRTY_RATIO,
-            1,
-            backoffMs,
-            maxMessageSize,
-            DEFAULT_MIN_COMPACTION_LAG_MS,
-            DEFAULT_DELETE_DELAY,
-            segmentSize,
-            DEFAULT_MAX_COMPACTION_LAG_MS,
-            null,
-            new Properties());
+                DEFAULT_MIN_CLEANABLE_DIRTY_RATIO,
+                1,
+                backoffMs,
+                maxMessageSize,
+                DEFAULT_MIN_COMPACTION_LAG_MS,
+                DEFAULT_DELETE_DELAY,
+                segmentSize,
+                DEFAULT_MAX_COMPACTION_LAG_MS,
+                null,
+                new Properties());
     }
 
     private LogCleaner makeCleaner(Iterable<TopicPartition> partitions,
-                                   Properties propertyOverrides,
-                                   long backoffMs) throws IOException {
+            Properties propertyOverrides,
+            long backoffMs) throws IOException {
         return makeCleaner(partitions,
-            DEFAULT_MIN_CLEANABLE_DIRTY_RATIO,
-            1,
-            backoffMs,
-            DEFAULT_MAX_MESSAGE_SIZE,
-            DEFAULT_MIN_COMPACTION_LAG_MS,
-            DEFAULT_DELETE_DELAY,
-            DEFAULT_SEGMENT_SIZE,
-            DEFAULT_MAX_COMPACTION_LAG_MS,
-            null,
-            propertyOverrides);
+                DEFAULT_MIN_CLEANABLE_DIRTY_RATIO,
+                1,
+                backoffMs,
+                DEFAULT_MAX_MESSAGE_SIZE,
+                DEFAULT_MIN_COMPACTION_LAG_MS,
+                DEFAULT_DELETE_DELAY,
+                DEFAULT_SEGMENT_SIZE,
+                DEFAULT_MAX_COMPACTION_LAG_MS,
+                null,
+                propertyOverrides);
     }
 
     private LogCleaner makeCleaner(Iterable<TopicPartition> partitions,
-                                   long backoffMs,
-                                   int maxMessageSize,
-                                   int cleanerIoBufferSize) throws IOException {
+            long backoffMs,
+            int maxMessageSize,
+            int cleanerIoBufferSize) throws IOException {
         return makeCleaner(partitions,
-            DEFAULT_MIN_CLEANABLE_DIRTY_RATIO,
-            1,
-            backoffMs,
-            maxMessageSize,
-            DEFAULT_MIN_COMPACTION_LAG_MS,
-            DEFAULT_DELETE_DELAY,
-            DEFAULT_SEGMENT_SIZE,
-            DEFAULT_MAX_COMPACTION_LAG_MS,
-            cleanerIoBufferSize,
-            new Properties());
+                DEFAULT_MIN_CLEANABLE_DIRTY_RATIO,
+                1,
+                backoffMs,
+                maxMessageSize,
+                DEFAULT_MIN_COMPACTION_LAG_MS,
+                DEFAULT_DELETE_DELAY,
+                DEFAULT_SEGMENT_SIZE,
+                DEFAULT_MAX_COMPACTION_LAG_MS,
+                cleanerIoBufferSize,
+                new Properties());
     }
 
     private LogCleaner makeCleaner(Iterable<TopicPartition> partitions,
-                                   long backoffMs,
-                                   long minCompactionLagMs,
-                                   int segmentSize,
-                                   long maxCompactionLagMs,
-                                   float minCleanableDirtyRatio) throws IOException {
+            long backoffMs,
+            long minCompactionLagMs,
+            int segmentSize,
+            long maxCompactionLagMs,
+            float minCleanableDirtyRatio) throws IOException {
         return makeCleaner(partitions,
-            minCleanableDirtyRatio,
-            1,
-            backoffMs,
-            DEFAULT_MAX_MESSAGE_SIZE,
-            minCompactionLagMs,
-            DEFAULT_DELETE_DELAY,
-            segmentSize,
-            maxCompactionLagMs,
-            null,
-            new Properties());
+                minCleanableDirtyRatio,
+                1,
+                backoffMs,
+                DEFAULT_MAX_MESSAGE_SIZE,
+                minCompactionLagMs,
+                DEFAULT_DELETE_DELAY,
+                segmentSize,
+                maxCompactionLagMs,
+                null,
+                new Properties());
     }
 
     private int counter() {
@@ -1047,19 +1052,19 @@ public class LogCleanerIntegrationTest {
     }
 
     private List<KeyValueOffset> writeDups(int numKeys, int numDups, UnifiedLog log, Compression codec,
-                                           int startKey, byte magicValue) throws IOException {
+            int startKey, byte magicValue) throws IOException {
         List<KeyValueOffset> results = new ArrayList<>();
         for (int i = 0; i < numDups; i++) {
             for (int key = startKey; key < startKey + numKeys; key++) {
                 String value = String.valueOf(counter());
                 MemoryRecords records = LogTestUtils.singletonRecords(
-                    value.getBytes(),
-                    codec,
-                    String.valueOf(key).getBytes(),
-                    RecordBatch.NO_TIMESTAMP,
-                    magicValue);
+                        value.getBytes(),
+                        codec,
+                        String.valueOf(key).getBytes(),
+                        RecordBatch.NO_TIMESTAMP,
+                        magicValue);
                 LogAppendInfo appendInfo = log.appendAsLeaderWithRecordVersion(
-                    records, 0, RecordVersion.lookup(magicValue));
+                        records, 0, RecordVersion.lookup(magicValue));
                 // move LSO forward to increase compaction bound
                 log.updateHighWatermark(log.logEndOffset());
                 results.add(new KeyValueOffset(key, value, appendInfo.firstOffset()));
@@ -1081,11 +1086,11 @@ public class LogCleanerIntegrationTest {
         }
         String value = sb.toString();
         MemoryRecords records = LogTestUtils.singletonRecords(
-            value.getBytes(),
-            codec,
-            String.valueOf(key).getBytes(),
-            RecordBatch.NO_TIMESTAMP,
-            messageFormatVersion);
+                value.getBytes(),
+                codec,
+                String.valueOf(key).getBytes(),
+                RecordBatch.NO_TIMESTAMP,
+                messageFormatVersion);
         return new ValueAndRecords(value, records);
     }
 

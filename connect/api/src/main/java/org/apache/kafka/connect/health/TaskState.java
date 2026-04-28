@@ -68,10 +68,10 @@ public class TaskState extends AbstractState {
     @Override
     public String toString() {
         return "TaskState{"
-            + "taskId='" + taskId + '\''
-            + "state='" + state() + '\''
-            + ", traceMessage='" + traceMessage() + '\''
-            + ", workerId='" + workerId() + '\''
-            + '}';
+                + "taskId='" + taskId + '\''
+                + "state='" + state() + '\''
+                + ", traceMessage='" + traceMessage() + '\''
+                + ", workerId='" + workerId() + '\''
+                + '}';
     }
 }

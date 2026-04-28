@@ -64,7 +64,7 @@ class BaseVersionRange {
             throw new IllegalArgumentException(
                 String.format(
                     "Expected minValue >= 0, maxValue >= 0 and maxValue >= minValue, but received" +
-                    " minValue: %d, maxValue: %d", minValue, maxValue));
+                        " minValue: %d, maxValue: %d", minValue, maxValue));
         }
         if (minKeyLabel.isEmpty()) {
             throw new IllegalArgumentException("Expected minKeyLabel to be non-empty.");

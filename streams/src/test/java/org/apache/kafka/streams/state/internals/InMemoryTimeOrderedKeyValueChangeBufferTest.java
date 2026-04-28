@@ -58,7 +58,7 @@ public class InMemoryTimeOrderedKeyValueChangeBufferTest {
     public void bufferShouldAllowLoggingDisablement() {
         final StoreBuilder<InMemoryTimeOrderedKeyValueChangeBuffer<Object, Object, Change<Object>>> builder
             = new InMemoryTimeOrderedKeyValueChangeBuffer.Builder<>(null, null, null)
-                .withLoggingDisabled();
+            .withLoggingDisabled();
 
         assertThat(builder.logConfig(), is(emptyMap()));
         assertThat(builder.loggingEnabled(), is(false));

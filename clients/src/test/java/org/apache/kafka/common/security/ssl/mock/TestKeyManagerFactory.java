@@ -53,7 +53,7 @@ public class TestKeyManagerFactory extends KeyManagerFactorySpi {
 
     @Override
     protected KeyManager[] engineGetKeyManagers() {
-        return new KeyManager[] {new TestKeyManager()};
+        return new KeyManager[]{new TestKeyManager()};
     }
 
     public static class TestKeyManager extends X509ExtendedKeyManager {
@@ -82,7 +82,7 @@ public class TestKeyManagerFactory extends KeyManagerFactorySpi {
 
         @Override
         public String[] getClientAliases(String s, Principal[] principals) {
-            return new String[] {ALIAS};
+            return new String[]{ALIAS};
         }
 
         @Override
@@ -92,7 +92,7 @@ public class TestKeyManagerFactory extends KeyManagerFactorySpi {
 
         @Override
         public String[] getServerAliases(String s, Principal[] principals) {
-            return new String[] {ALIAS};
+            return new String[]{ALIAS};
         }
 
         @Override
@@ -102,7 +102,7 @@ public class TestKeyManagerFactory extends KeyManagerFactorySpi {
 
         @Override
         public X509Certificate[] getCertificateChain(String s) {
-            return new X509Certificate[] {this.certificate};
+            return new X509Certificate[]{this.certificate};
         }
 
         @Override

@@ -81,10 +81,10 @@ public class ConsumerRecord<K, V> {
      * @param value The record contents
      */
     public ConsumerRecord(String topic,
-                          int partition,
-                          long offset,
-                          K key,
-                          V value) {
+        int partition,
+        long offset,
+        K key,
+        V value) {
         this(topic, partition, offset, NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, NULL_SIZE, NULL_SIZE, key, value,
             new RecordHeaders(), Optional.empty());
     }
@@ -105,16 +105,16 @@ public class ConsumerRecord<K, V> {
      * @param leaderEpoch Optional leader epoch of the record (may be empty for legacy record formats)
      */
     public ConsumerRecord(String topic,
-                          int partition,
-                          long offset,
-                          long timestamp,
-                          TimestampType timestampType,
-                          int serializedKeySize,
-                          int serializedValueSize,
-                          K key,
-                          V value,
-                          Headers headers,
-                          Optional<Integer> leaderEpoch) {
+        int partition,
+        long offset,
+        long timestamp,
+        TimestampType timestampType,
+        int serializedKeySize,
+        int serializedValueSize,
+        K key,
+        V value,
+        Headers headers,
+        Optional<Integer> leaderEpoch) {
         this(topic, partition, offset, timestamp, timestampType, serializedKeySize, serializedValueSize, key, value,
             headers, leaderEpoch, Optional.empty());
     }
@@ -136,17 +136,17 @@ public class ConsumerRecord<K, V> {
      * @param deliveryCount Optional delivery count of the record (may be empty when deliveries not counted)
      */
     public ConsumerRecord(String topic,
-                          int partition,
-                          long offset,
-                          long timestamp,
-                          TimestampType timestampType,
-                          int serializedKeySize,
-                          int serializedValueSize,
-                          K key,
-                          V value,
-                          Headers headers,
-                          Optional<Integer> leaderEpoch,
-                          Optional<Short> deliveryCount) {
+        int partition,
+        long offset,
+        long timestamp,
+        TimestampType timestampType,
+        int serializedKeySize,
+        int serializedValueSize,
+        K key,
+        V value,
+        Headers headers,
+        Optional<Integer> leaderEpoch,
+        Optional<Short> deliveryCount) {
         if (topic == null)
             throw new IllegalArgumentException("Topic cannot be null");
         if (headers == null)
@@ -186,7 +186,7 @@ public class ConsumerRecord<K, V> {
     public Headers headers() {
         return headers;
     }
-    
+
     /**
      * The key (or null if no key is specified)
      */
@@ -260,15 +260,15 @@ public class ConsumerRecord<K, V> {
     @Override
     public String toString() {
         return "ConsumerRecord(topic = " + topic
-               + ", partition = " + partition
-               + ", leaderEpoch = " + leaderEpoch.orElse(null)
-               + ", offset = " + offset
-               + ", " + timestampType + " = " + timestamp
-               + ", deliveryCount = " + deliveryCount.orElse(null)
-               + ", serialized key size = "  + serializedKeySize
-               + ", serialized value size = " + serializedValueSize
-               + ", headers = " + headers
-               + ", key = " + key
-               + ", value = " + value + ")";
+            + ", partition = " + partition
+            + ", leaderEpoch = " + leaderEpoch.orElse(null)
+            + ", offset = " + offset
+            + ", " + timestampType + " = " + timestamp
+            + ", deliveryCount = " + deliveryCount.orElse(null)
+            + ", serialized key size = " + serializedKeySize
+            + ", serialized value size = " + serializedValueSize
+            + ", headers = " + headers
+            + ", key = " + key
+            + ", value = " + value + ")";
     }
 }

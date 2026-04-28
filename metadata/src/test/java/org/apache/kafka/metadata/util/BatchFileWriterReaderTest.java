@@ -56,7 +56,7 @@ public final class BatchFileWriterReaderTest {
         }
 
         try (BatchFileReader reader = new BatchFileReader.Builder()
-                .setPath(tempPath.toString()).build()) {
+                 .setPath(tempPath.toString()).build()) {
             // Check the SnapshotHeaderRecord
             long currentOffset = 0;
             assertTrue(reader.hasNext());

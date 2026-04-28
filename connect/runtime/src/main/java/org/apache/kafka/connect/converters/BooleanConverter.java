@@ -63,7 +63,7 @@ public class BooleanConverter implements Converter, HeaderConverter {
     public void configure(Map<String, ?> configs, boolean isKey) {
         Map<String, Object> conf = new HashMap<>(configs);
         conf.put(ConverterConfig.TYPE_CONFIG,
-            isKey ? ConverterType.KEY.getName() : ConverterType.VALUE.getName());
+                isKey ? ConverterType.KEY.getName() : ConverterType.VALUE.getName());
         configure(conf);
     }
 
@@ -83,7 +83,7 @@ public class BooleanConverter implements Converter, HeaderConverter {
     public SchemaAndValue toConnectData(String topic, byte[] value) {
         try {
             return new SchemaAndValue(Schema.OPTIONAL_BOOLEAN_SCHEMA,
-                deserializer.deserialize(topic, value));
+                    deserializer.deserialize(topic, value));
         } catch (SerializationException e) {
             throw new DataException("Failed to deserialize boolean: ", e);
         }

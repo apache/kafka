@@ -41,12 +41,12 @@ public class DeleteShareGroupStateParameters implements PersisterParameters {
 
     public static DeleteShareGroupStateParameters from(DeleteShareGroupStateRequestData data) {
         return new Builder()
-                .setGroupTopicPartitionData(new GroupTopicPartitionData<>(data.groupId(), data.topics().stream()
-                        .map(deleteStateData -> new TopicData<>(deleteStateData.topicId(), deleteStateData.partitions().stream()
-                                .map(partitionData -> PartitionFactory.newPartitionIdData(partitionData.partition()))
-                                .collect(Collectors.toList())))
-                        .collect(Collectors.toList())))
-                .build();
+            .setGroupTopicPartitionData(new GroupTopicPartitionData<>(data.groupId(), data.topics().stream()
+                .map(deleteStateData -> new TopicData<>(deleteStateData.topicId(), deleteStateData.partitions().stream()
+                    .map(partitionData -> PartitionFactory.newPartitionIdData(partitionData.partition()))
+                    .collect(Collectors.toList())))
+                .collect(Collectors.toList())))
+            .build();
     }
 
     public GroupTopicPartitionData<PartitionIdData> groupTopicPartitionData() {

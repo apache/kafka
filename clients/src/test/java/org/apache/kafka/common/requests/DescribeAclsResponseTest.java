@@ -45,34 +45,34 @@ public class DescribeAclsResponseTest {
     private static final short V1 = 1;
 
     private static final AclDescription ALLOW_CREATE_ACL = buildAclDescription(
-            "127.0.0.1",
-            "User:ANONYMOUS",
-            AclOperation.CREATE,
-            AclPermissionType.ALLOW);
+        "127.0.0.1",
+        "User:ANONYMOUS",
+        AclOperation.CREATE,
+        AclPermissionType.ALLOW);
 
     private static final AclDescription DENY_READ_ACL = buildAclDescription(
-            "127.0.0.1",
-            "User:ANONYMOUS",
-            AclOperation.READ,
-            AclPermissionType.DENY);
+        "127.0.0.1",
+        "User:ANONYMOUS",
+        AclOperation.READ,
+        AclPermissionType.DENY);
 
     private static final DescribeAclsResource UNKNOWN_ACL = buildResource(
-            "foo",
-            ResourceType.UNKNOWN,
-            PatternType.LITERAL,
-            Collections.singletonList(DENY_READ_ACL));
+        "foo",
+        ResourceType.UNKNOWN,
+        PatternType.LITERAL,
+        Collections.singletonList(DENY_READ_ACL));
 
     private static final DescribeAclsResource PREFIXED_ACL1 = buildResource(
-            "prefix",
-            ResourceType.GROUP,
-            PatternType.PREFIXED,
-            Collections.singletonList(ALLOW_CREATE_ACL));
+        "prefix",
+        ResourceType.GROUP,
+        PatternType.PREFIXED,
+        Collections.singletonList(ALLOW_CREATE_ACL));
 
     private static final DescribeAclsResource LITERAL_ACL1 = buildResource(
-            "foo",
-            ResourceType.TOPIC,
-            PatternType.LITERAL,
-            Collections.singletonList(ALLOW_CREATE_ACL));
+        "foo",
+        ResourceType.TOPIC,
+        PatternType.LITERAL,
+        Collections.singletonList(ALLOW_CREATE_ACL));
 
     @Test
     public void shouldThrowIfUnknown() {
@@ -97,7 +97,7 @@ public class DescribeAclsResponseTest {
     @Test
     public void testAclBindings() {
         final AclBinding original = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "foo", PatternType.LITERAL),
-                new AccessControlEntry("User:ANONYMOUS", "127.0.0.1", AclOperation.CREATE, AclPermissionType.ALLOW));
+            new AccessControlEntry("User:ANONYMOUS", "127.0.0.1", AclOperation.CREATE, AclPermissionType.ALLOW));
 
         final List<AclBinding> result = DescribeAclsResponse.aclBindings(Collections.singletonList(LITERAL_ACL1));
         assertEquals(1, result.size());

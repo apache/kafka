@@ -42,7 +42,7 @@ public record OffsetSync(TopicPartition topicPartition, long upstreamOffset, lon
     @Override
     public String toString() {
         return String.format("OffsetSync{topicPartition=%s, upstreamOffset=%d, downstreamOffset=%d}",
-            topicPartition, upstreamOffset, downstreamOffset);
+                topicPartition, upstreamOffset, downstreamOffset);
     }
 
     ByteBuffer serializeValue() {

@@ -91,11 +91,11 @@ public class EndTransactionMarker {
         short version = value.getShort();
         if (version < EndTxnMarker.LOWEST_SUPPORTED_VERSION)
             throw new InvalidRecordException("Invalid version found for end transaction marker: " + version +
-                    ". May indicate data corruption");
+                ". May indicate data corruption");
 
         if (version > EndTxnMarker.HIGHEST_SUPPORTED_VERSION) {
             log.debug("Received end transaction marker value version {}. Parsing as version {}", version,
-                    EndTxnMarker.HIGHEST_SUPPORTED_VERSION);
+                EndTxnMarker.HIGHEST_SUPPORTED_VERSION);
             version = EndTxnMarker.HIGHEST_SUPPORTED_VERSION;
         }
         EndTxnMarker marker = new EndTxnMarker(new ByteBufferAccessor(value), version);
@@ -104,9 +104,9 @@ public class EndTransactionMarker {
 
     public int endTxnMarkerValueSize() {
         return DefaultRecord.sizeInBytes(0, 0L,
-                type.controlRecordKeySize(),
-                buffer.remaining(),
-                Record.EMPTY_HEADERS);
+            type.controlRecordKeySize(),
+            buffer.remaining(),
+            Record.EMPTY_HEADERS);
     }
 
 }

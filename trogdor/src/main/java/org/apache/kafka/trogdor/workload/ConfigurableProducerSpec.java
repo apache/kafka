@@ -123,18 +123,18 @@ public final class ConfigurableProducerSpec extends TaskSpec {
 
     @JsonCreator
     public ConfigurableProducerSpec(@JsonProperty("startMs") long startMs,
-                                    @JsonProperty("durationMs") long durationMs,
-                                    @JsonProperty("producerNode") String producerNode,
-                                    @JsonProperty("bootstrapServers") String bootstrapServers,
-                                    @JsonProperty("flushGenerator") Optional<FlushGenerator> flushGenerator,
-                                    @JsonProperty("throughputGenerator") ThroughputGenerator throughputGenerator,
-                                    @JsonProperty("keyGenerator") PayloadGenerator keyGenerator,
-                                    @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
-                                    @JsonProperty("producerConf") Map<String, String> producerConf,
-                                    @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
-                                    @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
-                                    @JsonProperty("activeTopic") TopicsSpec activeTopic,
-                                    @JsonProperty("activePartition") int activePartition) {
+        @JsonProperty("durationMs") long durationMs,
+        @JsonProperty("producerNode") String producerNode,
+        @JsonProperty("bootstrapServers") String bootstrapServers,
+        @JsonProperty("flushGenerator") Optional<FlushGenerator> flushGenerator,
+        @JsonProperty("throughputGenerator") ThroughputGenerator throughputGenerator,
+        @JsonProperty("keyGenerator") PayloadGenerator keyGenerator,
+        @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
+        @JsonProperty("producerConf") Map<String, String> producerConf,
+        @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
+        @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
+        @JsonProperty("activeTopic") TopicsSpec activeTopic,
+        @JsonProperty("activePartition") int activePartition) {
         super(startMs, durationMs);
         this.producerNode = (producerNode == null) ? "" : producerNode;
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;

@@ -57,13 +57,14 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
 
 public final class StreamsTestUtils {
-    private StreamsTestUtils() {}
+    private StreamsTestUtils() {
+    }
 
     public static Properties getStreamsConfig(final String applicationId,
-                                              final String bootstrapServers,
-                                              final String keySerdeClassName,
-                                              final String valueSerdeClassName,
-                                              final Properties additional) {
+        final String bootstrapServers,
+        final String keySerdeClassName,
+        final String valueSerdeClassName,
+        final Properties additional) {
 
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
@@ -77,8 +78,8 @@ public final class StreamsTestUtils {
     }
 
     public static Properties getStreamsConfig(final String applicationId,
-                                              final String bootstrapServers,
-                                              final Properties additional) {
+        final String bootstrapServers,
+        final Properties additional) {
 
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
@@ -90,13 +91,13 @@ public final class StreamsTestUtils {
     }
 
     public static Properties getStreamsConfig(final Serde<?> keyDeserializer,
-                                              final Serde<?> valueDeserializer) {
+        final Serde<?> valueDeserializer) {
         return getStreamsConfig(
-                UUID.randomUUID().toString(),
-                "localhost:9091",
-                keyDeserializer.getClass().getName(),
-                valueDeserializer.getClass().getName(),
-                new Properties());
+            UUID.randomUUID().toString(),
+            "localhost:9091",
+            keyDeserializer.getClass().getName(),
+            valueDeserializer.getClass().getName(),
+            new Properties());
     }
 
     public static Properties getStreamsConfig(final String applicationId) {
@@ -161,8 +162,8 @@ public final class StreamsTestUtils {
     }
 
     public static void verifyAllWindowedKeyValues(final KeyValueIterator<Windowed<Bytes>, byte[]> iterator,
-                                                  final List<Windowed<Bytes>> expectedKeys,
-                                                  final List<String> expectedValues) {
+        final List<Windowed<Bytes>> expectedKeys,
+        final List<String> expectedValues) {
         if (expectedKeys.size() != expectedValues.size()) {
             throw new IllegalArgumentException("expectedKeys and expectedValues should have the same size. " +
                 "expectedKeys size: " + expectedKeys.size() + ", expectedValues size: " + expectedValues.size());
@@ -179,16 +180,16 @@ public final class StreamsTestUtils {
     }
 
     public static void verifyWindowedKeyValue(final KeyValue<Windowed<Bytes>, byte[]> actual,
-                                              final Windowed<Bytes> expectedKey,
-                                              final String expectedValue) {
+        final Windowed<Bytes> expectedKey,
+        final String expectedValue) {
         assertThat(actual.key.window(), equalTo(expectedKey.window()));
         assertThat(actual.key.key(), equalTo(expectedKey.key()));
         assertThat(actual.value, equalTo(expectedValue.getBytes()));
     }
 
     public static Metric getMetricByName(final Map<MetricName, ? extends Metric> metrics,
-                                         final String name,
-                                         final String group) {
+        final String name,
+        final String group) {
         Metric metric = null;
         for (final Map.Entry<MetricName, ? extends Metric> entry : metrics.entrySet()) {
             if (entry.getKey().name().equals(name) && entry.getKey().group().equals(group)) {
@@ -212,9 +213,9 @@ public final class StreamsTestUtils {
     }
 
     public static Metric getMetricByNameFilterByTags(final Map<MetricName, ? extends Metric> metrics,
-                                                     final String name,
-                                                     final String group,
-                                                     final Map<String, String> filterTags) {
+        final String name,
+        final String group,
+        final Map<String, String> filterTags) {
         Metric metric = null;
         for (final Map.Entry<MetricName, ? extends Metric> entry : metrics.entrySet()) {
             if (entry.getKey().name().equals(name) && entry.getKey().group().equals(group)) {
@@ -246,9 +247,9 @@ public final class StreamsTestUtils {
     }
 
     public static boolean containsMetric(final Metrics metrics,
-                                         final String name,
-                                         final String group,
-                                         final Map<String, String> tags) {
+        final String name,
+        final String group,
+        final Map<String, String> tags) {
         final MetricName metricName = metrics.metricName(name, group, tags);
         return metrics.metric(metricName) != null;
     }
@@ -259,7 +260,7 @@ public final class StreamsTestUtils {
      */
     public static boolean isCheckSupplierCall() {
         return Arrays.stream(Thread.currentThread().getStackTrace())
-                .anyMatch(caller -> "org.apache.kafka.streams.internals.ApiUtils".equals(caller.getClassName()) && "checkSupplier".equals(caller.getMethodName()));
+            .anyMatch(caller -> "org.apache.kafka.streams.internals.ApiUtils".equals(caller.getClassName()) && "checkSupplier".equals(caller.getMethodName()));
     }
 
     public static class TaskBuilder<T extends Task> {
@@ -278,7 +279,7 @@ public final class StreamsTestUtils {
         }
 
         public static TaskBuilder<StreamTask> statefulTask(final TaskId taskId,
-                                                           final Set<TopicPartition> changelogPartitions) {
+            final Set<TopicPartition> changelogPartitions) {
             final StreamTask task = mock(StreamTask.class, withSettings().strictness(Strictness.LENIENT));
             when(task.isActive()).thenReturn(true);
             setupStatefulTask(task, taskId, changelogPartitions);
@@ -286,7 +287,7 @@ public final class StreamsTestUtils {
         }
 
         public static TaskBuilder<StandbyTask> standbyTask(final TaskId taskId,
-                                                           final Set<TopicPartition> changelogPartitions) {
+            final Set<TopicPartition> changelogPartitions) {
             final StandbyTask task = mock(StandbyTask.class, withSettings().strictness(Strictness.LENIENT));
             when(task.isActive()).thenReturn(false);
             setupStatefulTask(task, taskId, changelogPartitions);
@@ -294,8 +295,8 @@ public final class StreamsTestUtils {
         }
 
         private static void setupStatefulTask(final Task task,
-                                              final TaskId taskId,
-                                              final Set<TopicPartition> changelogPartitions) {
+            final TaskId taskId,
+            final Set<TopicPartition> changelogPartitions) {
             when(task.changelogPartitions()).thenReturn(changelogPartitions);
             when(task.id()).thenReturn(taskId);
             when(task.stateManager()).thenReturn(mock(ProcessorStateManager.class));

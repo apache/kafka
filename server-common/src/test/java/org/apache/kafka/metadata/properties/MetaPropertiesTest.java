@@ -33,7 +33,7 @@ public final class MetaPropertiesTest {
     public void testV0SerializationWithNothing() {
         testV0Serialization(Optional.empty(),
             OptionalInt.empty(),
-             Optional.empty(),
+            Optional.empty(),
             "MetaProperties(version=0)");
     }
 
@@ -77,11 +77,11 @@ public final class MetaPropertiesTest {
         String expectedToStringOutput
     ) {
         MetaProperties metaProperties = new MetaProperties.Builder().
-                setVersion(MetaPropertiesVersion.V0).
-                setClusterId(clusterId).
-                setNodeId(nodeId).
-                setDirectoryId(directoryId).
-                build();
+            setVersion(MetaPropertiesVersion.V0).
+            setClusterId(clusterId).
+            setNodeId(nodeId).
+            setDirectoryId(directoryId).
+            build();
         assertEquals(MetaPropertiesVersion.V0, metaProperties.version());
         assertEquals(clusterId, metaProperties.clusterId());
         assertEquals(nodeId, metaProperties.nodeId());

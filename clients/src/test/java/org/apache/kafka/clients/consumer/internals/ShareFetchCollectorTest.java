@@ -93,8 +93,8 @@ public class ShareFetchCollectorTest {
         subscribeAndAssign(topicAPartition0);
 
         ShareCompletedFetch completedFetch = completedFetchBuilder
-                .recordCount(recordCount)
-                .build();
+            .recordCount(recordCount)
+            .build();
 
         // Validate that the buffer is empty until after we add the fetch data.
         assertTrue(fetchBuffer.isEmpty());
@@ -208,10 +208,10 @@ public class ShareFetchCollectorTest {
 
         // Create a ShareFetchCollector that fails on ShareCompletedFetch initialization.
         fetchCollector = new ShareFetchCollector<>(logContext,
-                metadata,
-                subscriptions,
-                shareFetchConfig,
-                deserializers) {
+            metadata,
+            subscriptions,
+            shareFetchConfig,
+            deserializers) {
 
             @Override
             protected ShareCompletedFetch initialize(final ShareCompletedFetch completedFetch) {
@@ -221,8 +221,8 @@ public class ShareFetchCollectorTest {
 
         // Add the ShareCompletedFetch to the ShareFetchBuffer queue - the number of records doesn't matter
         ShareCompletedFetch completedFetch = completedFetchBuilder
-                .recordCount(10)
-                .build();
+            .recordCount(10)
+            .build();
         fetchBuffer.add(List.of(completedFetch));
 
         // At first, the queue is populated
@@ -238,8 +238,8 @@ public class ShareFetchCollectorTest {
         subscribeAndAssign(topicAPartition0);
 
         ShareCompletedFetch completedFetch = completedFetchBuilder
-                .error(Errors.TOPIC_AUTHORIZATION_FAILED)
-                .build();
+            .error(Errors.TOPIC_AUTHORIZATION_FAILED)
+            .build();
         fetchBuffer.add(List.of(completedFetch));
         assertThrows(TopicAuthorizationException.class, () -> fetchCollector.collect(fetchBuffer));
     }
@@ -250,8 +250,8 @@ public class ShareFetchCollectorTest {
         subscribeAndAssign(topicAPartition0);
 
         ShareCompletedFetch completedFetch = completedFetchBuilder
-                .error(Errors.UNKNOWN_LEADER_EPOCH)
-                .build();
+            .error(Errors.UNKNOWN_LEADER_EPOCH)
+            .build();
         fetchBuffer.add(List.of(completedFetch));
         ShareFetch<String, String> fetch = fetchCollector.collect(fetchBuffer);
         assertTrue(fetch.isEmpty());
@@ -263,8 +263,8 @@ public class ShareFetchCollectorTest {
         subscribeAndAssign(topicAPartition0);
 
         ShareCompletedFetch completedFetch = completedFetchBuilder
-                .error(Errors.UNKNOWN_SERVER_ERROR)
-                .build();
+            .error(Errors.UNKNOWN_SERVER_ERROR)
+            .build();
         fetchBuffer.add(List.of(completedFetch));
         ShareFetch<String, String> fetch = fetchCollector.collect(fetchBuffer);
         assertTrue(fetch.isEmpty());
@@ -276,8 +276,8 @@ public class ShareFetchCollectorTest {
         subscribeAndAssign(topicAPartition0);
 
         ShareCompletedFetch completedFetch = completedFetchBuilder
-                .error(Errors.CORRUPT_MESSAGE)
-                .build();
+            .error(Errors.CORRUPT_MESSAGE)
+            .build();
         fetchBuffer.add(List.of(completedFetch));
         assertThrows(KafkaException.class, () -> fetchCollector.collect(fetchBuffer));
     }
@@ -289,8 +289,8 @@ public class ShareFetchCollectorTest {
         subscribeAndAssign(topicAPartition0);
 
         ShareCompletedFetch completedFetch = completedFetchBuilder
-                .error(error)
-                .build();
+            .error(error)
+            .build();
         fetchBuffer.add(List.of(completedFetch));
         assertThrows(IllegalStateException.class, () -> fetchCollector.collect(fetchBuffer));
     }
@@ -317,19 +317,19 @@ public class ShareFetchCollectorTest {
         shareFetchConfig = new ShareFetchConfig(config);
 
         metadata = new ShareConsumerMetadata(
-                0,
-                1000,
-                10000,
-                false,
-                subscriptions,
-                logContext,
-                new ClusterResourceListeners());
+            0,
+            1000,
+            10000,
+            false,
+            subscriptions,
+            logContext,
+            new ClusterResourceListeners());
         fetchCollector = new ShareFetchCollector<>(
-                logContext,
-                metadata,
-                subscriptions,
-                shareFetchConfig,
-                deserializers);
+            logContext,
+            metadata,
+            subscriptions,
+            shareFetchConfig,
+            deserializers);
         fetchBuffer = new ShareFetchBuffer(logContext);
         completedFetchBuilder = new ShareCompletedFetchBuilder();
     }
@@ -345,20 +345,20 @@ public class ShareFetchCollectorTest {
     private static Stream<Arguments> testFetchWithOtherErrorsSource() {
         List<Errors> errors = new ArrayList<>(Arrays.asList(Errors.values()));
         errors.removeAll(Arrays.asList(
-                Errors.NONE,
-                Errors.NOT_LEADER_OR_FOLLOWER,
-                Errors.REPLICA_NOT_AVAILABLE,
-                Errors.KAFKA_STORAGE_ERROR,
-                Errors.FENCED_LEADER_EPOCH,
-                Errors.OFFSET_NOT_AVAILABLE,
-                Errors.UNKNOWN_TOPIC_OR_PARTITION,
-                Errors.UNKNOWN_TOPIC_ID,
-                Errors.INCONSISTENT_TOPIC_ID,
-                Errors.OFFSET_OUT_OF_RANGE,
-                Errors.TOPIC_AUTHORIZATION_FAILED,
-                Errors.UNKNOWN_LEADER_EPOCH,
-                Errors.UNKNOWN_SERVER_ERROR,
-                Errors.CORRUPT_MESSAGE
+            Errors.NONE,
+            Errors.NOT_LEADER_OR_FOLLOWER,
+            Errors.REPLICA_NOT_AVAILABLE,
+            Errors.KAFKA_STORAGE_ERROR,
+            Errors.FENCED_LEADER_EPOCH,
+            Errors.OFFSET_NOT_AVAILABLE,
+            Errors.UNKNOWN_TOPIC_OR_PARTITION,
+            Errors.UNKNOWN_TOPIC_ID,
+            Errors.INCONSISTENT_TOPIC_ID,
+            Errors.OFFSET_OUT_OF_RANGE,
+            Errors.TOPIC_AUTHORIZATION_FAILED,
+            Errors.UNKNOWN_LEADER_EPOCH,
+            Errors.UNKNOWN_SERVER_ERROR,
+            Errors.CORRUPT_MESSAGE
         ));
 
         return errors.stream().map(Arguments::of);
@@ -370,8 +370,8 @@ public class ShareFetchCollectorTest {
      */
     private static Stream<Arguments> testErrorInInitializeSource() {
         return Stream.of(
-                Arguments.of(new RuntimeException()),
-                Arguments.of(new KafkaException())
+            Arguments.of(new RuntimeException()),
+            Arguments.of(new KafkaException())
         );
     }
 
@@ -396,32 +396,32 @@ public class ShareFetchCollectorTest {
             ByteBuffer allocate = ByteBuffer.allocate(1024);
 
             try (MemoryRecordsBuilder builder = MemoryRecords.builder(allocate,
-                    Compression.NONE,
-                    TimestampType.CREATE_TIME,
-                    0)) {
-                for (int i = 0; i < recordCount; i++)
+                     Compression.NONE,
+                     TimestampType.CREATE_TIME,
+                     0)) {
+                for (int i = 0;i < recordCount;i++)
                     builder.append(0L, "key".getBytes(), ("value-" + i).getBytes());
 
                 records = builder.build();
             }
 
             ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
-                    .setPartitionIndex(topicAPartition0.partition())
-                    .setRecords(records)
-                    .setAcquiredRecords(ShareCompletedFetchTest.acquiredRecords(0L, recordCount));
+                .setPartitionIndex(topicAPartition0.partition())
+                .setRecords(records)
+                .setAcquiredRecords(ShareCompletedFetchTest.acquiredRecords(0L, recordCount));
 
             if (error != null)
                 partitionData.setErrorCode(error.code());
 
             return new ShareCompletedFetch(
-                    logContext,
-                    BufferSupplier.create(),
-                    0,
-                    topicAPartition0,
-                    partitionData,
-                    DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS,
-                    shareFetchMetricsAggregator,
-                    ApiKeys.SHARE_FETCH.latestVersion());
+                logContext,
+                BufferSupplier.create(),
+                0,
+                topicAPartition0,
+                partitionData,
+                DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS,
+                shareFetchMetricsAggregator,
+                ApiKeys.SHARE_FETCH.latestVersion());
         }
     }
 }

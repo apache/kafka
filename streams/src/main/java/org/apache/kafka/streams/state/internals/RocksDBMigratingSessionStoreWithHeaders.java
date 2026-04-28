@@ -44,19 +44,19 @@ public class RocksDBMigratingSessionStoreWithHeaders extends RocksDBStore implem
     static final byte[] SESSION_STORE_HEADERS_VALUES_COLUMN_FAMILY_NAME = "sessionKeyValueWithHeaders".getBytes(StandardCharsets.UTF_8);
 
     public RocksDBMigratingSessionStoreWithHeaders(final String name,
-                                                   final String metricsScope) {
+        final String metricsScope) {
         super(name, metricsScope);
     }
 
     RocksDBMigratingSessionStoreWithHeaders(final String name,
-                                            final String parentDir,
-                                            final RocksDBMetricsRecorder metricsRecorder) {
+        final String parentDir,
+        final RocksDBMetricsRecorder metricsRecorder) {
         super(name, parentDir, metricsRecorder);
     }
 
     @Override
     void openRocksDB(final DBOptions dbOptions,
-                     final ColumnFamilyOptions columnFamilyOptions) {
+        final ColumnFamilyOptions columnFamilyOptions) {
         final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
             dbOptions,
             new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),

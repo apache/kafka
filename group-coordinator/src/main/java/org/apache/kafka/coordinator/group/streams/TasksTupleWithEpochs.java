@@ -150,7 +150,7 @@ public record TasksTupleWithEpochs(Map<String, Map<Integer, Integer>> activeTask
             } else {
                 if (epochs != null) {
                     log.error("[GroupId {}] Size of assignment epochs {} is not equal to partitions {} for subtopology {}. " +
-                            "Using default epoch {} for all partitions.",
+                        "Using default epoch {} for all partitions.",
                         groupId, epochs.size(), partitions.size(), subtopologyId, memberEpoch);
                 }
                 // Legacy record without epochs: use member epoch as default
@@ -187,19 +187,19 @@ public record TasksTupleWithEpochs(Map<String, Map<Integer, Integer>> activeTask
 
     private static String taskAssignmentToString(Map<String, Map<Integer, Integer>> assignment) {
         StringBuilder builder = new StringBuilder("[");
-        
+
         // Sort subtopology IDs
         String[] subtopologyIds = assignment.keySet().toArray(new String[0]);
         java.util.Arrays.sort(subtopologyIds);
-        
+
         boolean first = true;
         for (String subtopologyId : subtopologyIds) {
             Map<Integer, Integer> partitions = assignment.get(subtopologyId);
-            
+
             // Sort partition IDs
             Integer[] partitionIds = partitions.keySet().toArray(new Integer[0]);
             java.util.Arrays.sort(partitionIds);
-            
+
             for (Integer partitionId : partitionIds) {
                 if (!first) {
                     builder.append(", ");

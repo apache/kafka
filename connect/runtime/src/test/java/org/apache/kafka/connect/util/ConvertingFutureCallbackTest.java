@@ -43,7 +43,7 @@ public class ConvertingFutureCallbackTest {
     public void setup() {
         executor = Executors.newSingleThreadExecutor();
     }
-  
+
     @Test
     public void shouldConvertBeforeGetOnSuccessfulCompletion() throws Exception {
         final Object expectedConversion = new Object();
@@ -95,7 +95,7 @@ public class ConvertingFutureCallbackTest {
             assertEquals(expectedError, e.getCause());
         }
     }
-  
+
     @Test
     public void shouldCancelBeforeGetIfMayCancelWhileRunning() {
         TestConvertingFutureCallback testCallback = new TestConvertingFutureCallback();
@@ -190,12 +190,12 @@ public class ConvertingFutureCallbackTest {
         assertEquals(1, testCallback.numberOfConversions());
         if (testThreadException.get() != null) assertThrows(CancellationException.class, testThreadException::get);
     }
-  
+
     protected static class TestConvertingFutureCallback extends ConvertingFutureCallback<Object, Object> {
         private final AtomicInteger numberOfConversions = new AtomicInteger();
         private final CountDownLatch getInvoked = new CountDownLatch(1);
         private final CountDownLatch cancelInvoked = new CountDownLatch(1);
-    
+
         public int numberOfConversions() {
             return numberOfConversions.get();
         }
@@ -207,7 +207,7 @@ public class ConvertingFutureCallbackTest {
         public void waitForCancel() throws InterruptedException {
             cancelInvoked.await();
         }
-    
+
         @Override
         public Object convert(Object result) {
             numberOfConversions.incrementAndGet();
@@ -222,8 +222,8 @@ public class ConvertingFutureCallbackTest {
 
         @Override
         public Object get(
-            long duration,
-            TimeUnit unit
+                long duration,
+                TimeUnit unit
         ) throws InterruptedException, ExecutionException, TimeoutException {
             getInvoked.countDown();
             return super.get(duration, unit);

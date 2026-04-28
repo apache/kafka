@@ -162,7 +162,7 @@ public final class WorkerManager {
         this.time = scheduler.time();
         this.workers = new HashMap<>();
         this.stateChangeExecutor = Executors.newSingleThreadScheduledExecutor(
-                ThreadUtils.createThreadFactory("WorkerManagerStateThread", false));
+            ThreadUtils.createThreadFactory("WorkerManagerStateThread", false));
         this.workerCleanupExecutor = Executors.newCachedThreadPool(
             ThreadUtils.createThreadFactory("WorkerCleanupThread%d", false));
         this.shutdownExecutor = Executors.newScheduledThreadPool(0,
@@ -475,7 +475,7 @@ public final class WorkerManager {
                     break;
                 case CANCELLING:
                     log.info("{}: Cancelling worker {} {}.  ",
-                            nodeName, worker, verb);
+                        nodeName, worker, verb);
                     break;
                 case RUNNING:
                     log.info("{}: Running worker {} {}.  Transitioning to STOPPING.",
@@ -572,7 +572,7 @@ public final class WorkerManager {
                     break;
                 case STOPPING:
                     log.info("{}: Can't stop worker {}, because it is already " +
-                            "stopping.", nodeName, worker);
+                        "stopping.", nodeName, worker);
                     break;
                 case DONE:
                     if (worker.mustDestroy) {

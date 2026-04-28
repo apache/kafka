@@ -124,8 +124,8 @@ final class SchemaGenerator {
     }
 
     private void generateSchemaForVersion(StructSpec struct,
-                                          short version,
-                                          CodeBuffer buffer) {
+        short version,
+        CodeBuffer buffer) {
         // Find the last valid field index.
         int lastValidIndex = struct.fields().size() - 1;
         while (true) {
@@ -134,7 +134,7 @@ final class SchemaGenerator {
             }
             FieldSpec field = struct.fields().get(lastValidIndex);
             if ((!field.taggedVersions().contains(version)) &&
-                    field.versions().contains(version)) {
+                field.versions().contains(version)) {
                 break;
             }
             lastValidIndex--;
@@ -150,7 +150,7 @@ final class SchemaGenerator {
         for (int i = 0; i <= lastValidIndex; i++) {
             FieldSpec field = struct.fields().get(i);
             if ((!field.versions().contains(version)) ||
-                    field.taggedVersions().contains(version)) {
+                field.taggedVersions().contains(version)) {
                 continue;
             }
             Versions fieldFlexibleVersions =
@@ -170,7 +170,7 @@ final class SchemaGenerator {
     }
 
     private void generateTaggedFieldsSchemaForVersion(StructSpec struct,
-            short version, CodeBuffer buffer) {
+        short version, CodeBuffer buffer) {
         headerGenerator.addStaticImport(MessageGenerator.TAGGED_FIELDS_SECTION_CLASS);
 
         // Find the last valid tagged field index.
@@ -192,7 +192,7 @@ final class SchemaGenerator {
         for (int i = 0; i <= lastValidIndex; i++) {
             FieldSpec field = struct.fields().get(i);
             if ((!field.versions().contains(version)) ||
-                    (!field.taggedVersions().contains(version))) {
+                (!field.taggedVersions().contains(version))) {
                 continue;
             }
             headerGenerator.addImport(MessageGenerator.FIELD_CLASS);
@@ -210,8 +210,8 @@ final class SchemaGenerator {
     }
 
     private String fieldTypeToSchemaType(FieldSpec field,
-                                         short version,
-                                         Versions fieldFlexibleVersions) {
+        short version,
+        Versions fieldFlexibleVersions) {
         return fieldTypeToSchemaType(field.type(),
             field.nullableVersions().contains(version),
             version,
@@ -220,10 +220,10 @@ final class SchemaGenerator {
     }
 
     private String fieldTypeToSchemaType(FieldType type,
-                                         boolean nullable,
-                                         short version,
-                                         Versions fieldFlexibleVersions,
-                                         boolean zeroCopy) {
+        boolean nullable,
+        short version,
+        Versions fieldFlexibleVersions,
+        boolean zeroCopy) {
         if (type instanceof FieldType.BoolFieldType) {
             headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
             if (nullable) {
@@ -305,14 +305,14 @@ final class SchemaGenerator {
                 FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
                 String prefix = nullable ? "CompactArrayOf.nullable" : "new CompactArrayOf";
                 return String.format("%s(%s)", prefix,
-                        fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions, false));
+                    fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions, false));
 
             } else {
                 headerGenerator.addImport(MessageGenerator.ARRAYOF_CLASS);
                 FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
                 String prefix = nullable ? "ArrayOf.nullable" : "new ArrayOf";
                 return String.format("%s(%s)", prefix,
-                        fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions, false));
+                    fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions, false));
             }
         } else if (type.isStruct()) {
             if (nullable) {

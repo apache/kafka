@@ -75,6 +75,7 @@ public class JoinGracePeriodDurabilityIntegrationTest {
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
     private static final long NOW = Instant.now().toEpochMilli();
+
     @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
@@ -189,7 +190,7 @@ public class JoinGracePeriodDurabilityIntegrationTest {
                     new KeyValueTimestamp<>("k4", "v4+v4", scaledTime(4L)),
                     new KeyValueTimestamp<>("k5", "v5+v5", scaledTime(5L)),
                     new KeyValueTimestamp<>("k3", "v3+v3", scaledTime(7L))
-                    )
+                )
             );
             assertThat("There should only be 5 output events.", eventCount.get(), is(5));
 

@@ -80,7 +80,7 @@ public class SslVersionsTransportLayerTest {
     @MethodSource("parameters")
     public void testTlsDefaults(List<String> serverProtocols, List<String> clientProtocols) throws Exception {
         // Create certificates for use by client and server. Add server cert to client truststore and vice versa.
-        CertStores serverCertStores = new CertStores(true, "server",  "localhost");
+        CertStores serverCertStores = new CertStores(true, "server", "localhost");
         CertStores clientCertStores = new CertStores(false, "client", "localhost");
 
         Map<String, Object> sslClientConfigs = getTrustingConfig(clientCertStores, serverCertStores, clientProtocols);

@@ -25,13 +25,13 @@ public final class KeyValueSpec {
     private final Long timestamp;
 
     public KeyValueSpec(String key,
-                        String value) {
+            String value) {
         this(key, value, null);
     }
 
     public KeyValueSpec(String key,
-                        String value,
-                        Long timestamp) {
+            String value,
+            Long timestamp) {
         this.key = key;
         this.value = value;
         this.timestamp = timestamp;

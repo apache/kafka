@@ -244,22 +244,22 @@ public class TestLinearWriteSpeed {
             this.messages = messages;
             Utils.delete(dir);
             this.log = UnifiedLog.create(
-                dir,
-                config,
-                0L,
-                0L,
-                scheduler,
-                new BrokerTopicStats(),
-                Time.SYSTEM,
-                5 * 60 * 1000,
-                new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
-                TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
-                new LogDirFailureChannel(10),
-                true,
-                Optional.empty(),
-                new CopyOnWriteMap<>(),
-                false,
-                LogOffsetsListener.NO_OP_OFFSETS_LISTENER
+                    dir,
+                    config,
+                    0L,
+                    0L,
+                    scheduler,
+                    new BrokerTopicStats(),
+                    Time.SYSTEM,
+                    5 * 60 * 1000,
+                    new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
+                    TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+                    new LogDirFailureChannel(10),
+                    true,
+                    Optional.empty(),
+                    new CopyOnWriteMap<>(),
+                    false,
+                    LogOffsetsListener.NO_OP_OFFSETS_LISTENER
             );
         }
 
@@ -267,12 +267,12 @@ public class TestLinearWriteSpeed {
             // reset the last offset for each batch to avoid failure caused by offset check
             messages.batches().forEach(b -> b.setLastOffset(b.lastOffset() - b.baseOffset()));
             log.appendAsLeader(
-                messages,
-                0,
-                AppendOrigin.CLIENT,
-                RequestLocal.noCaching(),
-                VerificationGuard.SENTINEL,
-                TV_UNKNOWN
+                    messages,
+                    0,
+                    AppendOrigin.CLIENT,
+                    RequestLocal.noCaching(),
+                    VerificationGuard.SENTINEL,
+                    TV_UNKNOWN
             );
             return messages.sizeInBytes();
         }
@@ -293,80 +293,80 @@ public class TestLinearWriteSpeed {
 
     private static Options createOptions(OptionParser parser) {
         OptionSpec<String> dirOpt = parser.accepts("dir", "The directory to write to.")
-            .withRequiredArg()
-            .describedAs("path")
-            .ofType(String.class)
-            .defaultsTo(System.getProperty("java.io.tmpdir"));
+                .withRequiredArg()
+                .describedAs("path")
+                .ofType(String.class)
+                .defaultsTo(System.getProperty("java.io.tmpdir"));
 
         OptionSpec<Long> bytesOpt = parser.accepts("bytes", "REQUIRED: The total number of bytes to write.")
-            .withRequiredArg()
-            .describedAs("num_bytes")
-            .ofType(Long.class);
+                .withRequiredArg()
+                .describedAs("num_bytes")
+                .ofType(Long.class);
 
         OptionSpec<Integer> sizeOpt = parser.accepts("size", "REQUIRED: The size of each write.")
-            .withRequiredArg()
-            .describedAs("num_bytes")
-            .ofType(Integer.class);
+                .withRequiredArg()
+                .describedAs("num_bytes")
+                .ofType(Integer.class);
 
         OptionSpec<Integer> messageSizeOpt = parser.accepts("message-size", "The size of each message in the message set.")
-            .withRequiredArg()
-            .describedAs("num_bytes")
-            .ofType(Integer.class)
-            .defaultsTo(1024);
+                .withRequiredArg()
+                .describedAs("num_bytes")
+                .ofType(Integer.class)
+                .defaultsTo(1024);
 
         OptionSpec<Integer> filesOpt = parser.accepts("files", "The number of logs or files.")
-            .withRequiredArg()
-            .describedAs("num_files")
-            .ofType(Integer.class)
-            .defaultsTo(1);
+                .withRequiredArg()
+                .describedAs("num_files")
+                .ofType(Integer.class)
+                .defaultsTo(1);
 
         OptionSpec<Long> reportingIntervalOpt = parser.accepts("reporting-interval", "The number of ms between updates.")
-            .withRequiredArg()
-            .describedAs("ms")
-            .ofType(Long.class)
-            .defaultsTo(1000L);
+                .withRequiredArg()
+                .describedAs("ms")
+                .ofType(Long.class)
+                .defaultsTo(1000L);
 
         OptionSpec<Integer> maxThroughputOpt = parser.accepts("max-throughput-mb", "The maximum throughput.")
-            .withRequiredArg()
-            .describedAs("mb")
-            .ofType(Integer.class)
-            .defaultsTo(Integer.MAX_VALUE);
+                .withRequiredArg()
+                .describedAs("mb")
+                .ofType(Integer.class)
+                .defaultsTo(Integer.MAX_VALUE);
 
         OptionSpec<Long> flushIntervalOpt = parser.accepts("flush-interval", "The number of messages between flushes")
-            .withRequiredArg()
-            .describedAs("message_count")
-            .ofType(Long.class)
-            .defaultsTo(Long.MAX_VALUE);
+                .withRequiredArg()
+                .describedAs("message_count")
+                .ofType(Long.class)
+                .defaultsTo(Long.MAX_VALUE);
 
         OptionSpec<String> compressionCodecOpt = parser.accepts("compression", "The compression codec to use")
-            .withRequiredArg()
-            .describedAs("codec")
-            .ofType(String.class)
-            .defaultsTo(CompressionType.NONE.name);
+                .withRequiredArg()
+                .describedAs("codec")
+                .ofType(String.class)
+                .defaultsTo(CompressionType.NONE.name);
 
         OptionSpec<Integer> compressionLevelOpt = parser.accepts("level", "The compression level to use")
-            .withRequiredArg()
-            .describedAs("level")
-            .ofType(Integer.class);
+                .withRequiredArg()
+                .describedAs("level")
+                .ofType(Integer.class);
 
         OptionSpec<Void> channelOpt = parser.accepts("channel", "Do writes to file channels.");
         OptionSpec<Void> logOpt = parser.accepts("log", "Do writes to kafka logs.");
         OptionSpec<Void> mmapOpt = parser.accepts("mmap", "Do writes to mmap file.");
 
         return new Options(
-            dirOpt,
-            bytesOpt,
-            sizeOpt,
-            messageSizeOpt,
-            filesOpt,
-            reportingIntervalOpt,
-            maxThroughputOpt,
-            flushIntervalOpt,
-            compressionCodecOpt,
-            compressionLevelOpt,
-            channelOpt,
-            logOpt,
-            mmapOpt
+                dirOpt,
+                bytesOpt,
+                sizeOpt,
+                messageSizeOpt,
+                filesOpt,
+                reportingIntervalOpt,
+                maxThroughputOpt,
+                flushIntervalOpt,
+                compressionCodecOpt,
+                compressionLevelOpt,
+                channelOpt,
+                logOpt,
+                mmapOpt
         );
     }
 }

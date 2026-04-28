@@ -36,10 +36,10 @@ public class TaskAndAction {
     private final StandbyUpdateListener.SuspendReason suspendReason;
 
     private TaskAndAction(final Task task,
-                          final TaskId taskId,
-                          final Action action,
-                          final CompletableFuture<StateUpdater.RemovedTaskResult> futureForRemove,
-                          final StandbyUpdateListener.SuspendReason suspendReason) {
+        final TaskId taskId,
+        final Action action,
+        final CompletableFuture<StateUpdater.RemovedTaskResult> futureForRemove,
+        final StandbyUpdateListener.SuspendReason suspendReason) {
         this.task = task;
         this.taskId = taskId;
         this.action = action;
@@ -53,8 +53,8 @@ public class TaskAndAction {
     }
 
     public static TaskAndAction createRemoveTask(final TaskId taskId,
-                                                 final CompletableFuture<StateUpdater.RemovedTaskResult> future,
-                                                 final StandbyUpdateListener.SuspendReason suspendReason) {
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future,
+        final StandbyUpdateListener.SuspendReason suspendReason) {
         Objects.requireNonNull(taskId, "Task ID of task to remove is null!");
         Objects.requireNonNull(future, "Future for task to remove is null!");
         Objects.requireNonNull(suspendReason, "Suspend reason for task to remove is null!");

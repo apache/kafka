@@ -44,13 +44,13 @@ public class FetchConfig {
      * the hassle of constructing a {@link ConsumerConfig}.
      */
     public FetchConfig(int minBytes,
-                       int maxBytes,
-                       int maxWaitMs,
-                       int fetchSize,
-                       int maxPollRecords,
-                       boolean checkCrcs,
-                       String clientRackId,
-                       IsolationLevel isolationLevel) {
+        int maxBytes,
+        int maxWaitMs,
+        int fetchSize,
+        int maxPollRecords,
+        boolean checkCrcs,
+        String clientRackId,
+        IsolationLevel isolationLevel) {
         this.minBytes = minBytes;
         this.maxBytes = maxBytes;
         this.maxWaitMs = maxWaitMs;
@@ -92,14 +92,14 @@ public class FetchConfig {
     @Override
     public String toString() {
         return "FetchConfig{" +
-                "minBytes=" + minBytes +
-                ", maxBytes=" + maxBytes +
-                ", maxWaitMs=" + maxWaitMs +
-                ", fetchSize=" + fetchSize +
-                ", maxPollRecords=" + maxPollRecords +
-                ", checkCrcs=" + checkCrcs +
-                ", clientRackId='" + clientRackId + '\'' +
-                ", isolationLevel=" + isolationLevel +
-                '}';
+            "minBytes=" + minBytes +
+            ", maxBytes=" + maxBytes +
+            ", maxWaitMs=" + maxWaitMs +
+            ", fetchSize=" + fetchSize +
+            ", maxPollRecords=" + maxPollRecords +
+            ", checkCrcs=" + checkCrcs +
+            ", clientRackId='" + clientRackId + '\'' +
+            ", isolationLevel=" + isolationLevel +
+            '}';
     }
 }

@@ -52,8 +52,8 @@ public class AdminBootstrapAddressesTest {
         map.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         AdminClientConfig config = new AdminClientConfig(map);
         assertEquals("You cannot set both bootstrap.servers and bootstrap.controllers",
-                assertThrows(ConfigException.class, () -> AdminBootstrapAddresses.fromConfig(config)).
-                        getMessage());
+            assertThrows(ConfigException.class, () -> AdminBootstrapAddresses.fromConfig(config)).
+                getMessage());
     }
 
     @ParameterizedTest
@@ -70,9 +70,9 @@ public class AdminBootstrapAddressesTest {
         AdminBootstrapAddresses addresses = AdminBootstrapAddresses.fromConfig(config);
         assertEquals(usingBootstrapControllers, addresses.usingBootstrapControllers());
         assertEquals(Arrays.asList(
-            new InetSocketAddress("localhost", 9092),
-            new InetSocketAddress("localhost", 9093),
-            new InetSocketAddress("localhost", 9094)),
-                addresses.addresses());
+                new InetSocketAddress("localhost", 9092),
+                new InetSocketAddress("localhost", 9093),
+                new InetSocketAddress("localhost", 9094)),
+            addresses.addresses());
     }
 }

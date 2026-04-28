@@ -106,9 +106,9 @@ public class RemoveMembersFromConsumerGroupHandler extends AdminApiHandler.Batch
             final Map<MemberIdentity, Errors> memberErrors = new HashMap<>();
             for (MemberResponse memberResponse : response.memberResponses()) {
                 memberErrors.put(new MemberIdentity()
-                                     .setMemberId(memberResponse.memberId())
-                                     .setGroupInstanceId(memberResponse.groupInstanceId()),
-                                 Errors.forCode(memberResponse.errorCode()));
+                        .setMemberId(memberResponse.memberId())
+                        .setGroupInstanceId(memberResponse.groupInstanceId()),
+                    Errors.forCode(memberResponse.errorCode()));
             }
 
             return ApiResult.completed(groupId, memberErrors);

@@ -44,10 +44,10 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext<Object,
     private final Time time;
 
     public GlobalProcessorContextImpl(final StreamsConfig config,
-                                      final GlobalStateManager stateMgr,
-                                      final StreamsMetricsImpl metrics,
-                                      final ThreadCache cache,
-                                      final Time time) {
+        final GlobalStateManager stateMgr,
+        final StreamsMetricsImpl metrics,
+        final ThreadCache cache,
+        final Time time) {
         super(new TaskId(-1, -1), config, metrics, cache);
         stateManager = stateMgr;
         this.time = time;
@@ -142,11 +142,11 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext<Object,
 
     @Override
     public void logChange(final String storeName,
-                          final Bytes key,
-                          final byte[] value,
-                          final long timestamp,
-                          final Headers headers,
-                          final Position position) {
+        final Bytes key,
+        final byte[] value,
+        final long timestamp,
+        final Headers headers,
+        final Position position) {
         throw new UnsupportedOperationException("this should not happen: logChange() not supported in global processor context.");
     }
 

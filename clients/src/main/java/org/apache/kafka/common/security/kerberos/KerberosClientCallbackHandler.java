@@ -49,11 +49,11 @@ public class KerberosClientCallbackHandler implements AuthenticateCallbackHandle
                 nc.setName(nc.getDefaultName());
             } else if (callback instanceof PasswordCallback) {
                 String errorMessage = "Could not login: the client is being asked for a password, but the Kafka" +
-                             " client code does not currently support obtaining a password from the user.";
+                    " client code does not currently support obtaining a password from the user.";
                 errorMessage += " Make sure -Djava.security.auth.login.config property passed to JVM and" +
-                             " the client is configured to use a ticket cache (using" +
-                             " the JAAS configuration setting 'useTicketCache=true)'. Make sure you are using" +
-                             " FQDN of the Kafka broker you are trying to connect to.";
+                    " the client is configured to use a ticket cache (using" +
+                    " the JAAS configuration setting 'useTicketCache=true)'. Make sure you are using" +
+                    " FQDN of the Kafka broker you are trying to connect to.";
                 throw new UnsupportedCallbackException(callback, errorMessage);
             } else if (callback instanceof RealmCallback) {
                 RealmCallback rc = (RealmCallback) callback;
@@ -65,7 +65,7 @@ public class KerberosClientCallbackHandler implements AuthenticateCallbackHandle
                 ac.setAuthorized(authId.equals(authzId));
                 if (ac.isAuthorized())
                     ac.setAuthorizedID(authzId);
-            }  else {
+            } else {
                 throw new UnsupportedCallbackException(callback, "Unrecognized SASL ClientCallback");
             }
         }

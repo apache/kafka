@@ -126,11 +126,11 @@ public class FetchSessionHandler {
         private final boolean canUseTopicIds;
 
         FetchRequestData(Map<TopicPartition, PartitionData> toSend,
-                         List<TopicIdPartition> toForget,
-                         List<TopicIdPartition> toReplace,
-                         Map<TopicPartition, PartitionData> sessionPartitions,
-                         FetchMetadata metadata,
-                         boolean canUseTopicIds) {
+            List<TopicIdPartition> toForget,
+            List<TopicIdPartition> toReplace,
+            Map<TopicPartition, PartitionData> sessionPartitions,
+            FetchMetadata metadata,
+            boolean canUseTopicIds) {
             this.toSend = toSend;
             this.toForget = toForget;
             this.toReplace = toReplace;
@@ -278,7 +278,7 @@ public class FetchSessionHandler {
             if (nextMetadata.isFull()) {
                 if (log.isDebugEnabled()) {
                     log.debug("Built full fetch {} for node {} with {}.",
-                            nextMetadata, node, topicPartitionsToLogString(next.keySet()));
+                        nextMetadata, node, topicPartitionsToLogString(next.keySet()));
                 }
                 sessionPartitions = next;
                 next = null;
@@ -289,7 +289,7 @@ public class FetchSessionHandler {
                     sessionTopicNames = Collections.emptyMap();
                 }
                 Map<TopicPartition, PartitionData> toSend =
-                        Collections.unmodifiableMap(new LinkedHashMap<>(sessionPartitions));
+                    Collections.unmodifiableMap(new LinkedHashMap<>(sessionPartitions));
                 return new FetchRequestData(toSend, Collections.emptyList(), Collections.emptyList(), toSend, nextMetadata, canUseTopicIds);
             }
 
@@ -298,7 +298,7 @@ public class FetchSessionHandler {
             List<TopicIdPartition> altered = new ArrayList<>();
             List<TopicIdPartition> replaced = new ArrayList<>();
             for (Iterator<Entry<TopicPartition, PartitionData>> iter =
-                 sessionPartitions.entrySet().iterator(); iter.hasNext(); ) {
+                sessionPartitions.entrySet().iterator();iter.hasNext();) {
                 Entry<TopicPartition, PartitionData> entry = iter.next();
                 TopicPartition topicPartition = entry.getKey();
                 PartitionData prevData = entry.getValue();
@@ -308,8 +308,8 @@ public class FetchSessionHandler {
                     // we add it to the "replaced" set. If the request is version 13 or higher, the replaced
                     // partition will be forgotten. In any case, we will send the new partition in the request.
                     if (!prevData.topicId.equals(nextData.topicId)
-                            && !prevData.topicId.equals(Uuid.ZERO_UUID)
-                            && !nextData.topicId.equals(Uuid.ZERO_UUID)) {
+                        && !prevData.topicId.equals(Uuid.ZERO_UUID)
+                        && !nextData.topicId.equals(Uuid.ZERO_UUID)) {
                         // Re-add the replaced partition to the end of 'next'
                         next.put(topicPartition, nextData);
                         entry.setValue(nextData);
@@ -355,21 +355,21 @@ public class FetchSessionHandler {
 
             if (log.isDebugEnabled()) {
                 log.debug("Built incremental fetch {} for node {}. Added {}, altered {}, removed {}, " +
-                          "replaced {} out of {}", nextMetadata, node, topicIdPartitionsToLogString(added),
-                          topicIdPartitionsToLogString(altered), topicIdPartitionsToLogString(removed),
-                          topicIdPartitionsToLogString(replaced), topicPartitionsToLogString(sessionPartitions.keySet()));
+                    "replaced {} out of {}", nextMetadata, node, topicIdPartitionsToLogString(added),
+                    topicIdPartitionsToLogString(altered), topicIdPartitionsToLogString(removed),
+                    topicIdPartitionsToLogString(replaced), topicPartitionsToLogString(sessionPartitions.keySet()));
             }
             Map<TopicPartition, PartitionData> toSend = Collections.unmodifiableMap(next);
             Map<TopicPartition, PartitionData> curSessionPartitions = copySessionPartitions
-                    ? Collections.unmodifiableMap(new LinkedHashMap<>(sessionPartitions))
-                    : Collections.unmodifiableMap(sessionPartitions);
+                ? Collections.unmodifiableMap(new LinkedHashMap<>(sessionPartitions))
+                : Collections.unmodifiableMap(sessionPartitions);
             next = null;
             return new FetchRequestData(toSend,
-                    Collections.unmodifiableList(removed),
-                    Collections.unmodifiableList(replaced),
-                    curSessionPartitions,
-                    nextMetadata,
-                    canUseTopicIds);
+                Collections.unmodifiableList(removed),
+                Collections.unmodifiableList(replaced),
+                curSessionPartitions,
+                nextMetadata,
+                canUseTopicIds);
         }
     }
 
@@ -412,7 +412,7 @@ public class FetchSessionHandler {
      */
     static <T> Set<T> findMissing(Set<T> toFind, Set<T> toSearch) {
         Set<T> ret = new LinkedHashSet<>();
-        for (T toFindItem: toFind) {
+        for (T toFindItem : toFind) {
             if (!toSearch.contains(toFindItem)) {
                 ret.add(toFindItem);
             }
@@ -565,7 +565,7 @@ public class FetchSessionHandler {
                 // The server created a new incremental fetch session.
                 if (log.isDebugEnabled())
                     log.debug("Node {} sent a full fetch response that created a new incremental " +
-                            "fetch session {}{}", node, response.sessionId(), responseDataToLogString(topicPartitions));
+                        "fetch session {}{}", node, response.sessionId(), responseDataToLogString(topicPartitions));
                 nextMetadata = FetchMetadata.newIncremental(response.sessionId());
                 return true;
             }
@@ -579,7 +579,7 @@ public class FetchSessionHandler {
                 // The incremental fetch session was closed by the server.
                 if (log.isDebugEnabled())
                     log.debug("Node {} sent an incremental fetch response closing session {}{}",
-                            node, nextMetadata.sessionId(), responseDataToLogString(topicPartitions));
+                        node, nextMetadata.sessionId(), responseDataToLogString(topicPartitions));
                 nextMetadata = FetchMetadata.INITIAL;
                 return true;
             } else {

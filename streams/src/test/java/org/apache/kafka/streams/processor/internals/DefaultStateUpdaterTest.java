@@ -832,7 +832,7 @@ class DefaultStateUpdaterTest {
     }
 
     private void setupShouldThrowIfRemovingUpdatingStatefulTaskFailsWithException(final Task task,
-                                                                                  final RuntimeException exception) throws Exception {
+        final RuntimeException exception) throws Exception {
         when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
         final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
@@ -843,9 +843,9 @@ class DefaultStateUpdaterTest {
     }
 
     private void verifyRemovingUpdatingStatefulTaskFails(final CompletableFuture<StateUpdater.RemovedTaskResult> future,
-                                                         final Task task,
-                                                         final RuntimeException exception,
-                                                         final boolean shouldStillBeRunning) throws Exception {
+        final Task task,
+        final RuntimeException exception,
+        final boolean shouldStillBeRunning) throws Exception {
         final ExecutionException executionException = assertThrows(ExecutionException.class, future::get);
         assertInstanceOf(RuntimeException.class, executionException.getCause());
         verifyRestoredActiveTasks();
@@ -1763,8 +1763,8 @@ class DefaultStateUpdaterTest {
 
         final TaskCorruptedException taskCorruptedException = new TaskCorruptedException(Set.of(TASK_0_2));
         when(changelogReader.restore(Map.of(
-                TASK_0_0, activeTask1,
-                TASK_0_2, failedStatefulTask))
+            TASK_0_0, activeTask1,
+            TASK_0_2, failedStatefulTask))
         ).thenThrow(taskCorruptedException);
 
         stateUpdater.add(failedStatefulTask);
@@ -1860,15 +1860,15 @@ class DefaultStateUpdaterTest {
 
     @SuppressWarnings("unchecked")
     private static <T> void verifyMetric(final StreamsMetricsImpl metrics,
-                                         final MetricName metricName,
-                                         final Matcher<T> matcher) {
+        final MetricName metricName,
+        final Matcher<T> matcher) {
         assertThat(metrics.metrics().get(metricName).metricName().description(), is(metricName.description()));
         assertThat(metrics.metrics().get(metricName).metricName().tags(), is(metricName.tags()));
         assertThat((T) metrics.metrics().get(metricName).metricValue(), matcher);
     }
 
     private void verifyGetTasks(final Set<StreamTask> expectedActiveTasks,
-                                final Set<StandbyTask> expectedStandbyTasks) {
+        final Set<StandbyTask> expectedStandbyTasks) {
         final Set<Task> tasks = stateUpdater.tasks();
 
         assertEquals(expectedActiveTasks.size() + expectedStandbyTasks.size(), tasks.size());
@@ -1906,7 +1906,7 @@ class DefaultStateUpdaterTest {
                 },
                 VERIFICATION_TIMEOUT,
                 () -> "Did not get all restored active task within the given timeout! Expected: "
-                        + expectedRestoredTasks + ", actual: " + restoredTasks
+                    + expectedRestoredTasks + ", actual: " + restoredTasks
             );
         }
     }
@@ -1922,7 +1922,7 @@ class DefaultStateUpdaterTest {
             },
             VERIFICATION_TIMEOUT,
             () -> "Did not get all restored active task within the given timeout! Expected: "
-                    + expectedRestoredTasks + ", actual: " + restoredTasks
+                + expectedRestoredTasks + ", actual: " + restoredTasks
         );
         assertTrue(stateUpdater.drainRestoredActiveTasks(Duration.ZERO).isEmpty());
     }
@@ -1945,7 +1945,7 @@ class DefaultStateUpdaterTest {
                 },
                 VERIFICATION_TIMEOUT,
                 () -> "Did not get all updating task within the given timeout! Expected: "
-                        + expectedUpdatingTasks + ", actual: " + updatingTasks
+                    + expectedUpdatingTasks + ", actual: " + updatingTasks
             );
         }
     }
@@ -1961,7 +1961,7 @@ class DefaultStateUpdaterTest {
             },
             VERIFICATION_TIMEOUT,
             () -> "Did not see all standby task within the given timeout! Expected: "
-                    + expectedStandbyTasks + ", actual: " + standbyTasks
+                + expectedStandbyTasks + ", actual: " + standbyTasks
         );
     }
 
@@ -1991,7 +1991,7 @@ class DefaultStateUpdaterTest {
                 },
                 VERIFICATION_TIMEOUT,
                 () -> "Did not get all paused task within the given timeout! Expected: "
-                        + expectedPausedTasks + ", actual: " + pausedTasks
+                    + expectedPausedTasks + ", actual: " + pausedTasks
             );
         }
     }
@@ -2007,7 +2007,7 @@ class DefaultStateUpdaterTest {
             },
             VERIFICATION_TIMEOUT,
             () -> "Did not get all exceptions and failed tasks within the given timeout! Expected: "
-                    + expectedExceptionAndTasks + ", actual: " + failedTasks
+                + expectedExceptionAndTasks + ", actual: " + failedTasks
         );
     }
 
@@ -2026,7 +2026,7 @@ class DefaultStateUpdaterTest {
             },
             VERIFICATION_TIMEOUT,
             () -> "Did not get all exceptions and failed tasks within the given timeout! Expected: "
-                        + expectedFailedTasks + ", actual: " + failedTasks
+                + expectedFailedTasks + ", actual: " + failedTasks
         );
     }
 
@@ -2045,7 +2045,7 @@ class DefaultStateUpdaterTest {
             },
             VERIFICATION_TIMEOUT,
             () -> "Did not get all exceptions and failed tasks within the given timeout! Expected: "
-                    + expectedExceptionAndTasks + ", actual: " + failedTasks
+                + expectedExceptionAndTasks + ", actual: " + failedTasks
         );
         assertFalse(stateUpdater.hasExceptionsAndFailedTasks());
         assertTrue(stateUpdater.drainExceptionsAndFailedTasks().isEmpty());

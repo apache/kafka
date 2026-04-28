@@ -75,6 +75,7 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
                     "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used.");
 
     private final Cache<Schema, Schema> moveSchemaCache = new SynchronizedCache<>(new LRUCache<>(16));
+
     enum Operation {
         MOVE(MOVE_OPERATION),
         COPY(COPY_OPERATION);
@@ -187,7 +188,9 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
     }
 
     protected abstract Object operatingValue(R record);
+
     protected abstract Schema operatingSchema(R record);
+
     protected abstract R newRecord(R record, Schema updatedSchema, Object updatedValue, Iterable<Header> updatedHeaders);
 
     public static class Key<R extends ConnectRecord<R>> extends HeaderFrom<R> {

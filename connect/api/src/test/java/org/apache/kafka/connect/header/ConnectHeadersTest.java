@@ -84,7 +84,7 @@ public class ConnectHeadersTest {
     @Test
     public void shouldNotAllowNullKey() {
         assertThrows(NullPointerException.class,
-            () -> headers.add(null, "value", Schema.STRING_SCHEMA));
+                () -> headers.add(null, "value", Schema.STRING_SCHEMA));
     }
 
     protected void populate(Headers headers) {
@@ -387,7 +387,7 @@ public class ConnectHeadersTest {
         Schema emptyStructSchema = SchemaBuilder.struct();
         assertSchemaMatches(emptyStructSchema, new Struct(emptyStructSchema));
         Schema structSchema = SchemaBuilder.struct().field("foo", Schema.OPTIONAL_BOOLEAN_SCHEMA).field("bar", Schema.STRING_SCHEMA)
-                                           .schema();
+                .schema();
         assertSchemaMatches(structSchema, new Struct(structSchema).put("foo", true).put("bar", "v"));
     }
 

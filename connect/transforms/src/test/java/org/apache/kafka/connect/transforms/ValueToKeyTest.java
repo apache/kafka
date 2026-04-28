@@ -108,8 +108,8 @@ public class ValueToKeyTest {
         xform.configure(Map.of("fields", "not_exist"));
 
         final Schema valueSchema = SchemaBuilder.struct()
-            .field("a", Schema.INT32_SCHEMA)
-            .build();
+                .field("a", Schema.INT32_SCHEMA)
+                .build();
 
         final Struct value = new Struct(valueSchema);
         value.put("a", 1);

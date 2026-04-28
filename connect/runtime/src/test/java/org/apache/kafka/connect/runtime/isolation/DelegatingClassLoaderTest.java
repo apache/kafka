@@ -120,15 +120,15 @@ public class DelegatingClassLoaderTest {
         transformations.add(castV2);
         transformations.add(filter);
         scanResult = new PluginScanResult(
-            sinkConnectors,
-            new TreeSet<>(),
-            new TreeSet<>(),
-            new TreeSet<>(),
-            transformations,
-            new TreeSet<>(),
-            new TreeSet<>(),
-            new TreeSet<>(),
-            new TreeSet<>()
+                sinkConnectors,
+                new TreeSet<>(),
+                new TreeSet<>(),
+                new TreeSet<>(),
+                transformations,
+                new TreeSet<>(),
+                new TreeSet<>(),
+                new TreeSet<>(),
+                new TreeSet<>()
         );
     }
 

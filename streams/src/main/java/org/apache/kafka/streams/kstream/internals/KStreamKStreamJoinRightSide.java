@@ -28,13 +28,13 @@ import java.util.Optional;
 class KStreamKStreamJoinRightSide<K, VLeft, VRight, VOut> extends KStreamKStreamJoin<K, VLeft, VRight, VOut, VRight, VLeft> {
 
     KStreamKStreamJoinRightSide(final JoinWindowsInternal windows,
-                                final ValueJoinerWithKey<? super K, ? super VRight, ? super VLeft, ? extends VOut> joiner,
-                                final boolean outer,
-                                final TimeTrackerSupplier sharedTimeTrackerSupplier,
-                                final StoreFactory otherWindowStoreFactory,
-                                final Optional<StoreFactory> outerJoinWindowStoreFactory) {
+        final ValueJoinerWithKey<? super K, ? super VRight, ? super VLeft, ? extends VOut> joiner,
+        final boolean outer,
+        final TimeTrackerSupplier sharedTimeTrackerSupplier,
+        final StoreFactory otherWindowStoreFactory,
+        final Optional<StoreFactory> outerJoinWindowStoreFactory) {
         super(windows, joiner, outer, windows.afterMs, windows.beforeMs, sharedTimeTrackerSupplier,
-              otherWindowStoreFactory, outerJoinWindowStoreFactory);
+            otherWindowStoreFactory, outerJoinWindowStoreFactory);
     }
 
     @Override

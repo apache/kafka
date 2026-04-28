@@ -25,7 +25,7 @@ public class InMemorySessionBytesStoreSupplier implements SessionBytesStoreSuppl
     private final long retentionPeriod;
 
     public InMemorySessionBytesStoreSupplier(final String name,
-                                             final long retentionPeriod) {
+        final long retentionPeriod) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
     }

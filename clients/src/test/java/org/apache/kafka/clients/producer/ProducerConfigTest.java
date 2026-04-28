@@ -151,7 +151,7 @@ public class ProducerConfigTest {
         configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         ConfigException configException = assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
         assertEquals("To use the idempotent producer, " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION +
-                                " must be set to at most 5. Current value is " + inFlightConnection + ".", configException.getMessage());
+            " must be set to at most 5. Current value is " + inFlightConnection + ".", configException.getMessage());
 
         configs.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "5");
         assertDoesNotThrow(() -> new ProducerConfig(configs));

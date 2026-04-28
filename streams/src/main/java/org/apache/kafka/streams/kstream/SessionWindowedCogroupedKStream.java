@@ -71,7 +71,7 @@ public interface SessionWindowedCogroupedKStream<K, V> {
      * the latest (rolling) aggregate for each key per session
      */
     KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
-                                     final Merger<? super K, V> sessionMerger);
+        final Merger<? super K, V> sessionMerger);
 
     /**
      * Aggregate the values of records in these streams by the grouped key and defined sessions.
@@ -117,8 +117,8 @@ public interface SessionWindowedCogroupedKStream<K, V> {
      * the latest (rolling) aggregate for each key per session
      */
     KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
-                                     final Merger<? super K, V> sessionMerger,
-                                     final Named named);
+        final Merger<? super K, V> sessionMerger,
+        final Named named);
 
     /**
      * Aggregate the values of records in these streams by the grouped key and defined sessions.
@@ -178,8 +178,8 @@ public interface SessionWindowedCogroupedKStream<K, V> {
      * the latest (rolling) aggregate for each key within a window
      */
     KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
-                                     final Merger<? super K, V> sessionMerger,
-                                     final Materialized<K, V, SessionStore<Bytes, byte[]>> materialized);
+        final Merger<? super K, V> sessionMerger,
+        final Materialized<K, V, SessionStore<Bytes, byte[]>> materialized);
 
     /**
      * Aggregate the values of records in these streams by the grouped key and defined sessions.
@@ -237,7 +237,7 @@ public interface SessionWindowedCogroupedKStream<K, V> {
      * the latest (rolling) aggregate for each key per session
      */
     KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer,
-                                     final Merger<? super K, V> sessionMerger,
-                                     final Named named,
-                                     final Materialized<K, V, SessionStore<Bytes, byte[]>> materialized);
+        final Merger<? super K, V> sessionMerger,
+        final Named named,
+        final Materialized<K, V, SessionStore<Bytes, byte[]>> materialized);
 }

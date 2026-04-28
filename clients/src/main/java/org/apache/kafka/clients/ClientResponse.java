@@ -50,24 +50,24 @@ public class ClientResponse {
      *                     or if there was a version mismatch.
      */
     public ClientResponse(RequestHeader requestHeader,
-                          RequestCompletionHandler callback,
-                          String destination,
-                          long createdTimeMs,
-                          long receivedTimeMs,
-                          boolean disconnected,
-                          UnsupportedVersionException versionMismatch,
-                          AuthenticationException authenticationException,
-                          AbstractResponse responseBody) {
+        RequestCompletionHandler callback,
+        String destination,
+        long createdTimeMs,
+        long receivedTimeMs,
+        boolean disconnected,
+        UnsupportedVersionException versionMismatch,
+        AuthenticationException authenticationException,
+        AbstractResponse responseBody) {
         this(requestHeader,
-             callback,
-             destination,
-             createdTimeMs,
-             receivedTimeMs,
-             disconnected,
-             false,
-             versionMismatch,
-             authenticationException,
-             responseBody);
+            callback,
+            destination,
+            createdTimeMs,
+            receivedTimeMs,
+            disconnected,
+            false,
+            versionMismatch,
+            authenticationException,
+            responseBody);
     }
 
     /**
@@ -85,15 +85,15 @@ public class ClientResponse {
      *                     or if there was a version mismatch.
      */
     public ClientResponse(RequestHeader requestHeader,
-                          RequestCompletionHandler callback,
-                          String destination,
-                          long createdTimeMs,
-                          long receivedTimeMs,
-                          boolean disconnected,
-                          boolean timedOut,
-                          UnsupportedVersionException versionMismatch,
-                          AuthenticationException authenticationException,
-                          AbstractResponse responseBody) {
+        RequestCompletionHandler callback,
+        String destination,
+        long createdTimeMs,
+        long receivedTimeMs,
+        boolean disconnected,
+        boolean timedOut,
+        UnsupportedVersionException versionMismatch,
+        AuthenticationException authenticationException,
+        AbstractResponse responseBody) {
         if (!disconnected && timedOut)
             throw new IllegalStateException("The client response can't be in the state of connected, yet timed out");
 
@@ -157,17 +157,17 @@ public class ClientResponse {
     @Override
     public String toString() {
         return "ClientResponse(receivedTimeMs=" + receivedTimeMs +
-               ", latencyMs=" +
-               latencyMs +
-               ", disconnected=" +
-               disconnected +
-               ", timedOut=" +
-               timedOut +
-               ", requestHeader=" +
-               requestHeader +
-               ", responseBody=" +
-               responseBody +
-               ")";
+            ", latencyMs=" +
+            latencyMs +
+            ", disconnected=" +
+            disconnected +
+            ", timedOut=" +
+            timedOut +
+            ", requestHeader=" +
+            requestHeader +
+            ", responseBody=" +
+            responseBody +
+            ")";
     }
 
 }

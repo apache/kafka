@@ -87,7 +87,7 @@ public class MockProducerTest {
         PartitionInfo partitionInfo0 = new PartitionInfo(topic, 0, null, null, null);
         PartitionInfo partitionInfo1 = new PartitionInfo(topic, 1, null, null, null);
         Cluster cluster = new Cluster(null, new ArrayList<>(0), asList(partitionInfo0, partitionInfo1),
-                Collections.emptySet(), Collections.emptySet());
+            Collections.emptySet(), Collections.emptySet());
         MockProducer<String, String> producer = new MockProducer<>(
             cluster,
             true,
@@ -442,7 +442,7 @@ public class MockProducerTest {
         producer.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata("groupId"));
         assertFalse(producer.sentOffsets());
     }
-    
+
     @Test
     public void shouldAddOffsetsWhenSendOffsetsToTransactionByGroupMetadata() {
         buildMockProducer(true);

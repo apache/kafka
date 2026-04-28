@@ -40,11 +40,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class PartitionGrouperTest {
 
     private final List<PartitionInfo> infos = Arrays.asList(
-            new PartitionInfo("topic1", 0, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic1", 1, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic1", 2, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic2", 0, Node.noNode(), new Node[0], new Node[0]),
-            new PartitionInfo("topic2", 1, Node.noNode(), new Node[0], new Node[0])
+        new PartitionInfo("topic1", 0, Node.noNode(), new Node[0], new Node[0]),
+        new PartitionInfo("topic1", 1, Node.noNode(), new Node[0], new Node[0]),
+        new PartitionInfo("topic1", 2, Node.noNode(), new Node[0], new Node[0]),
+        new PartitionInfo("topic2", 0, Node.noNode(), new Node[0], new Node[0]),
+        new PartitionInfo("topic2", 1, Node.noNode(), new Node[0], new Node[0])
     );
 
     private final Cluster metadata = new Cluster(
@@ -83,10 +83,10 @@ public class PartitionGrouperTest {
             new TaskId(SUBTOPOLOGY_0.nodeGroupId, 0, SUBTOPOLOGY_0.namedTopology),
             Set.of(new TopicPartition("topic1", 0), new TopicPartition("topic2", 0)));
         expectedPartitionsForTask.put(
-            new TaskId(SUBTOPOLOGY_0.nodeGroupId, 1,  SUBTOPOLOGY_0.namedTopology),
+            new TaskId(SUBTOPOLOGY_0.nodeGroupId, 1, SUBTOPOLOGY_0.namedTopology),
             Set.of(new TopicPartition("topic1", 1), new TopicPartition("topic2", 1)));
         expectedPartitionsForTask.put(
-                new TaskId(SUBTOPOLOGY_0.nodeGroupId, 2,  SUBTOPOLOGY_0.namedTopology),
+            new TaskId(SUBTOPOLOGY_0.nodeGroupId, 2, SUBTOPOLOGY_0.namedTopology),
             Set.of(new TopicPartition("topic1", 2)));
 
         assertEquals(expectedPartitionsForTask, grouper.partitionGroups(topicGroups, metadata));
@@ -96,7 +96,7 @@ public class PartitionGrouperTest {
     public void shouldNotCreateAnyTasksBecauseOneTopicHasUnknownPartitions() {
         final PartitionGrouper grouper = new PartitionGrouper();
         final Map<Subtopology, Set<String>> topicGroups = new HashMap<>();
-    
+
         topicGroups.put(SUBTOPOLOGY_0, Set.of("topic1", "unknownTopic", "topic2"));
         assertThrows(RuntimeException.class, () -> grouper.partitionGroups(topicGroups, metadata));
     }

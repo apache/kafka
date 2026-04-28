@@ -150,7 +150,7 @@ public interface ProcessingExceptionHandler extends Configurable {
          * @param deadLetterQueueRecords the list of records to be sent to the dead letter queue; may be {@code null}.
          */
         private Response(final Result result,
-                         final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
+            final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords) {
             this.result = result;
             this.deadLetterQueueRecords = deadLetterQueueRecords;
         }

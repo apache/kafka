@@ -28,15 +28,25 @@ import java.util.List;
 
 public interface Readable {
     byte readByte();
+
     short readShort();
+
     int readInt();
+
     long readLong();
+
     double readDouble();
+
     byte[] readArray(int length);
+
     int readUnsignedVarint();
+
     ByteBuffer readByteBuffer(int length);
+
     int readVarint();
+
     long readVarlong();
+
     int remaining();
 
     /**

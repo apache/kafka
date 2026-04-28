@@ -56,8 +56,8 @@ public class MeterTest {
 
         // Record values in multiple windows and verify that rates are reported
         // for time windows and that the total is cumulative.
-        for (int i = 1; i <= 100; i++) {
-            for (; now < i * 1000; now += intervalMs, nextValue += delta) {
+        for (int i = 1;i <= 100;i++) {
+            for (;now < i * 1000;now += intervalMs, nextValue += delta) {
                 expectedTotal += nextValue;
                 meter.record(config, nextValue, now);
             }
@@ -66,7 +66,7 @@ public class MeterTest {
             long windowStartMs = Math.max(now - windowSizeMs, 0);
             double sampledTotal = 0.0;
             double prevValue = nextValue - delta;
-            for (long timeMs = now - 100; timeMs >= windowStartMs; timeMs -= intervalMs, prevValue -= delta)
+            for (long timeMs = now - 100;timeMs >= windowStartMs;timeMs -= intervalMs, prevValue -= delta)
                 sampledTotal += prevValue;
             assertEquals(sampledTotal * 1000 / windowSizeMs, rateStat.measure(config, now), EPS);
         }

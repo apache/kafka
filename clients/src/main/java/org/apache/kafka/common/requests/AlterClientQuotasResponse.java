@@ -90,8 +90,8 @@ public class AlterClientQuotasResponse extends AbstractResponse {
         List<AlterClientQuotasResponseData.EntityData> entityData = new ArrayList<>(entity.entries().size());
         for (Map.Entry<String, String> entry : entity.entries().entrySet()) {
             entityData.add(new AlterClientQuotasResponseData.EntityData()
-                    .setEntityType(entry.getKey())
-                    .setEntityName(entry.getValue()));
+                .setEntityType(entry.getKey())
+                .setEntityName(entry.getValue()));
         }
         return entityData;
     }
@@ -105,9 +105,9 @@ public class AlterClientQuotasResponse extends AbstractResponse {
         for (Map.Entry<ClientQuotaEntity, ApiError> entry : result.entrySet()) {
             ApiError e = entry.getValue();
             entries.add(new EntryData()
-                    .setErrorCode(e.error().code())
-                    .setErrorMessage(e.message())
-                    .setEntity(toEntityData(entry.getKey())));
+                .setErrorCode(e.error().code())
+                .setErrorMessage(e.message())
+                .setEntity(toEntityData(entry.getKey())));
         }
 
         return new AlterClientQuotasResponse(new AlterClientQuotasResponseData()

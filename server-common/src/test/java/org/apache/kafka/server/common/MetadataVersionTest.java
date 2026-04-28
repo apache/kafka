@@ -284,7 +284,7 @@ class MetadataVersionTest {
     public void assertLatestProductionIsLessThanLatest() {
         assertTrue(LATEST_PRODUCTION.ordinal() < MetadataVersion.latestTesting().ordinal(),
             "Expected LATEST_PRODUCTION " + LATEST_PRODUCTION +
-            " to be less than the latest of " + MetadataVersion.latestTesting());
+                " to be less than the latest of " + MetadataVersion.latestTesting());
     }
 
     /**

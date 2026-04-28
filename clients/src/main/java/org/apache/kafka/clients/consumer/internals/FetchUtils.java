@@ -46,8 +46,8 @@ public class FetchUtils {
      * @param topicPartition {@link TopicPartition} for which this state change is related
      */
     static void requestMetadataUpdate(final Metadata metadata,
-                                      final SubscriptionState subscriptions,
-                                      final TopicPartition topicPartition) {
+        final SubscriptionState subscriptions,
+        final TopicPartition topicPartition) {
         metadata.requestUpdate(false);
         subscriptions.clearPreferredReadReplica(topicPartition);
     }

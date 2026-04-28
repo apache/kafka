@@ -94,7 +94,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
 
     private static final String METRICS_SCOPE = "metrics-scope";
-    
+
     private long windowSizeForTimeWindow = 500;
     private InternalMockProcessorContext<?, ?> context;
     private AbstractDualSchemaRocksDBSegmentedBytesStore<KeyValueSegment> bytesStore;
@@ -116,7 +116,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         SessionSchemaWithIndex,
         SessionSchemaWithoutIndex
     }
-    
+
     @BeforeEach
     public void before() {
         if (getBaseSchema() instanceof TimeFirstSessionKeySchema) {
@@ -170,17 +170,17 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         switch (schemaType()) {
             case WindowSchemaWithIndex:
                 return new RocksDBTimeOrderedWindowSegmentedBytesStore<>(
-                        storeName,
-                        retention,
-                        true,
-                        new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval)
+                    storeName,
+                    retention,
+                    true,
+                    new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval)
                 );
             case WindowSchemaWithoutIndex:
                 return new RocksDBTimeOrderedWindowSegmentedBytesStore<>(
-                        storeName,
-                        retention,
-                        false,
-                        new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval)
+                    storeName,
+                    retention,
+                    false,
+                    new KeyValueSegments(storeName, METRICS_SCOPE, retention, segmentInterval)
                 );
             case SessionSchemaWithIndex:
                 return new RocksDBTimeOrderedSessionSegmentedBytesStore<>(
@@ -983,8 +983,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
                 // actual from = (1000 - 1000 + 1)
                 // and search happens in the range 1-2000
                 expected = asList(
-                        KeyValue.pair(new Windowed<>(keyA, windows[0]), 10L),
-                        KeyValue.pair(new Windowed<>(keyB, windows[2]), 20L)
+                    KeyValue.pair(new Windowed<>(keyA, windows[0]), 10L),
+                    KeyValue.pair(new Windowed<>(keyB, windows[2]), 20L)
                 );
             } else {
                 // For session key schema, actual from is 501
@@ -1021,8 +1021,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
             // observed stream time = 1000. actual from = (1000 - 1000 + 1)
             // and search happens in the range 1-2000
             expected = asList(
-                    KeyValue.pair(new Windowed<>(key, windows[0]), 10L),
-                    KeyValue.pair(new Windowed<>(key, windows[1]), 50L)
+                KeyValue.pair(new Windowed<>(key, windows[0]), 10L),
+                KeyValue.pair(new Windowed<>(key, windows[1]), 50L)
             );
         } else {
             // For session key schema, actual from is 501
@@ -1086,7 +1086,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
             Collections.singletonList(
                 KeyValue.pair(new Windowed<>(key, windows[3]), 1000L)
             ),
-                results1
+            results1
         );
 
         segments.close();
@@ -1343,14 +1343,14 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         final File dir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext<>(
-                dir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
-                new StreamsConfig(props),
-                MockRecordCollector::new,
-                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
-                Time.SYSTEM
+            dir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
+            new StreamsConfig(props),
+            MockRecordCollector::new,
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+            Time.SYSTEM
         );
         bytesStore = getBytesStore();
         bytesStore.init(context, bytesStore);
@@ -1379,14 +1379,14 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         final File dir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext<>(
-                dir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
-                new StreamsConfig(props),
-                MockRecordCollector::new,
-                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
-                Time.SYSTEM
+            dir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
+            new StreamsConfig(props),
+            MockRecordCollector::new,
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+            Time.SYSTEM
         );
         bytesStore = getBytesStore();
         bytesStore.init(context, bytesStore);
@@ -1418,14 +1418,14 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         final File dir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext<>(
-                dir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
-                new StreamsConfig(props),
-                MockRecordCollector::new,
-                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
-                Time.SYSTEM
+            dir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
+            new StreamsConfig(props),
+            MockRecordCollector::new,
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+            Time.SYSTEM
         );
         bytesStore = getBytesStore();
         bytesStore.init(context, bytesStore);
@@ -1459,14 +1459,14 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         props.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
         final File dir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext<>(
-                dir,
-                Serdes.String(),
-                Serdes.String(),
-                new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
-                new StreamsConfig(props),
-                MockRecordCollector::new,
-                new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
-                Time.SYSTEM
+            dir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
+            new StreamsConfig(props),
+            MockRecordCollector::new,
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+            Time.SYSTEM
         );
         bytesStore = getBytesStore();
         bytesStore.init(context, bytesStore);
@@ -1482,29 +1482,29 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         position1 = position1.withComponent("", 0, 1);
         headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
         headers.add(new RecordHeader(
-                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
-                PositionSerde.serialize(position1).array())
+            ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+            PositionSerde.serialize(position1).array())
         );
-        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
-                serializeKey(new Windowed<>("a", windows[0]), true).get(), serializeValue(50L), headers, Optional.empty()));
+        records.add(new ConsumerRecord<>("", 0, 0L, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+            serializeKey(new Windowed<>("a", windows[0]), true).get(), serializeValue(50L), headers, Optional.empty()));
 
         headers.remove(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
         position1 = position1.withComponent("", 0, 2);
         headers.add(new RecordHeader(
-                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
-                PositionSerde.serialize(position1).array())
+            ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+            PositionSerde.serialize(position1).array())
         );
-        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
-                serializeKey(new Windowed<>("a", windows[2]), true).get(), serializeValue(100L), headers, Optional.empty()));
+        records.add(new ConsumerRecord<>("", 0, 0L, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+            serializeKey(new Windowed<>("a", windows[2]), true).get(), serializeValue(100L), headers, Optional.empty()));
 
         headers.remove(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
         position1 = position1.withComponent("", 0, 3);
         headers.add(new RecordHeader(
-                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
-                PositionSerde.serialize(position1).array())
+            ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+            PositionSerde.serialize(position1).array())
         );
-        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
-                serializeKey(new Windowed<>("a", windows[3]), true).get(), serializeValue(200L), headers, Optional.empty()));
+        records.add(new ConsumerRecord<>("", 0, 0L, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+            serializeKey(new Windowed<>("a", windows[3]), true).get(), serializeValue(200L), headers, Optional.empty()));
 
         return records;
     }
@@ -1517,29 +1517,29 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         position1 = position1.withComponent("A", 0, 1);
         headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
         headers.add(new RecordHeader(
-                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
-                PositionSerde.serialize(position1).array())
+            ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+            PositionSerde.serialize(position1).array())
         );
-        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
-                serializeKey(new Windowed<>("a", windows[0]), true).get(), serializeValue(50L), headers, Optional.empty()));
+        records.add(new ConsumerRecord<>("", 0, 0L, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+            serializeKey(new Windowed<>("a", windows[0]), true).get(), serializeValue(50L), headers, Optional.empty()));
 
         headers.remove(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
         position1 = position1.withComponent("B", 0, 2);
         headers.add(new RecordHeader(
-                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
-                PositionSerde.serialize(position1).array())
+            ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+            PositionSerde.serialize(position1).array())
         );
-        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
-                serializeKey(new Windowed<>("a", windows[2]), true).get(), serializeValue(100L), headers, Optional.empty()));
+        records.add(new ConsumerRecord<>("", 0, 0L, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+            serializeKey(new Windowed<>("a", windows[2]), true).get(), serializeValue(100L), headers, Optional.empty()));
 
         headers.remove(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
         position1 = position1.withComponent("A", 0, 3);
         headers.add(new RecordHeader(
-                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
-                PositionSerde.serialize(position1).array())
+            ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+            PositionSerde.serialize(position1).array())
         );
-        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
-                serializeKey(new Windowed<>("a", windows[3]), true).get(), serializeValue(200L), headers, Optional.empty()));
+        records.add(new ConsumerRecord<>("", 0, 0L, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+            serializeKey(new Windowed<>("a", windows[3]), true).get(), serializeValue(200L), headers, Optional.empty()));
 
         return records;
     }
@@ -1552,18 +1552,18 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         position = position.withComponent("A", 0, 1);
         headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
         headers.add(new RecordHeader(
-                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
-                PositionSerde.serialize(position).array()));
-        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
-                serializeKey(new Windowed<>("a", windows[0]), true).get(), serializeValue(50L), headers, Optional.empty()));
+            ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+            PositionSerde.serialize(position).array()));
+        records.add(new ConsumerRecord<>("", 0, 0L, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+            serializeKey(new Windowed<>("a", windows[0]), true).get(), serializeValue(50L), headers, Optional.empty()));
 
         position = position.withComponent("A", 0, 2);
         headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
         headers.add(new RecordHeader(
-                ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
-                PositionSerde.serialize(position).array()));
-        records.add(new ConsumerRecord<>("", 0, 0L,  RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
-                serializeKey(new Windowed<>("a", windows[2]), true).get(), null, headers, Optional.empty()));
+            ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+            PositionSerde.serialize(position).array()));
+        records.add(new ConsumerRecord<>("", 0, 0L, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, -1, -1,
+            serializeKey(new Windowed<>("a", windows[2]), true).get(), null, headers, Optional.empty()));
 
         return records;
     }
@@ -1573,7 +1573,6 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
         records.add(new ConsumerRecord<>("", 0, 0L, serializeKey(new Windowed<>("a", windows[2])).get(), serializeValue(50L)));
         return records;
     }
-
 
 
     @Test

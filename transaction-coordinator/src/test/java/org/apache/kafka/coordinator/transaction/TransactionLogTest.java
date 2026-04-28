@@ -53,6 +53,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
 class TransactionLogTest {
 
     private final Set<TopicPartition> topicPartitions = Set.of(
@@ -126,7 +127,7 @@ class TransactionLogTest {
             assertEquals(topicPartitions, deserialized.topicPartitions());
         }
     }
-  
+
     @Test
     void shouldRoundTripPreviousAndNextProducerIds() {
         var txnTransitMetadata = new TxnTransitMetadata(

@@ -37,9 +37,9 @@ public class MockInternalTopicManager extends InternalTopicManager {
     private final boolean mockCreateInternalTopics;
 
     public MockInternalTopicManager(final Time time,
-                                    final StreamsConfig streamsConfig,
-                                    final MockConsumer<byte[], byte[]> restoreConsumer,
-                                    final boolean mockCreateInternalTopics) {
+        final StreamsConfig streamsConfig,
+        final MockConsumer<byte[], byte[]> restoreConsumer,
+        final boolean mockCreateInternalTopics) {
         super(time, new MockClientSupplier().getAdmin(streamsConfig.originals()), streamsConfig);
 
         this.restoreConsumer = restoreConsumer;
@@ -65,10 +65,10 @@ public class MockInternalTopicManager extends InternalTopicManager {
 
     @Override
     protected Map<String, Integer> getNumPartitions(final Set<String> topics,
-                                                    final Set<String> tempUnknownTopics) {
+        final Set<String> tempUnknownTopics) {
         final Map<String, Integer> partitions = new HashMap<>();
         for (final String topic : topics) {
-            partitions.put(topic, restoreConsumer.partitionsFor(topic) == null ?  null : restoreConsumer.partitionsFor(topic).size());
+            partitions.put(topic, restoreConsumer.partitionsFor(topic) == null ? null : restoreConsumer.partitionsFor(topic).size());
         }
 
         return partitions;

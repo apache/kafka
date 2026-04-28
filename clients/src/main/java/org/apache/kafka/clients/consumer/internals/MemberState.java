@@ -124,15 +124,15 @@ public enum MemberState {
         ACKNOWLEDGING.previousValidStates = Collections.singletonList(RECONCILING);
 
         FATAL.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING,
-                PREPARE_LEAVING, LEAVING, UNSUBSCRIBED);
+            PREPARE_LEAVING, LEAVING, UNSUBSCRIBED);
 
         FENCED.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING,
-                PREPARE_LEAVING, LEAVING);
+            PREPARE_LEAVING, LEAVING);
 
         JOINING.previousValidStates = Arrays.asList(FENCED, UNSUBSCRIBED, STALE);
 
         PREPARE_LEAVING.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING,
-                ACKNOWLEDGING, UNSUBSCRIBED);
+            ACKNOWLEDGING, UNSUBSCRIBED);
 
         LEAVING.previousValidStates = Collections.singletonList(PREPARE_LEAVING);
 

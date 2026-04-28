@@ -39,7 +39,7 @@ class FeaturesDeltaTest {
             .setName(MetadataVersion.FEATURE_NAME)
             .setFeatureLevel(MetadataVersionTestUtils.IBP_3_3_IV2_FEATURE_LEVEL)));
         assertTrue(exception.getMessage().contains("Unsupported metadata version - if you are currently upgrading your " +
-            "cluster, please ensure the metadata version is set to " + MetadataVersion.MINIMUM_VERSION),
+                "cluster, please ensure the metadata version is set to " + MetadataVersion.MINIMUM_VERSION),
             "Expected substring missing from exception message: " + exception.getMessage());
     }
 

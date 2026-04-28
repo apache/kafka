@@ -37,14 +37,14 @@ public class Heartbeat {
     public static final short VERSION = 0;
 
     public static final Schema VALUE_SCHEMA_V0 = new Schema(
-            new Field(TIMESTAMP_KEY, Type.INT64));
+        new Field(TIMESTAMP_KEY, Type.INT64));
 
     public static final Schema KEY_SCHEMA = new Schema(
-            new Field(SOURCE_CLUSTER_ALIAS_KEY, Type.STRING),
-            new Field(TARGET_CLUSTER_ALIAS_KEY, Type.STRING));
+        new Field(SOURCE_CLUSTER_ALIAS_KEY, Type.STRING),
+        new Field(TARGET_CLUSTER_ALIAS_KEY, Type.STRING));
 
     public static final Schema HEADER_SCHEMA = new Schema(
-            new Field(VERSION_KEY, Type.INT16));
+        new Field(VERSION_KEY, Type.INT16));
 
     private final String sourceClusterAlias;
     private final String targetClusterAlias;
@@ -101,9 +101,9 @@ public class Heartbeat {
         long timestamp = valueStruct.getLong(TIMESTAMP_KEY);
         Struct keyStruct = KEY_SCHEMA.read(ByteBuffer.wrap(record.key()));
         String sourceClusterAlias = keyStruct.getString(SOURCE_CLUSTER_ALIAS_KEY);
-        String targetClusterAlias = keyStruct.getString(TARGET_CLUSTER_ALIAS_KEY); 
-        return new Heartbeat(sourceClusterAlias, targetClusterAlias, timestamp);    
-    } 
+        String targetClusterAlias = keyStruct.getString(TARGET_CLUSTER_ALIAS_KEY);
+        return new Heartbeat(sourceClusterAlias, targetClusterAlias, timestamp);
+    }
 
     private Struct headerStruct(short version) {
         Struct struct = new Struct(HEADER_SCHEMA);

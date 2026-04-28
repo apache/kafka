@@ -63,7 +63,7 @@ public class StreamsStandByReplicaTest {
             System.err.println("No bootstrap kafka servers specified in " + StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
             Exit.exit(1);
         }
-        
+
         streamsProperties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         streamsProperties.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         streamsProperties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
@@ -98,11 +98,11 @@ public class StreamsStandByReplicaTest {
 
         if (!confirmCorrectConfigs(streamsProperties)) {
             System.err.printf(
-                    "ERROR: Did not have all required configs expected  to contain %s, %s,  %s,  %s%n",
-                    StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG),
-                    StreamsConfig.producerPrefix(ProducerConfig.RETRIES_CONFIG),
-                    StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG),
-                    StreamsConfig.producerPrefix(ProducerConfig.MAX_BLOCK_MS_CONFIG)
+                "ERROR: Did not have all required configs expected  to contain %s, %s,  %s,  %s%n",
+                StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG),
+                StreamsConfig.producerPrefix(ProducerConfig.RETRIES_CONFIG),
+                StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG),
+                StreamsConfig.producerPrefix(ProducerConfig.MAX_BLOCK_MS_CONFIG)
             );
 
             Exit.exit(1);
@@ -142,7 +142,7 @@ public class StreamsStandByReplicaTest {
                 for (final ThreadMetadata threadMetadatum : threadMetadata) {
                     System.out.println(
                         "ACTIVE_TASKS:" + threadMetadatum.activeTasks().size()
-                        + " STANDBY_TASKS:" + threadMetadatum.standbyTasks().size());
+                            + " STANDBY_TASKS:" + threadMetadatum.standbyTasks().size());
                 }
             }
         });
@@ -162,9 +162,9 @@ public class StreamsStandByReplicaTest {
 
     private static boolean confirmCorrectConfigs(final Properties properties) {
         return properties.containsKey(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) &&
-               properties.containsKey(StreamsConfig.producerPrefix(ProducerConfig.RETRIES_CONFIG)) &&
-               properties.containsKey(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG)) &&
-               properties.containsKey(StreamsConfig.producerPrefix(ProducerConfig.MAX_BLOCK_MS_CONFIG));
+            properties.containsKey(StreamsConfig.producerPrefix(ProducerConfig.RETRIES_CONFIG)) &&
+            properties.containsKey(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG)) &&
+            properties.containsKey(StreamsConfig.producerPrefix(ProducerConfig.MAX_BLOCK_MS_CONFIG));
     }
 
 }

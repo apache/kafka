@@ -49,13 +49,13 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
     private EmitStrategy emitStrategy = EmitStrategy.onWindowUpdate();
 
     TimeWindowedKStreamImpl(final Windows<W> windows,
-                            final InternalStreamsBuilder builder,
-                            final Set<String> subTopologySourceNodes,
-                            final String name,
-                            final Serde<K> keySerde,
-                            final Serde<V> valueSerde,
-                            final GroupedStreamAggregateBuilder<K, V> aggregateBuilder,
-                            final GraphNode graphNode) {
+        final InternalStreamsBuilder builder,
+        final Set<String> subTopologySourceNodes,
+        final String name,
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde,
+        final GroupedStreamAggregateBuilder<K, V> aggregateBuilder,
+        final GraphNode graphNode) {
         super(name, keySerde, valueSerde, subTopologySourceNodes, graphNode, builder);
         this.windows = Objects.requireNonNull(windows, "windows can't be null");
         this.aggregateBuilder = aggregateBuilder;
@@ -91,7 +91,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
     }
 
     private KTable<Windowed<K>, Long> doCount(final Named named,
-                                              final Materialized<K, Long, WindowStore<Bytes, byte[]>> materialized) {
+        final Materialized<K, Long, WindowStore<Bytes, byte[]>> materialized) {
         final MaterializedInternal<K, Long, WindowStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
 
@@ -133,14 +133,14 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
 
     @Override
     public KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
-                                         final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized) {
+        final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized) {
         return reduce(reducer, NamedInternal.empty(), materialized);
     }
 
     @Override
     public KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
-                                         final Named named,
-                                         final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized) {
+        final Named named,
+        final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(reducer, "reducer can't be null");
         Objects.requireNonNull(named, "named can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
@@ -180,30 +180,30 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
 
     @Override
     public <VOut> KTable<Windowed<K>, VOut> aggregate(final Initializer<VOut> initializer,
-                                                      final Aggregator<? super K, ? super V, VOut> aggregator) {
+        final Aggregator<? super K, ? super V, VOut> aggregator) {
         return aggregate(initializer, aggregator, Materialized.with(keySerde, null));
     }
 
     @Override
     public <VOut> KTable<Windowed<K>, VOut> aggregate(final Initializer<VOut> initializer,
-                                                      final Aggregator<? super K, ? super V, VOut> aggregator,
-                                                      final Named named) {
+        final Aggregator<? super K, ? super V, VOut> aggregator,
+        final Named named) {
         return aggregate(initializer, aggregator, named, Materialized.with(keySerde, null));
     }
 
 
     @Override
     public <VOut> KTable<Windowed<K>, VOut> aggregate(final Initializer<VOut> initializer,
-                                                      final Aggregator<? super K, ? super V, VOut> aggregator,
-                                                      final Materialized<K, VOut, WindowStore<Bytes, byte[]>> materialized) {
+        final Aggregator<? super K, ? super V, VOut> aggregator,
+        final Materialized<K, VOut, WindowStore<Bytes, byte[]>> materialized) {
         return aggregate(initializer, aggregator, NamedInternal.empty(), materialized);
     }
 
     @Override
     public <VOut> KTable<Windowed<K>, VOut> aggregate(final Initializer<VOut> initializer,
-                                                      final Aggregator<? super K, ? super V, VOut> aggregator,
-                                                      final Named named,
-                                                      final Materialized<K, VOut, WindowStore<Bytes, byte[]>> materialized) {
+        final Aggregator<? super K, ? super V, VOut> aggregator,
+        final Named named,
+        final Materialized<K, VOut, WindowStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");

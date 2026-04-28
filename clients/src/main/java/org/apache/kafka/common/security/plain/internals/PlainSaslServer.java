@@ -116,7 +116,7 @@ public class PlainSaslServer implements SaslServer {
     private List<String> extractTokens(String string) {
         List<String> tokens = new ArrayList<>();
         int startIndex = 0;
-        for (int i = 0; i < 4; ++i) {
+        for (int i = 0;i < 4;++i) {
             int endIndex = string.indexOf("\u0000", startIndex);
             if (endIndex == -1) {
                 tokens.add(string.substring(startIndex));

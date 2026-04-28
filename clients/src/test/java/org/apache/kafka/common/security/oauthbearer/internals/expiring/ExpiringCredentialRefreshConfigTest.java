@@ -30,15 +30,15 @@ public class ExpiringCredentialRefreshConfigTest {
     @Test
     public void fromGoodConfig() {
         ExpiringCredentialRefreshConfig expiringCredentialRefreshConfig = new ExpiringCredentialRefreshConfig(
-                new ConfigDef().withClientSaslSupport().parse(Collections.emptyMap()), true);
+            new ConfigDef().withClientSaslSupport().parse(Collections.emptyMap()), true);
         assertEquals(Double.valueOf(SaslConfigs.DEFAULT_LOGIN_REFRESH_WINDOW_FACTOR),
-                Double.valueOf(expiringCredentialRefreshConfig.loginRefreshWindowFactor()));
+            Double.valueOf(expiringCredentialRefreshConfig.loginRefreshWindowFactor()));
         assertEquals(Double.valueOf(SaslConfigs.DEFAULT_LOGIN_REFRESH_WINDOW_JITTER),
-                Double.valueOf(expiringCredentialRefreshConfig.loginRefreshWindowJitter()));
+            Double.valueOf(expiringCredentialRefreshConfig.loginRefreshWindowJitter()));
         assertEquals(Short.valueOf(SaslConfigs.DEFAULT_LOGIN_REFRESH_MIN_PERIOD_SECONDS),
-                Short.valueOf(expiringCredentialRefreshConfig.loginRefreshMinPeriodSeconds()));
+            Short.valueOf(expiringCredentialRefreshConfig.loginRefreshMinPeriodSeconds()));
         assertEquals(Short.valueOf(SaslConfigs.DEFAULT_LOGIN_REFRESH_BUFFER_SECONDS),
-                Short.valueOf(expiringCredentialRefreshConfig.loginRefreshBufferSeconds()));
+            Short.valueOf(expiringCredentialRefreshConfig.loginRefreshBufferSeconds()));
         assertTrue(expiringCredentialRefreshConfig.loginRefreshReloginAllowedBeforeLogout());
     }
 }

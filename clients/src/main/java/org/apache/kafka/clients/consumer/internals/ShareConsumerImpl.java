@@ -130,7 +130,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      */
     private class ShareAcknowledgementEventProcessor implements EventProcessor<ShareAcknowledgementEvent> {
 
-        public ShareAcknowledgementEventProcessor() {}
+        public ShareAcknowledgementEventProcessor() {
+        }
 
         @Override
         public void process(final ShareAcknowledgementEvent event) {
@@ -151,7 +152,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      */
     private class BackgroundEventProcessor implements EventProcessor<BackgroundEvent> {
 
-        public BackgroundEventProcessor() {}
+        public BackgroundEventProcessor() {
+        }
 
         @Override
         public void process(final BackgroundEvent event) {
@@ -216,35 +218,35 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     private boolean shouldSendShareFetchEvent = false;
 
     ShareConsumerImpl(final ConsumerConfig config,
-                      final Deserializer<K> keyDeserializer,
-                      final Deserializer<V> valueDeserializer) {
+        final Deserializer<K> keyDeserializer,
+        final Deserializer<V> valueDeserializer) {
         this(
-                config,
-                keyDeserializer,
-                valueDeserializer,
-                Time.SYSTEM,
-                ApplicationEventHandler::new,
-                CompletableEventReaper::new,
-                ShareFetchCollector::new,
-                new LinkedBlockingQueue<>(),
-                new LinkedBlockingQueue<>()
+            config,
+            keyDeserializer,
+            valueDeserializer,
+            Time.SYSTEM,
+            ApplicationEventHandler::new,
+            CompletableEventReaper::new,
+            ShareFetchCollector::new,
+            new LinkedBlockingQueue<>(),
+            new LinkedBlockingQueue<>()
         );
     }
 
     // Visible for testing
     ShareConsumerImpl(final ConsumerConfig config,
-                      final Deserializer<K> keyDeserializer,
-                      final Deserializer<V> valueDeserializer,
-                      final Time time,
-                      final ApplicationEventHandlerFactory applicationEventHandlerFactory,
-                      final AsyncKafkaConsumer.CompletableEventReaperFactory backgroundEventReaperFactory,
-                      final ShareFetchCollectorFactory<K, V> fetchCollectorFactory,
-                      final LinkedBlockingQueue<ShareAcknowledgementEvent> acknowledgementEventQueue,
-                      final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue) {
+        final Deserializer<K> keyDeserializer,
+        final Deserializer<V> valueDeserializer,
+        final Time time,
+        final ApplicationEventHandlerFactory applicationEventHandlerFactory,
+        final AsyncKafkaConsumer.CompletableEventReaperFactory backgroundEventReaperFactory,
+        final ShareFetchCollectorFactory<K, V> fetchCollectorFactory,
+        final LinkedBlockingQueue<ShareAcknowledgementEvent> acknowledgementEventQueue,
+        final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue) {
         try {
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
-                    config,
-                    GroupRebalanceConfig.ProtocolType.SHARE
+                config,
+                GroupRebalanceConfig.ProtocolType.SHARE
             );
             this.clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
             this.groupId = config.getString(ConsumerConfig.GROUP_ID_CONFIG);
@@ -269,8 +271,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             this.currentFetch = ShareFetch.empty();
             this.subscriptions = createSubscriptionState(config, logContext);
             ClusterResourceListeners clusterResourceListeners = ClientUtils.configureClusterResourceListeners(
-                    metrics.reporters(),
-                    Arrays.asList(deserializers.keyDeserializer(), deserializers.valueDeserializer()));
+                metrics.reporters(),
+                Arrays.asList(deserializers.keyDeserializer(), deserializers.valueDeserializer()));
             this.metadata = new ShareConsumerMetadata(config, subscriptions, logContext, clusterResourceListeners);
             final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
             metadata.bootstrap(addresses);
@@ -285,62 +287,62 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new ShareFetchBuffer(logContext);
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier = NetworkClientDelegate.supplier(
-                    time,
-                    logContext,
-                    metadata,
-                    config,
-                    apiVersions,
-                    metrics,
-                    shareFetchMetricsManager.throttleTimeSensor(),
-                    clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),
-                    backgroundEventHandler,
-                    true,
-                    asyncConsumerMetrics
+                time,
+                logContext,
+                metadata,
+                config,
+                apiVersions,
+                metrics,
+                shareFetchMetricsManager.throttleTimeSensor(),
+                clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null),
+                backgroundEventHandler,
+                true,
+                asyncConsumerMetrics
             );
             this.completedAcknowledgements = new LinkedList<>();
 
             final Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(
-                    time,
-                    logContext,
-                    acknowledgementEventHandler,
-                    backgroundEventHandler,
-                    metadata,
-                    subscriptions,
-                    fetchBuffer,
-                    config,
-                    groupRebalanceConfig,
-                    shareFetchMetricsManager,
-                    clientTelemetryReporter,
-                    metrics
+                time,
+                logContext,
+                acknowledgementEventHandler,
+                backgroundEventHandler,
+                metadata,
+                subscriptions,
+                fetchBuffer,
+                config,
+                groupRebalanceConfig,
+                shareFetchMetricsManager,
+                clientTelemetryReporter,
+                metrics
             );
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
-                    logContext,
-                    metadata,
-                    subscriptions,
-                    requestManagersSupplier
+                logContext,
+                metadata,
+                subscriptions,
+                requestManagersSupplier
             );
 
             this.applicationEventHandler = applicationEventHandlerFactory.build(
-                    logContext,
-                    time,
-                    config.getInt(CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG),
-                    applicationEventQueue,
-                    new CompletableEventReaper(logContext),
-                    applicationEventProcessorSupplier,
-                    networkClientDelegateSupplier,
-                    requestManagersSupplier,
-                    asyncConsumerMetrics);
+                logContext,
+                time,
+                config.getInt(CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG),
+                applicationEventQueue,
+                new CompletableEventReaper(logContext),
+                applicationEventProcessorSupplier,
+                networkClientDelegateSupplier,
+                requestManagersSupplier,
+                asyncConsumerMetrics);
 
             this.acknowledgementEventProcessor = new ShareAcknowledgementEventProcessor();
             this.backgroundEventProcessor = new BackgroundEventProcessor();
             this.backgroundEventReaper = backgroundEventReaperFactory.build(logContext);
 
             this.fetchCollector = fetchCollectorFactory.build(
-                    logContext,
-                    metadata,
-                    subscriptions,
-                    new ShareFetchConfig(config),
-                    deserializers);
+                logContext,
+                metadata,
+                subscriptions,
+                new ShareFetchConfig(config),
+                deserializers);
 
             this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics);
 
@@ -360,15 +362,15 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
     // Visible for testing
     ShareConsumerImpl(final LogContext logContext,
-                      final String clientId,
-                      final String groupId,
-                      final ConsumerConfig config,
-                      final Deserializer<K> keyDeserializer,
-                      final Deserializer<V> valueDeserializer,
-                      final Time time,
-                      final KafkaClient client,
-                      final SubscriptionState subscriptions,
-                      final ShareConsumerMetadata metadata) {
+        final String clientId,
+        final String groupId,
+        final ConsumerConfig config,
+        final Deserializer<K> keyDeserializer,
+        final Deserializer<V> valueDeserializer,
+        final Time time,
+        final KafkaClient client,
+        final SubscriptionState subscriptions,
+        final ShareConsumerMetadata metadata) {
         this.clientId = clientId;
         this.groupId = groupId;
         this.log = logContext.logger(getClass());
@@ -388,11 +390,11 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         ShareConsumerMetrics metricsRegistry = new ShareConsumerMetrics();
         this.shareFetchMetricsManager = new ShareFetchMetricsManager(metrics, metricsRegistry.shareFetchMetrics);
         this.fetchCollector = new ShareFetchCollector<>(
-                logContext,
-                metadata,
-                subscriptions,
-                new ShareFetchConfig(config),
-                deserializers);
+            logContext,
+            metadata,
+            subscriptions,
+            new ShareFetchConfig(config),
+            deserializers);
         this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics);
         this.asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP);
 
@@ -404,43 +406,43 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             backgroundEventQueue, time, asyncConsumerMetrics);
 
         final Supplier<NetworkClientDelegate> networkClientDelegateSupplier =
-                NetworkClientDelegate.supplier(time, config, logContext, client, metadata, backgroundEventHandler, true, asyncConsumerMetrics);
+            NetworkClientDelegate.supplier(time, config, logContext, client, metadata, backgroundEventHandler, true, asyncConsumerMetrics);
 
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
-                config,
-                GroupRebalanceConfig.ProtocolType.SHARE);
+            config,
+            GroupRebalanceConfig.ProtocolType.SHARE);
         final Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(
-                time,
-                logContext,
-                acknowledgementEventHandler,
-                backgroundEventHandler,
-                metadata,
-                subscriptions,
-                fetchBuffer,
-                config,
-                groupRebalanceConfig,
-                shareFetchMetricsManager,
-                clientTelemetryReporter,
-                metrics
+            time,
+            logContext,
+            acknowledgementEventHandler,
+            backgroundEventHandler,
+            metadata,
+            subscriptions,
+            fetchBuffer,
+            config,
+            groupRebalanceConfig,
+            shareFetchMetricsManager,
+            clientTelemetryReporter,
+            metrics
         );
 
         final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
-                logContext,
-                metadata,
-                subscriptions,
-                requestManagersSupplier
+            logContext,
+            metadata,
+            subscriptions,
+            requestManagersSupplier
         );
 
         this.applicationEventHandler = new ApplicationEventHandler(
-                logContext,
-                time,
-                config.getInt(CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG),
-                applicationEventQueue,
-                new CompletableEventReaper(logContext),
-                applicationEventProcessorSupplier,
-                networkClientDelegateSupplier,
-                requestManagersSupplier,
-                asyncConsumerMetrics);
+            logContext,
+            time,
+            config.getInt(CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG),
+            applicationEventQueue,
+            new CompletableEventReaper(logContext),
+            applicationEventProcessorSupplier,
+            networkClientDelegateSupplier,
+            requestManagersSupplier,
+            asyncConsumerMetrics);
 
         this.acknowledgementEventProcessor = new ShareAcknowledgementEventProcessor();
         this.backgroundEventProcessor = new BackgroundEventProcessor();
@@ -453,24 +455,24 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     // Visible for testing
     @SuppressWarnings("ParameterNumber")
     ShareConsumerImpl(final LogContext logContext,
-                      final String clientId,
-                      final Deserializer<K> keyDeserializer,
-                      final Deserializer<V> valueDeserializer,
-                      final ShareFetchBuffer fetchBuffer,
-                      final ShareFetchCollector<K, V> fetchCollector,
-                      final ShareFetchMetricsManager shareFetchMetricsManager,
-                      final Time time,
-                      final ApplicationEventHandler applicationEventHandler,
-                      final BlockingQueue<ShareAcknowledgementEvent> acknowledgementEventQueue,
-                      final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                      final CompletableEventReaper backgroundEventReaper,
-                      final Metrics metrics,
-                      final SubscriptionState subscriptions,
-                      final ShareConsumerMetadata metadata,
-                      final int requestTimeoutMs,
-                      final int defaultApiTimeoutMs,
-                      final String groupId,
-                      final String acknowledgementModeConfig) {
+        final String clientId,
+        final Deserializer<K> keyDeserializer,
+        final Deserializer<V> valueDeserializer,
+        final ShareFetchBuffer fetchBuffer,
+        final ShareFetchCollector<K, V> fetchCollector,
+        final ShareFetchMetricsManager shareFetchMetricsManager,
+        final Time time,
+        final ApplicationEventHandler applicationEventHandler,
+        final BlockingQueue<ShareAcknowledgementEvent> acknowledgementEventQueue,
+        final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+        final CompletableEventReaper backgroundEventReaper,
+        final Metrics metrics,
+        final SubscriptionState subscriptions,
+        final ShareConsumerMetadata metadata,
+        final int requestTimeoutMs,
+        final int defaultApiTimeoutMs,
+        final String groupId,
+        final String acknowledgementModeConfig) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.clientId = clientId;
@@ -498,22 +500,22 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.asyncConsumerMetrics = new AsyncConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP);
         this.acknowledgementEventHandler = new ShareAcknowledgementEventHandler(acknowledgementEventQueue);
         this.backgroundEventHandler = new BackgroundEventHandler(
-                backgroundEventQueue, time, asyncConsumerMetrics);
+            backgroundEventQueue, time, asyncConsumerMetrics);
     }
 
     // auxiliary interface for testing
     interface ApplicationEventHandlerFactory {
 
         ApplicationEventHandler build(
-                final LogContext logContext,
-                final Time time,
-                final int initializationTimeoutMs,
-                final BlockingQueue<ApplicationEvent> applicationEventQueue,
-                final CompletableEventReaper applicationEventReaper,
-                final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
-                final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-                final Supplier<RequestManagers> requestManagersSupplier,
-                final AsyncConsumerMetrics asyncConsumerMetrics
+            final LogContext logContext,
+            final Time time,
+            final int initializationTimeoutMs,
+            final BlockingQueue<ApplicationEvent> applicationEventQueue,
+            final CompletableEventReaper applicationEventReaper,
+            final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
+            final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
+            final Supplier<RequestManagers> requestManagersSupplier,
+            final AsyncConsumerMetrics asyncConsumerMetrics
         );
     }
 
@@ -521,11 +523,11 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     interface ShareFetchCollectorFactory<K, V> {
 
         ShareFetchCollector<K, V> build(
-                final LogContext logContext,
-                final ShareConsumerMetadata metadata,
-                final SubscriptionState subscriptions,
-                final ShareFetchConfig shareFetchConfig,
-                final Deserializers<K, V> deserializers
+            final LogContext logContext,
+            final ShareConsumerMetadata metadata,
+            final SubscriptionState subscriptions,
+            final ShareFetchConfig shareFetchConfig,
+            final Deserializers<K, V> deserializers
         );
     }
 
@@ -1027,13 +1029,13 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
         // Prepare shutting down the network thread
         swallow(log, Level.ERROR, "Failed to release assignment before closing consumer",
-                () -> sendAcknowledgementsAndLeaveGroup(closeTimer, firstException), firstException);
+            () -> sendAcknowledgementsAndLeaveGroup(closeTimer, firstException), firstException);
         swallow(log, Level.ERROR, "Failed to stop finding coordinator",
-                this::stopFindCoordinatorOnClose, firstException);
+            this::stopFindCoordinatorOnClose, firstException);
         swallow(log, Level.ERROR, "Failed invoking acknowledgement commit callback",
-                this::handleCompletedAcknowledgements, firstException);
+            this::handleCompletedAcknowledgements, firstException);
         swallow(log, Level.ERROR, "Failed processing background events",
-                this::processBackgroundEventsOnClose, firstException);
+            this::processBackgroundEventsOnClose, firstException);
         if (applicationEventHandler != null)
             closeQuietly(() -> applicationEventHandler.close(Duration.ofMillis(closeTimer.remainingMs())), "Failed shutting down network thread", firstException);
         closeTimer.update();
@@ -1086,8 +1088,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             return;
         }
         completeQuietly(
-                () -> applicationEventHandler.addAndGet(new ShareAcknowledgeOnCloseEvent(acknowledgementsToSend(), calculateDeadlineMs(timer))),
-                "Failed to send pending acknowledgements with a timeout(ms)=" + timer.timeoutMs(), firstException);
+            () -> applicationEventHandler.addAndGet(new ShareAcknowledgeOnCloseEvent(acknowledgementsToSend(), calculateDeadlineMs(timer))),
+            "Failed to send pending acknowledgements with a timeout(ms)=" + timer.timeoutMs(), firstException);
         timer.update();
 
         ShareUnsubscribeEvent unsubscribeEvent = new ShareUnsubscribeEvent(calculateDeadlineMs(timer));
@@ -1100,7 +1102,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             log.info("Completed releasing assignment and leaving group to close consumer.");
         } catch (TimeoutException e) {
             log.warn("Consumer triggered an unsubscribe event to leave the group but couldn't " +
-                    "complete it within {} ms. It will proceed to close.", timer.timeoutMs());
+                "complete it within {} ms. It will proceed to close.", timer.timeoutMs());
         } finally {
             timer.update();
         }
@@ -1139,12 +1141,12 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         final long threadId = thread.getId();
         if (threadId != currentThread.get() && !currentThread.compareAndSet(NO_CURRENT_THREAD, threadId))
             throw new ConcurrentModificationException("KafkaShareConsumer is not safe for multi-threaded access. " +
-                    "currentThread(name: " + thread.getName() + ", id: " + threadId + ")" +
-                    " otherThread(id: " + currentThread.get() + ")"
+                "currentThread(name: " + thread.getName() + ", id: " + threadId + ")" +
+                " otherThread(id: " + currentThread.get() + ")"
             );
         if (acknowledgementCommitCallbackHandler != null && acknowledgementCommitCallbackHandler.hasEnteredCallback()) {
             throw new IllegalStateException("KafkaShareConsumer methods are not accessible from user-defined " +
-                    "acknowledgement commit callback.");
+                "acknowledgement commit callback.");
         }
         refCount.incrementAndGet();
     }
@@ -1164,7 +1166,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     private void maybeThrowInvalidGroupIdException() {
         if (groupId == null || groupId.isEmpty()) {
             throw new InvalidGroupIdException(
-                    "You must provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
+                "You must provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
         }
     }
 
@@ -1333,8 +1335,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      */
     // Visible for testing
     <T> T processBackgroundEvents(final Future<T> future,
-                                  final Timer timer,
-                                  final Predicate<Exception> ignoreErrorEventException) {
+        final Timer timer,
+        final Predicate<Exception> ignoreErrorEventException) {
         log.trace("Will wait up to {} ms for future {} to complete", timer.remainingMs(), future);
 
         do {
@@ -1377,8 +1379,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
     // Visible for testing
     void completeQuietly(final Utils.ThrowingRunnable function,
-                         final String msg,
-                         final AtomicReference<Throwable> firstException) {
+        final String msg,
+        final AtomicReference<Throwable> firstException) {
         try {
             function.run();
         } catch (TimeoutException e) {

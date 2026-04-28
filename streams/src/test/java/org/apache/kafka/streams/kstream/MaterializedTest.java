@@ -93,7 +93,7 @@ public class MaterializedTest {
     @Test
     public void shouldThrowIllegalArgumentExceptionIfStoreSupplierAndStoreTypeBothSet() {
         final IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> Materialized.as(Stores.persistentKeyValueStore("test")).withStoreType(Materialized.StoreType.ROCKS_DB));
+            () -> Materialized.as(Stores.persistentKeyValueStore("test")).withStoreType(Materialized.StoreType.ROCKS_DB));
 
         assertEquals("Cannot set store type when store supplier is pre-configured.", e.getMessage());
     }
@@ -106,6 +106,6 @@ public class MaterializedTest {
         final TopologyException e = assertThrows(TopologyException.class,
             () -> Materialized.as(invalidStoreName));
         assertEquals("Invalid topology: Name is illegal, it can't be longer than " + maxNameLength +
-                " characters, name: " + invalidStoreName, e.getMessage());
+            " characters, name: " + invalidStoreName, e.getMessage());
     }
 }

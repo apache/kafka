@@ -277,7 +277,7 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
         }
         if (size > totalBatchSize) {
             throw new RuntimeException("Specified frame size, " + size + ", is larger than the entire size of the " +
-                    "batch, which is " + totalBatchSize);
+                "batch, which is " + totalBatchSize);
         }
         ByteBuffer buf = bufferSupplier.get(size);
 
@@ -302,7 +302,7 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
             long timestampDelta = input.readVarlong();
             if (timestampDelta != 0) {
                 throw new IllegalArgumentException("Got timestamp delta of " + timestampDelta + ", but this is invalid because it " +
-                        "is not 0 as expected.");
+                    "is not 0 as expected.");
             }
 
             // Read offset delta
@@ -329,7 +329,7 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
             int numHeaders = buf.array()[size - 1];
             if (numHeaders != 0) {
                 throw new IllegalArgumentException("Got numHeaders of " + numHeaders + ", but this is invalid because " +
-                        "it is not 0 as expected.");
+                    "it is not 0 as expected.");
             }
 
             return record;

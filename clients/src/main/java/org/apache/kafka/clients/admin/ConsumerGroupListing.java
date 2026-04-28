@@ -86,9 +86,9 @@ public class ConsumerGroupListing {
      * @param isSimpleConsumerGroup     If consumer group is simple or not.
      */
     public ConsumerGroupListing(
-            String groupId,
-            Optional<GroupState> groupState,
-            boolean isSimpleConsumerGroup
+        String groupId,
+        Optional<GroupState> groupState,
+        boolean isSimpleConsumerGroup
     ) {
         this(groupId, groupState, Optional.empty(), isSimpleConsumerGroup);
     }
@@ -102,10 +102,10 @@ public class ConsumerGroupListing {
      * @param isSimpleConsumerGroup     If consumer group is simple or not.
      */
     public ConsumerGroupListing(
-            String groupId,
-            Optional<GroupState> groupState,
-            Optional<GroupType> type,
-            boolean isSimpleConsumerGroup
+        String groupId,
+        Optional<GroupState> groupState,
+        Optional<GroupType> type,
+        boolean isSimpleConsumerGroup
     ) {
         this.groupId = groupId;
         this.groupState = Objects.requireNonNull(groupState);

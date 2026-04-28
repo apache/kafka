@@ -48,7 +48,7 @@ public abstract class BaseDeleteSegmentsTest extends TieredStorageTestHarness {
 
         // Create topicA with 1 partition, 1 RF and enabled with remote storage.
         builder.createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment, replicaAssignment,
-                        enableRemoteLogStorage)
+                enableRemoteLogStorage)
                 // produce events to partition 0 and expect 3 segments to be offloaded
                 .expectSegmentToBeOffloaded(broker0, topicA, p0, 0, new KeyValueSpec("k0", "v0"))
                 .expectSegmentToBeOffloaded(broker0, topicA, p0, 1, new KeyValueSpec("k1", "v1"))

@@ -69,10 +69,10 @@ public class TimestampedWindowStoreBuilderTest {
         when(supplier.metricsScope()).thenReturn(METRICS_SCOPE);
 
         builder = new TimestampedWindowStoreBuilder<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime());
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime());
     }
 
     @SuppressWarnings("unchecked")
@@ -82,7 +82,7 @@ public class TimestampedWindowStoreBuilderTest {
         when(supplier.get()).thenReturn(inner);
         setUpWithoutInner(storeName);
     }
-    
+
     @ValueSource(strings = {TIMESTAMP_STORE_NAME, TIMEORDERED_STORE_NAME})
     @ParameterizedTest
     public void shouldHaveMeteredStoreAsOuterStore(final String storeName) {
@@ -128,8 +128,8 @@ public class TimestampedWindowStoreBuilderTest {
     public void shouldHaveChangeLoggingStoreWhenLoggingEnabled(final String storeName) {
         setUp(storeName);
         final TimestampedWindowStore<String, String> store = builder
-                .withLoggingEnabled(Collections.emptyMap())
-                .build();
+            .withLoggingEnabled(Collections.emptyMap())
+            .build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(store, instanceOf(MeteredTimestampedWindowStore.class));
         assertThat(wrapped, instanceOf(ChangeLoggingTimestampedWindowBytesStore.class));
@@ -141,9 +141,9 @@ public class TimestampedWindowStoreBuilderTest {
     public void shouldHaveCachingAndChangeLoggingWhenBothEnabled(final String storeName) {
         setUp(storeName);
         final TimestampedWindowStore<String, String> store = builder
-                .withLoggingEnabled(Collections.emptyMap())
-                .withCachingEnabled()
-                .build();
+            .withLoggingEnabled(Collections.emptyMap())
+            .withCachingEnabled()
+            .build();
         final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
         final WrappedStateStore changeLogging = (WrappedStateStore) caching.wrapped();
         assertThat(store, instanceOf(MeteredTimestampedWindowStore.class));

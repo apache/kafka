@@ -115,9 +115,9 @@ public class DirectoryConfigProviderTest {
     public void testNoTraversal() {
         // Check we can't escape outside the path directory
         Set<String> keys = Set.of(
-                String.join(File.separator, "..", siblingFileName),
-                String.join(File.separator, "..", siblingDir),
-                String.join(File.separator, "..", siblingDir, siblingDirFileName));
+            String.join(File.separator, "..", siblingFileName),
+            String.join(File.separator, "..", siblingDir),
+            String.join(File.separator, "..", siblingDir, siblingDirFileName));
         ConfigData configData = provider.get(dir, keys);
         assertTrue(configData.data().isEmpty());
         assertNull(configData.ttl());

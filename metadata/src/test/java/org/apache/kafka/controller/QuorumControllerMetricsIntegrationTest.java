@@ -77,8 +77,8 @@ public class QuorumControllerMetricsIntegrationTest {
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 setControllerBuilderInitializer(controllerBuilder ->
-                    controllerBuilder.setMetrics(metrics)
-                ).
+                controllerBuilder.setMetrics(metrics)
+            ).
                 build()
         ) {
             assertEquals(1, controlEnv.activeController().controllerMetrics().newActiveControllers());
@@ -166,7 +166,8 @@ public class QuorumControllerMetricsIntegrationTest {
             // Inject a new timed out operation.
             CountDownLatch latch2 = pause(active);
             active.appendControlEventWithDeadline("fakeTimeoutOperation",
-                () -> { },
+                () -> {
+                },
                 active.time().nanoseconds());
             latch2.countDown();
             TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
@@ -192,9 +193,9 @@ public class QuorumControllerMetricsIntegrationTest {
     public void testEventQueueOperationsStartedMetric() throws Throwable {
         try (
             MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(3).
-                                                build();
+                build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
-                                                     build()
+                build()
         ) {
             QuorumController active = controlEnv.activeController();
             registerBrokersAndUnfence(active, 3);

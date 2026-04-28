@@ -206,7 +206,7 @@ public final class TaskManager {
         private String error = "";
 
         ManagedTask(String id, TaskSpec originalSpec, TaskSpec spec,
-                    TaskController controller, TaskStateType state) {
+            TaskController controller, TaskStateType state) {
             this.id = id;
             this.originalSpec = originalSpec;
             this.spec = spec;
@@ -241,7 +241,7 @@ public final class TaskManager {
             }
             if (!nonExistentNodeNames.isEmpty()) {
                 throw new KafkaException("Unknown node names: " +
-                        String.join(", ", nonExistentNodeNames));
+                    String.join(", ", nonExistentNodeNames));
             }
             if (validNodeNames.isEmpty()) {
                 throw new KafkaException("No node names specified.");
@@ -302,7 +302,7 @@ public final class TaskManager {
      * @throws RequestConflictException - if a task with the same ID but different spec exists
      */
     public void createTask(final String id, TaskSpec spec)
-            throws Throwable {
+        throws Throwable {
         try {
             executor.submit(new CreateTask(id, spec)).get();
         } catch (ExecutionException | JsonProcessingException e) {
@@ -362,7 +362,7 @@ public final class TaskManager {
             long delayMs = task.startDelayMs(time.milliseconds());
             task.startFuture = scheduler.schedule(executor, new RunTask(task), delayMs);
             log.info("Created a new task {} with spec {}, scheduled to start {} ms from now.",
-                    id, spec, delayMs);
+                id, spec, delayMs);
             return null;
         }
     }
@@ -678,7 +678,8 @@ public final class TaskManager {
      * Wait for shutdown to complete.  May be called prior to beginShutdown.
      */
     public void waitForShutdown() throws InterruptedException {
-        while (!executor.awaitTermination(1, TimeUnit.DAYS)) { }
+        while (!executor.awaitTermination(1, TimeUnit.DAYS)) {
+        }
     }
 
     class Shutdown implements Callable<Void> {

@@ -16,6 +16,7 @@
  */
 
 package org.apache.kafka.trogdor.rest;
+
 import org.apache.kafka.trogdor.task.TaskSpec;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -48,11 +49,11 @@ public class TaskDone extends TaskState {
 
     @JsonCreator
     public TaskDone(@JsonProperty("spec") TaskSpec spec,
-            @JsonProperty("startedMs") long startedMs,
-            @JsonProperty("doneMs") long doneMs,
-            @JsonProperty("error") String error,
-            @JsonProperty("cancelled") boolean cancelled,
-            @JsonProperty("status") JsonNode status) {
+        @JsonProperty("startedMs") long startedMs,
+        @JsonProperty("doneMs") long doneMs,
+        @JsonProperty("error") String error,
+        @JsonProperty("cancelled") boolean cancelled,
+        @JsonProperty("status") JsonNode status) {
         super(spec, status);
         this.startedMs = startedMs;
         this.doneMs = doneMs;

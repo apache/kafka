@@ -122,7 +122,7 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
     public void setConsumerGroupGauges(Map<ConsumerGroupState, Long> consumerGroupGauges) {
         this.consumerGroupGauges = consumerGroupGauges;
     }
-    
+
     /**
      * Set the number of streams groups.
      * This method should be the only way to update the map and is called by the scheduled task
@@ -183,7 +183,7 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
      */
     public long numClassicGroups() {
         return classicGroupGauges.values().stream()
-                                 .mapToLong(Long::longValue).sum();
+            .mapToLong(Long::longValue).sum();
     }
 
     /**
@@ -208,7 +208,7 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
         return consumerGroupGauges.values().stream()
             .mapToLong(Long::longValue).sum();
     }
-    
+
     /**
      * Get the number of streams groups in the specified state.
      *

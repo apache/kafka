@@ -29,9 +29,9 @@ public class RemoteFetchCount {
     }
 
     public RemoteFetchCount(FetchCountAndOp segmentFetchCountAndOp,
-                            FetchCountAndOp offsetIdxFetchCountAndOp,
-                            FetchCountAndOp timeIdxFetchCountAndOp,
-                            FetchCountAndOp txnIdxFetchCountAndOp) {
+            FetchCountAndOp offsetIdxFetchCountAndOp,
+            FetchCountAndOp timeIdxFetchCountAndOp,
+            FetchCountAndOp txnIdxFetchCountAndOp) {
         this.segmentFetchCountAndOp = segmentFetchCountAndOp;
         this.offsetIdxFetchCountAndOp = offsetIdxFetchCountAndOp;
         this.timeIdxFetchCountAndOp = timeIdxFetchCountAndOp;

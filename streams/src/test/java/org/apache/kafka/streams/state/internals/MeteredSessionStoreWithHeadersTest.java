@@ -806,7 +806,8 @@ public class MeteredSessionStoreWithHeadersTest {
         when(innerStore.query(any(), any(PositionBound.class), any(QueryConfig.class)))
             .thenReturn((QueryResult) expectedResult);
 
-        final Query<Void> unknownQuery = new Query<Void>() { };
+        final Query<Void> unknownQuery = new Query<Void>() {
+        };
         final QueryResult<Void> result =
             store.query(unknownQuery, PositionBound.unbounded(), new QueryConfig(false));
 

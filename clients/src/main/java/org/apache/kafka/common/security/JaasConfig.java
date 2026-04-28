@@ -77,7 +77,7 @@ class JaasConfig extends Configuration {
         if (this.loginContextName.equals(name))
             return configEntries.toArray(new AppConfigurationEntry[0]);
         else
-            return  null;
+            return null;
     }
 
     private LoginModuleControlFlag loginModuleControlFlag(String flag) {

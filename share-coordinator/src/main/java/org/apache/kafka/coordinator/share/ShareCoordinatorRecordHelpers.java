@@ -33,20 +33,20 @@ public class ShareCoordinatorRecordHelpers {
                 .setTopicId(topicId)
                 .setPartition(partitionId),
             new ApiMessageAndVersion(new ShareSnapshotValue()
-                .setSnapshotEpoch(offsetData.snapshotEpoch())
-                .setStateEpoch(offsetData.stateEpoch())
-                .setLeaderEpoch(offsetData.leaderEpoch())
-                .setStartOffset(offsetData.startOffset())
-                .setDeliveryCompleteCount(offsetData.deliveryCompleteCount())
-                .setStateBatches(offsetData.stateBatches().stream()
-                    .map(batch -> new ShareSnapshotValue.StateBatch()
-                        .setFirstOffset(batch.firstOffset())
-                        .setLastOffset(batch.lastOffset())
-                        .setDeliveryCount(batch.deliveryCount())
-                        .setDeliveryState(batch.deliveryState()))
-                    .toList())
-                .setCreateTimestamp(offsetData.createTimestamp())
-                .setWriteTimestamp(offsetData.writeTimestamp()),
+                    .setSnapshotEpoch(offsetData.snapshotEpoch())
+                    .setStateEpoch(offsetData.stateEpoch())
+                    .setLeaderEpoch(offsetData.leaderEpoch())
+                    .setStartOffset(offsetData.startOffset())
+                    .setDeliveryCompleteCount(offsetData.deliveryCompleteCount())
+                    .setStateBatches(offsetData.stateBatches().stream()
+                        .map(batch -> new ShareSnapshotValue.StateBatch()
+                            .setFirstOffset(batch.firstOffset())
+                            .setLastOffset(batch.lastOffset())
+                            .setDeliveryCount(batch.deliveryCount())
+                            .setDeliveryState(batch.deliveryState()))
+                        .toList())
+                    .setCreateTimestamp(offsetData.createTimestamp())
+                    .setWriteTimestamp(offsetData.writeTimestamp()),
                 (short) 0
             )
         );
@@ -59,17 +59,17 @@ public class ShareCoordinatorRecordHelpers {
                 .setTopicId(topicId)
                 .setPartition(partitionId),
             new ApiMessageAndVersion(new ShareUpdateValue()
-                .setSnapshotEpoch(offsetData.snapshotEpoch())
-                .setLeaderEpoch(offsetData.leaderEpoch())
-                .setStartOffset(offsetData.startOffset())
-                .setDeliveryCompleteCount(offsetData.deliveryCompleteCount())
-                .setStateBatches(offsetData.stateBatches().stream()
-                    .map(batch -> new ShareUpdateValue.StateBatch()
-                        .setFirstOffset(batch.firstOffset())
-                        .setLastOffset(batch.lastOffset())
-                        .setDeliveryCount(batch.deliveryCount())
-                        .setDeliveryState(batch.deliveryState()))
-                    .toList()),
+                    .setSnapshotEpoch(offsetData.snapshotEpoch())
+                    .setLeaderEpoch(offsetData.leaderEpoch())
+                    .setStartOffset(offsetData.startOffset())
+                    .setDeliveryCompleteCount(offsetData.deliveryCompleteCount())
+                    .setStateBatches(offsetData.stateBatches().stream()
+                        .map(batch -> new ShareUpdateValue.StateBatch()
+                            .setFirstOffset(batch.firstOffset())
+                            .setLastOffset(batch.lastOffset())
+                            .setDeliveryCount(batch.deliveryCount())
+                            .setDeliveryState(batch.deliveryState()))
+                        .toList()),
                 (short) 0
             )
         );

@@ -103,12 +103,12 @@ public class SinkConnectorsIntegrationTest {
         Map<String, String> connectorProps = baseSinkConnectorProps(String.join(",", topics));
         // Need an eager assignor here; round-robin is as good as any
         connectorProps.put(
-            CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
-            RoundRobinAssignor.class.getName());
+                CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
+                RoundRobinAssignor.class.getName());
         // After deleting a topic, offset commits will fail for it; reduce the timeout here so that the test doesn't take forever to proceed past that point
         connectorProps.put(
-            CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + DEFAULT_API_TIMEOUT_MS_CONFIG,
-            "5000");
+                CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + DEFAULT_API_TIMEOUT_MS_CONFIG,
+                "5000");
 
         final Set<String> consumedRecordValues = new HashSet<>();
         Consumer<SinkRecord> onPut = record -> assertTrue(consumedRecordValues.add(Objects.toString(record.value())), "Task received duplicate record from Connect");
@@ -130,9 +130,9 @@ public class SinkConnectorsIntegrationTest {
         expectedRecordValues.add("t1v1");
 
         waitForCondition(
-            () -> expectedRecordValues.equals(consumedRecordValues),
-            TASK_CONSUME_TIMEOUT_MS,
-            "Task did not receive records in time");
+                () -> expectedRecordValues.equals(consumedRecordValues),
+                TASK_CONSUME_TIMEOUT_MS,
+                "Task did not receive records in time");
         assertEquals(1, task.timesAssigned(tp1));
         assertEquals(0, task.timesRevoked(tp1));
         assertEquals(expectedAssignment, task.assignment());
@@ -145,9 +145,9 @@ public class SinkConnectorsIntegrationTest {
         expectedRecordValues.add("t1v2");
 
         waitForCondition(
-            () -> expectedRecordValues.equals(consumedRecordValues),
-            TASK_CONSUME_TIMEOUT_MS,
-            "Task did not receive records in time");
+                () -> expectedRecordValues.equals(consumedRecordValues),
+                TASK_CONSUME_TIMEOUT_MS,
+                "Task did not receive records in time");
         assertEquals(2, task.timesAssigned(tp1));
         assertEquals(1, task.timesRevoked(tp1));
         assertEquals(1, task.timesCommitted(tp1));
@@ -166,9 +166,9 @@ public class SinkConnectorsIntegrationTest {
 
         expectedAssignment.add(tp3);
         waitForCondition(
-            () -> expectedRecordValues.equals(consumedRecordValues),
-            TASK_CONSUME_TIMEOUT_MS,
-            "Task did not receive records in time");
+                () -> expectedRecordValues.equals(consumedRecordValues),
+                TASK_CONSUME_TIMEOUT_MS,
+                "Task did not receive records in time");
         assertEquals(3, task.timesAssigned(tp1));
         assertEquals(2, task.timesRevoked(tp1));
         assertEquals(2, task.timesCommitted(tp1));
@@ -187,9 +187,9 @@ public class SinkConnectorsIntegrationTest {
         expectedRecordValues.add("t2v3");
 
         waitForCondition(
-            () -> expectedRecordValues.equals(consumedRecordValues) && expectedAssignment.equals(task.assignment()),
-            TASK_CONSUME_TIMEOUT_MS,
-            "Timed out while waiting for task to receive records and updated topic partition assignment");
+                () -> expectedRecordValues.equals(consumedRecordValues) && expectedAssignment.equals(task.assignment()),
+                TASK_CONSUME_TIMEOUT_MS,
+                "Timed out while waiting for task to receive records and updated topic partition assignment");
         assertEquals(3, task.timesAssigned(tp1));
         assertEquals(3, task.timesRevoked(tp1));
         assertEquals(3, task.timesCommitted(tp1));
@@ -236,9 +236,9 @@ public class SinkConnectorsIntegrationTest {
         expectedRecordValues.add("t1v1");
 
         waitForCondition(
-            () -> expectedRecordValues.equals(consumedRecordValues),
-            TASK_CONSUME_TIMEOUT_MS,
-            "Task did not receive records in time");
+                () -> expectedRecordValues.equals(consumedRecordValues),
+                TASK_CONSUME_TIMEOUT_MS,
+                "Task did not receive records in time");
         assertEquals(1, task.timesAssigned(tp1));
         assertEquals(0, task.timesRevoked(tp1));
         assertEquals(expectedAssignment, task.assignment());
@@ -251,9 +251,9 @@ public class SinkConnectorsIntegrationTest {
         expectedRecordValues.add("t1v2");
 
         waitForCondition(
-            () -> expectedRecordValues.equals(consumedRecordValues),
-            TASK_CONSUME_TIMEOUT_MS,
-            "Task did not receive records in time");
+                () -> expectedRecordValues.equals(consumedRecordValues),
+                TASK_CONSUME_TIMEOUT_MS,
+                "Task did not receive records in time");
         assertEquals(1, task.timesAssigned(tp1));
         assertEquals(0, task.timesRevoked(tp1));
         assertEquals(0, task.timesCommitted(tp1));
@@ -272,9 +272,9 @@ public class SinkConnectorsIntegrationTest {
 
         expectedAssignment.add(tp3);
         waitForCondition(
-            () -> expectedRecordValues.equals(consumedRecordValues),
-            TASK_CONSUME_TIMEOUT_MS,
-            "Task did not receive records in time");
+                () -> expectedRecordValues.equals(consumedRecordValues),
+                TASK_CONSUME_TIMEOUT_MS,
+                "Task did not receive records in time");
         assertEquals(1, task.timesAssigned(tp1));
         assertEquals(0, task.timesRevoked(tp1));
         assertEquals(0, task.timesCommitted(tp1));
@@ -293,9 +293,9 @@ public class SinkConnectorsIntegrationTest {
         expectedRecordValues.add("t2v3");
 
         waitForCondition(
-            () -> expectedRecordValues.equals(consumedRecordValues) && expectedAssignment.equals(task.assignment()),
-            TASK_CONSUME_TIMEOUT_MS,
-            "Timed out while waiting for task to receive records and updated topic partition assignment");
+                () -> expectedRecordValues.equals(consumedRecordValues) && expectedAssignment.equals(task.assignment()),
+                TASK_CONSUME_TIMEOUT_MS,
+                "Timed out while waiting for task to receive records and updated topic partition assignment");
         assertEquals(1, task.timesAssigned(tp1));
         assertEquals(1, task.timesRevoked(tp1));
         assertEquals(1, task.timesCommitted(tp1));

@@ -76,22 +76,22 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
      * Initialize the coordination manager.
      */
     public WorkerCoordinator(GroupRebalanceConfig config,
-                             LogContext logContext,
-                             ConsumerNetworkClient client,
-                             Metrics metrics,
-                             String metricGrpPrefix,
-                             Time time,
-                             String restUrl,
-                             ConfigBackingStore configStorage,
-                             WorkerRebalanceListener listener,
-                             ConnectProtocolCompatibility protocolCompatibility,
-                             int maxDelay) {
+            LogContext logContext,
+            ConsumerNetworkClient client,
+            Metrics metrics,
+            String metricGrpPrefix,
+            Time time,
+            String restUrl,
+            ConfigBackingStore configStorage,
+            WorkerRebalanceListener listener,
+            ConnectProtocolCompatibility protocolCompatibility,
+            int maxDelay) {
         super(config,
-              logContext,
-              client,
-              metrics,
-              metricGrpPrefix,
-              time);
+                logContext,
+                client,
+                metrics,
+                metricGrpPrefix,
+                time);
         this.log = logContext.logger(WorkerCoordinator.class);
         this.restUrl = restUrl;
         this.configStorage = configStorage;
@@ -222,16 +222,16 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
 
     @Override
     protected Map<String, ByteBuffer> onLeaderElected(String leaderId,
-                                                      String protocol,
-                                                      List<JoinGroupResponseMember> allMemberMetadata,
-                                                      boolean skipAssignment) {
+            String protocol,
+            List<JoinGroupResponseMember> allMemberMetadata,
+            boolean skipAssignment) {
         if (skipAssignment)
             throw new IllegalStateException("Can't skip assignment because Connect does not support static membership.");
 
         ConnectProtocolCompatibility protocolCompatibility = ConnectProtocolCompatibility.fromProtocol(protocol);
         return protocolCompatibility == EAGER
-               ? eagerAssignor.performAssignment(leaderId, protocolCompatibility, allMemberMetadata, this)
-               : incrementalAssignor.performAssignment(leaderId, protocolCompatibility, allMemberMetadata, this);
+                ? eagerAssignor.performAssignment(leaderId, protocolCompatibility, allMemberMetadata, this)
+                : incrementalAssignor.performAssignment(leaderId, protocolCompatibility, allMemberMetadata, this);
     }
 
     @Override
@@ -245,7 +245,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
                 listener.onRevoked(localAssignmentSnapshot.leader(), localAssignmentSnapshot.connectors(), localAssignmentSnapshot.tasks());
         } else {
             log.debug("Cooperative rebalance triggered. Keeping assignment {} until it's "
-                      + "explicitly revoked.", localAssignmentSnapshot);
+                    + "explicitly revoked.", localAssignmentSnapshot);
         }
         return true;
     }
@@ -388,11 +388,11 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             };
 
             metrics.addMetric(metrics.metricName("assigned-connectors",
-                              this.metricGrpName,
-                              "The number of connector instances currently assigned to this worker"), numConnectors);
+                    this.metricGrpName,
+                    "The number of connector instances currently assigned to this worker"), numConnectors);
             metrics.addMetric(metrics.metricName("assigned-tasks",
-                              this.metricGrpName,
-                              "The number of tasks currently assigned to this worker"), numTasks);
+                    this.metricGrpName,
+                    "The number of tasks currently assigned to this worker"), numTasks);
         }
     }
 
@@ -412,8 +412,8 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         private final Map<ConnectorTaskId, String> taskOwners;
 
         public LeaderState(Map<String, ExtendedWorkerState> allMembers,
-                           Map<String, Collection<String>> connectorAssignment,
-                           Map<String, Collection<ConnectorTaskId>> taskAssignment) {
+                Map<String, Collection<String>> connectorAssignment,
+                Map<String, Collection<ConnectorTaskId>> taskAssignment) {
             this.allMembers = allMembers;
             this.connectorOwners = invertAssignment(connectorAssignment);
             this.taskOwners = invertAssignment(taskAssignment);
@@ -477,7 +477,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             }
 
             public ConnectorsAndTasks.Builder with(Collection<String> connectors,
-                                                   Collection<ConnectorTaskId> tasks) {
+                    Collection<ConnectorTaskId> tasks) {
                 withConnectors = new LinkedHashSet<>(connectors);
                 withTasks = new LinkedHashSet<>(tasks);
                 return this;
@@ -551,7 +551,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             }
 
             public WorkerLoad.Builder withCopies(Collection<String> connectors,
-                                                 Collection<ConnectorTaskId> tasks) {
+                    Collection<ConnectorTaskId> tasks) {
                 withConnectors = new ArrayList<>(
                         Objects.requireNonNull(connectors, "connectors may be empty but not null"));
                 withTasks = new ArrayList<>(
@@ -560,7 +560,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             }
 
             public WorkerLoad.Builder with(Collection<String> connectors,
-                                           Collection<ConnectorTaskId> tasks) {
+                    Collection<ConnectorTaskId> tasks) {
                 withConnectors = Objects.requireNonNull(connectors,
                         "connectors may be empty but not null");
                 withTasks = Objects.requireNonNull(tasks, "tasks may be empty but not null");
@@ -615,8 +615,8 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             return (left, right) -> {
                 int res = left.connectors.size() - right.connectors.size();
                 return res != 0 ? res : left.worker == null
-                                        ? right.worker == null ? 0 : -1
-                                        : left.worker.compareTo(right.worker);
+                        ? right.worker == null ? 0 : -1
+                        : left.worker.compareTo(right.worker);
             };
         }
 
@@ -624,8 +624,8 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             return (left, right) -> {
                 int res = left.tasks.size() - right.tasks.size();
                 return res != 0 ? res : left.worker == null
-                                        ? right.worker == null ? 0 : -1
-                                        : left.worker.compareTo(right.worker);
+                        ? right.worker == null ? 0 : -1
+                        : left.worker.compareTo(right.worker);
             };
         }
 

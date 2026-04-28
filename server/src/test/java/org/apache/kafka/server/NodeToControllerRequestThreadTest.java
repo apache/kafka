@@ -81,7 +81,7 @@ class NodeToControllerRequestThreadTest {
      * require {@code @SuppressWarnings("unchecked")} due to generic type erasure.
      */
     private static Supplier<ControllerInformation> sequentialProvider(
-            ControllerInformation first, ControllerInformation second) {
+        ControllerInformation first, ControllerInformation second) {
         AtomicReference<ControllerInformation> ref = new AtomicReference<>(first);
         return () -> ref.getAndSet(second);
     }

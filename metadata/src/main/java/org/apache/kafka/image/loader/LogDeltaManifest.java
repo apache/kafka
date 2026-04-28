@@ -152,11 +152,11 @@ public class LogDeltaManifest implements LoaderManifest {
     @Override
     public int hashCode() {
         return Objects.hash(
-                provenance,
-                leaderAndEpoch,
-                numBatches,
-                elapsedNs,
-                numBytes);
+            provenance,
+            leaderAndEpoch,
+            numBatches,
+            elapsedNs,
+            numBytes);
     }
 
     @Override
@@ -164,20 +164,20 @@ public class LogDeltaManifest implements LoaderManifest {
         if (o == null || !o.getClass().equals(this.getClass())) return false;
         LogDeltaManifest other = (LogDeltaManifest) o;
         return provenance.equals(other.provenance) &&
-                leaderAndEpoch == other.leaderAndEpoch &&
-                numBatches == other.numBatches &&
-                elapsedNs == other.elapsedNs &&
-                numBytes == other.numBytes;
+            leaderAndEpoch == other.leaderAndEpoch &&
+            numBatches == other.numBatches &&
+            elapsedNs == other.elapsedNs &&
+            numBytes == other.numBytes;
     }
 
     @Override
     public String toString() {
         return "LogDeltaManifest(" +
-                "provenance=" + provenance +
-                ", leaderAndEpoch=" + leaderAndEpoch +
-                ", numBatches=" + numBatches +
-                ", elapsedNs=" + elapsedNs +
-                ", numBytes=" + numBytes +
-                ")";
+            "provenance=" + provenance +
+            ", leaderAndEpoch=" + leaderAndEpoch +
+            ", numBatches=" + numBatches +
+            ", elapsedNs=" + elapsedNs +
+            ", numBytes=" + numBytes +
+            ")";
     }
 }

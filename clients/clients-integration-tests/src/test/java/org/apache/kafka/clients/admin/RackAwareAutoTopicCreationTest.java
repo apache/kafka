@@ -65,10 +65,10 @@ public class RackAwareAutoTopicCreationTest {
 
             // check broker rack content
             Map<Integer, String> expectedBrokerToRackMap = Map.of(
-                    0, "0",
-                    1, "0",
-                    2, "1",
-                    3, "1"
+                0, "0",
+                1, "0",
+                2, "1",
+                3, "1"
             );
             Map<Integer, String> actualBrokerToRackMap = getBrokerToRackMap(cluster);
             assertEquals(expectedBrokerToRackMap, actualBrokerToRackMap);
@@ -77,7 +77,7 @@ public class RackAwareAutoTopicCreationTest {
             Map<Integer, List<Integer>> assignments = getTopicAssignment(admin);
             for (List<Integer> brokerList : assignments.values()) {
                 assertEquals(new HashSet<>(brokerList).size(), brokerList.size(),
-                        "More than one replica is assigned to same broker for the same partition");
+                    "More than one replica is assigned to same broker for the same partition");
             }
 
             // check rack count for each partition
@@ -87,10 +87,10 @@ public class RackAwareAutoTopicCreationTest {
             int replicationFactor = Integer.parseInt(serverProperties.get(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG));
             List<Integer> expectedRackCounts = Collections.nCopies(numPartition, replicationFactor);
             List<Integer> actualRackCounts = distribution.partitionToRackMap.values().stream()
-                    .map(racks -> (int) racks.stream().distinct().count())
-                    .collect(Collectors.toList());
+                .map(racks -> (int) racks.stream().distinct().count())
+                .collect(Collectors.toList());
             assertEquals(expectedRackCounts, actualRackCounts,
-                    "More than one replica of the same partition is assigned to the same rack");
+                "More than one replica of the same partition is assigned to the same rack");
 
             // check replica count for each partition
             int numBrokers = cluster.brokers().size();
@@ -104,9 +104,9 @@ public class RackAwareAutoTopicCreationTest {
     private static Map<Integer, List<Integer>> getTopicAssignment(Admin admin) throws Exception {
         TopicDescription topicDescription = admin.describeTopics(List.of(TOPIC)).allTopicNames().get().get(TOPIC);
         return topicDescription.partitions().stream()
-                .collect(Collectors.toMap(
-                        TopicPartitionInfo::partition,
-                        p -> p.replicas().stream().map(Node::id).collect(Collectors.toList())));
+            .collect(Collectors.toMap(
+                TopicPartitionInfo::partition,
+                p -> p.replicas().stream().map(Node::id).collect(Collectors.toList())));
     }
 
     private static Map<Integer, String> getBrokerToRackMap(ClusterInstance cluster) throws Exception {

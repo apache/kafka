@@ -36,7 +36,8 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueMetricToSensor;
 
 public class RocksDBMetrics {
-    private RocksDBMetrics() {}
+    private RocksDBMetrics() {
+    }
 
     private static final String BYTES_WRITTEN_TO_DB = "bytes-written";
     private static final String BYTES_READ_FROM_DB = "bytes-read";
@@ -163,8 +164,8 @@ public class RocksDBMetrics {
         private final String storeName;
 
         public RocksDBMetricContext(final String taskName,
-                                    final String metricsScope,
-                                    final String storeName) {
+            final String metricsScope,
+            final String storeName) {
             this.taskName = taskName;
             this.metricsScope = metricsScope;
             this.storeName = storeName;
@@ -173,9 +174,11 @@ public class RocksDBMetrics {
         public String taskName() {
             return taskName;
         }
+
         public String metricsScope() {
             return metricsScope;
         }
+
         public String storeName() {
             return storeName;
         }
@@ -201,7 +204,7 @@ public class RocksDBMetrics {
     }
 
     public static Sensor bytesWrittenToDatabaseSensor(final StreamsMetricsImpl streamsMetrics,
-                                                      final RocksDBMetricContext metricContext) {
+        final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, BYTES_WRITTEN_TO_DB);
         addRateOfSumAndSumMetricsToSensor(
             sensor,
@@ -219,7 +222,7 @@ public class RocksDBMetrics {
     }
 
     public static Sensor bytesReadFromDatabaseSensor(final StreamsMetricsImpl streamsMetrics,
-                                                     final RocksDBMetricContext metricContext) {
+        final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, BYTES_READ_FROM_DB);
         addRateOfSumAndSumMetricsToSensor(
             sensor,
@@ -237,7 +240,7 @@ public class RocksDBMetrics {
     }
 
     public static Sensor memtableBytesFlushedSensor(final StreamsMetricsImpl streamsMetrics,
-                                                    final RocksDBMetricContext metricContext) {
+        final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, MEMTABLE_BYTES_FLUSHED);
         addRateOfSumAndSumMetricsToSensor(
             sensor,
@@ -255,7 +258,7 @@ public class RocksDBMetrics {
     }
 
     public static Sensor memtableHitRatioSensor(final StreamsMetricsImpl streamsMetrics,
-                                                final RocksDBMetricContext metricContext) {
+        final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, MEMTABLE_HIT_RATIO);
         addValueMetricToSensor(
             sensor,
@@ -272,7 +275,7 @@ public class RocksDBMetrics {
     }
 
     public static Sensor memtableAvgFlushTimeSensor(final StreamsMetricsImpl streamsMetrics,
-                                                    final RocksDBMetricContext metricContext) {
+        final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, MEMTABLE_FLUSH_TIME_AVG);
         addValueMetricToSensor(
             sensor,
@@ -289,7 +292,7 @@ public class RocksDBMetrics {
     }
 
     public static Sensor memtableMinFlushTimeSensor(final StreamsMetricsImpl streamsMetrics,
-                                                    final RocksDBMetricContext metricContext) {
+        final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, MEMTABLE_FLUSH_TIME_MIN);
         addValueMetricToSensor(
             sensor,
@@ -306,7 +309,7 @@ public class RocksDBMetrics {
     }
 
     public static Sensor memtableMaxFlushTimeSensor(final StreamsMetricsImpl streamsMetrics,
-                                                    final RocksDBMetricContext metricContext) {
+        final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, MEMTABLE_FLUSH_TIME_MAX);
         addValueMetricToSensor(
             sensor,
@@ -323,7 +326,7 @@ public class RocksDBMetrics {
     }
 
     public static Sensor writeStallDurationSensor(final StreamsMetricsImpl streamsMetrics,
-                                                  final RocksDBMetricContext metricContext) {
+        final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, WRITE_STALL_DURATION);
         addAvgAndSumMetricsToSensor(
             sensor,
@@ -341,7 +344,7 @@ public class RocksDBMetrics {
     }
 
     public static Sensor blockCacheDataHitRatioSensor(final StreamsMetricsImpl streamsMetrics,
-                                                      final RocksDBMetricContext metricContext) {
+        final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, BLOCK_CACHE_DATA_HIT_RATIO);
         addValueMetricToSensor(
             sensor,
@@ -358,7 +361,7 @@ public class RocksDBMetrics {
     }
 
     public static Sensor blockCacheIndexHitRatioSensor(final StreamsMetricsImpl streamsMetrics,
-                                                       final RocksDBMetricContext metricContext) {
+        final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, BLOCK_CACHE_INDEX_HIT_RATIO);
         addValueMetricToSensor(
             sensor,
@@ -375,7 +378,7 @@ public class RocksDBMetrics {
     }
 
     public static Sensor blockCacheFilterHitRatioSensor(final StreamsMetricsImpl streamsMetrics,
-                                                        final RocksDBMetricContext metricContext) {
+        final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, BLOCK_CACHE_FILTER_HIT_RATIO);
         addValueMetricToSensor(
             sensor,
@@ -392,7 +395,7 @@ public class RocksDBMetrics {
     }
 
     public static Sensor bytesReadDuringCompactionSensor(final StreamsMetricsImpl streamsMetrics,
-                                                         final RocksDBMetricContext metricContext) {
+        final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, BYTES_READ_DURING_COMPACTION);
         addRateOfSumMetricToSensor(
             sensor,
@@ -409,7 +412,7 @@ public class RocksDBMetrics {
     }
 
     public static Sensor bytesWrittenDuringCompactionSensor(final StreamsMetricsImpl streamsMetrics,
-                                                            final RocksDBMetricContext metricContext) {
+        final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, BYTES_WRITTEN_DURING_COMPACTION);
         addRateOfSumMetricToSensor(
             sensor,
@@ -426,7 +429,7 @@ public class RocksDBMetrics {
     }
 
     public static Sensor compactionTimeAvgSensor(final StreamsMetricsImpl streamsMetrics,
-                                                 final RocksDBMetricContext metricContext) {
+        final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, COMPACTION_TIME_AVG);
         addValueMetricToSensor(
             sensor,
@@ -443,7 +446,7 @@ public class RocksDBMetrics {
     }
 
     public static Sensor compactionTimeMinSensor(final StreamsMetricsImpl streamsMetrics,
-                                                 final RocksDBMetricContext metricContext) {
+        final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, COMPACTION_TIME_MIN);
         addValueMetricToSensor(
             sensor,
@@ -460,7 +463,7 @@ public class RocksDBMetrics {
     }
 
     public static Sensor compactionTimeMaxSensor(final StreamsMetricsImpl streamsMetrics,
-                                                 final RocksDBMetricContext metricContext) {
+        final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, COMPACTION_TIME_MAX);
         addValueMetricToSensor(
             sensor,
@@ -477,7 +480,7 @@ public class RocksDBMetrics {
     }
 
     public static Sensor numberOfOpenFilesSensor(final StreamsMetricsImpl streamsMetrics,
-                                                 final RocksDBMetricContext metricContext) {
+        final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, NUMBER_OF_OPEN_FILES);
         addSumMetricToSensor(
             sensor,
@@ -495,7 +498,7 @@ public class RocksDBMetrics {
     }
 
     public static Sensor numberOfFileErrorsSensor(final StreamsMetricsImpl streamsMetrics,
-                                                  final RocksDBMetricContext metricContext) {
+        final RocksDBMetricContext metricContext) {
         final Sensor sensor = createSensor(streamsMetrics, metricContext, NUMBER_OF_FILE_ERRORS);
         addSumMetricToSensor(
             sensor,
@@ -512,8 +515,8 @@ public class RocksDBMetrics {
     }
 
     public static void addNumEntriesActiveMemTableMetric(final StreamsMetricsImpl streamsMetrics,
-                                                         final RocksDBMetricContext metricContext,
-                                                         final Gauge<BigInteger> valueProvider) {
+        final RocksDBMetricContext metricContext,
+        final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,
@@ -524,8 +527,8 @@ public class RocksDBMetrics {
     }
 
     public static void addNumEntriesImmMemTablesMetric(final StreamsMetricsImpl streamsMetrics,
-                                                       final RocksDBMetricContext metricContext,
-                                                       final Gauge<BigInteger> valueProvider) {
+        final RocksDBMetricContext metricContext,
+        final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,
@@ -536,8 +539,8 @@ public class RocksDBMetrics {
     }
 
     public static void addNumDeletesImmMemTablesMetric(final StreamsMetricsImpl streamsMetrics,
-                                                       final RocksDBMetricContext metricContext,
-                                                       final Gauge<BigInteger> valueProvider) {
+        final RocksDBMetricContext metricContext,
+        final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,
@@ -548,8 +551,8 @@ public class RocksDBMetrics {
     }
 
     public static void addNumDeletesActiveMemTableMetric(final StreamsMetricsImpl streamsMetrics,
-                                                         final RocksDBMetricContext metricContext,
-                                                         final Gauge<BigInteger> valueProvider) {
+        final RocksDBMetricContext metricContext,
+        final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,
@@ -560,8 +563,8 @@ public class RocksDBMetrics {
     }
 
     public static void addNumImmutableMemTableMetric(final StreamsMetricsImpl streamsMetrics,
-                                                     final RocksDBMetricContext metricContext,
-                                                     final Gauge<BigInteger> valueProvider) {
+        final RocksDBMetricContext metricContext,
+        final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,
@@ -572,8 +575,8 @@ public class RocksDBMetrics {
     }
 
     public static void addCurSizeActiveMemTable(final StreamsMetricsImpl streamsMetrics,
-                                                final RocksDBMetricContext metricContext,
-                                                final Gauge<BigInteger> valueProvider) {
+        final RocksDBMetricContext metricContext,
+        final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,
@@ -584,8 +587,8 @@ public class RocksDBMetrics {
     }
 
     public static void addCurSizeAllMemTables(final StreamsMetricsImpl streamsMetrics,
-                                              final RocksDBMetricContext metricContext,
-                                              final Gauge<BigInteger> valueProvider) {
+        final RocksDBMetricContext metricContext,
+        final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,
@@ -596,8 +599,8 @@ public class RocksDBMetrics {
     }
 
     public static void addSizeAllMemTables(final StreamsMetricsImpl streamsMetrics,
-                                           final RocksDBMetricContext metricContext,
-                                           final Gauge<BigInteger> valueProvider) {
+        final RocksDBMetricContext metricContext,
+        final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,
@@ -608,8 +611,8 @@ public class RocksDBMetrics {
     }
 
     public static void addMemTableFlushPending(final StreamsMetricsImpl streamsMetrics,
-                                               final RocksDBMetricContext metricContext,
-                                               final Gauge<BigInteger> valueProvider) {
+        final RocksDBMetricContext metricContext,
+        final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,
@@ -620,8 +623,8 @@ public class RocksDBMetrics {
     }
 
     public static void addNumRunningFlushesMetric(final StreamsMetricsImpl streamsMetrics,
-                                                  final RocksDBMetricContext metricContext,
-                                                  final Gauge<BigInteger> valueProvider) {
+        final RocksDBMetricContext metricContext,
+        final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,
@@ -632,8 +635,8 @@ public class RocksDBMetrics {
     }
 
     public static void addCompactionPendingMetric(final StreamsMetricsImpl streamsMetrics,
-                                                  final RocksDBMetricContext metricContext,
-                                                  final Gauge<BigInteger> valueProvider) {
+        final RocksDBMetricContext metricContext,
+        final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,
@@ -644,8 +647,8 @@ public class RocksDBMetrics {
     }
 
     public static void addNumRunningCompactionsMetric(final StreamsMetricsImpl streamsMetrics,
-                                                      final RocksDBMetricContext metricContext,
-                                                      final Gauge<BigInteger> valueProvider) {
+        final RocksDBMetricContext metricContext,
+        final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,
@@ -656,8 +659,8 @@ public class RocksDBMetrics {
     }
 
     public static void addEstimatePendingCompactionBytesMetric(final StreamsMetricsImpl streamsMetrics,
-                                                               final RocksDBMetricContext metricContext,
-                                                               final Gauge<BigInteger> valueProvider) {
+        final RocksDBMetricContext metricContext,
+        final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,
@@ -668,8 +671,8 @@ public class RocksDBMetrics {
     }
 
     public static void addTotalSstFilesSizeMetric(final StreamsMetricsImpl streamsMetrics,
-                                                  final RocksDBMetricContext metricContext,
-                                                  final Gauge<BigInteger> valueProvider) {
+        final RocksDBMetricContext metricContext,
+        final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,
@@ -680,8 +683,8 @@ public class RocksDBMetrics {
     }
 
     public static void addLiveSstFilesSizeMetric(final StreamsMetricsImpl streamsMetrics,
-                                                 final RocksDBMetricContext metricContext,
-                                                 final Gauge<BigInteger> valueProvider) {
+        final RocksDBMetricContext metricContext,
+        final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,
@@ -692,8 +695,8 @@ public class RocksDBMetrics {
     }
 
     public static void addNumLiveVersionMetric(final StreamsMetricsImpl streamsMetrics,
-                                               final RocksDBMetricContext metricContext,
-                                               final Gauge<BigInteger> valueProvider) {
+        final RocksDBMetricContext metricContext,
+        final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,
@@ -704,8 +707,8 @@ public class RocksDBMetrics {
     }
 
     public static void addBlockCacheCapacityMetric(final StreamsMetricsImpl streamsMetrics,
-                                                   final RocksDBMetricContext metricContext,
-                                                   final Gauge<BigInteger> valueProvider) {
+        final RocksDBMetricContext metricContext,
+        final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,
@@ -716,8 +719,8 @@ public class RocksDBMetrics {
     }
 
     public static void addBlockCacheUsageMetric(final StreamsMetricsImpl streamsMetrics,
-                                                final RocksDBMetricContext metricContext,
-                                                final Gauge<BigInteger> valueProvider) {
+        final RocksDBMetricContext metricContext,
+        final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,
@@ -728,8 +731,8 @@ public class RocksDBMetrics {
     }
 
     public static void addBlockCachePinnedUsageMetric(final StreamsMetricsImpl streamsMetrics,
-                                                      final RocksDBMetricContext metricContext,
-                                                      final Gauge<BigInteger> valueProvider) {
+        final RocksDBMetricContext metricContext,
+        final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,
@@ -740,8 +743,8 @@ public class RocksDBMetrics {
     }
 
     public static void addEstimateNumKeysMetric(final StreamsMetricsImpl streamsMetrics,
-                                                final RocksDBMetricContext metricContext,
-                                                final Gauge<BigInteger> valueProvider) {
+        final RocksDBMetricContext metricContext,
+        final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,
@@ -752,8 +755,8 @@ public class RocksDBMetrics {
     }
 
     public static void addEstimateTableReadersMemMetric(final StreamsMetricsImpl streamsMetrics,
-                                                        final RocksDBMetricContext metricContext,
-                                                        final Gauge<BigInteger> valueProvider) {
+        final RocksDBMetricContext metricContext,
+        final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,
@@ -764,8 +767,8 @@ public class RocksDBMetrics {
     }
 
     public static void addBackgroundErrorsMetric(final StreamsMetricsImpl streamsMetrics,
-                                                 final RocksDBMetricContext metricContext,
-                                                 final Gauge<BigInteger> valueProvider) {
+        final RocksDBMetricContext metricContext,
+        final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,
@@ -776,10 +779,10 @@ public class RocksDBMetrics {
     }
 
     private static void addMutableMetric(final StreamsMetricsImpl streamsMetrics,
-                                         final RocksDBMetricContext metricContext,
-                                         final Gauge<BigInteger> valueProvider,
-                                         final String name,
-                                         final String description) {
+        final RocksDBMetricContext metricContext,
+        final Gauge<BigInteger> valueProvider,
+        final String name,
+        final String description) {
         streamsMetrics.addStoreLevelMutableMetric(
             metricContext.taskName(),
             metricContext.metricsScope(),
@@ -792,8 +795,8 @@ public class RocksDBMetrics {
     }
 
     private static Sensor createSensor(final StreamsMetricsImpl streamsMetrics,
-                                       final RocksDBMetricContext metricContext,
-                                       final String sensorSuffix) {
+        final RocksDBMetricContext metricContext,
+        final String sensorSuffix) {
         return streamsMetrics.storeLevelSensor(
             metricContext.taskName(),
             metricContext.storeName(),

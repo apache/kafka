@@ -43,13 +43,13 @@ public class AdminMetadataManagerTest {
     private final long refreshBackoffMs = 100;
     private final long metadataExpireMs = 60000;
     private final AdminMetadataManager mgr = new AdminMetadataManager(
-            logContext, refreshBackoffMs, metadataExpireMs, false);
+        logContext, refreshBackoffMs, metadataExpireMs, false);
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testSetUsingBootstrapControllers(boolean usingBootstrapControllers) {
         AdminMetadataManager manager = new AdminMetadataManager(
-                logContext, refreshBackoffMs, metadataExpireMs, usingBootstrapControllers);
+            logContext, refreshBackoffMs, metadataExpireMs, usingBootstrapControllers);
         assertEquals(usingBootstrapControllers, manager.usingBootstrapControllers());
     }
 
@@ -61,7 +61,7 @@ public class AdminMetadataManagerTest {
 
         // Metadata is not ready when bootstrap servers are set
         mgr.update(Cluster.bootstrap(Collections.singletonList(new InetSocketAddress("localhost", 9999))),
-                time.milliseconds());
+            time.milliseconds());
         assertFalse(mgr.isReady());
         assertEquals(0, mgr.metadataFetchDelayMs(time.milliseconds()));
 
@@ -156,8 +156,8 @@ public class AdminMetadataManagerTest {
         nodes.put(1, new Node(1, "localhost", 8122));
         nodes.put(2, new Node(2, "localhost", 8123));
         return new Cluster("mockClusterId", nodes.values(),
-                Collections.emptySet(), Collections.emptySet(),
-                Collections.emptySet(), nodes.get(0));
+            Collections.emptySet(), Collections.emptySet(),
+            Collections.emptySet(), nodes.get(0));
     }
 
 }

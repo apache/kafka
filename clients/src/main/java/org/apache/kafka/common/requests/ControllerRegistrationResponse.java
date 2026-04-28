@@ -54,6 +54,6 @@ public class ControllerRegistrationResponse extends AbstractResponse {
 
     public static ControllerRegistrationResponse parse(Readable readable, short version) {
         return new ControllerRegistrationResponse(
-                new ControllerRegistrationResponseData(readable, version));
+            new ControllerRegistrationResponseData(readable, version));
     }
 }

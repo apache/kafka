@@ -77,6 +77,7 @@ public class ByteUtilsTest {
         byte[] input = new byte[]{(byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
         assertThrows(IndexOutOfBoundsException.class, () -> ByteUtils.increment(Bytes.wrap(input)));
     }
+
     @Test
     public void testIncrementWithSubmap() {
         final NavigableMap<Bytes, byte[]> map = new TreeMap<>();
@@ -147,8 +148,8 @@ public class ByteUtilsTest {
 
     private int cmp(String l, String r) {
         return ByteUtils.BYTES_LEXICO_COMPARATOR.compare(
-                l.getBytes(StandardCharsets.UTF_8),
-                r.getBytes(StandardCharsets.UTF_8));
+            l.getBytes(StandardCharsets.UTF_8),
+            r.getBytes(StandardCharsets.UTF_8));
     }
 
 
@@ -192,21 +193,21 @@ public class ByteUtilsTest {
 
         byte[] array1 = new byte[4];
         ByteUtils.writeUnsignedIntLE(array1, 0, value1);
-        assertArrayEquals(new byte[] {0x01, 0x02, 0x03, 0x04}, array1);
+        assertArrayEquals(new byte[]{0x01, 0x02, 0x03, 0x04}, array1);
 
         array1 = new byte[8];
         ByteUtils.writeUnsignedIntLE(array1, 2, value1);
-        assertArrayEquals(new byte[] {0, 0, 0x01, 0x02, 0x03, 0x04, 0, 0}, array1);
+        assertArrayEquals(new byte[]{0, 0, 0x01, 0x02, 0x03, 0x04, 0, 0}, array1);
 
         int value2 = 0xf4f3f2f1;
 
         byte[] array2 = new byte[4];
         ByteUtils.writeUnsignedIntLE(array2, 0, value2);
-        assertArrayEquals(new byte[] {(byte) 0xf1, (byte) 0xf2, (byte) 0xf3, (byte) 0xf4}, array2);
+        assertArrayEquals(new byte[]{(byte) 0xf1, (byte) 0xf2, (byte) 0xf3, (byte) 0xf4}, array2);
 
         array2 = new byte[8];
         ByteUtils.writeUnsignedIntLE(array2, 2, value2);
-        assertArrayEquals(new byte[] {0, 0, (byte) 0xf1, (byte) 0xf2, (byte) 0xf3, (byte) 0xf4, 0, 0}, array2);
+        assertArrayEquals(new byte[]{0, 0, (byte) 0xf1, (byte) 0xf2, (byte) 0xf3, (byte) 0xf4, 0, 0}, array2);
     }
 
     @Test
@@ -215,115 +216,115 @@ public class ByteUtilsTest {
         ByteArrayOutputStream os1 = new ByteArrayOutputStream();
         ByteUtils.writeUnsignedIntLE(os1, value1);
         ByteUtils.writeUnsignedIntLE(os1, value1);
-        assertArrayEquals(new byte[] {0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04}, os1.toByteArray());
+        assertArrayEquals(new byte[]{0x01, 0x02, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04}, os1.toByteArray());
 
         int value2 = 0xf4f3f2f1;
         ByteArrayOutputStream os2 = new ByteArrayOutputStream();
         ByteUtils.writeUnsignedIntLE(os2, value2);
-        assertArrayEquals(new byte[] {(byte) 0xf1, (byte) 0xf2, (byte) 0xf3, (byte) 0xf4}, os2.toByteArray());
+        assertArrayEquals(new byte[]{(byte) 0xf1, (byte) 0xf2, (byte) 0xf3, (byte) 0xf4}, os2.toByteArray());
     }
 
     @Test
     public void testUnsignedVarintSerde() throws Exception {
-        assertUnsignedVarintSerde(0, new byte[] {x00});
-        assertUnsignedVarintSerde(-1, new byte[] {xFF, xFF, xFF, xFF, x0F});
-        assertUnsignedVarintSerde(1, new byte[] {x01});
-        assertUnsignedVarintSerde(63, new byte[] {x3F});
-        assertUnsignedVarintSerde(-64, new byte[] {xC0, xFF, xFF, xFF, x0F});
-        assertUnsignedVarintSerde(64, new byte[] {x40});
-        assertUnsignedVarintSerde(8191, new byte[] {xFF, x3F});
-        assertUnsignedVarintSerde(-8192, new byte[] {x80, xC0, xFF, xFF, x0F});
-        assertUnsignedVarintSerde(8192, new byte[] {x80, x40});
-        assertUnsignedVarintSerde(-8193, new byte[] {xFF, xBF, xFF, xFF, x0F});
-        assertUnsignedVarintSerde(1048575, new byte[] {xFF, xFF, x3F});
-        assertUnsignedVarintSerde(1048576, new byte[] {x80, x80, x40});
-        assertUnsignedVarintSerde(Integer.MAX_VALUE, new byte[] {xFF, xFF, xFF, xFF, x07});
-        assertUnsignedVarintSerde(Integer.MIN_VALUE, new byte[] {x80, x80, x80, x80, x08});
+        assertUnsignedVarintSerde(0, new byte[]{x00});
+        assertUnsignedVarintSerde(-1, new byte[]{xFF, xFF, xFF, xFF, x0F});
+        assertUnsignedVarintSerde(1, new byte[]{x01});
+        assertUnsignedVarintSerde(63, new byte[]{x3F});
+        assertUnsignedVarintSerde(-64, new byte[]{xC0, xFF, xFF, xFF, x0F});
+        assertUnsignedVarintSerde(64, new byte[]{x40});
+        assertUnsignedVarintSerde(8191, new byte[]{xFF, x3F});
+        assertUnsignedVarintSerde(-8192, new byte[]{x80, xC0, xFF, xFF, x0F});
+        assertUnsignedVarintSerde(8192, new byte[]{x80, x40});
+        assertUnsignedVarintSerde(-8193, new byte[]{xFF, xBF, xFF, xFF, x0F});
+        assertUnsignedVarintSerde(1048575, new byte[]{xFF, xFF, x3F});
+        assertUnsignedVarintSerde(1048576, new byte[]{x80, x80, x40});
+        assertUnsignedVarintSerde(Integer.MAX_VALUE, new byte[]{xFF, xFF, xFF, xFF, x07});
+        assertUnsignedVarintSerde(Integer.MIN_VALUE, new byte[]{x80, x80, x80, x80, x08});
     }
 
     @Test
     public void testVarintSerde() throws Exception {
-        assertVarintSerde(0, new byte[] {x00});
-        assertVarintSerde(-1, new byte[] {x01});
-        assertVarintSerde(1, new byte[] {x02});
-        assertVarintSerde(63, new byte[] {x7E});
-        assertVarintSerde(-64, new byte[] {x7F});
-        assertVarintSerde(64, new byte[] {x80, x01});
-        assertVarintSerde(-65, new byte[] {x81, x01});
-        assertVarintSerde(8191, new byte[] {xFE, x7F});
-        assertVarintSerde(-8192, new byte[] {xFF, x7F});
-        assertVarintSerde(8192, new byte[] {x80, x80, x01});
-        assertVarintSerde(-8193, new byte[] {x81, x80, x01});
-        assertVarintSerde(1048575, new byte[] {xFE, xFF, x7F});
-        assertVarintSerde(-1048576, new byte[] {xFF, xFF, x7F});
-        assertVarintSerde(1048576, new byte[] {x80, x80, x80, x01});
-        assertVarintSerde(-1048577, new byte[] {x81, x80, x80, x01});
-        assertVarintSerde(134217727, new byte[] {xFE, xFF, xFF, x7F});
-        assertVarintSerde(-134217728, new byte[] {xFF, xFF, xFF, x7F});
-        assertVarintSerde(134217728, new byte[] {x80, x80, x80, x80, x01});
-        assertVarintSerde(-134217729, new byte[] {x81, x80, x80, x80, x01});
-        assertVarintSerde(Integer.MAX_VALUE, new byte[] {xFE, xFF, xFF, xFF, x0F});
-        assertVarintSerde(Integer.MIN_VALUE, new byte[] {xFF, xFF, xFF, xFF, x0F});
+        assertVarintSerde(0, new byte[]{x00});
+        assertVarintSerde(-1, new byte[]{x01});
+        assertVarintSerde(1, new byte[]{x02});
+        assertVarintSerde(63, new byte[]{x7E});
+        assertVarintSerde(-64, new byte[]{x7F});
+        assertVarintSerde(64, new byte[]{x80, x01});
+        assertVarintSerde(-65, new byte[]{x81, x01});
+        assertVarintSerde(8191, new byte[]{xFE, x7F});
+        assertVarintSerde(-8192, new byte[]{xFF, x7F});
+        assertVarintSerde(8192, new byte[]{x80, x80, x01});
+        assertVarintSerde(-8193, new byte[]{x81, x80, x01});
+        assertVarintSerde(1048575, new byte[]{xFE, xFF, x7F});
+        assertVarintSerde(-1048576, new byte[]{xFF, xFF, x7F});
+        assertVarintSerde(1048576, new byte[]{x80, x80, x80, x01});
+        assertVarintSerde(-1048577, new byte[]{x81, x80, x80, x01});
+        assertVarintSerde(134217727, new byte[]{xFE, xFF, xFF, x7F});
+        assertVarintSerde(-134217728, new byte[]{xFF, xFF, xFF, x7F});
+        assertVarintSerde(134217728, new byte[]{x80, x80, x80, x80, x01});
+        assertVarintSerde(-134217729, new byte[]{x81, x80, x80, x80, x01});
+        assertVarintSerde(Integer.MAX_VALUE, new byte[]{xFE, xFF, xFF, xFF, x0F});
+        assertVarintSerde(Integer.MIN_VALUE, new byte[]{xFF, xFF, xFF, xFF, x0F});
     }
 
     @Test
     public void testVarlongSerde() throws Exception {
-        assertVarlongSerde(0, new byte[] {x00});
-        assertVarlongSerde(-1, new byte[] {x01});
-        assertVarlongSerde(1, new byte[] {x02});
-        assertVarlongSerde(63, new byte[] {x7E});
-        assertVarlongSerde(-64, new byte[] {x7F});
-        assertVarlongSerde(64, new byte[] {x80, x01});
-        assertVarlongSerde(-65, new byte[] {x81, x01});
-        assertVarlongSerde(8191, new byte[] {xFE, x7F});
-        assertVarlongSerde(-8192, new byte[] {xFF, x7F});
-        assertVarlongSerde(8192, new byte[] {x80, x80, x01});
-        assertVarlongSerde(-8193, new byte[] {x81, x80, x01});
-        assertVarlongSerde(1048575, new byte[] {xFE, xFF, x7F});
-        assertVarlongSerde(-1048576, new byte[] {xFF, xFF, x7F});
-        assertVarlongSerde(1048576, new byte[] {x80, x80, x80, x01});
-        assertVarlongSerde(-1048577, new byte[] {x81, x80, x80, x01});
-        assertVarlongSerde(134217727, new byte[] {xFE, xFF, xFF, x7F});
-        assertVarlongSerde(-134217728, new byte[] {xFF, xFF, xFF, x7F});
-        assertVarlongSerde(134217728, new byte[] {x80, x80, x80, x80, x01});
-        assertVarlongSerde(-134217729, new byte[] {x81, x80, x80, x80, x01});
-        assertVarlongSerde(Integer.MAX_VALUE, new byte[] {xFE, xFF, xFF, xFF, x0F});
-        assertVarlongSerde(Integer.MIN_VALUE, new byte[] {xFF, xFF, xFF, xFF, x0F});
-        assertVarlongSerde(17179869183L, new byte[] {xFE, xFF, xFF, xFF, x7F});
-        assertVarlongSerde(-17179869184L, new byte[] {xFF, xFF, xFF, xFF, x7F});
-        assertVarlongSerde(17179869184L, new byte[] {x80, x80, x80, x80, x80, x01});
-        assertVarlongSerde(-17179869185L, new byte[] {x81, x80, x80, x80, x80, x01});
-        assertVarlongSerde(2199023255551L, new byte[] {xFE, xFF, xFF, xFF, xFF, x7F});
-        assertVarlongSerde(-2199023255552L, new byte[] {xFF, xFF, xFF, xFF, xFF, x7F});
-        assertVarlongSerde(2199023255552L, new byte[] {x80, x80, x80, x80, x80, x80, x01});
-        assertVarlongSerde(-2199023255553L, new byte[] {x81, x80, x80, x80, x80, x80, x01});
-        assertVarlongSerde(281474976710655L, new byte[] {xFE, xFF, xFF, xFF, xFF, xFF, x7F});
-        assertVarlongSerde(-281474976710656L, new byte[] {xFF, xFF, xFF, xFF, xFF, xFF, x7F});
-        assertVarlongSerde(281474976710656L, new byte[] {x80, x80, x80, x80, x80, x80, x80, x01});
-        assertVarlongSerde(-281474976710657L, new byte[] {x81, x80, x80, x80, x80, x80, x80, 1});
-        assertVarlongSerde(36028797018963967L, new byte[] {xFE, xFF, xFF, xFF, xFF, xFF, xFF, x7F});
-        assertVarlongSerde(-36028797018963968L, new byte[] {xFF, xFF, xFF, xFF, xFF, xFF, xFF, x7F});
-        assertVarlongSerde(36028797018963968L, new byte[] {x80, x80, x80, x80, x80, x80, x80, x80, x01});
-        assertVarlongSerde(-36028797018963969L, new byte[] {x81, x80, x80, x80, x80, x80, x80, x80, x01});
-        assertVarlongSerde(4611686018427387903L, new byte[] {xFE, xFF, xFF, xFF, xFF, xFF, xFF, xFF, x7F});
-        assertVarlongSerde(-4611686018427387904L, new byte[] {xFF, xFF, xFF, xFF, xFF, xFF, xFF, xFF, x7F});
-        assertVarlongSerde(4611686018427387904L, new byte[] {x80, x80, x80, x80, x80, x80, x80, x80, x80, x01});
-        assertVarlongSerde(-4611686018427387905L, new byte[] {x81, x80, x80, x80, x80, x80, x80, x80, x80, x01});
-        assertVarlongSerde(Long.MAX_VALUE, new byte[] {xFE, xFF, xFF, xFF, xFF, xFF, xFF, xFF, xFF, x01});
-        assertVarlongSerde(Long.MIN_VALUE, new byte[] {xFF, xFF, xFF, xFF, xFF, xFF, xFF, xFF, xFF, x01});
+        assertVarlongSerde(0, new byte[]{x00});
+        assertVarlongSerde(-1, new byte[]{x01});
+        assertVarlongSerde(1, new byte[]{x02});
+        assertVarlongSerde(63, new byte[]{x7E});
+        assertVarlongSerde(-64, new byte[]{x7F});
+        assertVarlongSerde(64, new byte[]{x80, x01});
+        assertVarlongSerde(-65, new byte[]{x81, x01});
+        assertVarlongSerde(8191, new byte[]{xFE, x7F});
+        assertVarlongSerde(-8192, new byte[]{xFF, x7F});
+        assertVarlongSerde(8192, new byte[]{x80, x80, x01});
+        assertVarlongSerde(-8193, new byte[]{x81, x80, x01});
+        assertVarlongSerde(1048575, new byte[]{xFE, xFF, x7F});
+        assertVarlongSerde(-1048576, new byte[]{xFF, xFF, x7F});
+        assertVarlongSerde(1048576, new byte[]{x80, x80, x80, x01});
+        assertVarlongSerde(-1048577, new byte[]{x81, x80, x80, x01});
+        assertVarlongSerde(134217727, new byte[]{xFE, xFF, xFF, x7F});
+        assertVarlongSerde(-134217728, new byte[]{xFF, xFF, xFF, x7F});
+        assertVarlongSerde(134217728, new byte[]{x80, x80, x80, x80, x01});
+        assertVarlongSerde(-134217729, new byte[]{x81, x80, x80, x80, x01});
+        assertVarlongSerde(Integer.MAX_VALUE, new byte[]{xFE, xFF, xFF, xFF, x0F});
+        assertVarlongSerde(Integer.MIN_VALUE, new byte[]{xFF, xFF, xFF, xFF, x0F});
+        assertVarlongSerde(17179869183L, new byte[]{xFE, xFF, xFF, xFF, x7F});
+        assertVarlongSerde(-17179869184L, new byte[]{xFF, xFF, xFF, xFF, x7F});
+        assertVarlongSerde(17179869184L, new byte[]{x80, x80, x80, x80, x80, x01});
+        assertVarlongSerde(-17179869185L, new byte[]{x81, x80, x80, x80, x80, x01});
+        assertVarlongSerde(2199023255551L, new byte[]{xFE, xFF, xFF, xFF, xFF, x7F});
+        assertVarlongSerde(-2199023255552L, new byte[]{xFF, xFF, xFF, xFF, xFF, x7F});
+        assertVarlongSerde(2199023255552L, new byte[]{x80, x80, x80, x80, x80, x80, x01});
+        assertVarlongSerde(-2199023255553L, new byte[]{x81, x80, x80, x80, x80, x80, x01});
+        assertVarlongSerde(281474976710655L, new byte[]{xFE, xFF, xFF, xFF, xFF, xFF, x7F});
+        assertVarlongSerde(-281474976710656L, new byte[]{xFF, xFF, xFF, xFF, xFF, xFF, x7F});
+        assertVarlongSerde(281474976710656L, new byte[]{x80, x80, x80, x80, x80, x80, x80, x01});
+        assertVarlongSerde(-281474976710657L, new byte[]{x81, x80, x80, x80, x80, x80, x80, 1});
+        assertVarlongSerde(36028797018963967L, new byte[]{xFE, xFF, xFF, xFF, xFF, xFF, xFF, x7F});
+        assertVarlongSerde(-36028797018963968L, new byte[]{xFF, xFF, xFF, xFF, xFF, xFF, xFF, x7F});
+        assertVarlongSerde(36028797018963968L, new byte[]{x80, x80, x80, x80, x80, x80, x80, x80, x01});
+        assertVarlongSerde(-36028797018963969L, new byte[]{x81, x80, x80, x80, x80, x80, x80, x80, x01});
+        assertVarlongSerde(4611686018427387903L, new byte[]{xFE, xFF, xFF, xFF, xFF, xFF, xFF, xFF, x7F});
+        assertVarlongSerde(-4611686018427387904L, new byte[]{xFF, xFF, xFF, xFF, xFF, xFF, xFF, xFF, x7F});
+        assertVarlongSerde(4611686018427387904L, new byte[]{x80, x80, x80, x80, x80, x80, x80, x80, x80, x01});
+        assertVarlongSerde(-4611686018427387905L, new byte[]{x81, x80, x80, x80, x80, x80, x80, x80, x80, x01});
+        assertVarlongSerde(Long.MAX_VALUE, new byte[]{xFE, xFF, xFF, xFF, xFF, xFF, xFF, xFF, xFF, x01});
+        assertVarlongSerde(Long.MIN_VALUE, new byte[]{xFF, xFF, xFF, xFF, xFF, xFF, xFF, xFF, xFF, x01});
     }
 
     @Test
     public void testInvalidVarint() {
         // varint encoding has one overflow byte
-        ByteBuffer buf = ByteBuffer.wrap(new byte[] {xFF, xFF, xFF, xFF, xFF, x01});
+        ByteBuffer buf = ByteBuffer.wrap(new byte[]{xFF, xFF, xFF, xFF, xFF, x01});
         assertThrows(IllegalArgumentException.class, () -> ByteUtils.readVarint(buf));
     }
 
     @Test
     public void testInvalidVarlong() {
         // varlong encoding has one overflow byte
-        ByteBuffer buf = ByteBuffer.wrap(new byte[] {xFF, xFF, xFF, xFF, xFF, xFF, xFF, xFF, xFF, xFF, x01});
+        ByteBuffer buf = ByteBuffer.wrap(new byte[]{xFF, xFF, xFF, xFF, xFF, xFF, xFF, xFF, xFF, xFF, x01});
         assertThrows(IllegalArgumentException.class, () -> ByteUtils.readVarlong(buf));
     }
 
@@ -362,7 +363,7 @@ public class ByteUtilsTest {
 
         // compare the full range of values
         final ByteBuffer actual = ByteBuffer.allocate(MAX_LENGTH_VARLONG);
-        for (long i = 1; i < Long.MAX_VALUE && i >= 0; i = i << 1) {
+        for (long i = 1;i < Long.MAX_VALUE && i >= 0;i = i << 1) {
             ByteUtils.writeUnsignedVarlong(i, actual);
             final ByteBuffer expected = simpleImplementation.apply(i);
             assertArrayEquals(expected.array(), actual.array(), "Implementations do not match for number=" + i);
@@ -390,7 +391,7 @@ public class ByteUtilsTest {
 
         // compare the full range of values
         final ByteBuffer actual = ByteBuffer.allocate(MAX_LENGTH_VARINT);
-        for (int i = 0; i < Integer.MAX_VALUE && i >= 0; i += 13) {
+        for (int i = 0;i < Integer.MAX_VALUE && i >= 0;i += 13) {
             ByteUtils.writeUnsignedVarint(i, actual);
             final ByteBuffer expected = simpleImplementation.apply(i);
             assertArrayEquals(expected.array(), actual.array(), "Implementations do not match for integer=" + i);
@@ -417,7 +418,7 @@ public class ByteUtilsTest {
 
         // compare the full range of values
         final ByteBuffer testData = ByteBuffer.allocate(MAX_LENGTH_VARINT);
-        for (int i = 0; i < Integer.MAX_VALUE && i >= 0; i += 13) {
+        for (int i = 0;i < Integer.MAX_VALUE && i >= 0;i += 13) {
             ByteUtils.writeUnsignedVarint(i, testData);
             // prepare buffer for reading
             testData.flip();
@@ -448,7 +449,7 @@ public class ByteUtilsTest {
 
         // compare the full range of values
         final ByteBuffer testData = ByteBuffer.allocate(MAX_LENGTH_VARLONG);
-        for (long i = 1; i < Long.MAX_VALUE && i >= 0; i = i << 1) {
+        for (long i = 1;i < Long.MAX_VALUE && i >= 0;i = i << 1) {
             ByteUtils.writeUnsignedVarlong(i, testData);
             // prepare buffer for reading
             testData.flip();
@@ -472,7 +473,7 @@ public class ByteUtilsTest {
         };
 
         // compare the full range of values
-        for (int i = 0; i < Integer.MAX_VALUE && i >= 0; i += 13) {
+        for (int i = 0;i < Integer.MAX_VALUE && i >= 0;i += 13) {
             final int actual = ByteUtils.sizeOfUnsignedVarint(i);
             final int expected = simpleImplementation.apply(i);
             assertEquals(expected, actual);
@@ -492,7 +493,7 @@ public class ByteUtilsTest {
             return bytes;
         };
 
-        for (long l = 1; l < Long.MAX_VALUE && l >= 0; l = l << 1) {
+        for (long l = 1;l < Long.MAX_VALUE && l >= 0;l = l << 1) {
             final int expected = simpleImplementation.apply(l);
             final int actual = ByteUtils.sizeOfVarlong(l);
             assertEquals(expected, actual);
@@ -509,7 +510,7 @@ public class ByteUtilsTest {
             Integer.MIN_VALUE / 2, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE
         };
         ByteBuffer buffer = ByteBuffer.allocate(4 * values.length);
-        for (int i = 0; i < values.length; ++i) {
+        for (int i = 0;i < values.length;++i) {
             buffer.putInt(i * 4, values[i]);
             assertEquals(values[i], ByteUtils.readIntBE(buffer.array(), i * 4), "Written value should match read value.");
         }
@@ -565,7 +566,7 @@ public class ByteUtilsTest {
 
     private void assertDoubleSerde(double value, long expectedLongValue) throws IOException {
         byte[] expectedEncoding = new byte[8];
-        for (int i = 0; i < 8; i++) {
+        for (int i = 0;i < 8;i++) {
             expectedEncoding[7 - i] = (byte) (expectedLongValue & 0xFF);
             expectedLongValue >>= 8;
         }

@@ -116,13 +116,13 @@ public class MetricsTest {
         s.add(metrics.metricName("test.max", "grp1"), new Max());
         s.add(metrics.metricName("test.min", "grp1"), new Min());
         s.add(new Meter(TimeUnit.SECONDS, metrics.metricName("test.rate", "grp1"),
-                metrics.metricName("test.total", "grp1")));
+            metrics.metricName("test.total", "grp1")));
         s.add(new Meter(TimeUnit.SECONDS, new WindowedCount(), metrics.metricName("test.occurrences", "grp1"),
-                metrics.metricName("test.occurrences.total", "grp1")));
+            metrics.metricName("test.occurrences.total", "grp1")));
         s.add(metrics.metricName("test.count", "grp1"), new WindowedCount());
         s.add(new Percentiles(100, -100, 100, BucketSizing.CONSTANT,
-                             new Percentile(metrics.metricName("test.median", "grp1"), 50.0),
-                             new Percentile(metrics.metricName("test.perc99_9", "grp1"), 99.9)));
+            new Percentile(metrics.metricName("test.median", "grp1"), 50.0),
+            new Percentile(metrics.metricName("test.perc99_9", "grp1"), 99.9)));
 
         Sensor s2 = metrics.sensor("test.sensor2");
         s2.add(metrics.metricName("s2.total", "grp1"), new CumulativeSum());
@@ -130,7 +130,7 @@ public class MetricsTest {
 
         int sum = 0;
         int count = 10;
-        for (int i = 0; i < count; i++) {
+        for (int i = 0;i < count;i++) {
             s.record(i);
             sum += i;
         }
@@ -148,7 +148,7 @@ public class MetricsTest {
             "s2 reflects the constant value");
         assertEquals(4.5, metricValueFunc.apply(metrics.metric(metrics.metricName("test.avg", "grp1"))), EPS,
             "Avg(0...9) = 4.5");
-        assertEquals(count - 1,  metricValueFunc.apply(metrics.metric(metrics.metricName("test.max", "grp1"))), EPS,
+        assertEquals(count - 1, metricValueFunc.apply(metrics.metric(metrics.metricName("test.max", "grp1"))), EPS,
             "Max(0...9) = 9");
         assertEquals(0.0, metricValueFunc.apply(metrics.metric(metrics.metricName("test.min", "grp1"))), EPS,
             "Min(0...9) = 0");
@@ -278,19 +278,19 @@ public class MetricsTest {
         purger.run();
         assertNotNull(metrics.getSensor("test.s1"), "Sensor test.s1 must be present");
         assertNotNull(
-                metrics.metrics().get(metrics.metricName("test.s1.count", "grp1")), "MetricName test.s1.count must be present");
+            metrics.metrics().get(metrics.metricName("test.s1.count", "grp1")), "MetricName test.s1.count must be present");
         assertNotNull(metrics.getSensor("test.s2"), "Sensor test.s2 must be present");
         assertNotNull(
-                metrics.metrics().get(metrics.metricName("test.s2.count", "grp1")), "MetricName test.s2.count must be present");
+            metrics.metrics().get(metrics.metricName("test.s2.count", "grp1")), "MetricName test.s2.count must be present");
 
         time.sleep(1001);
         purger.run();
         assertNull(metrics.getSensor("test.s1"), "Sensor test.s1 should have been purged");
         assertNull(
-                metrics.metrics().get(metrics.metricName("test.s1.count", "grp1")), "MetricName test.s1.count should have been purged");
+            metrics.metrics().get(metrics.metricName("test.s1.count", "grp1")), "MetricName test.s1.count should have been purged");
         assertNotNull(metrics.getSensor("test.s2"), "Sensor test.s2 must be present");
         assertNotNull(
-                metrics.metrics().get(metrics.metricName("test.s2.count", "grp1")), "MetricName test.s2.count must be present");
+            metrics.metrics().get(metrics.metricName("test.s2.count", "grp1")), "MetricName test.s2.count must be present");
 
         // record a value in sensor s2. This should reset the clock for that sensor.
         // It should not get purged at the 3 second mark after creation
@@ -299,21 +299,21 @@ public class MetricsTest {
         purger.run();
         assertNotNull(metrics.getSensor("test.s2"), "Sensor test.s2 must be present");
         assertNotNull(
-                metrics.metrics().get(metrics.metricName("test.s2.count", "grp1")), "MetricName test.s2.count must be present");
+            metrics.metrics().get(metrics.metricName("test.s2.count", "grp1")), "MetricName test.s2.count must be present");
 
         // After another 1001 ms sleep, the metric should be purged
         time.sleep(1001);
         purger.run();
         assertNull(metrics.getSensor("test.s2"), "Sensor test.s2 should have been purged");
         assertNull(
-                metrics.metrics().get(metrics.metricName("test.s2.count", "grp1")), "MetricName test.s2.count should have been purged");
+            metrics.metrics().get(metrics.metricName("test.s2.count", "grp1")), "MetricName test.s2.count should have been purged");
 
         // After purging, it should be possible to recreate a metric
         s1 = metrics.sensor("test.s1", null, 1);
         s1.add(metrics.metricName("test.s1.count", "grp1"), new WindowedCount());
         assertNotNull(metrics.getSensor("test.s1"), "Sensor test.s1 must be present");
         assertNotNull(
-                metrics.metrics().get(metrics.metricName("test.s1.count", "grp1")), "MetricName test.s1.count must be present");
+            metrics.metrics().get(metrics.metricName("test.s1.count", "grp1")), "MetricName test.s1.count must be present");
     }
 
     @Test
@@ -406,7 +406,7 @@ public class MetricsTest {
     public void testDuplicateMetricName() {
         metrics.sensor("test").add(metrics.metricName("test", "grp1"), new Avg());
         assertThrows(IllegalArgumentException.class, () ->
-                metrics.sensor("test2").add(metrics.metricName("test", "grp1"), new CumulativeSum()));
+            metrics.sensor("test2").add(metrics.metricName("test", "grp1"), new CumulativeSum()));
     }
 
     @Test
@@ -441,12 +441,12 @@ public class MetricsTest {
     public void testPercentiles() {
         int buckets = 100;
         Percentiles percs = new Percentiles(4 * buckets,
-                                            0.0,
-                                            100.0,
-                                            BucketSizing.CONSTANT,
-                                            new Percentile(metrics.metricName("test.p25", "grp1"), 25),
-                                            new Percentile(metrics.metricName("test.p50", "grp1"), 50),
-                                            new Percentile(metrics.metricName("test.p75", "grp1"), 75));
+            0.0,
+            100.0,
+            BucketSizing.CONSTANT,
+            new Percentile(metrics.metricName("test.p25", "grp1"), 25),
+            new Percentile(metrics.metricName("test.p50", "grp1"), 50),
+            new Percentile(metrics.metricName("test.p75", "grp1"), 75));
         MetricConfig config = new MetricConfig().eventWindow(50).samples(2);
         Sensor sensor = metrics.sensor("test", config);
         sensor.add(percs);
@@ -455,7 +455,7 @@ public class MetricsTest {
         Metric p75 = this.metrics.metrics().get(metrics.metricName("test.p75", "grp1"));
 
         // record 100 sequential values
-        for (int i = 0; i < buckets; i++)
+        for (int i = 0;i < buckets;i++)
             sensor.record(i);
 
         assertEquals(25, (Double) p25.metricValue());
@@ -468,10 +468,10 @@ public class MetricsTest {
         final double min = 0.0d;
         final double max = 100d;
         Percentiles percs = new Percentiles(1000,
-                                            min,
-                                            max,
-                                            BucketSizing.LINEAR,
-                                            new Percentile(metrics.metricName("test.p50", "grp1"), 50));
+            min,
+            max,
+            BucketSizing.LINEAR,
+            new Percentile(metrics.metricName("test.p50", "grp1"), 50));
         MetricConfig config = new MetricConfig().eventWindow(50).samples(2);
         Sensor sensor = metrics.sensor("test", config);
         sensor.add(percs);
@@ -487,10 +487,10 @@ public class MetricsTest {
         final double min = 0.0d;
         final double max = 100d;
         Percentiles percs = new Percentiles(1000,
-                                            min,
-                                            max,
-                                            BucketSizing.LINEAR,
-                                            new Percentile(metrics.metricName("test.p50", "grp1"), 50));
+            min,
+            max,
+            BucketSizing.LINEAR,
+            new Percentile(metrics.metricName("test.p50", "grp1"), 50));
         MetricConfig config = new MetricConfig().eventWindow(50).samples(2);
         Sensor sensor = metrics.sensor("test", config);
         sensor.add(percs);
@@ -512,10 +512,10 @@ public class MetricsTest {
             int numberOfValues = 5000 + prng.nextInt(10_000);  // range is [5000, 15000]
 
             Percentiles percs = new Percentiles(sizeInBytes,
-                                                maximumValue,
-                                                BucketSizing.LINEAR,
-                                                new Percentile(metrics.metricName("test.p90", "grp1"), 90),
-                                                new Percentile(metrics.metricName("test.p99", "grp1"), 99));
+                maximumValue,
+                BucketSizing.LINEAR,
+                new Percentile(metrics.metricName("test.p90", "grp1"), 90),
+                new Percentile(metrics.metricName("test.p99", "grp1"), 99));
             MetricConfig config = new MetricConfig().eventWindow(50).samples(2);
             Sensor sensor = metrics.sensor("test", config);
             sensor.add(percs);
@@ -524,7 +524,7 @@ public class MetricsTest {
 
             final List<Long> values = new ArrayList<>(numberOfValues);
             // record two windows worth of sequential values
-            for (int i = 0; i < numberOfValues; ++i) {
+            for (int i = 0;i < numberOfValues;++i) {
                 long value = (Math.abs(prng.nextLong()) - 1) % maximumValue;
                 values.add(value);
                 sensor.record(value);
@@ -562,7 +562,7 @@ public class MetricsTest {
         int sum = 0;
         int count = cfg.samples() - 1;
         // Advance 1 window after every record
-        for (int i = 0; i < count; i++) {
+        for (int i = 0;i < count;i++) {
             s.record(100);
             sum += 100;
             time.sleep(cfg.timeWindowMs());
@@ -580,7 +580,7 @@ public class MetricsTest {
         assertEquals(sum / elapsedSecs, (Double) rateMetric.metricValue(), EPS, "Rate(0...2) = 2.666");
         assertEquals(count / elapsedSecs, (Double) countRateMetric.metricValue(), EPS, "Count rate(0...2) = 0.02666");
         assertEquals(elapsedSecs,
-                MetricsUtils.convert(((Rate) rateMetric.measurable()).windowSize(cfg, time.milliseconds()), TimeUnit.SECONDS), EPS, "Elapsed Time = 75 seconds");
+            MetricsUtils.convert(((Rate) rateMetric.measurable()).windowSize(cfg, time.milliseconds()), TimeUnit.SECONDS), EPS, "Elapsed Time = 75 seconds");
         assertEquals(sum, (Double) totalMetric.metricValue(), EPS);
         assertEquals(count, (Double) countTotalMetric.metricValue(), EPS);
 
@@ -717,7 +717,7 @@ public class MetricsTest {
         executorService.submit(new ConcurrentMetricOperation(alive, "record",
             () -> sensors.forEach(sensor -> sensor.record(random.nextInt(10000)))));
 
-        for (int i = 0; i < 10000; i++) {
+        for (int i = 0;i < 10000;i++) {
             if (sensors.size() > 5) {
                 Sensor sensor = random.nextBoolean() ? sensors.removeFirst() : sensors.removeLast();
                 metrics.removeSensor(sensor.name());
@@ -742,6 +742,7 @@ public class MetricsTest {
 
         class LockingReporter implements MetricsReporter {
             final Map<MetricName, KafkaMetric> activeMetrics = new HashMap<>();
+
             @Override
             public synchronized void init(List<KafkaMetric> metrics) {
             }
@@ -787,9 +788,9 @@ public class MetricsTest {
             () -> sensors.forEach(sensor -> sensor.metrics().forEach(metric ->
                 assertNotNull(metric.metricValue(), "Invalid metric value")))));
         Future<?> reportFuture = executorService.submit(new ConcurrentMetricOperation(alive, "report",
-                reporter::processMetrics));
+            reporter::processMetrics));
 
-        for (int i = 0; i < 10000; i++) {
+        for (int i = 0;i < 10000;i++) {
             if (sensors.size() > 10) {
                 Sensor sensor = random.nextBoolean() ? sensors.removeFirst() : sensors.removeLast();
                 metrics.removeSensor(sensor.name());
@@ -808,11 +809,13 @@ public class MetricsTest {
         private final AtomicBoolean alive;
         private final String opName;
         private final Runnable op;
+
         ConcurrentMetricOperation(AtomicBoolean alive, String opName, Runnable op) {
             this.alive = alive;
             this.opName = opName;
             this.op = op;
         }
+
         @Override
         public void run() {
             try {
@@ -839,6 +842,7 @@ public class MetricsTest {
         METER(10);
 
         final int id;
+
         StatType(int id) {
             this.id = id;
         }
@@ -893,13 +897,13 @@ public class MetricsTest {
                     break;
                 case PERCENTILES:
                     sensor.add(metrics.metricName("test.metric.percentiles", "percentiles", tags),
-                               new Percentiles(100, -100, 100, Percentiles.BucketSizing.CONSTANT,
-                                               new Percentile(metrics.metricName("test.median", "percentiles"), 50.0),
-                                               new Percentile(metrics.metricName("test.perc99_9", "percentiles"), 99.9)));
+                        new Percentiles(100, -100, 100, Percentiles.BucketSizing.CONSTANT,
+                            new Percentile(metrics.metricName("test.median", "percentiles"), 50.0),
+                            new Percentile(metrics.metricName("test.perc99_9", "percentiles"), 99.9)));
                     break;
                 case METER:
                     sensor.add(new Meter(metrics.metricName("test.metric.meter.rate", "meter", tags),
-                               metrics.metricName("test.metric.meter.total", "meter", tags)));
+                        metrics.metricName("test.metric.meter.total", "meter", tags)));
                     break;
                 default:
                     throw new IllegalStateException("Invalid stat type " + statType);

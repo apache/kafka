@@ -249,7 +249,7 @@ public final class AddVoterHandler {
         if (!validVersionRange(kraftVersion, supportedKraftVersions)) {
             logger.info(
                 "Aborting add voter operation for {} at {} since kraft.version range {} doesn't " +
-                "support reconfiguration",
+                    "support reconfiguration",
                 current.voterKey(),
                 current.voterEndpoints(),
                 supportedKraftVersions
@@ -259,7 +259,7 @@ public final class AddVoterHandler {
                 Errors.INVALID_REQUEST,
                 String.format(
                     "Aborted add voter operation for %s since the %s range %s doesn't " +
-                    "support the finalized version %s",
+                        "support the finalized version %s",
                     current.voterKey(),
                     KRaftVersion.FEATURE_NAME,
                     supportedKraftVersions
@@ -354,6 +354,6 @@ public final class AddVoterHandler {
     ) {
         return supportedKraftVersions.isPresent() &&
             (supportedKraftVersions.get().minVersion() <= finalizedVersion.featureLevel() &&
-             supportedKraftVersions.get().maxVersion() >= finalizedVersion.featureLevel());
+                supportedKraftVersions.get().maxVersion() >= finalizedVersion.featureLevel());
     }
 }

@@ -49,8 +49,8 @@ public class UncompressedRecordBatchValidationBenchmark extends BaseRecordBatchB
     public void measureAssignOffsetsNonCompressed(Blackhole bh) {
         MemoryRecords records = MemoryRecords.readableRecords(singleBatchBuffer.duplicate());
         new LogValidator(records, new TopicPartition("a", 0),
-            Time.SYSTEM, CompressionType.NONE, Compression.NONE, false,
-            messageVersion, TimestampType.CREATE_TIME, Long.MAX_VALUE, Long.MAX_VALUE, 0, AppendOrigin.CLIENT
+                Time.SYSTEM, CompressionType.NONE, Compression.NONE, false,
+                messageVersion, TimestampType.CREATE_TIME, Long.MAX_VALUE, Long.MAX_VALUE, 0, AppendOrigin.CLIENT
         ).assignOffsetsNonCompressed(PrimitiveRef.ofLong(startingOffset), validatorMetricsRecorder);
     }
 }

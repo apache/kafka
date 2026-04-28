@@ -41,7 +41,7 @@ public class MirrorHeartBeatConnectorTest {
     public void testMirrorHeartbeatConnectorDisabled() {
         // disable the heartbeat emission
         MirrorHeartbeatConfig config = new MirrorHeartbeatConfig(
-            makeProps("emit.heartbeats.enabled", "false"));
+                makeProps("emit.heartbeats.enabled", "false"));
 
         // MirrorHeartbeatConnector as minimum to run taskConfig()
         MirrorHeartbeatConnector connector = new MirrorHeartbeatConnector(config);
@@ -54,7 +54,7 @@ public class MirrorHeartBeatConnectorTest {
     public void testReplicationDisabled() {
         // disable the replication
         MirrorHeartbeatConfig config = new MirrorHeartbeatConfig(
-            makeProps("enabled", "false"));
+                makeProps("enabled", "false"));
 
         // MirrorHeartbeatConnector as minimum to run taskConfig()
         MirrorHeartbeatConnector connector = new MirrorHeartbeatConnector(config);

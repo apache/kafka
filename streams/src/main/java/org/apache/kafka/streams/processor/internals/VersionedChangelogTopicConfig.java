@@ -29,18 +29,20 @@ import java.util.Objects;
  */
 public class VersionedChangelogTopicConfig extends InternalTopicConfig {
     private static final Map<String, String> VERSIONED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES;
+
     static {
         final Map<String, String> tempTopicDefaultOverrides = new HashMap<>(INTERNAL_TOPIC_DEFAULT_OVERRIDES);
         tempTopicDefaultOverrides.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
         VERSIONED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempTopicDefaultOverrides);
     }
+
     private static final long VERSIONED_STORE_CHANGE_LOG_ADDITIONAL_COMPACTION_LAG_MS = 24 * 60 * 60 * 1000L;
 
     private final long minCompactionLagMs;
 
     VersionedChangelogTopicConfig(final String name,
-                                  final Map<String, String> topicConfigs,
-                                  final long minCompactionLagMs) {
+        final Map<String, String> topicConfigs,
+        final long minCompactionLagMs) {
         super(name, topicConfigs);
         this.minCompactionLagMs = minCompactionLagMs;
     }

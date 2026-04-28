@@ -205,7 +205,7 @@ public interface SessionWindowedKStream<K, V> {
      * that represent the latest (rolling) count (i.e., number of records) for each key per session
      */
     KTable<Windowed<K>, Long> count(final Named named,
-                                    final Materialized<K, Long, SessionStore<Bytes, byte[]>> materialized);
+        final Materialized<K, Long, SessionStore<Bytes, byte[]>> materialized);
 
     /**
      * Combine the values of records in this stream by the grouped key and defined sessions.
@@ -357,7 +357,7 @@ public interface SessionWindowedKStream<K, V> {
      * the latest (rolling) aggregate for each key per session
      */
     KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
-                                  final Materialized<K, V, SessionStore<Bytes, byte[]>> materialized);
+        final Materialized<K, V, SessionStore<Bytes, byte[]>> materialized);
 
     /**
      * Combine the values of records in this stream by the grouped key and defined sessions.
@@ -419,8 +419,8 @@ public interface SessionWindowedKStream<K, V> {
      * the latest (rolling) aggregate for each key per session
      */
     KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
-                                  final Named named,
-                                  final Materialized<K, V, SessionStore<Bytes, byte[]>> materialized);
+        final Named named,
+        final Materialized<K, V, SessionStore<Bytes, byte[]>> materialized);
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined sessions.
@@ -468,8 +468,8 @@ public interface SessionWindowedKStream<K, V> {
      * the latest (rolling) aggregate for each key per session
      */
     <VOut> KTable<Windowed<K>, VOut> aggregate(final Initializer<VOut> initializer,
-                                               final Aggregator<? super K, ? super V, VOut> aggregator,
-                                               final Merger<? super K, VOut> sessionMerger);
+        final Aggregator<? super K, ? super V, VOut> aggregator,
+        final Merger<? super K, VOut> sessionMerger);
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined sessions.
@@ -518,9 +518,9 @@ public interface SessionWindowedKStream<K, V> {
      * the latest (rolling) aggregate for each key per session
      */
     <VOut> KTable<Windowed<K>, VOut> aggregate(final Initializer<VOut> initializer,
-                                               final Aggregator<? super K, ? super V, VOut> aggregator,
-                                               final Merger<? super K, VOut> sessionMerger,
-                                               final Named named);
+        final Aggregator<? super K, ? super V, VOut> aggregator,
+        final Merger<? super K, VOut> sessionMerger,
+        final Named named);
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined sessions.
@@ -580,9 +580,9 @@ public interface SessionWindowedKStream<K, V> {
      * the latest (rolling) aggregate for each key per session
      */
     <VOut> KTable<Windowed<K>, VOut> aggregate(final Initializer<VOut> initializer,
-                                               final Aggregator<? super K, ? super V, VOut> aggregator,
-                                               final Merger<? super K, VOut> sessionMerger,
-                                               final Materialized<K, VOut, SessionStore<Bytes, byte[]>> materialized);
+        final Aggregator<? super K, ? super V, VOut> aggregator,
+        final Merger<? super K, VOut> sessionMerger,
+        final Materialized<K, VOut, SessionStore<Bytes, byte[]>> materialized);
 
     /**
      * Aggregate the values of records in this stream by the grouped key and defined sessions.
@@ -643,10 +643,10 @@ public interface SessionWindowedKStream<K, V> {
      * the latest (rolling) aggregate for each key per session
      */
     <VOut> KTable<Windowed<K>, VOut> aggregate(final Initializer<VOut> initializer,
-                                               final Aggregator<? super K, ? super V, VOut> aggregator,
-                                               final Merger<? super K, VOut> sessionMerger,
-                                               final Named named,
-                                               final Materialized<K, VOut, SessionStore<Bytes, byte[]>> materialized);
+        final Aggregator<? super K, ? super V, VOut> aggregator,
+        final Merger<? super K, VOut> sessionMerger,
+        final Named named,
+        final Materialized<K, VOut, SessionStore<Bytes, byte[]>> materialized);
 
     /**
      * Configure when the aggregated result will be emitted for {@code SessionWindowedKStream}.

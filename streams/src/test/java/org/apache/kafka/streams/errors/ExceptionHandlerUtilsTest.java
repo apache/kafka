@@ -53,18 +53,18 @@ public class ExceptionHandlerUtilsTest {
         final String key = "key";
         final String value = "value";
         final InternalProcessorContext<Object, Object> internalProcessorContext = new InternalMockProcessorContext<>(
-                new StateSerdes<>("sink", Serdes.ByteArray(), Serdes.ByteArray()),
-                collector
+            new StateSerdes<>("sink", Serdes.ByteArray(), Serdes.ByteArray()),
+            collector
         );
         internalProcessorContext.setRecordContext(new ProcessorRecordContext(
-                1L,
-                2,
-                3,
-                "source",
-                new RecordHeaders(Collections.singletonList(
-                        new RecordHeader("sourceHeader", stringSerializer.serialize(null, "hello world")))),
-                key.getBytes(),
-                value.getBytes()
+            1L,
+            2,
+            3,
+            "source",
+            new RecordHeaders(Collections.singletonList(
+                new RecordHeader("sourceHeader", stringSerializer.serialize(null, "hello world")))),
+            key.getBytes(),
+            value.getBytes()
         ));
         final ErrorHandlerContext errorHandlerContext = getErrorHandlerContext(internalProcessorContext);
 
@@ -104,15 +104,15 @@ public class ExceptionHandlerUtilsTest {
 
     private static DefaultErrorHandlerContext getErrorHandlerContext(final InternalProcessorContext<Object, Object> internalProcessorContext) {
         return new DefaultErrorHandlerContext(
-                null,
-                internalProcessorContext.topic(),
-                internalProcessorContext.partition(),
-                internalProcessorContext.offset(),
-                internalProcessorContext.headers(),
-                internalProcessorContext.currentNode().name(),
-                internalProcessorContext.taskId(),
-                internalProcessorContext.timestamp(),
-                internalProcessorContext.recordContext().sourceRawKey(),
-                internalProcessorContext.recordContext().sourceRawValue());
+            null,
+            internalProcessorContext.topic(),
+            internalProcessorContext.partition(),
+            internalProcessorContext.offset(),
+            internalProcessorContext.headers(),
+            internalProcessorContext.currentNode().name(),
+            internalProcessorContext.taskId(),
+            internalProcessorContext.timestamp(),
+            internalProcessorContext.recordContext().sourceRawKey(),
+            internalProcessorContext.recordContext().sourceRawValue());
     }
 }

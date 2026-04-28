@@ -244,55 +244,83 @@ public class MockProcessorContextAPITest {
             new AbstractProcessorContext<>(new TaskId(0, 0), new StreamsConfig(context.appConfigs()), (StreamsMetricsImpl) context.metrics(), null) {
                 @SuppressWarnings("rawtypes")
                 @Override
-                public void forward(final Record record, final String childName) { }
+                public void forward(final Record record, final String childName) {
+                }
+
                 @SuppressWarnings("rawtypes")
                 @Override
-                public void forward(final Record record) { }
+                public void forward(final Record record) {
+                }
+
                 @SuppressWarnings("rawtypes")
                 @Override
-                public void forward(final FixedKeyRecord record, final String childName) { }
+                public void forward(final FixedKeyRecord record, final String childName) {
+                }
+
                 @SuppressWarnings("rawtypes")
                 @Override
-                public void forward(final FixedKeyRecord record) { }
+                public void forward(final FixedKeyRecord record) {
+                }
+
                 @Override
                 public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
                     return null;
                 }
+
                 @Override
                 public Cancellable schedule(final Instant startTime, final Duration interval, final PunctuationType type, final Punctuator callback) {
                     return null;
                 }
+
                 @Override
-                public void commit() { }
+                public void commit() {
+                }
+
                 @Override
                 public long currentStreamTimeMs() {
                     return 0;
                 }
+
                 @Override
-                public void forward(final Object key, final Object value, final To to) { }
+                public void forward(final Object key, final Object value, final To to) {
+                }
+
                 @Override
-                public void forward(final Object key, final Object value) { }
+                public void forward(final Object key, final Object value) {
+                }
+
                 @SuppressWarnings("unchecked")
                 @Override
                 public StateStore getStateStore(final String name) {
                     return null;
                 }
+
                 @Override
-                public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) { }
+                public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
+                }
+
                 @Override
-                public void transitionToStandby(final ThreadCache newCache) { }
+                public void transitionToStandby(final ThreadCache newCache) {
+                }
+
                 @Override
-                public void registerCacheFlushListener(final String namespace, final ThreadCache.DirtyEntryFlushListener listener) { }
+                public void registerCacheFlushListener(final String namespace, final ThreadCache.DirtyEntryFlushListener listener) {
+                }
+
                 @Override
-                public void logChange(final String storeName, final Bytes key, final byte[] value, final long timestamp, final Headers headers, final Position position) { }
+                public void logChange(final String storeName, final Bytes key, final byte[] value, final long timestamp, final Headers headers, final Position position) {
+                }
+
                 @Override
                 protected StateManager stateManager() {
                     return null;
                 }
+
                 @Override
                 public String changelogFor(final String storeName) {
                     return "changelog";
                 }
+
                 @Override
                 public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
                     context.getStateStoreContext().register(store, stateRestoreCallback);
@@ -388,7 +416,8 @@ public class MockProcessorContextAPITest {
             }
 
             @Override
-            public void process(final Record<String, Long> record) {}
+            public void process(final Record<String, Long> record) {
+            }
         };
 
         final MockProcessorContext<Void, Void> context = new MockProcessorContext<>();

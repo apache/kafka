@@ -59,7 +59,7 @@ public class LoginManager {
     private int refCount;
 
     private LoginManager(JaasContext jaasContext, String saslMechanism, Map<String, ?> configs,
-                 LoginMetadata<?> loginMetadata) throws LoginException {
+        LoginMetadata<?> loginMetadata) throws LoginException {
         this.loginMetadata = loginMetadata;
         this.login = Utils.newInstance(loginMetadata.loginClass);
         loginCallbackHandler = Utils.newInstance(loginMetadata.loginCallbackClass);
@@ -97,15 +97,15 @@ public class LoginManager {
      *
      */
     public static LoginManager acquireLoginManager(JaasContext jaasContext, String saslMechanism,
-                                                   Class<? extends Login> defaultLoginClass,
-                                                   Map<String, ?> configs) throws LoginException {
+        Class<? extends Login> defaultLoginClass,
+        Map<String, ?> configs) throws LoginException {
         Class<? extends Login> loginClass = configuredClassOrDefault(configs, jaasContext,
-                saslMechanism, SaslConfigs.SASL_LOGIN_CLASS, defaultLoginClass);
+            saslMechanism, SaslConfigs.SASL_LOGIN_CLASS, defaultLoginClass);
         Class<? extends AuthenticateCallbackHandler> defaultLoginCallbackHandlerClass = OAuthBearerLoginModule.OAUTHBEARER_MECHANISM
-                .equals(saslMechanism) ? OAuthBearerUnsecuredLoginCallbackHandler.class
-                        : AbstractLogin.DefaultLoginCallbackHandler.class;
+            .equals(saslMechanism) ? OAuthBearerUnsecuredLoginCallbackHandler.class
+            : AbstractLogin.DefaultLoginCallbackHandler.class;
         Class<? extends AuthenticateCallbackHandler> loginCallbackClass = configuredClassOrDefault(configs, jaasContext,
-                saslMechanism, SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, defaultLoginCallbackHandlerClass);
+            saslMechanism, SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, defaultLoginCallbackHandlerClass);
         synchronized (LoginManager.class) {
             LoginManager loginManager;
             Password jaasConfigValue = jaasContext.dynamicJaasConfig();
@@ -172,9 +172,9 @@ public class LoginManager {
     @Override
     public String toString() {
         return "LoginManager(serviceName=" + serviceName() +
-                // subject.toString() exposes private credentials, so we can't use it
-                ", publicCredentials=" + subject().getPublicCredentials() +
-                ", refCount=" + refCount + ')';
+            // subject.toString() exposes private credentials, so we can't use it
+            ", publicCredentials=" + subject().getPublicCredentials() +
+            ", refCount=" + refCount + ')';
     }
 
     /**
@@ -184,14 +184,14 @@ public class LoginManager {
     private void closeResources() {
         try {
             List<Callable<Void>> tasks = asList(
-                    () -> {
-                        login.close();
-                        return null;
-                    },
-                    () -> {
-                        loginCallbackHandler.close();
-                        return null;
-                    }
+                () -> {
+                    login.close();
+                    return null;
+                },
+                () -> {
+                    loginCallbackHandler.close();
+                    return null;
+                }
             );
             Utils.tryAll(tasks);
         } catch (Throwable t) {
@@ -210,16 +210,16 @@ public class LoginManager {
     }
 
     private static <T> Class<? extends T> configuredClassOrDefault(Map<String, ?> configs,
-                                                     JaasContext jaasContext,
-                                                     String saslMechanism,
-                                                     String configName,
-                                                     Class<? extends T> defaultClass) {
-        String prefix  = jaasContext.type() == JaasContext.Type.SERVER ? ListenerName.saslMechanismPrefix(saslMechanism) : "";
+        JaasContext jaasContext,
+        String saslMechanism,
+        String configName,
+        Class<? extends T> defaultClass) {
+        String prefix = jaasContext.type() == JaasContext.Type.SERVER ? ListenerName.saslMechanismPrefix(saslMechanism) : "";
         @SuppressWarnings("unchecked")
         Class<? extends T> clazz = (Class<? extends T>) configs.get(prefix + configName);
         if (clazz != null && jaasContext.configurationEntries().size() != 1) {
             String errorMessage = configName + " cannot be specified with multiple login modules in the JAAS context. " +
-                    SaslConfigs.SASL_JAAS_CONFIG + " must be configured to override mechanism-specific configs.";
+                SaslConfigs.SASL_JAAS_CONFIG + " must be configured to override mechanism-specific configs.";
             throw new ConfigException(errorMessage);
         }
         if (clazz == null)
@@ -234,15 +234,15 @@ public class LoginManager {
         final Map<String, Object> saslConfigs;
 
         LoginMetadata(T configInfo, Class<? extends Login> loginClass,
-                      Class<? extends AuthenticateCallbackHandler> loginCallbackClass,
-                      Map<String, ?> configs) {
+            Class<? extends AuthenticateCallbackHandler> loginCallbackClass,
+            Map<String, ?> configs) {
             this.configInfo = configInfo;
             this.loginClass = loginClass;
             this.loginCallbackClass = loginCallbackClass;
             this.saslConfigs = new HashMap<>();
             configs.entrySet().stream()
-                    .filter(e -> e.getKey().startsWith("sasl."))
-                    .forEach(e -> saslConfigs.put(e.getKey(), e.getValue())); // value may be null
+                .filter(e -> e.getKey().startsWith("sasl."))
+                .forEach(e -> saslConfigs.put(e.getKey(), e.getValue())); // value may be null
         }
 
         @Override
@@ -257,9 +257,9 @@ public class LoginManager {
 
             LoginMetadata<?> loginMetadata = (LoginMetadata<?>) o;
             return Objects.equals(configInfo, loginMetadata.configInfo) &&
-                   Objects.equals(loginClass, loginMetadata.loginClass) &&
-                   Objects.equals(loginCallbackClass, loginMetadata.loginCallbackClass) &&
-                   Objects.equals(saslConfigs, loginMetadata.saslConfigs);
+                Objects.equals(loginClass, loginMetadata.loginClass) &&
+                Objects.equals(loginCallbackClass, loginMetadata.loginCallbackClass) &&
+                Objects.equals(saslConfigs, loginMetadata.saslConfigs);
         }
     }
 }

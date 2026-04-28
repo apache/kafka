@@ -36,12 +36,12 @@ public class GlobalStoreNode<KIn, VIn, S extends StateStore> extends StateStoreN
 
 
     public GlobalStoreNode(final StoreFactory storeBuilder,
-                           final String sourceName,
-                           final String topic,
-                           final ConsumedInternal<KIn, VIn> consumed,
-                           final String processorName,
-                           final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier,
-                           final boolean reprocessOnRestore) {
+        final String sourceName,
+        final String topic,
+        final ConsumedInternal<KIn, VIn> consumed,
+        final String processorName,
+        final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier,
+        final boolean reprocessOnRestore) {
 
         super(storeBuilder);
         this.sourceName = sourceName;
@@ -56,25 +56,25 @@ public class GlobalStoreNode<KIn, VIn, S extends StateStore> extends StateStoreN
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         storeBuilder.withLoggingDisabled();
         topologyBuilder.addGlobalStore(sourceName,
-                                       consumed.timestampExtractor(),
-                                       consumed.keyDeserializer(),
-                                       consumed.valueDeserializer(),
-                                       topic,
-                                       processorName,
-                                       new StoreDelegatingProcessorSupplier<>(
-                                               stateUpdateSupplier,
-                                               Set.of(new StoreFactory.FactoryWrappingStoreBuilder<>(storeBuilder))
-                                       ), reprocessOnRestore);
+            consumed.timestampExtractor(),
+            consumed.keyDeserializer(),
+            consumed.valueDeserializer(),
+            topic,
+            processorName,
+            new StoreDelegatingProcessorSupplier<>(
+                stateUpdateSupplier,
+                Set.of(new StoreFactory.FactoryWrappingStoreBuilder<>(storeBuilder))
+            ), reprocessOnRestore);
 
     }
 
     @Override
     public String toString() {
         return "GlobalStoreNode{" +
-               "sourceName='" + sourceName + '\'' +
-               ", topic='" + topic + '\'' +
-               ", processorName='" + processorName + '\'' +
-               ", reprocessOnRestore='" + reprocessOnRestore + '\'' +
-               "} ";
+            "sourceName='" + sourceName + '\'' +
+            ", topic='" + topic + '\'' +
+            ", processorName='" + processorName + '\'' +
+            ", reprocessOnRestore='" + reprocessOnRestore + '\'' +
+            "} ";
     }
 }

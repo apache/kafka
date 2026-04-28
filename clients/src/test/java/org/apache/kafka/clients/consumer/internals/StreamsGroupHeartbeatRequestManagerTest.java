@@ -317,7 +317,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
                     when(mock.heartbeatIntervalMs()).thenReturn(heartbeatIntervalMs);
                     when(mock.requestInFlight()).thenReturn(requestInFlight);
                 });
-             final MockedConstruction<Timer> pollTimerMockedConstruction = mockConstruction(Timer.class)
+            final MockedConstruction<Timer> pollTimerMockedConstruction = mockConstruction(Timer.class)
         ) {
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
             final Timer pollTimer = pollTimerMockedConstruction.constructed().get(0);
@@ -343,7 +343,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
                     when(mock.canSendRequest(time.milliseconds())).thenReturn(false);
                     when(mock.heartbeatIntervalMs()).thenReturn(heartbeatIntervalMs);
                 });
-             final MockedConstruction<Timer> pollTimerMockedConstruction = mockConstruction(Timer.class)
+            final MockedConstruction<Timer> pollTimerMockedConstruction = mockConstruction(Timer.class)
         ) {
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
             final Timer pollTimer = pollTimerMockedConstruction.constructed().get(0);
@@ -742,7 +742,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
     }
 
     private <V> boolean isSorted(List<V> collection, Comparator<V> comparator) {
-        for (int i = 1; i < collection.size(); i++) {
+        for (int i = 1;i < collection.size();i++) {
             if (comparator.compare(collection.get(i - 1), collection.get(i)) > 0) {
                 return false;
             }
@@ -923,7 +923,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
                     new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 2)
                 ),
                 Set.of(
-                ),
+                    ),
                 true
             )
         );
@@ -1485,7 +1485,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
     @ParameterizedTest
     @CsvSource({"true, false", "false, false", "true, true"})
     public void testMaximumTimeToWaitWhenHeartbeatShouldBeNotSentImmediately(final boolean isRequestInFlight,
-                                                                             final boolean shouldNotWaitForHeartbeatInterval) {
+        final boolean shouldNotWaitForHeartbeatInterval) {
         final long remainingMs = 12L;
         final long timeToNextHeartbeatMs = 6L;
         try (
@@ -1513,7 +1513,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
     @ParameterizedTest
     @CsvSource({"12, 5", "10, 6"})
     public void testMaximumTimeToWaitSelectingMinimumWaitTime(final long remainingMs,
-                                                              final long timeToNextHeartbeatMs) {
+        final long timeToNextHeartbeatMs) {
         try (
             final MockedConstruction<Timer> timerMockedConstruction =
                 mockConstruction(Timer.class, (mock, context) -> when(mock.remainingMs()).thenReturn(remainingMs));
@@ -1565,9 +1565,9 @@ class StreamsGroupHeartbeatRequestManagerTest {
     @Test
     public void testStreamsRebalanceDataHeartbeatIntervalMsUpdatedOnSuccess() {
         try (
-                final MockedConstruction<HeartbeatRequestState> ignored = mockConstruction(
-                        HeartbeatRequestState.class,
-                        (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true))
+            final MockedConstruction<HeartbeatRequestState> ignored = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true))
         ) {
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
             when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
@@ -1650,7 +1650,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
     }
 
     private static void assertTaskIdsEquals(final List<StreamsGroupHeartbeatRequestData.TaskIds> expected,
-                                            final List<StreamsGroupHeartbeatRequestData.TaskIds> actual) {
+        final List<StreamsGroupHeartbeatRequestData.TaskIds> actual) {
         List<StreamsGroupHeartbeatRequestData.TaskIds> sortedExpected = expected.stream()
             .map(taskIds -> new StreamsGroupHeartbeatRequestData.TaskIds()
                 .setSubtopologyId(taskIds.subtopologyId())

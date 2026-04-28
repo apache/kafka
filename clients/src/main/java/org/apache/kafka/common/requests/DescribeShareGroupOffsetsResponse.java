@@ -45,8 +45,8 @@ public class DescribeShareGroupOffsetsResponse extends AbstractResponse {
 
     // Builds a response with the same group-level error for all groups and empty topics lists for all groups
     public DescribeShareGroupOffsetsResponse(int throttleTimeMs,
-                                             List<String> groupIds,
-                                             Throwable allGroupsException) {
+        List<String> groupIds,
+        Throwable allGroupsException) {
         super(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS);
         short errorCode = Errors.forException(allGroupsException).code();
         List<DescribeShareGroupOffsetsResponseGroup> groupList = new ArrayList<>();

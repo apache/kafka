@@ -28,18 +28,18 @@ public class PunctuationSchedule extends Stamped<ProcessorNode<?, ?, ?, ?>> {
     private final RepointableCancellable cancellable;
 
     PunctuationSchedule(final ProcessorNode<?, ?, ?, ?> node,
-                        final long time,
-                        final long interval,
-                        final Punctuator punctuator) {
+        final long time,
+        final long interval,
+        final Punctuator punctuator) {
         this(node, time, interval, punctuator, new RepointableCancellable());
         cancellable.setSchedule(this);
     }
 
     private PunctuationSchedule(final ProcessorNode<?, ?, ?, ?> node,
-                                final long time,
-                                final long interval,
-                                final Punctuator punctuator,
-                                final RepointableCancellable cancellable) {
+        final long time,
+        final long interval,
+        final Punctuator punctuator,
+        final RepointableCancellable cancellable) {
         super(node, time);
         this.interval = interval;
         this.punctuator = punctuator;

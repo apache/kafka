@@ -71,109 +71,109 @@ public class TransactionalMessageCopier {
     /** Get the command-line argument parser. */
     private static ArgumentParser argParser() {
         ArgumentParser parser = ArgumentParsers
-                .newArgumentParser("transactional-message-copier")
-                .defaultHelp(true)
-                .description("This tool copies messages transactionally from an input partition to an output topic, " +
-                        "committing the consumed offsets along with the output messages");
+            .newArgumentParser("transactional-message-copier")
+            .defaultHelp(true)
+            .description("This tool copies messages transactionally from an input partition to an output topic, " +
+                "committing the consumed offsets along with the output messages");
 
         parser.addArgument("--input-topic")
-                .action(store())
-                .required(true)
-                .type(String.class)
-                .metavar("INPUT-TOPIC")
-                .dest("inputTopic")
-                .help("Consume messages from this topic");
+            .action(store())
+            .required(true)
+            .type(String.class)
+            .metavar("INPUT-TOPIC")
+            .dest("inputTopic")
+            .help("Consume messages from this topic");
 
         parser.addArgument("--input-partition")
-                .action(store())
-                .required(true)
-                .type(Integer.class)
-                .metavar("INPUT-PARTITION")
-                .dest("inputPartition")
-                .help("Consume messages from this partition of the input topic.");
+            .action(store())
+            .required(true)
+            .type(Integer.class)
+            .metavar("INPUT-PARTITION")
+            .dest("inputPartition")
+            .help("Consume messages from this partition of the input topic.");
 
         parser.addArgument("--output-topic")
-                .action(store())
-                .required(true)
-                .type(String.class)
-                .metavar("OUTPUT-TOPIC")
-                .dest("outputTopic")
-                .help("Produce messages to this topic");
+            .action(store())
+            .required(true)
+            .type(String.class)
+            .metavar("OUTPUT-TOPIC")
+            .dest("outputTopic")
+            .help("Produce messages to this topic");
 
         parser.addArgument("--broker-list")
-                .action(store())
-                .required(true)
-                .type(String.class)
-                .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
-                .dest("brokerList")
-                .help("Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
+            .action(store())
+            .required(true)
+            .type(String.class)
+            .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
+            .dest("brokerList")
+            .help("Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
 
         parser.addArgument("--max-messages")
-                .action(store())
-                .required(false)
-                .setDefault(-1)
-                .type(Integer.class)
-                .metavar("MAX-MESSAGES")
-                .dest("maxMessages")
-                .help("Process these many messages upto the end offset at the time this program was launched. If set to -1 " +
-                        "we will just read to the end offset of the input partition (as of the time the program was launched).");
+            .action(store())
+            .required(false)
+            .setDefault(-1)
+            .type(Integer.class)
+            .metavar("MAX-MESSAGES")
+            .dest("maxMessages")
+            .help("Process these many messages upto the end offset at the time this program was launched. If set to -1 " +
+                "we will just read to the end offset of the input partition (as of the time the program was launched).");
 
         parser.addArgument("--consumer-group")
-                .action(store())
-                .required(false)
-                .setDefault(-1)
-                .type(String.class)
-                .metavar("CONSUMER-GROUP")
-                .dest("consumerGroup")
-                .help("The consumer group id to use for storing the consumer offsets.");
+            .action(store())
+            .required(false)
+            .setDefault(-1)
+            .type(String.class)
+            .metavar("CONSUMER-GROUP")
+            .dest("consumerGroup")
+            .help("The consumer group id to use for storing the consumer offsets.");
 
         parser.addArgument("--transaction-size")
-                .action(store())
-                .required(false)
-                .setDefault(200)
-                .type(Integer.class)
-                .metavar("TRANSACTION-SIZE")
-                .dest("messagesPerTransaction")
-                .help("The number of messages to put in each transaction. Default is 200.");
+            .action(store())
+            .required(false)
+            .setDefault(200)
+            .type(Integer.class)
+            .metavar("TRANSACTION-SIZE")
+            .dest("messagesPerTransaction")
+            .help("The number of messages to put in each transaction. Default is 200.");
 
         parser.addArgument("--transaction-timeout")
-                .action(store())
-                .required(false)
-                .setDefault(60000)
-                .type(Integer.class)
-                .metavar("TRANSACTION-TIMEOUT")
-                .dest("transactionTimeout")
-                .help("The transaction timeout in milliseconds. Default is 60000(1 minute).");
+            .action(store())
+            .required(false)
+            .setDefault(60000)
+            .type(Integer.class)
+            .metavar("TRANSACTION-TIMEOUT")
+            .dest("transactionTimeout")
+            .help("The transaction timeout in milliseconds. Default is 60000(1 minute).");
 
         parser.addArgument("--transactional-id")
-                .action(store())
-                .required(true)
-                .type(String.class)
-                .metavar("TRANSACTIONAL-ID")
-                .dest("transactionalId")
-                .help("The transactionalId to assign to the producer");
+            .action(store())
+            .required(true)
+            .type(String.class)
+            .metavar("TRANSACTIONAL-ID")
+            .dest("transactionalId")
+            .help("The transactionalId to assign to the producer");
 
         parser.addArgument("--enable-random-aborts")
-                .action(storeTrue())
-                .type(Boolean.class)
-                .metavar("ENABLE-RANDOM-ABORTS")
-                .dest("enableRandomAborts")
-                .help("Whether or not to enable random transaction aborts (for system testing)");
+            .action(storeTrue())
+            .type(Boolean.class)
+            .metavar("ENABLE-RANDOM-ABORTS")
+            .dest("enableRandomAborts")
+            .help("Whether or not to enable random transaction aborts (for system testing)");
 
         parser.addArgument("--group-mode")
-                .action(storeTrue())
-                .type(Boolean.class)
-                .metavar("GROUP-MODE")
-                .dest("groupMode")
-                .help("Whether to let consumer subscribe to the input topic or do manual assign. If we do" +
-                          " subscription based consumption, the input partition shall be ignored");
+            .action(storeTrue())
+            .type(Boolean.class)
+            .metavar("GROUP-MODE")
+            .dest("groupMode")
+            .help("Whether to let consumer subscribe to the input topic or do manual assign. If we do" +
+                " subscription based consumption, the input partition shall be ignored");
 
         parser.addArgument("--use-group-metadata")
-                .action(storeTrue())
-                .type(Boolean.class)
-                .metavar("USE-GROUP-METADATA")
-                .dest("useGroupMetadata")
-                .help("Whether to use the new transactional commit API with group metadata");
+            .action(storeTrue())
+            .type(Boolean.class)
+            .metavar("USE-GROUP-METADATA")
+            .dest("useGroupMetadata")
+            .help("Whether to use the new transactional commit API with group metadata");
 
         return parser;
     }
@@ -183,9 +183,9 @@ public class TransactionalMessageCopier {
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, parsedArgs.getString("brokerList"));
         props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, parsedArgs.getString("transactionalId"));
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
-                "org.apache.kafka.common.serialization.StringSerializer");
+            "org.apache.kafka.common.serialization.StringSerializer");
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
-                "org.apache.kafka.common.serialization.StringSerializer");
+            "org.apache.kafka.common.serialization.StringSerializer");
         // We set a small batch size to ensure that we have multiple inflight requests per transaction.
         // If it is left at the default, each transaction will have only one batch per partition, hence not testing
         // the case with multiple inflights.
@@ -213,9 +213,9 @@ public class TransactionalMessageCopier {
         props.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "3000");
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-                "org.apache.kafka.common.serialization.StringDeserializer");
+            "org.apache.kafka.common.serialization.StringDeserializer");
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-                "org.apache.kafka.common.serialization.StringDeserializer");
+            "org.apache.kafka.common.serialization.StringDeserializer");
 
         return new KafkaConsumer<>(props);
     }

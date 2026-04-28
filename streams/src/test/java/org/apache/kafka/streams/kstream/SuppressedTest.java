@@ -203,12 +203,12 @@ public class SuppressedTest {
 
         assertThat(
             "long chain of eager buffer config sets logging even after other setters",
-                bufferConfigWithLoggingCalledAtTheEnd,
+            bufferConfigWithLoggingCalledAtTheEnd,
             is(new EagerBufferConfigImpl(5L, 6L, Collections.singletonMap("myConfigKey", "myConfigValue")))
         );
         assertThat(
             "long chain of strict buffer config sets logging even after other setters",
-                bufferConfigWithLoggingCalledAtTheEnd.shutDownWhenFull(),
+            bufferConfigWithLoggingCalledAtTheEnd.shutDownWhenFull(),
             is(new StrictBufferConfigImpl(5L, 6L, SHUT_DOWN, Collections.singletonMap("myConfigKey", "myConfigValue")))
         );
     }

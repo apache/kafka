@@ -43,7 +43,7 @@ import java.util.stream.Collectors;
  */
 public abstract class AbstractPartitionAssignor implements ConsumerPartitionAssignor {
     private static final Logger log = LoggerFactory.getLogger(AbstractPartitionAssignor.class);
-    private static final Node[] NO_NODES = new Node[] {Node.noNode()};
+    private static final Node[] NO_NODES = new Node[]{Node.noNode()};
 
     // Used only in unit tests to verify rack-aware assignment when all racks have all partitions.
     boolean preferRackAwareLogic;
@@ -56,7 +56,7 @@ public abstract class AbstractPartitionAssignor implements ConsumerPartitionAssi
      * @return Map from each member to the list of partitions assigned to them.
      */
     public abstract Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
-                                                             Map<String, Subscription> subscriptions);
+        Map<String, Subscription> subscriptions);
 
     /**
      * Default implementation of assignPartitions() that does not include racks. This is only
@@ -64,9 +64,9 @@ public abstract class AbstractPartitionAssignor implements ConsumerPartitionAssi
      * Note that this class is internal, but to be safe, we are maintaining compatibility.
      */
     public Map<String, List<TopicPartition>> assignPartitions(Map<String, List<PartitionInfo>> partitionsPerTopic,
-            Map<String, Subscription> subscriptions) {
+        Map<String, Subscription> subscriptions) {
         Map<String, Integer> partitionCountPerTopic = partitionsPerTopic.entrySet().stream()
-                .collect(Collectors.toMap(Entry::getKey, e -> e.getValue().size()));
+            .collect(Collectors.toMap(Entry::getKey, e -> e.getValue().size()));
         return assign(partitionCountPerTopic, subscriptions);
     }
 
@@ -105,7 +105,7 @@ public abstract class AbstractPartitionAssignor implements ConsumerPartitionAssi
 
     protected static List<TopicPartition> partitions(String topic, int numPartitions) {
         List<TopicPartition> partitions = new ArrayList<>(numPartitions);
-        for (int i = 0; i < numPartitions; i++)
+        for (int i = 0;i < numPartitions;i++)
             partitions.add(new TopicPartition(topic, i));
         return partitions;
     }
@@ -115,7 +115,7 @@ public abstract class AbstractPartitionAssignor implements ConsumerPartitionAssi
             String topic = e.getKey();
             int numPartitions = e.getValue();
             List<PartitionInfo> partitionInfos = new ArrayList<>(numPartitions);
-            for (int i = 0; i < numPartitions; i++)
+            for (int i = 0;i < numPartitions;i++)
                 partitionInfos.add(new PartitionInfo(topic, i, Node.noNode(), NO_NODES, NO_NODES));
             return partitionInfos;
         }));
@@ -149,9 +149,9 @@ public abstract class AbstractPartitionAssignor implements ConsumerPartitionAssi
         @Override
         public int compareTo(MemberInfo otherMemberInfo) {
             if (this.groupInstanceId.isPresent() &&
-                    otherMemberInfo.groupInstanceId.isPresent()) {
+                otherMemberInfo.groupInstanceId.isPresent()) {
                 return this.groupInstanceId.get()
-                        .compareTo(otherMemberInfo.groupInstanceId.get());
+                    .compareTo(otherMemberInfo.groupInstanceId.get());
             } else if (this.groupInstanceId.isPresent()) {
                 return -1;
             } else if (otherMemberInfo.groupInstanceId.isPresent()) {
@@ -178,8 +178,8 @@ public abstract class AbstractPartitionAssignor implements ConsumerPartitionAssi
         @Override
         public String toString() {
             return "MemberInfo [member.id: " + memberId
-                    + ", group.instance.id: " + groupInstanceId.orElse("{}")
-                    + "]";
+                + ", group.instance.id: " + groupInstanceId.orElse("{}")
+                + "]";
         }
     }
 }

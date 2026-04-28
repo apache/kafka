@@ -78,11 +78,11 @@ public class BufferPool {
         this.time = time;
         this.waitTime = this.metrics.sensor(WAIT_TIME_SENSOR_NAME);
         MetricName rateMetricName = metrics.metricName("bufferpool-wait-ratio",
-                                                   metricGrpName,
-                                                   "The fraction of time an appender waits for space allocation.");
+            metricGrpName,
+            "The fraction of time an appender waits for space allocation.");
         MetricName totalNsMetricName = metrics.metricName("bufferpool-wait-time-ns-total",
-                                                    metricGrpName,
-                                                    "The total time in nanoseconds an appender waits for space allocation.");
+            metricGrpName,
+            "The total time in nanoseconds an appender waits for space allocation.");
 
         Sensor bufferExhaustedRecordSensor = metrics.sensor("buffer-exhausted-records");
         MetricName bufferExhaustedRateMetricName = metrics.metricName("buffer-exhausted-rate", metricGrpName, "The average per-second number of record sends that are dropped due to buffer exhaustion");
@@ -107,9 +107,9 @@ public class BufferPool {
     public ByteBuffer allocate(int size, long maxTimeToBlockMs) throws InterruptedException {
         if (size > this.totalMemory)
             throw new IllegalArgumentException("Attempt to allocate " + size
-                                               + " bytes, but there is a hard limit of "
-                                               + this.totalMemory
-                                               + " on memory allocations.");
+                + " bytes, but there is a hard limit of "
+                + this.totalMemory
+                + " on memory allocations.");
 
         ByteBuffer buffer = null;
         this.lock.lock();

@@ -80,8 +80,8 @@ public class TimeOrderedCachingWindowStore
     private final AtomicLong maxObservedTimestamp;
 
     TimeOrderedCachingWindowStore(final WindowStore<Bytes, byte[]> underlying,
-                                  final long windowSize,
-                                  final long segmentInterval) {
+        final long windowSize,
+        final long segmentInterval) {
         super(underlying);
         this.windowSize = windowSize;
         this.baseKeyCacheFunction = new SegmentedCacheFunction(baseKeySchema, segmentInterval);
@@ -122,7 +122,7 @@ public class TimeOrderedCachingWindowStore
             stateStoreContext.applicationId()
         );
         internalContext = asInternalProcessorContext(stateStoreContext);
-        final String topic = ProcessorStateManager.storeChangelogTopic(prefix, name(),  stateStoreContext.taskId().topologyName());
+        final String topic = ProcessorStateManager.storeChangelogTopic(prefix, name(), stateStoreContext.taskId().topologyName());
 
         bytesSerdes = new StateSerdes<>(
             topic,
@@ -135,7 +135,7 @@ public class TimeOrderedCachingWindowStore
     }
 
     private void putAndMaybeForward(final List<DirtyEntry> entries,
-                                    final InternalProcessorContext<?, ?> context) {
+        final InternalProcessorContext<?, ?> context) {
 
         // Track what base key or index key we already processed so don't reprocess
         final Set<Bytes> processedBasedKey = new HashSet<>();
@@ -194,9 +194,9 @@ public class TimeOrderedCachingWindowStore
     }
 
     private void putAndMaybeForward(final InternalProcessorContext<?, ?> context,
-                                    final DirtyEntry finalEntry,
-                                    final Bytes binaryKey,
-                                    final long windowStartTimestamp) {
+        final DirtyEntry finalEntry,
+        final Bytes binaryKey,
+        final long windowStartTimestamp) {
         if (flushListener != null) {
             final byte[] rawNewValue = finalEntry.newValue();
             final byte[] rawOldValue = rawNewValue == null || sendOldValues ?
@@ -214,7 +214,7 @@ public class TimeOrderedCachingWindowStore
                     flushListener.apply(
                         new Record<>(
                             WindowKeySchema.toStoreKeyBinary(binaryKey,
-                                    windowStartTimestamp, 0)
+                                windowStartTimestamp, 0)
                                 .get(),
                             new Change<>(rawNewValue, sendOldValues ? rawOldValue : null),
                             finalEntry.entry().context().timestamp(),
@@ -236,7 +236,7 @@ public class TimeOrderedCachingWindowStore
 
     @Override
     public boolean setFlushListener(final CacheFlushListener<byte[], byte[]> flushListener,
-                                    final boolean sendOldValues) {
+        final boolean sendOldValues) {
         this.flushListener = flushListener;
         this.sendOldValues = sendOldValues;
 
@@ -252,8 +252,8 @@ public class TimeOrderedCachingWindowStore
 
     @Override
     public synchronized void put(final Bytes key,
-                                 final byte[] value,
-                                 final long windowStartTimestamp) {
+        final byte[] value,
+        final long windowStartTimestamp) {
         // since this function may not access the underlying inner store, we need to validate
         // if store is open outside as well.
         validateStoreOpen();
@@ -301,7 +301,7 @@ public class TimeOrderedCachingWindowStore
 
     @Override
     public byte[] fetch(final Bytes key,
-                        final long timestamp) {
+        final long timestamp) {
         validateStoreOpen();
         if (internalContext.cache() == null) {
             return wrapped().fetch(key, timestamp);
@@ -320,8 +320,8 @@ public class TimeOrderedCachingWindowStore
 
     @Override
     public synchronized WindowStoreIterator<byte[]> fetch(final Bytes key,
-                                                          final long timeFrom,
-                                                          final long timeTo) {
+        final long timeFrom,
+        final long timeTo) {
         // since this function may not access the underlying inner store, we need to validate
         // if store is open outside as well.
         validateStoreOpen();
@@ -336,8 +336,8 @@ public class TimeOrderedCachingWindowStore
 
     @Override
     public synchronized WindowStoreIterator<byte[]> backwardFetch(final Bytes key,
-                                                                  final long timeFrom,
-                                                                  final long timeTo) {
+        final long timeFrom,
+        final long timeTo) {
         // since this function may not access the underlying inner store, we need to validate
         // if store is open outside as well.
         validateStoreOpen();
@@ -351,10 +351,10 @@ public class TimeOrderedCachingWindowStore
     }
 
     private WindowStoreIterator<byte[]> fetchInternal(final WindowStoreIterator<byte[]> underlyingIterator,
-                                                      final Bytes key,
-                                                      final long timeFrom,
-                                                      final long timeTo,
-                                                      final boolean forward) {
+        final Bytes key,
+        final long timeFrom,
+        final long timeTo,
+        final boolean forward) {
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = new CacheIteratorWrapper(
             key, timeFrom, timeTo, forward, hasIndex);
         final KeySchema keySchema = hasIndex ? indexKeySchema : baseKeySchema;
@@ -371,9 +371,9 @@ public class TimeOrderedCachingWindowStore
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
-                                                           final Bytes keyTo,
-                                                           final long timeFrom,
-                                                           final long timeTo) {
+        final Bytes keyTo,
+        final long timeFrom,
+        final long timeTo) {
         if (keyFrom != null && keyTo != null && keyFrom.compareTo(keyTo) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
                 "This may be due to range arguments set in the wrong order, " +
@@ -397,9 +397,9 @@ public class TimeOrderedCachingWindowStore
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom,
-                                                                   final Bytes keyTo,
-                                                                   final long timeFrom,
-                                                                   final long timeTo) {
+        final Bytes keyTo,
+        final long timeFrom,
+        final long timeTo) {
         if (keyFrom != null && keyTo != null && keyFrom.compareTo(keyTo) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
                 + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
@@ -421,11 +421,11 @@ public class TimeOrderedCachingWindowStore
     }
 
     private KeyValueIterator<Windowed<Bytes>, byte[]> fetchKeyRange(final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator,
-                                                                    final Bytes keyFrom,
-                                                                    final Bytes keyTo,
-                                                                    final long timeFrom,
-                                                                    final long timeTo,
-                                                                    final boolean forward) {
+        final Bytes keyFrom,
+        final Bytes keyTo,
+        final long timeFrom,
+        final long timeTo,
+        final boolean forward) {
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = new CacheIteratorWrapper(
             keyFrom, keyTo, timeFrom, timeTo, forward, hasIndex);
 
@@ -452,7 +452,7 @@ public class TimeOrderedCachingWindowStore
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom,
-                                                              final long timeTo) {
+        final long timeTo) {
         validateStoreOpen();
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = wrapped().fetchAll(timeFrom, timeTo);
@@ -461,7 +461,7 @@ public class TimeOrderedCachingWindowStore
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final long timeFrom,
-                                                                      final long timeTo) {
+        final long timeTo) {
         validateStoreOpen();
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = wrapped().backwardFetchAll(timeFrom, timeTo);
@@ -469,9 +469,9 @@ public class TimeOrderedCachingWindowStore
     }
 
     private KeyValueIterator<Windowed<Bytes>, byte[]> fetchAllInternal(final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator,
-                                                                       final long timeFrom,
-                                                                       final long timeTo,
-                                                                       final boolean forward) {
+        final long timeFrom,
+        final long timeTo,
+        final boolean forward) {
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = new CacheIteratorWrapper(
             null, null, timeFrom, timeTo, forward, false);
         final HasNextCondition hasNextCondition = baseKeySchema.hasNextCondition(null, null, timeFrom, timeTo, forward);
@@ -558,19 +558,19 @@ public class TimeOrderedCachingWindowStore
         private ThreadCache.MemoryLRUCacheBytesIterator current;
 
         private CacheIteratorWrapper(final Bytes key,
-                                     final long timeFrom,
-                                     final long timeTo,
-                                     final boolean forward,
-                                     final boolean index) {
+            final long timeFrom,
+            final long timeTo,
+            final boolean forward,
+            final boolean index) {
             this(key, key, timeFrom, timeTo, forward, index);
         }
 
         private CacheIteratorWrapper(final Bytes keyFrom,
-                                     final Bytes keyTo,
-                                     final long timeFrom,
-                                     final long timeTo,
-                                     final boolean forward,
-                                     final boolean index) {
+            final Bytes keyTo,
+            final long timeFrom,
+            final long timeTo,
+            final boolean forward,
+            final boolean index) {
             this.keyFrom = keyFrom;
             this.keyTo = keyTo;
             this.timeTo = timeTo;

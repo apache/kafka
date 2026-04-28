@@ -71,7 +71,8 @@ public class MockRaftClientTestEnv implements AutoCloseable {
     public static class Builder {
         private final int numNodes;
         private Optional<RawSnapshotReader> snapshotReader = Optional.empty();
-        private Consumer<SharedLogData> sharedLogDataInitializer = __ -> { };
+        private Consumer<SharedLogData> sharedLogDataInitializer = __ -> {
+        };
         private KRaftVersion lastKRaftVersion = KRaftVersion.KRAFT_VERSION_0;
 
         public Builder(int numNodes) {

@@ -202,9 +202,9 @@ public class WorkerSinkTaskTest {
     }
 
     private void createTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter,
-                            RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
-                            Supplier<List<ErrorReporter<ConsumerRecord<byte[], byte[]>>>> errorReportersSupplier,
-                            TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> transformationChain) {
+            RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
+            Supplier<List<ErrorReporter<ConsumerRecord<byte[], byte[]>>>> errorReportersSupplier,
+            TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> transformationChain) {
         createTask(taskId, sinkTask, statusListener, initialState, workerConfig, metrics,
                 keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
                 transformationChain, consumer, pluginLoader, time,
@@ -212,13 +212,13 @@ public class WorkerSinkTaskTest {
     }
 
     private void createTask(ConnectorTaskId taskId, SinkTask task, TaskStatus.Listener statusListener, TargetState initialState,
-                            WorkerConfig workerConfig, ConnectMetrics connectMetrics, Converter keyConverter, Converter valueConverter,
-                            ErrorHandlingMetrics errorMetrics, HeaderConverter headerConverter,
-                            TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> transformationChain,
-                            Consumer<byte[], byte[]> consumer, ClassLoader loader, Time time,
-                            RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
-                            StatusBackingStore statusBackingStore,
-                            Supplier<List<ErrorReporter<ConsumerRecord<byte[], byte[]>>>> errorReportersSupplier) {
+            WorkerConfig workerConfig, ConnectMetrics connectMetrics, Converter keyConverter, Converter valueConverter,
+            ErrorHandlingMetrics errorMetrics, HeaderConverter headerConverter,
+            TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> transformationChain,
+            Consumer<byte[], byte[]> consumer, ClassLoader loader, Time time,
+            RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
+            StatusBackingStore statusBackingStore,
+            Supplier<List<ErrorReporter<ConsumerRecord<byte[], byte[]>>>> errorReportersSupplier) {
         Plugin<Converter> keyConverterPlugin = connectMetrics.wrap(keyConverter, taskId, true);
         Plugin<Converter> valueConverterPlugin = connectMetrics.wrap(valueConverter, taskId, false);
         Plugin<HeaderConverter> headerConverterPlugin = connectMetrics.wrap(headerConverter, taskId);
@@ -512,7 +512,7 @@ public class WorkerSinkTaskTest {
                     rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT);
                     rebalanceListener.getValue().onPartitionsAssigned(List.of());
                     return new ConsumerRecords<>(Map.of(TOPIC_PARTITION3, List.of(newRecord)),
-                        Map.of(TOPIC_PARTITION3, new OffsetAndMetadata(FIRST_OFFSET + 1, Optional.empty(), "")));
+                            Map.of(TOPIC_PARTITION3, new OffsetAndMetadata(FIRST_OFFSET + 1, Optional.empty(), "")));
                 });
         expectConversionAndTransformation(null, new RecordHeaders());
 
@@ -1041,7 +1041,7 @@ public class WorkerSinkTaskTest {
         // of those sleeps were 10 seconds.
         // KAFKA-8229
         assertEquals(previousCommitValue +
-                        (WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT - 10000L * 2),
+                (WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT - 10000L * 2),
                 workerTask.getNextCommit(),
                 "Should have only advanced by 40 seconds");
 
@@ -1179,7 +1179,7 @@ public class WorkerSinkTaskTest {
 
         workerTask.iteration(); // iter 2 -- deliver 2 records
 
-    // iter 3
+        // iter 3
         final Map<TopicPartition, OffsetAndMetadata> workerCurrentOffsets = new HashMap<>();
         workerCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
         workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
@@ -1234,7 +1234,7 @@ public class WorkerSinkTaskTest {
 
         // Delay the result of trying to commit offsets to Kafka via the consumer.commitAsync method.
         ArgumentCaptor<OffsetCommitCallback> offsetCommitCallbackArgumentCaptor =
-            ArgumentCaptor.forClass(OffsetCommitCallback.class);
+                ArgumentCaptor.forClass(OffsetCommitCallback.class);
         verify(consumer).commitAsync(eq(workerCurrentOffsets), offsetCommitCallbackArgumentCaptor.capture());
 
         final OffsetCommitCallback callback = offsetCommitCallbackArgumentCaptor.getValue();
@@ -1411,7 +1411,7 @@ public class WorkerSinkTaskTest {
 
         doAnswer(invocation -> {
             final Map<TopicPartition, OffsetAndMetadata> offsets = invocation.getArgument(0);
-            final OffsetCommitCallback callback =  invocation.getArgument(1);
+            final OffsetCommitCallback callback = invocation.getArgument(1);
             asyncCallbackRunner.set(() -> {
                 callback.onComplete(offsets, null);
                 asyncCallbackRan.set(true);
@@ -1883,10 +1883,12 @@ public class WorkerSinkTaskTest {
                 transformationChain, mockConsumer, pluginLoader, time,
                 RetryWithToleranceOperatorTest.noneOperator(), statusBackingStore, List::of);
         mockConsumer.updateBeginningOffsets(
-                new HashMap<>() {{
-                    put(TOPIC_PARTITION, 0L);
-                    put(TOPIC_PARTITION2, 0L);
-                }}
+                new HashMap<>() {
+                    {
+                        put(TOPIC_PARTITION, 0L);
+                        put(TOPIC_PARTITION2, 0L);
+                    }
+                }
         );
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
@@ -1942,7 +1944,7 @@ public class WorkerSinkTaskTest {
         return expectConsumerPoll(numMessages, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, new RecordHeaders());
     }
 
-    private Answer<ConsumerRecords<byte[], byte[]>> expectConsumerPoll(final int numMessages,  Headers headers) {
+    private Answer<ConsumerRecords<byte[], byte[]>> expectConsumerPoll(final int numMessages, Headers headers) {
         return expectConsumerPoll(numMessages, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, headers);
     }
 
@@ -1953,7 +1955,7 @@ public class WorkerSinkTaskTest {
             for (int i = 0; i < numMessages; i++) {
                 offset = FIRST_OFFSET + recordsReturnedTp1 + i;
                 records.add(new ConsumerRecord<>(TOPIC, PARTITION, offset, timestamp, timestampType,
-                    0, 0, RAW_KEY, RAW_VALUE, headers, Optional.empty()));
+                        0, 0, RAW_KEY, RAW_VALUE, headers, Optional.empty()));
             }
             recordsReturnedTp1 += numMessages;
             final TopicPartition tp = new TopicPartition(TOPIC, PARTITION);

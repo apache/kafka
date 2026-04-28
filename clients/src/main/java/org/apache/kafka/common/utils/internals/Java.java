@@ -18,7 +18,8 @@ package org.apache.kafka.common.utils.internals;
 
 public final class Java {
 
-    private Java() { }
+    private Java() {
+    }
 
     public static boolean isIbmJdk() {
         return System.getProperty("java.vendor").contains("IBM");

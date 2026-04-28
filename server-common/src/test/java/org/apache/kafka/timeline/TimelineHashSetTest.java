@@ -77,9 +77,9 @@ public class TimelineHashSetTest {
         SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
         TimelineHashSet<String> set = new TimelineHashSet<>(registry, 1);
         set.add("z");
-        assertArrayEquals(new String[] {"z"}, set.toArray());
-        assertArrayEquals(new String[] {"z", null}, set.toArray(new String[2]));
-        assertArrayEquals(new String[] {"z"}, set.toArray(new String[0]));
+        assertArrayEquals(new String[]{"z"}, set.toArray());
+        assertArrayEquals(new String[]{"z", null}, set.toArray(new String[2]));
+        assertArrayEquals(new String[]{"z"}, set.toArray(new String[0]));
     }
 
     @Test

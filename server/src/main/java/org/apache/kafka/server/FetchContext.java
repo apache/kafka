@@ -221,7 +221,7 @@ public sealed interface FetchContext {
         }
 
         private ImplicitLinkedHashCollection<CachedPartition> createNewSession(
-                LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> updates
+            LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> updates
         ) {
             ImplicitLinkedHashCollection<CachedPartition> cachedPartitions = new ImplicitLinkedHashCollection<>(updates.size());
             updates.forEach((part, respData) -> {

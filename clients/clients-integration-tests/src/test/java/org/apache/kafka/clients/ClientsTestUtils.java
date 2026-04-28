@@ -62,7 +62,8 @@ public class ClientsTestUtils {
     private static final String KEY_PREFIX = "key ";
     private static final String VALUE_PREFIX = "value ";
 
-    private ClientsTestUtils() {}
+    private ClientsTestUtils() {
+    }
 
     public static <K, V> List<ConsumerRecord<K, V>> consumeRecords(
         Consumer<K, V> consumer,
@@ -129,7 +130,7 @@ public class ClientsTestUtils {
         Consumer<byte[], byte[]> consumer,
         Duration timeout,
         Supplier<Boolean> testCondition,
-        long waitTimeMs, 
+        long waitTimeMs,
         String msg
     ) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
@@ -283,7 +284,7 @@ public class ClientsTestUtils {
             consumer.poll(Duration.ofMillis(100));
             return consumer.assignment().equals(expectedAssignment);
         }, () -> "Timed out while awaiting expected assignment " + expectedAssignment + ". " +
-                "The current assignment is " + consumer.assignment()
+            "The current assignment is " + consumer.assignment()
         );
     }
 
@@ -472,7 +473,7 @@ public class ClientsTestUtils {
         public byte[] serialize(String topic, byte[] data) {
             return data;
         }
-        
+
         public static void resetCount() {
             UPDATE_PRODUCER_COUNT.set(0);
         }

@@ -213,9 +213,9 @@ public class OffsetStorageWriterTest {
      */
     @SuppressWarnings("unchecked")
     private void expectStore(Map<String, Object> key, byte[] keySerialized,
-                             Map<String, Object> value, byte[] valueSerialized,
-                             final boolean fail,
-                             final CountDownLatch waitForCompletion) {
+            Map<String, Object> value, byte[] valueSerialized,
+            final boolean fail,
+            final CountDownLatch waitForCompletion) {
         List<Object> keyWrapped = Arrays.asList(NAMESPACE, key);
         when(keyConverter.fromConnectData(NAMESPACE, null, keyWrapped)).thenReturn(keySerialized);
         when(valueConverter.fromConnectData(NAMESPACE, null, value)).thenReturn(valueSerialized);

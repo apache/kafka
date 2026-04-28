@@ -95,12 +95,11 @@ public class TaskAssignorConvergenceTest {
         public final InternalTopicManager internalTopicManager;
 
 
-
         private static Harness initializeCluster(final int numStatelessTasks,
-                                                 final int numStatefulTasks,
-                                                 final int numClients,
-                                                 final Supplier<Integer> partitionCountSupplier,
-                                                 final int numNodes) {
+            final int numStatefulTasks,
+            final int numClients,
+            final Supplier<Integer> partitionCountSupplier,
+            final int numNodes) {
             int subtopology = 0;
             final Set<TaskId> statelessTasks = new TreeSet<>();
             int remainingStatelessTasks = numStatelessTasks;
@@ -190,14 +189,14 @@ public class TaskAssignorConvergenceTest {
         }
 
         private Harness(final Set<TaskId> statelessTasks,
-                        final Map<TaskId, Long> statefulTaskEndOffsetSums,
-                        final Map<ProcessId, ClientState> clientStates,
-                        final Cluster fullMetadata,
-                        final Map<TaskId, Set<TopicPartition>> partitionsForTask,
-                        final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask,
-                        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup,
-                        final Map<ProcessId, Map<String, Optional<String>>> racksForProcessConsumer,
-                        final InternalTopicManager internalTopicManager) {
+            final Map<TaskId, Long> statefulTaskEndOffsetSums,
+            final Map<ProcessId, ClientState> clientStates,
+            final Cluster fullMetadata,
+            final Map<TaskId, Set<TopicPartition>> partitionsForTask,
+            final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask,
+            final Map<Subtopology, Set<TaskId>> tasksForTopicGroup,
+            final Map<ProcessId, Map<String, Optional<String>>> racksForProcessConsumer,
+            final InternalTopicManager internalTopicManager) {
             this.statelessTasks = statelessTasks;
             this.statefulTaskEndOffsetSums = statefulTaskEndOffsetSums;
             this.clientStates = clientStates;
@@ -326,8 +325,8 @@ public class TaskAssignorConvergenceTest {
 
         private void recordConfig(final AssignmentConfigs configuration) {
             history.append("Creating assignor with configuration: ")
-                   .append(configuration)
-                   .append('\n');
+                .append(configuration)
+                .append('\n');
         }
 
         private void recordBefore(final int iteration) {
@@ -379,13 +378,13 @@ public class TaskAssignorConvergenceTest {
     public void staticAssignmentShouldConvergeWithTheFirstAssignment(final String rackAwareStrategy) {
         setUp(rackAwareStrategy);
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
-                                                                2,
-                                                                0,
-                                                                60_000L,
-                                                                EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
-                                                                null,
-                                                                null,
-                                                                rackAwareStrategy);
+            2,
+            0,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
+            null,
+            null,
+            rackAwareStrategy);
 
         final Harness harness = Harness.initializeCluster(1, 1, 1, () -> 1, 1);
 
@@ -409,13 +408,13 @@ public class TaskAssignorConvergenceTest {
         final int numNodes = 10;
 
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
-                                                                maxWarmupReplicas,
-                                                                numStandbyReplicas,
-                                                                60_000L,
-                                                                EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
-                                                                null,
-                                                                null,
-                                                                rackAwareStrategy);
+            maxWarmupReplicas,
+            numStandbyReplicas,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
+            null,
+            null,
+            rackAwareStrategy);
 
         final Harness harness = Harness.initializeCluster(numStatelessTasks, numStatefulTasks, 1, () -> 5, numNodes);
         testForConvergence(harness, configs, 1);
@@ -446,13 +445,13 @@ public class TaskAssignorConvergenceTest {
         final int numNodes = 10;
 
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
-                                                                maxWarmupReplicas,
-                                                                numStandbyReplicas,
-                                                                60_000L,
-                                                                EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
-                                                                null,
-                                                                null,
-                                                                rackAwareStrategy);
+            maxWarmupReplicas,
+            numStandbyReplicas,
+            60_000L,
+            EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
+            null,
+            null,
+            rackAwareStrategy);
 
         final Harness harness = Harness.initializeCluster(numStatelessTasks, numStatefulTasks, 7, () -> 5, numNodes);
         testForConvergence(harness, configs, 1);
@@ -502,13 +501,13 @@ public class TaskAssignorConvergenceTest {
             final int numberOfEvents = prng.nextInt(10) + 1;
 
             final AssignmentConfigs configs = new AssignmentConfigs(100L,
-                                                                    maxWarmupReplicas,
-                                                                    numStandbyReplicas,
-                                                                    60_000L,
-                                                                    EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
-                                                                    null,
-                                                                    null,
-                                                                    rackAwareStrategy);
+                maxWarmupReplicas,
+                numStandbyReplicas,
+                60_000L,
+                EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
+                null,
+                null,
+                rackAwareStrategy);
 
             harness = Harness.initializeCluster(
                 numStatelessTasks,
@@ -587,8 +586,8 @@ public class TaskAssignorConvergenceTest {
     }
 
     private static void testForConvergence(final Harness harness,
-                                           final AssignmentConfigs configs,
-                                           final int iterationLimit) {
+        final AssignmentConfigs configs,
+        final int iterationLimit) {
         final Set<TaskId> allTasks = new TreeSet<>();
         allTasks.addAll(harness.statelessTasks);
         allTasks.addAll(harness.statefulTaskEndOffsetSums.keySet());

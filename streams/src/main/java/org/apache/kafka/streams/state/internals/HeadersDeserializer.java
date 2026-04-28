@@ -69,7 +69,7 @@ class HeadersDeserializer {
         for (int i = 0; i < headersCount; i++) {
             final int keyLength = ByteUtils.readVarint(buffer);
             final byte[] keyBytes = readBytes(buffer, keyLength);
-            
+
             final String key = new String(keyBytes, StandardCharsets.UTF_8);
 
             final int valueLength = ByteUtils.readVarint(buffer);

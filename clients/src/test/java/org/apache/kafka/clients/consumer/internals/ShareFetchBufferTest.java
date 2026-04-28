@@ -164,17 +164,17 @@ public class ShareFetchBufferTest {
 
     private ShareCompletedFetch completedFetch(TopicIdPartition tp) {
         ShareFetchMetricsAggregator shareFetchMetricsAggregator = new ShareFetchMetricsAggregator(shareFetchMetricsManager,
-                allPartitions.stream().map(TopicIdPartition::topicPartition).collect(Collectors.toSet()));
+            allPartitions.stream().map(TopicIdPartition::topicPartition).collect(Collectors.toSet()));
         ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData();
         return new ShareCompletedFetch(
-                logContext,
-                BufferSupplier.create(),
-                0,
-                tp,
-                partitionData,
-                DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS,
-                shareFetchMetricsAggregator,
-                ApiKeys.SHARE_FETCH.latestVersion());
+            logContext,
+            BufferSupplier.create(),
+            0,
+            tp,
+            partitionData,
+            DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS,
+            shareFetchMetricsAggregator,
+            ApiKeys.SHARE_FETCH.latestVersion());
     }
 
     /**

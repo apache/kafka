@@ -373,10 +373,10 @@ public class StateStoreMetricsTest {
     }
 
     private void getAndVerifySensor(final Supplier<Sensor> sensorSupplier,
-                                    final String metricName,
-                                    final String descriptionOfAvg,
-                                    final String descriptionOfMax,
-                                    final String descriptionOfRate) {
+        final String metricName,
+        final String descriptionOfAvg,
+        final String descriptionOfMax,
+        final String descriptionOfRate) {
         try (final MockedStatic<StreamsMetricsImpl> streamsMetricsStaticMock = mockStatic(StreamsMetricsImpl.class)) {
             final Sensor sensor = sensorSupplier.get();
             streamsMetricsStaticMock.verify(
@@ -417,9 +417,9 @@ public class StateStoreMetricsTest {
     }
 
     private void verifySensorSuppressionBufferSensor(final Supplier<Sensor> sensorSupplier,
-                                                     final String metricName,
-                                                     final String descriptionOfAvg,
-                                                     final String descriptionOfMax) {
+        final String metricName,
+        final String descriptionOfAvg,
+        final String descriptionOfMax) {
         try (final MockedStatic<StreamsMetricsImpl> streamsMetricsStaticMock = mockStatic(StreamsMetricsImpl.class)) {
             final Sensor sensor = sensorSupplier.get();
             streamsMetricsStaticMock.verify(

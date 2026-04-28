@@ -37,7 +37,7 @@ public class HeartbeatRequest extends AbstractRequest {
         public HeartbeatRequest build(short version) {
             if (data.groupInstanceId() != null && version < 3) {
                 throw new UnsupportedVersionException("The broker heartbeat protocol version " +
-                        version + " does not support usage of config group.instance.id.");
+                    version + " does not support usage of config group.instance.id.");
             }
             return new HeartbeatRequest(data, version);
         }

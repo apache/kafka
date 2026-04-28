@@ -26,12 +26,12 @@ public class PartialDefaultRecord extends DefaultRecord {
     private final int valueSize;
 
     PartialDefaultRecord(int sizeInBytes,
-                         byte attributes,
-                         long offset,
-                         long timestamp,
-                         int sequence,
-                         int keySize,
-                         int valueSize) {
+        byte attributes,
+        long offset,
+        long timestamp,
+        int sequence,
+        int keySize,
+        int valueSize) {
         super(sizeInBytes, attributes, offset, timestamp, sequence, null, null, null);
 
         this.keySize = keySize;

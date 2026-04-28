@@ -86,10 +86,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(
-        types = {Type.KRAFT},
-        serverProperties = {
-            @ClusterConfigProperty(key = StandardAuthorizer.SUPER_USERS_CONFIG, value = "User:ANONYMOUS"),
-            @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = AclCommandTest.STANDARD_AUTHORIZER)}
+    types = {Type.KRAFT},
+    serverProperties = {
+        @ClusterConfigProperty(key = StandardAuthorizer.SUPER_USERS_CONFIG, value = "User:ANONYMOUS"),
+        @ClusterConfigProperty(key = AUTHORIZER_CLASS_NAME_CONFIG, value = AclCommandTest.STANDARD_AUTHORIZER)}
 
 )
 public class AclCommandTest {
@@ -128,8 +128,8 @@ public class AclCommandTest {
         new ResourcePattern(ResourceType.GROUP, "testGroup-2", LITERAL)
     );
     private static final Set<ResourcePattern> TRANSACTIONAL_ID_RESOURCES = Set.of(
-            new ResourcePattern(TRANSACTIONAL_ID, "t0", LITERAL),
-            new ResourcePattern(TRANSACTIONAL_ID, "t1", LITERAL)
+        new ResourcePattern(TRANSACTIONAL_ID, "t0", LITERAL),
+        new ResourcePattern(TRANSACTIONAL_ID, "t1", LITERAL)
     );
     private static final Set<ResourcePattern> TOKEN_RESOURCES = Set.of(
         new ResourcePattern(DELEGATION_TOKEN, "token1", LITERAL),
@@ -153,12 +153,12 @@ public class AclCommandTest {
         TOPIC_RESOURCES, Map.entry(
             Set.of(READ, WRITE, CREATE, DESCRIBE, DELETE, DESCRIBE_CONFIGS, ALTER_CONFIGS, ALTER),
             List.of(OPERATION, "Read", OPERATION, "Write", OPERATION, "Create",
-                    OPERATION, "Describe", OPERATION, "Delete", OPERATION, "DescribeConfigs",
-                    OPERATION, "AlterConfigs", OPERATION, "Alter")),
+                OPERATION, "Describe", OPERATION, "Delete", OPERATION, "DescribeConfigs",
+                OPERATION, "AlterConfigs", OPERATION, "Alter")),
         Set.of(CLUSTER_RESOURCE), Map.entry(
             Set.of(CREATE, CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, ALTER, DESCRIBE),
             List.of(OPERATION, "Create", OPERATION, "ClusterAction", OPERATION, "DescribeConfigs",
-                    OPERATION, "AlterConfigs", OPERATION, "IdempotentWrite", OPERATION, "Alter", OPERATION, "Describe")),
+                OPERATION, "AlterConfigs", OPERATION, "IdempotentWrite", OPERATION, "Alter", OPERATION, "Describe")),
         GROUP_RESOURCES, Map.entry(
             Set.of(READ, DESCRIBE, DELETE),
             List.of(OPERATION, "Read", OPERATION, "Describe", OPERATION, "Delete")),
@@ -169,8 +169,8 @@ public class AclCommandTest {
             Set.of(DESCRIBE),
             List.of(OPERATION, "Describe")),
         USER_RESOURCES, Map.entry(
-            Set.of(CREATE_TOKENS, DESCRIBE_TOKENS),
-            List.of(OPERATION, "CreateTokens", OPERATION, "DescribeTokens"))
+        Set.of(CREATE_TOKENS, DESCRIBE_TOKENS),
+        List.of(OPERATION, "CreateTokens", OPERATION, "DescribeTokens"))
     );
 
     private static final Map<Set<ResourcePattern>, Set<AccessControlEntry>> CONSUMER_RESOURCE_TO_ACLS = Map.of(
@@ -183,23 +183,23 @@ public class AclCommandTest {
         List.of(PRODUCER, IDEMPOTENT), producerResourceToAcls(true),
         List.of(CONSUMER), CONSUMER_RESOURCE_TO_ACLS,
         List.of(PRODUCER, CONSUMER),
-            CONSUMER_RESOURCE_TO_ACLS.entrySet().stream().collect(Collectors.toMap(
-                Map.Entry::getKey,
-                entry -> {
-                    Set<AccessControlEntry> value = new HashSet<>(entry.getValue());
-                    value.addAll(producerResourceToAcls(false).getOrDefault(entry.getKey(), Set.of()));
-                    return value;
-                }
-            )),
+        CONSUMER_RESOURCE_TO_ACLS.entrySet().stream().collect(Collectors.toMap(
+            Map.Entry::getKey,
+            entry -> {
+                Set<AccessControlEntry> value = new HashSet<>(entry.getValue());
+                value.addAll(producerResourceToAcls(false).getOrDefault(entry.getKey(), Set.of()));
+                return value;
+            }
+        )),
         List.of(PRODUCER, IDEMPOTENT, CONSUMER),
-            CONSUMER_RESOURCE_TO_ACLS.entrySet().stream().collect(Collectors.toMap(
-                Map.Entry::getKey,
-                entry -> {
-                    Set<AccessControlEntry> value = new HashSet<>(entry.getValue());
-                    value.addAll(producerResourceToAcls(true).getOrDefault(entry.getKey(), Set.of()));
-                    return value;
-                }
-            ))
+        CONSUMER_RESOURCE_TO_ACLS.entrySet().stream().collect(Collectors.toMap(
+            Map.Entry::getKey,
+            entry -> {
+                Set<AccessControlEntry> value = new HashSet<>(entry.getValue());
+                value.addAll(producerResourceToAcls(true).getOrDefault(entry.getKey(), Set.of()));
+                return value;
+            }
+        ))
     );
 
     @ClusterTest
@@ -239,9 +239,9 @@ public class AclCommandTest {
             appender.setClassLogger(AppInfoParser.class, Level.WARN);
             testAclCli(cluster, adminArgs(cluster.bootstrapServers(), Optional.of(TestUtils.tempFile("client.id=my-client"))));
             assertEquals(0, appender.getEvents().stream()
-                    .filter(e -> e.getLevel().equals(Level.WARN.toString()))
-                    .filter(e -> e.getThrowableClassName().filter(name -> name.equals(InstanceAlreadyExistsException.class.getName())).isPresent())
-                    .count(), "There should be no warnings about multiple registration of mbeans");
+                .filter(e -> e.getLevel().equals(Level.WARN.toString()))
+                .filter(e -> e.getThrowableClassName().filter(name -> name.equals(InstanceAlreadyExistsException.class.getName())).isPresent())
+                .count(), "There should be no warnings about multiple registration of mbeans");
         }
     }
 
@@ -251,9 +251,9 @@ public class AclCommandTest {
             appender.setClassLogger(AppInfoParser.class, Level.WARN);
             testAclCli(cluster, adminArgsWithBootstrapController(cluster.bootstrapControllers(), Optional.of(TestUtils.tempFile("client.id=my-client"))));
             assertEquals(0, appender.getEvents().stream()
-                    .filter(e -> e.getLevel().equals(Level.WARN.toString()))
-                    .filter(e -> e.getThrowableClassName().filter(name -> name.equals(InstanceAlreadyExistsException.class.getName())).isPresent())
-                    .count(), "There should be no warnings about multiple registration of mbeans");
+                .filter(e -> e.getLevel().equals(Level.WARN.toString()))
+                .filter(e -> e.getThrowableClassName().filter(name -> name.equals(InstanceAlreadyExistsException.class.getName())).isPresent())
+                .count(), "There should be no warnings about multiple registration of mbeans");
         }
     }
 
@@ -298,16 +298,16 @@ public class AclCommandTest {
     @Test
     public void testUseBootstrapServerOptWithBootstrapControllerOpt() {
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                List.of(BOOTSTRAP_SERVER, LOCALHOST, BOOTSTRAP_CONTROLLER, LOCALHOST),
-                "Only one of --bootstrap-server or --bootstrap-controller must be specified"
+            List.of(BOOTSTRAP_SERVER, LOCALHOST, BOOTSTRAP_CONTROLLER, LOCALHOST),
+            "Only one of --bootstrap-server or --bootstrap-controller must be specified"
         );
     }
 
     @Test
     public void testUseWithoutBootstrapServerOptAndBootstrapControllerOpt() {
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                List.of(ADD),
-                "One of --bootstrap-server or --bootstrap-controller must be specified"
+            List.of(ADD),
+            "One of --bootstrap-server or --bootstrap-controller must be specified"
         );
     }
 
@@ -321,32 +321,32 @@ public class AclCommandTest {
     @Test
     public void testUseListPrincipalsOptWithoutListOpt() {
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                List.of(BOOTSTRAP_SERVER, LOCALHOST, ADD, "--principal", "User:CN=client"),
-                "The --principal option is only available if --list is set"
+            List.of(BOOTSTRAP_SERVER, LOCALHOST, ADD, "--principal", "User:CN=client"),
+            "The --principal option is only available if --list is set"
         );
     }
 
     @Test
     public void testUseProducerOptWithoutTopicOpt() {
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                List.of(BOOTSTRAP_SERVER, LOCALHOST, ADD, PRODUCER),
-                "With --producer you must specify a --topic"
+            List.of(BOOTSTRAP_SERVER, LOCALHOST, ADD, PRODUCER),
+            "With --producer you must specify a --topic"
         );
     }
 
     @Test
     public void testUseIdempotentOptWithoutProducerOpt() {
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                List.of(BOOTSTRAP_SERVER, LOCALHOST, ADD, IDEMPOTENT),
-                "The --idempotent option is only available if --producer is set"
+            List.of(BOOTSTRAP_SERVER, LOCALHOST, ADD, IDEMPOTENT),
+            "The --idempotent option is only available if --producer is set"
         );
     }
 
     @Test
     public void testUseConsumerOptWithoutRequiredOpt() {
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                List.of(BOOTSTRAP_SERVER, LOCALHOST, ADD, CONSUMER),
-                "With --consumer you must specify a --topic and a --group and no --cluster or --transactional-id option should be specified."
+            List.of(BOOTSTRAP_SERVER, LOCALHOST, ADD, CONSUMER),
+            "With --consumer you must specify a --topic and a --group and no --cluster or --transactional-id option should be specified."
         );
         checkNotThrow(List.of(BOOTSTRAP_SERVER, LOCALHOST, ADD, CONSUMER, TOPIC, "test-topic", GROUP, "test-group"));
     }
@@ -354,16 +354,16 @@ public class AclCommandTest {
     @Test
     public void testInvalidArgs() {
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                List.of(BOOTSTRAP_SERVER, LOCALHOST, LIST, PRODUCER),
-                "Option \"[list]\" can't be used with option \"[producer]\""
+            List.of(BOOTSTRAP_SERVER, LOCALHOST, LIST, PRODUCER),
+            "Option \"[list]\" can't be used with option \"[producer]\""
         );
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                List.of(BOOTSTRAP_SERVER, LOCALHOST, ADD, PRODUCER, OPERATION, "all"),
-                "Option \"[producer]\" can't be used with option \"[operation]\""
+            List.of(BOOTSTRAP_SERVER, LOCALHOST, ADD, PRODUCER, OPERATION, "all"),
+            "Option \"[producer]\" can't be used with option \"[operation]\""
         );
         assertInitializeInvalidOptionsExitCodeAndMsg(
-                List.of(BOOTSTRAP_SERVER, LOCALHOST, ADD, CONSUMER, OPERATION, TOPIC, "test-topic", GROUP, "test-group"),
-                "Option \"[consumer]\" can't be used with option \"[operation]\""
+            List.of(BOOTSTRAP_SERVER, LOCALHOST, ADD, CONSUMER, OPERATION, TOPIC, "test-topic", GROUP, "test-group"),
+            "Option \"[consumer]\" can't be used with option \"[operation]\""
         );
     }
 
@@ -372,11 +372,11 @@ public class AclCommandTest {
             List<String> cmd = entry.getKey();
             Map<Set<ResourcePattern>, Set<AccessControlEntry>> resourcesToAcls = entry.getValue();
             List<String> resourceCommand = resourcesToAcls.keySet().stream()
-                    .map(RESOURCE_TO_COMMAND::get)
-                    .reduce(new ArrayList<>(), (list, commands) -> {
-                        list.addAll(commands);
-                        return list;
-                    });
+                .map(RESOURCE_TO_COMMAND::get)
+                .reduce(new ArrayList<>(), (list, commands) -> {
+                    list.addAll(commands);
+                    return list;
+                });
 
             List<String> args = new ArrayList<>(cmdArgs);
             args.addAll(getCmd(ALLOW));
@@ -408,7 +408,7 @@ public class AclCommandTest {
         AccessControlEntry describeAcl = new AccessControlEntry(PRINCIPAL.toString(), WILDCARD_HOST, DESCRIBE, ALLOW);
         AccessControlEntry createAcl = new AccessControlEntry(PRINCIPAL.toString(), WILDCARD_HOST, CREATE, ALLOW);
         cluster.waitAcls(new AclBindingFilter(new ResourcePattern(ResourceType.TOPIC, "Test-", PREFIXED).toFilter(), ANY),
-                List.of(writeAcl, describeAcl, createAcl));
+            List.of(writeAcl, describeAcl, createAcl));
 
         args = new ArrayList<>(cmdArgs);
         args.addAll(cmd);
@@ -417,9 +417,9 @@ public class AclCommandTest {
         callMain(args);
 
         cluster.waitAcls(new AclBindingFilter(new ResourcePattern(ResourceType.CLUSTER, "kafka-cluster", PREFIXED).toFilter(), ANY),
-                Set.of());
+            Set.of());
         cluster.waitAcls(new AclBindingFilter(new ResourcePattern(ResourceType.TOPIC, "Test-", PREFIXED).toFilter(), ANY),
-                Set.of());
+            Set.of());
     }
 
     private static Map<Set<ResourcePattern>, Set<AccessControlEntry>> producerResourceToAcls(boolean enableIdempotence) {
@@ -428,8 +428,8 @@ public class AclCommandTest {
             TRANSACTIONAL_ID_RESOURCES, AclCommand.getAcls(USERS, ALLOW, Set.of(WRITE, DESCRIBE), HOSTS),
             Set.of(CLUSTER_RESOURCE), AclCommand.getAcls(USERS, ALLOW,
                 enableIdempotence
-                        ? Set.of(IDEMPOTENT_WRITE)
-                        : Set.of(), HOSTS));
+                    ? Set.of(IDEMPOTENT_WRITE)
+                    : Set.of(), HOSTS));
     }
 
     private List<String> adminArgs(String bootstrapServer, Optional<File> commandConfig) {
@@ -494,22 +494,22 @@ public class AclCommandTest {
     }
 
     private void assertOutputContains(
-            String prefix,
-            Set<ResourcePattern> resources,
-            List<String> resourceCmd,
-            String output
+        String prefix,
+        Set<ResourcePattern> resources,
+        List<String> resourceCmd,
+        String output
     ) {
         resources.forEach(resource -> {
             String resourceType = resource.resourceType().toString();
 
             List<String> cmd = resource == CLUSTER_RESOURCE
-                    ? List.of("kafka-cluster")
-                    : resourceCmd.stream().filter(s -> !s.startsWith("--")).toList();
+                ? List.of("kafka-cluster")
+                : resourceCmd.stream().filter(s -> !s.startsWith("--")).toList();
 
             cmd.forEach(name -> {
                 String expected = String.format(
-                        "%s for resource `ResourcePattern(resourceType=%s, name=%s, patternType=LITERAL)`:",
-                        prefix, resourceType, name
+                    "%s for resource `ResourcePattern(resourceType=%s, name=%s, patternType=LITERAL)`:",
+                    prefix, resourceType, name
                 );
                 assertTrue(output.contains(expected), "Substring " + expected + " not in output:\n" + output);
             });
@@ -520,7 +520,7 @@ public class AclCommandTest {
         for (PatternType patternType : PatternType.values()) {
             List<String> addCmd = new ArrayList<>(cmdArgs);
             addCmd.addAll(List.of("--allow-principal", PRINCIPAL.toString(), PRODUCER, TOPIC, "Test",
-                    ADD, RESOURCE_PATTERN_TYPE, patternType.toString()));
+                ADD, RESOURCE_PATTERN_TYPE, patternType.toString()));
             verifyPatternType(addCmd, patternType.isSpecific());
 
             List<String> listCmd = new ArrayList<>(cmdArgs);
@@ -542,10 +542,10 @@ public class AclCommandTest {
     }
 
     private void testRemove(
-            ClusterInstance cluster,
-            List<String> cmdArgs,
-            Set<ResourcePattern> resources,
-            List<String> resourceCmd
+        ClusterInstance cluster,
+        List<String> cmdArgs,
+        Set<ResourcePattern> resources,
+        List<String> resourceCmd
     ) throws InterruptedException {
         List<String> args = new ArrayList<>(cmdArgs);
         args.addAll(resourceCmd);
@@ -559,12 +559,12 @@ public class AclCommandTest {
     }
 
     private Map.Entry<Set<AccessControlEntry>, List<String>> getAclToCommand(
-            AclPermissionType permissionType,
-            Set<AclOperation> operations
+        AclPermissionType permissionType,
+        Set<AclOperation> operations
     ) {
         return Map.entry(
-                AclCommand.getAcls(USERS, permissionType, operations, HOSTS),
-                getCmd(permissionType)
+            AclCommand.getAcls(USERS, permissionType, operations, HOSTS),
+            getCmd(permissionType)
         );
     }
 

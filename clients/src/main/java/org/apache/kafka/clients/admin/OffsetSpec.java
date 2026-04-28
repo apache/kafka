@@ -23,12 +23,24 @@ import java.util.Map;
  */
 public class OffsetSpec {
 
-    public static class EarliestSpec extends OffsetSpec { }
-    public static class LatestSpec extends OffsetSpec { }
-    public static class MaxTimestampSpec extends OffsetSpec { }
-    public static class EarliestLocalSpec extends OffsetSpec { }
-    public static class LatestTieredSpec extends OffsetSpec { }
-    public static class EarliestPendingUploadSpec extends OffsetSpec { }
+    public static class EarliestSpec extends OffsetSpec {
+    }
+
+    public static class LatestSpec extends OffsetSpec {
+    }
+
+    public static class MaxTimestampSpec extends OffsetSpec {
+    }
+
+    public static class EarliestLocalSpec extends OffsetSpec {
+    }
+
+    public static class LatestTieredSpec extends OffsetSpec {
+    }
+
+    public static class EarliestPendingUploadSpec extends OffsetSpec {
+    }
+
     public static class TimestampSpec extends OffsetSpec {
         private final long timestamp;
 

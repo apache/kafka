@@ -83,23 +83,23 @@ public class SubscriptionInfo {
     }
 
     public SubscriptionInfo(final int version,
-                            final int latestSupportedVersion,
-                            final ProcessId processId,
-                            final String userEndPoint,
-                            final Map<TaskId, Long> taskOffsetSums,
-                            final byte uniqueField,
-                            final int errorCode,
-                            final Map<String, String> clientTags) {
+        final int latestSupportedVersion,
+        final ProcessId processId,
+        final String userEndPoint,
+        final Map<TaskId, Long> taskOffsetSums,
+        final byte uniqueField,
+        final int errorCode,
+        final Map<String, String> clientTags) {
         validateVersions(version, latestSupportedVersion);
         final SubscriptionInfoData data = new SubscriptionInfoData();
         data.setVersion(version);
         data.setProcessId(new Uuid(processId.id().getMostSignificantBits(),
-                processId.id().getLeastSignificantBits()));
+            processId.id().getLeastSignificantBits()));
 
         if (version >= 2) {
             data.setUserEndPoint(userEndPoint == null
-                    ? new byte[0]
-                    : userEndPoint.getBytes(StandardCharsets.UTF_8));
+                ? new byte[0]
+                : userEndPoint.getBytes(StandardCharsets.UTF_8));
         }
         if (version >= 3) {
             data.setLatestSupportedVersion(latestSupportedVersion);
@@ -272,14 +272,14 @@ public class SubscriptionInfo {
                     if (data.version() >= MIN_NAMED_TOPOLOGY_VERSION) {
                         taskOffsetSumsCache.put(
                             new TaskId(taskOffsetSum.topicGroupId(),
-                                       taskOffsetSum.partition(),
-                                       taskOffsetSum.namedTopology()),
+                                taskOffsetSum.partition(),
+                                taskOffsetSum.namedTopology()),
                             taskOffsetSum.offsetSum());
                     } else {
                         for (final PartitionToOffsetSum partitionOffsetSum : taskOffsetSum.partitionToOffsetSum()) {
                             taskOffsetSumsCache.put(
                                 new TaskId(taskOffsetSum.topicGroupId(),
-                                           partitionOffsetSum.partition()),
+                                    partitionOffsetSum.partition()),
                                 partitionOffsetSum.offsetSum()
                             );
                         }
@@ -308,11 +308,11 @@ public class SubscriptionInfo {
     }
 
     private static Set<TaskId> taskOffsetSumMapToTaskSet(final Map<TaskId, Long> taskOffsetSums,
-                                                         final boolean getActiveTasks) {
+        final boolean getActiveTasks) {
         return taskOffsetSums.entrySet().stream()
-                   .filter(t -> getActiveTasks == (t.getValue() == Task.LATEST_OFFSET))
-                   .map(Map.Entry::getKey)
-                   .collect(Collectors.toSet());
+            .filter(t -> getActiveTasks == (t.getValue() == Task.LATEST_OFFSET))
+            .map(Map.Entry::getKey)
+            .collect(Collectors.toSet());
     }
 
     /**

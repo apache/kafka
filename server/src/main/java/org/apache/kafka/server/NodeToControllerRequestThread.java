@@ -60,6 +60,7 @@ public class NodeToControllerRequestThread extends InterBrokerSendThread {
 
     // Used for testing
     volatile boolean started = false;
+
     public void setStarted(boolean started) {
         this.started = started;
     }
@@ -114,10 +115,10 @@ public class NodeToControllerRequestThread extends InterBrokerSendThread {
                 if (controllerAddress.isPresent()) {
                     requestIter.remove();
                     return List.of(new RequestAndCompletionHandler(
-                            time.milliseconds(),
-                            controllerAddress.get(),
-                            request.request(),
-                            response -> handleResponse(request, response)
+                        time.milliseconds(),
+                        controllerAddress.get(),
+                        request.request(),
+                        response -> handleResponse(request, response)
                     ));
                 }
             }
@@ -130,24 +131,24 @@ public class NodeToControllerRequestThread extends InterBrokerSendThread {
         log.debug("Request {} received {}", queueItem.request(), response);
         if (response.authenticationException() != null) {
             log.error("Request {} failed due to authentication error with controller. Disconnecting the " +
-                            "connection to the stale controller {}",
-                    queueItem.request(), activeControllerAddress().map(Node::idString).orElse("null"),
-                    response.authenticationException()
+                "connection to the stale controller {}",
+                queueItem.request(), activeControllerAddress().map(Node::idString).orElse("null"),
+                response.authenticationException()
             );
             maybeDisconnectAndUpdateController();
             queueItem.callback().onComplete(response);
         } else if (response.versionMismatch() != null) {
             log.error("Request {} failed due to unsupported version error", queueItem.request(),
-                    response.versionMismatch());
+                response.versionMismatch());
             queueItem.callback().onComplete(response);
         } else if (response.wasDisconnected()) {
             updateControllerAddress(null);
             requestQueue.addFirst(queueItem);
         } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
             log.debug("Request {} received NOT_CONTROLLER exception. Disconnecting the " +
-                            "connection to the stale controller {}",
-                    queueItem.request(),
-                    activeControllerAddress().map(Node::idString).orElse("null"));
+                "connection to the stale controller {}",
+                queueItem.request(),
+                activeControllerAddress().map(Node::idString).orElse("null"));
             maybeDisconnectAndUpdateController();
             requestQueue.addFirst(queueItem);
         } else {

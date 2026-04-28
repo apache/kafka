@@ -61,6 +61,6 @@ public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
         String file = tempFile("{}").toURI().toString();
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, file);
         assertThrowsWithMessage(ConfigException.class, () -> VerificationKeyResolverFactory.create(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()),
-                ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
+            ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
     }
 }

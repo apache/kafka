@@ -128,10 +128,10 @@ public class ReassignPartitionsUnitTest {
             new PartitionReassignmentState(List.of(1, 2, 3), List.of(1, 2, 4), false));
 
         assertEquals(String.join(System.lineSeparator(),
-            "Status of partition reassignment:",
-            "Reassignment of partition bar-0 is still in progress.",
-            "Reassignment of partition foo-0 is completed.",
-            "Reassignment of partition foo-1 is still in progress."),
+                "Status of partition reassignment:",
+                "Reassignment of partition bar-0 is still in progress.",
+                "Reassignment of partition foo-0 is completed.",
+                "Reassignment of partition foo-1 is still in progress."),
             partitionReassignmentStatesToString(states));
     }
 
@@ -162,7 +162,7 @@ public class ReassignPartitionsUnitTest {
             reassignments.put(new TopicPartition("foo", 0), List.of(0, 1, 3));
             reassignments.put(new TopicPartition("quux", 0), List.of(1, 2, 3));
 
-            Map<TopicPartition, Throwable> reassignmentResult = alterPartitionReassignments(adminClient, reassignments,  false);
+            Map<TopicPartition, Throwable> reassignmentResult = alterPartitionReassignments(adminClient, reassignments, false);
 
             assertEquals(1, reassignmentResult.size());
             assertEquals(UnknownTopicOrPartitionException.class, reassignmentResult.get(new TopicPartition("quux", 0)).getClass());
@@ -210,13 +210,13 @@ public class ReassignPartitionsUnitTest {
     @Test
     public void testFindLogDirMoveStates() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().
-                numBrokers(4).
-                brokerLogDirs(List.of(
-                    List.of("/tmp/kafka-logs0", "/tmp/kafka-logs1"),
-                    List.of("/tmp/kafka-logs0", "/tmp/kafka-logs1"),
-                    List.of("/tmp/kafka-logs0", "/tmp/kafka-logs1"),
-                    Arrays.asList("/tmp/kafka-logs0", null)))
-                .build()) {
+                 numBrokers(4).
+                 brokerLogDirs(List.of(
+                 List.of("/tmp/kafka-logs0", "/tmp/kafka-logs1"),
+                 List.of("/tmp/kafka-logs0", "/tmp/kafka-logs1"),
+                 List.of("/tmp/kafka-logs0", "/tmp/kafka-logs1"),
+                 Arrays.asList("/tmp/kafka-logs0", null)))
+                 .build()) {
 
             addTopics(adminClient);
             List<Node> b = adminClient.brokers();
@@ -270,13 +270,13 @@ public class ReassignPartitionsUnitTest {
         states.put(new TopicPartitionReplica("quux", 2, 1), new MissingLogDirMoveState("/tmp/kafka-logs1"));
 
         assertEquals(String.join(System.lineSeparator(),
-            "Reassignment of replica bar-0-0 completed successfully.",
-            "Reassignment of replica foo-0-0 is still in progress.",
-            "Partition foo-1 on broker 0 is not being moved from log dir /tmp/kafka-logs0 to /tmp/kafka-logs1.",
-            "Partition quux-0 cannot be found in any live log directory on broker 0.",
-            "Partition quux-1 on broker 1 is being moved to log dir /tmp/kafka-logs2 instead of /tmp/kafka-logs1.",
-            "Partition quux-2 is not found in any live log dir on broker 1. " +
-                "There is likely an offline log directory on the broker."),
+                "Reassignment of replica bar-0-0 completed successfully.",
+                "Reassignment of replica foo-0-0 is still in progress.",
+                "Partition foo-1 on broker 0 is not being moved from log dir /tmp/kafka-logs0 to /tmp/kafka-logs1.",
+                "Partition quux-0 cannot be found in any live log directory on broker 0.",
+                "Partition quux-1 on broker 1 is being moved to log dir /tmp/kafka-logs2 instead of /tmp/kafka-logs1.",
+                "Partition quux-2 is not found in any live log dir on broker 1. " +
+                    "There is likely an offline log directory on the broker."),
             replicaMoveStatesToString(states));
     }
 
@@ -304,7 +304,7 @@ public class ReassignPartitionsUnitTest {
                 ReassignPartitionsCommand.getReplicasForPartitions(
                     adminClient,
                     Set.of(new TopicPartition("foo", 0), new TopicPartition("bar", 0))
-            ));
+                ));
             assertEquals(
                 assignments,
                 actualAssignments
@@ -322,10 +322,10 @@ public class ReassignPartitionsUnitTest {
     @Test
     public void testGetBrokerRackInformation() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().
-            brokers(List.of(new Node(0, "localhost", 9092, "rack0"),
-                new Node(1, "localhost", 9093, "rack1"),
-                new Node(2, "localhost", 9094, null))).
-            build()) {
+                 brokers(List.of(new Node(0, "localhost", 9092, "rack0"),
+                 new Node(1, "localhost", 9093, "rack1"),
+                 new Node(2, "localhost", 9094, null))).
+                 build()) {
 
             assertEquals(List.of(
                 new UsableBroker(0, Optional.of("rack0"), false),
@@ -349,17 +349,17 @@ public class ReassignPartitionsUnitTest {
     public void testParseGenerateAssignmentArgs() throws Exception {
         assertStartsWith("Broker list contains duplicate entries",
             assertThrows(AdminCommandFailedException.class, () -> parseGenerateAssignmentArgs(
-                "{\"topics\": [{\"topic\": \"foo\"}], \"version\":1}", "1,1,2"),
+                    "{\"topics\": [{\"topic\": \"foo\"}], \"version\":1}", "1,1,2"),
                 "Expected to detect duplicate broker list entries").getMessage());
         assertStartsWith("Broker list contains duplicate entries",
             assertThrows(AdminCommandFailedException.class, () -> parseGenerateAssignmentArgs(
-                "{\"topics\": [{\"topic\": \"foo\"}], \"version\":1}", "5,2,3,4,5"),
+                    "{\"topics\": [{\"topic\": \"foo\"}], \"version\":1}", "5,2,3,4,5"),
                 "Expected to detect duplicate broker list entries").getMessage());
         assertEquals(new SimpleImmutableEntry<>(List.of(5, 2, 3, 4), List.of("foo")),
             parseGenerateAssignmentArgs("{\"topics\": [{\"topic\": \"foo\"}], \"version\":1}", "5,2,3,4"));
         assertStartsWith("List of topics to reassign contains duplicate entries",
             assertThrows(AdminCommandFailedException.class, () -> parseGenerateAssignmentArgs(
-                "{\"topics\": [{\"topic\": \"foo\"},{\"topic\": \"foo\"}], \"version\":1}", "5,2,3,4"),
+                    "{\"topics\": [{\"topic\": \"foo\"},{\"topic\": \"foo\"}], \"version\":1}", "5,2,3,4"),
                 "Expected to detect duplicate topic entries").getMessage());
         assertEquals(new SimpleImmutableEntry<>(List.of(5, 3, 4), List.of("foo", "bar")),
             parseGenerateAssignmentArgs(
@@ -391,14 +391,14 @@ public class ReassignPartitionsUnitTest {
     @Test
     public void testGenerateAssignmentWithInconsistentRacks() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().
-            brokers(List.of(
-                new Node(0, "localhost", 9092, "rack0"),
-                new Node(1, "localhost", 9093, "rack0"),
-                new Node(2, "localhost", 9094, null),
-                new Node(3, "localhost", 9095, "rack1"),
-                new Node(4, "localhost", 9096, "rack1"),
-                new Node(5, "localhost", 9097, "rack2"))).
-            build()) {
+                 brokers(List.of(
+                 new Node(0, "localhost", 9092, "rack0"),
+                 new Node(1, "localhost", 9093, "rack0"),
+                 new Node(2, "localhost", 9094, null),
+                 new Node(3, "localhost", 9095, "rack1"),
+                 new Node(4, "localhost", 9096, "rack1"),
+                 new Node(5, "localhost", 9097, "rack2"))).
+                 build()) {
 
             addTopics(adminClient);
             assertStartsWith("Not all brokers have rack information.",
@@ -448,16 +448,16 @@ public class ReassignPartitionsUnitTest {
     @Test
     public void testCurrentPartitionReplicaAssignmentToString() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder()
-                .numBrokers(6)
-                .brokerLogDirs(List.of(
-                    List.of("/tmp/broker0/logs"),
-                    List.of("/tmp/broker1/logs"),
-                    List.of("/tmp/broker2/logs"),
-                    List.of("/tmp/broker3/logs"),
-                    List.of("/tmp/broker4/logs"),
-                    List.of("/tmp/broker5/logs")
-                ))
-                .build()
+                 .numBrokers(6)
+                 .brokerLogDirs(List.of(
+                     List.of("/tmp/broker0/logs"),
+                     List.of("/tmp/broker1/logs"),
+                     List.of("/tmp/broker2/logs"),
+                     List.of("/tmp/broker3/logs"),
+                     List.of("/tmp/broker4/logs"),
+                     List.of("/tmp/broker5/logs")
+                 ))
+                 .build()
         ) {
 
             List<Node> brokers = adminClient.brokers();
@@ -488,12 +488,12 @@ public class ReassignPartitionsUnitTest {
             currentParts.put(new TopicPartition("bar", 0), List.of(broker4, broker5));
 
             assertEquals(String.join(System.lineSeparator(),
-                "Current partition replica assignment",
-                "",
-                "{\"version\":1,\"partitions\":[{\"topic\":\"bar\",\"partition\":0,\"replicas\":[4,5],\"log_dirs\":[\"/tmp/broker4/logs\",\"/tmp/broker4/logs\"]}," +
-                    "{\"topic\":\"foo\",\"partition\":1,\"replicas\":[1,2,3],\"log_dirs\":[\"any\",\"any\",\"any\"]}]}",
-                "",
-                "Save this to use as the --reassignment-json-file option during rollback"),
+                    "Current partition replica assignment",
+                    "",
+                    "{\"version\":1,\"partitions\":[{\"topic\":\"bar\",\"partition\":0,\"replicas\":[4,5],\"log_dirs\":[\"/tmp/broker4/logs\",\"/tmp/broker4/logs\"]}," +
+                        "{\"topic\":\"foo\",\"partition\":1,\"replicas\":[1,2,3],\"log_dirs\":[\"any\",\"any\",\"any\"]}]}",
+                    "",
+                    "Save this to use as the --reassignment-json-file option during rollback"),
                 currentPartitionReplicaAssignmentToString(adminClient, proposedParts, currentParts)
             );
         }
@@ -712,17 +712,17 @@ public class ReassignPartitionsUnitTest {
 
             assertTrue(reassignmentResult.isEmpty());
             assertEquals(String.join(System.lineSeparator(),
-                "Current partition reassignments:",
-                "bar-0: replicas: 2,3,0. removing: 0.",
-                "foo-0: replicas: 0,1,2. adding: 4.",
-                "foo-1: replicas: 1,2,3. adding: 4,5. removing: 1,2."),
+                    "Current partition reassignments:",
+                    "bar-0: replicas: 2,3,0. removing: 0.",
+                    "foo-0: replicas: 0,1,2. adding: 4.",
+                    "foo-1: replicas: 1,2,3. adding: 4,5. removing: 1,2."),
                 curReassignmentsToString(adminClient));
         }
     }
 
     private void verifyBrokerThrottleResults(Config config,
-                                             long expectedInterBrokerThrottle,
-                                             long expectedReplicaAlterLogDirsThrottle) {
+        long expectedInterBrokerThrottle,
+        long expectedReplicaAlterLogDirsThrottle) {
         Map<String, String> configs = new HashMap<>();
         config.entries().forEach(entry -> configs.put(entry.name(), entry.value()));
         if (expectedInterBrokerThrottle >= 0) {
@@ -759,8 +759,8 @@ public class ReassignPartitionsUnitTest {
     }
 
     private void verifyTopicThrottleResults(Config config,
-                                            String expectedLeaderThrottle,
-                                            String expectedFollowerThrottle) {
+        String expectedLeaderThrottle,
+        String expectedFollowerThrottle) {
         Map<String, String> configs = new HashMap<>();
         config.entries().forEach(entry -> configs.put(entry.name(), entry.value()));
         assertEquals(expectedLeaderThrottle,
@@ -772,10 +772,10 @@ public class ReassignPartitionsUnitTest {
     @Test
     public void testAlterReplicaLogDirs() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().
-            numBrokers(4).
-            brokerLogDirs(Collections.nCopies(4,
-                List.of("/tmp/kafka-logs0", "/tmp/kafka-logs1"))).
-            build()) {
+                 numBrokers(4).
+                 brokerLogDirs(Collections.nCopies(4,
+                 List.of("/tmp/kafka-logs0", "/tmp/kafka-logs1"))).
+                 build()) {
 
             addTopics(adminClient);
 
@@ -807,13 +807,13 @@ public class ReassignPartitionsUnitTest {
     @Test
     public void testGetReplicaToLogDir() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder()
-                .numBrokers(4)
-                .brokerLogDirs(List.of(
-                    List.of("/tmp/broker0/logs0"),
-                    List.of("/tmp/broker1/logs0"),
-                    List.of("/tmp/broker2/logs0"),
-                    List.of("/tmp/broker3/logs0")
-                )).build()
+                 .numBrokers(4)
+                 .brokerLogDirs(List.of(
+                     List.of("/tmp/broker0/logs0"),
+                     List.of("/tmp/broker1/logs0"),
+                     List.of("/tmp/broker2/logs0"),
+                     List.of("/tmp/broker3/logs0")
+                 )).build()
         ) {
             addTopics(adminClient);
 

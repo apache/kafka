@@ -39,7 +39,7 @@ public class ShareAcknowledgeRequest extends AbstractRequest {
         }
 
         public static ShareAcknowledgeRequest.Builder forConsumer(String groupId, ShareRequestMetadata metadata, boolean isRenewAck,
-                                                                  Map<TopicIdPartition, List<ShareAcknowledgeRequestData.AcknowledgementBatch>> acknowledgementsMap) {
+            Map<TopicIdPartition, List<ShareAcknowledgeRequestData.AcknowledgementBatch>> acknowledgementsMap) {
             ShareAcknowledgeRequestData data = new ShareAcknowledgeRequestData();
             data.setGroupId(groupId);
             if (metadata != null) {
@@ -54,14 +54,14 @@ public class ShareAcknowledgeRequest extends AbstractRequest {
                 ShareAcknowledgeRequestData.AcknowledgeTopic ackTopic = ackTopics.find(tip.topicId());
                 if (ackTopic == null) {
                     ackTopic = new ShareAcknowledgeRequestData.AcknowledgeTopic()
-                            .setTopicId(tip.topicId())
-                            .setPartitions(new ShareAcknowledgeRequestData.AcknowledgePartitionCollection());
+                        .setTopicId(tip.topicId())
+                        .setPartitions(new ShareAcknowledgeRequestData.AcknowledgePartitionCollection());
                     ackTopics.add(ackTopic);
                 }
                 ShareAcknowledgeRequestData.AcknowledgePartition ackPartition = ackTopic.partitions().find(tip.partition());
                 if (ackPartition == null) {
                     ackPartition = new ShareAcknowledgeRequestData.AcknowledgePartition()
-                            .setPartitionIndex(tip.partition());
+                        .setPartitionIndex(tip.partition());
                     ackTopic.partitions().add(ackPartition);
                 }
                 ackPartition.setAcknowledgementBatches(acknowledgeEntry.getValue());
@@ -108,14 +108,14 @@ public class ShareAcknowledgeRequest extends AbstractRequest {
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
         return new ShareAcknowledgeResponse(new ShareAcknowledgeResponseData()
-                .setThrottleTimeMs(throttleTimeMs)
-                .setErrorCode(error.code()));
+            .setThrottleTimeMs(throttleTimeMs)
+            .setErrorCode(error.code()));
     }
 
     public static ShareAcknowledgeRequest parse(Readable readable, short version) {
         return new ShareAcknowledgeRequest(
-                new ShareAcknowledgeRequestData(readable, version),
-                version
+            new ShareAcknowledgeRequestData(readable, version),
+            version
         );
     }
 }

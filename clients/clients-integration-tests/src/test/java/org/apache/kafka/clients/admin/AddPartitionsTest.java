@@ -90,7 +90,7 @@ public class AddPartitionsTest {
                     NewPartitions.increaseTo(3, List.of(List.of(0, 1, 2))))).all().get()).getCause();
             assertInstanceOf(InvalidReplicaAssignmentException.class, cause);
             assertTrue(cause.getMessage().contains(
-                "Attempted to add 2 additional partition(s), but only 1 assignment(s) were specified."),
+                    "Attempted to add 2 additional partition(s), but only 1 assignment(s) were specified."),
                 "Unexpected error message: " + cause.getMessage());
         }
     }

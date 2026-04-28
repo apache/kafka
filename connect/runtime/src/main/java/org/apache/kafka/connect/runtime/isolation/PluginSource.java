@@ -22,9 +22,9 @@ import java.util.Arrays;
 import java.util.Objects;
 
 public record PluginSource(Path location,
-                           org.apache.kafka.connect.runtime.isolation.PluginSource.Type type,
-                           ClassLoader loader,
-                           URL[] urls) {
+org.apache.kafka.connect.runtime.isolation.PluginSource.Type type,
+ClassLoader loader,
+URL[] urls) {
 
     public enum Type {
         CLASSPATH, MULTI_JAR, SINGLE_JAR, CLASS_HIERARCHY

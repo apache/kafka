@@ -103,7 +103,7 @@ public final class Metrics implements Closeable {
     }
 
 
-  /**
+    /**
      * Create a metrics repository with no reporters and the given default config. This config will be used for any
      * metric that doesn't override its own config. Expiration of Sensors is disabled.
      * @param defaultConfig The default config to use for all metrics that don't override their config
@@ -156,7 +156,7 @@ public final class Metrics implements Closeable {
      * @param metricsContext The metricsContext to initialize metrics reporter with
      */
     public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time, boolean enableExpiration,
-                   MetricsContext metricsContext) {
+        MetricsContext metricsContext) {
         this.config = defaultConfig;
         this.sensors = new ConcurrentHashMap<>();
         this.metrics = new ConcurrentHashMap<>();
@@ -256,14 +256,14 @@ public final class Metrics implements Closeable {
      */
     public static String toHtmlTable(String domain, Iterable<MetricNameTemplate> allMetrics) {
         Map<String, Map<String, String>> beansAndAttributes = new TreeMap<>();
-    
+
         try (Metrics metrics = new Metrics()) {
             for (MetricNameTemplate template : allMetrics) {
                 Map<String, String> tags = new LinkedHashMap<>();
                 for (String s : template.tags()) {
                     tags.put(s, "{" + s + "}");
                 }
-    
+
                 MetricName metricName = metrics.metricName(template.name(), template.group(), template.description(), tags);
                 String mBeanName = JmxReporter.getMBeanName(domain, metricName);
                 if (!beansAndAttributes.containsKey(mBeanName)) {
@@ -502,10 +502,10 @@ public final class Metrics implements Closeable {
      */
     public void addMetric(MetricName metricName, MetricConfig config, MetricValueProvider<?> metricValueProvider) {
         KafkaMetric m = new KafkaMetric(new Object(),
-                                        Objects.requireNonNull(metricName),
-                                        Objects.requireNonNull(metricValueProvider),
-                                        config == null ? this.config : config,
-                                        time);
+            Objects.requireNonNull(metricName),
+            Objects.requireNonNull(metricValueProvider),
+            config == null ? this.config : config,
+            time);
         KafkaMetric existingMetric = registerMetric(m);
         if (existingMetric != null) {
             throw new IllegalArgumentException("A metric named '" + metricName + "' already exists, can't register another one.");
@@ -535,10 +535,10 @@ public final class Metrics implements Closeable {
      */
     public KafkaMetric addMetricIfAbsent(MetricName metricName, MetricConfig config, MetricValueProvider<?> metricValueProvider) {
         KafkaMetric metric = new KafkaMetric(new Object(),
-                Objects.requireNonNull(metricName),
-                Objects.requireNonNull(metricValueProvider),
-                config == null ? this.config : config,
-                time);
+            Objects.requireNonNull(metricName),
+            Objects.requireNonNull(metricValueProvider),
+            config == null ? this.config : config,
+            time);
 
         KafkaMetric existingMetric = registerMetric(metric);
         return existingMetric == null ? metric : existingMetric;
@@ -661,14 +661,14 @@ public final class Metrics implements Closeable {
         // check to make sure that the runtime defined tags contain all the template tags.
         Set<String> runtimeTagKeys = new HashSet<>(tags.keySet());
         runtimeTagKeys.addAll(config().tags().keySet());
-        
+
         Set<String> templateTagKeys = template.tags();
-        
+
         if (!runtimeTagKeys.equals(templateTagKeys)) {
             throw new IllegalArgumentException("For '" + template.name() + "', runtime-defined metric tags do not match the tags in the template. "
-                    + "Runtime = " + runtimeTagKeys + " Template = " + templateTagKeys.toString());
+                + "Runtime = " + runtimeTagKeys + " Template = " + templateTagKeys.toString());
         }
-                
+
         return this.metricName(template.name(), template.group(), template.description(), tags);
     }
 

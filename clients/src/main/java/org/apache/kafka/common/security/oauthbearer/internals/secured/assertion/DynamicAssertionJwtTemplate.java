@@ -45,10 +45,10 @@ public class DynamicAssertionJwtTemplate implements AssertionJwtTemplate {
     private final boolean includeJti;
 
     public DynamicAssertionJwtTemplate(Time time,
-                                       String algorithm,
-                                       int expSeconds,
-                                       int nbfSeconds,
-                                       boolean includeJti) {
+        String algorithm,
+        int expSeconds,
+        int nbfSeconds,
+        boolean includeJti) {
         this.time = time;
         this.algorithm = algorithm;
         this.expSeconds = expSeconds;

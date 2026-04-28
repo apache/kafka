@@ -36,8 +36,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class BooleanConverterTest {
     private static final String TOPIC = "topic";
-    private static final byte[] TRUE = new byte[] {0x01};
-    private static final byte[] FALSE = new byte[] {0x00};
+    private static final byte[] TRUE = new byte[]{0x01};
+    private static final byte[] FALSE = new byte[]{0x00};
     private final BooleanConverter converter = new BooleanConverter();
 
     @BeforeEach
@@ -52,20 +52,20 @@ public class BooleanConverterTest {
                 converter.fromConnectData(TOPIC, Schema.BOOLEAN_SCHEMA, Boolean.TRUE)
         );
         assertArrayEquals(
-            FALSE,
-            converter.fromConnectData(TOPIC, Schema.BOOLEAN_SCHEMA, Boolean.FALSE)
+                FALSE,
+                converter.fromConnectData(TOPIC, Schema.BOOLEAN_SCHEMA, Boolean.FALSE)
         );
     }
 
     @Test
     public void testFromConnectNullSchema() {
         assertArrayEquals(
-            TRUE,
-            converter.fromConnectData(TOPIC, null, Boolean.TRUE)
+                TRUE,
+                converter.fromConnectData(TOPIC, null, Boolean.TRUE)
         );
         assertArrayEquals(
-            FALSE,
-            converter.fromConnectData(TOPIC, null, Boolean.FALSE)
+                FALSE,
+                converter.fromConnectData(TOPIC, null, Boolean.FALSE)
         );
     }
 
@@ -73,13 +73,13 @@ public class BooleanConverterTest {
     @Test
     public void testFromConnectWrongSchema() {
         assertThrows(DataException.class,
-            () -> converter.fromConnectData(TOPIC, Schema.INT32_SCHEMA, Boolean.FALSE));
+                () -> converter.fromConnectData(TOPIC, Schema.INT32_SCHEMA, Boolean.FALSE));
     }
 
     @Test
     public void testFromConnectInvalidValue() {
         assertThrows(DataException.class,
-            () -> converter.fromConnectData(TOPIC, Schema.BOOLEAN_SCHEMA, "true"));
+                () -> converter.fromConnectData(TOPIC, Schema.BOOLEAN_SCHEMA, "true"));
     }
 
     @Test

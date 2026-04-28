@@ -16,6 +16,7 @@
  */
 
 package org.apache.kafka.trogdor.workload;
+
 import org.apache.kafka.common.utils.Time;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -50,7 +51,7 @@ public class ConstantThroughputGenerator implements ThroughputGenerator {
 
     @JsonCreator
     public ConstantThroughputGenerator(@JsonProperty("messagesPerWindow") int messagesPerWindow,
-                                       @JsonProperty("windowSizeMs") long windowSizeMs) {
+        @JsonProperty("windowSizeMs") long windowSizeMs) {
         // Calculate the default values.
         if (windowSizeMs <= 0) {
             windowSizeMs = 100;

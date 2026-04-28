@@ -85,8 +85,8 @@ public class OffsetCommitRequestTest {
                 ))
         );
         data = new OffsetCommitRequestData()
-                   .setGroupId(groupId)
-                   .setTopics(topics);
+            .setGroupId(groupId)
+            .setTopics(topics);
     }
 
     @Test

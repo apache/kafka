@@ -62,18 +62,18 @@ public class DefaultGroupFilter implements GroupFilter {
     static class GroupFilterConfig extends AbstractConfig {
 
         static final ConfigDef DEF = new ConfigDef()
-            .define(GROUPS_INCLUDE_CONFIG,
-                    Type.LIST,
-                    GROUPS_INCLUDE_DEFAULT,
-                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                    Importance.HIGH,
-                    GROUPS_INCLUDE_DOC)
-            .define(GROUPS_EXCLUDE_CONFIG,
-                    Type.LIST,
-                    GROUPS_EXCLUDE_DEFAULT,
-                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                    Importance.HIGH,
-                    GROUPS_EXCLUDE_DOC);
+                .define(GROUPS_INCLUDE_CONFIG,
+                        Type.LIST,
+                        GROUPS_INCLUDE_DEFAULT,
+                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                        Importance.HIGH,
+                        GROUPS_INCLUDE_DOC)
+                .define(GROUPS_EXCLUDE_CONFIG,
+                        Type.LIST,
+                        GROUPS_EXCLUDE_DEFAULT,
+                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                        Importance.HIGH,
+                        GROUPS_EXCLUDE_DOC);
 
         GroupFilterConfig(Map<String, ?> props) {
             super(DEF, props, false);

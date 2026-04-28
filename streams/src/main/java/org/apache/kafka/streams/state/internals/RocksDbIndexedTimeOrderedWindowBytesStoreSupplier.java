@@ -192,12 +192,12 @@ public class RocksDbIndexedTimeOrderedWindowBytesStoreSupplier implements Window
     @Override
     public String toString() {
         return "RocksDbIndexedTimeOrderedWindowBytesStoreSupplier{" +
-                   "name='" + name + '\'' +
-                   ", retentionPeriod=" + retentionPeriod +
-                   ", segmentInterval=" + segmentInterval +
-                   ", windowSize=" + windowSize +
-                   ", retainDuplicates=" + retainDuplicates +
-                   ", windowStoreType=" + windowStoreType +
-                   '}';
+            "name='" + name + '\'' +
+            ", retentionPeriod=" + retentionPeriod +
+            ", segmentInterval=" + segmentInterval +
+            ", windowSize=" + windowSize +
+            ", retainDuplicates=" + retainDuplicates +
+            ", windowStoreType=" + windowStoreType +
+            '}';
     }
 }

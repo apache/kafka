@@ -414,8 +414,8 @@ public class BrokerHeartbeatManager {
                 } else if (!request.wantFence()) {
                     if (request.currentMetadataOffset() >= registerBrokerRecordOffset) {
                         log.info("The request from broker {} to unfence has been granted " +
-                                "because it has caught up with the offset of its register " +
-                                "broker record {}.", brokerId, registerBrokerRecordOffset);
+                            "because it has caught up with the offset of its register " +
+                            "broker record {}.", brokerId, registerBrokerRecordOffset);
                         return new BrokerControlStates(currentState, UNFENCED);
                     } else {
                         if (log.isDebugEnabled()) {

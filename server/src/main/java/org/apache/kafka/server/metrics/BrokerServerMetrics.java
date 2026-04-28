@@ -36,22 +36,22 @@ public final class BrokerServerMetrics implements AutoCloseable {
 
     private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.server", "BrokerMetadataListener");
     private final com.yammer.metrics.core.MetricName batchProcessingTimeHistName =
-            metricsGroup.metricName("MetadataBatchProcessingTimeUs", Map.of());
+        metricsGroup.metricName("MetadataBatchProcessingTimeUs", Map.of());
 
     /**
      * A histogram tracking the time in microseconds it took to process batches of events.
      */
     private final Histogram batchProcessingTimeHist = KafkaYammerMetrics.defaultRegistry()
-            .newHistogram(batchProcessingTimeHistName, true);
+        .newHistogram(batchProcessingTimeHistName, true);
 
     private final com.yammer.metrics.core.MetricName batchSizeHistName =
-            metricsGroup.metricName("MetadataBatchSizes", Map.of());
+        metricsGroup.metricName("MetadataBatchSizes", Map.of());
 
     /**
      * A histogram tracking the sizes of batches that we have processed.
      */
     private final Histogram batchSizeHist = KafkaYammerMetrics.defaultRegistry()
-            .newHistogram(batchSizeHistName, true);
+        .newHistogram(batchSizeHistName, true);
 
     private final AtomicReference<MetadataProvenance> lastAppliedImageProvenance = new AtomicReference<>(MetadataProvenance.EMPTY);
     private final AtomicLong metadataLoadErrorCount = new AtomicLong(0);
@@ -69,29 +69,29 @@ public final class BrokerServerMetrics implements AutoCloseable {
     public BrokerServerMetrics(Metrics metrics) {
         this.metrics = metrics;
         lastAppliedRecordOffsetName = metrics.metricName(
-                "last-applied-record-offset",
-                METRIC_GROUP_NAME,
-                "The offset of the last record from the cluster metadata partition that was applied by the broker"
+            "last-applied-record-offset",
+            METRIC_GROUP_NAME,
+            "The offset of the last record from the cluster metadata partition that was applied by the broker"
         );
         lastAppliedRecordTimestampName = metrics.metricName(
-                "last-applied-record-timestamp",
-                METRIC_GROUP_NAME,
-                "The timestamp of the last record from the cluster metadata partition that was applied by the broker"
+            "last-applied-record-timestamp",
+            METRIC_GROUP_NAME,
+            "The timestamp of the last record from the cluster metadata partition that was applied by the broker"
         );
         lastAppliedRecordLagMsName = metrics.metricName(
-                "last-applied-record-lag-ms",
-                METRIC_GROUP_NAME,
-                "The difference between now and the timestamp of the last record from the cluster metadata partition that was applied by the broker"
+            "last-applied-record-lag-ms",
+            METRIC_GROUP_NAME,
+            "The difference between now and the timestamp of the last record from the cluster metadata partition that was applied by the broker"
         );
         metadataLoadErrorCountName = metrics.metricName(
-                "metadata-load-error-count",
-                METRIC_GROUP_NAME,
-                "The number of errors encountered by the BrokerMetadataListener while loading the metadata log and generating a new MetadataDelta based on it."
+            "metadata-load-error-count",
+            METRIC_GROUP_NAME,
+            "The number of errors encountered by the BrokerMetadataListener while loading the metadata log and generating a new MetadataDelta based on it."
         );
         metadataApplyErrorCountName = metrics.metricName(
-                "metadata-apply-error-count",
-                METRIC_GROUP_NAME,
-                "The number of errors encountered by the BrokerMetadataPublisher while applying a new MetadataImage based on the latest MetadataDelta."
+            "metadata-apply-error-count",
+            METRIC_GROUP_NAME,
+            "The number of errors encountered by the BrokerMetadataPublisher while applying a new MetadataImage based on the latest MetadataDelta."
         );
         ignoredStaticVotersName = metrics.metricName(
             "ignored-static-voters",
@@ -112,12 +112,12 @@ public final class BrokerServerMetrics implements AutoCloseable {
         KafkaYammerMetrics.defaultRegistry().removeMetric(batchProcessingTimeHistName);
         KafkaYammerMetrics.defaultRegistry().removeMetric(batchSizeHistName);
         Stream.of(
-                lastAppliedRecordOffsetName,
-                lastAppliedRecordTimestampName,
-                lastAppliedRecordLagMsName,
-                metadataLoadErrorCountName,
-                metadataApplyErrorCountName,
-                ignoredStaticVotersName
+            lastAppliedRecordOffsetName,
+            lastAppliedRecordTimestampName,
+            lastAppliedRecordLagMsName,
+            metadataLoadErrorCountName,
+            metadataApplyErrorCountName,
+            ignoredStaticVotersName
         ).forEach(metrics::removeMetric);
     }
 

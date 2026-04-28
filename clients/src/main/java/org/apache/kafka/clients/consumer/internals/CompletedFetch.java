@@ -83,12 +83,12 @@ public class CompletedFetch {
     private boolean initialized = false;
 
     CompletedFetch(Logger log,
-                   SubscriptionState subscriptions,
-                   BufferSupplier decompressionBufferSupplier,
-                   TopicPartition partition,
-                   FetchResponseData.PartitionData partitionData,
-                   FetchMetricsAggregator metricAggregator,
-                   Long fetchOffset) {
+        SubscriptionState subscriptions,
+        BufferSupplier decompressionBufferSupplier,
+        TopicPartition partition,
+        FetchResponseData.PartitionData partitionData,
+        FetchMetricsAggregator metricAggregator,
+        Long fetchOffset) {
         this.log = log;
         this.subscriptions = subscriptions;
         this.decompressionBufferSupplier = decompressionBufferSupplier;
@@ -161,7 +161,7 @@ public class CompletedFetch {
                 batch.ensureValid();
             } catch (CorruptRecordException e) {
                 throw new KafkaException("Record batch for partition " + partition + " at offset " +
-                        batch.baseOffset() + " is invalid, cause: " + e.getMessage());
+                    batch.baseOffset() + " is invalid, cause: " + e.getMessage());
             }
         }
     }
@@ -172,7 +172,7 @@ public class CompletedFetch {
                 record.ensureValid();
             } catch (CorruptRecordException e) {
                 throw new KafkaException("Record for partition " + partition + " at offset " + record.offset()
-                        + " is invalid, cause: " + e.getMessage());
+                    + " is invalid, cause: " + e.getMessage());
             }
         }
     }
@@ -216,8 +216,8 @@ public class CompletedFetch {
                         abortedProducerIds.remove(producerId);
                     } else if (isBatchAborted(currentBatch)) {
                         log.debug("Skipping aborted record batch from partition {} with producerId {} and " +
-                                        "offsets {} to {}",
-                                partition, producerId, currentBatch.baseOffset(), currentBatch.lastOffset());
+                            "offsets {} to {}",
+                            partition, producerId, currentBatch.baseOffset(), currentBatch.lastOffset());
                         nextFetchOffset = currentBatch.nextOffset();
                         continue;
                     }
@@ -255,13 +255,13 @@ public class CompletedFetch {
      * @return {@link ConsumerRecord Consumer records}
      */
     <K, V> List<ConsumerRecord<K, V>> fetchRecords(FetchConfig fetchConfig,
-                                                   Deserializers<K, V> deserializers,
-                                                   int maxRecords) {
+        Deserializers<K, V> deserializers,
+        int maxRecords) {
         // Error when fetching the next record before deserialization.
         if (corruptLastRecord)
             throw new KafkaException("Received exception when fetching the next record from " + partition
-                    + ". If needed, please seek past the record to "
-                    + "continue consumption.", cachedRecordException);
+                + ". If needed, please seek past the record to "
+                + "continue consumption.", cachedRecordException);
 
         if (isConsumed)
             return Collections.emptyList();
@@ -269,7 +269,7 @@ public class CompletedFetch {
         List<ConsumerRecord<K, V>> records = new ArrayList<>();
 
         try {
-            for (int i = 0; i < maxRecords; i++) {
+            for (int i = 0;i < maxRecords;i++) {
                 // Only move to next record if there was no exception in the last fetch. Otherwise, we should
                 // use the last record to do deserialization again.
                 if (cachedRecordException == null) {
@@ -300,8 +300,8 @@ public class CompletedFetch {
             cachedRecordException = e;
             if (records.isEmpty())
                 throw new KafkaException("Received exception when fetching the next record from " + partition
-                        + ". If needed, please seek past the record to "
-                        + "continue consumption.", e);
+                    + ". If needed, please seek past the record to "
+                    + "continue consumption.", e);
         }
         return records;
     }
@@ -310,10 +310,10 @@ public class CompletedFetch {
      * Parse the record entry, deserializing the key / value fields if necessary
      */
     <K, V> ConsumerRecord<K, V> parseRecord(Deserializers<K, V> deserializers,
-                                            TopicPartition partition,
-                                            Optional<Integer> leaderEpoch,
-                                            TimestampType timestampType,
-                                            Record record) {
+        TopicPartition partition,
+        Optional<Integer> leaderEpoch,
+        TimestampType timestampType,
+        Record record) {
         ByteBuffer keyBytes = record.key();
         ByteBuffer valueBytes = record.value();
         Headers headers = new RecordHeaders(record.headers());
@@ -332,21 +332,21 @@ public class CompletedFetch {
             throw newRecordDeserializationException(DeserializationExceptionOrigin.VALUE, partition, timestampType, record, e, headers);
         }
         return new ConsumerRecord<>(partition.topic(), partition.partition(), record.offset(),
-                record.timestamp(), timestampType,
-                keyBytes == null ? ConsumerRecord.NULL_SIZE : keyBytes.remaining(),
-                valueBytes == null ? ConsumerRecord.NULL_SIZE : valueBytes.remaining(),
-                key, value, headers, leaderEpoch);
+            record.timestamp(), timestampType,
+            keyBytes == null ? ConsumerRecord.NULL_SIZE : keyBytes.remaining(),
+            valueBytes == null ? ConsumerRecord.NULL_SIZE : valueBytes.remaining(),
+            key, value, headers, leaderEpoch);
     }
 
     private static RecordDeserializationException newRecordDeserializationException(DeserializationExceptionOrigin origin,
-                                                                                    TopicPartition partition,
-                                                                                    TimestampType timestampType,
-                                                                                    Record record,
-                                                                                    RuntimeException e,
-                                                                                    Headers headers) {
+        TopicPartition partition,
+        TimestampType timestampType,
+        Record record,
+        RuntimeException e,
+        Headers headers) {
         return new RecordDeserializationException(origin, partition, record.offset(), record.timestamp(), timestampType, record.key(), record.value(), headers,
-                "Error deserializing " + origin.name() + " for partition " + partition + " at offset " + record.offset()
-                        + ". If needed, please seek past the record to continue consumption.", e);
+            "Error deserializing " + origin.name() + " for partition " + partition + " at offset " + record.offset()
+                + ". If needed, please seek past the record to continue consumption.", e);
     }
 
     private Optional<Integer> maybeLeaderEpoch(int leaderEpoch) {
@@ -372,7 +372,7 @@ public class CompletedFetch {
             return null;
 
         PriorityQueue<FetchResponseData.AbortedTransaction> abortedTransactions = new PriorityQueue<>(
-                partition.abortedTransactions().size(), Comparator.comparingLong(FetchResponseData.AbortedTransaction::firstOffset)
+            partition.abortedTransactions().size(), Comparator.comparingLong(FetchResponseData.AbortedTransaction::firstOffset)
         );
         abortedTransactions.addAll(partition.abortedTransactions());
         return abortedTransactions;

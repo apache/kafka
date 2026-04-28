@@ -72,8 +72,8 @@ public class TopicTest {
     public void testTopicHasCollisionChars() {
         List<String> falseTopics = Arrays.asList("start", "end", "middle", "many");
         List<String> trueTopics = Arrays.asList(
-                ".start", "end.", "mid.dle", ".ma.ny.",
-                "_start", "end_", "mid_dle", "_ma_ny."
+            ".start", "end.", "mid.dle", ".ma.ny.",
+            "_start", "end_", "mid_dle", "_ma_ny."
         );
 
         for (String topic : falseTopics)
@@ -104,12 +104,12 @@ public class TopicTest {
             assertTrue(Topic.hasCollision(topic, topic));
 
         // Same Position
-        for (int i = 0; i < periodFirstMiddleLastNone.size(); ++i)
+        for (int i = 0;i < periodFirstMiddleLastNone.size();++i)
             assertTrue(Topic.hasCollision(periodFirstMiddleLastNone.get(i), underscoreFirstMiddleLastNone.get(i)));
 
         // Different Position
         Collections.reverse(underscoreFirstMiddleLastNone);
-        for (int i = 0; i < periodFirstMiddleLastNone.size(); ++i)
+        for (int i = 0;i < periodFirstMiddleLastNone.size();++i)
             assertFalse(Topic.hasCollision(periodFirstMiddleLastNone.get(i), underscoreFirstMiddleLastNone.get(i)));
     }
 }

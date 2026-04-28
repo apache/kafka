@@ -155,7 +155,7 @@ public class RebalanceTaskClosureIntegrationTest {
         // sending a message with wrong key and value types to trigger a stream thread failure and avoid the second rebalance
         // note that writing this message does not trigger the crash right away -- the thread is still blocked inside `poll()` waiting for the shutdown latch to unlock to complete the previous, still ongoing rebalance
         IntegrationTestUtils.produceKeyValuesSynchronously(INPUT_TOPIC_NAME, List.of(new KeyValue<>("key", 1L)),
-                TestUtils.producerConfig(cluster.bootstrapServers(), StringSerializer.class, LongSerializer.class, new Properties()), cluster.time);
+            TestUtils.producerConfig(cluster.bootstrapServers(), StringSerializer.class, LongSerializer.class, new Properties()), cluster.time);
         // Now we can close both apps. The StreamThreadStateListener will unblock the clearCache call, letting the rebalance finish.
         // After the rebalance finished, the "poison pill" record gets picked up crashing the thread,
         // and starting the shutdown directly
@@ -191,10 +191,10 @@ public class RebalanceTaskClosureIntegrationTest {
         private final AtomicInteger closeCount;
 
         public TestRocksDBStore(final String name,
-                                final CountDownLatch recycleLatch,
-                                final CountDownLatch pendingShutdownLatch,
-                                final AtomicInteger initCount,
-                                final AtomicInteger closeCount) {
+            final CountDownLatch recycleLatch,
+            final CountDownLatch pendingShutdownLatch,
+            final AtomicInteger initCount,
+            final AtomicInteger closeCount) {
             super(name, "rocksdb");
             this.recycleLatch = recycleLatch;
             this.pendingShutdownLatch = pendingShutdownLatch;
@@ -204,14 +204,14 @@ public class RebalanceTaskClosureIntegrationTest {
 
         @Override
         public void init(final StateStoreContext stateStoreContext,
-                         final StateStore root) {
+            final StateStore root) {
             initCount.incrementAndGet();
             super.init(stateStoreContext, root);
         }
 
         @Override
         public boolean setFlushListener(final CacheFlushListener<Bytes, byte[]> listener,
-                                        final boolean sendOldValues) {
+            final boolean sendOldValues) {
             return false;
         }
 

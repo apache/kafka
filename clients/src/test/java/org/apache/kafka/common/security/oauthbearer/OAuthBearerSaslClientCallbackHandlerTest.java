@@ -68,7 +68,7 @@ public class OAuthBearerSaslClientCallbackHandlerTest {
         CompletionException e = assertThrows(CompletionException.class, () -> SecurityManagerCompatibility.get().callAs(new Subject(),
             () -> {
                 OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
-                handler.handle(new Callback[] {callback});
+                handler.handle(new Callback[]{callback});
                 return null;
             }
         ));
@@ -81,12 +81,12 @@ public class OAuthBearerSaslClientCallbackHandlerTest {
         SecurityManagerCompatibility.get().callAs(new Subject(), () -> {
             final int maxTokens = 4;
             final Set<Object> privateCredentials = SecurityManagerCompatibility.get().current()
-                    .getPrivateCredentials();
+                .getPrivateCredentials();
             privateCredentials.clear();
-            for (int num = 1; num <= maxTokens; ++num) {
+            for (int num = 1;num <= maxTokens;++num) {
                 privateCredentials.add(createTokenWithLifetimeMillis(num));
                 OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
-                handler.handle(new Callback[] {callback});
+                handler.handle(new Callback[]{callback});
                 assertEquals(num, callback.token().lifetimeMs());
             }
             return null;
@@ -96,7 +96,7 @@ public class OAuthBearerSaslClientCallbackHandlerTest {
     private static OAuthBearerSaslClientCallbackHandler createCallbackHandler() {
         OAuthBearerSaslClientCallbackHandler handler = new OAuthBearerSaslClientCallbackHandler();
         handler.configure(Collections.emptyMap(), OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
-                Collections.emptyList());
+            Collections.emptyList());
         return handler;
     }
 }

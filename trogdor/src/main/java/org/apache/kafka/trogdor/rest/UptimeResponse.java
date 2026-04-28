@@ -30,7 +30,7 @@ public class UptimeResponse extends Message {
 
     @JsonCreator
     public UptimeResponse(@JsonProperty("serverStartMs") long serverStartMs,
-                          @JsonProperty("nowMs") long nowMs) {
+        @JsonProperty("nowMs") long nowMs) {
         this.serverStartMs = serverStartMs;
         this.nowMs = nowMs;
     }

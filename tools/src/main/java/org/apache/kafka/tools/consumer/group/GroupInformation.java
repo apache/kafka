@@ -22,5 +22,5 @@ import org.apache.kafka.common.Node;
 import java.util.Optional;
 
 record GroupInformation(String group, Node coordinator, String assignmentStrategy, GroupState groupState,
-                        int numMembers, Optional<Integer> groupEpoch, Optional<Integer> targetAssignmentEpoch) {
+int numMembers, Optional<Integer> groupEpoch, Optional<Integer> targetAssignmentEpoch) {
 }

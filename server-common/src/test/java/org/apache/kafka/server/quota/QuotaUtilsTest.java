@@ -109,7 +109,7 @@ public class QuotaUtilsTest {
         KafkaMetric testMetric = new KafkaMetric(new Object(), metricName, new Value(), new MetricConfig(), time);
 
         assertThrows(IllegalArgumentException.class,
-                () -> QuotaUtils.throttleTime(new QuotaViolationException(testMetric, 10.0, 20.0), time.milliseconds()));
+            () -> QuotaUtils.throttleTime(new QuotaViolationException(testMetric, 10.0, 20.0), time.milliseconds()));
     }
 
     @Test
@@ -117,16 +117,16 @@ public class QuotaUtilsTest {
         KafkaMetric testMetric = new KafkaMetric(new Object(), metricName, new Value(), new MetricConfig(), time);
 
         assertThrows(IllegalArgumentException.class,
-                () -> QuotaUtils.boundedThrottleTime(new QuotaViolationException(testMetric, 10.0, 20.0), maxThrottleTimeMs, time.milliseconds()));
+            () -> QuotaUtils.boundedThrottleTime(new QuotaViolationException(testMetric, 10.0, 20.0), maxThrottleTimeMs, time.milliseconds()));
     }
 
     // the `metric` passed into the returned QuotaViolationException will return windowSize = 'numSamples' - 1
     private QuotaViolationException quotaViolationException(double observedValue, double quota, int numSamples) {
         int sampleWindowSec = 1;
         MetricConfig metricConfig = new MetricConfig()
-                .timeWindow(sampleWindowSec, TimeUnit.SECONDS)
-                .samples(numSamples)
-                .quota(new Quota(quota, true));
+            .timeWindow(sampleWindowSec, TimeUnit.SECONDS)
+            .samples(numSamples)
+            .quota(new Quota(quota, true));
         KafkaMetric metric = new KafkaMetric(new Object(), metricName, new Rate(), metricConfig, time);
         return new QuotaViolationException(metric, observedValue, quota);
     }

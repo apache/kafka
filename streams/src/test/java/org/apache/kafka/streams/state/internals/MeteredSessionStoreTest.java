@@ -119,7 +119,7 @@ public class MeteredSessionStoreTest {
     private InternalProcessorContext<?, ?> context;
 
     private Map<String, String> tags;
-    
+
     public void setUpWithoutContext() {
         mockTime = new MockTime();
         store = new MeteredSessionStore<>(
@@ -245,8 +245,8 @@ public class MeteredSessionStoreTest {
     public void shouldFindSessionsFromStoreAndRecordFetchMetric() {
         setUp();
         when(innerStore.findSessions(KEY_BYTES, 0, 0))
-                .thenReturn(new KeyValueIteratorStub<>(
-                        Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()));
+            .thenReturn(new KeyValueIteratorStub<>(
+                Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()));
         init();
 
         final KeyValueIterator<Windowed<String>, String> iterator = store.findSessions(KEY, 0, 0);
@@ -286,8 +286,8 @@ public class MeteredSessionStoreTest {
     public void shouldFindSessionRangeFromStoreAndRecordFetchMetric() {
         setUp();
         when(innerStore.findSessions(KEY_BYTES, KEY_BYTES, 0, 0))
-                .thenReturn(new KeyValueIteratorStub<>(
-                        Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()));
+            .thenReturn(new KeyValueIteratorStub<>(
+                Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()));
         init();
 
         final KeyValueIterator<Windowed<String>, String> iterator = store.findSessions(KEY, KEY, 0, 0);
@@ -342,8 +342,8 @@ public class MeteredSessionStoreTest {
     public void shouldFetchForKeyAndRecordFetchMetric() {
         setUp();
         when(innerStore.fetch(KEY_BYTES))
-                .thenReturn(new KeyValueIteratorStub<>(
-                        Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()));
+            .thenReturn(new KeyValueIteratorStub<>(
+                Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()));
         init();
 
         final KeyValueIterator<Windowed<String>, String> iterator = store.fetch(KEY);
@@ -383,8 +383,8 @@ public class MeteredSessionStoreTest {
     public void shouldFetchRangeFromStoreAndRecordFetchMetric() {
         setUp();
         when(innerStore.fetch(KEY_BYTES, KEY_BYTES))
-                .thenReturn(new KeyValueIteratorStub<>(
-                        Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()));
+            .thenReturn(new KeyValueIteratorStub<>(
+                Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, VALUE_BYTES)).iterator()));
         init();
 
         final KeyValueIterator<Windowed<String>, String> iterator = store.fetch(KEY, KEY);
@@ -425,7 +425,7 @@ public class MeteredSessionStoreTest {
         setUp();
         final long systemTime = Time.SYSTEM.milliseconds();
         when(innerStore.findSessions(KEY_BYTES, systemTime - RETENTION_PERIOD, systemTime))
-                .thenReturn(new KeyValueIteratorStub<>(KeyValueIterators.emptyIterator()));
+            .thenReturn(new KeyValueIteratorStub<>(KeyValueIterators.emptyIterator()));
         init();
 
         final KeyValueIterator<Windowed<String>, String> iterator = store.findSessions(KEY, systemTime - RETENTION_PERIOD, systemTime);
@@ -438,7 +438,7 @@ public class MeteredSessionStoreTest {
         setUp();
         final long systemTime = Time.SYSTEM.milliseconds();
         when(innerStore.backwardFindSessions(KEY_BYTES, systemTime - RETENTION_PERIOD, systemTime))
-                .thenReturn(new KeyValueIteratorStub<>(KeyValueIterators.emptyIterator()));
+            .thenReturn(new KeyValueIteratorStub<>(KeyValueIterators.emptyIterator()));
         init();
 
         final KeyValueIterator<Windowed<String>, String> iterator = store.backwardFindSessions(KEY, systemTime - RETENTION_PERIOD, systemTime);
@@ -451,7 +451,7 @@ public class MeteredSessionStoreTest {
         setUp();
         final long systemTime = Time.SYSTEM.milliseconds();
         when(innerStore.findSessions(KEY_BYTES, KEY_BYTES, systemTime - RETENTION_PERIOD, systemTime))
-                .thenReturn(new KeyValueIteratorStub<>(KeyValueIterators.emptyIterator()));
+            .thenReturn(new KeyValueIteratorStub<>(KeyValueIterators.emptyIterator()));
         init();
 
         final KeyValueIterator<Windowed<String>, String> iterator = store.findSessions(KEY, KEY, systemTime - RETENTION_PERIOD, systemTime);
@@ -464,7 +464,7 @@ public class MeteredSessionStoreTest {
         setUp();
         final long systemTime = Time.SYSTEM.milliseconds();
         when(innerStore.backwardFindSessions(KEY_BYTES, KEY_BYTES, systemTime - RETENTION_PERIOD, systemTime))
-                .thenReturn(new KeyValueIteratorStub<>(KeyValueIterators.emptyIterator()));
+            .thenReturn(new KeyValueIteratorStub<>(KeyValueIterators.emptyIterator()));
         init();
 
         final KeyValueIterator<Windowed<String>, String> iterator = store.backwardFindSessions(KEY, KEY, systemTime - RETENTION_PERIOD, systemTime);
@@ -621,7 +621,8 @@ public class MeteredSessionStoreTest {
         assertThrows(NullPointerException.class, () -> store.backwardFindSessions("a", null, 0, 0));
     }
 
-    private interface CachedSessionStore extends SessionStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> { }
+    private interface CachedSessionStore extends SessionStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> {
+    }
 
     @SuppressWarnings("unchecked")
     @Test
@@ -674,7 +675,8 @@ public class MeteredSessionStoreTest {
             new MockTime()
         );
         metered.init(processorContext, metered);
-        assertTrue(metered.setFlushListener(record -> { }, false));
+        assertTrue(metered.setFlushListener(record -> {
+        }, false));
 
         final RecordHeaders headers = new RecordHeaders();
         headers.add(headerKey, "new".getBytes(StandardCharsets.UTF_8));
@@ -826,9 +828,9 @@ public class MeteredSessionStoreTest {
 
     private List<MetricName> storeMetrics() {
         return metrics.metrics()
-                      .keySet()
-                      .stream()
-                      .filter(name -> name.group().equals(STORE_LEVEL_GROUP) && name.tags().equals(tags))
-                      .collect(Collectors.toList());
+            .keySet()
+            .stream()
+            .filter(name -> name.group().equals(STORE_LEVEL_GROUP) && name.tags().equals(tags))
+            .collect(Collectors.toList());
     }
 }

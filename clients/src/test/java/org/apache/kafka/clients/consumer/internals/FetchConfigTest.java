@@ -48,12 +48,12 @@ public class FetchConfigTest {
 
     private void newFetchConfigFromValues() {
         new FetchConfig(ConsumerConfig.DEFAULT_FETCH_MIN_BYTES,
-                ConsumerConfig.DEFAULT_FETCH_MAX_BYTES,
-                ConsumerConfig.DEFAULT_FETCH_MAX_WAIT_MS,
-                ConsumerConfig.DEFAULT_MAX_PARTITION_FETCH_BYTES,
-                ConsumerConfig.DEFAULT_MAX_POLL_RECORDS,
-                true,
-                ConsumerConfig.DEFAULT_CLIENT_RACK,
-                IsolationLevel.READ_UNCOMMITTED);
+            ConsumerConfig.DEFAULT_FETCH_MAX_BYTES,
+            ConsumerConfig.DEFAULT_FETCH_MAX_WAIT_MS,
+            ConsumerConfig.DEFAULT_MAX_PARTITION_FETCH_BYTES,
+            ConsumerConfig.DEFAULT_MAX_POLL_RECORDS,
+            true,
+            ConsumerConfig.DEFAULT_CLIENT_RACK,
+            IsolationLevel.READ_UNCOMMITTED);
     }
 }

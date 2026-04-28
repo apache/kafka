@@ -34,8 +34,8 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
     protected final Consumer<? super KStream<K, V>> chainConsumer;
 
     protected Branched(final String name,
-                       final Function<? super KStream<K, V>, ? extends KStream<K, V>> chainFunction,
-                       final Consumer<? super KStream<K, V>> chainConsumer) {
+        final Function<? super KStream<K, V>, ? extends KStream<K, V>> chainFunction,
+        final Consumer<? super KStream<K, V>> chainConsumer) {
         this.name = name;
         this.chainFunction = chainFunction;
         this.chainConsumer = chainConsumer;
@@ -76,7 +76,7 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
      * @return a new instance of {@code Branched}
      */
     public static <K, V> Branched<K, V> withFunction(
-            final Function<? super KStream<K, V>, ? extends KStream<K, V>> chain
+        final Function<? super KStream<K, V>, ? extends KStream<K, V>> chain
     ) {
         Objects.requireNonNull(chain, "chain function cannot be null");
         return new Branched<>(null, chain, null);
@@ -144,7 +144,7 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
      * @return a new instance of {@code Branched}
      */
     public static <K, V> Branched<K, V> withConsumer(final Consumer<? super KStream<K, V>> chain,
-                                                     final String name) {
+        final String name) {
         Objects.requireNonNull(chain, "chain consumer cannot be null");
         return new Branched<>(name, null, chain);
     }

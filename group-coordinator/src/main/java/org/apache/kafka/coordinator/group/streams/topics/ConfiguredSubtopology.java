@@ -70,5 +70,4 @@ public record ConfiguredSubtopology(int numberOfTasks,
     }
 
 
-
 }

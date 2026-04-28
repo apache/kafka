@@ -38,8 +38,8 @@ public final class ExpectListOffsetsAction implements TieredStorageTestAction {
     private final EpochEntry expected;
 
     public ExpectListOffsetsAction(TopicPartition partition,
-                                   OffsetSpec spec,
-                                   EpochEntry expected) {
+            OffsetSpec spec,
+            EpochEntry expected) {
         this.partition = partition;
         this.spec = spec;
         this.expected = expected;

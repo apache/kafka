@@ -70,7 +70,7 @@ public class MemoryRecords extends AbstractRecords {
     public int writeTo(TransferableChannel channel, int position, int length) throws IOException {
         if (((long) position) + length > buffer.limit())
             throw new IllegalArgumentException("position+length should not be greater than buffer.limit(), position: "
-                    + position + ", length: " + length + ", buffer.limit(): " + buffer.limit());
+                + position + ", length: " + length + ", buffer.limit(): " + buffer.limit());
 
         return Utils.tryWriteTo(channel, position, length, buffer);
     }
@@ -145,7 +145,7 @@ public class MemoryRecords extends AbstractRecords {
      * to the delete horizon of the tombstones or txn markers which are present in the batch.
      */
     private static FilterResult filterTo(Iterable<MutableRecordBatch> batches, RecordFilter filter,
-                                         ByteBuffer destinationBuffer, BufferSupplier decompressionBufferSupplier) {
+        ByteBuffer destinationBuffer, BufferSupplier decompressionBufferSupplier) {
         FilterResult filterResult = new FilterResult(destinationBuffer);
         ByteBufferOutputStream bufferOutputStream = new ByteBufferOutputStream(destinationBuffer);
         for (MutableRecordBatch batch : batches) {
@@ -181,7 +181,7 @@ public class MemoryRecords extends AbstractRecords {
                     else
                         deleteHorizonMs = batch.deleteHorizonMs().orElse(RecordBatch.NO_TIMESTAMP);
                     try (final MemoryRecordsBuilder builder = buildRetainedRecordsInto(batch, retainedRecords,
-                            bufferOutputStream, deleteHorizonMs)) {
+                             bufferOutputStream, deleteHorizonMs)) {
                         MemoryRecords records = builder.build();
                         int filteredBatchSize = records.sizeInBytes();
                         MemoryRecordsBuilder.RecordsInfo info = builder.info();
@@ -195,9 +195,9 @@ public class MemoryRecords extends AbstractRecords {
 
                 bufferOutputStream.ensureRemaining(DefaultRecordBatch.RECORD_BATCH_OVERHEAD);
                 DefaultRecordBatch.writeEmptyHeader(bufferOutputStream.buffer(), RecordBatch.CURRENT_MAGIC_VALUE, batch.producerId(),
-                        batch.producerEpoch(), batch.baseSequence(), batch.baseOffset(), batch.lastOffset(),
-                        batch.partitionLeaderEpoch(), batch.timestampType(), batch.maxTimestamp(),
-                        batch.isTransactional(), batch.isControlBatch());
+                    batch.producerEpoch(), batch.baseSequence(), batch.baseOffset(), batch.lastOffset(),
+                    batch.partitionLeaderEpoch(), batch.timestampType(), batch.maxTimestamp(),
+                    batch.isTransactional(), batch.isControlBatch());
                 filterResult.updateRetainedBatchMetadata(batch, 0, true);
             }
 
@@ -214,9 +214,9 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     private static BatchFilterResult filterBatch(RecordBatch batch,
-                                                 BufferSupplier decompressionBufferSupplier,
-                                                 FilterResult filterResult,
-                                                 RecordFilter filter) {
+        BufferSupplier decompressionBufferSupplier,
+        FilterResult filterResult,
+        RecordFilter filter) {
         try (final CloseableIterator<Record> iterator = batch.streamingIterator(decompressionBufferSupplier)) {
             long maxOffset = -1;
             boolean containsTombstones = false;
@@ -249,10 +249,11 @@ public class MemoryRecords extends AbstractRecords {
         private final boolean writeOriginalBatch;
         private final boolean containsTombstones;
         private final long maxOffset;
+
         private BatchFilterResult(List<Record> retainedRecords,
-                                  final boolean writeOriginalBatch,
-                                  final boolean containsTombstones,
-                                  final long maxOffset) {
+            final boolean writeOriginalBatch,
+            final boolean containsTombstones,
+            final long maxOffset) {
             this.retainedRecords = retainedRecords;
             this.writeOriginalBatch = writeOriginalBatch;
             this.containsTombstones = containsTombstones;
@@ -261,26 +262,26 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     private static MemoryRecordsBuilder buildRetainedRecordsInto(RecordBatch originalBatch,
-                                                                 List<Record> retainedRecords,
-                                                                 ByteBufferOutputStream bufferOutputStream,
-                                                                 final long deleteHorizonMs) {
+        List<Record> retainedRecords,
+        ByteBufferOutputStream bufferOutputStream,
+        final long deleteHorizonMs) {
         Compression compression = Compression.of(originalBatch.compressionType()).build();
         // V0 has no timestamp type or timestamp, so we set the timestamp to CREATE_TIME and timestamp to NO_TIMESTAMP.
         // Note that this differs from produce up-conversion where the timestamp type topic config is used and the log append
         // time is generated if the config is LOG_APPEND_TIME. The reason for the different behavior is that there is
         // no appropriate log append time we can generate at compaction time.
         TimestampType timestampType = originalBatch.timestampType() == TimestampType.NO_TIMESTAMP_TYPE ?
-                TimestampType.CREATE_TIME : originalBatch.timestampType();
+            TimestampType.CREATE_TIME : originalBatch.timestampType();
         long logAppendTime = timestampType == TimestampType.LOG_APPEND_TIME ?
-                originalBatch.maxTimestamp() : RecordBatch.NO_TIMESTAMP;
+            originalBatch.maxTimestamp() : RecordBatch.NO_TIMESTAMP;
         long baseOffset = originalBatch.magic() >= RecordBatch.MAGIC_VALUE_V2 ?
-                originalBatch.baseOffset() : retainedRecords.get(0).offset();
+            originalBatch.baseOffset() : retainedRecords.get(0).offset();
 
         // Convert records with older record versions to the current one
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(bufferOutputStream, RecordBatch.CURRENT_MAGIC_VALUE,
-                compression, timestampType, baseOffset, logAppendTime, originalBatch.producerId(),
-                originalBatch.producerEpoch(), originalBatch.baseSequence(), originalBatch.isTransactional(),
-                originalBatch.isControlBatch(), originalBatch.partitionLeaderEpoch(), bufferOutputStream.limit(), deleteHorizonMs);
+            compression, timestampType, baseOffset, logAppendTime, originalBatch.producerId(),
+            originalBatch.producerEpoch(), originalBatch.baseSequence(), originalBatch.isTransactional(),
+            originalBatch.isControlBatch(), originalBatch.partitionLeaderEpoch(), bufferOutputStream.limit(), deleteHorizonMs);
 
         for (Record record : retainedRecords)
             builder.append(record);
@@ -334,8 +335,8 @@ public class MemoryRecords extends AbstractRecords {
     @Override
     public String toString() {
         return "MemoryRecords(size=" + sizeInBytes() +
-                ", buffer=" + buffer +
-                ")";
+            ", buffer=" + buffer +
+            ")";
     }
 
     @Override
@@ -367,8 +368,9 @@ public class MemoryRecords extends AbstractRecords {
         public static class BatchRetentionResult {
             public final BatchRetention batchRetention;
             public final boolean containsMarkerForEmptyTxn;
+
             public BatchRetentionResult(final BatchRetention batchRetention,
-                                        final boolean containsMarkerForEmptyTxn) {
+                final boolean containsMarkerForEmptyTxn) {
                 this.batchRetention = batchRetention;
                 this.containsMarkerForEmptyTxn = containsMarkerForEmptyTxn;
             }
@@ -413,11 +415,11 @@ public class MemoryRecords extends AbstractRecords {
         private void updateRetainedBatchMetadata(MutableRecordBatch retainedBatch, int numMessagesInBatch, boolean headerOnly) {
             int bytesRetained = headerOnly ? DefaultRecordBatch.RECORD_BATCH_OVERHEAD : retainedBatch.sizeInBytes();
             updateRetainedBatchMetadata(retainedBatch.maxTimestamp(), retainedBatch.lastOffset(),
-                    retainedBatch.lastOffset(), numMessagesInBatch, bytesRetained);
+                retainedBatch.lastOffset(), numMessagesInBatch, bytesRetained);
         }
 
         private void updateRetainedBatchMetadata(long maxTimestamp, long shallowOffsetOfMaxTimestamp, long maxOffset,
-                                                 int messagesRetained, int bytesRetained) {
+            int messagesRetained, int bytesRetained) {
             validateBatchMetadata(maxTimestamp, shallowOffsetOfMaxTimestamp, maxOffset);
             if (maxTimestamp > this.maxTimestamp) {
                 this.maxTimestamp = maxTimestamp;
@@ -473,17 +475,17 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
-                                               Compression compression,
-                                               TimestampType timestampType,
-                                               long baseOffset) {
+        Compression compression,
+        TimestampType timestampType,
+        long baseOffset) {
         return builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compression, timestampType, baseOffset);
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
-                                               Compression compression,
-                                               TimestampType timestampType,
-                                               long baseOffset,
-                                               int maxSize) {
+        Compression compression,
+        TimestampType timestampType,
+        long baseOffset,
+        int maxSize) {
         long logAppendTime = RecordBatch.NO_TIMESTAMP;
         if (timestampType == TimestampType.LOG_APPEND_TIME)
             logAppendTime = System.currentTimeMillis();
@@ -494,95 +496,95 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
-                                               byte magic,
-                                               Compression compression,
-                                               TimestampType timestampType,
-                                               long baseOffset,
-                                               long logAppendTime) {
+        byte magic,
+        Compression compression,
+        TimestampType timestampType,
+        long baseOffset,
+        long logAppendTime) {
         return builder(buffer, magic, compression, timestampType, baseOffset, logAppendTime,
-                RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH);
+            RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false,
+            RecordBatch.NO_PARTITION_LEADER_EPOCH);
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
-                                               byte magic,
-                                               Compression compression,
-                                               TimestampType timestampType,
-                                               long baseOffset) {
+        byte magic,
+        Compression compression,
+        TimestampType timestampType,
+        long baseOffset) {
         long logAppendTime = RecordBatch.NO_TIMESTAMP;
         if (timestampType == TimestampType.LOG_APPEND_TIME)
             logAppendTime = System.currentTimeMillis();
         return builder(buffer, magic, compression, timestampType, baseOffset, logAppendTime,
-                RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH);
+            RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false,
+            RecordBatch.NO_PARTITION_LEADER_EPOCH);
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
-                                               byte magic,
-                                               Compression compression,
-                                               TimestampType timestampType,
-                                               long baseOffset,
-                                               long logAppendTime,
-                                               int partitionLeaderEpoch) {
+        byte magic,
+        Compression compression,
+        TimestampType timestampType,
+        long baseOffset,
+        long logAppendTime,
+        int partitionLeaderEpoch) {
         return builder(buffer, magic, compression, timestampType, baseOffset, logAppendTime,
-                RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false, partitionLeaderEpoch);
+            RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false, partitionLeaderEpoch);
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
-                                               Compression compression,
-                                               long baseOffset,
-                                               long producerId,
-                                               short producerEpoch,
-                                               int baseSequence,
-                                               boolean isTransactional) {
+        Compression compression,
+        long baseOffset,
+        long producerId,
+        short producerEpoch,
+        int baseSequence,
+        boolean isTransactional) {
         return builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compression, TimestampType.CREATE_TIME, baseOffset,
-                RecordBatch.NO_TIMESTAMP, producerId, producerEpoch, baseSequence, isTransactional,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH);
+            RecordBatch.NO_TIMESTAMP, producerId, producerEpoch, baseSequence, isTransactional,
+            RecordBatch.NO_PARTITION_LEADER_EPOCH);
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
-                                               byte magic,
-                                               Compression compression,
-                                               TimestampType timestampType,
-                                               long baseOffset,
-                                               long logAppendTime,
-                                               long producerId,
-                                               short producerEpoch,
-                                               int baseSequence) {
+        byte magic,
+        Compression compression,
+        TimestampType timestampType,
+        long baseOffset,
+        long logAppendTime,
+        long producerId,
+        short producerEpoch,
+        int baseSequence) {
         return builder(buffer, magic, compression, timestampType, baseOffset, logAppendTime,
-                producerId, producerEpoch, baseSequence, false, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+            producerId, producerEpoch, baseSequence, false, RecordBatch.NO_PARTITION_LEADER_EPOCH);
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
-                                               byte magic,
-                                               Compression compression,
-                                               TimestampType timestampType,
-                                               long baseOffset,
-                                               long logAppendTime,
-                                               long producerId,
-                                               short producerEpoch,
-                                               int baseSequence,
-                                               boolean isTransactional,
-                                               int partitionLeaderEpoch) {
+        byte magic,
+        Compression compression,
+        TimestampType timestampType,
+        long baseOffset,
+        long logAppendTime,
+        long producerId,
+        short producerEpoch,
+        int baseSequence,
+        boolean isTransactional,
+        int partitionLeaderEpoch) {
         return builder(buffer, magic, compression, timestampType, baseOffset,
-                logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, false, partitionLeaderEpoch);
+            logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, false, partitionLeaderEpoch);
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
-                                               byte magic,
-                                               Compression compression,
-                                               TimestampType timestampType,
-                                               long baseOffset,
-                                               long logAppendTime,
-                                               long producerId,
-                                               short producerEpoch,
-                                               int baseSequence,
-                                               boolean isTransactional,
-                                               boolean isControlBatch,
-                                               int partitionLeaderEpoch) {
+        byte magic,
+        Compression compression,
+        TimestampType timestampType,
+        long baseOffset,
+        long logAppendTime,
+        long producerId,
+        short producerEpoch,
+        int baseSequence,
+        boolean isTransactional,
+        boolean isControlBatch,
+        int partitionLeaderEpoch) {
         return new MemoryRecordsBuilder(buffer, magic, compression, timestampType, baseOffset,
-                logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, isControlBatch, partitionLeaderEpoch,
-                buffer.remaining());
+            logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, isControlBatch, partitionLeaderEpoch,
+            buffer.remaining());
     }
 
     public static MemoryRecords withRecords(Compression compression, SimpleRecord... records) {
@@ -591,8 +593,8 @@ public class MemoryRecords extends AbstractRecords {
 
     public static MemoryRecords withRecords(Compression compression, int partitionLeaderEpoch, SimpleRecord... records) {
         return withRecords(RecordBatch.CURRENT_MAGIC_VALUE, 0L, compression, TimestampType.CREATE_TIME,
-                RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
-                partitionLeaderEpoch, false, records);
+            RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
+            partitionLeaderEpoch, false, records);
     }
 
     public static MemoryRecords withRecords(byte magic, Compression compression, SimpleRecord... records) {
@@ -601,7 +603,7 @@ public class MemoryRecords extends AbstractRecords {
 
     public static MemoryRecords withRecords(long initialOffset, Compression compression, SimpleRecord... records) {
         return withRecords(RecordBatch.CURRENT_MAGIC_VALUE, initialOffset, compression, TimestampType.CREATE_TIME,
-                records);
+            records);
     }
 
     public static MemoryRecords withRecords(byte magic, long initialOffset, Compression compression, SimpleRecord... records) {
@@ -610,60 +612,60 @@ public class MemoryRecords extends AbstractRecords {
 
     public static MemoryRecords withRecords(long initialOffset, Compression compression, int partitionLeaderEpoch, SimpleRecord... records) {
         return withRecords(RecordBatch.CURRENT_MAGIC_VALUE, initialOffset, compression, TimestampType.CREATE_TIME, RecordBatch.NO_PRODUCER_ID,
-                RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, partitionLeaderEpoch, false, records);
+            RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, partitionLeaderEpoch, false, records);
     }
 
     public static MemoryRecords withIdempotentRecords(Compression compression, long producerId,
-                                                      short producerEpoch, int baseSequence, SimpleRecord... records) {
+        short producerEpoch, int baseSequence, SimpleRecord... records) {
         return withRecords(RecordBatch.CURRENT_MAGIC_VALUE, 0L, compression, TimestampType.CREATE_TIME, producerId, producerEpoch,
-                baseSequence, RecordBatch.NO_PARTITION_LEADER_EPOCH, false, records);
+            baseSequence, RecordBatch.NO_PARTITION_LEADER_EPOCH, false, records);
     }
 
     public static MemoryRecords withIdempotentRecords(byte magic, long initialOffset, Compression compression,
-                                                      long producerId, short producerEpoch, int baseSequence,
-                                                      int partitionLeaderEpoch, SimpleRecord... records) {
+        long producerId, short producerEpoch, int baseSequence,
+        int partitionLeaderEpoch, SimpleRecord... records) {
         return withRecords(magic, initialOffset, compression, TimestampType.CREATE_TIME, producerId, producerEpoch,
-                baseSequence, partitionLeaderEpoch, false, records);
+            baseSequence, partitionLeaderEpoch, false, records);
     }
 
     public static MemoryRecords withIdempotentRecords(long initialOffset, Compression compression, long producerId,
-                                                      short producerEpoch, int baseSequence, int partitionLeaderEpoch,
-                                                      SimpleRecord... records) {
+        short producerEpoch, int baseSequence, int partitionLeaderEpoch,
+        SimpleRecord... records) {
         return withRecords(RecordBatch.CURRENT_MAGIC_VALUE, initialOffset, compression, TimestampType.CREATE_TIME,
-                producerId, producerEpoch, baseSequence, partitionLeaderEpoch, false, records);
+            producerId, producerEpoch, baseSequence, partitionLeaderEpoch, false, records);
     }
 
     public static MemoryRecords withTransactionalRecords(Compression compression, long producerId,
-                                                         short producerEpoch, int baseSequence, SimpleRecord... records) {
+        short producerEpoch, int baseSequence, SimpleRecord... records) {
         return withRecords(RecordBatch.CURRENT_MAGIC_VALUE, 0L, compression, TimestampType.CREATE_TIME,
-                producerId, producerEpoch, baseSequence, RecordBatch.NO_PARTITION_LEADER_EPOCH, true, records);
+            producerId, producerEpoch, baseSequence, RecordBatch.NO_PARTITION_LEADER_EPOCH, true, records);
     }
 
     public static MemoryRecords withTransactionalRecords(byte magic, long initialOffset, Compression compression,
-                                                         long producerId, short producerEpoch, int baseSequence,
-                                                         int partitionLeaderEpoch, SimpleRecord... records) {
+        long producerId, short producerEpoch, int baseSequence,
+        int partitionLeaderEpoch, SimpleRecord... records) {
         return withRecords(magic, initialOffset, compression, TimestampType.CREATE_TIME, producerId, producerEpoch,
-                baseSequence, partitionLeaderEpoch, true, records);
+            baseSequence, partitionLeaderEpoch, true, records);
     }
 
     public static MemoryRecords withTransactionalRecords(long initialOffset, Compression compression, long producerId,
-                                                         short producerEpoch, int baseSequence, int partitionLeaderEpoch,
-                                                         SimpleRecord... records) {
+        short producerEpoch, int baseSequence, int partitionLeaderEpoch,
+        SimpleRecord... records) {
         return withTransactionalRecords(RecordBatch.CURRENT_MAGIC_VALUE, initialOffset, compression,
-                producerId, producerEpoch, baseSequence, partitionLeaderEpoch, records);
+            producerId, producerEpoch, baseSequence, partitionLeaderEpoch, records);
     }
 
     public static MemoryRecords withRecords(byte magic, long initialOffset, Compression compression,
-                                            TimestampType timestampType, SimpleRecord... records) {
+        TimestampType timestampType, SimpleRecord... records) {
         return withRecords(magic, initialOffset, compression, timestampType, RecordBatch.NO_PRODUCER_ID,
-                RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                false, records);
+            RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, RecordBatch.NO_PARTITION_LEADER_EPOCH,
+            false, records);
     }
 
     public static MemoryRecords withRecords(byte magic, long initialOffset, Compression compression,
-                                            TimestampType timestampType, long producerId, short producerEpoch,
-                                            int baseSequence, int partitionLeaderEpoch, boolean isTransactional,
-                                            SimpleRecord... records) {
+        TimestampType timestampType, long producerId, short producerEpoch,
+        int baseSequence, int partitionLeaderEpoch, boolean isTransactional,
+        SimpleRecord... records) {
         if (records.length == 0)
             return MemoryRecords.EMPTY;
         int sizeEstimate = AbstractRecords.estimateSizeInBytes(magic, compression.type(), Arrays.asList(records));
@@ -672,8 +674,8 @@ public class MemoryRecords extends AbstractRecords {
         if (timestampType == TimestampType.LOG_APPEND_TIME)
             logAppendTime = System.currentTimeMillis();
         try (final MemoryRecordsBuilder builder = new MemoryRecordsBuilder(bufferStream, magic, compression, timestampType,
-                initialOffset, logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, false,
-                partitionLeaderEpoch, sizeEstimate)) {
+                 initialOffset, logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, false,
+                 partitionLeaderEpoch, sizeEstimate)) {
             for (SimpleRecord record : records)
                 builder.append(record);
             return builder.build();
@@ -682,34 +684,34 @@ public class MemoryRecords extends AbstractRecords {
 
     public static MemoryRecords withEndTransactionMarker(long producerId, short producerEpoch, EndTransactionMarker marker) {
         return withEndTransactionMarker(0L, System.currentTimeMillis(), RecordBatch.NO_PARTITION_LEADER_EPOCH,
-                producerId, producerEpoch, marker);
+            producerId, producerEpoch, marker);
     }
 
     public static MemoryRecords withEndTransactionMarker(long timestamp, long producerId, short producerEpoch,
-                                                         EndTransactionMarker marker) {
+        EndTransactionMarker marker) {
         return withEndTransactionMarker(0L, timestamp, RecordBatch.NO_PARTITION_LEADER_EPOCH, producerId,
-                producerEpoch, marker);
+            producerEpoch, marker);
     }
 
     public static MemoryRecords withEndTransactionMarker(long initialOffset, long timestamp, int partitionLeaderEpoch,
-                                                         long producerId, short producerEpoch,
-                                                         EndTransactionMarker marker) {
+        long producerId, short producerEpoch,
+        EndTransactionMarker marker) {
         int endTxnMarkerBatchSize = DefaultRecordBatch.RECORD_BATCH_OVERHEAD + marker.endTxnMarkerValueSize();
         ByteBuffer buffer = ByteBuffer.allocate(endTxnMarkerBatchSize);
         writeEndTransactionalMarker(buffer, initialOffset, timestamp, partitionLeaderEpoch, producerId,
-                producerEpoch, marker);
+            producerEpoch, marker);
         buffer.flip();
         return MemoryRecords.readableRecords(buffer);
     }
 
     public static void writeEndTransactionalMarker(ByteBuffer buffer, long initialOffset, long timestamp,
-                                                   int partitionLeaderEpoch, long producerId, short producerEpoch,
-                                                   EndTransactionMarker marker) {
+        int partitionLeaderEpoch, long producerId, short producerEpoch,
+        EndTransactionMarker marker) {
         boolean isTransactional = true;
         try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE,
-                TimestampType.CREATE_TIME, initialOffset, timestamp, producerId, producerEpoch,
-                RecordBatch.NO_SEQUENCE, isTransactional, true, partitionLeaderEpoch,
-                buffer.capacity())
+                 TimestampType.CREATE_TIME, initialOffset, timestamp, producerId, producerEpoch,
+                 RecordBatch.NO_SEQUENCE, isTransactional, true, partitionLeaderEpoch,
+                 buffer.capacity())
         ) {
             builder.appendEndTxnMarker(timestamp, marker);
         }
@@ -723,11 +725,11 @@ public class MemoryRecords extends AbstractRecords {
         LeaderChangeMessage leaderChangeMessage
     ) {
         try (MemoryRecordsBuilder builder = createKraftControlRecordBuilder(
-                initialOffset,
-                timestamp,
-                leaderEpoch,
-                buffer
-            )
+                 initialOffset,
+                 timestamp,
+                 leaderEpoch,
+                 buffer
+             )
         ) {
             builder.appendLeaderChangeMessage(timestamp, leaderChangeMessage);
             return builder.build();
@@ -742,11 +744,11 @@ public class MemoryRecords extends AbstractRecords {
         SnapshotHeaderRecord snapshotHeaderRecord
     ) {
         try (MemoryRecordsBuilder builder = createKraftControlRecordBuilder(
-                initialOffset,
-                timestamp,
-                leaderEpoch,
-                buffer
-            )
+                 initialOffset,
+                 timestamp,
+                 leaderEpoch,
+                 buffer
+             )
         ) {
             builder.appendSnapshotHeaderMessage(timestamp, snapshotHeaderRecord);
             return builder.build();
@@ -761,11 +763,11 @@ public class MemoryRecords extends AbstractRecords {
         SnapshotFooterRecord snapshotFooterRecord
     ) {
         try (MemoryRecordsBuilder builder = createKraftControlRecordBuilder(
-                initialOffset,
-                timestamp,
-                leaderEpoch,
-                buffer
-            )
+                 initialOffset,
+                 timestamp,
+                 leaderEpoch,
+                 buffer
+             )
         ) {
             builder.appendSnapshotFooterMessage(timestamp, snapshotFooterRecord);
             return builder.build();
@@ -780,11 +782,11 @@ public class MemoryRecords extends AbstractRecords {
         KRaftVersionRecord kraftVersionRecord
     ) {
         try (MemoryRecordsBuilder builder = createKraftControlRecordBuilder(
-                initialOffset,
-                timestamp,
-                leaderEpoch,
-                buffer
-            )
+                 initialOffset,
+                 timestamp,
+                 leaderEpoch,
+                 buffer
+             )
         ) {
             builder.appendKRaftVersionMessage(timestamp, kraftVersionRecord);
             return builder.build();
@@ -799,11 +801,11 @@ public class MemoryRecords extends AbstractRecords {
         VotersRecord votersRecord
     ) {
         try (MemoryRecordsBuilder builder = createKraftControlRecordBuilder(
-                initialOffset,
-                timestamp,
-                leaderEpoch,
-                buffer
-            )
+                 initialOffset,
+                 timestamp,
+                 leaderEpoch,
+                 buffer
+             )
         ) {
             builder.appendVotersMessage(timestamp, votersRecord);
             return builder.build();

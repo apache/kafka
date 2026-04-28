@@ -55,10 +55,10 @@ public final class Cluster {
      * @param partitions Information about a subset of the topic-partitions this cluster hosts
      */
     public Cluster(String clusterId,
-                   Collection<Node> nodes,
-                   Collection<PartitionInfo> partitions,
-                   Set<String> unauthorizedTopics,
-                   Set<String> internalTopics) {
+        Collection<Node> nodes,
+        Collection<PartitionInfo> partitions,
+        Set<String> unauthorizedTopics,
+        Set<String> internalTopics) {
         this(clusterId, false, nodes, partitions, unauthorizedTopics, Collections.emptySet(), internalTopics, null, Collections.emptyMap());
     }
 
@@ -68,11 +68,11 @@ public final class Cluster {
      * @param partitions Information about a subset of the topic-partitions this cluster hosts
      */
     public Cluster(String clusterId,
-                   Collection<Node> nodes,
-                   Collection<PartitionInfo> partitions,
-                   Set<String> unauthorizedTopics,
-                   Set<String> internalTopics,
-                   Node controller) {
+        Collection<Node> nodes,
+        Collection<PartitionInfo> partitions,
+        Set<String> unauthorizedTopics,
+        Set<String> internalTopics,
+        Node controller) {
         this(clusterId, false, nodes, partitions, unauthorizedTopics, Collections.emptySet(), internalTopics, controller, Collections.emptyMap());
     }
 
@@ -82,12 +82,12 @@ public final class Cluster {
      * @param partitions Information about a subset of the topic-partitions this cluster hosts
      */
     public Cluster(String clusterId,
-                   Collection<Node> nodes,
-                   Collection<PartitionInfo> partitions,
-                   Set<String> unauthorizedTopics,
-                   Set<String> invalidTopics,
-                   Set<String> internalTopics,
-                   Node controller) {
+        Collection<Node> nodes,
+        Collection<PartitionInfo> partitions,
+        Set<String> unauthorizedTopics,
+        Set<String> invalidTopics,
+        Set<String> internalTopics,
+        Node controller) {
         this(clusterId, false, nodes, partitions, unauthorizedTopics, invalidTopics, internalTopics, controller, Collections.emptyMap());
     }
 
@@ -97,25 +97,25 @@ public final class Cluster {
      * @param partitions Information about a subset of the topic-partitions this cluster hosts
      */
     public Cluster(String clusterId,
-                   Collection<Node> nodes,
-                   Collection<PartitionInfo> partitions,
-                   Set<String> unauthorizedTopics,
-                   Set<String> invalidTopics,
-                   Set<String> internalTopics,
-                   Node controller,
-                   Map<String, Uuid> topicIds) {
+        Collection<Node> nodes,
+        Collection<PartitionInfo> partitions,
+        Set<String> unauthorizedTopics,
+        Set<String> invalidTopics,
+        Set<String> internalTopics,
+        Node controller,
+        Map<String, Uuid> topicIds) {
         this(clusterId, false, nodes, partitions, unauthorizedTopics, invalidTopics, internalTopics, controller, topicIds);
     }
 
     private Cluster(String clusterId,
-                    boolean isBootstrapConfigured,
-                    Collection<Node> nodes,
-                    Collection<PartitionInfo> partitions,
-                    Set<String> unauthorizedTopics,
-                    Set<String> invalidTopics,
-                    Set<String> internalTopics,
-                    Node controller,
-                    Map<String, Uuid> topicIds) {
+        boolean isBootstrapConfigured,
+        Collection<Node> nodes,
+        Collection<PartitionInfo> partitions,
+        Set<String> unauthorizedTopics,
+        Set<String> invalidTopics,
+        Set<String> internalTopics,
+        Node controller,
+        Map<String, Uuid> topicIds) {
         this.isBootstrapConfigured = isBootstrapConfigured;
         this.clusterResource = new ClusterResource(clusterId);
         // make a randomized, unmodifiable copy of the nodes
@@ -224,8 +224,8 @@ public final class Cluster {
         Map<TopicPartition, PartitionInfo> combinedPartitions = new HashMap<>(this.partitionsByTopicPartition);
         combinedPartitions.putAll(partitions);
         return new Cluster(clusterResource.clusterId(), this.nodes, combinedPartitions.values(),
-                new HashSet<>(this.unauthorizedTopics), new HashSet<>(this.invalidTopics),
-                new HashSet<>(this.internalTopics), this.controller);
+            new HashSet<>(this.unauthorizedTopics), new HashSet<>(this.invalidTopics),
+            new HashSet<>(this.internalTopics), this.controller);
     }
 
     /**
@@ -379,19 +379,19 @@ public final class Cluster {
         if (o == null || getClass() != o.getClass()) return false;
         Cluster cluster = (Cluster) o;
         return isBootstrapConfigured == cluster.isBootstrapConfigured &&
-                Objects.equals(nodes, cluster.nodes) &&
-                Objects.equals(unauthorizedTopics, cluster.unauthorizedTopics) &&
-                Objects.equals(invalidTopics, cluster.invalidTopics) &&
-                Objects.equals(internalTopics, cluster.internalTopics) &&
-                Objects.equals(controller, cluster.controller) &&
-                Objects.equals(partitionsByTopicPartition, cluster.partitionsByTopicPartition) &&
-                Objects.equals(clusterResource, cluster.clusterResource) &&
-                Objects.equals(topicIds, cluster.topicIds);
+            Objects.equals(nodes, cluster.nodes) &&
+            Objects.equals(unauthorizedTopics, cluster.unauthorizedTopics) &&
+            Objects.equals(invalidTopics, cluster.invalidTopics) &&
+            Objects.equals(internalTopics, cluster.internalTopics) &&
+            Objects.equals(controller, cluster.controller) &&
+            Objects.equals(partitionsByTopicPartition, cluster.partitionsByTopicPartition) &&
+            Objects.equals(clusterResource, cluster.clusterResource) &&
+            Objects.equals(topicIds, cluster.topicIds);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(isBootstrapConfigured, nodes, unauthorizedTopics, invalidTopics, internalTopics, controller,
-                partitionsByTopicPartition, clusterResource, topicIds);
+            partitionsByTopicPartition, clusterResource, topicIds);
     }
 }

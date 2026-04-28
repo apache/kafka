@@ -940,7 +940,7 @@ public class OffsetsApiIntegrationTest {
     private String modifySinkConnectorOffsetsWithRetry(ConnectorOffsets offsetsToAlter) throws InterruptedException {
         // Some retry logic is necessary to account for KAFKA-15826,
         // where laggy sink task startup/shutdown can leave consumers running
-        String modifyVerb = offsetsToAlter != null ?  "alter" : "reset";
+        String modifyVerb = offsetsToAlter != null ? "alter" : "reset";
         String conditionDetails = "Failed to " + modifyVerb + " sink connector offsets in time";
         AtomicReference<String> responseReference = new AtomicReference<>();
         waitForCondition(
@@ -995,7 +995,7 @@ public class OffsetsApiIntegrationTest {
      * @throws InterruptedException if the thread is interrupted while waiting for the actual offsets to match the expected offsets
      */
     private void verifyExpectedSinkConnectorOffsets(String connectorName, String expectedTopic, int expectedPartitions,
-                                                    int expectedOffset, String conditionDetails) throws InterruptedException {
+            int expectedOffset, String conditionDetails) throws InterruptedException {
         AtomicReference<ConnectorOffsets> latestOffsets = new AtomicReference<>();
         waitForCondition(
                 () -> {
@@ -1012,7 +1012,7 @@ public class OffsetsApiIntegrationTest {
                     if (offsets.offsets().size() != expectedPartitions) {
                         return false;
                     }
-                    for (ConnectorOffset offset: offsets.offsets()) {
+                    for (ConnectorOffset offset : offsets.offsets()) {
                         assertEquals(expectedTopic, offset.partition().get(SinkUtils.KAFKA_TOPIC_KEY));
                         if ((Integer) offset.offset().get(SinkUtils.KAFKA_OFFSET_KEY) != expectedOffset) {
                             return false;
@@ -1051,7 +1051,7 @@ public class OffsetsApiIntegrationTest {
      * @throws InterruptedException if the thread is interrupted while waiting for the actual offsets to match the expected offsets
      */
     private void verifyExpectedSourceConnectorOffsets(String connectorName, int numTasks,
-                                                      int expectedOffset, String conditionDetails) throws InterruptedException {
+            int expectedOffset, String conditionDetails) throws InterruptedException {
         waitForCondition(() -> {
             ConnectorOffsets offsets = connect.connectorOffsets(connectorName);
             // The TestableSourceConnector has a source partition per task

@@ -211,7 +211,7 @@ public class StreamsGroupMemberTest {
     public void testBuilderUpdateWithConsumerGroupCurrentMemberAssignmentValue() {
         List<Integer> assignmentEpochsForTasks1 = List.of(5, 6, 7);
         List<Integer> assignmentEpochsForTasks4 = List.of(4, 3, 2);
-        
+
         StreamsGroupCurrentMemberAssignmentValue record = new StreamsGroupCurrentMemberAssignmentValue()
             .setMemberEpoch(MEMBER_EPOCH)
             .setPreviousMemberEpoch(PREVIOUS_MEMBER_EPOCH)

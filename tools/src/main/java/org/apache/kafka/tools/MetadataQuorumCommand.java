@@ -213,9 +213,9 @@ public class MetadataQuorumCommand {
     }
 
     private static List<List<String>> quorumInfoToRows(QuorumInfo.ReplicaState leader,
-                                                       Stream<QuorumInfo.ReplicaState> infos,
-                                                       String status,
-                                                       boolean humanReadable) {
+        Stream<QuorumInfo.ReplicaState> infos,
+        String status,
+        boolean humanReadable) {
         return infos.map(info -> {
             String lastFetchTimestamp = info.lastFetchTimestamp().isEmpty() ? "-1" :
                 humanReadable ? format("%d ms ago", relativeTimeMs(info.lastFetchTimestamp().getAsLong(), "last fetch")) :
@@ -267,13 +267,13 @@ public class MetadataQuorumCommand {
 
         System.out.println(
             "ClusterId:              " + clusterId +
-            "\nLeaderId:               " + quorumInfo.leaderId() +
-            "\nLeaderEpoch:            " + quorumInfo.leaderEpoch() +
-            "\nHighWatermark:          " + quorumInfo.highWatermark() +
-            "\nMaxFollowerLag:         " + maxFollowerLag +
-            "\nMaxFollowerLagTimeMs:   " + maxFollowerLagTimeMs +
-            "\nCurrentVoters:          " + printVoterState(quorumInfo) +
-            "\nCurrentObservers:       " + printObserverState(quorumInfo)
+                "\nLeaderId:               " + quorumInfo.leaderId() +
+                "\nLeaderEpoch:            " + quorumInfo.leaderEpoch() +
+                "\nHighWatermark:          " + quorumInfo.highWatermark() +
+                "\nMaxFollowerLag:         " + maxFollowerLag +
+                "\nMaxFollowerLagTimeMs:   " + maxFollowerLagTimeMs +
+                "\nCurrentVoters:          " + printVoterState(quorumInfo) +
+                "\nCurrentObservers:       " + printObserverState(quorumInfo)
         );
     }
 
@@ -410,8 +410,8 @@ public class MetadataQuorumCommand {
                     listenerName);
             }
             results.add(new RaftVoterEndpoint(endpoint.listener(),
-                    endpoint.host() == null ? "localhost" : endpoint.host(),
-                    endpoint.port()));
+                endpoint.host() == null ? "localhost" : endpoint.host(),
+                endpoint.port()));
         }
         return results;
     }

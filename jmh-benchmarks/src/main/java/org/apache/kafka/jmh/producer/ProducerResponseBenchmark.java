@@ -51,18 +51,18 @@ public class ProducerResponseBenchmark {
     private static final Uuid TOPIC_ID = Uuid.randomUuid();
     private static final String TOPIC_NAME = "tp";
     private static final Map<TopicIdPartition, ProduceResponse.PartitionResponse> PARTITION_RESPONSE_MAP = IntStream.range(0, NUMBER_OF_PARTITIONS)
-        .mapToObj(partitionIndex -> new AbstractMap.SimpleEntry<>(
-            new TopicIdPartition(TOPIC_ID, partitionIndex, TOPIC_NAME),
-            new ProduceResponse.PartitionResponse(
-                Errors.NONE,
-                0,
-                0,
-                0,
-                IntStream.range(0, NUMBER_OF_RECORDS)
-                    .mapToObj(ProduceResponse.RecordError::new)
-                    .toList())
-        ))
-        .collect(Collectors.toMap(AbstractMap.SimpleEntry::getKey, AbstractMap.SimpleEntry::getValue));
+            .mapToObj(partitionIndex -> new AbstractMap.SimpleEntry<>(
+                    new TopicIdPartition(TOPIC_ID, partitionIndex, TOPIC_NAME),
+                    new ProduceResponse.PartitionResponse(
+                            Errors.NONE,
+                            0,
+                            0,
+                            0,
+                            IntStream.range(0, NUMBER_OF_RECORDS)
+                                    .mapToObj(ProduceResponse.RecordError::new)
+                                    .toList())
+            ))
+            .collect(Collectors.toMap(AbstractMap.SimpleEntry::getKey, AbstractMap.SimpleEntry::getValue));
 
     /**
      * this method is still used by production so we benchmark it.

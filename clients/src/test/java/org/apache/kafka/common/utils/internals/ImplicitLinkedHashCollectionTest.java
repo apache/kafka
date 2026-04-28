@@ -144,7 +144,7 @@ public class ImplicitLinkedHashCollectionTest {
             i = i + 1;
         }
         assertEquals(sequence.length, i, "Iterator yielded " + (i + 1) + " elements, but " +
-                sequence.length + " were expected.");
+            sequence.length + " were expected.");
     }
 
     static void expectTraversal(Iterator<TestElement> iter, Iterator<Integer> expectedIter) {
@@ -477,13 +477,13 @@ public class ImplicitLinkedHashCollectionTest {
     public void testEnlargement() {
         ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>(5);
         assertEquals(11, coll.numSlots());
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0;i < 6;i++) {
             assertTrue(coll.add(new TestElement(i)));
         }
         assertEquals(23, coll.numSlots());
         assertEquals(6, coll.size());
         expectTraversal(coll.iterator(), 0, 1, 2, 3, 4, 5);
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0;i < 6;i++) {
             assertTrue(coll.contains(new TestElement(i)), "Failed to find element " + i);
         }
         coll.remove(new TestElement(3));
@@ -497,7 +497,7 @@ public class ImplicitLinkedHashCollectionTest {
         Random random = new Random(123);
         LinkedHashSet<Integer> existing = new LinkedHashSet<>();
         ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0;i < 100;i++) {
             addRandomElement(random, existing, coll);
             addRandomElement(random, existing, coll);
             addRandomElement(random, existing, coll);
@@ -550,7 +550,7 @@ public class ImplicitLinkedHashCollectionTest {
     }
 
     private void addRandomElement(Random random, LinkedHashSet<Integer> existing,
-                                  ImplicitLinkedHashCollection<TestElement> set) {
+        ImplicitLinkedHashCollection<TestElement> set) {
         int next;
         do {
             next = random.nextInt();
@@ -564,7 +564,7 @@ public class ImplicitLinkedHashCollectionTest {
         int removeIdx = random.nextInt(existing.size());
         Iterator<Integer> iter = existing.iterator();
         Integer element = null;
-        for (int i = 0; i <= removeIdx; i++) {
+        for (int i = 0;i <= removeIdx;i++) {
             element = iter.next();
         }
         existing.remove(new TestElement(element));
@@ -598,20 +598,20 @@ public class ImplicitLinkedHashCollectionTest {
     @Test
     public void testRemovals() {
         ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
-        List<TestElement> elements  = new ArrayList<>();
-        for (int i = 0; i < 100; i++) {
-            TestElement element  = new TestElement(i, i);
+        List<TestElement> elements = new ArrayList<>();
+        for (int i = 0;i < 100;i++) {
+            TestElement element = new TestElement(i, i);
             elements.add(element);
             coll.add(element);
         }
         assertEquals(100, coll.size());
         Iterator<TestElement> iter = coll.iterator();
-        for (int i = 0; i < 50; i++) {
+        for (int i = 0;i < 50;i++) {
             iter.next();
             iter.remove();
         }
         assertEquals(50, coll.size());
-        for (int i = 50; i < 100; i++) {
+        for (int i = 50;i < 100;i++) {
             assertEquals(new TestElement(i, i), coll.find(elements.get(i)));
         }
     }

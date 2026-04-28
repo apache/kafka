@@ -58,7 +58,7 @@ public class MetadataQuorumCommandUnitTest {
         assertEquals("node.id not found in configuration file. Is this a valid controller configuration file?",
             assertThrows(TerseException.class,
                 () -> assertEquals(4, MetadataQuorumCommand.getControllerId(props))).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -77,7 +77,7 @@ public class MetadataQuorumCommandUnitTest {
         assertEquals("node.id was negative in configuration file. Is this a valid controller configuration file?",
             assertThrows(TerseException.class,
                 () -> assertEquals(4, MetadataQuorumCommand.getControllerId(props))).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -87,7 +87,7 @@ public class MetadataQuorumCommandUnitTest {
         assertEquals("process.roles did not contain 'controller' in configuration file. Is this a valid controller configuration file?",
             assertThrows(TerseException.class,
                 () -> assertEquals(4, MetadataQuorumCommand.getControllerId(props))).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -98,7 +98,7 @@ public class MetadataQuorumCommandUnitTest {
         assertEquals("process.roles did not contain 'controller' in configuration file. Is this a valid controller configuration file?",
             assertThrows(TerseException.class,
                 () -> assertEquals(4, MetadataQuorumCommand.getControllerId(props))).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -129,7 +129,7 @@ public class MetadataQuorumCommandUnitTest {
         assertEquals("Neither metadata.log.dir nor log.dirs were found. Is this a valid controller configuration file?",
             assertThrows(TerseException.class,
                 () -> MetadataQuorumCommand.getMetadataDirectory(props)).
-                    getMessage());
+                getMessage());
     }
 
     static class MetadataQuorumCommandUnitTestEnv implements AutoCloseable {
@@ -140,12 +140,12 @@ public class MetadataQuorumCommandUnitTest {
             new MetaPropertiesEnsemble.Copier(MetaPropertiesEnsemble.EMPTY).
                 setMetaLogDir(Optional.of(metadataDir.getAbsolutePath())).
                 setLogDirProps(metadataDir.getAbsolutePath(),
-                    new MetaProperties.Builder().
-                        setClusterId("Ig-WB32JRqqzct3VafTr0w").
-                        setNodeId(2).
-                        setDirectoryId(directoryId).
-                            build()).
-                    writeLogDirChanges();
+                new MetaProperties.Builder().
+                    setClusterId("Ig-WB32JRqqzct3VafTr0w").
+                    setNodeId(2).
+                    setDirectoryId(directoryId).
+                    build()).
+                writeLogDirChanges();
         }
 
         File writePropertiesFile() throws IOException {
@@ -171,8 +171,8 @@ public class MetadataQuorumCommandUnitTest {
     @Test
     public void testGetMetadataDirectoryId() throws Exception {
         try (MetadataQuorumCommandUnitTestEnv testEnv =
-                new MetadataQuorumCommandUnitTestEnv(Optional.
-                    of(Uuid.fromString("wZoXPqWoSu6F6c8MkmdyAg")))) {
+                 new MetadataQuorumCommandUnitTestEnv(Optional.
+                     of(Uuid.fromString("wZoXPqWoSu6F6c8MkmdyAg")))) {
             assertEquals(Uuid.fromString("wZoXPqWoSu6F6c8MkmdyAg"),
                 MetadataQuorumCommand.getMetadataDirectoryId(testEnv.metadataDir.getAbsolutePath()));
         }
@@ -185,19 +185,19 @@ public class MetadataQuorumCommandUnitTest {
             assertEquals("No directory id found in " + testEnv.metadataDir.getAbsolutePath(),
                 assertThrows(TerseException.class,
                     () -> MetadataQuorumCommand.getMetadataDirectoryId(testEnv.metadataDir.getAbsolutePath())).
-                        getMessage());
+                    getMessage());
         }
     }
 
     @Test
     public void testGetMetadataDirectoryIdWhenThereIsNoDirectory() throws Exception {
         try (MetadataQuorumCommandUnitTestEnv testEnv =
-                     new MetadataQuorumCommandUnitTestEnv(Optional.empty())) {
+                 new MetadataQuorumCommandUnitTestEnv(Optional.empty())) {
             testEnv.close();
             assertEquals("Unable to read meta.properties from " + testEnv.metadataDir.getAbsolutePath(),
-                    assertThrows(TerseException.class,
-                        () -> MetadataQuorumCommand.getMetadataDirectoryId(testEnv.metadataDir.getAbsolutePath())).
-                            getMessage());
+                assertThrows(TerseException.class,
+                    () -> MetadataQuorumCommand.getMetadataDirectoryId(testEnv.metadataDir.getAbsolutePath())).
+                    getMessage());
         }
     }
 
@@ -207,7 +207,7 @@ public class MetadataQuorumCommandUnitTest {
         assertEquals("controller.listener.names was not found. Is this a valid controller configuration file?",
             assertThrows(TerseException.class,
                 () -> MetadataQuorumCommand.getControllerAdvertisedListeners(props)).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -217,7 +217,7 @@ public class MetadataQuorumCommandUnitTest {
         assertEquals("Cannot find information about controller listener name: CONTROLLER",
             assertThrows(TerseException.class,
                 () -> MetadataQuorumCommand.getControllerAdvertisedListeners(props)).
-                    getMessage());
+                getMessage());
     }
 
     @Test
@@ -226,9 +226,9 @@ public class MetadataQuorumCommandUnitTest {
         props.setProperty("controller.listener.names", "CONTROLLER,CONTROLLER2");
         props.setProperty("listeners", "CONTROLLER://example.com:9092,CONTROLLER2://:9093");
         assertEquals(Set.of(
-            new RaftVoterEndpoint("CONTROLLER", "example.com", 9092),
-            new RaftVoterEndpoint("CONTROLLER2", "localhost", 9093)),
-                MetadataQuorumCommand.getControllerAdvertisedListeners(props));
+                new RaftVoterEndpoint("CONTROLLER", "example.com", 9092),
+                new RaftVoterEndpoint("CONTROLLER2", "localhost", 9093)),
+            MetadataQuorumCommand.getControllerAdvertisedListeners(props));
     }
 
     @Test
@@ -238,9 +238,9 @@ public class MetadataQuorumCommandUnitTest {
         props.setProperty("listeners", "CONTROLLER://:9092,CONTROLLER2://:9093");
         props.setProperty("advertised.listeners", "CONTROLLER://example.com:9092,CONTROLLER2://example.com:9093");
         assertEquals(Set.of(
-            new RaftVoterEndpoint("CONTROLLER", "example.com", 9092),
-            new RaftVoterEndpoint("CONTROLLER2", "example.com", 9093)),
-                MetadataQuorumCommand.getControllerAdvertisedListeners(props));
+                new RaftVoterEndpoint("CONTROLLER", "example.com", 9092),
+                new RaftVoterEndpoint("CONTROLLER2", "example.com", 9093)),
+            MetadataQuorumCommand.getControllerAdvertisedListeners(props));
     }
 
     @Test
@@ -256,8 +256,8 @@ public class MetadataQuorumCommandUnitTest {
                         "add-controller",
                         "--dry-run"))).split("\n"));
             assertTrue(outputs.contains("DRY RUN of adding controller 5 with directory id " +
-                "wZoXPqWoSu6F6c8MkmdyAg and endpoints: CONTROLLER://example.com:9093, CONTROLLER_SSL://example.com:9094"),
-                    "Failed to find expected output in stdout: " + outputs);
+                    "wZoXPqWoSu6F6c8MkmdyAg and endpoints: CONTROLLER://example.com:9093, CONTROLLER_SSL://example.com:9094"),
+                "Failed to find expected output in stdout: " + outputs);
         }
     }
 }

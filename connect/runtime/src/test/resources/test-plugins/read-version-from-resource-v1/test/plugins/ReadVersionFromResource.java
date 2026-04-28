@@ -48,9 +48,9 @@ public class ReadVersionFromResource implements Converter {
     private String version(InputStream stream) throws IOException {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream))) {
             return reader.lines()
-                .filter(s -> !s.isEmpty() && !s.startsWith("#"))
-                .findFirst()
-                .get();
+                    .filter(s -> !s.isEmpty() && !s.startsWith("#"))
+                    .findFirst()
+                    .get();
         }
     }
 

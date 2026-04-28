@@ -177,7 +177,7 @@ public class StateManagerUtilTest {
     }
 
     @Test
-    public void  shouldStillWipeStateStoresIfCloseThrowsException() {
+    public void shouldStillWipeStateStoresIfCloseThrowsException() {
         final File randomFile = new File("/random/path");
 
         when(stateManager.taskId()).thenReturn(taskId);
@@ -187,7 +187,7 @@ public class StateManagerUtilTest {
 
         try (MockedStatic<Utils> ignored = mockStatic(Utils.class)) {
             assertThrows(ProcessorStateException.class, () ->
-                    StateManagerUtil.closeStateManager(logger, "logPrefix:", false, true, stateManager, stateDirectory, TaskType.ACTIVE));
+                StateManagerUtil.closeStateManager(logger, "logPrefix:", false, true, stateManager, stateDirectory, TaskType.ACTIVE));
         }
 
         verify(stateDirectory).unlock(taskId);
@@ -205,8 +205,8 @@ public class StateManagerUtilTest {
             utils.when(() -> Utils.delete(unknownFile)).thenThrow(new IOException("Deletion failed"));
 
             final ProcessorStateException thrown = assertThrows(
-                    ProcessorStateException.class, () -> StateManagerUtil.closeStateManager(logger,
-                            "logPrefix:", false, true, stateManager, stateDirectory, TaskType.ACTIVE));
+                ProcessorStateException.class, () -> StateManagerUtil.closeStateManager(logger,
+                    "logPrefix:", false, true, stateManager, stateDirectory, TaskType.ACTIVE));
 
             assertEquals(IOException.class, thrown.getCause().getClass());
         }
@@ -224,7 +224,7 @@ public class StateManagerUtilTest {
         when(stateDirectory.lock(taskId)).thenReturn(false);
 
         StateManagerUtil.closeStateManager(
-                logger, "logPrefix:", true, false, stateManager, stateDirectory, TaskType.ACTIVE);
+            logger, "logPrefix:", true, false, stateManager, stateDirectory, TaskType.ACTIVE);
 
         inOrder.verify(stateManager).taskId();
         inOrder.verify(stateDirectory).lock(taskId);
@@ -241,7 +241,7 @@ public class StateManagerUtilTest {
         when(stateDirectory.lock(taskId)).thenReturn(false);
 
         StateManagerUtil.closeStateManager(
-                logger, "logPrefix:", false, true, stateManager, stateDirectory, TaskType.ACTIVE);
+            logger, "logPrefix:", false, true, stateManager, stateDirectory, TaskType.ACTIVE);
 
         inOrder.verify(stateManager).taskId();
         inOrder.verify(stateDirectory).lock(taskId);

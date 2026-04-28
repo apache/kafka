@@ -101,8 +101,8 @@ public class EmbeddedConnectStandalone extends EmbeddedConnect {
     @Override
     public String toString() {
         return String.format("EmbeddedConnectStandalone(numBrokers= %d, workerProps= %s)",
-            numBrokers,
-            workerProps);
+                numBrokers,
+                workerProps);
     }
 
     @Override

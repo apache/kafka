@@ -639,8 +639,8 @@ public class SelfManagedOffsetRecoveryIntegrationTest {
 
         // Wait for instance 1 to have standby tasks
         TestUtils.waitForCondition(() ->
-            streams1Restart.metadataForLocalThreads().stream()
-                .anyMatch(t -> !t.standbyTasks().isEmpty()),
+                streams1Restart.metadataForLocalThreads().stream()
+                    .anyMatch(t -> !t.standbyTasks().isEmpty()),
             60_000, "Instance 1 should have standby tasks after restart");
 
         // Verify that store directories now exist for the standby tasks —

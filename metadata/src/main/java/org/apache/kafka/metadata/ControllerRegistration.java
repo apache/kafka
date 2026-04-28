@@ -64,7 +64,7 @@ public class ControllerRegistration {
                 SecurityProtocol protocol = SecurityProtocol.forId(endPoint.securityProtocol());
                 if (protocol == null) {
                     throw new RuntimeException("Unknown security protocol " +
-                            (int) endPoint.securityProtocol());
+                        (int) endPoint.securityProtocol());
                 }
                 newListeners.put(endPoint.name(), new Endpoint(endPoint.name(),
                     protocol,
@@ -75,7 +75,7 @@ public class ControllerRegistration {
             Map<String, VersionRange> newSupportedFeatures = new HashMap<>();
             record.features().forEach(feature ->
                 newSupportedFeatures.put(feature.name(), VersionRange.of(
-                        feature.minSupportedVersion(), feature.maxSupportedVersion()))
+                    feature.minSupportedVersion(), feature.maxSupportedVersion()))
             );
             this.supportedFeatures = Collections.unmodifiableMap(newSupportedFeatures);
         }
@@ -111,8 +111,8 @@ public class ControllerRegistration {
             if (supportedFeatures == null) {
                 supportedFeatures = new HashMap<>();
                 supportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
-                        MetadataVersion.MINIMUM_VERSION.featureLevel(),
-                        MetadataVersion.latestProduction().featureLevel()));
+                    MetadataVersion.MINIMUM_VERSION.featureLevel(),
+                    MetadataVersion.latestProduction().featureLevel()));
             }
             return new ControllerRegistration(id,
                 incarnationId,
@@ -129,10 +129,10 @@ public class ControllerRegistration {
     private final Map<String, VersionRange> supportedFeatures;
 
     private ControllerRegistration(int id,
-        Uuid incarnationId,
-        boolean zkMigrationReady,
-        Map<String, Endpoint> listeners,
-        Map<String, VersionRange> supportedFeatures
+                                   Uuid incarnationId,
+                                   boolean zkMigrationReady,
+                                   Map<String, Endpoint> listeners,
+                                   Map<String, VersionRange> supportedFeatures
     ) {
         this.id = id;
         this.incarnationId = incarnationId;
@@ -214,17 +214,17 @@ public class ControllerRegistration {
     @Override
     public String toString() {
         return "ControllerRegistration(id=" + id +
-                ", incarnationId=" + incarnationId +
-                ", zkMigrationReady=" + zkMigrationReady +
-                ", listeners=[" +
-                listeners.keySet().stream().sorted().
-                        map(n -> listeners.get(n).toString()).
-                        collect(Collectors.joining(", ")) +
-                "], supportedFeatures={" +
-                supportedFeatures.keySet().stream().sorted().
-                        map(k -> k + ": " + supportedFeatures.get(k)).
-                        collect(Collectors.joining(", ")) +
-                "}" +
-                ")";
+            ", incarnationId=" + incarnationId +
+            ", zkMigrationReady=" + zkMigrationReady +
+            ", listeners=[" +
+            listeners.keySet().stream().sorted().
+                map(n -> listeners.get(n).toString()).
+                collect(Collectors.joining(", ")) +
+            "], supportedFeatures={" +
+            supportedFeatures.keySet().stream().sorted().
+                map(k -> k + ": " + supportedFeatures.get(k)).
+                collect(Collectors.joining(", ")) +
+            "}" +
+            ")";
     }
 }

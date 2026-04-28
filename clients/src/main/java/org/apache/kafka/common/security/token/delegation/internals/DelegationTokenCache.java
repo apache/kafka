@@ -59,7 +59,7 @@ public class DelegationTokenCache {
 
     public void updateCache(DelegationToken token, Map<String, ScramCredential> scramCredentialMap) {
         //Update TokenCache
-        String tokenId =  token.tokenInfo().tokenId();
+        String tokenId = token.tokenInfo().tokenId();
         addToken(tokenId, token.tokenInfo());
         String hmac = token.hmacAsBase64String();
         //Update Scram Credentials

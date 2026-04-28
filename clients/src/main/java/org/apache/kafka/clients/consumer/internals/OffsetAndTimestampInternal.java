@@ -73,9 +73,9 @@ public class OffsetAndTimestampInternal {
     @Override
     public String toString() {
         return "OffsetAndTimestampInternal{" +
-                "timestamp=" + timestamp +
-                ", offset=" + offset +
-                ", leaderEpoch=" + leaderEpoch +
-                '}';
+            "timestamp=" + timestamp +
+            ", offset=" + offset +
+            ", leaderEpoch=" + leaderEpoch +
+            '}';
     }
 }

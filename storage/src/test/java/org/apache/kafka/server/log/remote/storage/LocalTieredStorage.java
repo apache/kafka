@@ -256,7 +256,7 @@ public final class LocalTieredStorage implements RemoteStorageManager {
                 transferer = (Transferer) getClass().getClassLoader().loadClass(transfererClass)
                         .getDeclaredConstructor().newInstance();
             } catch (InstantiationException | IllegalAccessException | ClassNotFoundException | ClassCastException |
-                     InvocationTargetException | NoSuchMethodException e) {
+                    InvocationTargetException | NoSuchMethodException e) {
                 throw new RuntimeException(format("Cannot create transferer from class '%s'", transfererClass), e);
             }
         }
@@ -331,14 +331,14 @@ public final class LocalTieredStorage implements RemoteStorageManager {
 
     @Override
     public InputStream fetchLogSegment(final RemoteLogSegmentMetadata metadata,
-                                       final int startPos) throws RemoteStorageException {
+            final int startPos) throws RemoteStorageException {
         return fetchLogSegment(metadata, startPos, metadata.segmentSizeInBytes());
     }
 
     @Override
     public InputStream fetchLogSegment(final RemoteLogSegmentMetadata metadata,
-                                       final int startPos,
-                                       final int endPos) throws RemoteStorageException {
+            final int startPos,
+            final int endPos) throws RemoteStorageException {
         checkArgument(startPos >= 0, "Start position must be positive", startPos);
         checkArgument(endPos >= startPos,
                 "End position cannot be less than startPosition", startPos, endPos);
@@ -385,7 +385,7 @@ public final class LocalTieredStorage implements RemoteStorageManager {
                 final InputStream inputStream;
                 if (fileType.isOptional() && !file.exists()) {
                     throw new RemoteResourceNotFoundException("Index file for type: " + indexType +
-                        " not found for segment " + metadata.remoteLogSegmentId());
+                            " not found for segment " + metadata.remoteLogSegmentId());
                 } else {
                     inputStream = newInputStream(file.toPath(), READ);
                 }

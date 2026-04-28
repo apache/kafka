@@ -112,8 +112,8 @@ public class OffsetAndMetadata implements Serializable {
         if (o == null || getClass() != o.getClass()) return false;
         OffsetAndMetadata that = (OffsetAndMetadata) o;
         return offset == that.offset &&
-                Objects.equals(metadata, that.metadata) &&
-                Objects.equals(leaderEpoch(), that.leaderEpoch());
+            Objects.equals(metadata, that.metadata) &&
+            Objects.equals(leaderEpoch(), that.leaderEpoch());
     }
 
     @Override
@@ -124,9 +124,9 @@ public class OffsetAndMetadata implements Serializable {
     @Override
     public String toString() {
         return "OffsetAndMetadata{" +
-                "offset=" + offset +
-                ", leaderEpoch=" + leaderEpoch().orElse(null) +
-                ", metadata='" + metadata + '\'' +
-                '}';
+            "offset=" + offset +
+            ", leaderEpoch=" + leaderEpoch().orElse(null) +
+            ", metadata='" + metadata + '\'' +
+            '}';
     }
 }

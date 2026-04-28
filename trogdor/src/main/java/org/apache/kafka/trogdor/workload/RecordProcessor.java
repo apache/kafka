@@ -32,5 +32,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 })
 public interface RecordProcessor {
     void processRecords(ConsumerRecords<byte[], byte[]> consumerRecords);
+
     JsonNode processorStatus();
 }

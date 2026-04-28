@@ -47,12 +47,12 @@ public class ConsumerProtocol {
     static {
         // Safety check to ensure that both parts of the consumer protocol remain in sync.
         if (ConsumerProtocolSubscription.LOWEST_SUPPORTED_VERSION
-                != ConsumerProtocolAssignment.LOWEST_SUPPORTED_VERSION)
+            != ConsumerProtocolAssignment.LOWEST_SUPPORTED_VERSION)
             throw new IllegalStateException("Subscription and Assignment schemas must have the " +
                 "same lowest version");
 
         if (ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION
-                != ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION)
+            != ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION)
             throw new IllegalStateException("Subscription and Assignment schemas must have the " +
                 "same highest version");
     }

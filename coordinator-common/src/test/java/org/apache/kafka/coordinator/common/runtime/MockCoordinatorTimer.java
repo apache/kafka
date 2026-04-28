@@ -48,7 +48,7 @@ public class MockCoordinatorTimer<U> implements CoordinatorTimer<U> {
 
     private final Map<String, ScheduledTimeout<U>> timeoutMap = new HashMap<>();
     private final PriorityQueue<ScheduledTimeout<U>> timeoutQueue = new PriorityQueue<>(
-        Comparator.comparingLong(entry -> entry.deadlineMs)
+            Comparator.comparingLong(entry -> entry.deadlineMs)
     );
 
     public MockCoordinatorTimer(Time time) {
@@ -60,12 +60,12 @@ public class MockCoordinatorTimer<U> implements CoordinatorTimer<U> {
      */
     @Override
     public void schedule(
-        String key,
-        long delay,
-        TimeUnit unit,
-        boolean retry,
-        long retryBackoff,
-        TimeoutOperation<U> operation
+            String key,
+            long delay,
+            TimeUnit unit,
+            boolean retry,
+            long retryBackoff,
+            TimeoutOperation<U> operation
     ) {
         cancel(key);
 
@@ -77,22 +77,22 @@ public class MockCoordinatorTimer<U> implements CoordinatorTimer<U> {
 
     @Override
     public void schedule(
-        String key,
-        long delay,
-        TimeUnit unit,
-        boolean retry,
-        TimeoutOperation<U> operation
+            String key,
+            long delay,
+            TimeUnit unit,
+            boolean retry,
+            TimeoutOperation<U> operation
     ) {
         schedule(key, delay, unit, retry, 500L, operation);
     }
 
     @Override
     public void scheduleIfAbsent(
-        String key,
-        long delay,
-        TimeUnit unit,
-        boolean retry,
-        TimeoutOperation<U> operation
+            String key,
+            long delay,
+            TimeUnit unit,
+            boolean retry,
+            TimeoutOperation<U> operation
     ) {
         if (!timeoutMap.containsKey(key)) {
             schedule(key, delay, unit, retry, 500L, operation);
@@ -151,8 +151,8 @@ public class MockCoordinatorTimer<U> implements CoordinatorTimer<U> {
             timeoutMap.remove(timeout.key, timeout);
 
             results.add(new ExpiredTimeout<>(
-                timeout.key,
-                timeout.operation.generateRecords()
+                    timeout.key,
+                    timeout.operation.generateRecords()
             ));
 
             timeout = timeoutQueue.peek();

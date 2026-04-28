@@ -28,8 +28,8 @@ public interface LegacyTaskAssignor {
      * @return whether the generated assignment requires a followup probing rebalance to satisfy all conditions
      */
     boolean assign(final Map<ProcessId, ClientState> clients,
-                   final Set<TaskId> allTaskIds,
-                   final Set<TaskId> statefulTaskIds,
-                   final RackAwareTaskAssignor rackAwareTaskAssignor,
-                   final AssignmentConfigs configs);
+        final Set<TaskId> allTaskIds,
+        final Set<TaskId> statefulTaskIds,
+        final RackAwareTaskAssignor rackAwareTaskAssignor,
+        final AssignmentConfigs configs);
 }

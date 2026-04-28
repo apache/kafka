@@ -32,9 +32,9 @@ public class DefaultTaskInfo implements TaskInfo {
     private final Set<TaskTopicPartition> topicPartitions;
 
     public DefaultTaskInfo(final TaskId id,
-                           final boolean isStateful,
-                           final Set<String> stateStoreNames,
-                           final Set<TaskTopicPartition> topicPartitions) {
+        final boolean isStateful,
+        final Set<String> stateStoreNames,
+        final Set<TaskTopicPartition> topicPartitions) {
         this.id = id;
         this.isStateful = isStateful;
         this.stateStoreNames = unmodifiableSet(stateStoreNames);

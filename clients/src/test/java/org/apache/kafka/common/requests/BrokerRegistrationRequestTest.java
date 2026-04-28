@@ -91,16 +91,16 @@ class BrokerRegistrationRequestTest {
                 setClusterId("test").
                 setRack(null).
                 setFeatures(new BrokerRegistrationRequestData.FeatureCollection(
-                    Arrays.asList(
-                        new BrokerRegistrationRequestData.Feature().
-                            setName("metadata.version").
-                            setMinSupportedVersion((short) 1).
-                            setMaxSupportedVersion((short) 17),
-                        new BrokerRegistrationRequestData.Feature().
-                            setName("kraft.version").
-                            setMinSupportedVersion((short) 0).
-                            setMaxSupportedVersion((short) 1)
-                    ))).
+                Arrays.asList(
+                    new BrokerRegistrationRequestData.Feature().
+                        setName("metadata.version").
+                        setMinSupportedVersion((short) 1).
+                        setMaxSupportedVersion((short) 17),
+                    new BrokerRegistrationRequestData.Feature().
+                        setName("kraft.version").
+                        setMinSupportedVersion((short) 0).
+                        setMaxSupportedVersion((short) 1)
+                ))).
                 setIncarnationId(Uuid.fromString("EfIEKywJSaWl5yWDwlop1Q")).
                 setListeners(new BrokerRegistrationRequestData.ListenerCollection()).
                 setPreviousBrokerEpoch(1L));

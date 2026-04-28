@@ -42,8 +42,8 @@ public final class DeleteRecordsAction implements TieredStorageTestAction {
     private final List<RemoteDeleteSegmentSpec> deleteSegmentSpecs;
 
     public DeleteRecordsAction(TopicPartition partition,
-                               Long beforeOffset,
-                               List<RemoteDeleteSegmentSpec> deleteSegmentSpecs) {
+            Long beforeOffset,
+            List<RemoteDeleteSegmentSpec> deleteSegmentSpecs) {
         this.partition = partition;
         this.beforeOffset = beforeOffset;
         this.deleteSegmentSpecs = deleteSegmentSpecs;

@@ -69,7 +69,7 @@ public class KStreamFlatMapTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<Integer, String> inputTopic =
-                    driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0), Duration.ZERO);
+                driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0), Duration.ZERO);
             for (final int expectedKey : expectedKeys) {
                 inputTopic.pipeInput(expectedKey, "V" + expectedKey);
             }
@@ -93,7 +93,7 @@ public class KStreamFlatMapTest {
     public void testKeyValueMapperResultNotNull() {
         final KStreamFlatMap<String, Integer, String, Integer> supplier = new KStreamFlatMap<>((key, value) -> null);
         final Throwable throwable = assertThrows(NullPointerException.class,
-                () -> supplier.get().process(new Record<>("K", 0, 0L)));
+            () -> supplier.get().process(new Record<>("K", 0, 0L)));
         assertThat(throwable.getMessage(), is("The provided KeyValueMapper returned null which is not allowed."));
     }
 }

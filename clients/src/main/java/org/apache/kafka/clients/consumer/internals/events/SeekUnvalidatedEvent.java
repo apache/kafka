@@ -52,8 +52,8 @@ public class SeekUnvalidatedEvent extends CompletableApplicationEvent<Void> {
     @Override
     protected String toStringBase() {
         return super.toStringBase()
-                + ", partition=" + partition
-                + ", offset=" + offset
-                + offsetEpoch.map(integer -> ", offsetEpoch=" + integer).orElse("");
+            + ", partition=" + partition
+            + ", offset=" + offset
+            + offsetEpoch.map(integer -> ", offsetEpoch=" + integer).orElse("");
     }
 }

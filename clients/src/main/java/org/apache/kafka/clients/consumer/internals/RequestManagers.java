@@ -65,15 +65,15 @@ public class RequestManagers implements Closeable {
     private final IdempotentCloser closer = new IdempotentCloser();
 
     public RequestManagers(LogContext logContext,
-                           OffsetsRequestManager offsetsRequestManager,
-                           TopicMetadataRequestManager topicMetadataRequestManager,
-                           FetchRequestManager fetchRequestManager,
-                           Optional<CoordinatorRequestManager> coordinatorRequestManager,
-                           Optional<CommitRequestManager> commitRequestManager,
-                           Optional<ConsumerHeartbeatRequestManager> heartbeatRequestManager,
-                           Optional<ConsumerMembershipManager> membershipManager,
-                           Optional<StreamsGroupHeartbeatRequestManager> streamsGroupHeartbeatRequestManager,
-                           Optional<StreamsMembershipManager> streamsMembershipManager) {
+        OffsetsRequestManager offsetsRequestManager,
+        TopicMetadataRequestManager topicMetadataRequestManager,
+        FetchRequestManager fetchRequestManager,
+        Optional<CoordinatorRequestManager> coordinatorRequestManager,
+        Optional<CommitRequestManager> commitRequestManager,
+        Optional<ConsumerHeartbeatRequestManager> heartbeatRequestManager,
+        Optional<ConsumerMembershipManager> membershipManager,
+        Optional<StreamsGroupHeartbeatRequestManager> streamsGroupHeartbeatRequestManager,
+        Optional<StreamsMembershipManager> streamsMembershipManager) {
         this.log = logContext.logger(RequestManagers.class);
         this.offsetsRequestManager = requireNonNull(offsetsRequestManager, "OffsetsRequestManager cannot be null");
         this.coordinatorRequestManager = coordinatorRequestManager;
@@ -102,10 +102,10 @@ public class RequestManagers implements Closeable {
     }
 
     public RequestManagers(LogContext logContext,
-                           ShareConsumeRequestManager shareConsumeRequestManager,
-                           Optional<CoordinatorRequestManager> coordinatorRequestManager,
-                           Optional<ShareHeartbeatRequestManager> shareHeartbeatRequestManager,
-                           Optional<ShareMembershipManager> shareMembershipManager) {
+        ShareConsumeRequestManager shareConsumeRequestManager,
+        Optional<CoordinatorRequestManager> coordinatorRequestManager,
+        Optional<ShareHeartbeatRequestManager> shareHeartbeatRequestManager,
+        Optional<ShareMembershipManager> shareMembershipManager) {
         this.log = logContext.logger(RequestManagers.class);
         this.shareConsumeRequestManager = Optional.of(shareConsumeRequestManager);
         this.coordinatorRequestManager = coordinatorRequestManager;
@@ -135,16 +135,16 @@ public class RequestManagers implements Closeable {
     @Override
     public void close() {
         closer.close(
-                () -> {
-                    log.debug("Closing RequestManagers");
+            () -> {
+                log.debug("Closing RequestManagers");
 
-                    entries.stream()
-                            .filter(rm -> rm instanceof Closeable)
-                            .map(rm -> (Closeable) rm)
-                            .forEach(c -> closeQuietly(c, c.getClass().getSimpleName()));
-                    log.debug("RequestManagers has been closed");
-                },
-                () -> log.debug("RequestManagers was already closed")
+                entries.stream()
+                    .filter(rm -> rm instanceof Closeable)
+                    .map(rm -> (Closeable) rm)
+                    .forEach(c -> closeQuietly(c, c.getClass().getSimpleName()));
+                log.debug("RequestManagers has been closed");
+            },
+            () -> log.debug("RequestManagers was already closed")
         );
     }
 
@@ -154,22 +154,22 @@ public class RequestManagers implements Closeable {
      */
     @SuppressWarnings({"checkstyle:ParameterNumber"})
     public static Supplier<RequestManagers> supplier(final Time time,
-                                                     final LogContext logContext,
-                                                     final BackgroundEventHandler backgroundEventHandler,
-                                                     final ConsumerMetadata metadata,
-                                                     final SubscriptionState subscriptions,
-                                                     final FetchBuffer fetchBuffer,
-                                                     final ConsumerConfig config,
-                                                     final GroupRebalanceConfig groupRebalanceConfig,
-                                                     final ApiVersions apiVersions,
-                                                     final FetchMetricsManager fetchMetricsManager,
-                                                     final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-                                                     final Optional<ClientTelemetryReporter> clientTelemetryReporter,
-                                                     final Metrics metrics,
-                                                     final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
-                                                     final MemberStateListener applicationThreadMemberStateListener,
-                                                     final Optional<StreamsRebalanceData> streamsRebalanceData,
-                                                     final PositionsValidator positionsValidator
+        final LogContext logContext,
+        final BackgroundEventHandler backgroundEventHandler,
+        final ConsumerMetadata metadata,
+        final SubscriptionState subscriptions,
+        final FetchBuffer fetchBuffer,
+        final ConsumerConfig config,
+        final GroupRebalanceConfig groupRebalanceConfig,
+        final ApiVersions apiVersions,
+        final FetchMetricsManager fetchMetricsManager,
+        final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
+        final Optional<ClientTelemetryReporter> clientTelemetryReporter,
+        final Metrics metrics,
+        final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
+        final MemberStateListener applicationThreadMemberStateListener,
+        final Optional<StreamsRebalanceData> streamsRebalanceData,
+        final PositionsValidator positionsValidator
     ) {
         return new CachedSupplier<>() {
             @Override
@@ -182,18 +182,18 @@ public class RequestManagers implements Closeable {
                 final int defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
 
                 final FetchRequestManager fetch = new FetchRequestManager(logContext,
-                        time,
-                        metadata,
-                        subscriptions,
-                        fetchConfig,
-                        fetchBuffer,
-                        fetchMetricsManager,
-                        networkClientDelegate,
-                        apiVersions);
+                    time,
+                    metadata,
+                    subscriptions,
+                    fetchConfig,
+                    fetchBuffer,
+                    fetchMetricsManager,
+                    networkClientDelegate,
+                    apiVersions);
                 final TopicMetadataRequestManager topic = new TopicMetadataRequestManager(
-                        logContext,
-                        time,
-                        config);
+                    logContext,
+                    time,
+                    config);
                 ConsumerHeartbeatRequestManager heartbeatRequestManager = null;
                 ConsumerMembershipManager membershipManager = null;
                 CoordinatorRequestManager coordinator = null;
@@ -298,16 +298,16 @@ public class RequestManagers implements Closeable {
                     logContext);
 
                 return new RequestManagers(
-                        logContext,
-                        listOffsets,
-                        topic,
-                        fetch,
-                        Optional.ofNullable(coordinator),
-                        Optional.ofNullable(commitRequestManager),
-                        Optional.ofNullable(heartbeatRequestManager),
-                        Optional.ofNullable(membershipManager),
-                        Optional.ofNullable(streamsGroupHeartbeatRequestManager),
-                        Optional.ofNullable(streamsMembershipManager)
+                    logContext,
+                    listOffsets,
+                    topic,
+                    fetch,
+                    Optional.ofNullable(coordinator),
+                    Optional.ofNullable(commitRequestManager),
+                    Optional.ofNullable(heartbeatRequestManager),
+                    Optional.ofNullable(membershipManager),
+                    Optional.ofNullable(streamsGroupHeartbeatRequestManager),
+                    Optional.ofNullable(streamsMembershipManager)
                 );
             }
         };
@@ -319,17 +319,17 @@ public class RequestManagers implements Closeable {
      */
     @SuppressWarnings({"checkstyle:ParameterNumber"})
     public static Supplier<RequestManagers> supplier(final Time time,
-                                                     final LogContext logContext,
-                                                     final ShareAcknowledgementEventHandler shareAcknowledgementEventHandler,
-                                                     final BackgroundEventHandler backgroundEventHandler,
-                                                     final ShareConsumerMetadata metadata,
-                                                     final SubscriptionState subscriptions,
-                                                     final ShareFetchBuffer fetchBuffer,
-                                                     final ConsumerConfig config,
-                                                     final GroupRebalanceConfig groupRebalanceConfig,
-                                                     final ShareFetchMetricsManager shareFetchMetricsManager,
-                                                     final Optional<ClientTelemetryReporter> clientTelemetryReporter,
-                                                     final Metrics metrics
+        final LogContext logContext,
+        final ShareAcknowledgementEventHandler shareAcknowledgementEventHandler,
+        final BackgroundEventHandler backgroundEventHandler,
+        final ShareConsumerMetadata metadata,
+        final SubscriptionState subscriptions,
+        final ShareFetchBuffer fetchBuffer,
+        final ConsumerConfig config,
+        final GroupRebalanceConfig groupRebalanceConfig,
+        final ShareFetchMetricsManager shareFetchMetricsManager,
+        final Optional<ClientTelemetryReporter> clientTelemetryReporter,
+        final Metrics metrics
     ) {
         return new CachedSupplier<>() {
             @Override
@@ -339,18 +339,18 @@ public class RequestManagers implements Closeable {
                 ShareFetchConfig shareFetchConfig = new ShareFetchConfig(config);
 
                 CoordinatorRequestManager coordinator = new CoordinatorRequestManager(
-                        logContext,
-                        retryBackoffMs,
-                        retryBackoffMaxMs,
-                        groupRebalanceConfig.groupId);
+                    logContext,
+                    retryBackoffMs,
+                    retryBackoffMaxMs,
+                    groupRebalanceConfig.groupId);
                 ShareMembershipManager shareMembershipManager = new ShareMembershipManager(
-                        logContext,
-                        groupRebalanceConfig.groupId,
-                        groupRebalanceConfig.rackId.orElse(null),
-                        subscriptions,
-                        metadata,
-                        time,
-                        metrics);
+                    logContext,
+                    groupRebalanceConfig.groupId,
+                    groupRebalanceConfig.rackId.orElse(null),
+                    subscriptions,
+                    metadata,
+                    time,
+                    metrics);
 
                 // Update the group member ID label in the client telemetry reporter.
                 // According to KIP-1082, the consumer will generate the member ID as the incarnation ID of the process.
@@ -359,34 +359,34 @@ public class RequestManagers implements Closeable {
                     .updateMetricsLabels(Map.of(ClientTelemetryProvider.GROUP_MEMBER_ID, shareMembershipManager.memberId())));
 
                 ShareHeartbeatRequestManager shareHeartbeatRequestManager = new ShareHeartbeatRequestManager(
-                        logContext,
-                        time,
-                        config,
-                        coordinator,
-                        subscriptions,
-                        shareMembershipManager,
-                        backgroundEventHandler,
-                        metrics);
+                    logContext,
+                    time,
+                    config,
+                    coordinator,
+                    subscriptions,
+                    shareMembershipManager,
+                    backgroundEventHandler,
+                    metrics);
                 ShareConsumeRequestManager shareConsumeRequestManager = new ShareConsumeRequestManager(
-                        time,
-                        logContext,
-                        groupRebalanceConfig.groupId,
-                        metadata,
-                        subscriptions,
-                        shareFetchConfig,
-                        fetchBuffer,
-                        shareAcknowledgementEventHandler,
-                        shareFetchMetricsManager,
-                        retryBackoffMs,
-                        retryBackoffMaxMs);
+                    time,
+                    logContext,
+                    groupRebalanceConfig.groupId,
+                    metadata,
+                    subscriptions,
+                    shareFetchConfig,
+                    fetchBuffer,
+                    shareAcknowledgementEventHandler,
+                    shareFetchMetricsManager,
+                    retryBackoffMs,
+                    retryBackoffMaxMs);
                 shareMembershipManager.registerStateListener(shareConsumeRequestManager);
 
                 return new RequestManagers(
-                        logContext,
-                        shareConsumeRequestManager,
-                        Optional.of(coordinator),
-                        Optional.of(shareHeartbeatRequestManager),
-                        Optional.of(shareMembershipManager)
+                    logContext,
+                    shareConsumeRequestManager,
+                    Optional.of(coordinator),
+                    Optional.of(shareHeartbeatRequestManager),
+                    Optional.of(shareMembershipManager)
                 );
             }
         };

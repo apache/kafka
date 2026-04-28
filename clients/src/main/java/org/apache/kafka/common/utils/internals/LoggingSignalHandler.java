@@ -99,8 +99,8 @@ public class LoggingSignalHandler {
                 return null;
             }
         };
-        return Proxy.newProxyInstance(Utils.getContextOrKafkaClassLoader(), new Class<?>[] {signalHandlerClass},
-                invocationHandler);
+        return Proxy.newProxyInstance(Utils.getContextOrKafkaClassLoader(), new Class<?>[]{signalHandlerClass},
+            invocationHandler);
     }
 
     private void register(String signalName, final Map<String, Object> jvmSignalHandlers) throws ReflectiveOperationException {

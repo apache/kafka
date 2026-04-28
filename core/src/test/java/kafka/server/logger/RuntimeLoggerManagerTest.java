@@ -81,9 +81,9 @@ public class RuntimeLoggerManagerTest {
     @Test
     public void testValidateSetRootLogLevelConfig() {
         MANAGER.validateLogLevelConfigs(List.of(new AlterableConfig().
-                setName(LoggingController.ROOT_LOGGER).
-                setConfigOperation(OpType.SET.id()).
-                setValue("TRACE")));
+            setName(LoggingController.ROOT_LOGGER).
+            setConfigOperation(OpType.SET.id()).
+            setValue("TRACE")));
     }
 
     @Test

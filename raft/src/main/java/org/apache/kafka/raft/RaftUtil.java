@@ -52,7 +52,7 @@ import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
-@SuppressWarnings({ "ClassDataAbstractionCoupling", "ClassFanOutComplexity" })
+@SuppressWarnings({"ClassDataAbstractionCoupling", "ClassFanOutComplexity"})
 public class RaftUtil {
 
     public static ApiMessage errorResponse(ApiKeys apiKey, Errors error) {
@@ -388,17 +388,17 @@ public class RaftUtil {
         List<ReplicaKey> preferredReplicaKeys
     ) {
         List<Integer> preferredSuccessors = preferredReplicaKeys
-                .stream()
-                .map(ReplicaKey::id)
-                .collect(Collectors.toList());
+            .stream()
+            .map(ReplicaKey::id)
+            .collect(Collectors.toList());
 
         List<EndQuorumEpochRequestData.ReplicaInfo> preferredCandidates = preferredReplicaKeys
-                .stream()
-                .map(replicaKey -> new EndQuorumEpochRequestData.ReplicaInfo()
+            .stream()
+            .map(replicaKey -> new EndQuorumEpochRequestData.ReplicaInfo()
                     .setCandidateId(replicaKey.id())
                     .setCandidateDirectoryId(replicaKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
-                )
-                .collect(Collectors.toList());
+            )
+            .collect(Collectors.toList());
 
         return new EndQuorumEpochRequestData()
             .setClusterId(clusterId)
@@ -432,17 +432,17 @@ public class RaftUtil {
         Endpoints endpoints
     ) {
         EndQuorumEpochResponseData response = new EndQuorumEpochResponseData()
-                   .setErrorCode(topLevelError.code())
-                   .setTopics(List.of(
-                       new EndQuorumEpochResponseData.TopicData()
-                           .setTopicName(topicPartition.topic())
-                           .setPartitions(List.of(
-                               new EndQuorumEpochResponseData.PartitionData()
-                                   .setErrorCode(partitionLevelError.code())
-                                   .setLeaderId(leaderId)
-                                   .setLeaderEpoch(leaderEpoch)
-                           )))
-                   );
+            .setErrorCode(topLevelError.code())
+            .setTopics(List.of(
+                new EndQuorumEpochResponseData.TopicData()
+                    .setTopicName(topicPartition.topic())
+                    .setPartitions(List.of(
+                        new EndQuorumEpochResponseData.PartitionData()
+                            .setErrorCode(partitionLevelError.code())
+                            .setLeaderId(leaderId)
+                            .setLeaderEpoch(leaderEpoch)
+                    )))
+            );
 
         if (apiVersion >= 1) {
             Optional<InetSocketAddress> address = endpoints.address(listenerName);
@@ -717,50 +717,50 @@ public class RaftUtil {
 
     static boolean hasValidTopicPartition(VoteResponseData data, TopicPartition topicPartition) {
         return data.topics().size() == 1 &&
-                   data.topics().get(0).topicName().equals(topicPartition.topic()) &&
-                   data.topics().get(0).partitions().size() == 1 &&
-                   data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+            data.topics().get(0).topicName().equals(topicPartition.topic()) &&
+            data.topics().get(0).partitions().size() == 1 &&
+            data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
     }
 
     static boolean hasValidTopicPartition(VoteRequestData data, TopicPartition topicPartition) {
         return data.topics().size() == 1 &&
-                   data.topics().get(0).topicName().equals(topicPartition.topic()) &&
-                   data.topics().get(0).partitions().size() == 1 &&
-                   data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+            data.topics().get(0).topicName().equals(topicPartition.topic()) &&
+            data.topics().get(0).partitions().size() == 1 &&
+            data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
     }
 
     static boolean hasValidTopicPartition(BeginQuorumEpochRequestData data, TopicPartition topicPartition) {
         return data.topics().size() == 1 &&
-                   data.topics().get(0).topicName().equals(topicPartition.topic()) &&
-                   data.topics().get(0).partitions().size() == 1 &&
-                   data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+            data.topics().get(0).topicName().equals(topicPartition.topic()) &&
+            data.topics().get(0).partitions().size() == 1 &&
+            data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
     }
 
     static boolean hasValidTopicPartition(BeginQuorumEpochResponseData data, TopicPartition topicPartition) {
         return data.topics().size() == 1 &&
-                   data.topics().get(0).topicName().equals(topicPartition.topic()) &&
-                   data.topics().get(0).partitions().size() == 1 &&
-                   data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+            data.topics().get(0).topicName().equals(topicPartition.topic()) &&
+            data.topics().get(0).partitions().size() == 1 &&
+            data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
     }
 
     static boolean hasValidTopicPartition(EndQuorumEpochRequestData data, TopicPartition topicPartition) {
         return data.topics().size() == 1 &&
-                   data.topics().get(0).topicName().equals(topicPartition.topic()) &&
-                   data.topics().get(0).partitions().size() == 1 &&
-                   data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+            data.topics().get(0).topicName().equals(topicPartition.topic()) &&
+            data.topics().get(0).partitions().size() == 1 &&
+            data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
     }
 
     static boolean hasValidTopicPartition(EndQuorumEpochResponseData data, TopicPartition topicPartition) {
         return data.topics().size() == 1 &&
-                   data.topics().get(0).topicName().equals(topicPartition.topic()) &&
-                   data.topics().get(0).partitions().size() == 1 &&
-                   data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+            data.topics().get(0).topicName().equals(topicPartition.topic()) &&
+            data.topics().get(0).partitions().size() == 1 &&
+            data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
     }
 
     static boolean hasValidTopicPartition(DescribeQuorumRequestData data, TopicPartition topicPartition) {
         return data.topics().size() == 1 &&
-                   data.topics().get(0).topicName().equals(topicPartition.topic()) &&
-                   data.topics().get(0).partitions().size() == 1 &&
-                   data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+            data.topics().get(0).topicName().equals(topicPartition.topic()) &&
+            data.topics().get(0).partitions().size() == 1 &&
+            data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
     }
 }

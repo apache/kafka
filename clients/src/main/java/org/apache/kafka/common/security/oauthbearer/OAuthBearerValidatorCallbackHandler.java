@@ -117,10 +117,10 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
      * Package-visible for testing.
      */
     void configure(Map<String, ?> configs,
-                   String saslMechanism,
-                   List<AppConfigurationEntry> jaasConfigEntries,
-                   CloseableVerificationKeyResolver verificationKeyResolver,
-                   JwtValidator jwtValidator) {
+        String saslMechanism,
+        List<AppConfigurationEntry> jaasConfigEntries,
+        CloseableVerificationKeyResolver verificationKeyResolver,
+        JwtValidator jwtValidator) {
         this.verificationKeyResolver = verificationKeyResolver;
         this.verificationKeyResolver.configure(configs, saslMechanism, jaasConfigEntries);
 

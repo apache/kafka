@@ -39,13 +39,13 @@ public class TaskCorruptedException extends StreamsException {
     }
 
     public TaskCorruptedException(final Set<TaskId> corruptedTasks,
-                                  final InvalidOffsetException e) {
+        final InvalidOffsetException e) {
         super("Tasks " + corruptedTasks + " are corrupted and hence need to be re-initialized", e);
         this.corruptedTasks = corruptedTasks;
     }
 
     public TaskCorruptedException(final Set<TaskId> corruptedTasks,
-                                  final ProcessorStateException e) {
+        final ProcessorStateException e) {
         super("Tasks " + corruptedTasks + " are corrupted and hence need to be re-initialized", e);
         this.corruptedTasks = corruptedTasks;
     }

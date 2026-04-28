@@ -64,8 +64,8 @@ public class ControllerRegistrationsPublisherTest {
     static {
         TEST_DELTA = new MetadataDelta.Builder().build();
         TEST_DELTA.replay(new FeatureLevelRecord().
-                setName(MetadataVersion.FEATURE_NAME).
-                setFeatureLevel(MetadataVersion.IBP_3_6_IV2.featureLevel()));
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.IBP_3_6_IV2.featureLevel()));
         TEST_DELTA.replay(RecordTestUtils.createTestControllerRegistration(0, true));
         TEST_DELTA.replay(RecordTestUtils.createTestControllerRegistration(1, false));
         TEST_DELTA.replay(RecordTestUtils.createTestControllerRegistration(2, false));

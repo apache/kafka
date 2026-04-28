@@ -58,10 +58,10 @@ public class StandaloneConfigTest {
 
     private static Map<String, String> withStringValues(Map<String, ?> inputs, String prefix) {
         return ConfigDef.convertToStringMapWithPasswordValues(inputs).entrySet().stream()
-            .collect(Collectors.toMap(
-                entry -> prefix + entry.getKey(),
-                Map.Entry::getValue
-            ));
+                .collect(Collectors.toMap(
+                        entry -> prefix + entry.getKey(),
+                        Map.Entry::getValue
+                ));
     }
 
     @Test
@@ -82,9 +82,9 @@ public class StandaloneConfigTest {
 
         StandaloneConfig config = new StandaloneConfig(props);
         Map<String, Object> actualProps = config.valuesWithPrefixAllOrNothing(HTTPS_LISTENER_PREFIX)
-            .entrySet().stream()
-            .filter(entry -> expectedSslProps.containsKey(entry.getKey()))
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                .entrySet().stream()
+                .filter(entry -> expectedSslProps.containsKey(entry.getKey()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
         assertEquals(expectedSslProps, actualProps);
     }
 }

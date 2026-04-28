@@ -129,14 +129,14 @@ public class ExampleConnectIntegrationTest {
 
         // validate the intended connector configuration, a config that errors
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(SINK_CONNECTOR_CLASS_NAME, props, 1,
-            "Validating connector configuration produced an unexpected number or errors.");
+                "Validating connector configuration produced an unexpected number or errors.");
 
         // add missing configuration to make the config valid
         props.put("name", CONNECTOR_NAME);
 
         // validate the intended connector configuration, a valid config
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(SINK_CONNECTOR_CLASS_NAME, props, 0,
-            "Validating connector configuration produced an unexpected number or errors.");
+                "Validating connector configuration produced an unexpected number or errors.");
 
         // start a sink connector
         connect.configureConnector(CONNECTOR_NAME, props);
@@ -193,14 +193,14 @@ public class ExampleConnectIntegrationTest {
 
         // validate the intended connector configuration, a config that errors
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(SOURCE_CONNECTOR_CLASS_NAME, props, 1,
-            "Validating connector configuration produced an unexpected number or errors.");
+                "Validating connector configuration produced an unexpected number or errors.");
 
         // add missing configuration to make the config valid
         props.put("name", CONNECTOR_NAME);
 
         // validate the intended connector configuration, a valid config
         connect.assertions().assertExactlyNumErrorsOnConnectorConfigValidation(SOURCE_CONNECTOR_CLASS_NAME, props, 0,
-            "Validating connector configuration produced an unexpected number or errors.");
+                "Validating connector configuration produced an unexpected number or errors.");
 
         // start a source connector
         connect.configureConnector(CONNECTOR_NAME, props);

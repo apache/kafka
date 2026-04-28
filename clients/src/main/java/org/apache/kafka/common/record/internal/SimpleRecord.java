@@ -98,9 +98,9 @@ public class SimpleRecord {
 
         SimpleRecord that = (SimpleRecord) o;
         return timestamp == that.timestamp &&
-                Objects.equals(key, that.key) &&
-                Objects.equals(value, that.value) &&
-                Arrays.equals(headers, that.headers);
+            Objects.equals(key, that.key) &&
+            Objects.equals(value, that.value) &&
+            Arrays.equals(headers, that.headers);
     }
 
     @Override
@@ -115,8 +115,8 @@ public class SimpleRecord {
     @Override
     public String toString() {
         return String.format("SimpleRecord(timestamp=%d, key=%d bytes, value=%d bytes)",
-                timestamp(),
-                key == null ? 0 : key.limit(),
-                value == null ? 0 : value.limit());
+            timestamp(),
+            key == null ? 0 : key.limit(),
+            value == null ? 0 : value.limit());
     }
 }

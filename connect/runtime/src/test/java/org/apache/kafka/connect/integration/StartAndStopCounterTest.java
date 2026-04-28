@@ -92,6 +92,7 @@ public class StartAndStopCounterTest {
         assertTrue(future.get(200, TimeUnit.MILLISECONDS));
         assertTrue(future.isDone());
     }
+
     @Test
     public void shouldFailToWaitForRestartThatNeverHappens() throws Exception {
         waiters = Executors.newSingleThreadExecutor();

@@ -220,17 +220,17 @@ public class TopicMetadataFetcherTest {
         List<MetadataResponse.PartitionMetadata> partitionsMetadata = new ArrayList<>();
         if (error == Errors.NONE) {
             Optional<MetadataResponse.TopicMetadata> foundMetadata = initialUpdateResponse.topicMetadata()
-                    .stream()
-                    .filter(topicMetadata -> topicMetadata.topic().equals(topicName))
-                    .findFirst();
+                .stream()
+                .filter(topicMetadata -> topicMetadata.topic().equals(topicName))
+                .findFirst();
             foundMetadata.ifPresent(topicMetadata -> partitionsMetadata.addAll(topicMetadata.partitionMetadata()));
         }
 
         MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(error, topicName, false,
-                partitionsMetadata);
+            partitionsMetadata);
         List<Node> brokers = new ArrayList<>(initialUpdateResponse.brokers());
         return RequestTestUtils.metadataResponse(brokers, initialUpdateResponse.clusterId(),
-                initialUpdateResponse.controller().id(), Collections.singletonList(topicMetadata));
+            initialUpdateResponse.controller().id(), Collections.singletonList(topicMetadata));
     }
 
     private void buildFetcher() {
@@ -245,16 +245,16 @@ public class TopicMetadataFetcherTest {
     }
 
     private void buildDependencies(MetricConfig metricConfig,
-                                   long metadataExpireMs,
-                                   SubscriptionState subscriptionState,
-                                   LogContext logContext) {
+        long metadataExpireMs,
+        SubscriptionState subscriptionState,
+        LogContext logContext) {
         time = new MockTime(1);
         subscriptions = subscriptionState;
         metadata = new ConsumerMetadata(0, 0, metadataExpireMs, false, false,
-                subscriptions, logContext, new ClusterResourceListeners());
+            subscriptions, logContext, new ClusterResourceListeners());
         client = new MockClient(time, metadata);
         metrics = new Metrics(metricConfig, time);
         consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time,
-                100, 1000, Integer.MAX_VALUE);
+            100, 1000, Integer.MAX_VALUE);
     }
 }

@@ -112,7 +112,7 @@ public class ClusterImageTest {
             setIncarnationId(Uuid.fromString("9ABu6HEgRuS-hjHLgC4cHw")).
             setZkMigrationReady(false).
             setListeners(Map.of("PLAINTEXT",
-                    new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 19092))).
+            new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 19092))).
             setSupportedFeatures(Map.of()).build());
         IMAGE1 = new ClusterImage(map1, cmap1);
 
@@ -125,12 +125,12 @@ public class ClusterImageTest {
             setId(1).setEpoch(1001), FENCE_BROKER_RECORD.highestSupportedVersion()));
         // mark b0 in controlled shutdown
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
-            setBrokerId(0).setBrokerEpoch(1000).setInControlledShutdown(
+                setBrokerId(0).setBrokerEpoch(1000).setInControlledShutdown(
                 BrokerRegistrationInControlledShutdownChange.IN_CONTROLLED_SHUTDOWN.value()),
             BROKER_REGISTRATION_CHANGE_RECORD.highestSupportedVersion()));
         // unregister b2
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new UnregisterBrokerRecord().
-            setBrokerId(2).setBrokerEpoch(123),
+                setBrokerId(2).setBrokerEpoch(123),
             (short) 0));
 
         ControllerEndpointCollection endpointsFor1001 = new ControllerEndpointCollection();
@@ -140,10 +140,10 @@ public class ClusterImageTest {
             setPort(19093).
             setSecurityProtocol(SecurityProtocol.PLAINTEXT.id));
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new RegisterControllerRecord().
-            setControllerId(1001).
-            setIncarnationId(Uuid.fromString("FdEHF-IqScKfYyjZ1CjfNQ")).
-            setZkMigrationReady(true).
-            setEndPoints(endpointsFor1001),
+                setControllerId(1001).
+                setIncarnationId(Uuid.fromString("FdEHF-IqScKfYyjZ1CjfNQ")).
+                setZkMigrationReady(true).
+                setEndPoints(endpointsFor1001),
             (short) 0));
 
         DELTA1 = new ClusterDelta(IMAGE1);
@@ -174,7 +174,7 @@ public class ClusterImageTest {
             setIncarnationId(Uuid.fromString("FdEHF-IqScKfYyjZ1CjfNQ")).
             setZkMigrationReady(true).
             setListeners(Map.of("PLAINTEXT",
-                new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 19093))).
+            new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 19093))).
             setSupportedFeatures(Map.of()).build());
         IMAGE2 = new ClusterImage(map2, cmap2);
 
@@ -187,21 +187,21 @@ public class ClusterImageTest {
             setId(1).setEpoch(1001), UNFENCE_BROKER_RECORD.highestSupportedVersion()));
         // mark b0 as not in controlled shutdown
         DELTA2_RECORDS.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
-            setBrokerId(0).setBrokerEpoch(1000).setInControlledShutdown(
+                setBrokerId(0).setBrokerEpoch(1000).setInControlledShutdown(
                 BrokerRegistrationInControlledShutdownChange.NONE.value()),
             BROKER_REGISTRATION_CHANGE_RECORD.highestSupportedVersion()));
         // re-register b2
         DELTA2_RECORDS.add(new ApiMessageAndVersion(new RegisterBrokerRecord().
-            setBrokerId(2).setIsMigratingZkBroker(true).setIncarnationId(Uuid.fromString("Am5Yse7GQxaw0b2alM74bP")).
-            setBrokerEpoch(1002).setEndPoints(new BrokerEndpointCollection(
+                setBrokerId(2).setIsMigratingZkBroker(true).setIncarnationId(Uuid.fromString("Am5Yse7GQxaw0b2alM74bP")).
+                setBrokerEpoch(1002).setEndPoints(new BrokerEndpointCollection(
                 List.of(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                     setPort(9094).setSecurityProtocol((short) 0)))).
-            setFeatures(new BrokerFeatureCollection(
+                setFeatures(new BrokerFeatureCollection(
                 Set.of(new BrokerFeature().
                     setName(MetadataVersion.FEATURE_NAME).
                     setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
                     setMaxSupportedVersion(MetadataVersion.IBP_3_6_IV0.featureLevel())))).
-            setRack("rack3"),
+                setRack("rack3"),
             REGISTER_BROKER_RECORD.highestSupportedVersion()));
 
         DELTA2 = new ClusterDelta(IMAGE2);
@@ -232,7 +232,7 @@ public class ClusterImageTest {
             setIncarnationId(Uuid.fromString("Am5Yse7GQxaw0b2alM74bP")).
             setListeners(List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9094))).
             setSupportedFeatures(Map.of("metadata.version",
-                VersionRange.of(MetadataVersion.MINIMUM_VERSION.featureLevel(), MetadataVersion.IBP_3_6_IV0.featureLevel()))).
+            VersionRange.of(MetadataVersion.MINIMUM_VERSION.featureLevel(), MetadataVersion.IBP_3_6_IV0.featureLevel()))).
             setRack(Optional.of("rack3")).
             setFenced(true).
             setIsMigratingZkBroker(true).build());
@@ -307,13 +307,13 @@ public class ClusterImageTest {
                 setId(1000).
                 setIncarnationId(Uuid.fromString("9ABu6HEgRuS-hjHLgC4cHw")).
                 setListeners(Map.of("PLAINTEXT",
-                    new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 19092))).
+                new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 19092))).
                 setSupportedFeatures(Map.of()).build()));
         RecordListWriter writer = new RecordListWriter();
         final AtomicReference<String> lossString = new AtomicReference<>("");
         testImage.write(writer, new ImageWriterOptions.Builder(MetadataVersion.IBP_3_6_IV2).
             setLossHandler(loss -> lossString.compareAndSet("", loss.loss())).
-                build());
+            build());
         assertEquals("controller registration data", lossString.get());
     }
 

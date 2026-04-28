@@ -52,10 +52,10 @@ public class TimingWheelTest {
     public void testAddExpiredTask() {
         long startMs = 1000L;
         TimingWheel timingWheel = new TimingWheel(
-            10L, 
-            5, 
-            startMs, 
-            new AtomicInteger(0), 
+            10L,
+            5,
+            startMs,
+            new AtomicInteger(0),
             new DelayQueue<>()
         );
 
@@ -151,7 +151,7 @@ public class TimingWheelTest {
             new AtomicInteger(0),
             new DelayQueue<>()
         );
-        
+
         assertNull(timingWheel.overflowWheel(), "Overflow wheel should not exist initially");
 
         // First overflow task should create parent wheel

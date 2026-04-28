@@ -86,12 +86,15 @@ public class KafkaBasedLogTest {
     private static final TopicPartition TP0 = new TopicPartition(TOPIC, 0);
     private static final TopicPartition TP1 = new TopicPartition(TOPIC, 1);
     private static final Map<String, Object> PRODUCER_PROPS = new HashMap<>();
+
     static {
         PRODUCER_PROPS.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "broker1:9092,broker2:9093");
         PRODUCER_PROPS.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
         PRODUCER_PROPS.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
     }
+
     private static final Map<String, Object> CONSUMER_PROPS = new HashMap<>();
+
     static {
         CONSUMER_PROPS.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "broker1:9092,broker2:9093");
         CONSUMER_PROPS.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer");
@@ -100,6 +103,7 @@ public class KafkaBasedLogTest {
 
     private static final Set<TopicPartition> CONSUMER_ASSIGNMENT = Set.of(TP0, TP1);
     private static final Map<String, String> FIRST_SET = new HashMap<>();
+
     static {
         FIRST_SET.put("key", "value");
         FIRST_SET.put(null, null);
@@ -185,14 +189,14 @@ public class KafkaBasedLogTest {
             consumer.scheduleNopPollTask();
             consumer.scheduleNopPollTask();
             consumer.schedulePollTask(() ->
-                consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY, TP0_VALUE,
-                    new RecordHeaders(), Optional.empty()))
+                    consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY, TP0_VALUE,
+                            new RecordHeaders(), Optional.empty()))
             );
             consumer.scheduleNopPollTask();
             consumer.scheduleNopPollTask();
             consumer.schedulePollTask(() ->
-                consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP1_KEY, TP1_VALUE,
-                    new RecordHeaders(), Optional.empty()))
+                    consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP1_KEY, TP1_VALUE,
+                            new RecordHeaders(), Optional.empty()))
             );
             consumer.schedulePollTask(finishedLatch::countDown);
         });
@@ -288,16 +292,16 @@ public class KafkaBasedLogTest {
             consumer.scheduleNopPollTask();
             consumer.schedulePollTask(() -> {
                 consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY, TP0_VALUE,
-                    new RecordHeaders(), Optional.empty()));
+                        new RecordHeaders(), Optional.empty()));
                 consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY, TP0_VALUE_NEW,
-                    new RecordHeaders(), Optional.empty()));
+                        new RecordHeaders(), Optional.empty()));
                 consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP1_KEY, TP1_VALUE,
-                    new RecordHeaders(), Optional.empty()));
+                        new RecordHeaders(), Optional.empty()));
             });
 
             consumer.schedulePollTask(() ->
-                consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 1, 0L, TimestampType.CREATE_TIME, 0, 0, TP1_KEY, TP1_VALUE_NEW,
-                    new RecordHeaders(), Optional.empty())));
+                    consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 1, 0L, TimestampType.CREATE_TIME, 0, 0, TP1_KEY, TP1_VALUE_NEW,
+                            new RecordHeaders(), Optional.empty())));
 
             // Already have FutureCallback that should be invoked/awaited, so no need for follow up finishedLatch
         });
@@ -331,16 +335,16 @@ public class KafkaBasedLogTest {
         consumer.schedulePollTask(() -> {
             // Trigger exception
             consumer.schedulePollTask(() ->
-                consumer.setPollException(Errors.COORDINATOR_NOT_AVAILABLE.exception()));
+                    consumer.setPollException(Errors.COORDINATOR_NOT_AVAILABLE.exception()));
 
             // Should keep polling until it reaches current log end offset for all partitions
             consumer.scheduleNopPollTask();
             consumer.scheduleNopPollTask();
             consumer.schedulePollTask(() -> {
                 consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY, TP0_VALUE_NEW,
-                    new RecordHeaders(), Optional.empty()));
+                        new RecordHeaders(), Optional.empty()));
                 consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY, TP0_VALUE_NEW,
-                    new RecordHeaders(), Optional.empty()));
+                        new RecordHeaders(), Optional.empty()));
             });
 
             consumer.schedulePollTask(finishedLatch::countDown);
@@ -383,9 +387,9 @@ public class KafkaBasedLogTest {
             consumer.scheduleNopPollTask();
             consumer.schedulePollTask(() -> {
                 consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY, TP0_VALUE,
-                    new RecordHeaders(), Optional.empty()));
+                        new RecordHeaders(), Optional.empty()));
                 consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY, TP0_VALUE_NEW,
-                    new RecordHeaders(), Optional.empty()));
+                        new RecordHeaders(), Optional.empty()));
             });
 
             consumer.schedulePollTask(finishedLatch::countDown);
@@ -412,9 +416,9 @@ public class KafkaBasedLogTest {
         endOffsets.put(TP1, 0L);
         admin = mock(TopicAdmin.class);
         when(admin.endOffsets(eq(tps)))
-            .thenReturn(endOffsets)
-            .thenThrow(exception)
-            .thenReturn(endOffsets);
+                .thenReturn(endOffsets)
+                .thenThrow(exception)
+                .thenReturn(endOffsets);
 
         store.start();
 

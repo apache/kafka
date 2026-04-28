@@ -52,13 +52,13 @@ public class DslWindowParams {
      */
     @Deprecated
     public DslWindowParams(
-            final String name,
-            final Duration retentionPeriod,
-            final Duration windowSize,
-            final boolean retainDuplicates,
-            final EmitStrategy emitStrategy,
-            final boolean isSlidingWindow,
-            final boolean isTimestamped
+        final String name,
+        final Duration retentionPeriod,
+        final Duration windowSize,
+        final boolean retainDuplicates,
+        final EmitStrategy emitStrategy,
+        final boolean isSlidingWindow,
+        final boolean isTimestamped
     ) {
         this.name = Objects.requireNonNull(name);
         this.retentionPeriod = retentionPeriod;
@@ -84,13 +84,13 @@ public class DslWindowParams {
      * @param dslStoreFormat   indicate the dsl store format (see {@link DslStoreFormat}
      */
     public DslWindowParams(
-            final String name,
-            final Duration retentionPeriod,
-            final Duration windowSize,
-            final boolean retainDuplicates,
-            final EmitStrategy emitStrategy,
-            final boolean isSlidingWindow,
-            final DslStoreFormat dslStoreFormat
+        final String name,
+        final Duration retentionPeriod,
+        final Duration windowSize,
+        final boolean retainDuplicates,
+        final EmitStrategy emitStrategy,
+        final boolean isSlidingWindow,
+        final DslStoreFormat dslStoreFormat
     ) {
         this.name = Objects.requireNonNull(name);
         this.retentionPeriod = retentionPeriod;
@@ -153,37 +153,37 @@ public class DslWindowParams {
         }
         final DslWindowParams that = (DslWindowParams) o;
         return retainDuplicates == that.retainDuplicates
-                && Objects.equals(name, that.name)
-                && Objects.equals(retentionPeriod, that.retentionPeriod)
-                && Objects.equals(windowSize, that.windowSize)
-                && Objects.equals(emitStrategy, that.emitStrategy)
-                && Objects.equals(isSlidingWindow, that.isSlidingWindow)
-                && Objects.equals(dslStoreFormat, that.dslStoreFormat);
+            && Objects.equals(name, that.name)
+            && Objects.equals(retentionPeriod, that.retentionPeriod)
+            && Objects.equals(windowSize, that.windowSize)
+            && Objects.equals(emitStrategy, that.emitStrategy)
+            && Objects.equals(isSlidingWindow, that.isSlidingWindow)
+            && Objects.equals(dslStoreFormat, that.dslStoreFormat);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(
-                name,
-                retentionPeriod,
-                windowSize,
-                retainDuplicates,
-                emitStrategy,
-                isSlidingWindow,
-                dslStoreFormat
+            name,
+            retentionPeriod,
+            windowSize,
+            retainDuplicates,
+            emitStrategy,
+            isSlidingWindow,
+            dslStoreFormat
         );
     }
 
     @Override
     public String toString() {
         return "DslWindowParams{" +
-                "name='" + name + '\'' +
-                ", retentionPeriod=" + retentionPeriod +
-                ", windowSize=" + windowSize +
-                ", retainDuplicates=" + retainDuplicates +
-                ", emitStrategy=" + emitStrategy +
-                ", isSlidingWindow=" + isSlidingWindow +
-                ", dslStoreFormat=" + dslStoreFormat +
-                '}';
+            "name='" + name + '\'' +
+            ", retentionPeriod=" + retentionPeriod +
+            ", windowSize=" + windowSize +
+            ", retainDuplicates=" + retainDuplicates +
+            ", emitStrategy=" + emitStrategy +
+            ", isSlidingWindow=" + isSlidingWindow +
+            ", dslStoreFormat=" + dslStoreFormat +
+            '}';
     }
 }

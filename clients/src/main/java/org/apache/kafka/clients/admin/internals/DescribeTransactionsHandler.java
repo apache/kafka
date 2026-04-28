@@ -173,7 +173,7 @@ public class DescribeTransactionsHandler extends AdminApiHandler.Batched<Coordin
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
                 log.debug("DescribeTransactions request for transactionalId `{}` failed because the " +
-                        "coordinator is still in the process of loading state. Will retry",
+                    "coordinator is still in the process of loading state. Will retry",
                     transactionalIdKey.idValue);
                 break;
 
@@ -183,7 +183,7 @@ public class DescribeTransactionsHandler extends AdminApiHandler.Batched<Coordin
                 // the key so that we retry the `FindCoordinator` request
                 unmapped.add(transactionalIdKey);
                 log.debug("DescribeTransactions request for transactionalId `{}` returned error {}. Will attempt " +
-                        "to find the coordinator again and retry", transactionalIdKey.idValue, error);
+                    "to find the coordinator again and retry", transactionalIdKey.idValue, error);
                 break;
 
             default:

@@ -53,9 +53,9 @@ public class CompressedRecordBatchValidationBenchmark extends BaseRecordBatchBen
     public void measureValidateMessagesAndAssignOffsetsCompressed(Blackhole bh) {
         MemoryRecords records = MemoryRecords.readableRecords(singleBatchBuffer.duplicate());
         new LogValidator(records, new TopicPartition("a", 0),
-            Time.SYSTEM, compressionType, compression(), false,  messageVersion,
-            TimestampType.CREATE_TIME, Long.MAX_VALUE, Long.MAX_VALUE, 0, AppendOrigin.CLIENT
+                Time.SYSTEM, compressionType, compression(), false, messageVersion,
+                TimestampType.CREATE_TIME, Long.MAX_VALUE, Long.MAX_VALUE, 0, AppendOrigin.CLIENT
         ).validateMessagesAndAssignOffsetsCompressed(PrimitiveRef.ofLong(startingOffset),
-            validatorMetricsRecorder, requestLocal.bufferSupplier());
+                validatorMetricsRecorder, requestLocal.bufferSupplier());
     }
 }

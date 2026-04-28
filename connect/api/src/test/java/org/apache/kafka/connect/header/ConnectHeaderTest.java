@@ -81,9 +81,9 @@ public class ConnectHeaderTest {
     @Test
     public void shouldGetSchemaFromStruct() {
         Schema schema = SchemaBuilder.struct()
-                                     .field("foo", Schema.STRING_SCHEMA)
-                                     .field("bar", Schema.INT32_SCHEMA)
-                                     .build();
+                .field("foo", Schema.STRING_SCHEMA)
+                .field("bar", Schema.INT32_SCHEMA)
+                .build();
         Struct value = new Struct(schema);
         value.put("foo", "value");
         value.put("bar", 100);

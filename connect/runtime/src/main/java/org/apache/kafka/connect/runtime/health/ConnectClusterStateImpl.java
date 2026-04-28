@@ -37,15 +37,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 public class ConnectClusterStateImpl implements ConnectClusterState {
-    
+
     private final long herderRequestTimeoutMs;
     private final ConnectClusterDetails clusterDetails;
     private final Herder herder;
 
     public ConnectClusterStateImpl(
-        long connectorsTimeoutMs,
-        ConnectClusterDetails clusterDetails,
-        Herder herder
+            long connectorsTimeoutMs,
+            ConnectClusterDetails clusterDetails,
+            Herder herder
     ) {
         this.herderRequestTimeoutMs = connectorsTimeoutMs;
         this.clusterDetails = clusterDetails;
@@ -67,16 +67,16 @@ public class ConnectClusterStateImpl implements ConnectClusterState {
     public ConnectorHealth connectorHealth(String connName) {
         ConnectorStateInfo state = herder.connectorStatus(connName);
         ConnectorState connectorState = new ConnectorState(
-            state.connector().state(),
-            state.connector().workerId(),
-            state.connector().trace()
+                state.connector().state(),
+                state.connector().workerId(),
+                state.connector().trace()
         );
         Map<Integer, TaskState> taskStates = taskStates(state.tasks());
         return new ConnectorHealth(
-            connName,
-            connectorState,
-            taskStates,
-            ConnectorType.valueOf(state.type().name())
+                connName,
+                connectorState,
+                taskStates,
+                ConnectorType.valueOf(state.type().name())
         );
     }
 
@@ -88,8 +88,8 @@ public class ConnectClusterStateImpl implements ConnectClusterState {
             return new HashMap<>(connectorConfigCallback.get(herderRequestTimeoutMs, TimeUnit.MILLISECONDS));
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             throw new ConnectException(
-                String.format("Failed to retrieve configuration for connector '%s'", connName),
-                e
+                    String.format("Failed to retrieve configuration for connector '%s'", connName),
+                    e
             );
         }
     }
@@ -105,8 +105,8 @@ public class ConnectClusterStateImpl implements ConnectClusterState {
 
         for (ConnectorStateInfo.TaskState state : states) {
             taskStates.put(
-                state.id(),
-                new TaskState(state.id(), state.state(), state.workerId(), state.trace())
+                    state.id(),
+                    new TaskState(state.id(), state.state(), state.workerId(), state.trace())
             );
         }
         return taskStates;

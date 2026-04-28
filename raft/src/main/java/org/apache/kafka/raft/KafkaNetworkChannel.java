@@ -68,7 +68,7 @@ public class KafkaNetworkChannel implements NetworkChannel {
 
         @Override
         public Collection<RequestAndCompletionHandler> generateRequests() {
-            List<RequestAndCompletionHandler> list =  new ArrayList<>();
+            List<RequestAndCompletionHandler> list = new ArrayList<>();
             while (true) {
                 RequestAndCompletionHandler request = queue.poll();
                 if (request == null) {
@@ -131,9 +131,9 @@ public class KafkaNetworkChannel implements NetworkChannel {
 
     private void sendCompleteFuture(RaftRequest.Outbound request, ApiMessage message) {
         RaftResponse.Inbound response = new RaftResponse.Inbound(
-                request.correlationId(),
-                message,
-                request.destination()
+            request.correlationId(),
+            message,
+            request.destination()
         );
         request.completion.complete(response);
     }

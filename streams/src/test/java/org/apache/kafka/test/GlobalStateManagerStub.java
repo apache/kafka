@@ -38,15 +38,16 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     public boolean committed;
 
     public GlobalStateManagerStub(final Set<String> storeNames,
-                                  final Map<TopicPartition, Long> offsets,
-                                  final File baseDirectory) {
+        final Map<TopicPartition, Long> offsets,
+        final File baseDirectory) {
         this.storeNames = storeNames;
         this.offsets = offsets;
         this.baseDirectory = baseDirectory;
     }
 
     @Override
-    public void setGlobalProcessorContext(final InternalProcessorContext processorContext) {}
+    public void setGlobalProcessorContext(final InternalProcessorContext processorContext) {
+    }
 
     @Override
     public Set<String> initialize() {
@@ -61,8 +62,9 @@ public class GlobalStateManagerStub implements GlobalStateManager {
 
     @Override
     public void registerStore(final StateStore store,
-                              final StateRestoreCallback stateRestoreCallback,
-                              final CommitCallback checkpoint) {}
+        final StateRestoreCallback stateRestoreCallback,
+        final CommitCallback checkpoint) {
+    }
 
     @Override
     public void commit() {

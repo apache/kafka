@@ -64,8 +64,8 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
     protected InternalProcessorContext<Windowed<KIn>, Change<VAgg>> internalProcessorContext;
 
     protected AbstractKStreamTimeWindowAggregateProcessor(final String storeName,
-                                                          final EmitStrategy emitStrategy,
-                                                          final boolean sendOldValues) {
+        final EmitStrategy emitStrategy,
+        final boolean sendOldValues) {
         this.storeName = storeName;
         this.emitStrategy = emitStrategy;
         this.sendOldValues = sendOldValues;
@@ -126,10 +126,10 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
     }
 
     protected void maybeForwardUpdate(final Record<KIn, VIn> record,
-                                      final Window window,
-                                      final VAgg oldAgg,
-                                      final VAgg newAgg,
-                                      final long newTimestamp) {
+        final Window window,
+        final VAgg oldAgg,
+        final VAgg newAgg,
+        final long newTimestamp) {
         if (emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
             return;
         }
@@ -157,9 +157,9 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
     }
 
     protected void logSkippedRecordForExpiredWindow(final Logger log,
-                                                    final long timestamp,
-                                                    final long windowExpire,
-                                                    final String window) {
+        final long timestamp,
+        final long windowExpire,
+        final String window) {
         if (context().recordMetadata().isPresent()) {
             final RecordMetadata recordMetadata = context().recordMetadata().get();
             log.warn("Skipping record for expired window. " +
@@ -218,9 +218,9 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
     }
 
     private void fetchAndEmit(final Record<KIn, VIn> record,
-                              final long windowCloseTime,
-                              final long emitRangeLowerBound,
-                              final long emitRangeUpperBound) {
+        final long windowCloseTime,
+        final long emitRangeLowerBound,
+        final long emitRangeUpperBound) {
         final long startMs = time.milliseconds();
 
         try (final KeyValueIterator<Windowed<KIn>, ValueTimestampHeaders<VAgg>> windowToEmit

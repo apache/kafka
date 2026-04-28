@@ -66,6 +66,6 @@ public class GetTelemetrySubscriptionsResponse extends AbstractResponse {
 
     public static GetTelemetrySubscriptionsResponse parse(Readable readable, short version) {
         return new GetTelemetrySubscriptionsResponse(new GetTelemetrySubscriptionsResponseData(
-                readable, version));
+            readable, version));
     }
 }

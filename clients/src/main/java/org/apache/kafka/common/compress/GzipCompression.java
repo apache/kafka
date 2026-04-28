@@ -68,9 +68,9 @@ public class GzipCompression implements Compression {
             // ChunkedBytesStream is used to wrap the GZIPInputStream because the default implementation of
             // GZIPInputStream does not use an intermediate buffer for decompression in chunks.
             return new ChunkedBytesStream(new GZIPInputStream(new ByteBufferInputStream(buffer), 8 * 1024),
-                                          decompressionBufferSupplier,
-                                          decompressionOutputSize(),
-                                          false);
+                decompressionBufferSupplier,
+                decompressionOutputSize(),
+                false);
         } catch (Exception e) {
             throw new KafkaException(e);
         }

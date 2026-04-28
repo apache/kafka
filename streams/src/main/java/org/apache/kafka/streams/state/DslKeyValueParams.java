@@ -47,7 +47,7 @@ public class DslKeyValueParams {
      * @param dslStoreFormat the format of the state store, see ({@link DslStoreFormat}
      */
     public DslKeyValueParams(final String name, final DslStoreFormat dslStoreFormat) {
-        this.name =  Objects.requireNonNull(name);
+        this.name = Objects.requireNonNull(name);
         this.dslStoreFormat = Objects.requireNonNull(dslStoreFormat);
     }
 
@@ -83,7 +83,7 @@ public class DslKeyValueParams {
         }
         final DslKeyValueParams that = (DslKeyValueParams) o;
         return dslStoreFormat == that.dslStoreFormat
-                && Objects.equals(name, that.name);
+            && Objects.equals(name, that.name);
     }
 
     @Override
@@ -94,8 +94,8 @@ public class DslKeyValueParams {
     @Override
     public String toString() {
         return "DslKeyValueParams{" +
-                "name='" + name + '\'' +
-                "dslStoreFormat=" + dslStoreFormat +
-                '}';
+            "name='" + name + '\'' +
+            "dslStoreFormat=" + dslStoreFormat +
+            '}';
     }
 }

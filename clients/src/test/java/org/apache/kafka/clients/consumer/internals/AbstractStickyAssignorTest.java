@@ -183,9 +183,9 @@ public abstract class AbstractStickyAssignorTest {
         partitionsPerTopic.put(topic, partitionInfos(topic, 2));
         subscriptions = new HashMap<>();
         subscriptions.put(consumerId, buildSubscriptionV2Above(
-                topics(topic),
-                List.of(tp(topic, 0), tp(topic, 1), tp(otherTopic, 0), tp(otherTopic, 1)),
-                generationId, 0));
+            topics(topic),
+            List.of(tp(topic, 0), tp(topic, 1), tp(otherTopic, 0), tp(otherTopic, 1)),
+            generationId, 0));
 
         Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
         assertEquals(partitions(tp(topic, 0), tp(topic, 1)), assignment.get(consumerId));
@@ -544,7 +544,7 @@ public abstract class AbstractStickyAssignorTest {
     public void testPoorRoundRobinAssignmentScenario(RackConfig rackConfig) {
         initializeRacks(rackConfig);
         Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
-        for (int i = 1; i <= 5; i++) {
+        for (int i = 1;i <= 5;i++) {
             String topicName = String.format("topic%d", i);
             partitionsPerTopic.put(topicName, partitionInfos(topicName, (i % 2) + 1));
         }
@@ -621,14 +621,14 @@ public abstract class AbstractStickyAssignorTest {
     public void testReassignmentAfterOneConsumerLeaves(RackConfig rackConfig) {
         initializeRacks(rackConfig);
         Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
-        for (int i = 1; i < 20; i++) {
+        for (int i = 1;i < 20;i++) {
             String topicName = getTopicName(i, 20);
             partitionsPerTopic.put(topicName, partitionInfos(topicName, i));
         }
 
-        for (int i = 1; i < 20; i++) {
+        for (int i = 1;i < 20;i++) {
             List<String> topics = new ArrayList<>();
-            for (int j = 1; j <= i; j++)
+            for (int j = 1;j <= i;j++)
                 topics.add(getTopicName(j, 20));
             subscriptions.put(getConsumerName(i, 20), subscription(topics, i));
         }
@@ -636,7 +636,7 @@ public abstract class AbstractStickyAssignorTest {
         Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
 
-        for (int i = 1; i < 20; i++) {
+        for (int i = 1;i < 20;i++) {
             String consumer = getConsumerName(i, 20);
             subscriptions.put(consumer,
                 buildSubscriptionV2Above(subscriptions.get(consumer).topics(), assignment.get(consumer), generationId, i));
@@ -656,7 +656,7 @@ public abstract class AbstractStickyAssignorTest {
         Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put("topic", partitionInfos("topic", 20));
 
-        for (int i = 1; i < 10; i++)
+        for (int i = 1;i < 10;i++)
             subscriptions.put(getConsumerName(i, 10),
                 subscription(topics("topic"), i));
 
@@ -677,14 +677,14 @@ public abstract class AbstractStickyAssignorTest {
     public void testSameSubscriptions(RackConfig rackConfig) {
         initializeRacks(rackConfig);
         Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
-        for (int i = 1; i < 15; i++) {
+        for (int i = 1;i < 15;i++) {
             String topicName = getTopicName(i, 15);
             partitionsPerTopic.put(topicName, partitionInfos(topicName, i));
         }
 
-        for (int i = 1; i < 9; i++) {
+        for (int i = 1;i < 9;i++) {
             List<String> topics = new ArrayList<>();
-            for (int j = 1; j <= partitionsPerTopic.size(); j++)
+            for (int j = 1;j <= partitionsPerTopic.size();j++)
                 topics.add(getTopicName(j, 15));
             subscriptions.put(getConsumerName(i, 9), subscription(topics, i));
         }
@@ -693,7 +693,7 @@ public abstract class AbstractStickyAssignorTest {
         assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
 
-        for (int i = 1; i < 9; i++) {
+        for (int i = 1;i < 9;i++) {
             String consumer = getConsumerName(i, 9);
             subscriptions.put(consumer,
                 buildSubscriptionV2Above(subscriptions.get(consumer).topics(), assignment.get(consumer), generationId, i));
@@ -717,19 +717,19 @@ public abstract class AbstractStickyAssignorTest {
 
         List<String> topics = new ArrayList<>();
         Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
-        for (int i = 0; i < topicCount; i++) {
+        for (int i = 0;i < topicCount;i++) {
             String topicName = getTopicName(i, topicCount);
             topics.add(topicName);
             partitionsPerTopic.put(topicName, partitionInfos(topicName, partitionCount));
         }
 
-        for (int i = 0; i < consumerCount; i++) {
+        for (int i = 0;i < consumerCount;i++) {
             subscriptions.put(getConsumerName(i, consumerCount), subscription(topics, i));
         }
 
         Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
 
-        for (int i = 1; i < consumerCount; i++) {
+        for (int i = 1;i < consumerCount;i++) {
             String consumer = getConsumerName(i, consumerCount);
             subscriptions.put(consumer, buildSubscriptionV2Above(topics, assignment.get(consumer), generationId, i));
         }
@@ -750,12 +750,12 @@ public abstract class AbstractStickyAssignorTest {
 
         List<String> topics = new ArrayList<>();
         Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
-        for (int i = 0; i < topicCount; i++) {
+        for (int i = 0;i < topicCount;i++) {
             String topicName = getTopicName(i, topicCount);
             topics.add(topicName);
             partitionsPerTopic.put(topicName, partitionInfos(topicName, partitionCount));
         }
-        for (int i = 0; i < consumerCount; i++) {
+        for (int i = 0;i < consumerCount;i++) {
             if (i == consumerCount - 1) {
                 subscriptions.put(getConsumerName(i, consumerCount), subscription(topics.subList(0, 1), i));
             } else {
@@ -765,7 +765,7 @@ public abstract class AbstractStickyAssignorTest {
 
         Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
 
-        for (int i = 1; i < consumerCount; i++) {
+        for (int i = 1;i < consumerCount;i++) {
             String consumer = getConsumerName(i, consumerCount);
             if (i == consumerCount - 1) {
                 subscriptions.put(consumer, buildSubscriptionV2Above(topics.subList(0, 1), assignment.get(consumer), generationId, i));
@@ -788,35 +788,35 @@ public abstract class AbstractStickyAssignorTest {
 
         List<String> topics = new ArrayList<>();
         Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
-        for (int i = 0; i < topicCount; i++) {
+        for (int i = 0;i < topicCount;i++) {
             String topicName = getTopicName(i, topicCount);
             topics.add(topicName);
             partitionsPerTopic.put(topicName, partitionInfos(topicName, partitionCount));
         }
-        for (int i = 0; i < consumerCount; i++) {
+        for (int i = 0;i < consumerCount;i++) {
             if (i % 4 == 0) {
                 subscriptions.put(getConsumerName(i, consumerCount),
-                        subscription(topics.subList(0, topicCount / 2), i));
+                    subscription(topics.subList(0, topicCount / 2), i));
             } else {
                 subscriptions.put(getConsumerName(i, consumerCount),
-                        subscription(topics.subList(topicCount / 2, topicCount), i));
+                    subscription(topics.subList(topicCount / 2, topicCount), i));
             }
         }
 
         Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
 
-        for (int i = 1; i < consumerCount; i++) {
+        for (int i = 1;i < consumerCount;i++) {
             String consumer = getConsumerName(i, consumerCount);
             if (i % 4 == 0) {
                 subscriptions.put(
-                        consumer,
-                        buildSubscriptionV2Above(topics.subList(0, topicCount / 2),
+                    consumer,
+                    buildSubscriptionV2Above(topics.subList(0, topicCount / 2),
                         assignment.get(consumer), generationId, i)
                 );
             } else {
                 subscriptions.put(
-                        consumer,
-                        buildSubscriptionV2Above(topics.subList(topicCount / 2, topicCount),
+                    consumer,
+                    buildSubscriptionV2Above(topics.subList(topicCount / 2, topicCount),
                         assignment.get(consumer), generationId, i)
                 );
             }
@@ -833,30 +833,30 @@ public abstract class AbstractStickyAssignorTest {
         int[][] sequence = new int[][]{{1, 2, 3}, {1, 3, 2}, {2, 1, 3}, {2, 3, 1}, {3, 1, 2}, {3, 2, 1}};
         for (int[] ints : sequence) {
             subscriptions.put(
-                    consumer1,
-                    buildSubscriptionV2Above(topics(topic),
+                consumer1,
+                buildSubscriptionV2Above(topics(topic),
                     partitions(tp(topic, 0), tp(topic, 2)), ints[0], 0)
             );
             subscriptions.put(
-                    consumer2,
-                    buildSubscriptionV2Above(topics(topic),
+                consumer2,
+                buildSubscriptionV2Above(topics(topic),
                     partitions(tp(topic, 1), tp(topic, 2), tp(topic, 3)), ints[1], 1)
             );
             subscriptions.put(
-                    consumer3,
-                    buildSubscriptionV2Above(topics(topic),
+                consumer3,
+                buildSubscriptionV2Above(topics(topic),
                     partitions(tp(topic, 2), tp(topic, 4), tp(topic, 5)), ints[2], 2)
             );
             subscriptions.put(
-                    consumer4,
-                    buildSubscriptionV2Above(topics(topic1),
+                consumer4,
+                buildSubscriptionV2Above(topics(topic1),
                     partitions(tp(topic1, 0)), 2, 3)
             );
 
             Map<String, List<TopicPartition>> assign = assignor.assignPartitions(partitionsPerTopic, subscriptions);
             assertEquals(assign.values().stream().mapToInt(List::size).sum(),
-                    assign.values().stream().flatMap(List::stream).collect(Collectors.toSet()).size());
-            for (List<TopicPartition> list: assign.values()) {
+                assign.values().stream().flatMap(List::stream).collect(Collectors.toSet()).size());
+            for (List<TopicPartition> list : assign.values()) {
                 assertTrue(list.size() >= 1 && list.size() <= 2);
             }
         }
@@ -872,14 +872,14 @@ public abstract class AbstractStickyAssignorTest {
         int consumerCount = 200;
 
         Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
-        for (int i = 0; i < topicCount; i++) {
+        for (int i = 0;i < topicCount;i++) {
             String topicName = getTopicName(i, topicCount);
             partitionsPerTopic.put(topicName, partitionInfos(topicName, rand.nextInt(10) + 1));
         }
 
-        for (int i = 0; i < consumerCount; i++) {
+        for (int i = 0;i < consumerCount;i++) {
             List<String> topics = new ArrayList<>();
-            for (int j = 0; j < rand.nextInt(20); j++)
+            for (int j = 0;j < rand.nextInt(20);j++)
                 topics.add(getTopicName(rand.nextInt(topicCount), topicCount));
             subscriptions.put(getConsumerName(i, consumerCount), subscription(topics, i));
         }
@@ -887,12 +887,12 @@ public abstract class AbstractStickyAssignorTest {
         Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
 
-        for (int i = 1; i < consumerCount; i++) {
+        for (int i = 1;i < consumerCount;i++) {
             String consumer = getConsumerName(i, consumerCount);
             subscriptions.put(consumer,
                 buildSubscriptionV2Above(subscriptions.get(consumer).topics(), assignment.get(consumer), generationId, i));
         }
-        for (int i = 0; i < 50; ++i) {
+        for (int i = 0;i < 50;++i) {
             String c = getConsumerName(rand.nextInt(consumerCount), consumerCount);
             subscriptions.remove(c);
         }
@@ -907,14 +907,14 @@ public abstract class AbstractStickyAssignorTest {
     public void testNewSubscription(RackConfig rackConfig) {
         initializeRacks(rackConfig);
         Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
-        for (int i = 1; i < 5; i++) {
+        for (int i = 1;i < 5;i++) {
             String topicName = getTopicName(i, 5);
             partitionsPerTopic.put(topicName, partitionInfos(topicName, 1));
         }
 
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0;i < 3;i++) {
             List<String> topics = new ArrayList<>();
-            for (int j = i; j <= 3 * i - 2; j++)
+            for (int j = i;j <= 3 * i - 2;j++)
                 topics.add(getTopicName(j, 5));
             subscriptions.put(getConsumerName(i, 3), subscription(topics, i));
         }
@@ -938,7 +938,7 @@ public abstract class AbstractStickyAssignorTest {
         String topic6 = "topic6";
 
         Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
-        for (int i = 1; i <= 6; i++) {
+        for (int i = 1;i <= 6;i++) {
             String topicName = String.format("topic%d", i);
             partitionsPerTopic.put(topicName, partitionInfos(topicName, 1));
         }
@@ -976,7 +976,7 @@ public abstract class AbstractStickyAssignorTest {
         Map<String, TopicPartition> partitionsAssigned = new HashMap<>();
 
         Set<Map.Entry<String, List<TopicPartition>>> assignments = assignment.entrySet();
-        for (Map.Entry<String, List<TopicPartition>> entry: assignments) {
+        for (Map.Entry<String, List<TopicPartition>> entry : assignments) {
             String consumer = entry.getKey();
             List<TopicPartition> topicPartitions = entry.getValue();
             int size = topicPartitions.size();
@@ -1000,7 +1000,7 @@ public abstract class AbstractStickyAssignorTest {
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
 
         assignments = assignment.entrySet();
-        for (Map.Entry<String, List<TopicPartition>> entry: assignments) {
+        for (Map.Entry<String, List<TopicPartition>> entry : assignments) {
             String consumer = entry.getKey();
             List<TopicPartition> topicPartitions = entry.getValue();
             assertEquals(1, topicPartitions.size(), "Consumer " + consumer + " is assigned more topic partitions than expected.");
@@ -1051,13 +1051,13 @@ public abstract class AbstractStickyAssignorTest {
         final int minNumTopics = 10;
         final int maxNumTopics = 20;
 
-        for (int round = 1; round <= 100; ++round) {
+        for (int round = 1;round <= 100;++round) {
             int numTopics = minNumTopics + new Random().nextInt(maxNumTopics - minNumTopics);
 
             ArrayList<String> topics = new ArrayList<>();
 
             Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
-            for (int i = 0; i < numTopics; ++i) {
+            for (int i = 0;i < numTopics;++i) {
                 String topicName = getTopicName(i, maxNumTopics);
                 topics.add(topicName);
                 partitionsPerTopic.put(topicName, partitionInfos(topicName, i + 1));
@@ -1065,7 +1065,7 @@ public abstract class AbstractStickyAssignorTest {
 
             int numConsumers = minNumConsumers + new Random().nextInt(maxNumConsumers - minNumConsumers);
 
-            for (int i = 0; i < numConsumers; ++i) {
+            for (int i = 0;i < numConsumers;++i) {
                 List<String> sub = Utils.sorted(getRandomSublist(topics));
                 subscriptions.put(getConsumerName(i, maxNumConsumers), subscription(sub, i));
             }
@@ -1076,7 +1076,7 @@ public abstract class AbstractStickyAssignorTest {
             verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
 
             subscriptions.clear();
-            for (int i = 0; i < numConsumers; ++i) {
+            for (int i = 0;i < numConsumers;++i) {
                 List<String> sub = Utils.sorted(getRandomSublist(topics));
                 String consumer = getConsumerName(i, maxNumConsumers);
                 subscriptions.put(consumer, buildSubscriptionV2Above(sub, assignment.get(consumer), generationId, i));
@@ -1232,7 +1232,7 @@ public abstract class AbstractStickyAssignorTest {
         Map<String, List<TopicPartition>> assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
         // ensure assigned partitions don't get reassigned
         assertEquals(new HashSet<>(partitions(tp(topic1, 2), tp(topic2, 1), tp(topic3, 0))),
-                new HashSet<>(assignment.get(consumer1)));
+            new HashSet<>(assignment.get(consumer1)));
         assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
@@ -1271,9 +1271,9 @@ public abstract class AbstractStickyAssignorTest {
         List<String> allTopics = asList("t1", "t2", "t3");
         List<List<String>> consumerTopics = asList(allTopics, allTopics, allTopics);
         List<String> nonRackAwareAssignment = asList(
-                "t1-0, t1-3, t2-0, t2-3, t2-6",
-                "t1-1, t1-4, t2-1, t2-4, t3-0",
-                "t1-2, t1-5, t2-2, t2-5, t3-1"
+            "t1-0, t1-3, t2-0, t2-3, t2-6",
+            "t1-1, t1-4, t2-1, t2-4, t3-0",
+            "t1-2, t1-5, t2-2, t2-5, t3-1"
         );
         verifyUniformSubscription(assignor, topics, 3, nullRacks(3), racks(3), consumerTopics, nonRackAwareAssignment, -1);
         verifyUniformSubscription(assignor, topics, 3, racks(3), nullRacks(3), consumerTopics, nonRackAwareAssignment, -1);
@@ -1319,17 +1319,17 @@ public abstract class AbstractStickyAssignorTest {
     }
 
     private void verifyUniformSubscription(AbstractStickyAssignor assignor,
-                                           Map<String, Integer> numPartitionsPerTopic,
-                                           int replicationFactor,
-                                           List<String> brokerRacks,
-                                           List<String> consumerRacks,
-                                           List<List<String>> consumerTopics,
-                                           List<String> expectedAssignments,
-                                           int numPartitionsWithRackMismatch) {
+        Map<String, Integer> numPartitionsPerTopic,
+        int replicationFactor,
+        List<String> brokerRacks,
+        List<String> consumerRacks,
+        List<List<String>> consumerTopics,
+        List<String> expectedAssignments,
+        int numPartitionsWithRackMismatch) {
         verifyRackAssignment(assignor, numPartitionsPerTopic, replicationFactor, brokerRacks, consumerRacks,
-                consumerTopics, null, expectedAssignments, numPartitionsWithRackMismatch);
+            consumerTopics, null, expectedAssignments, numPartitionsWithRackMismatch);
         verifyRackAssignment(assignor, numPartitionsPerTopic, replicationFactor, brokerRacks, consumerRacks,
-                consumerTopics, expectedAssignments, expectedAssignments, numPartitionsWithRackMismatch);
+            consumerTopics, expectedAssignments, expectedAssignments, numPartitionsWithRackMismatch);
     }
 
     @Test
@@ -1338,9 +1338,9 @@ public abstract class AbstractStickyAssignorTest {
         List<String> allTopics = asList("t1", "t2", "t3");
         List<List<String>> consumerTopics = asList(allTopics, allTopics, asList("t1", "t3"));
         List<String> nonRackAwareAssignment = asList(
-                "t1-5, t2-0, t2-2, t2-4, t2-6",
-                "t1-3, t2-1, t2-3, t2-5, t3-0",
-                "t1-0, t1-1, t1-2, t1-4, t3-1"
+            "t1-5, t2-0, t2-2, t2-4, t2-6",
+            "t1-3, t2-1, t2-3, t2-5, t3-0",
+            "t1-0, t1-1, t1-2, t1-4, t3-1"
         );
         verifyNonEqualSubscription(assignor, topics, 3, nullRacks(3), racks(3), consumerTopics, nonRackAwareAssignment, -1);
         verifyNonEqualSubscription(assignor, topics, 3, racks(3), nullRacks(3), consumerTopics, nonRackAwareAssignment, -1);
@@ -1362,7 +1362,7 @@ public abstract class AbstractStickyAssignorTest {
 
         // One consumer on a rack with no partitions. We allocate with misaligned rack to this consumer to maintain balance.
         verifyNonEqualSubscription(assignor, topics, 3, racks(2), racks(3), consumerTopics,
-                asList("t1-5, t2-0, t2-2, t2-4, t2-6", "t1-3, t2-1, t2-3, t2-5, t3-0", "t1-0, t1-1, t1-2, t1-4, t3-1"), 5);
+            asList("t1-5, t2-0, t2-2, t2-4, t2-6", "t1-3, t2-1, t2-3, t2-5, t3-0", "t1-0, t1-1, t1-2, t1-4, t3-1"), 5);
 
         // Verify that rack-awareness is improved if already owned partitions are misaligned.
         // Rack alignment is attempted, but not guaranteed.
@@ -1397,17 +1397,17 @@ public abstract class AbstractStickyAssignorTest {
     }
 
     private void verifyNonEqualSubscription(AbstractStickyAssignor assignor,
-                                            Map<String, Integer> numPartitionsPerTopic,
-                                            int replicationFactor,
-                                            List<String> brokerRacks,
-                                            List<String> consumerRacks,
-                                            List<List<String>> consumerTopics,
-                                            List<String> expectedAssignments,
-                                            int numPartitionsWithRackMismatch) {
+        Map<String, Integer> numPartitionsPerTopic,
+        int replicationFactor,
+        List<String> brokerRacks,
+        List<String> consumerRacks,
+        List<List<String>> consumerTopics,
+        List<String> expectedAssignments,
+        int numPartitionsWithRackMismatch) {
         verifyRackAssignment(assignor, numPartitionsPerTopic, replicationFactor, brokerRacks,
-                consumerRacks, consumerTopics, null, expectedAssignments, numPartitionsWithRackMismatch);
+            consumerRacks, consumerTopics, null, expectedAssignments, numPartitionsWithRackMismatch);
         verifyRackAssignment(assignor, numPartitionsPerTopic, replicationFactor, brokerRacks,
-                consumerRacks, consumerTopics, expectedAssignments, expectedAssignments, numPartitionsWithRackMismatch);
+            consumerRacks, consumerTopics, expectedAssignments, expectedAssignments, numPartitionsWithRackMismatch);
     }
 
     private String getTopicName(int i, int maxNum) {
@@ -1451,7 +1451,7 @@ public abstract class AbstractStickyAssignorTest {
     protected static boolean isFullyBalanced(Map<String, List<TopicPartition>> assignment) {
         int min = Integer.MAX_VALUE;
         int max = Integer.MIN_VALUE;
-        for (List<TopicPartition> topicPartitions: assignment.values()) {
+        for (List<TopicPartition> topicPartitions : assignment.values()) {
             int size = topicPartitions.size();
             if (size < min)
                 min = size;
@@ -1467,7 +1467,7 @@ public abstract class AbstractStickyAssignorTest {
         Random random = new Random();
         int howManyToRemove = random.nextInt(len);
 
-        for (int i = 1; i <= howManyToRemove; ++i)
+        for (int i = 1;i <= howManyToRemove;++i)
             selectedItems.remove(random.nextInt(selectedItems.size()));
 
         return selectedItems;
@@ -1487,25 +1487,25 @@ public abstract class AbstractStickyAssignorTest {
      * @param partitionsPerTopic: number of partitions per topic
      */
     protected void verifyValidityAndBalance(Map<String, Subscription> subscriptions,
-                                            Map<String, List<TopicPartition>> assignments,
-                                            Map<String, List<PartitionInfo>> partitionsPerTopic) {
+        Map<String, List<TopicPartition>> assignments,
+        Map<String, List<PartitionInfo>> partitionsPerTopic) {
         int size = subscriptions.size();
         assert size == assignments.size();
 
         List<String> consumers = Utils.sorted(assignments.keySet());
 
-        for (int i = 0; i < size; ++i) {
+        for (int i = 0;i < size;++i) {
             String consumer = consumers.get(i);
             List<TopicPartition> partitions = assignments.get(consumer);
-            for (TopicPartition partition: partitions)
+            for (TopicPartition partition : partitions)
                 assertTrue(subscriptions.get(consumer).topics().contains(partition.topic()),
                     "Error: Partition " + partition + "is assigned to c" + i + ", but it is not subscribed to Topic t" +
-                    partition.topic() + "\nSubscriptions: " + subscriptions + "\nAssignments: " + assignments);
+                        partition.topic() + "\nSubscriptions: " + subscriptions + "\nAssignments: " + assignments);
 
             if (i == size - 1)
                 continue;
 
-            for (int j = i + 1; j < size; ++j) {
+            for (int j = i + 1;j < size;++j) {
                 String otherConsumer = consumers.get(j);
                 List<TopicPartition> otherPartitions = assignments.get(otherConsumer);
 
@@ -1513,7 +1513,7 @@ public abstract class AbstractStickyAssignorTest {
                 intersection.retainAll(otherPartitions);
                 assertTrue(intersection.isEmpty(),
                     "Error: Consumers c" + i + " and c" + j + " have common partitions assigned to them: " + intersection +
-                    "\nSubscriptions: " + subscriptions + "\nAssignments: " + assignments);
+                        "\nSubscriptions: " + subscriptions + "\nAssignments: " + assignments);
 
                 int len = partitions.size();
                 int otherLen = otherPartitions.size();
@@ -1532,9 +1532,9 @@ public abstract class AbstractStickyAssignorTest {
                 for (TopicPartition tp : partitions) {
                     assertFalse(otherTopics.contains(tp.topic()),
                         "Error: Some partitions can be moved from c" + moreLoaded + " to c" + lessLoaded + " to achieve a better balance" +
-                        "\nc" + i + " has " + len + " partitions, and c" + j + " has " + otherLen + " partitions." +
-                        "\nSubscriptions: " + subscriptions +
-                        "\nAssignments: " + assignments);
+                            "\nc" + i + " has " + len + " partitions, and c" + j + " has " + otherLen + " partitions." +
+                            "\nSubscriptions: " + subscriptions +
+                            "\nAssignments: " + assignments);
                 }
             }
         }
@@ -1549,7 +1549,7 @@ public abstract class AbstractStickyAssignorTest {
         int nextIndex = nextPartitionIndex;
         nextPartitionIndex += 1;
         return AbstractPartitionAssignorTest.partitionInfos(topic, numberOfPartitions,
-                replicationFactor, numBrokerRacks, nextIndex);
+            replicationFactor, numBrokerRacks, nextIndex);
     }
 
     protected void initializeRacks(RackConfig rackConfig) {

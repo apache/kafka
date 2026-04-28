@@ -100,7 +100,7 @@ public class ConnectRestServerTest {
 
     @AfterEach
     public void tearDown() throws IOException {
-        for (CloseableHttpResponse response: responses) {
+        for (CloseableHttpResponse response : responses) {
             response.close();
         }
         if (httpClient != null) {
@@ -197,13 +197,13 @@ public class ConnectRestServerTest {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         response.getEntity().writeTo(baos);
         assertArrayEquals(
-            request.getAllowedMethods(response).toArray(),
-            baos.toString(StandardCharsets.UTF_8).split(", ")
+                request.getAllowedMethods(response).toArray(),
+                baos.toString(StandardCharsets.UTF_8).split(", ")
         );
     }
 
     public void checkCORSRequest(String corsDomain, String origin, String expectedHeader, String method)
-        throws IOException {
+            throws IOException {
         Map<String, String> configMap = baseServerProps();
         configMap.put(RestServerConfig.ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG, corsDomain);
         configMap.put(RestServerConfig.ACCESS_CONTROL_ALLOW_METHODS_CONFIG, method);
@@ -227,7 +227,7 @@ public class ConnectRestServerTest {
 
         if (expectedHeader != null) {
             assertEquals(expectedHeader,
-                response.getFirstHeader("Access-Control-Allow-Origin").getValue());
+                    response.getFirstHeader("Access-Control-Allow-Origin").getValue());
         }
 
         request = new HttpOptions("/connector-plugins/FileStreamSource/validate");
@@ -238,16 +238,16 @@ public class ConnectRestServerTest {
         assertEquals(404, response.getStatusLine().getStatusCode());
         if (expectedHeader != null) {
             assertEquals(expectedHeader,
-                response.getFirstHeader("Access-Control-Allow-Origin").getValue());
+                    response.getFirstHeader("Access-Control-Allow-Origin").getValue());
         }
         if (method != null) {
             assertEquals(method,
-                response.getFirstHeader("Access-Control-Allow-Methods").getValue());
+                    response.getFirstHeader("Access-Control-Allow-Methods").getValue());
         }
     }
 
     @Test
-    public void testStandaloneConfig() throws IOException  {
+    public void testStandaloneConfig() throws IOException {
         Map<String, String> configMap = baseServerProps();
         configMap.put("offset.storage.file.filename", "/tmp");
 
@@ -295,7 +295,8 @@ public class ConnectRestServerTest {
         expectedLogger.put("level", loggingLevel);
         expectedLogger.put("last_modified", lastModified);
         Map<String, Map<String, Object>> expectedLoggers = Map.of(logger, expectedLogger);
-        Map<String, Map<String, Object>> actualLoggers = mapper.readValue(responseStr, new TypeReference<>() { });
+        Map<String, Map<String, Object>> actualLoggers = mapper.readValue(responseStr, new TypeReference<>() {
+        });
         assertEquals(expectedLoggers, actualLoggers);
     }
 
@@ -373,7 +374,7 @@ public class ConnectRestServerTest {
     }
 
     @Test
-    public void testValidCustomizedHttpResponseHeaders() throws IOException  {
+    public void testValidCustomizedHttpResponseHeaders() throws IOException {
         String headerConfig =
                 "add X-XSS-Protection: 1; mode=block, \"add Cache-Control: no-cache, no-store, must-revalidate\"";
         Map<String, String> expectedHeaders = new HashMap<>();
@@ -383,7 +384,7 @@ public class ConnectRestServerTest {
     }
 
     @Test
-    public void testDefaultCustomizedHttpResponseHeaders() throws IOException  {
+    public void testDefaultCustomizedHttpResponseHeaders() throws IOException {
         String headerConfig = "";
         Map<String, String> expectedHeaders = new HashMap<>();
         checkCustomizedHttpResponseHeaders(headerConfig, expectedHeaders);
@@ -428,7 +429,7 @@ public class ConnectRestServerTest {
     }
 
     private void checkCustomizedHttpResponseHeaders(String headerConfig, Map<String, String> expectedHeaders)
-            throws IOException  {
+            throws IOException {
         Map<String, String> configMap = baseServerProps();
         configMap.put("offset.storage.file.filename", "/tmp");
         configMap.put(RestServerConfig.RESPONSE_HTTP_HEADERS_CONFIG, headerConfig);

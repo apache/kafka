@@ -32,8 +32,8 @@ import java.util.List;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
 public class ChangeLoggingKeyValueBytesStore
-        extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, byte[], byte[]>
-        implements KeyValueStore<Bytes, byte[]> {
+    extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, byte[], byte[]>
+    implements KeyValueStore<Bytes, byte[]> {
 
     InternalProcessorContext<?, ?> internalContext;
 
@@ -43,7 +43,7 @@ public class ChangeLoggingKeyValueBytesStore
 
     @Override
     public void init(final StateStoreContext stateStoreContext,
-                     final StateStore root) {
+        final StateStore root) {
         internalContext = asInternalProcessorContext(stateStoreContext);
         super.init(stateStoreContext, root);
         maybeSetEvictionListener();
@@ -66,14 +66,14 @@ public class ChangeLoggingKeyValueBytesStore
 
     @Override
     public void put(final Bytes key,
-                    final byte[] value) {
+        final byte[] value) {
         wrapped().put(key, value);
         log(key, value, internalContext.recordContext().timestamp(), new RecordHeaders());
     }
 
     @Override
     public byte[] putIfAbsent(final Bytes key,
-                              final byte[] value) {
+        final byte[] value) {
         final byte[] previous = wrapped().putIfAbsent(key, value);
         if (previous == null) {
             // then it was absent
@@ -92,7 +92,7 @@ public class ChangeLoggingKeyValueBytesStore
 
     @Override
     public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
-                                                                                    final PS prefixKeySerializer) {
+        final PS prefixKeySerializer) {
         return wrapped().prefixScan(prefix, prefixKeySerializer);
     }
 
@@ -110,13 +110,13 @@ public class ChangeLoggingKeyValueBytesStore
 
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
-                                                 final Bytes to) {
+        final Bytes to) {
         return wrapped().range(from, to);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
-                                                        final Bytes to) {
+        final Bytes to) {
         return wrapped().reverseRange(from, to);
     }
 

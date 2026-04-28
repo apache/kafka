@@ -118,11 +118,11 @@ public interface InternalProcessorContext<KOut, VOut>
     }
 
     void logChange(final String storeName,
-                   final Bytes key,
-                   final byte[] value,
-                   final long timestamp,
-                   final Headers headers,
-                   final Position position);
+        final Bytes key,
+        final byte[] value,
+        final long timestamp,
+        final Headers headers,
+        final Position position);
 
     String changelogFor(final String storeName);
 

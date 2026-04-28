@@ -66,7 +66,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
-import static  org.apache.kafka.test.TestUtils.SEEDED_RANDOM;
+import static org.apache.kafka.test.TestUtils.SEEDED_RANDOM;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -218,7 +218,7 @@ public class ConsumerBounceTest {
             consumer.seek(topicPartition, 0);
 
             TestUtils.waitForCondition(() -> clusterInstance.brokers().values().stream().allMatch(broker ->
-                    broker.replicaManager().localLog(topicPartition).get().highWatermark() == numRecords
+                broker.replicaManager().localLog(topicPartition).get().highWatermark() == numRecords
             ), 30000, "Failed to update high watermark for followers after timeout.");
 
             BounceBrokerScheduler scheduler = new BounceBrokerScheduler(numIters, clusterInstance);
@@ -265,14 +265,14 @@ public class ConsumerBounceTest {
         int numRecords = 1000;
 
         Consumer<byte[], byte[]> consumer = clusterInstance.consumer(
-                Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name, ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 6000,
-                       ConsumerConfig.METADATA_MAX_AGE_CONFIG, 100));
+            Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name, ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 6000,
+                ConsumerConfig.METADATA_MAX_AGE_CONFIG, 100));
         consumers.add(consumer);
         consumer.subscribe(List.of(newTopic));
         consumer.poll(Duration.ZERO);
         // Schedule topic creation after 2 seconds
         executor.schedule(() -> assertDoesNotThrow(() -> clusterInstance.createTopic(newTopic, numPartitions, numReplica)),
-                2, TimeUnit.SECONDS);
+            2, TimeUnit.SECONDS);
 
         // Start first poller
         ConsumerAssignmentPoller poller = new ConsumerAssignmentPoller(consumer, List.of(newTopic));
@@ -375,8 +375,8 @@ public class ConsumerBounceTest {
 
     private Set<Integer> findCoordinators(List<String> groups) throws Exception {
         FindCoordinatorRequest request = new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData()
-                .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
-                .setCoordinatorKeys(groups)).build();
+            .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
+            .setCoordinatorKeys(groups)).build();
         Set<Integer> nodes = new HashSet<>();
         TestUtils.waitForCondition(() -> {
             FindCoordinatorResponse response = null;
@@ -434,26 +434,26 @@ public class ConsumerBounceTest {
             partitions.add(new TopicPartition(topic, i));
 
         addConsumersToGroupAndWaitForGroupAssignment(
-                Integer.parseInt(MAX_GROUP_SIZE),
-                List.of(topic),
-                partitions,
-                group,
-                consumerConfig
+            Integer.parseInt(MAX_GROUP_SIZE),
+            List.of(topic),
+            partitions,
+            group,
+            consumerConfig
         );
 
         addConsumersToGroup(
-                1,
-                List.of(topic),
-                group,
-                consumerConfig
+            1,
+            List.of(topic),
+            group,
+            consumerConfig
         );
 
         ConsumerAssignmentPoller rejectedConsumer = consumerPollers.get(consumerPollers.size() - 1);
         consumerPollers.remove(consumerPollers.size() - 1);
 
         TestUtils.waitForCondition(
-                () -> rejectedConsumer.getThrownException().isPresent(),
-                "Extra consumer did not throw an exception"
+            () -> rejectedConsumer.getThrownException().isPresent(),
+            "Extra consumer did not throw an exception"
         );
 
         assertInstanceOf(GroupMaxSizeReachedException.class, rejectedConsumer.getThrownException().get());
@@ -462,12 +462,12 @@ public class ConsumerBounceTest {
         var data = "data".getBytes(StandardCharsets.UTF_8);
         try (Producer<byte[], byte[]> producer = clusterInstance.producer()) {
             IntStream.range(0, numPartition * 100).forEach(index ->
-                    producer.send(new ProducerRecord<>(topic, index % numPartition, data, data)));
+                producer.send(new ProducerRecord<>(topic, index % numPartition, data, data)));
         }
 
         TestUtils.waitForCondition(
-                () -> consumerPollers.stream().allMatch(p -> p.receivedMessages() >= 100),
-                10000L, "The consumers in the group could not fetch the expected records"
+            () -> consumerPollers.stream().allMatch(p -> p.receivedMessages() >= 100),
+            10000L, "The consumers in the group could not fetch the expected records"
         );
     }
 
@@ -484,15 +484,15 @@ public class ConsumerBounceTest {
      * @param group consumer group ID
      */
     private void addConsumersToGroupAndWaitForGroupAssignment(
-            int numOfConsumersToAdd,
-            List<String> topicsToSubscribe,
-            Set<TopicPartition> subscriptions,
-            String group,
-            Map<String, String> consumerConfig
+        int numOfConsumersToAdd,
+        List<String> topicsToSubscribe,
+        Set<TopicPartition> subscriptions,
+        String group,
+        Map<String, String> consumerConfig
     ) throws InterruptedException {
         // Validation: number of consumers should not exceed number of partitions
         assertTrue(consumers.size() + numOfConsumersToAdd <= subscriptions.size(),
-                "Total consumers exceed number of partitions");
+            "Total consumers exceed number of partitions");
 
         // Add consumers and pollers
         addConsumersToGroup(numOfConsumersToAdd, topicsToSubscribe, group, consumerConfig);
@@ -515,9 +515,9 @@ public class ConsumerBounceTest {
      * @return true if assignment is valid
      */
     private boolean isPartitionAssignmentValid(
-            List<Set<TopicPartition>> assignments,
-            Set<TopicPartition> partitions,
-            List<Set<TopicPartition>> expectedAssignment
+        List<Set<TopicPartition>> assignments,
+        Set<TopicPartition> partitions,
+        List<Set<TopicPartition>> expectedAssignment
     ) {
         // 1. Check that every consumer has non-empty assignment
         boolean allNonEmpty = assignments.stream().noneMatch(Set::isEmpty);
@@ -560,11 +560,11 @@ public class ConsumerBounceTest {
      * @param expectedAssignments   Expected assignments (optional)
      */
     private void validateGroupAssignment(
-            List<ConsumerAssignmentPoller> consumerPollers,
-            Set<TopicPartition> subscriptions,
-            Optional<String> msg,
-            long waitTimeMs,
-            List<Set<TopicPartition>> expectedAssignments
+        List<ConsumerAssignmentPoller> consumerPollers,
+        Set<TopicPartition> subscriptions,
+        Optional<String> msg,
+        long waitTimeMs,
+        List<Set<TopicPartition>> expectedAssignments
     ) throws InterruptedException {
         List<Set<TopicPartition>> assignments = new ArrayList<>();
 
@@ -577,8 +577,8 @@ public class ConsumerBounceTest {
 
     // Overload for convenience (optional msg and expectedAssignments)
     private void validateGroupAssignment(
-            List<ConsumerAssignmentPoller> consumerPollers,
-            Set<TopicPartition> subscriptions
+        List<ConsumerAssignmentPoller> consumerPollers,
+        Set<TopicPartition> subscriptions
     ) throws InterruptedException {
         validateGroupAssignment(consumerPollers, subscriptions, Optional.empty(), 10000L, new ArrayList<>());
     }
@@ -591,10 +591,10 @@ public class ConsumerBounceTest {
      * @param group consumer group ID
      */
     private void addConsumersToGroup(
-            int numOfConsumersToAdd,
-            List<String> topicsToSubscribe,
-            String group,
-            Map<String, String> consumerConfigs) {
+        int numOfConsumersToAdd,
+        List<String> topicsToSubscribe,
+        String group,
+        Map<String, String> consumerConfigs) {
 
         Map<String, Object> configs = new HashMap<>(consumerConfigs);
         configs.put(ConsumerConfig.GROUP_ID_CONFIG, group);
@@ -688,7 +688,6 @@ public class ConsumerBounceTest {
     }
 
 
-
     private Consumer<byte[], byte[]> createConsumerAndReceive(String groupId, boolean manualAssign, int numRecords,
                                                               Map<String, String> consumerConfig) throws InterruptedException {
         Map<String, Object> configs = new HashMap<>(consumerConfig);
@@ -750,10 +749,10 @@ public class ConsumerBounceTest {
     }
 
     private Future<?> submitCloseAndValidate(
-            Consumer<byte[], byte[]> consumer,
-            long closeTimeoutMs,
-            Optional<Long> minCloseTimeMs,
-            Optional<Long> maxCloseTimeMs) {
+        Consumer<byte[], byte[]> consumer,
+        long closeTimeoutMs,
+        Optional<Long> minCloseTimeMs,
+        Optional<Long> maxCloseTimeMs) {
 
         return executor.submit(() -> {
             final long closeGraceTimeMs = 2000;
@@ -777,7 +776,7 @@ public class ConsumerBounceTest {
 
     private void receiveExactRecords(ConsumerAssignmentPoller consumer, int numRecords, long timeoutMs) throws InterruptedException {
         TestUtils.waitForCondition(() -> consumer.receivedMessages() == numRecords, timeoutMs,
-                () -> String.format("Consumer did not receive expected %d. It received %d", numRecords, consumer.receivedMessages()));
+            () -> String.format("Consumer did not receive expected %d. It received %d", numRecords, consumer.receivedMessages()));
     }
 
     // A mock class to represent broker bouncing (simulate broker restart behavior)

@@ -40,8 +40,8 @@ public class DefaultApplicationState implements ApplicationState {
     private final Map<Boolean, Map<ProcessId, KafkaStreamsState>> cachedKafkaStreamStates;
 
     public DefaultApplicationState(final AssignmentConfigs assignmentConfigs,
-                                   final Map<TaskId, TaskInfo> tasks,
-                                   final Map<ProcessId, ClientMetadata> clientStates) {
+        final Map<TaskId, TaskInfo> tasks,
+        final Map<ProcessId, ClientMetadata> clientStates) {
         this.assignmentConfigs = assignmentConfigs;
         this.tasks = unmodifiableMap(tasks);
         this.clientStates = clientStates;

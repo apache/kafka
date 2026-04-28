@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 public class RocksDBTimeOrderedWindowSchemaWithIndexSegmentedBytesStoreTest extends AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
-    
+
     @Override
     SchemaType schemaType() {
         return SchemaType.WindowSchemaWithIndex;

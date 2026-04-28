@@ -79,8 +79,8 @@ public class DescribeShareGroupOffsetsRequest extends AbstractRequest {
 
     public static DescribeShareGroupOffsetsRequest parse(Readable readable, short version) {
         return new DescribeShareGroupOffsetsRequest(
-                new DescribeShareGroupOffsetsRequestData(readable, version),
-                version
+            new DescribeShareGroupOffsetsRequestData(readable, version),
+            version
         );
     }
 

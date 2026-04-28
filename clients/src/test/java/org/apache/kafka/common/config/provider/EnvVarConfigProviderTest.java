@@ -96,7 +96,8 @@ class EnvVarConfigProviderTest {
         assertThrows(ConfigException.class, () -> envVarConfigProvider.get("test-path", Collections.singleton("test_var1")));
     }
 
-    @Test void testRegExpEnvVarsSingleEntryKeyList() {
+    @Test
+    void testRegExpEnvVarsSingleEntryKeyList() {
         Map<String, String> testConfigMap = Collections.singletonMap(ALLOWLIST_PATTERN_CONFIG, "secret_.*");
         envVarConfigProvider.configure(testConfigMap);
         Set<String> keyList = Collections.singleton("secret_var2");
@@ -105,7 +106,8 @@ class EnvVarConfigProviderTest {
         assertEquals(keyList, keys);
     }
 
-    @Test void testRegExpEnvVarsNoKeyList() {
+    @Test
+    void testRegExpEnvVarsNoKeyList() {
         Map<String, String> testConfigMap = Collections.singletonMap(ALLOWLIST_PATTERN_CONFIG, "secret_.*");
         envVarConfigProvider.configure(testConfigMap);
         Set<String> keys = envVarConfigProvider.get("").data().keySet();

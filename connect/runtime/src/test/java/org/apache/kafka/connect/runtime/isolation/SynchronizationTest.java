@@ -72,21 +72,21 @@ public class SynchronizationTest {
     @BeforeEach
     public void setup(TestInfo testInfo) {
         Map<String, String> pluginProps = Map.of(
-            WorkerConfig.PLUGIN_PATH_CONFIG,
-            TestPlugins.pluginPathJoined()
+                WorkerConfig.PLUGIN_PATH_CONFIG,
+                TestPlugins.pluginPathJoined()
         );
         threadPrefix = SynchronizationTest.class.getSimpleName()
-            + "." + testInfo.getDisplayName() + "-";
+                + "." + testInfo.getDisplayName() + "-";
         dclBreakpoint = new Breakpoint<>();
         pclBreakpoint = new Breakpoint<>();
         plugins = new Plugins(pluginProps, Plugins.class.getClassLoader(), new SynchronizedClassLoaderFactory());
         exec = new ThreadPoolExecutor(
-            2,
-            2,
-            1000L,
-            TimeUnit.MILLISECONDS,
-            new LinkedBlockingDeque<>(),
-            threadFactoryWithNamedThreads(threadPrefix)
+                2,
+                2,
+                1000L,
+                TimeUnit.MILLISECONDS,
+                new LinkedBlockingDeque<>(),
+                threadFactoryWithNamedThreads(threadPrefix)
         );
 
     }
@@ -148,7 +148,7 @@ public class SynchronizationTest {
          * @throws TimeoutException If the barrier is not reached before 1s passes.
          */
         public void testAwait()
-            throws InterruptedException, BrokenBarrierException, TimeoutException {
+                throws InterruptedException, BrokenBarrierException, TimeoutException {
             CyclicBarrier barrier;
             synchronized (this) {
                 barrier = this.barrier;
@@ -303,7 +303,7 @@ public class SynchronizationTest {
     // Ensure the PluginClassLoader is parallel capable and not synchronized on its monitor lock
     @Timeout(15)
     public void testPluginClassLoaderDoesntHoldMonitorLock()
-        throws InterruptedException, TimeoutException, BrokenBarrierException {
+            throws InterruptedException, TimeoutException, BrokenBarrierException {
         String t1Class = TestPlugins.TestPlugin.SAMPLING_CONVERTER.className();
         ClassLoader connectorLoader = plugins.connectorLoader(t1Class, null);
 
@@ -366,10 +366,10 @@ public class SynchronizationTest {
         long[] deadlockedThreads = ManagementFactory.getThreadMXBean().findDeadlockedThreads();
         if (deadlockedThreads != null && deadlockedThreads.length > 0) {
             final String threads = Arrays
-                .stream(ManagementFactory.getThreadMXBean().getThreadInfo(deadlockedThreads))
-                .filter(this::threadFromCurrentTest)
-                .map(SynchronizationTest::threadInfoToString)
-                .collect(Collectors.joining(""));
+                    .stream(ManagementFactory.getThreadMXBean().getThreadInfo(deadlockedThreads))
+                    .filter(this::threadFromCurrentTest)
+                    .map(SynchronizationTest::threadInfoToString)
+                    .collect(Collectors.joining(""));
             if (!threads.isEmpty()) {
                 fail("Found deadlocked threads while classloading\n" + threads);
             }
@@ -379,25 +379,25 @@ public class SynchronizationTest {
     private void dumpThreads(String msg) {
         if (log.isDebugEnabled()) {
             log.debug("{}:\n{}",
-                msg,
-                Arrays.stream(ManagementFactory.getThreadMXBean().dumpAllThreads(true, true))
-                    .filter(this::threadFromCurrentTest)
-                    .map(SynchronizationTest::threadInfoToString)
-                    .collect(Collectors.joining("\n"))
+                    msg,
+                    Arrays.stream(ManagementFactory.getThreadMXBean().dumpAllThreads(true, true))
+                            .filter(this::threadFromCurrentTest)
+                            .map(SynchronizationTest::threadInfoToString)
+                            .collect(Collectors.joining("\n"))
             );
         }
     }
 
     private static String threadInfoToString(ThreadInfo info) {
         StringBuilder sb = new StringBuilder("\"" + info.getThreadName() + "\"" +
-            " Id=" + info.getThreadId() + " " +
-            info.getThreadState());
+                " Id=" + info.getThreadId() + " " +
+                info.getThreadState());
         if (info.getLockName() != null) {
             sb.append(" on " + info.getLockName());
         }
         if (info.getLockOwnerName() != null) {
             sb.append(" owned by \"" + info.getLockOwnerName() +
-                "\" Id=" + info.getLockOwnerId());
+                    "\" Id=" + info.getLockOwnerId());
         }
         if (info.isSuspended()) {
             sb.append(" (suspended)");
@@ -463,8 +463,8 @@ public class SynchronizationTest {
             // This is essentially Executors.defaultThreadFactory except with
             // custom thread names so in order to filter by thread names when debugging
             Thread t = new Thread(Thread.currentThread().getThreadGroup(), r,
-                threadPrefix + threadNumber.getAndIncrement(),
-                0);
+                    threadPrefix + threadNumber.getAndIncrement(),
+                    0);
             if (t.isDaemon()) {
                 t.setDaemon(false);
             }

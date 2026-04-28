@@ -93,7 +93,7 @@ public class EventPerformanceMonitorTest {
         monitor.observeEvent("myEvent", MILLISECONDS.toNanos(12));
         assertEquals("In the last 60000 ms period, 1 controller events were completed, which took an " +
             "average of 12.00 ms each. The slowest event was myEvent, which took 12.00 ms.",
-                monitor.periodicPerformanceMessage());
+            monitor.periodicPerformanceMessage());
     }
 
     @Test
@@ -104,7 +104,7 @@ public class EventPerformanceMonitorTest {
         monitor.observeEvent("myEvent3", MILLISECONDS.toNanos(1));
         assertEquals("In the last 60000 ms period, 3 controller events were completed, which took an " +
             "average of 10.67 ms each. The slowest event was myEvent2, which took 19.00 ms.",
-                monitor.periodicPerformanceMessage());
+            monitor.periodicPerformanceMessage());
     }
 
     @Test

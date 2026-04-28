@@ -115,7 +115,7 @@ public class SingleFieldPath {
                         // this backtick was escaped; include it in the field name, but continue
                         // looking for an unescaped matching backtick
                         field.append(path, start, idx - 1)
-                            .append(BACKTICK);
+                                .append(BACKTICK);
 
                         idx++;
                         start = idx;
@@ -240,8 +240,8 @@ public class SingleFieldPath {
     @Override
     public String toString() {
         return "SingleFieldPath{" +
-            "version=" + version +
-            ", path=" + String.join(".", steps) +
-            '}';
+                "version=" + version +
+                ", path=" + String.join(".", steps) +
+                '}';
     }
 }

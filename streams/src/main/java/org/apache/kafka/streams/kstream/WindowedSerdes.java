@@ -70,7 +70,7 @@ public class WindowedSerdes {
 
     @SuppressWarnings("rawtypes")
     static void verifyInnerSerializerNotNull(final Serializer inner,
-                                             final Serializer wrapper) {
+        final Serializer wrapper) {
         if (inner == null) {
             throw new NullPointerException("Inner serializer is `null`. " +
                 "User code must use constructor `" + wrapper.getClass().getSimpleName() + "(final Serializer<T> inner)` " +
@@ -80,7 +80,7 @@ public class WindowedSerdes {
 
     @SuppressWarnings("rawtypes")
     static void verifyInnerDeserializerNotNull(final Deserializer inner,
-                                               final Deserializer wrapper) {
+        final Deserializer wrapper) {
         if (inner == null) {
             throw new NullPointerException("Inner deserializer is `null`. " +
                 "User code must use constructor `" + wrapper.getClass().getSimpleName() + "(final Deserializer<T> inner)` " +

@@ -198,15 +198,15 @@ public class GlobalStreamThread extends Thread {
     }
 
     public GlobalStreamThread(final ProcessorTopology topology,
-                              final StreamsConfig config,
-                              final Consumer<byte[], byte[]> globalConsumer,
-                              final StateDirectory stateDirectory,
-                              final long cacheSizeBytes,
-                              final StreamsMetricsImpl streamsMetrics,
-                              final Time time,
-                              final String threadClientId,
-                              final StateRestoreListener stateRestoreListener,
-                              final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler) {
+        final StreamsConfig config,
+        final Consumer<byte[], byte[]> globalConsumer,
+        final StateDirectory stateDirectory,
+        final long cacheSizeBytes,
+        final StreamsMetricsImpl streamsMetrics,
+        final Time time,
+        final String threadClientId,
+        final StateRestoreListener stateRestoreListener,
+        final java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler) {
         super(threadClientId);
         this.time = time;
         this.config = config;
@@ -230,9 +230,9 @@ public class GlobalStreamThread extends Thread {
         private final Logger log;
 
         StateConsumer(final LogContext logContext,
-                      final Consumer<byte[], byte[]> globalConsumer,
-                      final GlobalStateMaintainer stateMaintainer,
-                      final Duration pollTime) {
+            final Consumer<byte[], byte[]> globalConsumer,
+            final GlobalStateMaintainer stateMaintainer,
+            final Duration pollTime) {
             this.log = logContext.logger(getClass());
             this.globalConsumer = globalConsumer;
             this.stateMaintainer = stateMaintainer;

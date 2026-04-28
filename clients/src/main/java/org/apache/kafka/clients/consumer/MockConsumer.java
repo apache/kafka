@@ -204,7 +204,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         committed.clear();
         this.subscriptions.subscribe(pattern, listener);
         Set<String> topicsToSubscribe = new HashSet<>();
-        for (String topic: partitions.keySet()) {
+        for (String topic : partitions.keySet()) {
             if (pattern.matcher(topic).matches() &&
                 !subscriptions.subscription().contains(topic))
                 topicsToSubscribe.add(topic);
@@ -302,7 +302,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
                         results.computeIfAbsent(entry.getKey(), partition -> new ArrayList<>()).add(rec);
                         Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(Optional.empty(), rec.leaderEpoch());
                         SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
-                                rec.offset() + 1, rec.leaderEpoch(), leaderAndEpoch);
+                            rec.offset() + 1, rec.leaderEpoch(), leaderAndEpoch);
                         subscriptions.position(entry.getKey(), newPosition);
                         nextOffsetAndMetadata.put(entry.getKey(), new OffsetAndMetadata(rec.offset() + 1, rec.leaderEpoch(), ""));
                         numPollRecords++;
@@ -660,7 +660,8 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
      * Schedules a no-op task to be executed during a poll invocation.
      */
     public synchronized void scheduleNopPollTask() {
-        schedulePollTask(() -> { });
+        schedulePollTask(() -> {
+        });
     }
 
     public synchronized Set<TopicPartition> paused() {
@@ -716,7 +717,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch,
-            Duration timeout) {
+        Duration timeout) {
         return offsetsForTimes(timestampsToSearch);
     }
 

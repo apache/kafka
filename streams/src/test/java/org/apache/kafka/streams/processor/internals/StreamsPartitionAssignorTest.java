@@ -268,13 +268,13 @@ public class StreamsPartitionAssignorTest {
 
     // Make sure to complete setting up any mocks (such as TaskManager or AdminClient) before configuring the assignor
     private MockInternalTopicManager configurePartitionAssignorWith(final Map<String, Object> props,
-                                                                    final Map<String, Object> parameterizedConfig) {
+        final Map<String, Object> parameterizedConfig) {
         return configurePartitionAssignorWith(props, null, parameterizedConfig);
     }
 
     private MockInternalTopicManager configurePartitionAssignorWith(final Map<String, Object> props,
-                                                                    final List<Map<String, List<TopicPartitionInfo>>> topicPartitionInfo,
-                                                                    final Map<String, Object> parameterizedConfig) {
+        final List<Map<String, List<TopicPartitionInfo>>> topicPartitionInfo,
+        final Map<String, Object> parameterizedConfig) {
         final Map<String, Object> configMap = configProps(parameterizedConfig);
         configMap.putAll(props);
 
@@ -289,7 +289,7 @@ public class StreamsPartitionAssignorTest {
     }
 
     private void createMockTaskManager(final Set<TaskId> activeTasks,
-                                       final Set<TaskId> standbyTasks) {
+        final Set<TaskId> standbyTasks) {
         taskManager = mock(TaskManager.class);
         lenient().when(taskManager.topologyMetadata()).thenReturn(topologyMetadata);
         lenient().when(taskManager.taskOffsetSums()).thenReturn(getTaskOffsetSums(activeTasks, standbyTasks));
@@ -301,13 +301,13 @@ public class StreamsPartitionAssignorTest {
     // If mockCreateInternalTopics is true the internal topic manager will report that it had to create all internal
     // topics and we will skip the listOffsets request for these changelogs
     private MockInternalTopicManager overwriteInternalTopicManagerWithMock(final boolean mockCreateInternalTopics,
-                                                                           final Map<String, Object> parameterizedConfig) {
+        final Map<String, Object> parameterizedConfig) {
         return overwriteInternalTopicManagerWithMock(mockCreateInternalTopics, null, parameterizedConfig);
     }
 
     private MockInternalTopicManager overwriteInternalTopicManagerWithMock(final boolean mockCreateInternalTopics,
-                                                                           final List<Map<String, List<TopicPartitionInfo>>> topicPartitionInfo,
-                                                                           final Map<String, Object> parameterizedConfig) {
+        final List<Map<String, List<TopicPartitionInfo>>> topicPartitionInfo,
+        final Map<String, Object> parameterizedConfig) {
         final MockInternalTopicManager mockInternalTopicManager = spy(new MockInternalTopicManager(
             time,
             new StreamsConfig(configProps(parameterizedConfig)),
@@ -348,8 +348,8 @@ public class StreamsPartitionAssignorTest {
     }
 
     private static Map<String, Object> buildParameterizedConfig(final Class<? extends LegacyTaskAssignor> internalTaskAssignor,
-                                                                final Class<? extends TaskAssignor> customTaskAssignor,
-                                                                final String rackAwareAssignorStrategy) {
+        final Class<? extends TaskAssignor> customTaskAssignor,
+        final String rackAwareAssignorStrategy) {
         final Map<String, Object> configurationMap = new HashMap<>();
         configurationMap.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, rackAwareAssignorStrategy);
         if (internalTaskAssignor != null) {
@@ -382,7 +382,7 @@ public class StreamsPartitionAssignorTest {
     public void shouldProduceStickyAndBalancedAssignmentWhenNothingChanges(final Map<String, Object> parameterizedConfig) {
         setUp(parameterizedConfig, false);
         final List<TaskId> allTasks =
-                asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3);
+            asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3);
 
         final Map<String, List<TaskId>> previousAssignment = mkMap(
             mkEntry(CONSUMER_1, asList(TASK_0_0, TASK_1_1, TASK_1_3)),
@@ -625,43 +625,43 @@ public class StreamsPartitionAssignorTest {
         );
 
         final List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(mkEntry(
-                "stream-partition-assignor-test-store-changelog",
-                singletonList(
-                    new TopicPartitionInfo(
-                        0,
-                        new Node(1, "h1", 80),
-                        singletonList(new Node(1, "h1", 80)),
-                        emptyList()
-                    )
+            "stream-partition-assignor-test-store-changelog",
+            singletonList(
+                new TopicPartitionInfo(
+                    0,
+                    new Node(1, "h1", 80),
+                    singletonList(new Node(1, "h1", 80)),
+                    emptyList()
                 )
             )
+        )
         ));
         configurePartitionAssignorWith(emptyMap(), partitionInfo, parameterizedConfig);
 
         subscriptions.put("consumer10",
-                          new Subscription(
-                              topics,
-                              getInfo(PID_1, prevTasks10, standbyTasks10).encode(),
-                              Collections.emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_3)
-                          ));
+            new Subscription(
+                topics,
+                getInfo(PID_1, prevTasks10, standbyTasks10).encode(),
+                Collections.emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_3)
+            ));
         subscriptions.put("consumer11",
-                          new Subscription(
-                              topics,
-                              getInfo(PID_1, prevTasks11, standbyTasks11).encode(),
-                              Collections.emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_3)
-                          ));
+            new Subscription(
+                topics,
+                getInfo(PID_1, prevTasks11, standbyTasks11).encode(),
+                Collections.emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_3)
+            ));
         subscriptions.put("consumer20",
-                          new Subscription(
-                              topics,
-                              getInfo(PID_2, prevTasks20, standbyTasks20).encode(),
-                              Collections.emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_0)
-                          ));
+            new Subscription(
+                topics,
+                getInfo(PID_2, prevTasks20, standbyTasks20).encode(),
+                Collections.emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_0)
+            ));
 
         final Map<String, Assignment> assignments = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
 
@@ -728,27 +728,27 @@ public class StreamsPartitionAssignorTest {
         configureDefault(parameterizedConfig);
 
         subscriptions.put("consumer10",
-                          new Subscription(
-                              topics,
-                              defaultSubscriptionInfo.encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_2)
-                          ));
+            new Subscription(
+                topics,
+                defaultSubscriptionInfo.encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_2)
+            ));
         subscriptions.put("consumer11",
-                          new Subscription(
-                              topics,
-                              defaultSubscriptionInfo.encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_2)
-                          ));
+            new Subscription(
+                topics,
+                defaultSubscriptionInfo.encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_2)
+            ));
 
         final Map<String, Assignment> assignments = partitionAssignor.assign(localMetadata, new GroupSubscription(subscriptions)).groupAssignment();
 
         // check assigned partitions
         assertEquals(Set.of(Set.of(t2p2, t1p0, t1p2, t2p0), Set.of(t1p1, t2p1, t1p3, t2p3)),
-                     Set.of(new HashSet<>(assignments.get("consumer10").partitions()), new HashSet<>(assignments.get("consumer11").partitions())));
+            Set.of(new HashSet<>(assignments.get("consumer10").partitions()), new HashSet<>(assignments.get("consumer11").partitions())));
 
         // the first consumer
         final AssignmentInfo info10 = AssignmentInfo.decode(assignments.get("consumer10").userData());
@@ -790,29 +790,29 @@ public class StreamsPartitionAssignorTest {
         configureDefaultPartitionAssignor(parameterizedConfig);
 
         subscriptions.put("consumer10",
-                          new Subscription(
-                              topics,
-                              getInfo(PID_1, Set.of(TASK_0_0, TASK_0_2), emptySet()).encode(),
-                              asList(t1p0, t1p2),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_2)
-                          ));
+            new Subscription(
+                topics,
+                getInfo(PID_1, Set.of(TASK_0_0, TASK_0_2), emptySet()).encode(),
+                asList(t1p0, t1p2),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_2)
+            ));
         subscriptions.put("consumer11",
-                          new Subscription(
-                              topics,
-                              getInfo(PID_1, Set.of(TASK_0_1, TASK_0_3), emptySet()).encode(),
-                              asList(t1p1, t1p3),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_2)
-                          ));
+            new Subscription(
+                topics,
+                getInfo(PID_1, Set.of(TASK_0_1, TASK_0_3), emptySet()).encode(),
+                asList(t1p1, t1p3),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_2)
+            ));
         subscriptions.put("consumer20",
-                          new Subscription(
-                              topics,
-                              getInfo(PID_2, emptySet(), emptySet()).encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_2)
-                          ));
+            new Subscription(
+                topics,
+                getInfo(PID_2, emptySet(), emptySet()).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_2)
+            ));
 
         final Map<String, Assignment> assignments = partitionAssignor.assign(localMetadata, new GroupSubscription(subscriptions)).groupAssignment();
 
@@ -838,21 +838,21 @@ public class StreamsPartitionAssignorTest {
         final Set<TaskId> prevTasks10 = Set.of(TASK_0_0);
         final Set<TaskId> standbyTasks10 = Set.of(TASK_0_1);
         final Cluster emptyMetadata = new Cluster("cluster", Collections.singletonList(Node.noNode()),
-                                                  emptySet(),
-                                                  emptySet(),
-                                                  emptySet());
+            emptySet(),
+            emptySet(),
+            emptySet());
 
         createMockTaskManager(prevTasks10, standbyTasks10);
         configureDefaultPartitionAssignor(parameterizedConfig);
 
         subscriptions.put("consumer10",
-                          new Subscription(
-                              topics,
-                              getInfo(PID_1, prevTasks10, standbyTasks10).encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_3)
-                          ));
+            new Subscription(
+                topics,
+                getInfo(PID_1, prevTasks10, standbyTasks10).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_3)
+            ));
 
         // initially metadata is empty
         Map<String, Assignment> assignments =
@@ -860,7 +860,7 @@ public class StreamsPartitionAssignorTest {
 
         // check assigned partitions
         assertEquals(emptySet(),
-                     new HashSet<>(assignments.get("consumer10").partitions()));
+            new HashSet<>(assignments.get("consumer10").partitions()));
 
         // check assignment info
         AssignmentInfo info10 = checkAssignment(emptySet(), assignments.get("consumer10"));
@@ -872,7 +872,7 @@ public class StreamsPartitionAssignorTest {
         assignments = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
         // check assigned partitions
         assertEquals(Set.of(t1p0, t2p0, t1p1, t2p1, t1p2, t2p2),
-                     new HashSet<>(assignments.get("consumer10").partitions()));
+            new HashSet<>(assignments.get("consumer10").partitions()));
 
         // the first consumer
         info10 = checkAssignment(allTopics, assignments.get("consumer10"));
@@ -900,31 +900,31 @@ public class StreamsPartitionAssignorTest {
         final Set<TaskId> prevTasks10 = Set.of(TASK_0_0);
         final Set<TaskId> prevTasks11 = Set.of(TASK_0_1);
         final Set<TaskId> prevTasks20 = Set.of(TASK_0_2);
-        
+
         createMockTaskManager(prevTasks10, EMPTY_TASKS);
         configureDefaultPartitionAssignor(parameterizedConfig);
 
         subscriptions.put("consumer10",
-                          new Subscription(
-                              topics,
-                              getInfo(PID_1, prevTasks10, EMPTY_TASKS).encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_4)));
+            new Subscription(
+                topics,
+                getInfo(PID_1, prevTasks10, EMPTY_TASKS).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_4)));
         subscriptions.put("consumer11",
-                          new Subscription(
-                              topics,
-                              getInfo(PID_1, prevTasks11, EMPTY_TASKS).encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_4)));
+            new Subscription(
+                topics,
+                getInfo(PID_1, prevTasks11, EMPTY_TASKS).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_4)));
         subscriptions.put("consumer20",
-                          new Subscription(
-                              topics,
-                              getInfo(PID_2, prevTasks20, EMPTY_TASKS).encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_1)));
+            new Subscription(
+                topics,
+                getInfo(PID_2, prevTasks20, EMPTY_TASKS).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_1)));
 
         final Map<String, Assignment> assignments = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
 
@@ -966,10 +966,10 @@ public class StreamsPartitionAssignorTest {
         final List<TaskId> tasks = asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2);
 
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
-                asList(APPLICATION_ID + "-store1-changelog",
-                    APPLICATION_ID + "-store2-changelog",
-                    APPLICATION_ID + "-store3-changelog"),
-                asList(3, 3, 3)),
+            asList(APPLICATION_ID + "-store1-changelog",
+                APPLICATION_ID + "-store2-changelog",
+                APPLICATION_ID + "-store3-changelog"),
+            asList(3, 3, 3)),
             true
         );
 
@@ -984,26 +984,26 @@ public class StreamsPartitionAssignorTest {
         configurePartitionAssignorWith(emptyMap(), changelogTopicPartitionInfo, parameterizedConfig);
 
         subscriptions.put("consumer10",
-                          new Subscription(
-                              topics,
-                              defaultSubscriptionInfo.encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_1)));
+            new Subscription(
+                topics,
+                defaultSubscriptionInfo.encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_1)));
         subscriptions.put("consumer11",
-                          new Subscription(
-                              topics,
-                              defaultSubscriptionInfo.encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_1)));
+            new Subscription(
+                topics,
+                defaultSubscriptionInfo.encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_1)));
         subscriptions.put("consumer20",
-                          new Subscription(
-                              topics,
-                              getInfo(PID_2, EMPTY_TASKS, EMPTY_TASKS).encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_2)));
+            new Subscription(
+                topics,
+                getInfo(PID_2, EMPTY_TASKS, EMPTY_TASKS).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_2)));
 
         final Map<String, Assignment> assignments = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
 
@@ -1035,8 +1035,8 @@ public class StreamsPartitionAssignorTest {
     }
 
     private static Set<TaskId> tasksForState(final String storeName,
-                                             final List<TaskId> tasks,
-                                             final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> topicGroups) {
+        final List<TaskId> tasks,
+        final Map<Subtopology, InternalTopologyBuilder.TopicsInfo> topicGroups) {
         final String changelogTopic = ProcessorStateManager.storeChangelogTopic(APPLICATION_ID, storeName, null);
 
         final Set<TaskId> ids = new HashSet<>();
@@ -1155,8 +1155,8 @@ public class StreamsPartitionAssignorTest {
 
         createMockTaskManager(prevTasks00, standbyTasks01);
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
-                singletonList(APPLICATION_ID + "-store1-changelog"),
-                singletonList(3)),
+            singletonList(APPLICATION_ID + "-store1-changelog"),
+            singletonList(3)),
             true
         );
 
@@ -1166,26 +1166,26 @@ public class StreamsPartitionAssignorTest {
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1), changelogTopicPartitionInfo, parameterizedConfig);
 
         subscriptions.put("consumer10",
-                          new Subscription(
-                              topics,
-                              getInfo(PID_1, prevTasks00, EMPTY_TASKS, USER_END_POINT).encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_0)));
+            new Subscription(
+                topics,
+                getInfo(PID_1, prevTasks00, EMPTY_TASKS, USER_END_POINT).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_0)));
         subscriptions.put("consumer11",
-                          new Subscription(
-                              topics,
-                              getInfo(PID_1, prevTasks01, standbyTasks02, USER_END_POINT).encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_0)));
+            new Subscription(
+                topics,
+                getInfo(PID_1, prevTasks01, standbyTasks02, USER_END_POINT).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_0)));
         subscriptions.put("consumer20",
-                          new Subscription(
-                              topics,
-                              getInfo(PID_2, prevTasks02, standbyTasks00, OTHER_END_POINT).encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_4)));
+            new Subscription(
+                topics,
+                getInfo(PID_2, prevTasks02, standbyTasks00, OTHER_END_POINT).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_4)));
 
         final Map<String, Assignment> assignments =
             partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
@@ -1252,8 +1252,8 @@ public class StreamsPartitionAssignorTest {
 
         createMockTaskManager(EMPTY_TASKS, EMPTY_TASKS);
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
-                singletonList(APPLICATION_ID + "-store1-changelog"),
-                singletonList(3)),
+            singletonList(APPLICATION_ID + "-store1-changelog"),
+            singletonList(3)),
             true
         );
         final Map<String, List<TopicPartitionInfo>> changelogTopicPartitionInfo = mkMap(
@@ -1272,25 +1272,25 @@ public class StreamsPartitionAssignorTest {
 
         for (final String consumerId : client1Consumers) {
             subscriptions.put(consumerId,
-                    new Subscription(
-                            topics,
-                            getInfo(PID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
-                            emptyList(),
-                            DEFAULT_GENERATION,
-                            Optional.of(RACK_2)));
+                new Subscription(
+                    topics,
+                    getInfo(PID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
+                    emptyList(),
+                    DEFAULT_GENERATION,
+                    Optional.of(RACK_2)));
         }
         for (final String consumerId : client2Consumers) {
             subscriptions.put(consumerId,
-                    new Subscription(
-                            topics,
-                            getInfo(PID_2, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
-                            emptyList(),
-                            DEFAULT_GENERATION,
-                            Optional.of(RACK_4)));
+                new Subscription(
+                    topics,
+                    getInfo(PID_2, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
+                    emptyList(),
+                    DEFAULT_GENERATION,
+                    Optional.of(RACK_4)));
         }
 
         final Map<String, Assignment> assignments =
-                partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
+            partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
 
         // Consumers
         final AssignmentInfo info10 = AssignmentInfo.decode(assignments.get("consumer10").userData());
@@ -1323,8 +1323,8 @@ public class StreamsPartitionAssignorTest {
 
         createMockTaskManager(EMPTY_TASKS, EMPTY_TASKS);
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
-                singletonList(APPLICATION_ID + "-store1-changelog"),
-                singletonList(3)),
+            singletonList(APPLICATION_ID + "-store1-changelog"),
+            singletonList(3)),
             true
         );
         final List<Map<String, List<TopicPartitionInfo>>> changelogTopicPartitionInfo = getTopicPartitionInfo(
@@ -1333,22 +1333,22 @@ public class StreamsPartitionAssignorTest {
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1), changelogTopicPartitionInfo, parameterizedConfig);
 
         subscriptions.put("consumer10",
-                new Subscription(
-                        topics,
-                        getInfo(PID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
-                        emptyList(),
-                        DEFAULT_GENERATION,
-                        Optional.of(RACK_4)));
+            new Subscription(
+                topics,
+                getInfo(PID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_4)));
         subscriptions.put("consumer20",
-                new Subscription(
-                        topics,
-                        getInfo(PID_2, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
-                        emptyList(),
-                        DEFAULT_GENERATION,
-                        Optional.of(RACK_4)));
+            new Subscription(
+                topics,
+                getInfo(PID_2, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_4)));
 
         final Map<String, Assignment> assignments =
-                partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
+            partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
 
         // Consumers
         final AssignmentInfo info10 = AssignmentInfo.decode(assignments.get("consumer10").userData());
@@ -1377,8 +1377,8 @@ public class StreamsPartitionAssignorTest {
 
         createMockTaskManager(EMPTY_TASKS, EMPTY_TASKS);
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
-                singletonList(APPLICATION_ID + "-store1-changelog"),
-                singletonList(3)),
+            singletonList(APPLICATION_ID + "-store1-changelog"),
+            singletonList(3)),
             true
         );
         final List<Map<String, List<TopicPartitionInfo>>> changelogTopicPartitionInfo = getTopicPartitionInfo(
@@ -1387,36 +1387,36 @@ public class StreamsPartitionAssignorTest {
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1), changelogTopicPartitionInfo, parameterizedConfig);
 
         subscriptions.put("consumer10",
-                new Subscription(
-                        topics,
-                        getInfo(PID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
-                        emptyList(),
-                        DEFAULT_GENERATION,
-                        Optional.of(RACK_0)));
+            new Subscription(
+                topics,
+                getInfo(PID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_0)));
         subscriptions.put("consumer11",
-                new Subscription(
-                        topics,
-                        getInfo(PID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
-                        emptyList(),
-                        DEFAULT_GENERATION,
-                        Optional.of(RACK_0)));
+            new Subscription(
+                topics,
+                getInfo(PID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_0)));
         subscriptions.put("consumer20",
-                new Subscription(
-                        topics,
-                        getInfo(PID_2, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
-                        emptyList(),
-                        DEFAULT_GENERATION,
-                        Optional.of(RACK_2)));
+            new Subscription(
+                topics,
+                getInfo(PID_2, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_2)));
         subscriptions.put("consumer21",
-                new Subscription(
-                        topics,
-                        getInfo(PID_2, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
-                        emptyList(),
-                        DEFAULT_GENERATION,
-                        Optional.of(RACK_2)));
+            new Subscription(
+                topics,
+                getInfo(PID_2, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_2)));
 
         final Map<String, Assignment> assignments =
-                partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
+            partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
 
         // Consumers
         final AssignmentInfo info10 = AssignmentInfo.decode(assignments.get("consumer10").userData());
@@ -1491,12 +1491,12 @@ public class StreamsPartitionAssignorTest {
         final MockInternalTopicManager internalTopicManager = configurePartitionAssignorWith(emptyMap(), changelogTopicPartitionInfo, parameterizedConfig);
 
         subscriptions.put("consumer10",
-                          new Subscription(
-                              topics,
-                              defaultSubscriptionInfo.encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_2))
+            new Subscription(
+                topics,
+                defaultSubscriptionInfo.encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_2))
         );
         partitionAssignor.assign(metadata, new GroupSubscription(subscriptions));
 
@@ -1528,12 +1528,12 @@ public class StreamsPartitionAssignorTest {
         final MockInternalTopicManager internalTopicManager = configurePartitionAssignorWith(emptyMap(), changelogTopicPartitionInfo, parameterizedConfig);
 
         subscriptions.put("consumer10",
-                          new Subscription(
-                              topics,
-                              defaultSubscriptionInfo.encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_3))
+            new Subscription(
+                topics,
+                defaultSubscriptionInfo.encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_3))
         );
         partitionAssignor.assign(metadata, new GroupSubscription(subscriptions));
 
@@ -1573,9 +1573,9 @@ public class StreamsPartitionAssignorTest {
         topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(configProps(parameterizedConfig)));
 
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
-                asList(APPLICATION_ID + "-topic3-STATE-STORE-0000000002-changelog",
-                    APPLICATION_ID + "-KTABLE-AGGREGATE-STATE-STORE-0000000006-changelog"),
-                asList(4, 4)),
+            asList(APPLICATION_ID + "-topic3-STATE-STORE-0000000002-changelog",
+                APPLICATION_ID + "-KTABLE-AGGREGATE-STATE-STORE-0000000006-changelog"),
+            asList(4, 4)),
             true
         );
 
@@ -1597,12 +1597,12 @@ public class StreamsPartitionAssignorTest {
         final MockInternalTopicManager mockInternalTopicManager = configurePartitionAssignorWith(emptyMap(), topicPartitionInfo, parameterizedConfig);
 
         subscriptions.put(client,
-                          new Subscription(
-                              asList("topic1", "topic3"),
-                              defaultSubscriptionInfo.encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_4))
+            new Subscription(
+                asList("topic1", "topic3"),
+                defaultSubscriptionInfo.encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_4))
         );
 
         final Map<String, Assignment> assignment =
@@ -1665,13 +1665,13 @@ public class StreamsPartitionAssignorTest {
         partitionAssignor.setInternalTopicManager(mockInternalTopicManager);
 
         subscriptions.put(client,
-                          new Subscription(
-                              singletonList("topic1"),
-                              defaultSubscriptionInfo.encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_2)
-                          )
+            new Subscription(
+                singletonList("topic1"),
+                defaultSubscriptionInfo.encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_2)
+            )
         );
         assertThrows(TimeoutException.class, () -> partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)));
     }
@@ -1690,7 +1690,7 @@ public class StreamsPartitionAssignorTest {
 
         createDefaultMockTaskManager();
         partitionAssignor.configure(configProps(parameterizedConfig));
-        final MockInternalTopicManager mockInternalTopicManager =  new MockInternalTopicManager(
+        final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
             time,
             config,
             mockClientSupplier.restoreConsumer,
@@ -1752,13 +1752,13 @@ public class StreamsPartitionAssignorTest {
         configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.APPLICATION_SERVER_CONFIG, USER_END_POINT), parameterizedConfig);
 
         subscriptions.put("consumer1",
-                          new Subscription(
-                              topics,
-                              getInfo(PID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_2)
-                          )
+            new Subscription(
+                topics,
+                getInfo(PID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_2)
+            )
         );
         final Map<String, Assignment> assignments = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
         final Assignment consumerAssignment = assignments.get("consumer1");
@@ -1840,13 +1840,13 @@ public class StreamsPartitionAssignorTest {
         final MockInternalTopicManager mockInternalTopicManager = configureDefault(parameterizedConfig);
 
         subscriptions.put(client,
-                          new Subscription(
-                              Collections.singletonList("unknownTopic"),
-                              defaultSubscriptionInfo.encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_2)
-                          )
+            new Subscription(
+                Collections.singletonList("unknownTopic"),
+                defaultSubscriptionInfo.encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_2)
+            )
         );
         final Map<String, Assignment> assignment = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
 
@@ -1917,20 +1917,20 @@ public class StreamsPartitionAssignorTest {
         final List<TopicPartition> allPartitions = asList(t1p0, t1p1, t1p2);
 
         subscriptions.put(CONSUMER_1,
-                          new Subscription(
-                              Collections.singletonList("topic1"),
-                              getInfo(PID_1, allTasks, EMPTY_TASKS).encode(),
-                              allPartitions,
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_0))
+            new Subscription(
+                Collections.singletonList("topic1"),
+                getInfo(PID_1, allTasks, EMPTY_TASKS).encode(),
+                allPartitions,
+                DEFAULT_GENERATION,
+                Optional.of(RACK_0))
         );
         subscriptions.put(CONSUMER_2,
-                          new Subscription(
-                              Collections.singletonList("topic1"),
-                              getInfo(PID_1, EMPTY_TASKS, allTasks).encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_0))
+            new Subscription(
+                Collections.singletonList("topic1"),
+                getInfo(PID_1, EMPTY_TASKS, allTasks).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_0))
         );
 
         createMockTaskManager(allTasks, allTasks);
@@ -1966,8 +1966,8 @@ public class StreamsPartitionAssignorTest {
 
         createDefaultMockTaskManager();
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
-                singletonList(APPLICATION_ID + "-KSTREAM-AGGREGATE-STATE-STORE-0000000001-changelog"),
-                singletonList(3)),
+            singletonList(APPLICATION_ID + "-KSTREAM-AGGREGATE-STATE-STORE-0000000001-changelog"),
+            singletonList(3)),
             true
         );
 
@@ -1976,20 +1976,20 @@ public class StreamsPartitionAssignorTest {
         configurePartitionAssignorWith(props, changelogTopicPartitionInfo, parameterizedConfig);
 
         subscriptions.put("consumer1",
-                          new Subscription(
-                              Collections.singletonList("topic1"),
-                              getInfo(PID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_3))
+            new Subscription(
+                Collections.singletonList("topic1"),
+                getInfo(PID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_3))
         );
         subscriptions.put("consumer2",
-                          new Subscription(
-                              Collections.singletonList("topic1"),
-                              getInfo(PID_2, EMPTY_TASKS, EMPTY_TASKS, OTHER_END_POINT).encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_1))
+            new Subscription(
+                Collections.singletonList("topic1"),
+                getInfo(PID_2, EMPTY_TASKS, EMPTY_TASKS, OTHER_END_POINT).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_1))
         );
         final Set<TopicPartition> allPartitions = Set.of(t1p0, t1p1, t1p2);
         final Map<String, Assignment> assign = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
@@ -2062,25 +2062,25 @@ public class StreamsPartitionAssignorTest {
     }
 
     private void shouldReturnLowestAssignmentVersionForDifferentSubscriptionVersions(final int smallestVersion,
-                                                                                     final int otherVersion,
-                                                                                     final Map<String, Object> parameterizedObject) {
+        final int otherVersion,
+        final Map<String, Object> parameterizedObject) {
         subscriptions.put("consumer1",
-                          new Subscription(
-                              Collections.singletonList("topic1"),
-                              getInfoForOlderVersion(smallestVersion,
-                                  PID_1, EMPTY_TASKS, EMPTY_TASKS).encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_2))
+            new Subscription(
+                Collections.singletonList("topic1"),
+                getInfoForOlderVersion(smallestVersion,
+                    PID_1, EMPTY_TASKS, EMPTY_TASKS).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_2))
         );
         subscriptions.put("consumer2",
-                          new Subscription(
-                              Collections.singletonList("topic1"),
-                              getInfoForOlderVersion(otherVersion, PID_2, EMPTY_TASKS, EMPTY_TASKS).encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_1)
-                          )
+            new Subscription(
+                Collections.singletonList("topic1"),
+                getInfoForOlderVersion(otherVersion, PID_2, EMPTY_TASKS, EMPTY_TASKS).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_1)
+            )
         );
 
         configureDefault(parameterizedObject);
@@ -2217,7 +2217,7 @@ public class StreamsPartitionAssignorTest {
         //  especially whether it could build the repartition topic counts (step zero) with a complex topology.
         //  The traversal path 0 -> 1 -> 2 -> 3 hits the case where sub-topology 2 will be initialized while its
         //  parent 3 hasn't been initialized yet.
-        builder.addSource(null, "KSTREAM-SOURCE-0000000000",  null, null, null, "input-stream");
+        builder.addSource(null, "KSTREAM-SOURCE-0000000000", null, null, null, "input-stream");
         builder.addProcessor("KSTREAM-FLATMAPVALUES-0000000001", new MockApiProcessorSupplier<>(), "KSTREAM-SOURCE-0000000000");
         builder.addProcessor("KSTREAM-BRANCH-0000000002", new MockApiProcessorSupplier<>(), "KSTREAM-FLATMAPVALUES-0000000001");
         builder.addProcessor("KSTREAM-BRANCHCHILD-0000000003", new MockApiProcessorSupplier<>(), "KSTREAM-BRANCH-0000000002");
@@ -2339,8 +2339,8 @@ public class StreamsPartitionAssignorTest {
         builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor1");
 
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
-                singletonList(APPLICATION_ID + "-store1-changelog"),
-                singletonList(changelogNumPartitions - 1)),
+            singletonList(APPLICATION_ID + "-store1-changelog"),
+            singletonList(changelogNumPartitions - 1)),
             true
         );
 
@@ -2371,8 +2371,8 @@ public class StreamsPartitionAssignorTest {
         builder.addStateStore(new MockKeyValueStoreBuilder("store2", false), "processor1");
 
         adminClient = createMockAdminClientForAssignor(getTopicPartitionOffsetsMap(
-                singletonList(APPLICATION_ID + "-store1-changelog"),
-                singletonList(3)),
+            singletonList(APPLICATION_ID + "-store1-changelog"),
+            singletonList(3)),
             true
         );
 
@@ -2409,26 +2409,26 @@ public class StreamsPartitionAssignorTest {
         builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor1");
 
         subscriptions.put("consumer10",
-                          new Subscription(
-                              singletonList("topic1"),
-                              defaultSubscriptionInfo.encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_4)
-                          ));
+            new Subscription(
+                singletonList("topic1"),
+                defaultSubscriptionInfo.encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_4)
+            ));
 
         configureDefault(parameterizedConfig);
         final List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(mkEntry(
-                "stream-partition-assignor-test-store-changelog",
-                singletonList(
-                    new TopicPartitionInfo(
-                        0,
-                        new Node(1, "h1", 80),
-                        singletonList(new Node(1, "h1", 80)),
-                        emptyList()
-                    )
+            "stream-partition-assignor-test-store-changelog",
+            singletonList(
+                new TopicPartitionInfo(
+                    0,
+                    new Node(1, "h1", 80),
+                    singletonList(new Node(1, "h1", 80)),
+                    emptyList()
                 )
             )
+        )
         ));
         overwriteInternalTopicManagerWithMock(true, partitionInfo, parameterizedConfig);
 
@@ -2474,16 +2474,16 @@ public class StreamsPartitionAssignorTest {
 
         configureDefault(parameterizedConfig);
         final List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(mkEntry(
-                "stream-partition-assignor-test-store-changelog",
-                singletonList(
-                    new TopicPartitionInfo(
-                        0,
-                        new Node(1, "h1", 80),
-                        singletonList(new Node(1, "h1", 80)),
-                        emptyList()
-                    )
+            "stream-partition-assignor-test-store-changelog",
+            singletonList(
+                new TopicPartitionInfo(
+                    0,
+                    new Node(1, "h1", 80),
+                    singletonList(new Node(1, "h1", 80)),
+                    emptyList()
                 )
             )
+        )
         ));
         overwriteInternalTopicManagerWithMock(false, partitionInfo, parameterizedConfig);
 
@@ -2550,16 +2550,16 @@ public class StreamsPartitionAssignorTest {
         configureDefault(parameterizedConfig);
 
         subscriptions.put("consumer",
-                          new Subscription(
-                              singletonList("topic"),
-                              defaultSubscriptionInfo.encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_0)
-                          ));
+            new Subscription(
+                singletonList("topic"),
+                defaultSubscriptionInfo.encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_0)
+            ));
         final Map<String, Assignment> assignments = partitionAssignor.assign(emptyClusterMetadata, new GroupSubscription(subscriptions)).groupAssignment();
         assertThat(AssignmentInfo.decode(assignments.get("consumer").userData()).errCode(),
-                   equalTo(AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code()));
+            equalTo(AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code()));
     }
 
     @ParameterizedTest
@@ -2623,16 +2623,16 @@ public class StreamsPartitionAssignorTest {
         configureDefault(parameterizedConfig);
 
         subscriptions.put("consumer",
-                          new Subscription(
-                              singletonList("topic"),
-                              defaultSubscriptionInfo.encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_1)
-                          ));
+            new Subscription(
+                singletonList("topic"),
+                defaultSubscriptionInfo.encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_1)
+            ));
         final Map<String, Assignment> assignments = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
         assertThat(AssignmentInfo.decode(assignments.get("consumer").userData()).errCode(),
-                   equalTo(AssignorError.ASSIGNMENT_ERROR.code()));
+            equalTo(AssignorError.ASSIGNMENT_ERROR.code()));
     }
 
     @ParameterizedTest
@@ -2644,7 +2644,7 @@ public class StreamsPartitionAssignorTest {
         configureDefaultPartitionAssignor(parameterizedConfig);
         final Set<String> topics = Set.of("input");
         final Subscription subscription = new Subscription(new ArrayList<>(topics),
-                                                           partitionAssignor.subscriptionUserData(topics));
+            partitionAssignor.subscriptionUserData(topics));
         final SubscriptionInfo info = getInfo(PID_1, EMPTY_TASKS, EMPTY_TASKS, uniqueField, clientTags);
 
         assertEquals(singletonList("input"), subscription.topics());
@@ -2685,20 +2685,20 @@ public class StreamsPartitionAssignorTest {
 
     private void shouldEncodeAssignmentErrorIfPreVersionProbingSubscriptionAndFutureSubscriptionIsMixed(final int oldVersion, final Map<String, Object> parameterizedConfig) {
         subscriptions.put("consumer1",
-                          new Subscription(
-                              Collections.singletonList("topic1"),
-                              getInfoForOlderVersion(oldVersion, PID_1, EMPTY_TASKS, EMPTY_TASKS).encode(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_0))
+            new Subscription(
+                Collections.singletonList("topic1"),
+                getInfoForOlderVersion(oldVersion, PID_1, EMPTY_TASKS, EMPTY_TASKS).encode(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_0))
         );
         subscriptions.put("future-consumer",
-                          new Subscription(
-                              Collections.singletonList("topic1"),
-                              encodeFutureSubscription(),
-                              emptyList(),
-                              DEFAULT_GENERATION,
-                              Optional.of(RACK_1))
+            new Subscription(
+                Collections.singletonList("topic1"),
+                encodeFutureSubscription(),
+                emptyList(),
+                DEFAULT_GENERATION,
+                Optional.of(RACK_1))
         );
         configureDefault(parameterizedConfig);
 
@@ -2714,7 +2714,7 @@ public class StreamsPartitionAssignorTest {
     }
 
     private static AssignmentInfo checkAssignment(final Set<String> expectedTopics,
-                                                  final Assignment assignment) {
+        final Assignment assignment) {
 
         // This assumed 1) DefaultPartitionGrouper is used, and 2) there is an only one topic group.
 
@@ -2758,7 +2758,7 @@ public class StreamsPartitionAssignorTest {
     }
 
     private static void assertEquivalentAssignment(final Map<String, List<TaskId>> thisAssignment,
-                                                   final Map<String, List<TaskId>> otherAssignment) {
+        final Map<String, List<TaskId>> otherAssignment) {
         assertEquals(thisAssignment.size(), otherAssignment.size());
         for (final Map.Entry<String, List<TaskId>> entry : thisAssignment.entrySet()) {
             final String consumer = entry.getKey();
@@ -2780,10 +2780,10 @@ public class StreamsPartitionAssignorTest {
      *            of partitions of the ith topic in changelogTopics is given by the ith element of topicsNumPartitions
      */
     private static Map<TopicPartition, Long> getTopicPartitionOffsetsMap(final List<String> changelogTopics,
-                                                                         final List<Integer> topicsNumPartitions) {
+        final List<Integer> topicsNumPartitions) {
         if (changelogTopics.size() != topicsNumPartitions.size()) {
             throw new IllegalStateException("Passed in " + changelogTopics.size() + " changelog topic names, but " +
-                                               topicsNumPartitions.size() + " different numPartitions for the topics");
+                topicsNumPartitions.size() + " different numPartitions for the topics");
         }
         final Map<TopicPartition, Long> changelogEndOffsets = new HashMap<>();
         for (int i = 0; i < changelogTopics.size(); ++i) {
@@ -2797,9 +2797,9 @@ public class StreamsPartitionAssignorTest {
     }
 
     private static SubscriptionInfo getInfoForOlderVersion(final int version,
-                                                           final ProcessId processId,
-                                                           final Set<TaskId> prevTasks,
-                                                           final Set<TaskId> standbyTasks) {
+        final ProcessId processId,
+        final Set<TaskId> prevTasks,
+        final Set<TaskId> standbyTasks) {
         return new SubscriptionInfo(
             version, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0, 0, EMPTY_CLIENT_TAGS);
     }

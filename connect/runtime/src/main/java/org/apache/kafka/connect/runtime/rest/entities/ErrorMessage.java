@@ -24,7 +24,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * {@link org.apache.kafka.connect.errors.ConnectException}s.
  */
 public record ErrorMessage(
-    @JsonProperty("error_code") int errorCode,
-    @JsonProperty String message
+@JsonProperty("error_code") int errorCode,
+@JsonProperty String message
 ) {
 }

@@ -62,8 +62,8 @@ public class PrintedTest {
     public void shouldCreateProcessorThatPrintsToFile() throws IOException {
         final File file = TestUtils.tempFile();
         final ProcessorSupplier<String, Integer, Void, Void> processorSupplier = new PrintedInternal<>(
-                Printed.<String, Integer>toFile(file.getPath()))
-                .build("processor");
+            Printed.<String, Integer>toFile(file.getPath()))
+            .build("processor");
         final Processor<String, Integer, Void, Void> processor = processorSupplier.get();
         processor.process(new Record<>("hi", 1, 0L));
         processor.close();
@@ -87,8 +87,8 @@ public class PrintedTest {
     @Test
     public void shouldPrintWithLabel() {
         final Processor<String, Integer, Void, Void> processor = new PrintedInternal<>(sysOutPrinter.withLabel("label"))
-                .build("processor")
-                .get();
+            .build("processor")
+            .get();
 
         processor.process(new Record<>("hello", 3, 0L));
         processor.close();

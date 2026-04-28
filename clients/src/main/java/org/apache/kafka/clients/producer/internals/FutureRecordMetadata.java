@@ -38,7 +38,7 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
     private volatile FutureRecordMetadata nextRecordMetadata = null;
 
     public FutureRecordMetadata(ProduceRequestResult result, int batchIndex, long createTimestamp, int serializedKeySize,
-                                int serializedValueSize, Time time) {
+        int serializedValueSize, Time time) {
         this.result = result;
         this.batchIndex = batchIndex;
         this.createTimestamp = createTimestamp;
@@ -103,7 +103,7 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
         if (nextRecordMetadata != null)
             return nextRecordMetadata.value();
         return new RecordMetadata(result.topicPartition(), this.result.baseOffset(), this.batchIndex,
-                                  timestamp(), this.serializedKeySize, this.serializedValueSize);
+            timestamp(), this.serializedKeySize, this.serializedValueSize);
     }
 
     private long timestamp() {

@@ -60,7 +60,7 @@ public class ConsumerProtocolTest {
         Subscription subscription = new Subscription(Arrays.asList("foo", "bar"),
             ByteBuffer.wrap("hello".getBytes()), ownedPartitions, generationId, rackId);
 
-        for (short version = ConsumerProtocolSubscription.LOWEST_SUPPORTED_VERSION; version <= ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION; version++) {
+        for (short version = ConsumerProtocolSubscription.LOWEST_SUPPORTED_VERSION;version <= ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION;version++) {
             ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription, version);
             Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer);
 
@@ -199,7 +199,7 @@ public class ConsumerProtocolTest {
         List<TopicPartition> partitions = Arrays.asList(tp1, tp2);
         Assignment assignment = new Assignment(partitions, ByteBuffer.wrap("hello".getBytes()));
 
-        for (short version = ConsumerProtocolAssignment.LOWEST_SUPPORTED_VERSION; version <= ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION; version++) {
+        for (short version = ConsumerProtocolAssignment.LOWEST_SUPPORTED_VERSION;version <= ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION;version++) {
             ByteBuffer buffer = ConsumerProtocol.serializeAssignment(assignment, version);
             Assignment parsedAssignment = ConsumerProtocol.deserializeAssignment(buffer);
             assertEquals(Set.copyOf(partitions), Set.copyOf(parsedAssignment.partitions()));
@@ -222,7 +222,7 @@ public class ConsumerProtocolTest {
             )
             .setUserData(ByteBuffer.wrap("hello".getBytes()));
 
-        for (short version = ConsumerProtocolAssignment.LOWEST_SUPPORTED_VERSION; version <= ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION; version++) {
+        for (short version = ConsumerProtocolAssignment.LOWEST_SUPPORTED_VERSION;version <= ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION;version++) {
             ByteBuffer buffer = ConsumerProtocol.serializeAssignment(assignment, version);
             ConsumerProtocolAssignment parsedAssignment = ConsumerProtocol.deserializeConsumerProtocolAssignment(buffer);
             assertEquals(Set.copyOf(assignment.assignedPartitions()), Set.copyOf(parsedAssignment.assignedPartitions()));
@@ -288,7 +288,7 @@ public class ConsumerProtocolTest {
         Subscription subscription = new Subscription(Arrays.asList("foo", "bar"),
             ByteBuffer.wrap("hello".getBytes()), ownedPartitions, generationId, rackId);
 
-        for (short version = ConsumerProtocolSubscription.LOWEST_SUPPORTED_VERSION; version <= ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION; version++) {
+        for (short version = ConsumerProtocolSubscription.LOWEST_SUPPORTED_VERSION;version <= ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION;version++) {
             ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription, version);
             ConsumerProtocolSubscription parsedSubscription = ConsumerProtocol.deserializeConsumerProtocolSubscription(buffer);
 
@@ -297,11 +297,11 @@ public class ConsumerProtocolTest {
 
             if (version >= 1) {
                 assertEquals(
-                        Set.of(
-                            new ConsumerProtocolSubscription.TopicPartition().setTopic("foo").setPartitions(Collections.singletonList(0)),
-                            new ConsumerProtocolSubscription.TopicPartition().setTopic("bar").setPartitions(Collections.singletonList(0)
-                    )),
-                        Set.copyOf(parsedSubscription.ownedPartitions())
+                    Set.of(
+                        new ConsumerProtocolSubscription.TopicPartition().setTopic("foo").setPartitions(Collections.singletonList(0)),
+                        new ConsumerProtocolSubscription.TopicPartition().setTopic("bar").setPartitions(Collections.singletonList(0)
+                        )),
+                    Set.copyOf(parsedSubscription.ownedPartitions())
                 );
             } else {
                 assertEquals(new ConsumerProtocolSubscription.TopicPartitionCollection(), parsedSubscription.ownedPartitions());

@@ -31,15 +31,15 @@ public class ExponentialBackoffTest {
         long backoffMax = 2000;
         double jitter = 0.2;
         ExponentialBackoff exponentialBackoff = new ExponentialBackoff(
-                scaleFactor, ratio, backoffMax, jitter
+            scaleFactor, ratio, backoffMax, jitter
         );
 
-        for (int i = 0; i <= 100; i++) {
-            for (int attempts = 0; attempts <= 10; attempts++) {
+        for (int i = 0;i <= 100;i++) {
+            for (int attempts = 0;attempts <= 10;attempts++) {
                 if (attempts <= 4) {
                     assertEquals(scaleFactor * Math.pow(ratio, attempts),
-                            exponentialBackoff.backoff(attempts),
-                            scaleFactor * Math.pow(ratio, attempts) * jitter);
+                        exponentialBackoff.backoff(attempts),
+                        scaleFactor * Math.pow(ratio, attempts) * jitter);
                 } else {
                     assertTrue(exponentialBackoff.backoff(attempts) <= backoffMax * (1 + jitter));
                 }
@@ -59,10 +59,10 @@ public class ExponentialBackoffTest {
     @Test
     public void testExponentialBackoffWithInvalidJitter() {
         assertEquals("jitter must be between 0 and 1, but got -1.0",
-                assertThrows(IllegalArgumentException.class,
-                        () -> new ExponentialBackoff(100, 2, 400, -1)).getMessage());
+            assertThrows(IllegalArgumentException.class,
+                () -> new ExponentialBackoff(100, 2, 400, -1)).getMessage());
         assertEquals("jitter must be between 0 and 1, but got 3000.0",
-                assertThrows(IllegalArgumentException.class,
-                        () -> new ExponentialBackoff(100, 2, 400, 3000)).getMessage());
+            assertThrows(IllegalArgumentException.class,
+                () -> new ExponentialBackoff(100, 2, 400, 3000)).getMessage());
     }
 }

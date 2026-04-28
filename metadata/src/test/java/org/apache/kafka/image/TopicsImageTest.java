@@ -105,19 +105,19 @@ public class TopicsImageTest {
     static {
         TOPIC_IMAGES1 = List.of(
             newTopicImage("foo", FOO_UUID,
-                new PartitionRegistration.Builder().setReplicas(new int[] {2, 3, 4}).
+                new PartitionRegistration.Builder().setReplicas(new int[]{2, 3, 4}).
                     setDirectories(DirectoryId.migratingArray(3)).
-                    setIsr(new int[] {2, 3}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(345).build(),
-                new PartitionRegistration.Builder().setReplicas(new int[] {3, 4, 5}).
-                        setDirectories(DirectoryId.migratingArray(3)).
-                    setIsr(new int[] {3, 4, 5}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(4).setPartitionEpoch(684).build(),
-                new PartitionRegistration.Builder().setReplicas(new int[] {2, 4, 5}).
-                        setDirectories(DirectoryId.migratingArray(3)).
-                    setIsr(new int[] {2, 4, 5}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(10).setPartitionEpoch(84).build()),
+                    setIsr(new int[]{2, 3}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(345).build(),
+                new PartitionRegistration.Builder().setReplicas(new int[]{3, 4, 5}).
+                    setDirectories(DirectoryId.migratingArray(3)).
+                    setIsr(new int[]{3, 4, 5}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(4).setPartitionEpoch(684).build(),
+                new PartitionRegistration.Builder().setReplicas(new int[]{2, 4, 5}).
+                    setDirectories(DirectoryId.migratingArray(3)).
+                    setIsr(new int[]{2, 4, 5}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(10).setPartitionEpoch(84).build()),
             newTopicImage("bar", BAR_UUID,
-                new PartitionRegistration.Builder().setReplicas(new int[] {0, 1, 2, 3, 4}).
+                new PartitionRegistration.Builder().setReplicas(new int[]{0, 1, 2, 3, 4}).
                     setDirectories(DirectoryId.migratingArray(5)).
-                    setIsr(new int[] {0, 1, 2, 3}).setRemovingReplicas(new int[] {1}).setAddingReplicas(new int[] {3, 4}).setLeader(0).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(345).build()));
+                    setIsr(new int[]{0, 1, 2, 3}).setRemovingReplicas(new int[]{1}).setAddingReplicas(new int[]{3, 4}).setLeader(0).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(345).build()));
 
         IMAGE1 = new TopicsImage(newTopicsByIdMap(TOPIC_IMAGES1), newTopicsByNameMap(TOPIC_IMAGES1));
 
@@ -128,12 +128,12 @@ public class TopicsImageTest {
             REMOVE_TOPIC_RECORD.highestSupportedVersion()));
         // change topic
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new PartitionChangeRecord().
-            setTopicId(BAR_UUID).
-            setPartitionId(0).setLeader(1),
+                setTopicId(BAR_UUID).
+                setPartitionId(0).setLeader(1),
             PARTITION_CHANGE_RECORD.highestSupportedVersion()));
         // add topic
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new TopicRecord().
-            setName("baz").setTopicId(BAZ_UUID),
+                setName("baz").setTopicId(BAZ_UUID),
             TOPIC_RECORD.highestSupportedVersion()));
         // add partition record for new topic
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new PartitionRecord().
@@ -148,11 +148,11 @@ public class TopicsImageTest {
             setPartitionEpoch(1), PARTITION_RECORD.highestSupportedVersion()));
         // re-add topic with different topic id
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new TopicRecord().
-            setName("foo").setTopicId(FOO_UUID2),
+                setName("foo").setTopicId(FOO_UUID2),
             TOPIC_RECORD.highestSupportedVersion()));
         // add then remove topic
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new TopicRecord().
-            setName("bam").setTopicId(BAM_UUID),
+                setName("bam").setTopicId(BAM_UUID),
             TOPIC_RECORD.highestSupportedVersion()));
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new RemoveTopicRecord().
             setTopicId(BAM_UUID),
@@ -164,13 +164,13 @@ public class TopicsImageTest {
         List<TopicImage> topics2 = List.of(
             newTopicImage("foo", FOO_UUID2),
             newTopicImage("bar", BAR_UUID,
-                new PartitionRegistration.Builder().setReplicas(new int[] {0, 1, 2, 3, 4}).
+                new PartitionRegistration.Builder().setReplicas(new int[]{0, 1, 2, 3, 4}).
                     setDirectories(DirectoryId.migratingArray(5)).
-                    setIsr(new int[] {0, 1, 2, 3}).setRemovingReplicas(new int[] {1}).setAddingReplicas(new int[] {3, 4}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(2).setPartitionEpoch(346).build()),
+                    setIsr(new int[]{0, 1, 2, 3}).setRemovingReplicas(new int[]{1}).setAddingReplicas(new int[]{3, 4}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(2).setPartitionEpoch(346).build()),
             newTopicImage("baz", BAZ_UUID,
-                new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4}).
+                new PartitionRegistration.Builder().setReplicas(new int[]{1, 2, 3, 4}).
                     setDirectories(DirectoryId.migratingArray(4)).
-                    setIsr(new int[] {3, 4}).setRemovingReplicas(new int[] {2}).setAddingReplicas(new int[] {1}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(2).setPartitionEpoch(1).build()));
+                    setIsr(new int[]{3, 4}).setRemovingReplicas(new int[]{2}).setAddingReplicas(new int[]{1}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(2).setPartitionEpoch(1).build()));
         IMAGE2 = new TopicsImage(newTopicsByIdMap(topics2), newTopicsByNameMap(topics2));
     }
 
@@ -254,7 +254,7 @@ public class TopicsImageTest {
         );
         assertEquals(
             Set.of(new TopicPartition("baz", 1), new TopicPartition("bar", 0),
-                    new TopicPartition("bam", 1)),
+                new TopicPartition("bam", 1)),
             changes.followers().keySet()
         );
 
@@ -274,7 +274,7 @@ public class TopicsImageTest {
             newTopicImage(
                 "zoo",
                 zooId,
-                newPartition(new int[] {localId, 1, 2})
+                newPartition(new int[]{localId, 1, 2})
             )
         );
         TopicsImage image = new TopicsImage(newTopicsByIdMap(topics), newTopicsByNameMap(topics));
@@ -320,7 +320,7 @@ public class TopicsImageTest {
             newTopicImage(
                 "zoo",
                 zooId,
-                newPartition(new int[] {localId, 1, 2})
+                newPartition(new int[]{localId, 1, 2})
             )
         );
         TopicsImage image = new TopicsImage(newTopicsByIdMap(topics),
@@ -357,7 +357,7 @@ public class TopicsImageTest {
             newTopicImage(
                 "foo",
                 fooId,
-                newPartition(new int[] {0, 1, 2, 3})
+                newPartition(new int[]{0, 1, 2, 3})
             )
         );
         TopicsImage image = new TopicsImage(newTopicsByIdMap(topics),
@@ -448,7 +448,7 @@ public class TopicsImageTest {
             newTopicImage(
                 "foo",
                 fooId,
-                newPartition(new int[] {0, 1, 2, 3})
+                newPartition(new int[]{0, 1, 2, 3})
             )
         );
         TopicsImage image = new TopicsImage(newTopicsByIdMap(topics),
@@ -550,7 +550,7 @@ public class TopicsImageTest {
             newTopicImage(
                 "foo",
                 fooId,
-                newPartition(new int[] {0, 1, 2, 3})
+                newPartition(new int[]{0, 1, 2, 3})
             )
         );
         TopicsImage image = new TopicsImage(newTopicsByIdMap(topics),
@@ -706,12 +706,12 @@ public class TopicsImageTest {
             newTopicImage(
                 "zoo",
                 zooId,
-                newPartition(new int[] {0, 1, localId}),
-                newPartition(new int[] {localId, 1, 2}),
-                newPartition(new int[] {0, 1, localId}),
-                newPartition(new int[] {localId, 1, 2}),
-                newPartition(new int[] {0, 1, 2}),
-                newPartition(new int[] {0, 1, 2})
+                newPartition(new int[]{0, 1, localId}),
+                newPartition(new int[]{localId, 1, 2}),
+                newPartition(new int[]{0, 1, localId}),
+                newPartition(new int[]{localId, 1, 2}),
+                newPartition(new int[]{0, 1, 2}),
+                newPartition(new int[]{0, 1, 2})
             )
         );
         TopicsImage image = new TopicsImage(newTopicsByIdMap(topics), newTopicsByNameMap(topics));
@@ -735,10 +735,10 @@ public class TopicsImageTest {
         topicRecords.add(
             new ApiMessageAndVersion(
                 new PartitionChangeRecord()
-                  .setTopicId(zooId)
-                  .setPartitionId(2)
-                  .setIsr(List.of(0, 1, 2))
-                  .setReplicas(List.of(0, 1, 2)),
+                    .setTopicId(zooId)
+                    .setPartitionId(2)
+                    .setIsr(List.of(0, 1, 2))
+                    .setReplicas(List.of(0, 1, 2)),
                 PARTITION_CHANGE_RECORD.highestSupportedVersion()
             )
         );
@@ -746,11 +746,11 @@ public class TopicsImageTest {
         topicRecords.add(
             new ApiMessageAndVersion(
                 new PartitionChangeRecord()
-                  .setTopicId(zooId)
-                  .setPartitionId(3)
-                  .setLeader(0)
-                  .setIsr(List.of(0, 1, 2))
-                  .setReplicas(List.of(0, 1, 2)),
+                    .setTopicId(zooId)
+                    .setPartitionId(3)
+                    .setLeader(0)
+                    .setIsr(List.of(0, 1, 2))
+                    .setReplicas(List.of(0, 1, 2)),
                 PARTITION_CHANGE_RECORD.highestSupportedVersion()
             )
         );
@@ -758,11 +758,11 @@ public class TopicsImageTest {
         topicRecords.add(
             new ApiMessageAndVersion(
                 new PartitionChangeRecord()
-                  .setTopicId(zooId)
-                  .setPartitionId(4)
-                  .setLeader(localId)
-                  .setIsr(List.of(localId, 1, 2))
-                  .setReplicas(List.of(localId, 1, 2)),
+                    .setTopicId(zooId)
+                    .setPartitionId(4)
+                    .setLeader(localId)
+                    .setIsr(List.of(localId, 1, 2))
+                    .setReplicas(List.of(localId, 1, 2)),
                 PARTITION_CHANGE_RECORD.highestSupportedVersion()
             )
         );
@@ -770,10 +770,10 @@ public class TopicsImageTest {
         topicRecords.add(
             new ApiMessageAndVersion(
                 new PartitionChangeRecord()
-                  .setTopicId(zooId)
-                  .setPartitionId(5)
-                  .setIsr(List.of(0, 1, localId))
-                  .setReplicas(List.of(0, 1, localId)),
+                    .setTopicId(zooId)
+                    .setPartitionId(5)
+                    .setIsr(List.of(0, 1, localId))
+                    .setReplicas(List.of(0, 1, localId)),
                 PARTITION_CHANGE_RECORD.highestSupportedVersion()
             )
         );
@@ -911,7 +911,7 @@ public class TopicsImageTest {
     @Test
     public void testPartitionReplicas() {
         TopicsImage image = topicsImage(List.of(
-                newTopicImage(FOO_0.topic(), FOO_0.topicId(), newPartition(new int[]{0, 1, 2}))
+            newTopicImage(FOO_0.topic(), FOO_0.topicId(), newPartition(new int[]{0, 1, 2}))
         ));
         assertEquals(List.of(0, 1, 2), image.partitionReplicas(FOO_UUID, 0));
     }

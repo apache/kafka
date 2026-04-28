@@ -463,20 +463,20 @@ public class RocksDBMetricsTest {
         metricAdder.run();
 
         verify(streamsMetrics).addStoreLevelMutableMetric(
-                eq(TASK_ID),
-                eq(STORE_TYPE),
-                eq(STORE_NAME),
-                eq(name),
-                eq(description),
-                eq(RecordingLevel.INFO),
-                eq(VALUE_PROVIDER)
+            eq(TASK_ID),
+            eq(STORE_TYPE),
+            eq(STORE_NAME),
+            eq(name),
+            eq(description),
+            eq(RecordingLevel.INFO),
+            eq(VALUE_PROVIDER)
         );
     }
 
     private void verifyRateAndTotalSensor(final String metricNamePrefix,
-                                          final String descriptionOfTotal,
-                                          final String descriptionOfRate,
-                                          final SensorCreator sensorCreator) {
+        final String descriptionOfTotal,
+        final String descriptionOfRate,
+        final SensorCreator sensorCreator) {
         setupStreamsMetricsMock(metricNamePrefix);
         StreamsMetricsImpl.addRateOfSumAndSumMetricsToSensor(
             sensor,
@@ -491,8 +491,8 @@ public class RocksDBMetricsTest {
     }
 
     private void verifyRateSensor(final String metricNamePrefix,
-                                  final String description,
-                                  final SensorCreator sensorCreator) {
+        final String description,
+        final SensorCreator sensorCreator) {
         setupStreamsMetricsMock(metricNamePrefix);
         StreamsMetricsImpl.addRateOfSumMetricToSensor(sensor, STATE_LEVEL_GROUP, tags, metricNamePrefix, description);
 
@@ -500,8 +500,8 @@ public class RocksDBMetricsTest {
     }
 
     private void verifyValueSensor(final String metricNamePrefix,
-                                   final String description,
-                                   final SensorCreator sensorCreator) {
+        final String description,
+        final SensorCreator sensorCreator) {
         setupStreamsMetricsMock(metricNamePrefix);
         StreamsMetricsImpl.addValueMetricToSensor(sensor, STATE_LEVEL_GROUP, tags, metricNamePrefix, description);
 
@@ -509,9 +509,9 @@ public class RocksDBMetricsTest {
     }
 
     private void verifySumSensor(final String metricNamePrefix,
-                                 final boolean withSuffix,
-                                 final String description,
-                                 final SensorCreator sensorCreator) {
+        final boolean withSuffix,
+        final String description,
+        final SensorCreator sensorCreator) {
         setupStreamsMetricsMock(metricNamePrefix);
         if (withSuffix) {
             StreamsMetricsImpl.addSumMetricToSensor(sensor, STATE_LEVEL_GROUP, tags, metricNamePrefix, description);
@@ -526,15 +526,15 @@ public class RocksDBMetricsTest {
     private void setupStreamsMetricsMock(final String metricNamePrefix) {
 
         when(streamsMetrics.storeLevelSensor(
-                TASK_ID,
-                STORE_NAME,
-                metricNamePrefix,
-                RecordingLevel.DEBUG
+            TASK_ID,
+            STORE_NAME,
+            metricNamePrefix,
+            RecordingLevel.DEBUG
         )).thenReturn(sensor);
         when(streamsMetrics.storeLevelTagMap(
-                TASK_ID,
-                STORE_TYPE,
-                STORE_NAME
+            TASK_ID,
+            STORE_TYPE,
+            STORE_NAME
         )).thenReturn(tags);
     }
 

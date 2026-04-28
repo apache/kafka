@@ -138,20 +138,20 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
     }
 
     Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(TopicIdPartition topicIdPartition,
-                                                                long offset,
-                                                                int epochForOffset)
+            long offset,
+            int epochForOffset)
             throws RemoteStorageException {
         return getRemoteLogMetadataCache(topicIdPartition).remoteLogSegmentMetadata(epochForOffset, offset);
     }
 
     Optional<RemoteLogSegmentMetadata> nextSegmentWithTxnIndex(TopicIdPartition topicIdPartition,
-                                                               int epoch,
-                                                               long offset) throws RemoteStorageException {
+            int epoch,
+            long offset) throws RemoteStorageException {
         return getRemoteLogMetadataCache(topicIdPartition).nextSegmentWithTxnIndex(epoch, offset);
     }
 
     Optional<Long> highestLogOffset(TopicIdPartition topicIdPartition,
-                                    int leaderEpoch) throws RemoteStorageException {
+            int leaderEpoch) throws RemoteStorageException {
         return getRemoteLogMetadataCache(topicIdPartition).highestOffsetForEpoch(leaderEpoch);
     }
 

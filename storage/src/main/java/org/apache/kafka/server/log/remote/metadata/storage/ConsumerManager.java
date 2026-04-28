@@ -48,21 +48,21 @@ public class ConsumerManager implements Closeable {
     private final Thread consumerTaskThread;
 
     public ConsumerManager(TopicBasedRemoteLogMetadataManagerConfig rlmmConfig,
-                           RemotePartitionMetadataEventHandler remotePartitionMetadataEventHandler,
-                           RemoteLogMetadataTopicPartitioner topicPartitioner,
-                           Time time) {
+            RemotePartitionMetadataEventHandler remotePartitionMetadataEventHandler,
+            RemoteLogMetadataTopicPartitioner topicPartitioner,
+            Time time) {
         this.rlmmConfig = rlmmConfig;
         this.time = time;
 
         //Create a task to consume messages and submit the respective events to RemotePartitionMetadataEventHandler.
         KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(rlmmConfig.consumerProperties());
         consumerTask = new ConsumerTask(
-            remotePartitionMetadataEventHandler,
-            topicPartitioner,
-            consumer,
-            100L,
-            300_000L,
-            time
+                remotePartitionMetadataEventHandler,
+                topicPartitioner,
+                consumer,
+                100L,
+                300_000L,
+                time
         );
         consumerTaskThread = KafkaThread.nonDaemon("RLMMConsumerTask", consumerTask);
     }
@@ -97,7 +97,7 @@ public class ConsumerManager implements Closeable {
      * @throws TimeoutException if this method execution did not complete with in the given {@code timeoutMs}.
      */
     void waitTillConsumptionCatchesUp(RecordMetadata recordMetadata,
-                                      long timeoutMs) throws TimeoutException {
+            long timeoutMs) throws TimeoutException {
         int partition = recordMetadata.partition();
         // If the current assignment does not have the subscription for this partition then return immediately.
         if (!consumerTask.isMetadataPartitionAssigned(partition)) {

@@ -92,6 +92,7 @@ public class EmbeddedKafkaCluster {
     private final KafkaClusterTestKit cluster;
     private final Properties brokerConfig;
     public final MockTime time;
+
     public EmbeddedKafkaCluster(final int numBrokers) {
         this(numBrokers, new Properties());
     }
@@ -101,36 +102,38 @@ public class EmbeddedKafkaCluster {
     }
 
     public EmbeddedKafkaCluster(final int numBrokers,
-                                final Properties brokerConfig,
-                                final long mockTimeMillisStart) {
+        final Properties brokerConfig,
+        final long mockTimeMillisStart) {
         this(numBrokers, brokerConfig, Collections.emptyMap(), mockTimeMillisStart, System.nanoTime());
     }
+
     public EmbeddedKafkaCluster(final int numBrokers,
-                                final Properties brokerConfig,
-                                final Map<Integer, Map<String, String>> brokerConfigOverrides) {
+        final Properties brokerConfig,
+        final Map<Integer, Map<String, String>> brokerConfigOverrides) {
         this(numBrokers, brokerConfig, brokerConfigOverrides, System.currentTimeMillis(), System.nanoTime());
     }
+
     public EmbeddedKafkaCluster(final int numBrokers,
-                                final Properties brokerConfig,
-                                final Map<Integer, Map<String, String>> brokerConfigOverrides,
-                                final long mockTimeMillisStart,
-                                final long mockTimeNanoStart) {
+        final Properties brokerConfig,
+        final Map<Integer, Map<String, String>> brokerConfigOverrides,
+        final long mockTimeMillisStart,
+        final long mockTimeNanoStart) {
         addDefaultBrokerPropsIfAbsent(brokerConfig);
 
         if (!brokerConfigOverrides.isEmpty() && brokerConfigOverrides.size() != numBrokers) {
             throw new IllegalArgumentException("Size of brokerConfigOverrides " + brokerConfigOverrides.size()
-                    + " must match broker number " + numBrokers);
+                + " must match broker number " + numBrokers);
         }
         try {
             final KafkaClusterTestKit.Builder clusterBuilder = new KafkaClusterTestKit.Builder(
-                    new TestKitNodes.Builder()
-                            .setCombined(true)
-                            .setNumBrokerNodes(numBrokers)
-                            .setPerServerProperties(brokerConfigOverrides)
-                            // Reduce number of controllers for faster startup
-                            // We may make this configurable in the future if there's a use case for it
-                            .setNumControllerNodes(1)
-                            .build()
+                new TestKitNodes.Builder()
+                    .setCombined(true)
+                    .setNumBrokerNodes(numBrokers)
+                    .setPerServerProperties(brokerConfigOverrides)
+                    // Reduce number of controllers for faster startup
+                    // We may make this configurable in the future if there's a use case for it
+                    .setNumControllerNodes(1)
+                    .build()
             );
 
             brokerConfig.forEach((k, v) -> clusterBuilder.setConfigProp((String) k, v));
@@ -275,18 +278,18 @@ public class EmbeddedKafkaCluster {
     public void createTopic(final String topic, final int partitions, final int replication, final Map<String, String> topicConfig) {
         if (replication > cluster.brokers().size()) {
             throw new InvalidReplicationFactorException("Insufficient brokers ("
-                    + cluster.brokers().size() + ") for desired replication (" + replication + ")");
+                + cluster.brokers().size() + ") for desired replication (" + replication + ")");
         }
 
         log.info("Creating topic { name: {}, partitions: {}, replication: {}, config: {} }",
-                topic, partitions, replication, topicConfig);
+            topic, partitions, replication, topicConfig);
         final NewTopic newTopic = new NewTopic(topic, partitions, (short) replication);
         newTopic.configs(topicConfig);
 
         try (final Admin adminClient = createAdminClient()) {
             adminClient.createTopics(Collections.singletonList(newTopic)).all().get();
             TestUtils.waitForCondition(() -> adminClient.listTopics().names().get().contains(topic),
-                    "Wait for topic " + topic + " to get created.");
+                "Wait for topic " + topic + " to get created.");
         } catch (final TopicExistsException ignored) {
         } catch (final InterruptedException | ExecutionException e) {
             if (!(e.getCause() instanceof TopicExistsException)) {

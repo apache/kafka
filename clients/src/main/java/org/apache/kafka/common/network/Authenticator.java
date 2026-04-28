@@ -152,7 +152,7 @@ public interface Authenticator extends Closeable {
     default Optional<NetworkReceive> pollResponseReceivedDuringReauthentication() {
         return Optional.empty();
     }
-    
+
     /**
      * Return true if this is a server-side authenticator and the connected client
      * has indicated that it supports re-authentication, otherwise false

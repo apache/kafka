@@ -39,8 +39,8 @@ public class PrintForeachAction<K, V> implements ForeachAction<K, V> {
      * @param label The given name will be printed.
      */
     PrintForeachAction(final OutputStream outputStream,
-                       final KeyValueMapper<? super K, ? super V, String> mapper,
-                       final String label) {
+        final KeyValueMapper<? super K, ? super V, String> mapper,
+        final String label) {
         this.printWriter = new PrintWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
         this.closable = outputStream != System.out && outputStream != System.err;
         this.mapper = mapper;

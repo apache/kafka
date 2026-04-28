@@ -49,8 +49,8 @@ public class KTableSuppressProcessorSupplier<K, V> implements
     private final KTableImpl<K, ?, V> parentKTable;
 
     public KTableSuppressProcessorSupplier(final SuppressedInternal<K> suppress,
-                                           final StoreBuilder<?> storeBuilder,
-                                           final KTableImpl<K, ?, V> parentKTable) {
+        final StoreBuilder<?> storeBuilder,
+        final KTableImpl<K, ?, V> parentKTable) {
         this.suppress = suppress;
         this.storeBuilder = storeBuilder;
         this.parentKTable = parentKTable;

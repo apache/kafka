@@ -39,10 +39,10 @@ public class CoordinatorBackgroundThreadPoolExecutorTest {
         CoordinatorRuntimeMetrics metrics = mock(CoordinatorRuntimeMetrics.class);
         Time mockTime = new MockTime();
         CoordinatorBackgroundThreadPoolExecutor threadPoolExecutor = new CoordinatorBackgroundThreadPoolExecutor(
-            "thread-pool-",
-            2,
-            mockTime,
-            metrics
+                "thread-pool-",
+                2,
+                mockTime,
+                metrics
         );
 
         try {
@@ -57,19 +57,22 @@ public class CoordinatorBackgroundThreadPoolExecutorTest {
                 task1Started.countDown();
                 try {
                     task1Unblocked.await();
-                } catch (InterruptedException e) { }
+                } catch (InterruptedException e) {
+                }
             });
             Future<?> task2 = threadPoolExecutor.submit(() -> {
                 task2Started.countDown();
                 try {
                     task2Unblocked.await();
-                } catch (InterruptedException e) { }
+                } catch (InterruptedException e) {
+                }
             });
             Future<?> task3 = threadPoolExecutor.submit(() -> {
                 task3Started.countDown();
                 try {
                     task3Unblocked.await();
-                } catch (InterruptedException e) { }
+                } catch (InterruptedException e) {
+                }
             });
 
             // Task 1 and task 2 start.

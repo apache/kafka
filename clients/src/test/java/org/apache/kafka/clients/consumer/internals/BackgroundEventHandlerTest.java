@@ -33,7 +33,7 @@ import static org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerM
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class BackgroundEventHandlerTest {
-    private final BlockingQueue<BackgroundEvent> backgroundEventsQueue =  new LinkedBlockingQueue<>();
+    private final BlockingQueue<BackgroundEvent> backgroundEventsQueue = new LinkedBlockingQueue<>();
 
     @ParameterizedTest
     @MethodSource("org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetricsTest#groupNameProvider")

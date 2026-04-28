@@ -39,7 +39,7 @@ public class LogCaptureAppender extends AbstractAppender implements AutoCloseabl
     private final List<LogEvent> events = new LinkedList<>();
     private final Map<Class<?>, Level> logLevelChanges = new HashMap<>();
     private final List<org.apache.logging.log4j.core.Logger> loggers = new ArrayList<>();
-    
+
     @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
     public static class Event {
         private final String level;
@@ -114,9 +114,9 @@ public class LogCaptureAppender extends AbstractAppender implements AutoCloseabl
 
     public List<String> getMessages(String level) {
         return getEvents().stream()
-                .filter(e -> level.equals(e.getLevel()))
-                .map(Event::getMessage)
-                .collect(Collectors.toList());
+            .filter(e -> level.equals(e.getLevel()))
+            .map(Event::getMessage)
+            .collect(Collectors.toList());
     }
 
     public List<String> getMessages() {

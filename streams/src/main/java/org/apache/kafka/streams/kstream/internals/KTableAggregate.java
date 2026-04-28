@@ -50,9 +50,9 @@ public class KTableAggregate<KIn, VIn, VAgg> implements
     private boolean sendOldValues = false;
 
     KTableAggregate(final MaterializedInternal<KIn, VAgg, KeyValueStore<Bytes, byte[]>> materialized,
-                    final Initializer<VAgg> initializer,
-                    final Aggregator<? super KIn, ? super VIn, VAgg> add,
-                    final Aggregator<? super KIn, ? super VIn, VAgg> remove) {
+        final Initializer<VAgg> initializer,
+        final Aggregator<? super KIn, ? super VIn, VAgg> add,
+        final Aggregator<? super KIn, ? super VIn, VAgg> remove) {
         this.storeFactory = new KeyValueStoreMaterializer<>(materialized);
         this.storeName = materialized.storeName();
         this.initializer = initializer;

@@ -195,7 +195,7 @@ public class ResetStreamsGroupOffsetTest {
         final String appId = generateRandomAppId();
         final String topic1 = generateRandomTopic();
         final String topic2 = generateRandomTopic();
-        final int  numOfPartitions = 2;
+        final int numOfPartitions = 2;
         String[] args;
         produceConsumeShutdown(appId, topic1, topic2, RECORD_TOTAL * numOfPartitions * 2);
         produceMessagesOnTwoPartitions(RECORD_TOTAL, topic1);
@@ -290,7 +290,7 @@ public class ResetStreamsGroupOffsetTest {
 
         // reset both partitions of topic1 and topic2:1 to specific offset
         args = new String[]{"--bootstrap-server", bootstrapServers, "--reset-offsets", "--group", appId,
-            "--input-topic", topic1,  "--input-topic", topic2 + ":1", "--to-offset", "5"};
+            "--input-topic", topic1, "--input-topic", topic2 + ":1", "--to-offset", "5"};
         final Map<TopicPartition, Long> expectedOffsets = Map.of(
             new TopicPartition(topic1, 0), 5L,
             new TopicPartition(topic1, 1), 5L,
@@ -389,28 +389,28 @@ public class ResetStreamsGroupOffsetTest {
         }
         adminClient.alterStreamsGroupOffsets(appId, offsets).all().get();
         Map<TopicPartition, Long> committedOffsets = committedOffsets(List.of(topics), appId);
-        for (TopicPartition tp: offsets.keySet()) {
+        for (TopicPartition tp : offsets.keySet()) {
             assertEquals(desiredOffset, committedOffsets.get(tp));
         }
     }
 
     private void AssertCommittedOffsets(String appId,
-                                        String topic,
-                                        long expectedCommittedOffset,
-                                        int... partitions) throws ExecutionException, InterruptedException {
+        String topic,
+        long expectedCommittedOffset,
+        int... partitions) throws ExecutionException, InterruptedException {
         List<TopicPartition> affectedTPs = Arrays.stream(partitions)
             .mapToObj(partition -> new TopicPartition(topic, partition))
             .toList();
         Map<TopicPartition, Long> committedOffsets = committedOffsets(List.of(topic), appId);
-        for (TopicPartition tp: affectedTPs) {
+        for (TopicPartition tp : affectedTPs) {
             assertEquals(expectedCommittedOffset, committedOffsets.get(tp));
         }
     }
 
     private void AssertCommittedOffsets(String appId,
-                                        String topic1,
-                                        String topic2,
-                                        long expectedCommittedOffset) throws ExecutionException, InterruptedException {
+        String topic1,
+        String topic2,
+        long expectedCommittedOffset) throws ExecutionException, InterruptedException {
         TopicPartition tp10 = new TopicPartition(topic1, 0);
         TopicPartition tp11 = new TopicPartition(topic2, 0);
         TopicPartition tp20 = new TopicPartition(topic1, 1);
@@ -443,11 +443,11 @@ public class ResetStreamsGroupOffsetTest {
      * @throws InterruptedException If the thread is interrupted during the reset operation.
      */
     private void resetOffsetsAndAssert(String[] args,
-                                       String appId,
-                                       String topic,
-                                       long expectedOffset,
-                                       long expectedCommittedOffset,
-                                       int... partitions) throws ExecutionException, InterruptedException {
+        String appId,
+        String topic,
+        long expectedOffset,
+        long expectedCommittedOffset,
+        int... partitions) throws ExecutionException, InterruptedException {
         Map<String, Map<TopicPartition, Long>> resetOffsetsResultByGroup;
         Map<TopicPartition, Long> expectedOffetMap = Arrays.stream(partitions)
             .boxed()
@@ -528,19 +528,19 @@ public class ResetStreamsGroupOffsetTest {
      * @throws InterruptedException If the thread is interrupted during the reset operation.
      */
     private void resetOffsetsAndAssert(String[] args,
-                                       String appId,
-                                       String topic1,
-                                       String topic2,
-                                       long expectedOffset,
-                                       long expectedCommittedOffset) throws ExecutionException, InterruptedException {
+        String appId,
+        String topic1,
+        String topic2,
+        long expectedOffset,
+        long expectedCommittedOffset) throws ExecutionException, InterruptedException {
         Map<String, Map<TopicPartition, Long>> resetOffsetsResultByGroup;
         Map<String, Map<TopicPartition, Long>> expectedResetResults = Map.of(
             appId, Map.of(
-                new TopicPartition(topic1, 0), expectedOffset,
-                new TopicPartition(topic2, 0), expectedOffset,
-                new TopicPartition(topic1, 1), expectedOffset,
-                new TopicPartition(topic2, 1), expectedOffset
-            )
+            new TopicPartition(topic1, 0), expectedOffset,
+            new TopicPartition(topic2, 0), expectedOffset,
+            new TopicPartition(topic1, 1), expectedOffset,
+            new TopicPartition(topic2, 1), expectedOffset
+        )
         );
 
         try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args)) {
@@ -572,10 +572,10 @@ public class ResetStreamsGroupOffsetTest {
      * @throws InterruptedException If the thread is interrupted during the reset operation.
      */
     private void resetOffsetsAndAssert(String[] args,
-                                       String appId,
-                                       List<String> topics,
-                                       Map<TopicPartition, Long> expectedOffsets,
-                                       Map<TopicPartition, Long> expectedCommittedOffsets) throws ExecutionException, InterruptedException {
+        String appId,
+        List<String> topics,
+        Map<TopicPartition, Long> expectedOffsets,
+        Map<TopicPartition, Long> expectedCommittedOffsets) throws ExecutionException, InterruptedException {
         Map<TopicPartition, Long> resetOffsetsResult;
 
         try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(args)) {
@@ -589,27 +589,27 @@ public class ResetStreamsGroupOffsetTest {
     }
 
     private void resetOffsetsAndAssertForDryRunAndExecute(String[] args,
-                                                          String appId,
-                                                          String topic,
-                                                          long expectedOffset,
-                                                          long expectedCommittedOffset,
-                                                          int... partitions) throws ExecutionException, InterruptedException {
-        resetOffsetsAndAssert(addTo(args, "--dry-run"), appId, topic,  expectedOffset, expectedCommittedOffset, partitions);
+        String appId,
+        String topic,
+        long expectedOffset,
+        long expectedCommittedOffset,
+        int... partitions) throws ExecutionException, InterruptedException {
+        resetOffsetsAndAssert(addTo(args, "--dry-run"), appId, topic, expectedOffset, expectedCommittedOffset, partitions);
         resetOffsetsAndAssert(addTo(args, "--execute"), appId, topic, expectedOffset, expectedOffset, partitions);
     }
 
     private void resetOffsetsAndAssertForDryRunAndExecute(String[] args,
-                                       String appId,
-                                       String topic1,
-                                       String topic2,
-                                       long expectedOffset,
-                                       long expectedCommittedOffset) throws ExecutionException, InterruptedException {
+        String appId,
+        String topic1,
+        String topic2,
+        long expectedOffset,
+        long expectedCommittedOffset) throws ExecutionException, InterruptedException {
         resetOffsetsAndAssert(addTo(args, "--dry-run"), appId, topic1, topic2, expectedOffset, expectedCommittedOffset);
         resetOffsetsAndAssert(addTo(args, "--execute"), appId, topic1, topic2, expectedOffset, expectedOffset);
     }
 
     private Map<TopicPartition, Long> committedOffsets(List<String> topics,
-                                                       String group) throws ExecutionException, InterruptedException {
+        String group) throws ExecutionException, InterruptedException {
         return adminClient.listConsumerGroupOffsets(group)
             .all().get()
             .get(group).entrySet()
@@ -696,7 +696,7 @@ public class ResetStreamsGroupOffsetTest {
         });
 
 
-        final KafkaStreams streams =  new KafkaStreams(builder.build(), STREAMS_CONFIG);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), STREAMS_CONFIG);
         streams.cleanUp();
         streams.start();
 
@@ -705,12 +705,12 @@ public class ResetStreamsGroupOffsetTest {
 
 
         TestUtils.waitForCondition(() -> streams.state().equals(KafkaStreams.State.RUNNING),
-                () -> "Expected RUNNING state but streams is on " + streams.state());
+            () -> "Expected RUNNING state but streams is on " + streams.state());
 
 
         try {
             TestUtils.waitForCondition(() -> recordCount.get() == numOfCommittedMessages,
-                    () -> "Expected " + numOfCommittedMessages + " records processed but only got " + recordCount.get());
+                () -> "Expected " + numOfCommittedMessages + " records processed but only got " + recordCount.get());
         } catch (final Exception e) {
             e.printStackTrace();
         } finally {

@@ -104,7 +104,7 @@ public class OffsetCommitRequest extends AbstractRequest {
         for (OffsetCommitRequestTopic topic : data.topics()) {
             for (OffsetCommitRequestData.OffsetCommitRequestPartition partition : topic.partitions()) {
                 offsets.put(new TopicPartition(topic.name(), partition.partitionIndex()),
-                        partition.committedOffset());
+                    partition.committedOffset());
             }
         }
         return offsets;

@@ -66,14 +66,14 @@ public record LogAppendResult(
 
     public Errors error() {
         return exception
-                .map(Errors::forException)
-                .orElse(Errors.NONE);
+            .map(Errors::forException)
+            .orElse(Errors.NONE);
     }
 
     public String errorMessage() {
         return exception
-                .filter(e -> hasCustomErrorMessage)
-                .map(Throwable::getMessage)
-                .orElse(null);
+            .filter(e -> hasCustomErrorMessage)
+            .map(Throwable::getMessage)
+            .orElse(null);
     }
 }

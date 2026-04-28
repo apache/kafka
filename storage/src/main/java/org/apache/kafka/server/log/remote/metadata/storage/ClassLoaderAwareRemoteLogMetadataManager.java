@@ -40,7 +40,7 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
     private final ClassLoader loader;
 
     public ClassLoaderAwareRemoteLogMetadataManager(RemoteLogMetadataManager delegate,
-                                                    ClassLoader loader) {
+            ClassLoader loader) {
         this.delegate = delegate;
         this.loader = loader;
     }
@@ -57,14 +57,14 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
 
     @Override
     public Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(TopicIdPartition topicIdPartition,
-                                                                       int epochForOffset,
-                                                                       long offset) throws RemoteStorageException {
+            int epochForOffset,
+            long offset) throws RemoteStorageException {
         return withClassLoader(() -> delegate.remoteLogSegmentMetadata(topicIdPartition, epochForOffset, offset));
     }
 
     @Override
     public Optional<Long> highestOffsetForEpoch(TopicIdPartition topicIdPartition,
-                                                int leaderEpoch) throws RemoteStorageException {
+            int leaderEpoch) throws RemoteStorageException {
         return withClassLoader(() -> delegate.highestOffsetForEpoch(topicIdPartition, leaderEpoch));
     }
 
@@ -80,13 +80,13 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
 
     @Override
     public Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicIdPartition topicIdPartition,
-                                                                    int leaderEpoch) throws RemoteStorageException {
+            int leaderEpoch) throws RemoteStorageException {
         return withClassLoader(() -> delegate.listRemoteLogSegments(topicIdPartition, leaderEpoch));
     }
 
     @Override
     public void onPartitionLeadershipChanges(Set<TopicIdPartition> leaderPartitions,
-                                             Set<TopicIdPartition> followerPartitions) {
+            Set<TopicIdPartition> followerPartitions) {
         withClassLoader(() -> {
             delegate.onPartitionLeadershipChanges(leaderPartitions, followerPartitions);
             return null;

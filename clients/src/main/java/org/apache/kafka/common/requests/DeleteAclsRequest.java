@@ -78,15 +78,15 @@ public class DeleteAclsRequest extends AbstractRequest {
                     filter.setPatternTypeFilter(PatternType.LITERAL.code());
                 else if (patternType != PatternType.LITERAL)
                     throw new UnsupportedVersionException("Version 0 does not support pattern type " +
-                            patternType + " (only LITERAL and ANY are supported)");
+                        patternType + " (only LITERAL and ANY are supported)");
             }
         }
 
         final boolean unknown = data.filters().stream().anyMatch(filter ->
-                filter.patternTypeFilter() == PatternType.UNKNOWN.code()
-                        || filter.resourceTypeFilter() == ResourceType.UNKNOWN.code()
-                        || filter.operation() == AclOperation.UNKNOWN.code()
-                        || filter.permissionType() == AclPermissionType.UNKNOWN.code()
+            filter.patternTypeFilter() == PatternType.UNKNOWN.code()
+                || filter.resourceTypeFilter() == ResourceType.UNKNOWN.code()
+                || filter.operation() == AclOperation.UNKNOWN.code()
+                || filter.permissionType() == AclPermissionType.UNKNOWN.code()
         );
 
         if (unknown) {

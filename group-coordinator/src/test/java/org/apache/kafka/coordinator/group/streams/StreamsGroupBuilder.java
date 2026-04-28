@@ -111,9 +111,9 @@ public class StreamsGroupBuilder {
         if (topology != null) {
             records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(
                 groupId,
-                    new StreamsGroupTopologyValue()
-                        .setEpoch(topology.topologyEpoch())
-                        .setSubtopologies(topology.subtopologies().values().stream().sorted(Comparator.comparing(Subtopology::subtopologyId)).toList()))
+                new StreamsGroupTopologyValue()
+                    .setEpoch(topology.topologyEpoch())
+                    .setSubtopologies(topology.subtopologies().values().stream().sorted(Comparator.comparing(Subtopology::subtopologyId)).toList()))
             );
         }
 

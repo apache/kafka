@@ -45,18 +45,18 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
     private final Sensor tasksLostSensor;
 
     public DefaultStreamsRebalanceListener(final Logger log,
-                                           final Time time,
-                                           final StreamsRebalanceData streamsRebalanceData,
-                                           final StreamThread streamThread,
-                                           final TaskManager taskManager,
-                                           final StreamsMetricsImpl streamsMetrics,
-                                           final String threadId) {
+        final Time time,
+        final StreamsRebalanceData streamsRebalanceData,
+        final StreamThread streamThread,
+        final TaskManager taskManager,
+        final StreamsMetricsImpl streamsMetrics,
+        final String threadId) {
         this.log = log;
         this.time = time;
         this.streamsRebalanceData = streamsRebalanceData;
         this.streamThread = streamThread;
         this.taskManager = taskManager;
-        
+
         // Create sensors for rebalance metrics
         this.tasksRevokedSensor = RebalanceListenerMetrics.tasksRevokedSensor(threadId, streamsMetrics);
         this.tasksAssignedSensor = RebalanceListenerMetrics.tasksAssignedSensor(threadId, streamsMetrics);
@@ -130,13 +130,13 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
     }
 
     private Set<TopicPartition> toTopicPartitions(final StreamsRebalanceData.TaskId task,
-                                                  final StreamsRebalanceData.Subtopology subTopology) {
+        final StreamsRebalanceData.Subtopology subTopology) {
         return
             Stream.concat(
-                    subTopology.sourceTopics().stream(),
-                    subTopology.repartitionSourceTopics().keySet().stream()
-                )
-                .map(t -> new TopicPartition(t, task.partitionId()))
+                subTopology.sourceTopics().stream(),
+                subTopology.repartitionSourceTopics().keySet().stream()
+            )
+            .map(t -> new TopicPartition(t, task.partitionId()))
                 .collect(Collectors.toSet());
     }
 }

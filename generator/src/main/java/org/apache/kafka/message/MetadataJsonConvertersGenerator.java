@@ -45,8 +45,8 @@ public class MetadataJsonConvertersGenerator implements TypeClassGenerator {
             MessageSpec prevSpec = apis.put(id, spec);
             if (prevSpec != null) {
                 throw new RuntimeException("Duplicate metadata record entry for type " +
-                        id + ". Original claimant: " + prevSpec.name() + ". New " +
-                        "claimant: " + spec.name());
+                    id + ". Original claimant: " + prevSpec.name() + ". New " +
+                    "claimant: " + spec.name());
             }
         }
     }
@@ -86,7 +86,7 @@ public class MetadataJsonConvertersGenerator implements TypeClassGenerator {
         buffer.incrementIndent();
         headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
         buffer.printf("throw new UnsupportedVersionException(\"Unknown metadata id \"" +
-                " + apiMessage.apiKey());%n");
+            " + apiMessage.apiKey());%n");
         buffer.decrementIndent();
         buffer.decrementIndent();
         buffer.printf("}%n");
@@ -113,7 +113,7 @@ public class MetadataJsonConvertersGenerator implements TypeClassGenerator {
         buffer.incrementIndent();
         headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
         buffer.printf("throw new UnsupportedVersionException(\"Unknown metadata id \"" +
-                " + apiKey);%n");
+            " + apiKey);%n");
         buffer.decrementIndent();
         buffer.decrementIndent();
         buffer.printf("}%n");

@@ -48,7 +48,7 @@ public class RoundRobinAssignorTest {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(consumerId, new Subscription(Collections.emptyList())));
+            Collections.singletonMap(consumerId, new Subscription(Collections.emptyList())));
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertTrue(assignment.get(consumerId).isEmpty());
     }
@@ -57,7 +57,7 @@ public class RoundRobinAssignorTest {
     public void testOneConsumerNonexistentTopic() {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(consumerId, new Subscription(topics(topic))));
+            Collections.singletonMap(consumerId, new Subscription(topics(topic))));
 
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertTrue(assignment.get(consumerId).isEmpty());
@@ -69,7 +69,7 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(topic, 3);
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(consumerId, new Subscription(topics(topic))));
+            Collections.singletonMap(consumerId, new Subscription(topics(topic))));
         assertEquals(partitions(tp(topic, 0), tp(topic, 1), tp(topic, 2)), assignment.get(consumerId));
     }
 
@@ -82,7 +82,7 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(otherTopic, 3);
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(consumerId, new Subscription(topics(topic))));
+            Collections.singletonMap(consumerId, new Subscription(topics(topic))));
         assertEquals(partitions(tp(topic, 0), tp(topic, 1), tp(topic, 2)), assignment.get(consumerId));
     }
 
@@ -91,7 +91,7 @@ public class RoundRobinAssignorTest {
         Map<String, Integer> partitionsPerTopic = setupPartitionsPerTopicWithTwoTopics(1, 2);
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(consumerId, new Subscription(topics(topic1, topic2))));
+            Collections.singletonMap(consumerId, new Subscription(topics(topic1, topic2))));
         assertEquals(partitions(tp(topic1, 0), tp(topic2, 0), tp(topic2, 1)), assignment.get(consumerId));
     }
 
@@ -281,11 +281,11 @@ public class RoundRobinAssignorTest {
 
         Map<String, List<TopicPartition>> expectedInstanceAssignment = new HashMap<>();
         expectedInstanceAssignment.put(instance1,
-                                       partitions(tp(topic1, 0), tp(topic1, 3), tp(topic2, 1), tp(topic2, 4)));
+            partitions(tp(topic1, 0), tp(topic1, 3), tp(topic2, 1), tp(topic2, 4)));
         expectedInstanceAssignment.put(instance2,
-                                       partitions(tp(topic1, 1), tp(topic1, 4), tp(topic2, 2)));
+            partitions(tp(topic1, 1), tp(topic1, 4), tp(topic2, 2)));
         expectedInstanceAssignment.put(instance3,
-                                       partitions(tp(topic1, 2), tp(topic2, 0), tp(topic2, 3)));
+            partitions(tp(topic1, 2), tp(topic2, 0), tp(topic2, 3)));
 
         List<AbstractPartitionAssignor.MemberInfo> staticMemberInfos = new ArrayList<>();
         for (Map.Entry<String, String> entry : memberIdToInstanceId.entrySet()) {
@@ -337,11 +337,11 @@ public class RoundRobinAssignorTest {
     }
 
     private static Map<String, List<TopicPartition>> checkStaticAssignment(AbstractPartitionAssignor assignor,
-                                                                           Map<String, Integer> partitionsPerTopic,
-                                                                           Map<String, Subscription> consumers) {
+        Map<String, Integer> partitionsPerTopic,
+        Map<String, Subscription> consumers) {
         Map<String, List<TopicPartition>> assignmentByMemberId = assignor.assign(partitionsPerTopic, consumers);
         return consumers.entrySet().stream()
-                .filter(e -> e.getValue().groupInstanceId().isPresent())
-                .collect(Collectors.toMap(e -> e.getValue().groupInstanceId().get(), e -> assignmentByMemberId.get(e.getKey())));
+            .filter(e -> e.getValue().groupInstanceId().isPresent())
+            .collect(Collectors.toMap(e -> e.getValue().groupInstanceId().get(), e -> assignmentByMemberId.get(e.getKey())));
     }
 }

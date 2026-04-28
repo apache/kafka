@@ -83,13 +83,13 @@ public class GroupRebalanceConfig {
 
     // For testing purpose.
     public GroupRebalanceConfig(final int sessionTimeoutMs,
-                                final int rebalanceTimeoutMs,
-                                final int heartbeatIntervalMs,
-                                String groupId,
-                                Optional<String> groupInstanceId,
-                                String rackId,
-                                long retryBackoffMs,
-                                long retryBackoffMaxMs) {
+        final int rebalanceTimeoutMs,
+        final int heartbeatIntervalMs,
+        String groupId,
+        Optional<String> groupInstanceId,
+        String rackId,
+        long retryBackoffMs,
+        long retryBackoffMaxMs) {
         this.sessionTimeoutMs = sessionTimeoutMs;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.heartbeatIntervalMs = heartbeatIntervalMs;

@@ -82,13 +82,13 @@ public class StateTracker {
         }
 
         StateChange(State state, long startTime, long unassignedTotalTimeMs, long runningTotalTimeMs, long pausedTotalTimeMs,
-                            long stoppedTotalTimeMs, long failedTotalTimeMs, long destroyedTotalTimeMs, long restartingTotalTimeMs) {
+                long stoppedTotalTimeMs, long failedTotalTimeMs, long destroyedTotalTimeMs, long restartingTotalTimeMs) {
             this.state = state;
             this.startTime = startTime;
             this.unassignedTotalTimeMs = unassignedTotalTimeMs;
             this.runningTotalTimeMs = runningTotalTimeMs;
             this.pausedTotalTimeMs = pausedTotalTimeMs;
-            this.stoppedTotalTimeMs  = stoppedTotalTimeMs;
+            this.stoppedTotalTimeMs = stoppedTotalTimeMs;
             this.failedTotalTimeMs = failedTotalTimeMs;
             this.destroyedTotalTimeMs = destroyedTotalTimeMs;
             this.restartingTotalTimeMs = restartingTotalTimeMs;
@@ -180,7 +180,7 @@ public class StateTracker {
                     break;
             }
             long total = durationCurrent + unassignedTotalTimeMs + runningTotalTimeMs + pausedTotalTimeMs +
-                                 failedTotalTimeMs + destroyedTotalTimeMs + restartingTotalTimeMs;
+                    failedTotalTimeMs + destroyedTotalTimeMs + restartingTotalTimeMs;
             return total == 0.0d ? 0.0d : (double) durationDesired / total;
         }
     }

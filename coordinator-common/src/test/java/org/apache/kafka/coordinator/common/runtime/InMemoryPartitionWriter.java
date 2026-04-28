@@ -54,15 +54,15 @@ public class InMemoryPartitionWriter implements PartitionWriter {
     }
 
     private PartitionState partitionState(
-        TopicPartition tp
+            TopicPartition tp
     ) {
         return partitions.computeIfAbsent(tp, __ -> new PartitionState());
     }
 
     @Override
     public void registerListener(
-        TopicPartition tp,
-        Listener listener
+            TopicPartition tp,
+            Listener listener
     ) {
         PartitionState state = partitionState(tp);
         state.lock.lock();
@@ -75,8 +75,8 @@ public class InMemoryPartitionWriter implements PartitionWriter {
 
     @Override
     public void deregisterListener(
-        TopicPartition tp,
-        Listener listener
+            TopicPartition tp,
+            Listener listener
     ) {
         PartitionState state = partitionState(tp);
         state.lock.lock();
@@ -94,10 +94,10 @@ public class InMemoryPartitionWriter implements PartitionWriter {
 
     @Override
     public long append(
-        TopicPartition tp,
-        VerificationGuard verificationGuard,
-        MemoryRecords batch,
-        short transactionVersion
+            TopicPartition tp,
+            VerificationGuard verificationGuard,
+            MemoryRecords batch,
+            short transactionVersion
     ) {
         PartitionState state = partitionState(tp);
         state.lock.lock();
@@ -118,54 +118,54 @@ public class InMemoryPartitionWriter implements PartitionWriter {
 
     @Override
     public CompletableFuture<Void> deleteRecords(
-        TopicPartition tp,
-        long deleteBeforeOffset
+            TopicPartition tp,
+            long deleteBeforeOffset
     ) throws KafkaException {
         throw new RuntimeException("method not implemented");
     }
 
     @Override
     public CompletableFuture<VerificationGuard> maybeStartTransactionVerification(
-        TopicPartition tp,
-        String transactionalId,
-        long producerId,
-        short producerEpoch,
-        int apiVersion
+            TopicPartition tp,
+            String transactionalId,
+            long producerId,
+            short producerEpoch,
+            int apiVersion
     ) throws KafkaException {
         return CompletableFuture.completedFuture(new VerificationGuard());
     }
 
     public void commit(
-        TopicPartition tp,
-        long offset
+            TopicPartition tp,
+            long offset
     ) {
         PartitionState state = partitionState(tp);
         state.lock.lock();
         try {
             state.committedOffset = offset;
             state.listeners.forEach(listener ->
-                listener.onHighWatermarkUpdated(tp, state.committedOffset));
+                    listener.onHighWatermarkUpdated(tp, state.committedOffset));
         } finally {
             state.lock.unlock();
         }
     }
 
     public void commit(
-        TopicPartition tp
+            TopicPartition tp
     ) {
         PartitionState state = partitionState(tp);
         state.lock.lock();
         try {
             state.committedOffset = state.endOffset;
             state.listeners.forEach(listener ->
-                listener.onHighWatermarkUpdated(tp, state.committedOffset));
+                    listener.onHighWatermarkUpdated(tp, state.committedOffset));
         } finally {
             state.lock.unlock();
         }
     }
 
     public List<MemoryRecords> entries(
-        TopicPartition tp
+            TopicPartition tp
     ) {
         PartitionState state = partitionState(tp);
         state.lock.lock();

@@ -110,8 +110,8 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
     }
 
     private static void buildTaskAssignmentReport(final StringBuilder taskReportBuilder,
-                                                  final Set<TaskMetadata> taskMetadata,
-                                                  final String taskType) {
+        final Set<TaskMetadata> taskMetadata,
+        final String taskType) {
         taskReportBuilder.append(taskType);
         for (final TaskMetadata task : taskMetadata) {
             final Set<TopicPartition> topicPartitions = task.topicPartitions();

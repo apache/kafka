@@ -80,7 +80,7 @@ public interface AlterConfigPolicy extends Configurable, AutoCloseable {
         @Override
         public String toString() {
             return "AlterConfigPolicy.RequestMetadata(resource=" + resource +
-                    ", configs=" + configs + ")";
+                ", configs=" + configs + ")";
         }
     }
 

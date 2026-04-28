@@ -66,11 +66,11 @@ public class SessionedProtocolIntegrationTest {
 
         // build a Connect cluster backed by a Kafka KRaft cluster
         connect = new EmbeddedConnectCluster.Builder()
-            .name("connect-cluster")
-            .numWorkers(2)
-            .numBrokers(1)
-            .workerProps(workerProps)
-            .build();
+                .name("connect-cluster")
+                .numWorkers(2)
+                .numBrokers(1)
+                .workerProps(workerProps)
+                .build();
 
         // start the clusters
         connect.start();
@@ -88,8 +88,8 @@ public class SessionedProtocolIntegrationTest {
     @Test
     public void ensureInternalEndpointIsSecured() throws Throwable {
         final String connectorTasksEndpoint = connect.endpointForResource(String.format(
-            "connectors/%s/tasks",
-            CONNECTOR_NAME
+                "connectors/%s/tasks",
+                CONNECTOR_NAME
         ));
         final Map<String, String> emptyHeaders = new HashMap<>();
         final Map<String, String> invalidSignatureHeaders = new HashMap<>();
@@ -99,20 +99,20 @@ public class SessionedProtocolIntegrationTest {
         // We haven't created the connector yet, but this should still return a 400 instead of a 404
         // if the endpoint is secured
         log.info(
-            "Making a POST request to the {} endpoint with no connector started and no signature header; " 
-                + "expecting 400 error response",
-            connectorTasksEndpoint
+                "Making a POST request to the {} endpoint with no connector started and no signature header; "
+                        + "expecting 400 error response",
+                connectorTasksEndpoint
         );
         assertEquals(
-            BAD_REQUEST.getStatusCode(),
-            connect.requestPost(connectorTasksEndpoint, "[]", emptyHeaders).getStatus()
+                BAD_REQUEST.getStatusCode(),
+                connect.requestPost(connectorTasksEndpoint, "[]", emptyHeaders).getStatus()
         );
 
         // Try again, but with an invalid signature
         log.info(
-            "Making a POST request to the {} endpoint with no connector started and an invalid signature header; "
-                + "expecting 403 error response",
-            connectorTasksEndpoint
+                "Making a POST request to the {} endpoint with no connector started and an invalid signature header; "
+                        + "expecting 403 error response",
+                connectorTasksEndpoint
         );
         assertEquals(
                 FORBIDDEN.getStatusCode(),
@@ -140,24 +140,24 @@ public class SessionedProtocolIntegrationTest {
         // We haven't created the connector yet, but this should still return a 400 instead of a 404
         // if the endpoint is secured
         log.info(
-            "Making a POST request to the {} endpoint with the connector started and no signature header; "
-                + "expecting 400 error response",
-            connectorTasksEndpoint
+                "Making a POST request to the {} endpoint with the connector started and no signature header; "
+                        + "expecting 400 error response",
+                connectorTasksEndpoint
         );
         assertEquals(
-            BAD_REQUEST.getStatusCode(),
-            connect.requestPost(connectorTasksEndpoint, "[]", emptyHeaders).getStatus()
+                BAD_REQUEST.getStatusCode(),
+                connect.requestPost(connectorTasksEndpoint, "[]", emptyHeaders).getStatus()
         );
 
         // Try again, but with an invalid signature
         log.info(
-            "Making a POST request to the {} endpoint with the connector started and an invalid signature header; "
-                + "expecting 403 error response",
-            connectorTasksEndpoint
+                "Making a POST request to the {} endpoint with the connector started and an invalid signature header; "
+                        + "expecting 403 error response",
+                connectorTasksEndpoint
         );
         assertEquals(
-            FORBIDDEN.getStatusCode(),
-            connect.requestPost(connectorTasksEndpoint, "[]", invalidSignatureHeaders).getStatus()
+                FORBIDDEN.getStatusCode(),
+                connect.requestPost(connectorTasksEndpoint, "[]", invalidSignatureHeaders).getStatus()
         );
     }
 }

@@ -46,7 +46,7 @@ public class StringExpander {
         int rangeEndInt = Integer.parseInt(rangeEnd);
         if (rangeEndInt < rangeStartInt) {
             throw new RuntimeException("Invalid range: start " + rangeStartInt +
-                    " is higher than end " + rangeEndInt);
+                " is higher than end " + rangeEndInt);
         }
         for (int i = rangeStartInt; i <= rangeEndInt; i++) {
             set.add(String.format("%s%d%s", prequel, i, epilog));

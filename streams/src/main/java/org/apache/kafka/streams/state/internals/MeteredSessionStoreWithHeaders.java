@@ -59,8 +59,8 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
     @SuppressWarnings("unchecked")
     @Override
     protected Serde<AggregationWithHeaders<AGG>> prepareValueSerdeForStore(
-            final Serde<AggregationWithHeaders<AGG>> valueSerde,
-            final SerdeGetter getter
+        final Serde<AggregationWithHeaders<AGG>> valueSerde,
+        final SerdeGetter getter
     ) {
         if (valueSerde == null) {
             return new AggregationWithHeadersSerde<>((Serde<AGG>) getter.valueSerde());

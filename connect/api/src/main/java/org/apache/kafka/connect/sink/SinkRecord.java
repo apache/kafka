@@ -46,12 +46,12 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
     }
 
     public SinkRecord(String topic, int partition, Schema keySchema, Object key, Schema valueSchema, Object value, long kafkaOffset,
-                      Long timestamp, TimestampType timestampType) {
+            Long timestamp, TimestampType timestampType) {
         this(topic, partition, keySchema, key, valueSchema, value, kafkaOffset, timestamp, timestampType, null);
     }
 
     public SinkRecord(String topic, int partition, Schema keySchema, Object key, Schema valueSchema, Object value, long kafkaOffset,
-                      Long timestamp, TimestampType timestampType, Iterable<Header> headers) {
+            Long timestamp, TimestampType timestampType, Iterable<Header> headers) {
         this(topic, partition, keySchema, key, valueSchema, value, kafkaOffset, timestamp, timestampType, headers, topic, partition, kafkaOffset);
     }
 
@@ -60,8 +60,8 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
      * should not use this directly outside testing code.
      */
     public SinkRecord(String topic, int partition, Schema keySchema, Object key, Schema valueSchema, Object value, long kafkaOffset,
-                      Long timestamp, TimestampType timestampType, Iterable<Header> headers, String originalTopic,
-                      Integer originalKafkaPartition, long originalKafkaOffset) {
+            Long timestamp, TimestampType timestampType, Iterable<Header> headers, String originalTopic,
+            Integer originalKafkaPartition, long originalKafkaOffset) {
         super(topic, partition, keySchema, key, valueSchema, value, timestamp, headers);
         this.kafkaOffset = kafkaOffset;
         this.timestampType = timestampType;
@@ -184,7 +184,7 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
 
     @Override
     public SinkRecord newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value,
-                                Long timestamp, Iterable<Header> headers) {
+            Long timestamp, Iterable<Header> headers) {
         return new SinkRecord(topic, kafkaPartition, keySchema, key, valueSchema, value, kafkaOffset, timestamp, timestampType, headers,
                 originalTopic, originalKafkaPartition, originalKafkaOffset);
     }

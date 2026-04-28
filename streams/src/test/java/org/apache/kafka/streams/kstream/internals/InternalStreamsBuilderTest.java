@@ -124,7 +124,7 @@ public class InternalStreamsBuilderTest {
         final KStream<String, String> source2 = builder.stream(Collections.singleton(topic2), consumed);
         final KStream<String, String> source3 = builder.stream(Collections.singleton(topic3), consumed);
         final KStream<String, String> processedSource1 =
-                source1.mapValues(v -> v)
+            source1.mapValues(v -> v)
                 .filter((k, v) -> true);
         final KStream<String, String> processedSource2 = source2.filter((k, v) -> true);
 
@@ -150,7 +150,7 @@ public class InternalStreamsBuilderTest {
         assertEquals(0, topology.storeToChangelogTopic().size());
         assertNull(table1.queryableStoreName());
     }
-    
+
     @Test
     public void shouldBuildGlobalTableWithNonQueryableStoreName() {
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materializedInternal =
@@ -175,7 +175,7 @@ public class InternalStreamsBuilderTest {
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(Materialized.as("globalTable"), builder, storePrefix);
         builder.globalTable("table",
-                            consumed,
+            consumed,
             materializedInternal);
 
         builder.buildAndOptimizeTopology();
@@ -191,11 +191,11 @@ public class InternalStreamsBuilderTest {
     @Test
     public void shouldThrowOnVersionedStoreSupplierForGlobalTable() {
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materializedInternal =
-                new MaterializedInternal<>(
-                        Materialized.as(Stores.persistentVersionedKeyValueStore("store", Duration.ZERO)),
-                        builder,
-                        storePrefix
-                );
+            new MaterializedInternal<>(
+                Materialized.as(Stores.persistentVersionedKeyValueStore("store", Duration.ZERO)),
+                builder,
+                storePrefix
+            );
 
         assertThrows(
             TopologyException.class,
@@ -771,8 +771,8 @@ public class InternalStreamsBuilderTest {
     public void shouldNotOptimizeJoinWhenNotInConfig() {
         // Given:
         final String value = String.join(",",
-                                         StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS,
-                                         StreamsConfig.MERGE_REPARTITION_TOPICS);
+            StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS,
+            StreamsConfig.MERGE_REPARTITION_TOPICS);
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, value);
         final KStream<String, String> stream1 = builder.stream(Collections.singleton("t1"), consumed);
         stream1.join(stream1, MockValueJoiner.TOSTRING_JOINER, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)));
@@ -1263,8 +1263,8 @@ public class InternalStreamsBuilderTest {
         // Given:
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final KStream<String, String> left = builder.stream(Collections.singleton("topic-1"), consumed)
-                .selectKey((k, v) -> v)
-                .filter((k, v) -> v != null);
+            .selectKey((k, v) -> v)
+            .filter((k, v) -> v != null);
         final KStream<String, String> right = builder.stream(Collections.singleton("topic-2"), consumed);
 
         final KStream<String, String> merged = left.merge(right);
@@ -1272,8 +1272,8 @@ public class InternalStreamsBuilderTest {
         final KGroupedStream<String, String> grouped = merged.groupByKey();
         grouped.count(Materialized.as("count-store"));
         grouped.aggregate(
-                () -> null,
-                (k, v, agg) -> k, Materialized.as("latest-store"));
+            () -> null,
+            (k, v, agg) -> k, Materialized.as("latest-store"));
 
         // When:
         builder.buildAndOptimizeTopology(props);
@@ -1290,16 +1290,16 @@ public class InternalStreamsBuilderTest {
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final KStream<String, String> left = builder.stream(Collections.singleton("topic-1"), consumed);
         final KStream<String, String> right = builder.stream(Collections.singleton("topic-2"), consumed)
-                .selectKey((k, v) -> v)
-                .filter((k, v) -> v != null);
+            .selectKey((k, v) -> v)
+            .filter((k, v) -> v != null);
 
         final KStream<String, String> merged = left.merge(right);
 
         final KGroupedStream<String, String> grouped = merged.groupByKey();
         grouped.count(Materialized.as("count-store"));
         grouped.aggregate(
-                () -> null,
-                (k, v, agg) -> k, Materialized.as("latest-store"));
+            () -> null,
+            (k, v, agg) -> k, Materialized.as("latest-store"));
 
         // When:
         builder.buildAndOptimizeTopology(props);
@@ -1358,7 +1358,7 @@ public class InternalStreamsBuilderTest {
         if (clazz.isAssignableFrom(currentNode.getClass())) {
             return currentNode;
         }
-        for (final GraphNode child: currentNode.children()) {
+        for (final GraphNode child : currentNode.children()) {
             visited.add(child);
             final GraphNode result = getNodeByType(child, clazz, visited);
             if (result != null) {
@@ -1377,7 +1377,7 @@ public class InternalStreamsBuilderTest {
         if (clazz.isAssignableFrom(currentNode.getClass())) {
             result.add(currentNode);
         }
-        for (final GraphNode child: currentNode.children()) {
+        for (final GraphNode child : currentNode.children()) {
             if (!visited.contains(child)) {
                 visited.add(child);
                 getNodesByType(child, clazz, visited, result);
@@ -1394,7 +1394,7 @@ public class InternalStreamsBuilderTest {
             count.incrementAndGet();
         }
 
-        for (final GraphNode child: currentNode.children()) {
+        for (final GraphNode child : currentNode.children()) {
             if (!visited.contains(child)) {
                 visited.add(child);
                 countJoinWindowNodes(count, child, visited);
@@ -1405,7 +1405,8 @@ public class InternalStreamsBuilderTest {
     private static GraphNode newTestGraphNode(final String name) {
         return new GraphNode(name) {
             @Override
-            public void writeToTopology(final InternalTopologyBuilder topologyBuilder) { }
+            public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+            }
         };
     }
 }

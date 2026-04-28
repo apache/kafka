@@ -61,7 +61,7 @@ public class TimestampTest {
     @Test
     public void testFromLogicalInvalidSchema() {
         assertThrows(DataException.class,
-            () -> Timestamp.fromLogical(Timestamp.builder().name("invalid").build(), EPOCH.getTime()));
+                () -> Timestamp.fromLogical(Timestamp.builder().name("invalid").build(), EPOCH.getTime()));
     }
 
     @Test
@@ -73,6 +73,6 @@ public class TimestampTest {
     @Test
     public void testToLogicalInvalidSchema() {
         assertThrows(DataException.class,
-            () -> Date.toLogical(Date.builder().name("invalid").build(), 0));
+                () -> Date.toLogical(Date.builder().name("invalid").build(), 0));
     }
 }

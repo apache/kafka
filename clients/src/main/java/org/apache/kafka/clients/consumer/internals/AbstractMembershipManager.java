@@ -204,12 +204,12 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     protected CloseOptions.GroupMembershipOperation leaveGroupOperation = CloseOptions.GroupMembershipOperation.DEFAULT;
 
     AbstractMembershipManager(String groupId,
-                              SubscriptionState subscriptions,
-                              Metadata metadata,
-                              Logger log,
-                              Time time,
-                              RebalanceMetricsManager metricsManager,
-                              boolean autoCommitEnabled) {
+        SubscriptionState subscriptions,
+        Metadata metadata,
+        Logger log,
+        Time time,
+        RebalanceMetricsManager metricsManager,
+        boolean autoCommitEnabled) {
         this.groupId = groupId;
         this.state = MemberState.UNSUBSCRIBED;
         this.subscriptions = subscriptions;
@@ -233,7 +233,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     protected void transitionTo(MemberState nextState) {
         if (!state.equals(nextState) && !nextState.getPreviousValidStates().contains(state)) {
             throw new IllegalStateException(String.format("Invalid state transition from %s to %s",
-                    state, nextState));
+                state, nextState));
         }
 
         if (isCompletingRebalance(state, nextState)) {
@@ -351,7 +351,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         } else {
             // Same assignment received, nothing to reconcile.
             log.debug("Target assignment {} received from the broker is equals to the member " +
-                    "current assignment {}. Nothing to reconcile.",
+                "current assignment {}. Nothing to reconcile.",
                 currentTargetAssignment, currentAssignment);
             // Make sure we transition the member back to STABLE if it was RECONCILING (ex.
             // member was RECONCILING unresolved assignments that were just removed by the
@@ -387,8 +387,8 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     public void transitionToFenced() {
         if (state == MemberState.PREPARE_LEAVING) {
             log.info("Member {} with epoch {} got fenced but it is already preparing to leave " +
-                    "the group, so it will stop sending heartbeat and won't attempt to send the " +
-                    "leave request or rejoin.", memberId, memberEpoch);
+                "the group, so it will stop sending heartbeat and won't attempt to send the " +
+                "leave request or rejoin.", memberId, memberEpoch);
             // Briefly transition to LEAVING to ensure all required actions are applied even
             // though there is no need to send a leave group heartbeat (ex. clear epoch and
             // notify epoch listeners). Then transition to UNSUBSCRIBED, ensuring that the member
@@ -402,27 +402,27 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
         if (state == MemberState.LEAVING) {
             log.debug("Member {} with epoch {} got fenced before sending leave group heartbeat. " +
-                    "It will not send the leave request and won't attempt to rejoin.", memberId, memberEpoch);
+                "It will not send the leave request and won't attempt to rejoin.", memberId, memberEpoch);
             transitionTo(MemberState.UNSUBSCRIBED);
             maybeCompleteLeaveInProgress();
             return;
         }
         if (state == MemberState.UNSUBSCRIBED) {
             log.debug("Member {} with epoch {} got fenced but it already left the group, so it " +
-                    "won't attempt to rejoin.", memberId, memberEpoch);
+                "won't attempt to rejoin.", memberId, memberEpoch);
             return;
         }
         transitionTo(MemberState.FENCED);
         resetEpoch();
         log.debug("Member {} with epoch {} transitioned to {} state. It will release its " +
-                "assignment and rejoin the group.", memberId, memberEpoch, MemberState.FENCED);
+            "assignment and rejoin the group.", memberId, memberEpoch, MemberState.FENCED);
 
         // Release assignment
         CompletableFuture<Void> callbackResult = signalPartitionsLost(subscriptions.assignedPartitions());
         callbackResult.whenComplete((result, error) -> {
             if (error != null) {
                 log.error("onPartitionsLost callback invocation failed while releasing assignment" +
-                        " after member got fenced. Member will rejoin the group anyways.", error);
+                    " after member got fenced. Member will rejoin the group anyways.", error);
             }
             clearAssignment();
             if (state == MemberState.FENCED) {
@@ -447,7 +447,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
         if (previousState == MemberState.UNSUBSCRIBED && maybeCompleteLeaveInProgress()) {
             log.debug("Member {} with epoch {} got fatal error from the broker but it already " +
-                    "left the group, so onPartitionsLost callback won't be triggered.", memberId, memberEpoch);
+                "left the group, so onPartitionsLost callback won't be triggered.", memberId, memberEpoch);
             return;
         }
 
@@ -464,7 +464,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         callbackResult.whenComplete((result, error) -> {
             if (error != null) {
                 log.error("onPartitionsLost callback invocation failed while releasing assignment" +
-                        "after member failed with fatal error.", error);
+                    "after member failed with fatal error.", error);
             }
             clearAssignment();
         });
@@ -514,7 +514,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     public void transitionToJoining() {
         if (state == MemberState.FATAL) {
             log.warn("No action taken to join the group with the updated subscription because " +
-                    "the member is in FATAL state");
+                "the member is in FATAL state");
             return;
         }
         if (reconciliationInProgress) {
@@ -601,7 +601,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             });
         } else {
             log.debug("Member {} attempting to leave has no rebalance callbacks, " +
-                    "so it will clear assignments and transition to send heartbeat to leave group.", memberId);
+                "so it will clear assignments and transition to send heartbeat to leave group.", memberId);
             clearAssignmentAndLeaveGroup();
         }
 
@@ -632,7 +632,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     public void transitionToSendingLeaveGroup(boolean dueToExpiredPollTimer) {
         if (state == MemberState.FATAL) {
             log.warn("Member {} with epoch {} won't send leave group request because it is in " +
-                    "FATAL state", memberId, memberEpoch);
+                "FATAL state", memberId, memberEpoch);
             return;
         }
         if (state == MemberState.UNSUBSCRIBED) {
@@ -692,10 +692,10 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
                 transitionTo(MemberState.STABLE);
             } else {
                 log.debug("Member {} with epoch {} transitioned to {} after a heartbeat was sent " +
-                        "to ack a previous reconciliation. \n" +
-                        "\t\tCurrent assignment: {} \n" +
-                        "\t\tTarget assignment: {}\n",
-                        memberId, memberEpoch, MemberState.RECONCILING, currentAssignment, currentTargetAssignment);
+                    "to ack a previous reconciliation. \n" +
+                    "\t\tCurrent assignment: {} \n" +
+                    "\t\tTarget assignment: {}\n",
+                    memberId, memberEpoch, MemberState.RECONCILING, currentAssignment, currentTargetAssignment);
                 transitionTo(MemberState.RECONCILING);
             }
         } else if (state == MemberState.LEAVING) {
@@ -719,7 +719,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     public void onHeartbeatRequestSkipped() {
         if (state == MemberState.LEAVING) {
             log.warn("Heartbeat to leave group cannot be sent (most probably due to coordinator " +
-                    "not known/available). Member {} with epoch {} will transition to {}.",
+                "not known/available). Member {} with epoch {} will transition to {}.",
                 memberId, memberEpoch, MemberState.UNSUBSCRIBED);
             transitionTo(MemberState.UNSUBSCRIBED);
             maybeCompleteLeaveInProgress();
@@ -815,12 +815,12 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
         if (targetAssignmentReconciled()) {
             log.trace("Ignoring reconciliation attempt. Target assignment is equal to the " +
-                    "current assignment.");
+                "current assignment.");
             return;
         }
         if (reconciliationInProgress) {
             log.trace("Ignoring reconciliation attempt. Another reconciliation is already in progress. " +
-                 "Assignment {} will be handled in the next reconciliation loop.", currentTargetAssignment);
+                "Assignment {} will be handled in the next reconciliation loop.", currentTargetAssignment);
             return;
         }
 
@@ -864,17 +864,17 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         markReconciliationInProgress();
 
         log.info("Reconciling assignment with local epoch {}\n" +
-                        "\tMember:                                    {}\n" +
-                        "\tAssigned partitions:                       {}\n" +
-                        "\tCurrent owned partitions:                  {}\n" +
-                        "\tAdded partitions (assigned - owned):       {}\n" +
-                        "\tRevoked partitions (owned - assigned):     {}\n",
-                resolvedAssignment.localEpoch,
-                memberId,
-                assignedTopicPartitions,
-                ownedPartitions,
-                addedPartitions,
-                revokedPartitions
+            "\tMember:                                    {}\n" +
+            "\tAssigned partitions:                       {}\n" +
+            "\tCurrent owned partitions:                  {}\n" +
+            "\tAdded partitions (assigned - owned):       {}\n" +
+            "\tRevoked partitions (owned - assigned):     {}\n",
+            resolvedAssignment.localEpoch,
+            memberId,
+            assignedTopicPartitions,
+            ownedPartitions,
+            addedPartitions,
+            revokedPartitions
         );
 
         // Mark partitions as pending revocation to stop fetching from the partitions (no new
@@ -926,9 +926,9 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      * transition. Note that if any of the 2 callbacks fails, the reconciliation should fail.
      */
     private void revokeAndAssign(LocalAssignment resolvedAssignment,
-                                 TopicIdPartitionSet assignedTopicIdPartitions,
-                                 SortedSet<TopicPartition> revokedPartitions,
-                                 SortedSet<TopicPartition> addedPartitions) {
+        TopicIdPartitionSet assignedTopicIdPartitions,
+        SortedSet<TopicPartition> revokedPartitions,
+        SortedSet<TopicPartition> addedPartitions) {
         CompletableFuture<Void> revocationResult;
         if (!revokedPartitions.isEmpty()) {
             revocationResult = revokePartitions(revokedPartitions);
@@ -1078,8 +1078,8 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
         if (!unresolved.isEmpty()) {
             log.debug("Topic Ids {} received in target assignment were not found in metadata and " +
-                    "are not currently assigned. Requesting a metadata update now to resolve " +
-                    "topic names.", unresolved.keySet());
+                "are not currently assigned. Requesting a metadata update now to resolve " +
+                "topic names.", unresolved.keySet());
             metadata.requestUpdate(true);
         }
 
@@ -1181,8 +1181,8 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      * @return Future that will complete when the callback execution completes.
      */
     private CompletableFuture<Void> assignPartitions(
-            TopicIdPartitionSet assignedPartitions,
-            SortedSet<TopicPartition> addedPartitions) {
+        TopicIdPartitionSet assignedPartitions,
+        SortedSet<TopicPartition> addedPartitions) {
 
         // Signal that new partitions have been reconciled so that type-specific actions can be taken.
         // - ShareMembershipManager: updates subscription immediately and returns completed future
@@ -1205,7 +1205,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
                 // broker removes them from the assignment.
                 if (!addedPartitions.isEmpty() && subscriptions.assignedPartitions().containsAll(addedPartitions)) {
                     log.warn("Leaving newly assigned partitions {} marked as non-fetchable and not " +
-                            "requiring initializing positions after onPartitionsAssigned callback failed.",
+                        "requiring initializing positions after onPartitionsAssigned callback failed.",
                         addedPartitions, exception);
                 }
             }
@@ -1226,7 +1226,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      * @param addedPartitions The newly added partitions (used for callback and subscription update)
      */
     protected abstract CompletableFuture<Void> signalPartitionsAssigned(TopicIdPartitionSet assignedPartitions,
-                                                                        SortedSet<TopicPartition> addedPartitions);
+        SortedSet<TopicPartition> addedPartitions);
 
     /**
      * Signals to the membership manager that partitions are being revoked so that actions
@@ -1443,9 +1443,9 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
         public String toString() {
             return "LocalAssignment{" +
-                    "localEpoch=" + localEpoch +
-                    ", partitions=" + partitions +
-                    '}';
+                "localEpoch=" + localEpoch +
+                ", partitions=" + partitions +
+                '}';
         }
 
         public boolean equals(final Object o) {

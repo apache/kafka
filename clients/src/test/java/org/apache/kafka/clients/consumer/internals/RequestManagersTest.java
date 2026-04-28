@@ -41,7 +41,8 @@ public class RequestManagersTest {
     @Test
     public void testMemberStateListenerRegistered() {
 
-        final MemberStateListener listener = (memberEpoch, memberId) -> { };
+        final MemberStateListener listener = (memberEpoch, memberId) -> {
+        };
 
         final Properties properties = requiredConsumerConfig();
         properties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "consumerGroup");
@@ -87,7 +88,8 @@ public class RequestManagersTest {
     @Test
     public void testStreamMemberStateListenerRegistered() {
 
-        final MemberStateListener listener = (memberEpoch, memberId) -> { };
+        final MemberStateListener listener = (memberEpoch, memberId) -> {
+        };
 
         final Properties properties = requiredConsumerConfig();
         properties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "consumerGroup");

@@ -423,17 +423,17 @@ public class ThreadMetricsTest {
     public void shouldAddThreadStateTelemetryMetric() {
         final Gauge<Integer> threadStateProvider = (streamsMetrics, startTime) -> StreamThread.State.RUNNING.ordinal();
         ThreadMetrics.addThreadStateTelemetryMetric(
-                PROCESS_ID,
-                THREAD_ID,
-                streamsMetrics,
-                threadStateProvider
+            PROCESS_ID,
+            THREAD_ID,
+            streamsMetrics,
+            threadStateProvider
         );
         verify(streamsMetrics).addThreadLevelMutableMetric(
-                "thread-state",
-                "The current state of the thread",
-                THREAD_ID,
-                Collections.singletonMap("process-id", PROCESS_ID),
-                threadStateProvider
+            "thread-state",
+            "The current state of the thread",
+            THREAD_ID,
+            Collections.singletonMap("process-id", PROCESS_ID),
+            threadStateProvider
         );
     }
 
@@ -441,18 +441,18 @@ public class ThreadMetricsTest {
     public void shouldAddThreadStateJmxMetric() {
         final Gauge<String> threadStateProvider = (streamsMetrics, startTime) -> StreamThread.State.RUNNING.name();
         ThreadMetrics.addThreadStateMetric(
-                THREAD_ID,
-                streamsMetrics,
-                threadStateProvider
+            THREAD_ID,
+            streamsMetrics,
+            threadStateProvider
         );
         verify(streamsMetrics).addThreadLevelMutableMetric(
-                "state",
-                "The current state of the thread",
-                THREAD_ID,
-                threadStateProvider
+            "state",
+            "The current state of the thread",
+            THREAD_ID,
+            threadStateProvider
         );
     }
-    
+
 
     @Test
     public void shouldAddTotalBlockedTimeMetric() {

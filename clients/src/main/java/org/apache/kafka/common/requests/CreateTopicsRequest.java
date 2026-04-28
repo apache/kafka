@@ -40,7 +40,7 @@ public class CreateTopicsRequest extends AbstractRequest {
         public CreateTopicsRequest build(short version) {
             if (data.validateOnly() && version == 0)
                 throw new UnsupportedVersionException("validateOnly is not supported in version 0 of " +
-                        "CreateTopicsRequest");
+                    "CreateTopicsRequest");
 
             final List<String> topicsWithDefaults = data.topics()
                 .stream()

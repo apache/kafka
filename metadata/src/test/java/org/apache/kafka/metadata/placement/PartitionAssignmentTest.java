@@ -67,12 +67,12 @@ public class PartitionAssignmentTest {
     public void testToString() {
         List<Integer> replicas = List.of(0, 1, 2);
         List<Uuid> directories = List.of(
-                Uuid.fromString("65WMNfybQpCDVulYOxMCTw"),
-                Uuid.fromString("VkZ5AkuESPGkMc2OxpKUjw"),
-                Uuid.fromString("wFtTi4FxTlOhhHytfxv7fQ")
+            Uuid.fromString("65WMNfybQpCDVulYOxMCTw"),
+            Uuid.fromString("VkZ5AkuESPGkMc2OxpKUjw"),
+            Uuid.fromString("wFtTi4FxTlOhhHytfxv7fQ")
         );
         PartitionAssignment partitionAssignment = new PartitionAssignment(replicas, directories::get);
         assertEquals("PartitionAssignment(replicas=[0, 1, 2], " +
-                "directories=[65WMNfybQpCDVulYOxMCTw, VkZ5AkuESPGkMc2OxpKUjw, wFtTi4FxTlOhhHytfxv7fQ])", partitionAssignment.toString());
+            "directories=[65WMNfybQpCDVulYOxMCTw, VkZ5AkuESPGkMc2OxpKUjw, wFtTi4FxTlOhhHytfxv7fQ])", partitionAssignment.toString());
     }
 }

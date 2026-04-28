@@ -25,9 +25,9 @@ import java.util.Locale;
 import java.util.Map;
 
 public record CreateConnectorRequest(
-    @JsonProperty("name") String name,
-    @JsonProperty("config") Map<String, String> config,
-    @JsonProperty("initial_state") InitialState initialState
+@JsonProperty("name") String name,
+@JsonProperty("config") Map<String, String> config,
+@JsonProperty("initial_state") InitialState initialState
 ) {
     public TargetState initialTargetState() {
         return initialState != null ? initialState.toTargetState() : null;
@@ -46,7 +46,7 @@ public record CreateConnectorRequest(
         public TargetState toTargetState() {
             return switch (this) {
                 case RUNNING -> TargetState.STARTED;
-                case PAUSED  -> TargetState.PAUSED;
+                case PAUSED -> TargetState.PAUSED;
                 case STOPPED -> TargetState.STOPPED;
             };
         }

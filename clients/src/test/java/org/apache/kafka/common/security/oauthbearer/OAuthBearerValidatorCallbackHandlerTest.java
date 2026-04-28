@@ -175,7 +175,7 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
 
         try {
             OAuthBearerValidatorCallback callback = new OAuthBearerValidatorCallback(accessToken);
-            handler.handle(new Callback[] {callback});
+            handler.handle(new Callback[]{callback});
 
             assertNull(callback.token());
             String actualMessage = callback.errorStatus();

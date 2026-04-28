@@ -428,8 +428,8 @@ public class ClassicGroupMember {
             ", sessionTimeoutMs=" + sessionTimeoutMs +
             ", protocolType='" + protocolType + '\'' +
             ", supportedProtocols=" + supportedProtocols.stream()
-                .map(JoinGroupRequestProtocol::name)
-                .toList() +
+            .map(JoinGroupRequestProtocol::name)
+            .toList() +
             ')';
     }
 }

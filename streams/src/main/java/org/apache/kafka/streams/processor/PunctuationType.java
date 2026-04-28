@@ -32,6 +32,6 @@ import java.time.Duration;
  * </ul>
  */
 public enum PunctuationType {
-   STREAM_TIME,
-   WALL_CLOCK_TIME,
+    STREAM_TIME,
+    WALL_CLOCK_TIME,
 }

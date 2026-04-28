@@ -123,7 +123,8 @@ public class PapiDslIntegrationTest {
             .table("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
             .transformValues(() -> new ValueTransformerWithKey<>() {
                 @Override
-                public void init(final ProcessorContext context) { }
+                public void init(final ProcessorContext context) {
+                }
 
                 @Override
                 public String transform(final String readOnlyKey, final String value) {
@@ -131,7 +132,8 @@ public class PapiDslIntegrationTest {
                 }
 
                 @Override
-                public void close() { }
+                public void close() {
+                }
             }, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String()))
         );
     }
@@ -294,14 +296,14 @@ public class PapiDslIntegrationTest {
     @Test
     public void processorShouldAccessKStreamWindowReducedOnWindowCloseKTableStoreAsTimestampedStore() {
         verifyWindow(builder
-            .stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
-            .groupByKey()
-            .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofHours(1L)))
-            .emitStrategy(EmitStrategy.onWindowClose())
-            .reduce(
-                (value, aggregate) -> value,
-                Materialized.<String, String, WindowStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
-            ),
+                .stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+                .groupByKey()
+                .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofHours(1L)))
+                .emitStrategy(EmitStrategy.onWindowClose())
+                .reduce(
+                    (value, aggregate) -> value,
+                    Materialized.<String, String, WindowStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
+                ),
             true
         );
     }
@@ -323,15 +325,15 @@ public class PapiDslIntegrationTest {
     @Test
     public void processorShouldAccessKStreamWindowAggregatedOnWindowCloseKTableStoreAsTimestampedStore() {
         verifyWindow(builder
-            .stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
-            .groupByKey()
-            .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofHours(1L)))
-            .emitStrategy(EmitStrategy.onWindowClose())
-            .aggregate(
-                () -> "",
-                (key, value, aggregate) -> value,
-                Materialized.<String, String, WindowStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
-            ),
+                .stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+                .groupByKey()
+                .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofHours(1L)))
+                .emitStrategy(EmitStrategy.onWindowClose())
+                .aggregate(
+                    () -> "",
+                    (key, value, aggregate) -> value,
+                    Materialized.<String, String, WindowStore<Bytes, byte[]>>as("table-store").withKeySerde(Serdes.String()).withValueSerde(Serdes.String())
+                ),
             true
         );
     }
@@ -388,17 +390,17 @@ public class PapiDslIntegrationTest {
     @Test
     public void processorShouldAccessKStreamSessionReducedOnWindowCloseKTableStoreAsTimestampedStore() {
         verifySession(builder
-            .stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
-            .groupByKey()
-            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofHours(1L)))
-            .emitStrategy(EmitStrategy.onWindowClose())
-            .reduce(
-                (value, aggregate) -> value,
-                Materialized.<String, String, SessionStore<Bytes, byte[]>>as("table-store")
-                    .withKeySerde(Serdes.String())
-                    .withValueSerde(Serdes.String())
-                    .withRetention(Duration.ofHours(10L))
-            ),
+                .stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+                .groupByKey()
+                .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofHours(1L)))
+                .emitStrategy(EmitStrategy.onWindowClose())
+                .reduce(
+                    (value, aggregate) -> value,
+                    Materialized.<String, String, SessionStore<Bytes, byte[]>>as("table-store")
+                        .withKeySerde(Serdes.String())
+                        .withValueSerde(Serdes.String())
+                        .withRetention(Duration.ofHours(10L))
+                ),
             true
         );
     }
@@ -421,19 +423,19 @@ public class PapiDslIntegrationTest {
     @Test
     public void processorShouldAccessKStreamSessionAggregateOnWindowCloseKTableStoreAsTimestampedStore() {
         verifySession(builder
-            .stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
-            .groupByKey()
-            .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofHours(1L)))
-            .emitStrategy(EmitStrategy.onWindowClose())
-            .aggregate(
-                () -> "",
-                (key, value, aggregate) -> value,
-                (key, left, right) -> "",
-                Materialized.<String, String, SessionStore<Bytes, byte[]>>as("table-store")
-                    .withKeySerde(Serdes.String())
-                    .withValueSerde(Serdes.String())
-                    .withRetention(Duration.ofHours(10L))
-            ),
+                .stream("input-topic", Consumed.with(Serdes.String(), Serdes.String()))
+                .groupByKey()
+                .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofHours(1L)))
+                .emitStrategy(EmitStrategy.onWindowClose())
+                .aggregate(
+                    () -> "",
+                    (key, value, aggregate) -> value,
+                    (key, left, right) -> "",
+                    Materialized.<String, String, SessionStore<Bytes, byte[]>>as("table-store")
+                        .withKeySerde(Serdes.String())
+                        .withValueSerde(Serdes.String())
+                        .withRetention(Duration.ofHours(10L))
+                ),
             true
         );
     }

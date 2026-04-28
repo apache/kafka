@@ -63,11 +63,11 @@ public class ShareFetchUtils {
      * by acquiring records from the share partition.
      */
     static Map<TopicIdPartition, ShareFetchResponseData.PartitionData> processFetchResponse(
-            ShareFetch shareFetch,
-            List<ShareFetchPartitionData> shareFetchPartitionDataList,
-            LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions,
-            ReplicaManager replicaManager,
-            BiConsumer<SharePartitionKey, Throwable> exceptionHandler
+        ShareFetch shareFetch,
+        List<ShareFetchPartitionData> shareFetchPartitionDataList,
+        LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions,
+        ReplicaManager replicaManager,
+        BiConsumer<SharePartitionKey, Throwable> exceptionHandler
     ) {
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> response = new HashMap<>();
 
@@ -146,8 +146,8 @@ public class ShareFetchUtils {
     static long offsetForEarliestTimestamp(TopicIdPartition topicIdPartition, ReplicaManager replicaManager, int leaderEpoch) {
         // Isolation level is only required when reading from the latest offset hence use Option.empty() for now.
         Optional<FileRecords.TimestampAndOffset> timestampAndOffset = replicaManager.fetchOffsetForTimestamp(
-                topicIdPartition.topicPartition(), ListOffsetsRequest.EARLIEST_TIMESTAMP, Option.empty(),
-                Optional.of(leaderEpoch), true).timestampAndOffsetOpt();
+            topicIdPartition.topicPartition(), ListOffsetsRequest.EARLIEST_TIMESTAMP, Option.empty(),
+            Optional.of(leaderEpoch), true).timestampAndOffsetOpt();
         if (timestampAndOffset.isEmpty()) {
             throw new OffsetNotAvailableException("Offset for earliest timestamp not found for topic partition: " + topicIdPartition);
         }

@@ -61,7 +61,7 @@ public class StateSerdesTest {
     @SuppressWarnings("rawtypes")
     @Test
     public void shouldReturnSerdesForBuiltInKeyAndValueTypesForBuiltinTypes() {
-        final Class[] supportedBuildInTypes = new Class[] {
+        final Class[] supportedBuildInTypes = new Class[]{
             String.class,
             Short.class,
             Integer.class,
@@ -116,8 +116,8 @@ public class StateSerdesTest {
             e.getMessage(),
             equalTo(
                 "A serializer (org.apache.kafka.common.serialization.StringSerializer) " +
-                "is not compatible to the actual value type (value type: java.lang.Integer). " +
-                "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters."));
+                    "is not compatible to the actual value type (value type: java.lang.Integer). " +
+                    "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters."));
     }
 
     @Test

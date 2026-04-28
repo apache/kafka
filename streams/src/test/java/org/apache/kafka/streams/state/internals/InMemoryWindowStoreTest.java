@@ -69,10 +69,10 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
 
     @Override
     <K, V> WindowStore<K, V> buildWindowStore(final long retentionPeriod,
-                                              final long windowSize,
-                                              final boolean retainDuplicates,
-                                              final Serde<K> keySerde,
-                                              final Serde<V> valueSerde) {
+        final long windowSize,
+        final boolean retainDuplicates,
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde) {
         return Stores.windowStoreBuilder(
             Stores.inMemoryWindowStore(
                 STORE_NAME,
@@ -92,39 +92,39 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
         assertEquals(0L, store.numEntries());
 
         store.put(
-                Bytes.wrap("a".getBytes()),
-                "1".getBytes(),
-                0L
+            Bytes.wrap("a".getBytes()),
+            "1".getBytes(),
+            0L
         );
         assertEquals(1L, store.numEntries());
 
         store.put(
-                Bytes.wrap("b".getBytes()),
-                "2".getBytes(),
-                0L
+            Bytes.wrap("b".getBytes()),
+            "2".getBytes(),
+            0L
         );
         assertEquals(2L, store.numEntries());
 
         store.put(
-                Bytes.wrap("a".getBytes()),
-                "3".getBytes(),
-                10L
+            Bytes.wrap("a".getBytes()),
+            "3".getBytes(),
+            10L
         );
         assertEquals(3L, store.numEntries());
 
         // overwrite existing entry (same key, same timestamp)
         store.put(
-                Bytes.wrap("a".getBytes()),
-                "4".getBytes(),
-                0L
+            Bytes.wrap("a".getBytes()),
+            "4".getBytes(),
+            0L
         );
         assertEquals(3L, store.numEntries());
 
         // delete entry by putting null
         store.put(
-                Bytes.wrap("b".getBytes()),
-                null,
-                0L
+            Bytes.wrap("b".getBytes()),
+            null,
+            0L
         );
         assertEquals(2L, store.numEntries());
 
@@ -151,7 +151,7 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
 
         context.restore(STORE_NAME, restorableEntries);
         try (final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore
-            .fetchAll(0L, 2 * WINDOW_SIZE)) {
+                 .fetchAll(0L, 2 * WINDOW_SIZE)) {
 
             assertEquals(windowedPair(1, "one", 0L), iterator.next());
             assertEquals(windowedPair(2, "two", WINDOW_SIZE), iterator.next());

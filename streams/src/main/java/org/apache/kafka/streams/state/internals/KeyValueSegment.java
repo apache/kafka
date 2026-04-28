@@ -30,10 +30,10 @@ public class KeyValueSegment extends RocksDBStore implements Segment {
     private final long id;
 
     KeyValueSegment(final String segmentName,
-                    final String windowName,
-                    final long id,
-                    final Position position,
-                    final RocksDBMetricsRecorder metricsRecorder) {
+        final String windowName,
+        final long id,
+        final Position position,
+        final RocksDBMetricsRecorder metricsRecorder) {
         super(segmentName, windowName, metricsRecorder);
         this.id = id;
         this.position = position;

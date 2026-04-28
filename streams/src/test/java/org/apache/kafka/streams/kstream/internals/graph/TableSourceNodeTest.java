@@ -52,7 +52,7 @@ public class TableSourceNodeTest {
     @BeforeEach
     public void before() {
         when(topologyBuilder.wrapProcessorSupplier(any(), any()))
-                .thenAnswer(iom -> ProcessorWrapper.asWrapped(iom.getArgument(1)));
+            .thenAnswer(iom -> ProcessorWrapper.asWrapped(iom.getArgument(1)));
     }
 
     @Test
@@ -72,12 +72,12 @@ public class TableSourceNodeTest {
     private void buildTableSourceNode(final boolean shouldReuseSourceTopicForChangelog) {
         final TableSourceNodeBuilder<String, String> tableSourceNodeBuilder = TableSourceNode.tableSourceNodeBuilder();
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>>
-                materializedInternal = new MaterializedInternal<>(Materialized.as(STORE_NAME));
+            materializedInternal = new MaterializedInternal<>(Materialized.as(STORE_NAME));
         final TableSourceNode<String, String> tableSourceNode = tableSourceNodeBuilder
             .withTopic(TOPIC)
             .withConsumedInternal(new ConsumedInternal<>(Consumed.as("node-name")))
             .withProcessorParameters(
-                    new ProcessorParameters<>(new KTableSource<>(materializedInternal), null))
+                new ProcessorParameters<>(new KTableSource<>(materializedInternal), null))
             .build();
         tableSourceNode.reuseSourceTopicForChangeLog(shouldReuseSourceTopicForChangelog);
 

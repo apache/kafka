@@ -30,7 +30,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 class SingleFieldPathTest {
 
-    @Test void shouldFindField() {
+    @Test
+    void shouldFindField() {
         Schema barSchema = SchemaBuilder.struct().field("bar", Schema.INT32_SCHEMA).build();
         Schema schema = SchemaBuilder.struct().field("foo", barSchema).build();
 
@@ -38,7 +39,8 @@ class SingleFieldPathTest {
         assertEquals(schema.field("foo"), pathV2("foo").fieldFrom(schema));
     }
 
-    @Test void shouldReturnNullFieldWhenFieldNotFound() {
+    @Test
+    void shouldReturnNullFieldWhenFieldNotFound() {
         Schema barSchema = SchemaBuilder.struct().field("bar", Schema.INT32_SCHEMA).build();
         Schema schema = SchemaBuilder.struct().field("foo", barSchema).build();
 
@@ -48,7 +50,8 @@ class SingleFieldPathTest {
         assertNull(pathV2("test").fieldFrom(null));
     }
 
-    @Test void shouldFindValueInMap() {
+    @Test
+    void shouldFindValueInMap() {
         Map<String, Object> foo = new HashMap<>();
         foo.put("bar", 42);
         foo.put("baz", null);
@@ -59,7 +62,8 @@ class SingleFieldPathTest {
         assertNull(pathV2("foo.baz").valueFrom(map));
     }
 
-    @Test void shouldReturnNullValueWhenFieldNotFoundInMap() {
+    @Test
+    void shouldReturnNullValueWhenFieldNotFoundInMap() {
         Map<String, Object> foo = new HashMap<>();
         foo.put("bar", 42);
         foo.put("baz", null);
@@ -72,38 +76,40 @@ class SingleFieldPathTest {
         assertNull(pathV2("foo.baz.inner").valueFrom(map));
     }
 
-    @Test void shouldFindValueInStruct() {
+    @Test
+    void shouldFindValueInStruct() {
         Schema bazSchema = SchemaBuilder.struct()
-            .field("inner", Schema.STRING_SCHEMA)
-            .optional()
-            .build();
+                .field("inner", Schema.STRING_SCHEMA)
+                .optional()
+                .build();
         Schema barSchema = SchemaBuilder.struct()
-            .field("bar", Schema.INT32_SCHEMA)
-            .field("baz", bazSchema)
-            .build();
+                .field("bar", Schema.INT32_SCHEMA)
+                .field("baz", bazSchema)
+                .build();
         Schema schema = SchemaBuilder.struct().field("foo", barSchema).build();
         Struct foo = new Struct(barSchema)
-            .put("bar", 42)
-            .put("baz", null);
+                .put("bar", 42)
+                .put("baz", null);
         Struct struct = new Struct(schema).put("foo", foo);
 
         assertEquals(42, pathV2("foo.bar").valueFrom(struct));
         assertNull(pathV2("foo.baz").valueFrom(struct));
     }
 
-    @Test void shouldReturnNullValueWhenFieldNotFoundInStruct() {
+    @Test
+    void shouldReturnNullValueWhenFieldNotFoundInStruct() {
         Schema bazSchema = SchemaBuilder.struct()
-            .field("inner", Schema.STRING_SCHEMA)
-            .optional()
-            .build();
+                .field("inner", Schema.STRING_SCHEMA)
+                .optional()
+                .build();
         Schema barSchema = SchemaBuilder.struct()
-            .field("bar", Schema.INT32_SCHEMA)
-            .field("baz", bazSchema)
-            .build();
+                .field("bar", Schema.INT32_SCHEMA)
+                .field("baz", bazSchema)
+                .build();
         Schema schema = SchemaBuilder.struct().field("foo", barSchema).build();
         Struct foo = new Struct(barSchema)
-            .put("bar", 42)
-            .put("baz", null);
+                .put("bar", 42)
+                .put("baz", null);
         Struct struct = new Struct(schema).put("foo", foo);
 
         assertNull(pathV2("un.known").valueFrom(struct));

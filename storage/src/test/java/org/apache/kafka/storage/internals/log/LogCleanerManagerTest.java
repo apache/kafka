@@ -74,7 +74,7 @@ class LogCleanerManagerTest {
     private static final MockTime TIME = new MockTime(1400000000000L, 1000L);  // Tue May 13 16:53:20 UTC 2014 for `currentTimeMs`
     private static final long OFFSET = 999;
     private static final ProducerStateManagerConfig PRODUCER_STATE_MANAGER_CONFIG =
-        new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false);
+            new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false);
 
     private File tmpDir;
     private File tmpDir2;
@@ -85,9 +85,9 @@ class LogCleanerManagerTest {
         private final Map<TopicPartition, Long> cleanerCheckpoints = new HashMap<>();
 
         LogCleanerManagerMock(
-            List<File> logDirs,
-            ConcurrentMap<TopicPartition, UnifiedLog> logs,
-            LogDirFailureChannel logDirFailureChannel
+                List<File> logDirs,
+                ConcurrentMap<TopicPartition, UnifiedLog> logs,
+                LogDirFailureChannel logDirFailureChannel
         ) {
             super(logDirs, logs, logDirFailureChannel);
         }
@@ -99,14 +99,14 @@ class LogCleanerManagerTest {
 
         @Override
         public void updateCheckpoints(
-            File dataDir,
-            Optional<Map.Entry<TopicPartition, Long>> partitionToUpdateOrAdd,
-            Optional<TopicPartition> partitionToRemove
+                File dataDir,
+                Optional<Map.Entry<TopicPartition, Long>> partitionToUpdateOrAdd,
+                Optional<TopicPartition> partitionToRemove
         ) {
             assert partitionToRemove.isEmpty() : "partitionToRemove argument with value not yet handled";
 
             Map.Entry<TopicPartition, Long> entry = partitionToUpdateOrAdd.orElseThrow(() ->
-                new IllegalArgumentException("Empty 'partitionToUpdateOrAdd' argument not yet handled"));
+                    new IllegalArgumentException("Empty 'partitionToUpdateOrAdd' argument not yet handled"));
 
             addCheckpoint(entry.getKey(), entry.getValue());
         }
@@ -124,18 +124,18 @@ class LogCleanerManagerTest {
     static class LogMock extends UnifiedLog {
 
         LogMock(
-            long logStartOffset,
-            LocalLog localLog,
-            BrokerTopicStats brokerTopicStats,
-            int producerIdExpirationCheckIntervalMs,
-            LeaderEpochFileCache leaderEpochCache,
-            ProducerStateManager producerStateManager,
-            Optional<Uuid> topicId,
-            boolean remoteStorageSystemEnable,
-            LogOffsetsListener logOffsetsListener
+                long logStartOffset,
+                LocalLog localLog,
+                BrokerTopicStats brokerTopicStats,
+                int producerIdExpirationCheckIntervalMs,
+                LeaderEpochFileCache leaderEpochCache,
+                ProducerStateManager producerStateManager,
+                Optional<Uuid> topicId,
+                boolean remoteStorageSystemEnable,
+                LogOffsetsListener logOffsetsListener
         ) throws IOException {
             super(logStartOffset, localLog, brokerTopicStats, producerIdExpirationCheckIntervalMs, leaderEpochCache,
-                producerStateManager, topicId, remoteStorageSystemEnable, logOffsetsListener);
+                    producerStateManager, topicId, remoteStorageSystemEnable, logOffsetsListener);
         }
 
         // Throw an error in getFirstBatchTimestampForSegments since it is called in grabFilthiestLog()
@@ -186,15 +186,15 @@ class LogCleanerManagerTest {
         LogConfig config = createLowRetentionLogConfig(logSegmentSize, TopicConfig.CLEANUP_POLICY_COMPACT);
         LogSegments segments = new LogSegments(tp);
         LeaderEpochFileCache leaderEpochCache = UnifiedLog.createLeaderEpochCache(tpDir, TOPIC_PARTITION, logDirFailureChannel,
-            Optional.empty(), TIME.scheduler);
+                Optional.empty(), TIME.scheduler);
         ProducerStateManager producerStateManager = new ProducerStateManager(TOPIC_PARTITION, tpDir, 5 * 60 * 1000,
-            PRODUCER_STATE_MANAGER_CONFIG, TIME);
+                PRODUCER_STATE_MANAGER_CONFIG, TIME);
         LoadedLogOffsets offsets = new LogLoader(tpDir, tp, config, TIME.scheduler, TIME, logDirFailureChannel, true,
-            segments, 0L, 0L, leaderEpochCache, producerStateManager, new ConcurrentHashMap<>(), false).load();
+                segments, 0L, 0L, leaderEpochCache, producerStateManager, new ConcurrentHashMap<>(), false).load();
         LocalLog localLog = new LocalLog(tpDir, config, segments, offsets.recoveryPoint(), offsets.nextOffsetMetadata(),
-            TIME.scheduler, TIME, tp, logDirFailureChannel);
+                TIME.scheduler, TIME, tp, logDirFailureChannel);
         UnifiedLog log = new LogMock(offsets.logStartOffset(), localLog, new BrokerTopicStats(), PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
-            leaderEpochCache, producerStateManager, Optional.empty(), false, LogOffsetsListener.NO_OP_OFFSETS_LISTENER);
+                leaderEpochCache, producerStateManager, Optional.empty(), false, LogOffsetsListener.NO_OP_OFFSETS_LISTENER);
 
         writeRecords(log, logSegmentsCount * 2, 10, 2);
 
@@ -204,7 +204,7 @@ class LogCleanerManagerTest {
         cleanerManager.addCheckpoint(tp, 1L);
 
         LogCleaningException thrownException = assertThrows(LogCleaningException.class,
-            () -> cleanerManager.grabFilthiestCompactedLog(TIME, new PreCleanStats()).get());
+                () -> cleanerManager.grabFilthiestCompactedLog(TIME, new PreCleanStats()).get());
 
         assertEquals(log, thrownException.log);
         assertInstanceOf(IllegalStateException.class, thrownException.getCause());
@@ -381,7 +381,7 @@ class LogCleanerManagerTest {
     public void testLogsWithSegmentsToDeleteShouldConsiderCleanupPolicyCompactDeleteLogs() throws IOException {
         MemoryRecords records = LogTestUtils.singletonRecords("test".getBytes(), "test".getBytes());
         UnifiedLog log = createLog(records.sizeInBytes() * 5, TopicConfig.CLEANUP_POLICY_COMPACT + "," +
-            TopicConfig.CLEANUP_POLICY_DELETE, new TopicPartition("log", 0));
+                TopicConfig.CLEANUP_POLICY_DELETE, new TopicPartition("log", 0));
         LogCleanerManager cleanerManager = createCleanerManager(log);
 
         int readyToDelete = cleanerManager.deletableLogs().size();
@@ -613,9 +613,9 @@ class LogCleanerManagerTest {
         OffsetsToClean cleanableOffsets = LogCleanerManager.cleanableOffsets(log, lastCleanOffset, TIME.milliseconds());
         assertEquals(0L, cleanableOffsets.firstDirtyOffset(), "The first cleanable offset starts at the beginning of the log.");
         assertEquals(log.highWatermark(), log.lastStableOffset(),
-            "The high watermark equals the last stable offset as no transactions are in progress");
+                "The high watermark equals the last stable offset as no transactions are in progress");
         assertEquals(log.lastStableOffset(), cleanableOffsets.firstUncleanableDirtyOffset(),
-            "The first uncleanable offset is bounded by the last stable offset.");
+                "The first uncleanable offset is bounded by the last stable offset.");
     }
 
     /**
@@ -637,7 +637,7 @@ class LogCleanerManagerTest {
 
         assertEquals(0L, cleanableOffsets.firstDirtyOffset(), "The first cleanable offset starts at the beginning of the log.");
         assertEquals(log.activeSegment().baseOffset(), cleanableOffsets.firstUncleanableDirtyOffset(),
-            "The first uncleanable offset begins with the active segment.");
+                "The first uncleanable offset begins with the active segment.");
     }
 
     /**
@@ -669,7 +669,7 @@ class LogCleanerManagerTest {
         OffsetsToClean cleanableOffsets = LogCleanerManager.cleanableOffsets(log, lastCleanOffset, TIME.milliseconds());
         assertEquals(0L, cleanableOffsets.firstDirtyOffset(), "The first cleanable offset starts at the beginning of the log.");
         assertEquals(activeSegAtT0.baseOffset(), cleanableOffsets.firstUncleanableDirtyOffset(),
-            "The first uncleanable offset begins with the second block of log entries.");
+                "The first uncleanable offset begins with the second block of log entries.");
     }
 
     /**
@@ -697,7 +697,7 @@ class LogCleanerManagerTest {
         OffsetsToClean cleanableOffsets = LogCleanerManager.cleanableOffsets(log, lastCleanOffset, TIME.milliseconds());
         assertEquals(0L, cleanableOffsets.firstDirtyOffset(), "The first cleanable offset starts at the beginning of the log.");
         assertEquals(log.activeSegment().baseOffset(), cleanableOffsets.firstUncleanableDirtyOffset(),
-            "The first uncleanable offset begins with active segment.");
+                "The first uncleanable offset begins with active segment.");
     }
 
     @Test
@@ -731,10 +731,10 @@ class LogCleanerManagerTest {
         short producerEpoch = 0;
         int sequence = 0;
         log.appendAsLeader(MemoryRecords.withTransactionalRecords(Compression.NONE, producerId, producerEpoch, sequence,
-            new SimpleRecord(TIME.milliseconds(), "1".getBytes(), "a".getBytes()),
-            new SimpleRecord(TIME.milliseconds(), "2".getBytes(), "b".getBytes())), 0);
+                new SimpleRecord(TIME.milliseconds(), "1".getBytes(), "a".getBytes()),
+                new SimpleRecord(TIME.milliseconds(), "2".getBytes(), "b".getBytes())), 0);
         log.appendAsLeader(MemoryRecords.withTransactionalRecords(Compression.NONE, producerId, producerEpoch, sequence + 2,
-            new SimpleRecord(TIME.milliseconds(), "3".getBytes(), "c".getBytes())), 0);
+                new SimpleRecord(TIME.milliseconds(), "3".getBytes(), "c".getBytes())), 0);
         log.roll();
         log.updateHighWatermark(3L);
 
@@ -745,8 +745,8 @@ class LogCleanerManagerTest {
         assertEquals(0L, cleanableOffsets.firstUncleanableDirtyOffset());
 
         log.appendAsLeader(MemoryRecords.withEndTransactionMarker(TIME.milliseconds(), producerId, producerEpoch,
-            new EndTransactionMarker(ControlRecordType.ABORT, 15)), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
-            VerificationGuard.SENTINEL, TransactionVersion.TV_1.featureLevel());
+                        new EndTransactionMarker(ControlRecordType.ABORT, 15)), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
+                VerificationGuard.SENTINEL, TransactionVersion.TV_1.featureLevel());
         log.roll();
         log.updateHighWatermark(4L);
 
@@ -797,7 +797,7 @@ class LogCleanerManagerTest {
     public void testDoneDeleting() throws IOException {
         MemoryRecords records = LogTestUtils.singletonRecords("test".getBytes(), "test".getBytes());
         UnifiedLog log = createLog(records.sizeInBytes() * 5, TopicConfig.CLEANUP_POLICY_COMPACT +
-            "," + TopicConfig.CLEANUP_POLICY_DELETE, new TopicPartition("log", 0));
+                "," + TopicConfig.CLEANUP_POLICY_DELETE, new TopicPartition("log", 0));
         LogCleanerManager cleanerManager = createCleanerManager(log);
         TopicPartition tp = new TopicPartition("log", 0);
 
@@ -870,8 +870,8 @@ class LogCleanerManagerTest {
         File partitionDir = new File(logDir, UnifiedLog.logDirName(topicPartition));
 
         return UnifiedLog.create(partitionDir, config, 0L, 0L, TIME.scheduler, new BrokerTopicStats(), TIME, 5 * 60 * 1000,
-            PRODUCER_STATE_MANAGER_CONFIG, PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT, new LogDirFailureChannel(10),
-            true, Optional.empty());
+                PRODUCER_STATE_MANAGER_CONFIG, PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT, new LogDirFailureChannel(10),
+                true, Optional.empty());
     }
 
     private LogConfig createLowRetentionLogConfig(int segmentSize, String cleanupPolicy) {
@@ -898,9 +898,9 @@ class LogCleanerManagerTest {
         long endOffset = startOffset + numRecords;
 
         SimpleRecord[] records = IntStream.range((int) startOffset, (int) endOffset)
-            .mapToObj(offset -> new SimpleRecord(TIME.milliseconds(), String.format("key-%d", offset).getBytes(),
-                String.format("value-%d", offset).getBytes()))
-            .toArray(SimpleRecord[]::new);
+                .mapToObj(offset -> new SimpleRecord(TIME.milliseconds(), String.format("key-%d", offset).getBytes(),
+                        String.format("value-%d", offset).getBytes()))
+                .toArray(SimpleRecord[]::new);
 
         log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records), 1);
         log.maybeIncrementHighWatermark(log.logEndOffsetMetadata());
@@ -908,13 +908,13 @@ class LogCleanerManagerTest {
 
     private UnifiedLog makeLog(LogConfig config) throws IOException {
         return UnifiedLog.create(logDir, config, 0L, 0L, TIME.scheduler, new BrokerTopicStats(), TIME, 5 * 60 * 1000,
-            PRODUCER_STATE_MANAGER_CONFIG, PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT, new LogDirFailureChannel(10),
-            true, Optional.empty());
+                PRODUCER_STATE_MANAGER_CONFIG, PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT, new LogDirFailureChannel(10),
+                true, Optional.empty());
     }
 
     private MemoryRecords records(int key, int value, long timestamp) {
         return MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(timestamp, Integer.toString(key).getBytes(),
-            Integer.toString(value).getBytes()));
+                Integer.toString(value).getBytes()));
     }
 
     private static LogConfig createLogConfig() {

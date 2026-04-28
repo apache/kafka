@@ -52,7 +52,7 @@ public final class DeleteSegmentsDueToLogStartOffsetBreachTest extends TieredSto
 
         // Create topicA with 1 partition and 2 RF
         builder.createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment, replicaAssignment,
-                        enableRemoteLogStorage)
+                enableRemoteLogStorage)
                 // produce events to partition 0 and expect 2 segments to be offloaded
                 .expectSegmentToBeOffloaded(broker0, topicA, p0, 0, new KeyValueSpec("k0", "v0"),
                         new KeyValueSpec("k1", "v1"))

@@ -81,7 +81,7 @@ public class TestJaasConfig extends Configuration {
 
     public void createOrUpdateEntry(String name, String loginModule, Map<String, Object> options) {
         AppConfigurationEntry entry = new AppConfigurationEntry(loginModule, LoginModuleControlFlag.REQUIRED, options);
-        entryMap.put(name, new AppConfigurationEntry[] {entry});
+        entryMap.put(name, new AppConfigurationEntry[]{entry});
     }
 
     public void addEntry(String name, String loginModule, Map<String, Object> options) {
@@ -128,7 +128,7 @@ public class TestJaasConfig extends Configuration {
                 return defaultClientOptions();
         }
     }
-    
+
     public static Map<String, Object> defaultClientOptions() {
         Map<String, Object> options = new HashMap<>();
         options.put("username", USERNAME);

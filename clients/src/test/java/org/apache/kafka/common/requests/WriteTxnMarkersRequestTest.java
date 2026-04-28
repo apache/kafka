@@ -46,9 +46,9 @@ public class WriteTxnMarkersRequestTest {
     @BeforeEach
     public void setUp() {
         markers = Collections.singletonList(
-             new WriteTxnMarkersRequest.TxnMarkerEntry(
-                 PRODUCER_ID, PRODUCER_EPOCH, COORDINATOR_EPOCH,
-                 RESULT, Collections.singletonList(TOPIC_PARTITION), (short) 0)
+            new WriteTxnMarkersRequest.TxnMarkerEntry(
+                PRODUCER_ID, PRODUCER_EPOCH, COORDINATOR_EPOCH,
+                RESULT, Collections.singletonList(TOPIC_PARTITION), (short) 0)
         );
     }
 

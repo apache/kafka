@@ -46,22 +46,24 @@ public class DirectoryIdTest {
     @Test
     void testCreateAssignmentMap() {
         assertThrows(IllegalArgumentException.class, () ->
-                DirectoryId.createAssignmentMap(new int[]{1, 2}, DirectoryId.unassignedArray(3)));
+            DirectoryId.createAssignmentMap(new int[]{1, 2}, DirectoryId.unassignedArray(3)));
         assertEquals(
-            new HashMap<Integer, Uuid>() {{
+            new HashMap<Integer, Uuid>() {
+                {
                     put(1, Uuid.fromString("upjfkCrUR9GNn1i94ip1wg"));
                     put(2, Uuid.fromString("bCF3l0RIQjOKhUqgbivHZA"));
                     put(3, Uuid.fromString("Fg3mFhcVQlqCWRk4dZazxw"));
                     put(4, Uuid.fromString("bv9TEYi4TqOm52hLmrxT5w"));
-                }},
+                }
+            },
             DirectoryId.createAssignmentMap(
-                    new int[] {1, 2, 3, 4},
-                    new Uuid[] {
-                            Uuid.fromString("upjfkCrUR9GNn1i94ip1wg"),
-                            Uuid.fromString("bCF3l0RIQjOKhUqgbivHZA"),
-                            Uuid.fromString("Fg3mFhcVQlqCWRk4dZazxw"),
-                            Uuid.fromString("bv9TEYi4TqOm52hLmrxT5w")
-                    })
+                new int[]{1, 2, 3, 4},
+                new Uuid[]{
+                    Uuid.fromString("upjfkCrUR9GNn1i94ip1wg"),
+                    Uuid.fromString("bCF3l0RIQjOKhUqgbivHZA"),
+                    Uuid.fromString("Fg3mFhcVQlqCWRk4dZazxw"),
+                    Uuid.fromString("bv9TEYi4TqOm52hLmrxT5w")
+                })
         );
     }
 

@@ -77,8 +77,8 @@ public class SslFactory implements Reconfigurable, Closeable {
      *                                              using the truststore.
      */
     public SslFactory(ConnectionMode connectionMode,
-                      String clientAuthConfigOverride,
-                      boolean keystoreVerifiableUsingTruststore) {
+        String clientAuthConfigOverride,
+        boolean keystoreVerifiableUsingTruststore) {
         this.connectionMode = connectionMode;
         this.clientAuthConfigOverride = clientAuthConfigOverride;
         this.keystoreVerifiableUsingTruststore = keystoreVerifiableUsingTruststore;
@@ -103,7 +103,7 @@ public class SslFactory implements Reconfigurable, Closeable {
                 SslEngineValidator.validate(builder, builder);
             } catch (Exception e) {
                 throw new ConfigException("A client SSLEngine created with the provided settings " +
-                        "can't connect to a server SSLEngine created with those settings.", e);
+                    "can't connect to a server SSLEngine created with those settings.", e);
             }
         }
         this.sslEngineFactory = builder;
@@ -130,14 +130,14 @@ public class SslFactory implements Reconfigurable, Closeable {
             Utils.closeQuietly(this.sslEngineFactory, "close stale ssl engine factory");
             this.sslEngineFactory = newSslEngineFactory;
             log.info("Created new {} SSL engine builder with keystore {} truststore {}", connectionMode,
-                    newSslEngineFactory.keystore(), newSslEngineFactory.truststore());
+                newSslEngineFactory.keystore(), newSslEngineFactory.truststore());
         }
     }
 
     private SslEngineFactory instantiateSslEngineFactory(Map<String, Object> configs) {
         @SuppressWarnings("unchecked")
         Class<? extends SslEngineFactory> sslEngineFactoryClass =
-                (Class<? extends SslEngineFactory>) configs.get(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG);
+            (Class<? extends SslEngineFactory>) configs.get(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG);
         SslEngineFactory sslEngineFactory;
         if (sslEngineFactoryClass == null) {
             sslEngineFactory = new DefaultSslEngineFactory();
@@ -166,12 +166,12 @@ public class SslFactory implements Reconfigurable, Closeable {
             if (sslEngineFactory.keystore() == null) {
                 if (newSslEngineFactory.keystore() != null) {
                     throw new ConfigException("Cannot add SSL keystore to an existing listener for " +
-                            "which no keystore was configured.");
+                        "which no keystore was configured.");
                 }
             } else {
                 if (newSslEngineFactory.keystore() == null) {
                     throw new ConfigException("Cannot remove the SSL keystore from an existing listener for " +
-                            "which a keystore was configured.");
+                        "which a keystore was configured.");
                 }
 
                 boolean allowDnChanges = ConfigUtils.getBoolean(nextConfigs, BrokerSecurityConfigs.SSL_ALLOW_DN_CHANGES_CONFIG, BrokerSecurityConfigs.DEFAULT_SSL_ALLOW_DN_CHANGES_VALUE);
@@ -181,7 +181,7 @@ public class SslFactory implements Reconfigurable, Closeable {
             }
             if (sslEngineFactory.truststore() == null && newSslEngineFactory.truststore() != null) {
                 throw new ConfigException("Cannot add SSL truststore to an existing listener for which no " +
-                        "truststore was configured.");
+                    "truststore was configured.");
             }
             if (keystoreVerifiableUsingTruststore) {
                 if (sslEngineFactory.truststore() != null || sslEngineFactory.keystore() != null) {
@@ -266,8 +266,8 @@ public class SslFactory implements Reconfigurable, Closeable {
      * @param <V>       The map value type.
      */
     private static <K, V> void copyMapEntries(Map<K, V> destMap,
-                                              Map<K, ? extends V> srcMap,
-                                              Set<K> keySet) {
+        Map<K, ? extends V> srcMap,
+        Set<K> keySet) {
         for (K k : keySet) {
             copyMapEntry(destMap, srcMap, k);
         }
@@ -283,8 +283,8 @@ public class SslFactory implements Reconfigurable, Closeable {
      * @param <V>       The map value type.
      */
     private static <K, V> void copyMapEntry(Map<K, V> destMap,
-                                            Map<K, ? extends V> srcMap,
-                                            K key) {
+        Map<K, ? extends V> srcMap,
+        K key) {
         if (srcMap.containsKey(key)) {
             destMap.put(key, srcMap.get(key));
         }
@@ -305,7 +305,7 @@ public class SslFactory implements Reconfigurable, Closeable {
             List<CertificateEntries> entries = new ArrayList<>();
             while (aliases.hasMoreElements()) {
                 String alias = aliases.nextElement();
-                Certificate cert  = keystore.getCertificate(alias);
+                Certificate cert = keystore.getCertificate(alias);
                 if (cert instanceof X509Certificate)
                     entries.add(new CertificateEntries(alias, (X509Certificate) cert));
             }
@@ -331,7 +331,7 @@ public class SslFactory implements Reconfigurable, Closeable {
                     oldEntries.size(), newEntries.size()));
             }
 
-            for (int i = 0; i < newEntries.size(); i++) {
+            for (int i = 0;i < newEntries.size();i++) {
                 CertificateEntries newEntry = newEntries.get(i);
                 CertificateEntries oldEntry = oldEntries.get(i);
                 Principal newPrincipal = newEntry.subjectPrincipal;
@@ -355,13 +355,13 @@ public class SslFactory implements Reconfigurable, Closeable {
                     oldEntries.size(), newEntries.size()));
             }
 
-            for (int i = 0; i < newEntries.size(); i++) {
+            for (int i = 0;i < newEntries.size();i++) {
                 CertificateEntries newEntry = newEntries.get(i);
                 CertificateEntries oldEntry = oldEntries.get(i);
 
                 if (!newEntry.subjectAltNames.containsAll(oldEntry.subjectAltNames)) {
                     throw new ConfigException(String.format("Keystore SubjectAltNames do not match: " +
-                            " existing={alias=%s, SAN=%s}, new={alias=%s, SAN=%s}",
+                        " existing={alias=%s, SAN=%s}, new={alias=%s, SAN=%s}",
                         oldEntry.alias, oldEntry.subjectAltNames, newEntry.alias, newEntry.subjectAltNames));
                 }
             }
@@ -386,13 +386,13 @@ public class SslFactory implements Reconfigurable, Closeable {
                 return false;
             CertificateEntries other = (CertificateEntries) obj;
             return Objects.equals(subjectPrincipal, other.subjectPrincipal) &&
-                    Objects.equals(subjectAltNames, other.subjectAltNames);
+                Objects.equals(subjectAltNames, other.subjectAltNames);
         }
 
         @Override
         public String toString() {
             return "subjectPrincipal=" + subjectPrincipal +
-                    ", subjectAltNames=" + subjectAltNames;
+                ", subjectAltNames=" + subjectAltNames;
         }
     }
 
@@ -409,11 +409,11 @@ public class SslFactory implements Reconfigurable, Closeable {
         private ByteBuffer netBuffer;
 
         static void validate(SslEngineFactory oldEngineBuilder,
-                             SslEngineFactory newEngineBuilder) throws SSLException {
+            SslEngineFactory newEngineBuilder) throws SSLException {
             validate(createSslEngineForValidation(oldEngineBuilder, ConnectionMode.SERVER),
-                    createSslEngineForValidation(newEngineBuilder, ConnectionMode.CLIENT));
+                createSslEngineForValidation(newEngineBuilder, ConnectionMode.CLIENT));
             validate(createSslEngineForValidation(newEngineBuilder, ConnectionMode.SERVER),
-                    createSslEngineForValidation(oldEngineBuilder, ConnectionMode.CLIENT));
+                createSslEngineForValidation(oldEngineBuilder, ConnectionMode.CLIENT));
         }
 
         private static SSLEngine createSslEngineForValidation(SslEngineFactory sslEngineFactory, ConnectionMode connectionMode) {
@@ -450,6 +450,7 @@ public class SslFactory implements Reconfigurable, Closeable {
         void beginHandshake() throws SSLException {
             sslEngine.beginHandshake();
         }
+
         void handshake(SslEngineValidator peerValidator) throws SSLException {
             SSLEngineResult.HandshakeStatus handshakeStatus = sslEngine.getHandshakeStatus();
             while (true) {
@@ -457,7 +458,8 @@ public class SslFactory implements Reconfigurable, Closeable {
                     case NEED_WRAP:
                         handshakeResult = sslEngine.wrap(EMPTY_BUF, netBuffer);
                         switch (handshakeResult.getStatus()) {
-                            case OK: break;
+                            case OK:
+                                break;
                             case BUFFER_OVERFLOW:
                                 if (netBuffer.position() != 0) // Wait for peer to consume previously wrapped data
                                     return;
@@ -505,7 +507,8 @@ public class SslFactory implements Reconfigurable, Closeable {
             peerValidator.netBuffer.compact();
             SSLEngineResult.HandshakeStatus handshakeStatus = sslEngineResult.getHandshakeStatus();
             switch (sslEngineResult.getStatus()) {
-                case OK: break;
+                case OK:
+                    break;
                 case BUFFER_OVERFLOW:
                     appBuffer = Utils.ensureCapacity(appBuffer, sslEngine.getSession().getApplicationBufferSize());
                     break;
@@ -523,7 +526,7 @@ public class SslFactory implements Reconfigurable, Closeable {
 
         boolean complete() {
             return sslEngine.getHandshakeStatus() == SSLEngineResult.HandshakeStatus.FINISHED ||
-                    sslEngine.getHandshakeStatus() == SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING;
+                sslEngine.getHandshakeStatus() == SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING;
         }
 
         void close() {

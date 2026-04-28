@@ -82,7 +82,7 @@ public class KTableAggregateTest {
     private StreamsBuilder createStreamBuilderInMemory(final boolean withHeaders) {
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
         props.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG,
-                    BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class.getName());
+            BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class.getName());
         StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         return new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
     }
@@ -114,7 +114,7 @@ public class KTableAggregateTest {
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
             final Headers headers = new RecordHeaders();
-            headers.add(new RecordHeader("header-key",  "header-value".getBytes(StandardCharsets.UTF_8)));
+            headers.add(new RecordHeader("header-key", "header-value".getBytes(StandardCharsets.UTF_8)));
             inputTopic.pipeInput(new TestRecord<>("A", "1", headers, 10L));
             inputTopic.pipeInput("B", "2", 15L);
             inputTopic.pipeInput("A", "3", 20L);
@@ -253,8 +253,8 @@ public class KTableAggregateTest {
     }
 
     private static void testCountHelper(final StreamsBuilder builder,
-                                        final String input,
-                                        final MockApiProcessorSupplier<String, Object, Void, Void> supplier) {
+        final String input,
+        final MockApiProcessorSupplier<String, Object, Void, Void> supplier) {
         try (
             final TopologyTestDriver driver = new TopologyTestDriver(
                 builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
@@ -406,18 +406,18 @@ public class KTableAggregateTest {
         final Serde<String> stringSerde = Serdes.String();
 
         builder
-                .table(input, Consumed.with(stringSerde, stringSerde))
-                // key is not changed
-                .groupBy(KeyValue::pair, Grouped.with(stringSerde, stringSerde))
-                .count()
-                .toStream()
-                .to(output);
+            .table(input, Consumed.with(stringSerde, stringSerde))
+            // key is not changed
+            .groupBy(KeyValue::pair, Grouped.with(stringSerde, stringSerde))
+            .count()
+            .toStream()
+            .to(output);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), config, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic =
-                    driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestOutputTopic<String, Long> outputTopic =
-                    driver.createOutputTopic(output, new StringDeserializer(), new LongDeserializer());
+                driver.createOutputTopic(output, new StringDeserializer(), new LongDeserializer());
 
             inputTopic.pipeInput("1", "", 8L);
             inputTopic.pipeInput("1", "", 9L);
@@ -436,9 +436,9 @@ public class KTableAggregateTest {
         upgradingConfig.putAll(CONFIG);
         upgradingConfig.put(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_33);
         testUpgradeFromConfig(upgradingConfig, asList(
-                new KeyValueTimestamp<>("1", 1L, 8),
-                new KeyValueTimestamp<>("1", 0L, 9), // transient inconsistent state
-                new KeyValueTimestamp<>("1", 1L, 9)
+            new KeyValueTimestamp<>("1", 1L, 8),
+            new KeyValueTimestamp<>("1", 0L, 9), // transient inconsistent state
+            new KeyValueTimestamp<>("1", 1L, 9)
         ), withHeaders);
     }
 
@@ -446,8 +446,8 @@ public class KTableAggregateTest {
     @CsvSource({"true", "false"})
     public void testShouldNotSendTransientStateIfNotUpgrading(final boolean withHeaders) {
         testUpgradeFromConfig(CONFIG, asList(
-                new KeyValueTimestamp<>("1", 1L, 8),
-                new KeyValueTimestamp<>("1", 1L, 9)
+            new KeyValueTimestamp<>("1", 1L, 8),
+            new KeyValueTimestamp<>("1", 1L, 9)
         ), withHeaders);
     }
 
@@ -483,26 +483,26 @@ public class KTableAggregateTest {
     }
 
     private void testKeyWithNoEquals(
-            final KeyValueMapper<NoEqualsImpl, NoEqualsImpl, KeyValue<NoEqualsImpl, NoEqualsImpl>> keyValueMapper,
-            final List<TestRecord<NoEqualsImpl, Long>> expected,
-            final boolean withHeaders) {
+        final KeyValueMapper<NoEqualsImpl, NoEqualsImpl, KeyValue<NoEqualsImpl, NoEqualsImpl>> keyValueMapper,
+        final List<TestRecord<NoEqualsImpl, Long>> expected,
+        final boolean withHeaders) {
         final StreamsBuilder builder = createStreamBuilderInMemory(withHeaders);
         final String input = "input-topic";
         final String output = "output-topic";
         final Serde<NoEqualsImpl> noEqualsImplSerde = new NoEqualsImplSerde();
 
         builder
-                .table(input, Consumed.with(noEqualsImplSerde, noEqualsImplSerde))
-                .groupBy(keyValueMapper, Grouped.with(noEqualsImplSerde, noEqualsImplSerde))
-                .count()
-                .toStream()
-                .to(output);
+            .table(input, Consumed.with(noEqualsImplSerde, noEqualsImplSerde))
+            .groupBy(keyValueMapper, Grouped.with(noEqualsImplSerde, noEqualsImplSerde))
+            .count()
+            .toStream()
+            .to(output);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<NoEqualsImpl, NoEqualsImpl> inputTopic =
-                    driver.createInputTopic(input, noEqualsImplSerde.serializer(), noEqualsImplSerde.serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+                driver.createInputTopic(input, noEqualsImplSerde.serializer(), noEqualsImplSerde.serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestOutputTopic<NoEqualsImpl, Long> outputTopic =
-                    driver.createOutputTopic(output, noEqualsImplSerde.deserializer(), new LongDeserializer());
+                driver.createOutputTopic(output, noEqualsImplSerde.deserializer(), new LongDeserializer());
 
             final NoEqualsImpl a = new NoEqualsImpl("1");
             final NoEqualsImpl b = new NoEqualsImpl("1");
@@ -522,14 +522,14 @@ public class KTableAggregateTest {
     @CsvSource({"true", "false"})
     public void testNoEqualsAndNotSameObject(final boolean withHeaders) {
         testKeyWithNoEquals(
-                // key changes, different object reference (deserializer returns a new object reference)
-                (k, v) -> new KeyValue<>(v, v),
-                asList(
-                        new TestRecord<>(new NoEqualsImpl("1"), 1L, Instant.ofEpochMilli(8)),
-                        new TestRecord<>(new NoEqualsImpl("1"), 0L, Instant.ofEpochMilli(9)), // transient inconsistent state
-                        new TestRecord<>(new NoEqualsImpl("1"), 1L, Instant.ofEpochMilli(9))
-                ),
-                withHeaders
+            // key changes, different object reference (deserializer returns a new object reference)
+            (k, v) -> new KeyValue<>(v, v),
+            asList(
+                new TestRecord<>(new NoEqualsImpl("1"), 1L, Instant.ofEpochMilli(8)),
+                new TestRecord<>(new NoEqualsImpl("1"), 0L, Instant.ofEpochMilli(9)), // transient inconsistent state
+                new TestRecord<>(new NoEqualsImpl("1"), 1L, Instant.ofEpochMilli(9))
+            ),
+            withHeaders
         );
     }
 
@@ -537,13 +537,13 @@ public class KTableAggregateTest {
     @CsvSource({"true", "false"})
     public void testNoEqualsAndSameObject(final boolean withHeaders) {
         testKeyWithNoEquals(
-                // key does not change, same object reference
-                KeyValue::new,
-                asList(
-                        new TestRecord<>(new NoEqualsImpl("1"), 1L, Instant.ofEpochMilli(8)),
-                        new TestRecord<>(new NoEqualsImpl("1"), 1L, Instant.ofEpochMilli(9))
-                ),
-                withHeaders
+            // key does not change, same object reference
+            KeyValue::new,
+            asList(
+                new TestRecord<>(new NoEqualsImpl("1"), 1L, Instant.ofEpochMilli(8)),
+                new TestRecord<>(new NoEqualsImpl("1"), 1L, Instant.ofEpochMilli(9))
+            ),
+            withHeaders
         );
     }
 }

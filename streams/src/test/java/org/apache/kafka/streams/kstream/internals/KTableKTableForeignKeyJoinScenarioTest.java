@@ -118,8 +118,8 @@ public class KTableKTableForeignKeyJoinScenarioTest {
             value -> Integer.parseInt(value.split("-")[0]),
             (aVal, bVal) -> "(" + aVal + "," + bVal + ")",
             Materialized.<Integer, String, KeyValueStore<Bytes, byte[]>>as("asdf")
-                    .withKeySerde(Serdes.Integer())
-                    .withValueSerde(Serdes.String())
+                .withKeySerde(Serdes.Integer())
+                .withValueSerde(Serdes.String())
         );
 
         final KTable<Integer, String> finalJoinResult = aTable.join(
@@ -197,12 +197,12 @@ public class KTableKTableForeignKeyJoinScenarioTest {
         final KTable<Integer, String> left = builder.table(
             LEFT_TABLE,
             Consumed.with(serdeScope.decorateSerde(Serdes.Integer(), streamsConfig, true),
-                        serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
+                serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
         );
         final KTable<Integer, String> right = builder.table(
-                RIGHT_TABLE,
-                Consumed.with(serdeScope.decorateSerde(Serdes.Integer(), streamsConfig, true),
-                              serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
+            RIGHT_TABLE,
+            Consumed.with(serdeScope.decorateSerde(Serdes.Integer(), streamsConfig, true),
+                serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
         );
 
         left.join(

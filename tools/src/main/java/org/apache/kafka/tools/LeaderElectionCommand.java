@@ -181,12 +181,12 @@ public class LeaderElectionCommand {
                 new AdminCommandFailedException(String.format("%s replica(s) could not be elected", failed.size()));
             failed.forEach((key, value) -> {
                 System.out.println(
-                        String.format(
-                                "Error completing leader election (%s) for partition: %s: %s",
-                                electionType,
-                                key,
-                                value
-                        )
+                    String.format(
+                        "Error completing leader election (%s) for partition: %s: %s",
+                        electionType,
+                        key,
+                        value
+                    )
                 );
                 rootException.addSuppressed(value);
             });
@@ -233,7 +233,7 @@ public class LeaderElectionCommand {
             partitions.add(new TopicPartition(topic, partition));
         }
 
-        Set<TopicPartition> duplicatePartitions  = partitions.stream()
+        Set<TopicPartition> duplicatePartitions = partitions.stream()
             .filter(i -> Collections.frequency(partitions, i) > 1)
             .collect(Collectors.toSet());
 
@@ -255,6 +255,7 @@ public class LeaderElectionCommand {
         private final ArgumentAcceptingOptionSpec<Integer> partition;
         private final OptionSpecBuilder allTopicPartitions;
         private final ArgumentAcceptingOptionSpec<ElectionType> electionType;
+
         public LeaderElectionCommandOptions(String[] args) {
             super(args);
             bootstrapServer = parser
@@ -268,7 +269,7 @@ public class LeaderElectionCommand {
                 .accepts(
                     "admin.config",
                     "(DEPRECATED) Configuration properties files to pass to the admin client. " +
-                    "This option will be removed in a future version. Use --command-config instead.")
+                        "This option will be removed in a future version. Use --command-config instead.")
                 .withRequiredArg()
                 .describedAs("config file")
                 .ofType(String.class);

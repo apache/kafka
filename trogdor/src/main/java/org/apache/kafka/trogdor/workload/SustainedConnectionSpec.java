@@ -83,22 +83,22 @@ public final class SustainedConnectionSpec extends TaskSpec {
 
     @JsonCreator
     public SustainedConnectionSpec(
-            @JsonProperty("startMs") long startMs,
-            @JsonProperty("durationMs") long durationMs,
-            @JsonProperty("clientNode") String clientNode,
-            @JsonProperty("bootstrapServers") String bootstrapServers,
-            @JsonProperty("producerConf") Map<String, String> producerConf,
-            @JsonProperty("consumerConf") Map<String, String> consumerConf,
-            @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
-            @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
-            @JsonProperty("keyGenerator") PayloadGenerator keyGenerator,
-            @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
-            @JsonProperty("producerConnectionCount") int producerConnectionCount,
-            @JsonProperty("consumerConnectionCount") int consumerConnectionCount,
-            @JsonProperty("metadataConnectionCount") int metadataConnectionCount,
-            @JsonProperty("topicName") String topicName,
-            @JsonProperty("numThreads") int numThreads,
-            @JsonProperty("refreshRateMs") int refreshRateMs) {
+        @JsonProperty("startMs") long startMs,
+        @JsonProperty("durationMs") long durationMs,
+        @JsonProperty("clientNode") String clientNode,
+        @JsonProperty("bootstrapServers") String bootstrapServers,
+        @JsonProperty("producerConf") Map<String, String> producerConf,
+        @JsonProperty("consumerConf") Map<String, String> consumerConf,
+        @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
+        @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
+        @JsonProperty("keyGenerator") PayloadGenerator keyGenerator,
+        @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
+        @JsonProperty("producerConnectionCount") int producerConnectionCount,
+        @JsonProperty("consumerConnectionCount") int consumerConnectionCount,
+        @JsonProperty("metadataConnectionCount") int metadataConnectionCount,
+        @JsonProperty("topicName") String topicName,
+        @JsonProperty("numThreads") int numThreads,
+        @JsonProperty("refreshRateMs") int refreshRateMs) {
         super(startMs, durationMs);
         this.clientNode = clientNode == null ? "" : clientNode;
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;

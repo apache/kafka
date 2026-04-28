@@ -44,9 +44,9 @@ public class ConsumerRebalanceListenerInvoker {
     private final RebalanceCallbackMetricsManager metricsManager;
 
     ConsumerRebalanceListenerInvoker(LogContext logContext,
-                                     SubscriptionState subscriptions,
-                                     Time time,
-                                     RebalanceCallbackMetricsManager metricsManager) {
+        SubscriptionState subscriptions,
+        Time time,
+        RebalanceCallbackMetricsManager metricsManager) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.time = time;

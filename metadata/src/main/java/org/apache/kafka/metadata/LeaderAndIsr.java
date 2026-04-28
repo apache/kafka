@@ -44,27 +44,27 @@ public class LeaderAndIsr {
     }
 
     public LeaderAndIsr(
-            int leader,
-            int leaderEpoch,
-            List<Integer> isr,
-            LeaderRecoveryState leaderRecoveryState,
-            int partitionEpoch
+        int leader,
+        int leaderEpoch,
+        List<Integer> isr,
+        LeaderRecoveryState leaderRecoveryState,
+        int partitionEpoch
     ) {
         this(
-                leader,
-                leaderEpoch,
-                leaderRecoveryState,
-                isr.stream().map(brokerId -> new BrokerState().setBrokerId(brokerId)).toList(),
-                partitionEpoch
+            leader,
+            leaderEpoch,
+            leaderRecoveryState,
+            isr.stream().map(brokerId -> new BrokerState().setBrokerId(brokerId)).toList(),
+            partitionEpoch
         );
     }
 
     public LeaderAndIsr(
-            int leader,
-            int leaderEpoch,
-            LeaderRecoveryState leaderRecoveryState,
-            List<BrokerState> isrWithBrokerEpoch,
-            int partitionEpoch
+        int leader,
+        int leaderEpoch,
+        LeaderRecoveryState leaderRecoveryState,
+        List<BrokerState> isrWithBrokerEpoch,
+        int partitionEpoch
     ) {
         this.leader = leader;
         this.leaderEpoch = leaderEpoch;
@@ -123,19 +123,19 @@ public class LeaderAndIsr {
 
     public Set<Integer> isr() {
         return isrWithBrokerEpoch.stream()
-                .map(BrokerState::brokerId)
-                .collect(Collectors.toUnmodifiableSet());
+            .map(BrokerState::brokerId)
+            .collect(Collectors.toUnmodifiableSet());
     }
 
     @Override
     public String toString() {
         return "LeaderAndIsr(" +
-                "leader=" + leader +
-                ", leaderEpoch=" + leaderEpoch +
-                ", isrWithBrokerEpoch=" + isrWithBrokerEpoch +
-                ", leaderRecoveryState=" + leaderRecoveryState +
-                ", partitionEpoch=" + partitionEpoch +
-                ')';
+            "leader=" + leader +
+            ", leaderEpoch=" + leaderEpoch +
+            ", isrWithBrokerEpoch=" + isrWithBrokerEpoch +
+            ", leaderRecoveryState=" + leaderRecoveryState +
+            ", partitionEpoch=" + partitionEpoch +
+            ')';
     }
 
     @Override
@@ -144,7 +144,7 @@ public class LeaderAndIsr {
         if (o == null || getClass() != o.getClass()) return false;
         LeaderAndIsr that = (LeaderAndIsr) o;
         return leader == that.leader && leaderEpoch == that.leaderEpoch && partitionEpoch == that.partitionEpoch &&
-                leaderRecoveryState == that.leaderRecoveryState && Objects.equals(isrWithBrokerEpoch, that.isrWithBrokerEpoch);
+            leaderRecoveryState == that.leaderRecoveryState && Objects.equals(isrWithBrokerEpoch, that.isrWithBrokerEpoch);
     }
 
     @Override

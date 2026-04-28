@@ -89,12 +89,12 @@ public class RocksDbIndexedTimeOrderedWindowBytesStoreWithHeadersSupplier
     @Override
     public String toString() {
         return "RocksDbIndexedTimeOrderedWindowBytesStoreWithHeadersSupplier{" +
-                   "name='" + name + '\'' +
-                   ", retentionPeriod=" + retentionPeriod +
-                   ", segmentInterval=" + segmentInterval +
-                   ", windowSize=" + windowSize +
-                   ", retainDuplicates=" + retainDuplicates +
-                   ", windowStoreType=" + windowStoreType +
-                   '}';
+            "name='" + name + '\'' +
+            ", retentionPeriod=" + retentionPeriod +
+            ", segmentInterval=" + segmentInterval +
+            ", windowSize=" + windowSize +
+            ", retainDuplicates=" + retainDuplicates +
+            ", windowStoreType=" + windowStoreType +
+            '}';
     }
 }

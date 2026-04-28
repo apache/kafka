@@ -75,7 +75,7 @@ public class RangeQueryIntegrationTest {
     private static final String TABLE_NAME = "mytable";
     private static final int DATA_SIZE = 5;
 
-    private enum StoreType { InMemory, RocksDB, Timed }
+    private enum StoreType {InMemory, RocksDB, Timed}
 
     private final LinkedList<KeyValue<String, String>> records;
 
@@ -195,10 +195,10 @@ public class RangeQueryIntegrationTest {
 
     private void writeInputData() {
         IntegrationTestUtils.produceKeyValuesSynchronously(
-                inputStream,
-                records,
-                TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class),
-                CLUSTER.time
+            inputStream,
+            records,
+            TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class),
+            CLUSTER.time
         );
     }
 
@@ -240,9 +240,9 @@ public class RangeQueryIntegrationTest {
 
         final KeyValueBytesStoreSupplier stateStoreSupplier = createStore.get();
         final Materialized<String, String, KeyValueStore<Bytes, byte[]>> stateStoreConfig = Materialized
-                .<String, String>as(stateStoreSupplier)
-                .withKeySerde(Serdes.String())
-                .withValueSerde(Serdes.String());
+            .<String, String>as(stateStoreSupplier)
+            .withKeySerde(Serdes.String())
+            .withValueSerde(Serdes.String());
         if (cachingEnabled) {
             stateStoreConfig.withCachingEnabled();
         } else {

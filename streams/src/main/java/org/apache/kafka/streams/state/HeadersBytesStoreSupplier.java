@@ -20,4 +20,5 @@ package org.apache.kafka.streams.state;
  * A store supplier that can be used to create one or more "header" stores,
  * specifically, {@link HeadersBytesStore} instances.
  */
-public interface HeadersBytesStoreSupplier { }
+public interface HeadersBytesStoreSupplier {
+}

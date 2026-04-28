@@ -60,16 +60,16 @@ public class ClusterConfigState {
     final Set<String> inconsistentConnectors;
 
     public ClusterConfigState(long offset,
-                              SessionKey sessionKey,
-                              Map<String, Integer> connectorTaskCounts,
-                              Map<String, Map<String, String>> connectorConfigs,
-                              Map<String, TargetState> connectorTargetStates,
-                              Map<ConnectorTaskId, Map<String, String>> taskConfigs,
-                              Map<String, Integer> connectorTaskCountRecords,
-                              Map<String, Integer> connectorTaskConfigGenerations,
-                              Map<String, AppliedConnectorConfig> appliedConnectorConfigs,
-                              Set<String> connectorsPendingFencing,
-                              Set<String> inconsistentConnectors) {
+            SessionKey sessionKey,
+            Map<String, Integer> connectorTaskCounts,
+            Map<String, Map<String, String>> connectorConfigs,
+            Map<String, TargetState> connectorTargetStates,
+            Map<ConnectorTaskId, Map<String, String>> taskConfigs,
+            Map<String, Integer> connectorTaskCountRecords,
+            Map<String, Integer> connectorTaskConfigGenerations,
+            Map<String, AppliedConnectorConfig> appliedConnectorConfigs,
+            Set<String> connectorsPendingFencing,
+            Set<String> inconsistentConnectors) {
         this(offset,
                 sessionKey,
                 connectorTaskCounts,
@@ -85,17 +85,17 @@ public class ClusterConfigState {
     }
 
     public ClusterConfigState(long offset,
-                              SessionKey sessionKey,
-                              Map<String, Integer> connectorTaskCounts,
-                              Map<String, Map<String, String>> connectorConfigs,
-                              Map<String, TargetState> connectorTargetStates,
-                              Map<ConnectorTaskId, Map<String, String>> taskConfigs,
-                              Map<String, Integer> connectorTaskCountRecords,
-                              Map<String, Integer> connectorTaskConfigGenerations,
-                              Map<String, AppliedConnectorConfig> appliedConnectorConfigs,
-                              Set<String> connectorsPendingFencing,
-                              Set<String> inconsistentConnectors,
-                              WorkerConfigTransformer configTransformer) {
+            SessionKey sessionKey,
+            Map<String, Integer> connectorTaskCounts,
+            Map<String, Map<String, String>> connectorConfigs,
+            Map<String, TargetState> connectorTargetStates,
+            Map<ConnectorTaskId, Map<String, String>> taskConfigs,
+            Map<String, Integer> connectorTaskCountRecords,
+            Map<String, Integer> connectorTaskConfigGenerations,
+            Map<String, AppliedConnectorConfig> appliedConnectorConfigs,
+            Set<String> connectorsPendingFencing,
+            Set<String> inconsistentConnectors,
+            WorkerConfigTransformer configTransformer) {
         this.offset = offset;
         this.sessionKey = sessionKey;
         this.connectorTaskCounts = connectorTaskCounts;
@@ -172,7 +172,7 @@ public class ClusterConfigState {
      * been generated
      */
     public Map<String, String> appliedConnectorConfig(String connector) {
-        AppliedConnectorConfig appliedConfig =  appliedConnectorConfigs.get(connector);
+        AppliedConnectorConfig appliedConfig = appliedConnectorConfigs.get(connector);
         return appliedConfig != null ? appliedConfig.transformedConfig(configTransformer) : null;
     }
 

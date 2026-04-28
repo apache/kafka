@@ -69,7 +69,7 @@ public class ListConsumerGroupOffsetsSpec {
     @Override
     public String toString() {
         return "ListConsumerGroupOffsetsSpec(" +
-                "topicPartitions=" + topicPartitions +
-                ')';
+            "topicPartitions=" + topicPartitions +
+            ')';
     }
 }

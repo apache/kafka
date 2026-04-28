@@ -44,9 +44,9 @@ class KTableMapValues<KIn, VIn, VOut> implements KTableProcessorSupplier<KIn, VI
     private final StoreFactory storeFactory;
 
     KTableMapValues(final KTableImpl<KIn, ?, VIn> parent,
-                    final ValueMapperWithKey<? super KIn, ? super VIn, ? extends VOut> mapper,
-                    final String queryableName,
-                    final StoreFactory storeFactory) {
+        final ValueMapperWithKey<? super KIn, ? super VIn, ? extends VOut> mapper,
+        final String queryableName,
+        final StoreFactory storeFactory) {
         this.parent = parent;
         this.mapper = mapper;
         this.queryableName = queryableName;
@@ -112,7 +112,7 @@ class KTableMapValues<KIn, VIn, VOut> implements KTableProcessorSupplier<KIn, VI
         return newValue;
     }
 
-    private ValueTimestampHeaders<VOut> computeValueAndTimestamp(final KIn key, final ValueTimestampHeaders<VIn> valueTimestampHeaders, final Headers  contextHeaders) {
+    private ValueTimestampHeaders<VOut> computeValueAndTimestamp(final KIn key, final ValueTimestampHeaders<VIn> valueTimestampHeaders, final Headers contextHeaders) {
 
         VOut newValue = null;
         long timestamp = 0;

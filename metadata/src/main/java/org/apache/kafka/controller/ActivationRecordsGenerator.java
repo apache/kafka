@@ -160,14 +160,14 @@ public class ActivationRecordsGenerator {
     ) {
         if (curMetadataVersion.isEmpty()) {
             return recordsForEmptyLog(activationMessageConsumer,
-                    transactionStartOffset,
-                    bootstrapMetadata,
-                    bootstrapMetadata.metadataVersion(),
-                    defaultMinInSyncReplicas);
+                transactionStartOffset,
+                bootstrapMetadata,
+                bootstrapMetadata.metadataVersion(),
+                defaultMinInSyncReplicas);
         } else {
             return recordsForNonEmptyLog(activationMessageConsumer,
-                    transactionStartOffset,
-                    curMetadataVersion.get());
+                transactionStartOffset,
+                curMetadataVersion.get());
         }
     }
 }

@@ -65,7 +65,7 @@ public class RandomComponentPayloadGenerator implements PayloadGenerator {
 
     @JsonCreator
     public RandomComponentPayloadGenerator(@JsonProperty("seed") long seed,
-                                           @JsonProperty("components") List<RandomComponent> components) {
+        @JsonProperty("components") List<RandomComponent> components) {
         this.seed = seed;
         if (components == null || components.isEmpty()) {
             throw new IllegalArgumentException("Components must be a specified, non-empty list of RandomComponents.");

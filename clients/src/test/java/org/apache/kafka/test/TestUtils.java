@@ -113,13 +113,13 @@ public class TestUtils {
 
     public static Cluster clusterWith(final int nodes, final Map<String, Integer> topicPartitionCounts) {
         final Node[] ns = new Node[nodes];
-        for (int i = 0; i < nodes; i++)
+        for (int i = 0;i < nodes;i++)
             ns[i] = new Node(i, "localhost", 1969);
         final List<PartitionInfo> parts = new ArrayList<>();
         for (final Map.Entry<String, Integer> topicPartition : topicPartitionCounts.entrySet()) {
             final String topic = topicPartition.getKey();
             final int partitions = topicPartition.getValue();
-            for (int i = 0; i < partitions; i++)
+            for (int i = 0;i < partitions;i++)
                 parts.add(new PartitionInfo(topic, i, ns[i % ns.length], ns, ns));
         }
         return new Cluster("kafka-cluster", asList(ns), parts, Collections.emptySet(), Collections.emptySet());
@@ -139,7 +139,7 @@ public class TestUtils {
     public static MetadataSnapshot metadataSnapshotWith(final int nodes, final Map<String, Integer> topicPartitionCounts) {
         final Node[] ns = new Node[nodes];
         Map<Integer, Node> nodesById = new HashMap<>();
-        for (int i = 0; i < nodes; i++) {
+        for (int i = 0;i < nodes;i++) {
             ns[i] = new Node(i, "localhost", 1969);
             nodesById.put(ns[i].id(), ns[i]);
         }
@@ -147,7 +147,7 @@ public class TestUtils {
         for (final Map.Entry<String, Integer> topicPartition : topicPartitionCounts.entrySet()) {
             final String topic = topicPartition.getKey();
             final int partitions = topicPartition.getValue();
-            for (int i = 0; i < partitions; i++) {
+            for (int i = 0;i < partitions;i++) {
                 TopicPartition tp = new TopicPartition(topic, partitions);
                 Node node = ns[i % ns.length];
                 partsMetadatas.add(new PartitionMetadata(Errors.NONE, tp, Optional.of(node.id()), Optional.empty(), null, null, null));
@@ -174,7 +174,7 @@ public class TestUtils {
      */
     public static void assertNoLeakedThreadsWithNameAndDaemonStatus(String threadName, boolean isDaemon) throws InterruptedException {
         waitForCondition(() -> Thread.getAllStackTraces().keySet().stream()
-                .noneMatch(t -> t.isDaemon() == isDaemon && t.isAlive() && t.getName().startsWith(threadName)), String.format("Thread leak detected: %s", threadName));
+            .noneMatch(t -> t.isDaemon() == isDaemon && t.isAlive() && t.getName().startsWith(threadName)), String.format("Thread leak detected: %s", threadName));
     }
 
     /**
@@ -205,7 +205,7 @@ public class TestUtils {
      */
     public static String randomString(final int len) {
         final StringBuilder b = new StringBuilder();
-        for (int i = 0; i < len; i++)
+        for (int i = 0;i < len;i++)
             b.append(LETTERS_AND_DIGITS.charAt(SEEDED_RANDOM.nextInt(LETTERS_AND_DIGITS.length())));
         return b.toString();
     }
@@ -330,9 +330,9 @@ public class TestUtils {
     }
 
     public static Properties producerConfig(final String bootstrapServers,
-                                            final Class<?> keySerializer,
-                                            final Class<?> valueSerializer,
-                                            final Properties additional) {
+        final Class<?> keySerializer,
+        final Class<?> valueSerializer,
+        final Properties additional) {
         final Properties properties = new Properties();
         properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         properties.put(ProducerConfig.ACKS_CONFIG, "all");
@@ -355,10 +355,10 @@ public class TestUtils {
     }
 
     public static Properties consumerConfig(final String bootstrapServers,
-                                            final String groupId,
-                                            final Class<?> keyDeserializer,
-                                            final Class<?> valueDeserializer,
-                                            final Properties additional) {
+        final String groupId,
+        final Class<?> keyDeserializer,
+        final Class<?> valueDeserializer,
+        final Properties additional) {
 
         final Properties consumerConfig = new Properties();
         consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
@@ -371,9 +371,9 @@ public class TestUtils {
     }
 
     public static Properties consumerConfig(final String bootstrapServers,
-                                            final String groupId,
-                                            final Class<?> keyDeserializer,
-                                            final Class<?> valueDeserializer) {
+        final String groupId,
+        final Class<?> keyDeserializer,
+        final Class<?> valueDeserializer) {
         return consumerConfig(bootstrapServers,
             groupId,
             keyDeserializer,
@@ -457,7 +457,7 @@ public class TestUtils {
      * @throws InterruptedException if the current thread is interrupted while waiting for {@code runnable} to complete successfully.
      */
     public static void retryOnExceptionWithTimeout(final long timeoutMs,
-                                                   final ValuelessCallable runnable) throws InterruptedException {
+        final ValuelessCallable runnable) throws InterruptedException {
         retryOnExceptionWithTimeout(timeoutMs, DEFAULT_POLL_INTERVAL_MS, runnable);
     }
 
@@ -484,8 +484,8 @@ public class TestUtils {
      * @throws InterruptedException if the current thread is interrupted while waiting for {@code runnable} to complete successfully.
      */
     public static void retryOnExceptionWithTimeout(final long timeoutMs,
-                                                   final long pollIntervalMs,
-                                                   final ValuelessCallable runnable) throws InterruptedException {
+        final long pollIntervalMs,
+        final ValuelessCallable runnable) throws InterruptedException {
         final long expectedEnd = System.currentTimeMillis() + timeoutMs;
 
         while (true) {
@@ -598,8 +598,8 @@ public class TestUtils {
             // Enable strict type checking.
             // This ensures we're testing for the exact exception type, not its subclasses.
             assertEquals(
-                exceptionCauseClass, 
-                cause.getClass(), 
+                exceptionCauseClass,
+                cause.getClass(),
                 "Expected " + exceptionCauseClass.getSimpleName() + ", but got " + cause.getClass().getSimpleName()
             );
             return exceptionCauseClass.cast(cause);
@@ -621,9 +621,9 @@ public class TestUtils {
     }
 
     public static <T extends Throwable> void assertFutureThrowsWithMessageContaining(
-            Class<T> expectedCauseClassApiException,
-            Future<?> future,
-            String expectedMessage
+        Class<T> expectedCauseClassApiException,
+        Future<?> future,
+        String expectedMessage
     ) {
         T receivedException = assertFutureThrows(expectedCauseClassApiException, future);
         assertTrue(receivedException.getMessage().contains(expectedMessage));
@@ -642,7 +642,7 @@ public class TestUtils {
     }
 
     @SuppressWarnings("unchecked")
-    public static <T> T fieldValue(Object o, Class<?> clazz, String fieldName)  {
+    public static <T> T fieldValue(Object o, Class<?> clazz, String fieldName) {
         try {
             Field field = clazz.getDeclaredField(fieldName);
             field.setAccessible(true);
@@ -666,7 +666,7 @@ public class TestUtils {
      * @param <T>       type of element in the iterators.
      */
     public static <T> boolean sameElementsWithOrder(Iterator<T> iterator1,
-                                                    Iterator<T> iterator2) {
+        Iterator<T> iterator2) {
         while (iterator1.hasNext()) {
             if (!iterator2.hasNext()) {
                 return false;
@@ -688,7 +688,7 @@ public class TestUtils {
      * @param <T>       type of element in the iterators.
      */
     public static <T> boolean sameElementsWithoutOrder(Iterator<T> iterator1,
-                                                       Iterator<T> iterator2) {
+        Iterator<T> iterator2) {
         // Check both the iterators have the same set of elements irrespective of order and duplicates.
         Set<T> allSegmentsSet = new HashSet<>();
         iterator1.forEachRemaining(allSegmentsSet::add);
@@ -699,48 +699,48 @@ public class TestUtils {
     }
 
     public static ApiVersionsResponse defaultApiVersionsResponse(
-            ApiMessageType.ListenerType listenerType
+        ApiMessageType.ListenerType listenerType
     ) {
         return defaultApiVersionsResponse(0, listenerType);
     }
 
     public static ApiVersionsResponse defaultApiVersionsResponse(
-            int throttleTimeMs,
-            ApiMessageType.ListenerType listenerType
+        int throttleTimeMs,
+        ApiMessageType.ListenerType listenerType
     ) {
         return createApiVersionsResponse(
-                throttleTimeMs,
-                ApiVersionsResponse.filterApis(listenerType, true, true),
-                Features.emptySupportedFeatures(),
-                false
+            throttleTimeMs,
+            ApiVersionsResponse.filterApis(listenerType, true, true),
+            Features.emptySupportedFeatures(),
+            false
         );
     }
 
     public static ApiVersionsResponse defaultApiVersionsResponse(
-            int throttleTimeMs,
-            ApiMessageType.ListenerType listenerType,
-            boolean enableUnstableLastVersion
+        int throttleTimeMs,
+        ApiMessageType.ListenerType listenerType,
+        boolean enableUnstableLastVersion
     ) {
         return createApiVersionsResponse(
-                throttleTimeMs,
-                ApiVersionsResponse.filterApis(listenerType, enableUnstableLastVersion, true),
-                Features.emptySupportedFeatures(),
-                false
+            throttleTimeMs,
+            ApiVersionsResponse.filterApis(listenerType, enableUnstableLastVersion, true),
+            Features.emptySupportedFeatures(),
+            false
         );
     }
 
     public static ApiVersionsResponse createApiVersionsResponse(
-            int throttleTimeMs,
-            ApiVersionsResponseData.ApiVersionCollection apiVersions
+        int throttleTimeMs,
+        ApiVersionsResponseData.ApiVersionCollection apiVersions
     ) {
         return createApiVersionsResponse(throttleTimeMs, apiVersions, Features.emptySupportedFeatures(), false);
     }
 
     public static ApiVersionsResponse createApiVersionsResponse(
-            int throttleTimeMs,
-            ApiVersionsResponseData.ApiVersionCollection apiVersions,
-            Features<SupportedVersionRange> latestSupportedFeatures,
-            boolean zkMigrationEnabled
+        int throttleTimeMs,
+        ApiVersionsResponseData.ApiVersionCollection apiVersions,
+        Features<SupportedVersionRange> latestSupportedFeatures,
+        boolean zkMigrationEnabled
     ) {
         return new ApiVersionsResponse.Builder().
             setThrottleTimeMs(throttleTimeMs).

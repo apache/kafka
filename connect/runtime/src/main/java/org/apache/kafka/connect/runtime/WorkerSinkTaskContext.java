@@ -46,8 +46,8 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
     private boolean commitRequested;
 
     public WorkerSinkTaskContext(Consumer<byte[], byte[]> consumer,
-                                 WorkerSinkTask sinkTask,
-                                 ClusterConfigState configState) {
+            WorkerSinkTask sinkTask,
+            ClusterConfigState configState) {
         this.offsets = new HashMap<>();
         this.timeoutMs = -1L;
         this.consumer = consumer;
@@ -175,7 +175,7 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
     @Override
     public String toString() {
         return "WorkerSinkTaskContext{" +
-               "id=" + sinkTask.id +
-               '}';
+                "id=" + sinkTask.id +
+                '}';
     }
 }

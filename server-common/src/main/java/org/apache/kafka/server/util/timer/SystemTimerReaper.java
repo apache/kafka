@@ -71,7 +71,8 @@ public class SystemTimerReaper implements Timer {
         // blocked on poll by sending a no-op.
         timer.add(new TimerTask(0) {
             @Override
-            public void run() {}
+            public void run() {
+            }
         });
         reaper.awaitShutdown();
         timer.close();

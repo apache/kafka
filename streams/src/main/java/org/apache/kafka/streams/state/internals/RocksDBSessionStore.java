@@ -46,8 +46,8 @@ public class RocksDBSessionStore
 
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
+        final PositionBound positionBound,
+        final QueryConfig config) {
 
         return StoreQueryUtils.handleBasicQueries(
             query,
@@ -61,8 +61,8 @@ public class RocksDBSessionStore
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes key,
-                                                                  final long earliestSessionEndTime,
-                                                                  final long latestSessionStartTime) {
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().fetch(
             key,
             earliestSessionEndTime,
@@ -73,8 +73,8 @@ public class RocksDBSessionStore
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes key,
-                                                                          final long earliestSessionEndTime,
-                                                                          final long latestSessionStartTime) {
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().backwardFetch(
             key,
             earliestSessionEndTime,
@@ -85,9 +85,9 @@ public class RocksDBSessionStore
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes keyFrom,
-                                                                  final Bytes keyTo,
-                                                                  final long earliestSessionEndTime,
-                                                                  final long latestSessionStartTime) {
+        final Bytes keyTo,
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().fetch(
             keyFrom,
             keyTo,
@@ -99,9 +99,9 @@ public class RocksDBSessionStore
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes keyFrom,
-                                                                          final Bytes keyTo,
-                                                                          final long earliestSessionEndTime,
-                                                                          final long latestSessionStartTime) {
+        final Bytes keyTo,
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().backwardFetch(
             keyFrom,
             keyTo,
@@ -113,8 +113,8 @@ public class RocksDBSessionStore
 
     @Override
     public byte[] fetchSession(final Bytes key,
-                               final long earliestSessionEndTime,
-                               final long latestSessionStartTime) {
+        final long earliestSessionEndTime,
+        final long latestSessionStartTime) {
         return wrapped().get(SessionKeySchema.toBinary(
             key,
             earliestSessionEndTime,

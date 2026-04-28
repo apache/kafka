@@ -71,8 +71,8 @@ public class KafkaStreamsAssignment {
     }
 
     private KafkaStreamsAssignment(final ProcessId processId,
-                                   final Map<TaskId, AssignedTask> tasks,
-                                   final Optional<Instant> followupRebalanceDeadline) {
+        final Map<TaskId, AssignedTask> tasks,
+        final Optional<Instant> followupRebalanceDeadline) {
         this.processId = processId;
         this.tasks = tasks;
         this.followupRebalanceDeadline = followupRebalanceDeadline;

@@ -68,7 +68,7 @@ public class SaslServerCallbackHandler implements AuthenticateCallbackHandler {
         String authenticationID = ac.getAuthenticationID();
         String authorizationID = ac.getAuthorizationID();
         LOG.info("Successfully authenticated client: authenticationID={}; authorizationID={}.",
-                authenticationID, authorizationID);
+            authenticationID, authorizationID);
         ac.setAuthorized(true);
         ac.setAuthorizedID(authenticationID);
     }

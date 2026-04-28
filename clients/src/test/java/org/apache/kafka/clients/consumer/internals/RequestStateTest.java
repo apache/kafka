@@ -29,12 +29,12 @@ public class RequestStateTest {
     @Test
     public void testRequestStateSimple() {
         RequestState state = new RequestState(
-                new LogContext(),
-                this.getClass().getSimpleName(),
-                100,
-                2,
-                1000,
-                0);
+            new LogContext(),
+            this.getClass().getSimpleName(),
+            100,
+            2,
+            1000,
+            0);
 
         // ensure not permitting consecutive requests
         assertTrue(state.canSendRequest(0));
@@ -64,12 +64,12 @@ public class RequestStateTest {
 
     private void testTrackInflight(BiConsumer<RequestState, Integer> onCompletedAttempt) {
         RequestState state = new RequestState(
-                new LogContext(),
-                this.getClass().getSimpleName(),
-                100,
-                2,
-                1000,
-                0);
+            new LogContext(),
+            this.getClass().getSimpleName(),
+            100,
+            2,
+            1000,
+            0);
 
         // Just to be safe, let's make sure a new RequestState object doesn't think it has
         // an in-flight request.

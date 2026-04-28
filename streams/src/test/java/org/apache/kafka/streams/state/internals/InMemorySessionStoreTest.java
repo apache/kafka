@@ -44,38 +44,38 @@ public class InMemorySessionStoreTest extends AbstractSessionBytesStoreTest {
         assertEquals(0L, store.numEntries());
 
         store.put(
-                new Windowed<>(
-                        Bytes.wrap("a".getBytes()),
-                        new SessionWindow(0, 0)
-                ),
-                "1".getBytes()
+            new Windowed<>(
+                Bytes.wrap("a".getBytes()),
+                new SessionWindow(0, 0)
+            ),
+            "1".getBytes()
         );
         assertEquals(1L, store.numEntries());
 
         store.put(
-                new Windowed<>(
-                        Bytes.wrap("b".getBytes()),
-                        new SessionWindow(0, 10)
-                ),
-                "2".getBytes()
+            new Windowed<>(
+                Bytes.wrap("b".getBytes()),
+                new SessionWindow(0, 10)
+            ),
+            "2".getBytes()
         );
         assertEquals(2L, store.numEntries());
 
         store.put(
-                new Windowed<>(
-                        Bytes.wrap("a".getBytes()),
-                        new SessionWindow(5, 15)
-                ),
-                "3".getBytes()
+            new Windowed<>(
+                Bytes.wrap("a".getBytes()),
+                new SessionWindow(5, 15)
+            ),
+            "3".getBytes()
         );
         assertEquals(3L, store.numEntries());
 
         // remove one entry
         store.remove(
-                new Windowed<>(
-                        Bytes.wrap("a".getBytes()),
-                        new SessionWindow(0, 0)
-                )
+            new Windowed<>(
+                Bytes.wrap("a".getBytes()),
+                new SessionWindow(0, 0)
+            )
         );
         assertEquals(2L, store.numEntries());
 
@@ -86,27 +86,27 @@ public class InMemorySessionStoreTest extends AbstractSessionBytesStoreTest {
     public void shouldNotExpireFromOpenIterator() {
 
         sessionStore.put(
-                new Windowed<>("a", new SessionWindow(0, 0)),
-                1L
+            new Windowed<>("a", new SessionWindow(0, 0)),
+            1L
         );
         sessionStore.put(
-                new Windowed<>("aa", new SessionWindow(0, 10)),
-                2L
+            new Windowed<>("aa", new SessionWindow(0, 10)),
+            2L
         );
         sessionStore.put(
-                new Windowed<>("a", new SessionWindow(10, 20)),
-                3L
+            new Windowed<>("a", new SessionWindow(10, 20)),
+            3L
         );
 
         final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions("a", "b", 0L, RETENTION_PERIOD);
 
         // Advance stream time to expire the first three record
         sessionStore.put(
-                new Windowed<>(
-                        "aa",
-                        new SessionWindow(100, 2 * RETENTION_PERIOD)
-                ),
-                4L
+            new Windowed<>(
+                "aa",
+                new SessionWindow(100, 2 * RETENTION_PERIOD)
+            ),
+            4L
         );
 
         assertEquals(Set.of(1L, 2L, 3L, 4L), valuesToSet(iterator));
@@ -115,7 +115,7 @@ public class InMemorySessionStoreTest extends AbstractSessionBytesStoreTest {
         iterator.close();
 
         try (final KeyValueIterator<Windowed<String>, Long> it =
-             sessionStore.findSessions("a", "b", 0L, 20L)) {
+                 sessionStore.findSessions("a", "b", 0L, 20L)) {
             assertFalse(it.hasNext());
         }
     }

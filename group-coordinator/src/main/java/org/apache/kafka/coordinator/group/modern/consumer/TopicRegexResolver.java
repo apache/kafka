@@ -92,7 +92,7 @@ public class TopicRegexResolver {
                 // when received from the members. If for some reason, it would
                 // happen, we log it and ignore it.
                 log.error("[GroupId {}] Couldn't parse regular expression '{}' due to `{}`. Ignoring it.",
-                        groupId, regex, ex.getDescription());
+                    groupId, regex, ex.getDescription());
             }
         }
 

@@ -41,13 +41,13 @@ public class HeartbeatTest {
         long retryBackoffMs = 10L;
         long retryBackoffMaxMs = 100L;
         GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(sessionTimeoutMs,
-                                                                        maxPollIntervalMs,
-                                                                        heartbeatIntervalMs,
-                                                                        "group_id",
-                                                                        Optional.empty(),
-                                                                        null,
-                                                                        retryBackoffMs,
-                                                                        retryBackoffMaxMs);
+            maxPollIntervalMs,
+            heartbeatIntervalMs,
+            "group_id",
+            Optional.empty(),
+            null,
+            retryBackoffMs,
+            retryBackoffMaxMs);
         heartbeat = new Heartbeat(rebalanceConfig, time);
     }
 

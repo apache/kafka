@@ -51,46 +51,46 @@ public class DynamicBrokerConfig {
     public static final Set<String> DYNAMIC_SECURITY_CONFIGS = SslConfigs.RECONFIGURABLE_CONFIGS;
 
     private static final Set<String> DYNAMIC_PRODUCER_STATE_MANAGER_CONFIGS = Set.of(
-            TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_CONFIG,
-            TransactionLogConfig.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG);
+        TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_CONFIG,
+        TransactionLogConfig.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG);
 
     private static final Set<String> CLUSTER_LEVEL_LISTENER_CONFIGS = Set.of(
-            SocketServerConfigs.MAX_CONNECTIONS_CONFIG,
-            SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG,
-            SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG);
+        SocketServerConfigs.MAX_CONNECTIONS_CONFIG,
+        SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG,
+        SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG);
 
     private static final Set<String> PER_BROKER_CONFIGS = Stream.of(
-            DYNAMIC_SECURITY_CONFIGS,
-            DynamicListenerConfig.RECONFIGURABLE_CONFIGS,
-            Set.of(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG))
+        DYNAMIC_SECURITY_CONFIGS,
+        DynamicListenerConfig.RECONFIGURABLE_CONFIGS,
+        Set.of(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG))
         .flatMap(Collection::stream)
         .filter(c -> !CLUSTER_LEVEL_LISTENER_CONFIGS.contains(c))
         .collect(Collectors.toUnmodifiableSet());
 
     public static final Set<String> ALL_DYNAMIC_CONFIGS = Stream.of(
-            DYNAMIC_SECURITY_CONFIGS,
-            LogCleaner.RECONFIGURABLE_CONFIGS,
-            DynamicLogConfig.RECONFIGURABLE_CONFIGS,
-            DynamicThreadPool.RECONFIGURABLE_CONFIGS,
-            List.of(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG),
-            DynamicListenerConfig.RECONFIGURABLE_CONFIGS,
-            SocketServer.RECONFIGURABLE_CONFIGS,
-            DYNAMIC_PRODUCER_STATE_MANAGER_CONFIGS,
-            DynamicRemoteLogConfig.RECONFIGURABLE_CONFIGS,
-            DynamicReplicationConfig.RECONFIGURABLE_CONFIGS,
-            List.of(AbstractConfig.CONFIG_PROVIDERS_CONFIG),
-            GroupCoordinatorConfig.RECONFIGURABLE_CONFIGS,
-            DynamicQuotaConfig.RECONFIGURABLE_CONFIGS,
-            ShareCoordinatorConfig.RECONFIGURABLE_CONFIGS)
+        DYNAMIC_SECURITY_CONFIGS,
+        LogCleaner.RECONFIGURABLE_CONFIGS,
+        DynamicLogConfig.RECONFIGURABLE_CONFIGS,
+        DynamicThreadPool.RECONFIGURABLE_CONFIGS,
+        List.of(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG),
+        DynamicListenerConfig.RECONFIGURABLE_CONFIGS,
+        SocketServer.RECONFIGURABLE_CONFIGS,
+        DYNAMIC_PRODUCER_STATE_MANAGER_CONFIGS,
+        DynamicRemoteLogConfig.RECONFIGURABLE_CONFIGS,
+        DynamicReplicationConfig.RECONFIGURABLE_CONFIGS,
+        List.of(AbstractConfig.CONFIG_PROVIDERS_CONFIG),
+        GroupCoordinatorConfig.RECONFIGURABLE_CONFIGS,
+        DynamicQuotaConfig.RECONFIGURABLE_CONFIGS,
+        ShareCoordinatorConfig.RECONFIGURABLE_CONFIGS)
         .flatMap(Collection::stream)
         .collect(Collectors.toUnmodifiableSet());
 
     private static final Set<String> LISTENER_MECHANISM_CONFIGS = Set.of(
-            SaslConfigs.SASL_JAAS_CONFIG,
-            SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS,
-            SaslConfigs.SASL_LOGIN_CLASS,
-            BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG,
-            BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_CONFIG);
+        SaslConfigs.SASL_JAAS_CONFIG,
+        SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS,
+        SaslConfigs.SASL_LOGIN_CLASS,
+        BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG,
+        BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_CONFIG);
 
     private static final Pattern LISTENER_CONFIG_REGEX = Pattern.compile("listener\\.name\\.[^.]*\\.(.*)");
 
@@ -130,11 +130,11 @@ public class DynamicBrokerConfig {
     public static void validateConfigs(Properties props, boolean perBrokerConfig) {
         checkInvalidProps(nonDynamicConfigs(props), "Cannot update these configs dynamically");
         checkInvalidProps(securityConfigsWithoutListenerPrefix(props),
-                "These security configs can be dynamically updated only per-listener using the listener prefix");
+            "These security configs can be dynamically updated only per-listener using the listener prefix");
         validateConfigTypes(props);
         if (!perBrokerConfig) {
             checkInvalidProps(perBrokerConfigs(props),
-                    "Cannot update these configs at default cluster level, broker id must be specified");
+                "Cannot update these configs at default cluster level, broker id must be specified");
         }
     }
 
@@ -194,9 +194,9 @@ public class DynamicBrokerConfig {
 
     public static Map<String, String> dynamicConfigUpdateModes() {
         return ALL_DYNAMIC_CONFIGS.stream().collect(Collectors.toMap(
-                Function.identity(),
-                name -> PER_BROKER_CONFIGS.contains(name) ? "per-broker" : "cluster-wide"
-            )
+            Function.identity(),
+            name -> PER_BROKER_CONFIGS.contains(name) ? "per-broker" : "cluster-wide"
+        )
         );
     }
 
@@ -207,8 +207,8 @@ public class DynamicBrokerConfig {
          * configuration).
          */
         public static final Set<String> RECONFIGURABLE_CONFIGS = Stream.of(
-                ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.values(),
-                Set.of(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG))
+            ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.values(),
+            Set.of(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG))
             .flatMap(Collection::stream)
             .collect(Collectors.toUnmodifiableSet());
     }
@@ -219,69 +219,69 @@ public class DynamicBrokerConfig {
          * these are also monitored by other objects such as ChannelBuilders and SocketServers.
          */
         public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
-                // Listener configs
-                SocketServerConfigs.LISTENERS_CONFIG,
-                SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,
+            // Listener configs
+            SocketServerConfigs.LISTENERS_CONFIG,
+            SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,
 
-                // SSL configs
-                BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
-                SslConfigs.SSL_PROTOCOL_CONFIG,
-                SslConfigs.SSL_PROVIDER_CONFIG,
-                SslConfigs.SSL_CIPHER_SUITES_CONFIG,
-                SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG,
-                SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
-                SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
-                SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
-                SslConfigs.SSL_KEY_PASSWORD_CONFIG,
-                SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
-                SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
-                SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
-                SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG,
-                SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG,
-                SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG,
-                SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG,
-                BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG,
-                SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG,
+            // SSL configs
+            BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
+            SslConfigs.SSL_PROTOCOL_CONFIG,
+            SslConfigs.SSL_PROVIDER_CONFIG,
+            SslConfigs.SSL_CIPHER_SUITES_CONFIG,
+            SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG,
+            SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
+            SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
+            SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
+            SslConfigs.SSL_KEY_PASSWORD_CONFIG,
+            SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
+            SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
+            SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
+            SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG,
+            SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG,
+            SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG,
+            SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG,
+            BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG,
+            SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG,
 
-                // SASL configs
-                BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG,
-                SaslConfigs.SASL_JAAS_CONFIG,
-                BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
-                SaslConfigs.SASL_KERBEROS_SERVICE_NAME,
-                SaslConfigs.SASL_KERBEROS_KINIT_CMD,
-                SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR,
-                SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER,
-                SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN,
-                BrokerSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG,
-                SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_FACTOR,
-                SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_JITTER,
-                SaslConfigs.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS,
-                SaslConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS,
+            // SASL configs
+            BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG,
+            SaslConfigs.SASL_JAAS_CONFIG,
+            BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
+            SaslConfigs.SASL_KERBEROS_SERVICE_NAME,
+            SaslConfigs.SASL_KERBEROS_KINIT_CMD,
+            SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR,
+            SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER,
+            SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN,
+            BrokerSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG,
+            SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_FACTOR,
+            SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_JITTER,
+            SaslConfigs.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS,
+            SaslConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS,
 
-                // Connection limit configs
-                SocketServerConfigs.MAX_CONNECTIONS_CONFIG,
-                SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG,
+            // Connection limit configs
+            SocketServerConfigs.MAX_CONNECTIONS_CONFIG,
+            SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG,
 
-                // Network threads
-                SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG);
+            // Network threads
+            SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG);
     }
 
     public static class DynamicRemoteLogConfig {
         public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
-                RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP,
-                RemoteLogManagerConfig.REMOTE_FETCH_MAX_WAIT_MS_PROP,
-                RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP,
-                RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP,
-                RemoteLogManagerConfig.REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_PROP,
-                RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP,
-                RemoteLogManagerConfig.REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP,
-                RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP,
-                RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP);
+            RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP,
+            RemoteLogManagerConfig.REMOTE_FETCH_MAX_WAIT_MS_PROP,
+            RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP,
+            RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP,
+            RemoteLogManagerConfig.REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_PROP,
+            RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP,
+            RemoteLogManagerConfig.REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP,
+            RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP,
+            RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP);
     }
 
     public static class DynamicReplicationConfig {
         public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
-                ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG);
+            ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG);
     }
 
     public static class DynamicQuotaConfig {

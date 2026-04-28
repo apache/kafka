@@ -35,10 +35,10 @@ class ThrottlerTest {
 
         Time mockTime = new MockTime();
         Throttler throttler = new Throttler(desiredCountPerSec,
-                                            throttleCheckIntervalMs,
-                                            "throttler",
-                                            "entries",
-                                            mockTime);
+                throttleCheckIntervalMs,
+                "throttler",
+                "entries",
+                mockTime);
 
         // Observe desiredCountPerInterval at t1
         long t1 = mockTime.milliseconds();
@@ -76,10 +76,10 @@ class ThrottlerTest {
 
         Time mockTime = new MockTime();
         Throttler throttler = new Throttler(desiredCountPerSec,
-                                            throttleCheckIntervalMs,
-                                            "throttler",
-                                            "entries",
-                                            mockTime);
+                throttleCheckIntervalMs,
+                "throttler",
+                "entries",
+                mockTime);
 
         // Observe desiredCountPerInterval at t1
         long t1 = mockTime.milliseconds();

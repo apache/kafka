@@ -40,7 +40,7 @@ public class FileLock {
     public FileLock(File file) throws IOException {
         this.file = file;
         this.channel = FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.READ,
-                StandardOpenOption.WRITE);
+            StandardOpenOption.WRITE);
     }
 
     public File file() {

@@ -47,7 +47,7 @@ public class BrokerApiVersionsCommandTest {
     @ClusterTest
     public void testBrokerApiVersionsCommandOutput(ClusterInstance clusterInstance) {
         String output = ToolsTestUtils.grabConsoleOutput(() ->
-                BrokerApiVersionsCommand.mainNoExit("--bootstrap-server", clusterInstance.bootstrapServers()));
+            BrokerApiVersionsCommand.mainNoExit("--bootstrap-server", clusterInstance.bootstrapServers()));
         Iterator<String> lineIter = Arrays.stream(output.split("\n")).iterator();
         assertTrue(lineIter.hasNext());
         assertEquals(clusterInstance.bootstrapServers() + " (id: 0 rack: null isFenced: false) -> (", lineIter.next());
@@ -55,8 +55,8 @@ public class BrokerApiVersionsCommandTest {
         ApiMessageType.ListenerType listenerType = ApiMessageType.ListenerType.BROKER;
 
         NodeApiVersions nodeApiVersions = new NodeApiVersions(
-                ApiVersionsResponse.filterApis(listenerType, true, true),
-                List.of());
+            ApiVersionsResponse.filterApis(listenerType, true, true),
+            List.of());
         Iterator<ApiKeys> apiKeysIter = ApiKeys.clientApis().iterator();
         while (apiKeysIter.hasNext()) {
             ApiKeys apiKey = apiKeysIter.next();
@@ -67,8 +67,8 @@ public class BrokerApiVersionsCommandTest {
                 assertNotNull(apiVersion, "No apiVersion found for " + apiKey);
 
                 String versionRangeStr = (apiVersion.minVersion() == apiVersion.maxVersion()) ?
-                        String.valueOf(apiVersion.minVersion()) :
-                        apiVersion.minVersion() + " to " + apiVersion.maxVersion();
+                    String.valueOf(apiVersion.minVersion()) :
+                    apiVersion.minVersion() + " to " + apiVersion.maxVersion();
                 short usableVersion = nodeApiVersions.latestUsableVersion(apiKey);
                 if (apiKey == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS || apiKey == ApiKeys.PUSH_TELEMETRY) {
                     lineBuilder.append(apiKey.name).append("(").append(apiKey.id).append("): UNSUPPORTED").append(terminator);
@@ -92,7 +92,7 @@ public class BrokerApiVersionsCommandTest {
         props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
         try (BrokerApiVersionsCommand.AdminClient admin = BrokerApiVersionsCommand.AdminClient.create(props)) {
             int brokerId = clusterInstance.brokers().keySet().iterator().next();
-            KafkaFuture<NodeApiVersions> future =  admin.getNodeApiVersions(new Node(brokerId + 1, "localhost", 9093, null));
+            KafkaFuture<NodeApiVersions> future = admin.getNodeApiVersions(new Node(brokerId + 1, "localhost", 9093, null));
             assertTrue(future.isCompletedExceptionally());
         }
     }

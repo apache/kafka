@@ -47,7 +47,7 @@ import static org.mockito.Mockito.verify;
 public class ApplicationEventHandlerTest {
     private final Time time = new MockTime();
     private final int initializationTimeoutMs = 50;
-    private final BlockingQueue<ApplicationEvent> applicationEventsQueue =  new LinkedBlockingQueue<>();
+    private final BlockingQueue<ApplicationEvent> applicationEventsQueue = new LinkedBlockingQueue<>();
     private final ApplicationEventProcessor applicationEventProcessor = mock(ApplicationEventProcessor.class);
     private final NetworkClientDelegate networkClientDelegate = mock(NetworkClientDelegate.class);
     private final RequestManagers requestManagers = mock(RequestManagers.class);
@@ -59,15 +59,15 @@ public class ApplicationEventHandlerTest {
         try (Metrics metrics = new Metrics();
              AsyncConsumerMetrics asyncConsumerMetrics = spy(new AsyncConsumerMetrics(metrics, groupName));
              ApplicationEventHandler applicationEventHandler = new ApplicationEventHandler(
-                     new LogContext(),
-                     time,
-                     initializationTimeoutMs,
-                     applicationEventsQueue,
-                     applicationEventReaper,
-                     () -> applicationEventProcessor,
-                     () -> networkClientDelegate,
-                     () -> requestManagers,
-                     asyncConsumerMetrics
+                 new LogContext(),
+                 time,
+                 initializationTimeoutMs,
+                 applicationEventsQueue,
+                 applicationEventReaper,
+                 () -> applicationEventProcessor,
+                 () -> networkClientDelegate,
+                 () -> requestManagers,
+                 asyncConsumerMetrics
              )) {
             // add event
             applicationEventHandler.add(new AsyncPollEvent(time.milliseconds() + 10, time.milliseconds()));
@@ -106,7 +106,7 @@ public class ApplicationEventHandlerTest {
     }
 
     private <T extends Throwable> T assertInitializeResourcesError(Class<T> exceptionClass,
-                                                                   Supplier<NetworkClientDelegate> networkClientDelegateSupplier) {
+        Supplier<NetworkClientDelegate> networkClientDelegateSupplier) {
         try (Metrics metrics = new Metrics();
              AsyncConsumerMetrics asyncConsumerMetrics = spy(new AsyncConsumerMetrics(metrics, "test-group"))) {
             return assertThrows(exceptionClass, () -> new ApplicationEventHandler(

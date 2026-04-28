@@ -30,7 +30,7 @@ public class ByteBufferAccessorTest {
     public void testReadArray() {
         ByteBuffer buf = ByteBuffer.allocate(1024);
         ByteBufferAccessor accessor = new ByteBufferAccessor(buf);
-        final byte[] testArray = new byte[] {0x4b, 0x61, 0x46};
+        final byte[] testArray = new byte[]{0x4b, 0x61, 0x46};
         accessor.writeByteArray(testArray);
         accessor.writeInt(12345);
         accessor.flip();
@@ -52,7 +52,7 @@ public class ByteBufferAccessorTest {
         accessor.flip();
         assertEquals("ABC", accessor.readString(3));
         assertEquals("Error reading byte array of 2 byte(s): only 0 byte(s) available",
-                assertThrows(RuntimeException.class,
-                        () -> accessor.readString(2)).getMessage());
+            assertThrows(RuntimeException.class,
+                () -> accessor.readString(2)).getMessage());
     }
 }

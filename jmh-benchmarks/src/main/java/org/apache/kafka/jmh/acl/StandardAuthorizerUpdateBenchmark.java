@@ -90,25 +90,25 @@ public class StandardAuthorizerUpdateBenchmark {
 
     private List<StandardAclWithId> prepareAcls() {
         return IntStream.range(0, 10000)
-            .mapToObj(i -> {
-                ResourceType resourceType = RANDOM.nextInt(10) > 7 ? ResourceType.GROUP : ResourceType.TOPIC;
-                String resourceName = resourceNamePrefix + i;
-                ResourcePattern resourcePattern = new ResourcePattern(resourceType, resourceName, PatternType.LITERAL);
-                return aclsForResource(resourcePattern);
-            })
-            .flatMap(Collection::stream)
-            .toList();
+                .mapToObj(i -> {
+                    ResourceType resourceType = RANDOM.nextInt(10) > 7 ? ResourceType.GROUP : ResourceType.TOPIC;
+                    String resourceName = resourceNamePrefix + i;
+                    ResourcePattern resourcePattern = new ResourcePattern(resourceType, resourceName, PatternType.LITERAL);
+                    return aclsForResource(resourcePattern);
+                })
+                .flatMap(Collection::stream)
+                .toList();
     }
 
     private List<StandardAclWithId> aclsForResource(ResourcePattern pattern) {
         return IntStream.range(1, 256)
-            .mapToObj(i -> {
-                String p = PRINCIPAL.toString() + RANDOM.nextInt(100);
-                String h = "127.0.0." + i;
-                return new StandardAcl(pattern.resourceType(), pattern.name(), pattern.patternType(), p, h, READ, ALLOW);
-            })
-            .map(this::withId)
-            .toList();
+                .mapToObj(i -> {
+                    String p = PRINCIPAL.toString() + RANDOM.nextInt(100);
+                    String h = "127.0.0." + i;
+                    return new StandardAcl(pattern.resourceType(), pattern.name(), pattern.patternType(), p, h, READ, ALLOW);
+                })
+                .map(this::withId)
+                .toList();
     }
 
     private StandardAclWithId withId(StandardAcl acl) {
@@ -122,10 +122,10 @@ public class StandardAuthorizerUpdateBenchmark {
 
     private void addAcls(int num) {
         IntStream.range(0, num)
-            .mapToObj(aclsToAdd::get)
-            .forEach(aclWithId -> {
-                authorizer.addAcl(aclWithId.id(), aclWithId.acl());
-                index++;
-            });
+                .mapToObj(aclsToAdd::get)
+                .forEach(aclWithId -> {
+                    authorizer.addAcl(aclWithId.id(), aclWithId.acl());
+                    index++;
+                });
     }
 }

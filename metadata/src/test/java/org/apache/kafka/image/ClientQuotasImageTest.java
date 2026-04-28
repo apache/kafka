@@ -63,21 +63,21 @@ public class ClientQuotasImageTest {
         DELTA1_RECORDS = new ArrayList<>();
         // remove quota
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ClientQuotaRecord().
-                setEntity(List.of(
-                    new EntityData().setEntityType(ClientQuotaEntity.USER).setEntityName("bar"),
-                    new EntityData().setEntityType(ClientQuotaEntity.IP).setEntityName("127.0.0.1"))).
-                setKey(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG).
-                setRemove(true), CLIENT_QUOTA_RECORD.highestSupportedVersion()));
+            setEntity(List.of(
+            new EntityData().setEntityType(ClientQuotaEntity.USER).setEntityName("bar"),
+            new EntityData().setEntityType(ClientQuotaEntity.IP).setEntityName("127.0.0.1"))).
+            setKey(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG).
+            setRemove(true), CLIENT_QUOTA_RECORD.highestSupportedVersion()));
         // alter quota
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ClientQuotaRecord().
             setEntity(List.of(
-                new EntityData().setEntityType(ClientQuotaEntity.USER).setEntityName("foo"))).
+            new EntityData().setEntityType(ClientQuotaEntity.USER).setEntityName("foo"))).
             setKey(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG).
             setValue(234.0), CLIENT_QUOTA_RECORD.highestSupportedVersion()));
         // add quota to entity with existing quota
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ClientQuotaRecord().
             setEntity(List.of(
-                new EntityData().setEntityType(ClientQuotaEntity.USER).setEntityName("foo"))).
+            new EntityData().setEntityType(ClientQuotaEntity.USER).setEntityName("foo"))).
             setKey(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG).
             setValue(999.0), CLIENT_QUOTA_RECORD.highestSupportedVersion()));
 

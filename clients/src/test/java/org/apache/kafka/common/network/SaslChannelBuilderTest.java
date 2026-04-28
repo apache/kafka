@@ -114,10 +114,10 @@ public class SaslChannelBuilderTest {
         GSSManager gssManager = Mockito.mock(GSSManager.class);
         GSSName gssName = Mockito.mock(GSSName.class);
         Mockito.when(gssManager.createName(Mockito.anyString(), Mockito.any()))
-                .thenAnswer(unused -> gssName);
+            .thenAnswer(unused -> gssName);
         Oid oid = new Oid("1.2.840.113554.1.2.2");
         Mockito.when(gssManager.createCredential(gssName, GSSContext.INDEFINITE_LIFETIME, oid, GSSCredential.ACCEPT_ONLY))
-                .thenAnswer(unused -> Mockito.mock(GSSCredential.class));
+            .thenAnswer(unused -> Mockito.mock(GSSCredential.class));
 
         SaslChannelBuilder channelBuilder1 = createGssapiChannelBuilder(jaasContexts, gssManager);
         assertEquals(1, channelBuilder1.subject("GSSAPI").getPrincipals().size());
@@ -129,7 +129,7 @@ public class SaslChannelBuilderTest {
         assertSame(channelBuilder1.subject("GSSAPI"), channelBuilder2.subject("GSSAPI"));
 
         Mockito.verify(gssManager, Mockito.times(1))
-                .createCredential(gssName, GSSContext.INDEFINITE_LIFETIME, oid, GSSCredential.ACCEPT_ONLY);
+            .createCredential(gssName, GSSContext.INDEFINITE_LIFETIME, oid, GSSCredential.ACCEPT_ONLY);
     }
 
     /**
@@ -205,8 +205,8 @@ public class SaslChannelBuilderTest {
         JaasContext jaasContext = new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig, null);
         Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
         return new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts, securityProtocol, new ListenerName(saslMechanism),
-                false, saslMechanism, null,
-                null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier());
+            false, saslMechanism, null,
+            null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier());
     }
 
     public static final class TestGssapiLoginModule implements LoginModule {

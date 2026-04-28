@@ -93,7 +93,7 @@ public class DefaultMessageFormatterTest {
         headers.add("h1", "v1".getBytes());
         headers.add("h2", "v2".getBytes());
         record = new ConsumerRecord<>("topic", 0, 123, 123L, TimestampType.CREATE_TIME, -1, -1, "key".getBytes(), "value".getBytes(),
-                headers, Optional.of(58), Optional.of((short) 1));
+            headers, Optional.of(58), Optional.of((short) 1));
         out = new ByteArrayOutputStream();
         formatter.writeTo(record, new PrintStream(out));
         assertEquals("CreateTime:123\tPartition:0\tOffset:123\tDelivery:1\tEpoch:58\th1:v1,h2:v2\tkey\tvalue\n", out.toString());
@@ -135,7 +135,7 @@ public class DefaultMessageFormatterTest {
         assertEquals("CreateTime:123<sep>Partition:0<sep>Offset:123<sep>h1:v1|h2:v2<sep>key<end>", out.toString());
 
         record = new ConsumerRecord<>("topic", 0, 123, 123L, TimestampType.CREATE_TIME, -1, -1, "key".getBytes(), "value".getBytes(),
-                headers, Optional.empty());
+            headers, Optional.empty());
 
         configs.put("key.deserializer", UpperCaseDeserializer.class.getName());
         formatter.configure(configs);
@@ -150,7 +150,7 @@ public class DefaultMessageFormatterTest {
         assertEquals("CreateTime:123<sep>Partition:0<sep>Offset:123<sep>h1:V1|h2:V2<sep>KEY<end>", out.toString());
 
         record = new ConsumerRecord<>("topic", 0, 123, 123L, TimestampType.CREATE_TIME, -1, -1, "key".getBytes(), null,
-                headers, Optional.empty());
+            headers, Optional.empty());
 
         configs.put("print.value", "true");
         configs.put("null.literal", "<null>");

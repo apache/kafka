@@ -38,9 +38,9 @@ public class StateStoreNode<S extends StateStore> extends GraphNode {
     @Override
     public String toString() {
         return "StateStoreNode{" +
-               " name='" + storeBuilder.storeName() +  '\'' +
-               ", logConfig=" + storeBuilder.logConfig() +
-               ", loggingEnabled='" + storeBuilder.loggingEnabled() + '\'' +
-               "} ";
+            " name='" + storeBuilder.storeName() + '\'' +
+            ", logConfig=" + storeBuilder.logConfig() +
+            ", loggingEnabled='" + storeBuilder.loggingEnabled() + '\'' +
+            "} ";
     }
 }

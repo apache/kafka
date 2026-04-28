@@ -70,9 +70,9 @@ public class ControllerMetricsTestUtils {
             case OFFLINE -> -1;
         };
         return new PartitionRegistration.Builder().
-            setReplicas(new int[] {0, 1, 2}).
+            setReplicas(new int[]{0, 1, 2}).
             setDirectories(DirectoryId.migratingArray(3)).
-            setIsr(new int[] {0, 1, 2}).
+            setIsr(new int[]{0, 1, 2}).
             setLeader(leader).
             setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
             setLeaderEpoch(100).

@@ -41,13 +41,13 @@ class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed
     private final Set<MeteredIterator> openIterators;
 
     MeteredWindowedKeyValueIterator(final KeyValueIterator<Windowed<Bytes>, byte[]> iter,
-                                    final Sensor operationSensor,
-                                    final Sensor iteratorSensor,
-                                    final Function<byte[], K> deserializeKey,
-                                    final Function<byte[], V> deserializeValue,
-                                    final Time time,
-                                    final LongAdder numOpenIterators,
-                                    final Set<MeteredIterator> openIterators) {
+        final Sensor operationSensor,
+        final Sensor iteratorSensor,
+        final Function<byte[], K> deserializeKey,
+        final Function<byte[], V> deserializeValue,
+        final Time time,
+        final LongAdder numOpenIterators,
+        final Set<MeteredIterator> openIterators) {
         this.iter = iter;
         this.operationSensor = operationSensor;
         this.iteratorSensor = iteratorSensor;

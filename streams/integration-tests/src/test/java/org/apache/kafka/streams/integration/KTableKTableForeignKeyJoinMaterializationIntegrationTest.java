@@ -142,9 +142,9 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
     }
 
     private Topology getTopology(final Properties streamsConfig,
-                                 final String queryableStoreName,
-                                 final boolean materialized,
-                                 final boolean queryable) {
+        final String queryableStoreName,
+        final boolean materialized,
+        final boolean queryable) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KTable<String, String> left = builder.table(LEFT_TABLE, Consumed.with(Serdes.String(), Serdes.String()));

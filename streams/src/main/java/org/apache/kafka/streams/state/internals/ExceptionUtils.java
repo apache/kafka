@@ -19,7 +19,8 @@ package org.apache.kafka.streams.state.internals;
 import java.util.LinkedList;
 
 final class ExceptionUtils {
-    private ExceptionUtils() {}
+    private ExceptionUtils() {
+    }
 
     static LinkedList<RuntimeException> executeAll(final Runnable... actions) {
         final LinkedList<RuntimeException> suppressed = new LinkedList<>();

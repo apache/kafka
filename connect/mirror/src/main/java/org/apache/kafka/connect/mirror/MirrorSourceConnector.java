@@ -85,7 +85,7 @@ public class MirrorSourceConnector extends SourceConnector {
 
     private static final Logger log = LoggerFactory.getLogger(MirrorSourceConnector.class);
     private static final ResourcePatternFilter ANY_TOPIC = new ResourcePatternFilter(ResourceType.TOPIC,
-        null, PatternType.ANY);
+            null, PatternType.ANY);
     private static final AclBindingFilter ANY_TOPIC_ACL = new AclBindingFilter(ANY_TOPIC, AccessControlEntryFilter.ANY);
     private static final String READ_COMMITTED = IsolationLevel.READ_COMMITTED.toString();
     private static final String EXACTLY_ONCE_SUPPORT_CONFIG = "exactly.once.support";
@@ -163,9 +163,9 @@ public class MirrorSourceConnector extends SourceConnector {
         scheduler.execute(this::refreshKnownTargetTopics, "refreshing known target topics");
         scheduler.scheduleRepeating(this::syncTopicAcls, config.syncTopicAclsInterval(), "syncing topic ACLs");
         scheduler.scheduleRepeating(this::syncTopicConfigs, config.syncTopicConfigsInterval(),
-            "syncing topic configs");
+                "syncing topic configs");
         scheduler.scheduleRepeatingDelayed(this::refreshTopicPartitions, config.refreshTopicsInterval(),
-            "refreshing topics");
+                "refreshing topics");
         log.info("Started {} with {} topic-partitions.", connectorName, knownSourceTopicPartitions.size());
         log.info("Starting {} took {} ms.", connectorName, System.currentTimeMillis() - start);
     }
@@ -324,20 +324,20 @@ public class MirrorSourceConnector extends SourceConnector {
     List<TopicPartition> findSourceTopicPartitions()
             throws InterruptedException, ExecutionException {
         Set<String> topics = listTopics(sourceAdminClient).stream()
-            .filter(this::shouldReplicateTopic)
-            .collect(Collectors.toSet());
+                .filter(this::shouldReplicateTopic)
+                .collect(Collectors.toSet());
         return describeTopics(sourceAdminClient, topics).stream()
-            .flatMap(MirrorSourceConnector::expandTopicDescription)
-            .collect(Collectors.toList());
+                .flatMap(MirrorSourceConnector::expandTopicDescription)
+                .collect(Collectors.toList());
     }
 
     // visible for testing
     List<TopicPartition> findTargetTopicPartitions()
             throws InterruptedException, ExecutionException {
         Set<String> topics = listTopics(targetAdminClient).stream()
-            .filter(t -> sourceAndTarget.source().equals(replicationPolicy.topicSource(t)))
-            .filter(t -> !t.equals(config.checkpointsTopic()))
-            .collect(Collectors.toSet());
+                .filter(t -> sourceAndTarget.source().equals(replicationPolicy.topicSource(t)))
+                .filter(t -> !t.equals(config.checkpointsTopic()))
+                .collect(Collectors.toSet());
         return describeTopics(targetAdminClient, topics).stream()
                 .flatMap(MirrorSourceConnector::expandTopicDescription)
                 .collect(Collectors.toList());
@@ -373,11 +373,11 @@ public class MirrorSourceConnector extends SourceConnector {
             deletedTopicPartitions.removeAll(sourceTopicPartitionsSet);
 
             log.info("Found {} new topic-partitions on {}. " +
-                     "Found {} deleted topic-partitions on {}. " +
-                     "Found {} topic-partitions missing on {}.",
-                     newTopicPartitions.size(), sourceAndTarget.source(),
-                     deletedTopicPartitions.size(), sourceAndTarget.source(),
-                     missingInTarget.size(), sourceAndTarget.target());
+                    "Found {} deleted topic-partitions on {}. " +
+                    "Found {} topic-partitions missing on {}.",
+                    newTopicPartitions.size(), sourceAndTarget.source(),
+                    deletedTopicPartitions.size(), sourceAndTarget.source(),
+                    missingInTarget.size(), sourceAndTarget.target());
 
             log.trace("Found new topic-partitions on {}: {}", sourceAndTarget.source(), newTopicPartitions);
             log.trace("Found deleted topic-partitions on {}: {}", sourceAndTarget.source(), deletedTopicPartitions);
@@ -403,10 +403,10 @@ public class MirrorSourceConnector extends SourceConnector {
     private Set<String> topicsBeingReplicated() {
         Set<String> knownTargetTopics = toTopics(knownTargetTopicPartitions);
         return knownSourceTopicPartitions.stream()
-            .map(TopicPartition::topic)
-            .distinct()
-            .filter(x -> knownTargetTopics.contains(formatRemoteTopic(x)))
-            .collect(Collectors.toSet());
+                .map(TopicPartition::topic)
+                .distinct()
+                .filter(x -> knownTargetTopics.contains(formatRemoteTopic(x)))
+                .collect(Collectors.toSet());
     }
 
     private Set<String> toTopics(Collection<TopicPartition> tps) {
@@ -422,12 +422,12 @@ public class MirrorSourceConnector extends SourceConnector {
         if (rawBindings.isEmpty())
             return;
         List<AclBinding> filteredBindings = rawBindings.get().stream()
-            .filter(x -> x.pattern().resourceType() == ResourceType.TOPIC)
-            .filter(x -> x.pattern().patternType() == PatternType.LITERAL)
-            .filter(this::shouldReplicateAcl)
-            .filter(x -> shouldReplicateTopic(x.pattern().name()))
-            .map(this::targetAclBinding)
-            .collect(Collectors.toList());
+                .filter(x -> x.pattern().resourceType() == ResourceType.TOPIC)
+                .filter(x -> x.pattern().patternType() == PatternType.LITERAL)
+                .filter(this::shouldReplicateAcl)
+                .filter(x -> shouldReplicateTopic(x.pattern().name()))
+                .map(this::targetAclBinding)
+                .collect(Collectors.toList());
         updateTopicAcls(filteredBindings);
     }
 
@@ -436,7 +436,7 @@ public class MirrorSourceConnector extends SourceConnector {
             throws InterruptedException, ExecutionException {
         Map<String, Config> sourceConfigs = describeTopicConfigs(topicsBeingReplicated());
         Map<String, Config> targetConfigs = sourceConfigs.entrySet().stream()
-            .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x -> targetConfig(x.getValue(), true)));
+                .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x -> targetConfig(x.getValue(), true)));
         incrementalAlterConfigs(targetConfigs);
     }
 
@@ -489,7 +489,7 @@ public class MirrorSourceConnector extends SourceConnector {
         if (!sourceTopicsWithNewPartitions.isEmpty()) {
             Map<String, NewPartitions> newTargetPartitions = sourceTopicsWithNewPartitions.entrySet().stream()
                     .collect(Collectors.toMap(sourceTopicAndPartitionCount -> sourceToRemoteTopics.get(sourceTopicAndPartitionCount.getKey()),
-                        sourceTopicAndPartitionCount -> NewPartitions.increaseTo(sourceTopicAndPartitionCount.getValue().intValue())));
+                            sourceTopicAndPartitionCount -> NewPartitions.increaseTo(sourceTopicAndPartitionCount.getValue().intValue())));
             createNewPartitions(newTargetPartitions);
         }
     }
@@ -613,25 +613,25 @@ public class MirrorSourceConnector extends SourceConnector {
         }
         log.trace("Syncing configs for {} topics.", configOps.size());
         adminCall(() -> {
-            targetAdminClient.incrementalAlterConfigs(configOps).values()
-                .forEach((k, v) -> v.whenComplete((x, e) -> {
-                    if (e instanceof UnsupportedVersionException) {
-                        log.error("Failed to sync configs for topic {} on cluster {} with " +
-                                "IncrementalAlterConfigs API", k.name(), sourceAndTarget.target(), e);
-                        context.raiseError(new ConnectException("the target cluster '"
-                                + sourceAndTarget.target() + "' is not compatible with " +
-                                "IncrementalAlterConfigs " +
-                                "API", e));
-                    } else if (e != null) {
-                        log.warn("Could not alter configuration of topic {}.", k.name(), e);
-                    } else {
-                        log.debug("Successfully altered configuration of topic {}.", k.name());
-                    }
-                }));
-            return null;
-        },
-            () -> String.format("incremental alter topic configs %s on %s cluster", topicConfigs,
-                    config.targetClusterAlias()));
+                    targetAdminClient.incrementalAlterConfigs(configOps).values()
+                            .forEach((k, v) -> v.whenComplete((x, e) -> {
+                                if (e instanceof UnsupportedVersionException) {
+                                    log.error("Failed to sync configs for topic {} on cluster {} with " +
+                                            "IncrementalAlterConfigs API", k.name(), sourceAndTarget.target(), e);
+                                    context.raiseError(new ConnectException("the target cluster '"
+                                            + sourceAndTarget.target() + "' is not compatible with " +
+                                            "IncrementalAlterConfigs " +
+                                            "API", e));
+                                } else if (e != null) {
+                                    log.warn("Could not alter configuration of topic {}.", k.name(), e);
+                                } else {
+                                    log.debug("Successfully altered configuration of topic {}.", k.name());
+                                }
+                            }));
+                    return null;
+                },
+                () -> String.format("incremental alter topic configs %s on %s cluster", topicConfigs,
+                        config.targetClusterAlias()));
     }
 
     private void updateTopicAcls(List<AclBinding> bindings) throws ExecutionException, InterruptedException {
@@ -652,14 +652,14 @@ public class MirrorSourceConnector extends SourceConnector {
     private static Stream<TopicPartition> expandTopicDescription(TopicDescription description) {
         String topic = description.name();
         return description.partitions().stream()
-            .map(x -> new TopicPartition(topic, x.partition()));
+                .map(x -> new TopicPartition(topic, x.partition()));
     }
 
     Map<String, Config> describeTopicConfigs(Set<String> topics)
             throws InterruptedException, ExecutionException {
         Set<ConfigResource> resources = topics.stream()
-            .map(x -> new ConfigResource(ConfigResource.Type.TOPIC, x))
-            .collect(Collectors.toSet());
+                .map(x -> new ConfigResource(ConfigResource.Type.TOPIC, x))
+                .collect(Collectors.toSet());
         return adminCall(
                 () -> sourceAdminClient.describeConfigs(resources).all().get().entrySet().stream()
                         .collect(Collectors.toMap(x -> x.getKey().name(), Entry::getValue)),
@@ -672,11 +672,11 @@ public class MirrorSourceConnector extends SourceConnector {
         // If not using incrementalAlterConfigs API, sync the default property only if ConfigPropertyFilter::shouldReplicateSourceDefault returns true.
         // If ConfigPropertyFilter::shouldReplicateConfigProperty returns false, do not sync the property at all.
         List<ConfigEntry> entries = sourceConfig.entries().stream()
-            .filter(x -> incremental || (x.isDefault() && shouldReplicateSourceDefault(x.name())) || !x.isDefault())
-            .filter(x -> !x.isReadOnly() && !x.isSensitive())
-            .filter(x -> x.source() != ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG)
-            .filter(x -> shouldReplicateTopicConfigurationProperty(x.name()))
-            .collect(Collectors.toList());
+                .filter(x -> incremental || (x.isDefault() && shouldReplicateSourceDefault(x.name())) || !x.isDefault())
+                .filter(x -> !x.isReadOnly() && !x.isSensitive())
+                .filter(x -> x.source() != ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG)
+                .filter(x -> shouldReplicateTopicConfigurationProperty(x.name()))
+                .collect(Collectors.toList());
         return new Config(entries);
     }
 
@@ -699,12 +699,12 @@ public class MirrorSourceConnector extends SourceConnector {
     boolean shouldReplicateTopic(String topic) {
         return (topicFilter.shouldReplicateTopic(topic)
                 || (heartbeatsReplicationEnabled && replicationPolicy.isHeartbeatsTopic(topic)))
-            && !replicationPolicy.isInternalTopic(topic) && !isCycle(topic);
+                && !replicationPolicy.isInternalTopic(topic) && !isCycle(topic);
     }
 
     boolean shouldReplicateAcl(AclBinding aclBinding) {
         return !(aclBinding.entry().permissionType() == AclPermissionType.ALLOW
-            && aclBinding.entry().operation() == AclOperation.WRITE);
+                && aclBinding.entry().operation() == AclOperation.WRITE);
     }
 
     boolean shouldReplicateTopicConfigurationProperty(String property) {

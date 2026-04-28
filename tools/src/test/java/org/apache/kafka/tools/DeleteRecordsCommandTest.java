@@ -117,7 +117,7 @@ public class DeleteRecordsCommandTest {
 
     @Test
     public void testCommandConfigNotExists() {
-        assertThrows(NoSuchFileException.class, () -> DeleteRecordsCommand.execute(new String[] {
+        assertThrows(NoSuchFileException.class, () -> DeleteRecordsCommand.execute(new String[]{
             "--bootstrap-server", "localhost:9092",
             "--offset-json-file", "/not/existing/file",
             "--command-config", "/another/not/existing/file"

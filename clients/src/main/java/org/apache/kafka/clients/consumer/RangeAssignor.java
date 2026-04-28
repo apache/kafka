@@ -121,13 +121,13 @@ public class RangeAssignor extends AbstractPartitionAssignor {
      */
     @Override
     public Map<String, List<TopicPartition>> assignPartitions(Map<String, List<PartitionInfo>> partitionsPerTopic,
-                                                              Map<String, Subscription> subscriptions) {
+        Map<String, Subscription> subscriptions) {
         Map<String, List<MemberInfo>> consumersPerTopic = consumersPerTopic(subscriptions);
         Map<String, String> consumerRacks = consumerRacks(subscriptions);
         List<TopicAssignmentState> topicAssignmentStates = partitionsPerTopic.entrySet().stream()
-                .filter(e -> !e.getValue().isEmpty())
-                .map(e -> new TopicAssignmentState(e.getKey(), e.getValue(), consumersPerTopic.get(e.getKey()), consumerRacks))
-                .collect(Collectors.toList());
+            .filter(e -> !e.getValue().isEmpty())
+            .map(e -> new TopicAssignmentState(e.getKey(), e.getValue(), consumersPerTopic.get(e.getKey()), consumerRacks))
+            .collect(Collectors.toList());
 
         Map<String, List<TopicPartition>> assignment = new HashMap<>();
         subscriptions.keySet().forEach(memberId -> assignment.put(memberId, new ArrayList<>()));
@@ -146,20 +146,20 @@ public class RangeAssignor extends AbstractPartitionAssignor {
     // This method is not used, but retained for compatibility with any custom assignors that extend this class.
     @Override
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
-                                                    Map<String, Subscription> subscriptions) {
+        Map<String, Subscription> subscriptions) {
         return assignPartitions(partitionInfosWithoutRacks(partitionsPerTopic), subscriptions);
     }
 
     private void assignRanges(TopicAssignmentState assignmentState,
-                              BiFunction<String, TopicPartition, Boolean> mayAssign,
-                              Map<String, List<TopicPartition>> assignment) {
+        BiFunction<String, TopicPartition, Boolean> mayAssign,
+        Map<String, List<TopicPartition>> assignment) {
         for (String consumer : assignmentState.consumers.keySet()) {
             if (assignmentState.unassignedPartitions.isEmpty())
                 break;
             List<TopicPartition> assignablePartitions = assignmentState.unassignedPartitions.stream()
-                    .filter(tp -> mayAssign.apply(consumer, tp))
-                    .limit(assignmentState.maxAssignable(consumer))
-                    .collect(Collectors.toList());
+                .filter(tp -> mayAssign.apply(consumer, tp))
+                .limit(assignmentState.maxAssignable(consumer))
+                .collect(Collectors.toList());
             if (assignablePartitions.isEmpty())
                 continue;
 
@@ -168,7 +168,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
     }
 
     private void assignWithRackMatching(Collection<TopicAssignmentState> assignmentStates,
-                                        Map<String, List<TopicPartition>> assignment) {
+        Map<String, List<TopicPartition>> assignment) {
 
         assignmentStates.stream().collect(Collectors.groupingBy(t -> t.consumers)).forEach((consumers, states) ->
             states.stream().collect(Collectors.groupingBy(t -> t.partitionRacks.size())).forEach((numPartitions, coPartitionedStates) -> {
@@ -184,17 +184,17 @@ public class RangeAssignor extends AbstractPartitionAssignor {
     }
 
     private void assignCoPartitionedWithRackMatching(LinkedHashMap<String, Optional<String>> consumers,
-                                                     int numPartitions,
-                                                     Collection<TopicAssignmentState> assignmentStates,
-                                                     Map<String, List<TopicPartition>> assignment) {
+        int numPartitions,
+        Collection<TopicAssignmentState> assignmentStates,
+        Map<String, List<TopicPartition>> assignment) {
 
         Set<String> remainingConsumers = new LinkedHashSet<>(consumers.keySet());
-        for (int i = 0; i < numPartitions; i++) {
+        for (int i = 0;i < numPartitions;i++) {
             int p = i;
 
             Optional<String> matchingConsumer = remainingConsumers.stream()
-                    .filter(c -> assignmentStates.stream().allMatch(t -> t.racksMatch(c, new TopicPartition(t.topic, p)) && t.maxAssignable(c) > 0))
-                    .findFirst();
+                .filter(c -> assignmentStates.stream().allMatch(t -> t.racksMatch(c, new TopicPartition(t.topic, p)) && t.maxAssignable(c) > 0))
+                .findFirst();
             if (matchingConsumer.isPresent()) {
                 String consumer = matchingConsumer.get();
                 assignmentStates.forEach(t -> assign(consumer, Collections.singletonList(new TopicPartition(t.topic, p)), t, assignment));
@@ -216,7 +216,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
     private Map<String, String> consumerRacks(Map<String, Subscription> subscriptions) {
         Map<String, String> consumerRacks = new HashMap<>(subscriptions.size());
         subscriptions.forEach((memberId, subscription) ->
-                subscription.rackId().filter(r -> !r.isEmpty()).ifPresent(rackId -> consumerRacks.put(memberId, rackId)));
+            subscription.rackId().filter(r -> !r.isEmpty()).ifPresent(rackId -> consumerRacks.put(memberId, rackId)));
         return consumerRacks;
     }
 
@@ -236,10 +236,10 @@ public class RangeAssignor extends AbstractPartitionAssignor {
             List<MemberInfo> members = membersOrNull == null ? Collections.emptyList() : membersOrNull;
             Collections.sort(members);
             consumers = members.stream().map(c -> c.memberId)
-                    .collect(Collectors.toMap(Function.identity(), c -> Optional.ofNullable(consumerRacks.get(c)), (a, b) -> a, LinkedHashMap::new));
+                .collect(Collectors.toMap(Function.identity(), c -> Optional.ofNullable(consumerRacks.get(c)), (a, b) -> a, LinkedHashMap::new));
 
             this.unassignedPartitions = partitionInfos.stream().map(p -> new TopicPartition(p.topic(), p.partition()))
-                    .collect(Collectors.toCollection(LinkedHashSet::new));
+                .collect(Collectors.toCollection(LinkedHashSet::new));
             this.numAssignedByConsumer = consumers.keySet().stream().collect(Collectors.toMap(Function.identity(), c -> 0));
             numPartitionsPerConsumer = consumers.isEmpty() ? 0 : partitionInfos.size() / consumers.size();
             remainingConsumersWithExtraPartition = consumers.isEmpty() ? 0 : partitionInfos.size() % consumers.size();
@@ -247,15 +247,15 @@ public class RangeAssignor extends AbstractPartitionAssignor {
             Set<String> allConsumerRacks = new HashSet<>();
             Set<String> allPartitionRacks = new HashSet<>();
             members.stream().map(m -> m.memberId).filter(consumerRacks::containsKey)
-                    .forEach(memberId -> allConsumerRacks.add(consumerRacks.get(memberId)));
+                .forEach(memberId -> allConsumerRacks.add(consumerRacks.get(memberId)));
             if (!allConsumerRacks.isEmpty()) {
                 partitionRacks = new HashMap<>(partitionInfos.size());
                 partitionInfos.forEach(p -> {
                     TopicPartition tp = new TopicPartition(p.topic(), p.partition());
                     Set<String> racks = Arrays.stream(p.replicas())
-                            .map(Node::rack)
-                            .filter(Objects::nonNull)
-                            .collect(Collectors.toSet());
+                        .map(Node::rack)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
                     partitionRacks.put(tp, racks);
                     allPartitionRacks.addAll(racks);
                 });
@@ -287,11 +287,11 @@ public class RangeAssignor extends AbstractPartitionAssignor {
         @Override
         public String toString() {
             return "TopicAssignmentState(" +
-                    "topic=" + topic +
-                    ", consumers=" + consumers +
-                    ", partitionRacks=" + partitionRacks +
-                    ", unassignedPartitions=" + unassignedPartitions +
-                    ")";
+                "topic=" + topic +
+                ", consumers=" + consumers +
+                ", partitionRacks=" + partitionRacks +
+                ", unassignedPartitions=" + unassignedPartitions +
+                ")";
         }
     }
 }

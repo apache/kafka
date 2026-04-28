@@ -86,11 +86,11 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         final Map<TopicPartition, Long> highWatermarks;
 
         StateStoreMetadata(final StateStore stateStore,
-                           final List<TopicPartition> changelogPartitions,
-                           final Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>> reprocessFactory,
-                           final StateRestoreCallback restoreCallback,
-                           final RecordConverter recordConverter,
-                           final Map<TopicPartition, Long> highWatermarks) {
+            final List<TopicPartition> changelogPartitions,
+            final Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>> reprocessFactory,
+            final StateRestoreCallback restoreCallback,
+            final RecordConverter recordConverter,
+            final Map<TopicPartition, Long> highWatermarks) {
             this.stateStore = stateStore;
             this.changelogPartitions = changelogPartitions;
             this.reprocessFactory = reprocessFactory;
@@ -125,12 +125,12 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private Sensor droppedRecordsSensor;
 
     public GlobalStateManagerImpl(final LogContext logContext,
-                                  final Time time,
-                                  final ProcessorTopology topology,
-                                  final Consumer<byte[], byte[]> globalConsumer,
-                                  final StateDirectory stateDirectory,
-                                  final StateRestoreListener stateRestoreListener,
-                                  final StreamsConfig config) {
+        final Time time,
+        final ProcessorTopology topology,
+        final Consumer<byte[], byte[]> globalConsumer,
+        final StateDirectory stateDirectory,
+        final StateRestoreListener stateRestoreListener,
+        final StreamsConfig config) {
         this.time = time;
         this.topology = topology;
         this.stateDirectory = stateDirectory;
@@ -184,13 +184,13 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         for (final StateStore stateStore : topology.globalStateStores()) {
             final List<TopicPartition> storePartitions = topicPartitionsForStore(stateStore);
             final StateStore maybeWrappedStore = LegacyCheckpointingStateStore.maybeWrapStore(
-                    stateStore, eosEnabled, new HashSet<>(storePartitions), stateDirectory, null, logPrefix);
+                stateStore, eosEnabled, new HashSet<>(storePartitions), stateDirectory, null, logPrefix);
             try {
                 maybeWrappedStore.init(globalProcessorContext, maybeWrappedStore);
             } catch (final ProcessorStateException e) {
                 if (eosEnabled) {
                     log.warn("{}Detected unclean shutdown for global store {}. " +
-                            "Wiping global state directory.", logPrefix, stateStore.name(), e);
+                        "Wiping global state directory.", logPrefix, stateStore.name(), e);
                     try {
                         Utils.delete(stateDirectory.globalStateDir().getAbsoluteFile());
                     } catch (final IOException ioe) {
@@ -250,8 +250,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
     @Override
     public void registerStore(final StateStore store,
-                              final StateRestoreCallback stateRestoreCallback,
-                              final CommitCallback ignored) {
+        final StateRestoreCallback stateRestoreCallback,
+        final CommitCallback ignored) {
         log.info("Registering global store {}", store.name());
 
         // TODO (KAFKA-12887): we should not trigger user's exception handler for illegal-argument but always
@@ -284,9 +284,9 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         );
 
         final Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>> reprocessFactory = topology
-                .storeNameToReprocessOnRestore().getOrDefault(store.name(), Optional.empty());
+            .storeNameToReprocessOnRestore().getOrDefault(store.name(), Optional.empty());
         storeMetadata.put(store.name(), new StateStoreMetadata(
-                store, topicPartitions, reprocessFactory, stateRestoreCallback, converterForStore(store), highWatermarks));
+            store, topicPartitions, reprocessFactory, stateRestoreCallback, converterForStore(store), highWatermarks));
     }
 
     private List<TopicPartition> topicPartitionsForStore(final StateStore store) {
@@ -422,27 +422,27 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                         ), "Invalid ProcessingExceptionHandler response");
                                     if (!response.deadLetterQueueRecords().isEmpty()) {
                                         log.warn("Dead letter queue records cannot be sent for global state/KTable processors. " +
-                                                "DLQ support for global store/KTable will be added in a future release. " + "Record context: {}",
+                                            "DLQ support for global store/KTable will be added in a future release. " + "Record context: {}",
                                             errorHandlerContext);
                                     }
                                 } catch (final Exception fatalUserException) {
                                     log.error(
-                                            "Processing error callback failed after processing error for record: {}",
-                                            errorHandlerContext,
-                                            processingException
+                                        "Processing error callback failed after processing error for record: {}",
+                                        errorHandlerContext,
+                                        processingException
                                     );
                                     throw new FailedProcessingException(
-                                            "Fatal user code error in processing error callback",
-                                            null,
-                                            fatalUserException
+                                        "Fatal user code error in processing error callback",
+                                        null,
+                                        fatalUserException
                                     );
                                 }
-                                
+
                                 if (response.result() == ProcessingExceptionHandler.Result.FAIL) {
                                     log.error("Processing exception handler is set to fail upon" +
-                                            " a processing error. If you would rather have the streaming pipeline" +
-                                            " continue after a processing error, please set the " +
-                                            PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.");
+                                        " a processing error. If you would rather have the streaming pipeline" +
+                                        " continue after a processing error, please set the " +
+                                        PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.");
                                     throw new FailedProcessingException(null, processingException);
                                 }
                                 droppedRecordsSensor.record();
@@ -529,7 +529,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     private <R> R retryUntilSuccessOrThrowOnTaskTimeout(final Supplier<R> supplier,
-                                                        final String errorMessage) {
+        final String errorMessage) {
         long deadlineMs = NO_DEADLINE;
 
         do {

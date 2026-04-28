@@ -39,9 +39,9 @@ public class TopicCreation {
     private final Set<String> topicCache;
 
     protected TopicCreation(boolean isTopicCreationEnabled,
-                            TopicCreationGroup defaultTopicGroup,
-                            Map<String, TopicCreationGroup> topicGroups,
-                            Set<String> topicCache) {
+            TopicCreationGroup defaultTopicGroup,
+            Map<String, TopicCreationGroup> topicGroups,
+            Set<String> topicCache) {
         this.isTopicCreationEnabled = isTopicCreationEnabled;
         this.defaultTopicGroup = defaultTopicGroup;
         this.topicGroups = topicGroups;

@@ -27,7 +27,8 @@ import java.util.List;
 import java.util.Objects;
 
 public final class StateRestoreCallbackAdapter {
-    private StateRestoreCallbackAdapter() {}
+    private StateRestoreCallbackAdapter() {
+    }
 
     public static RecordBatchingStateRestoreCallback adapt(final StateRestoreCallback restoreCallback) {
         Objects.requireNonNull(restoreCallback, "stateRestoreCallback must not be null");

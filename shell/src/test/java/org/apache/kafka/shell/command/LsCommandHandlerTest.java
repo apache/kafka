@@ -54,7 +54,7 @@ public class LsCommandHandlerTest {
     public void testPrintEntries() throws Exception {
         try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
             try (PrintWriter writer = new PrintWriter(new OutputStreamWriter(
-                    stream, StandardCharsets.UTF_8))) {
+                     stream, StandardCharsets.UTF_8))) {
                 LsCommandHandler.printEntries(writer, "", OptionalInt.of(18),
                     List.of("alphabet", "beta", "gamma", "theta", "zeta"));
             }
@@ -69,7 +69,7 @@ public class LsCommandHandlerTest {
     public void testPrintTargets() throws Exception {
         try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
             try (PrintWriter writer = new PrintWriter(new OutputStreamWriter(
-                    stream, StandardCharsets.UTF_8))) {
+                     stream, StandardCharsets.UTF_8))) {
                 LsCommandHandler.printTargets(writer, OptionalInt.of(18),
                     List.of("foo", "foobarbaz", "quux"), List.of(
                         new TargetDirectory("/some/dir",

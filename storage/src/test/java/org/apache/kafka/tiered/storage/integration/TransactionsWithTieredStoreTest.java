@@ -98,15 +98,15 @@ public class TransactionsWithTieredStoreTest extends TransactionsTest {
                 CollectionConverters.asJava(brokers()).stream().allMatch(broker ->
                         CollectionConverters.asJava(partitionLocalStartOffsets)
                                 .entrySet().stream().allMatch(entry -> {
-                                    long offset = broker.replicaManager().localLog(entry.getKey()).get().localLogStartOffset();
-                                    offsets.put(broker.config().brokerId(), offset);
-                                    return entry.getValue() == offset;
-                                })
+                            long offset = broker.replicaManager().localLog(entry.getKey()).get().localLogStartOffset();
+                            offsets.put(broker.config().brokerId(), offset);
+                            return entry.getValue() == offset;
+                        })
                 ), () -> "local log start offset doesn't change to the expected position:" + partitionLocalStartOffsets + ", current position:" + offsets);
     }
 
     private boolean isAssignedReplica(TopicPartition topicPartition,
-                                      Integer replicaId) {
+            Integer replicaId) {
         Optional<KafkaBroker> brokerOpt = CollectionConverters.asJava(brokers())
                 .stream()
                 .filter(b -> b.config().brokerId() == replicaId).findFirst();

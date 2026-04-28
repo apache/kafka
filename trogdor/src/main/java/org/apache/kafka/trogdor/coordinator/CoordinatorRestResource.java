@@ -109,11 +109,11 @@ public class CoordinatorRestResource {
     @GET
     @Path("/tasks/")
     public Response tasks(@QueryParam("taskId") List<String> taskId,
-            @DefaultValue("0") @QueryParam("firstStartMs") long firstStartMs,
-            @DefaultValue("0") @QueryParam("lastStartMs") long lastStartMs,
-            @DefaultValue("0") @QueryParam("firstEndMs") long firstEndMs,
-            @DefaultValue("0") @QueryParam("lastEndMs") long lastEndMs,
-            @DefaultValue("") @QueryParam("state") String state) throws Throwable {
+        @DefaultValue("0") @QueryParam("firstStartMs") long firstStartMs,
+        @DefaultValue("0") @QueryParam("lastStartMs") long lastStartMs,
+        @DefaultValue("0") @QueryParam("firstEndMs") long firstEndMs,
+        @DefaultValue("0") @QueryParam("lastEndMs") long lastEndMs,
+        @DefaultValue("") @QueryParam("state") String state) throws Throwable {
         boolean isEmptyState = state.isEmpty();
         if (!isEmptyState && !TaskStateType.Constants.VALUES.contains(state)) {
             return Response.status(400).entity(

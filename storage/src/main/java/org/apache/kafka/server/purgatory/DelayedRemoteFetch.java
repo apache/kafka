@@ -69,14 +69,14 @@ public class DelayedRemoteFetch extends DelayedOperation {
     private final Consumer<Map<TopicIdPartition, FetchPartitionData>> responseCallback;
 
     public DelayedRemoteFetch(Map<TopicIdPartition, Future<Void>> remoteFetchTasks,
-                              Map<TopicIdPartition, CompletableFuture<RemoteLogReadResult>> remoteFetchResults,
-                              Map<TopicIdPartition, RemoteStorageFetchInfo> remoteFetchInfos,
-                              long remoteFetchMaxWaitMs,
-                              Map<TopicIdPartition, FetchPartitionStatus> fetchPartitionStatus,
-                              FetchParams fetchParams,
-                              Map<TopicIdPartition, LogReadResult> localReadResults,
-                              Consumer<TopicPartition> partitionOrException,
-                              Consumer<Map<TopicIdPartition, FetchPartitionData>> responseCallback) {
+            Map<TopicIdPartition, CompletableFuture<RemoteLogReadResult>> remoteFetchResults,
+            Map<TopicIdPartition, RemoteStorageFetchInfo> remoteFetchInfos,
+            long remoteFetchMaxWaitMs,
+            Map<TopicIdPartition, FetchPartitionStatus> fetchPartitionStatus,
+            FetchParams fetchParams,
+            Map<TopicIdPartition, LogReadResult> localReadResults,
+            Consumer<TopicPartition> partitionOrException,
+            Consumer<Map<TopicIdPartition, FetchPartitionData>> responseCallback) {
         super(remoteFetchMaxWaitMs);
         this.remoteFetchTasks = remoteFetchTasks;
         this.remoteFetchResults = remoteFetchResults;
@@ -156,26 +156,26 @@ public class DelayedRemoteFetch extends DelayedOperation {
         localReadResults.forEach((tpId, result) -> {
             CompletableFuture<RemoteLogReadResult> remoteFetchResult = remoteFetchResults.get(tpId);
             if (remoteFetchResults.containsKey(tpId)
-                && remoteFetchResult.isDone()
-                && result.error() == Errors.NONE
-                && result.info().delayedRemoteStorageFetch.isPresent()) {
+                    && remoteFetchResult.isDone()
+                    && result.error() == Errors.NONE
+                    && result.info().delayedRemoteStorageFetch.isPresent()) {
 
                 if (remoteFetchResult.join().error().isPresent()) {
                     fetchPartitionData.put(tpId,
-                        new LogReadResult(Errors.forException(remoteFetchResult.join().error().get())).toFetchPartitionData(false));
+                            new LogReadResult(Errors.forException(remoteFetchResult.join().error().get())).toFetchPartitionData(false));
                 } else {
                     FetchDataInfo info = remoteFetchResult.join().fetchDataInfo().get();
                     fetchPartitionData.put(tpId,
-                        new FetchPartitionData(
-                            result.error(),
-                            result.highWatermark(),
-                            result.leaderLogStartOffset(),
-                            info.records,
-                            Optional.empty(),
-                            result.lastStableOffset(),
-                            info.abortedTransactions,
-                            result.preferredReadReplica(),
-                            false));
+                            new FetchPartitionData(
+                                    result.error(),
+                                    result.highWatermark(),
+                                    result.leaderLogStartOffset(),
+                                    info.records,
+                                    Optional.empty(),
+                                    result.lastStableOffset(),
+                                    info.abortedTransactions,
+                                    result.preferredReadReplica(),
+                                    false));
                 }
             } else {
                 fetchPartitionData.put(tpId, result.toFetchPartitionData(false));

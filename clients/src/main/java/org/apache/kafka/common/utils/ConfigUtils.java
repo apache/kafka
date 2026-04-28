@@ -76,7 +76,7 @@ public class ConfigUtils {
             return Boolean.parseBoolean((String) value);
         } else {
             log.error("Invalid value ({}) on configuration '{}'. The default value '{}' will be used instead. Please specify a true/false value.",
-                    value, key, defaultValue);
+                value, key, defaultValue);
             return defaultValue;
         }
     }

@@ -105,7 +105,7 @@ public final class MessageUtil {
         long value = jsonNodeToLong(node, about);
         if (value < 0 || value > UNSIGNED_INT_MAX) {
             throw new RuntimeException(about + ": value " + value +
-                    " does not fit in a 32-bit unsigned integer.");
+                " does not fit in a 32-bit unsigned integer.");
         }
         return value;
     }
@@ -194,7 +194,7 @@ public final class MessageUtil {
      * A null list is equivalent to an empty one in this context.
      */
     public static boolean compareRawTaggedFields(List<RawTaggedField> first,
-                                                 List<RawTaggedField> second) {
+        List<RawTaggedField> second) {
         if (first == null) {
             return second == null || second.isEmpty();
         } else if (second == null) {

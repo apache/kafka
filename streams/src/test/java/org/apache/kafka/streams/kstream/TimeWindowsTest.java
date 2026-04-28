@@ -138,7 +138,7 @@ public class TimeWindowsTest {
         verifyEquality(TimeWindows.ofSizeAndGrace(ofMillis(3), ofMillis(4)), TimeWindows.ofSizeAndGrace(ofMillis(3), ofMillis(4)));
 
         verifyEquality(TimeWindows.ofSizeAndGrace(ofMillis(3), ofMillis(33)),
-                TimeWindows.ofSizeAndGrace(ofMillis(3), ofMillis(33))
+            TimeWindows.ofSizeAndGrace(ofMillis(3), ofMillis(33))
         );
     }
 
@@ -146,13 +146,13 @@ public class TimeWindowsTest {
     public void equalsAndHashcodeShouldBeValidForNegativeCases() {
 
         verifyInEquality(
-                TimeWindows.ofSizeWithNoGrace(ofMillis(9)),
-                TimeWindows.ofSizeWithNoGrace(ofMillis(3))
+            TimeWindows.ofSizeWithNoGrace(ofMillis(9)),
+            TimeWindows.ofSizeWithNoGrace(ofMillis(3))
         );
 
         verifyInEquality(
-                TimeWindows.ofSizeAndGrace(ofMillis(9), ofMillis(9)),
-                TimeWindows.ofSizeAndGrace(ofMillis(3), ofMillis(9))
+            TimeWindows.ofSizeAndGrace(ofMillis(9), ofMillis(9)),
+            TimeWindows.ofSizeAndGrace(ofMillis(3), ofMillis(9))
         );
 
         verifyInEquality(TimeWindows.ofSizeWithNoGrace(ofMillis(3)).advanceBy(ofMillis(2)), TimeWindows.ofSizeWithNoGrace(ofMillis(3)).advanceBy(ofMillis(1)));

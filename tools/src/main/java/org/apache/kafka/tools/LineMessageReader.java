@@ -135,9 +135,9 @@ public class LineMessageReader implements RecordReader {
                         String value = line.substring(headerOffset + keyOffset);
 
                         ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
-                                topic,
-                                key != null && !key.equals(nullMarker) ? key.getBytes(StandardCharsets.UTF_8) : null,
-                                value != null && !value.equals(nullMarker) ? value.getBytes(StandardCharsets.UTF_8) : null
+                            topic,
+                            key != null && !key.equals(nullMarker) ? key.getBytes(StandardCharsets.UTF_8) : null,
+                            value != null && !value.equals(nullMarker) ? value.getBytes(StandardCharsets.UTF_8) : null
                         );
 
                         if (headers != null && !headers.equals(nullMarker)) {
@@ -181,24 +181,24 @@ public class LineMessageReader implements RecordReader {
 
     private Header[] splitHeaders(String headers) {
         return stream(headersSeparatorPattern.split(headers))
-                .map(pair -> {
-                    int i = pair.indexOf(headersKeySeparator);
-                    if (i == -1) {
-                        if (ignoreError) {
-                            return new RecordHeader(pair, null);
-                        }
-                        throw new KafkaException("No header key separator found in pair '" + pair + "' on line number " + lineNumber);
+            .map(pair -> {
+                int i = pair.indexOf(headersKeySeparator);
+                if (i == -1) {
+                    if (ignoreError) {
+                        return new RecordHeader(pair, null);
                     }
+                    throw new KafkaException("No header key separator found in pair '" + pair + "' on line number " + lineNumber);
+                }
 
-                    String headerKey = pair.substring(0, i);
-                    if (headerKey.equals(nullMarker)) {
-                        throw new KafkaException("Header keys should not be equal to the null marker '" + nullMarker + "' as they can't be null");
-                    }
+                String headerKey = pair.substring(0, i);
+                if (headerKey.equals(nullMarker)) {
+                    throw new KafkaException("Header keys should not be equal to the null marker '" + nullMarker + "' as they can't be null");
+                }
 
-                    String value = pair.substring(i + headersKeySeparator.length());
-                    byte[] headerValue = value.equals(nullMarker) ? null : value.getBytes(StandardCharsets.UTF_8);
-                    return new RecordHeader(headerKey, headerValue);
-                }).toArray(Header[]::new);
+                String value = pair.substring(i + headersKeySeparator.length());
+                byte[] headerValue = value.equals(nullMarker) ? null : value.getBytes(StandardCharsets.UTF_8);
+                return new RecordHeader(headerKey, headerValue);
+            }).toArray(Header[]::new);
     }
 
     // Visible for testing

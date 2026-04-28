@@ -61,7 +61,7 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     public static final int NUM_PARTITIONS = 1;
     public static final int BROKER_COUNT = 1;
     public static final String KAFKA_CLIENT_SASL_MECHANISM = "SCRAM-SHA-256";
-    private static final Seq<String> KAFKA_SERVER_SASL_MECHANISMS =  CollectionConverters.asScala(List.of(KAFKA_CLIENT_SASL_MECHANISM)).toSeq();
+    private static final Seq<String> KAFKA_SERVER_SASL_MECHANISMS = CollectionConverters.asScala(List.of(KAFKA_CLIENT_SASL_MECHANISM)).toSeq();
 
     private Consumer<byte[], byte[]> createConsumer() {
         return createConsumer(
@@ -122,7 +122,7 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
         try (Admin admin = createPrivilegedAdminClient()) {
             admin.createTopics(List.of(
                 new NewTopic(TOPIC, NUM_PARTITIONS, (short) BROKER_COUNT))).all().
-                    get(5, TimeUnit.MINUTES);
+                get(5, TimeUnit.MINUTES);
         } catch (ExecutionException | InterruptedException | TimeoutException e) {
             throw new RuntimeException(e);
         }
@@ -174,7 +174,7 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     private ConsumerGroupCommand.ConsumerGroupService prepareConsumerGroupService() throws IOException {
         File propsFile = TestUtils.tempFile(
             "security.protocol=SASL_PLAINTEXT\n" +
-            "sasl.mechanism=" + KAFKA_CLIENT_SASL_MECHANISM);
+                "sasl.mechanism=" + KAFKA_CLIENT_SASL_MECHANISM);
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()),
             "--describe",

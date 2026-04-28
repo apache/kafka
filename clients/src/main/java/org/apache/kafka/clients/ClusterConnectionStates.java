@@ -49,19 +49,19 @@ final class ClusterConnectionStates {
     private final ExponentialBackoff connectionSetupTimeout;
 
     public ClusterConnectionStates(long reconnectBackoffMs, long reconnectBackoffMaxMs,
-                                   long connectionSetupTimeoutMs, long connectionSetupTimeoutMaxMs,
-                                   LogContext logContext, HostResolver hostResolver) {
+        long connectionSetupTimeoutMs, long connectionSetupTimeoutMaxMs,
+        LogContext logContext, HostResolver hostResolver) {
         this.log = logContext.logger(ClusterConnectionStates.class);
         this.reconnectBackoff = new ExponentialBackoff(
-                reconnectBackoffMs,
-                RECONNECT_BACKOFF_EXP_BASE,
-                reconnectBackoffMaxMs,
-                RECONNECT_BACKOFF_JITTER);
+            reconnectBackoffMs,
+            RECONNECT_BACKOFF_EXP_BASE,
+            reconnectBackoffMaxMs,
+            RECONNECT_BACKOFF_JITTER);
         this.connectionSetupTimeout = new ExponentialBackoff(
-                connectionSetupTimeoutMs,
-                CONNECTION_SETUP_TIMEOUT_EXP_BASE,
-                connectionSetupTimeoutMaxMs,
-                CONNECTION_SETUP_TIMEOUT_JITTER);
+            connectionSetupTimeoutMs,
+            CONNECTION_SETUP_TIMEOUT_EXP_BASE,
+            connectionSetupTimeoutMaxMs,
+            CONNECTION_SETUP_TIMEOUT_JITTER);
         this.nodeState = new HashMap<>();
         this.connectingNodes = new HashSet<>();
         this.hostResolver = hostResolver;
@@ -80,7 +80,7 @@ final class ClusterConnectionStates {
             return true;
         else
             return state.state.isDisconnected() &&
-                   now - state.lastConnectAttemptMs >= state.reconnectBackoffMs;
+                now - state.lastConnectAttemptMs >= state.reconnectBackoffMs;
     }
 
     /**
@@ -91,8 +91,8 @@ final class ClusterConnectionStates {
     public boolean isBlackedOut(String id, long now) {
         NodeConnectionState state = nodeState.get(id);
         return state != null
-                && state.state.isDisconnected()
-                && now - state.lastConnectAttemptMs < state.reconnectBackoffMs;
+            && state.state.isDisconnected()
+            && now - state.lastConnectAttemptMs < state.reconnectBackoffMs;
     }
 
     /**
@@ -135,7 +135,7 @@ final class ClusterConnectionStates {
     public boolean isPreparingConnection(String id) {
         NodeConnectionState state = nodeState.get(id);
         return state != null &&
-                (state.state == ConnectionState.CONNECTING || state.state == ConnectionState.CHECKING_API_VERSIONS);
+            (state.state == ConnectionState.CONNECTING || state.state == ConnectionState.CHECKING_API_VERSIONS);
     }
 
     /**
@@ -160,7 +160,7 @@ final class ClusterConnectionStates {
         // Create a new NodeConnectionState if nodeState does not already contain one
         // for the specified id or if the hostname associated with the node id changed.
         nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now,
-                reconnectBackoff.backoff(0), connectionSetupTimeout.backoff(0), host, hostResolver, log));
+            reconnectBackoff.backoff(0), connectionSetupTimeout.backoff(0), host, hostResolver, log));
         connectingNodes.add(id);
     }
 
@@ -482,7 +482,7 @@ final class ClusterConnectionStates {
         private InetAddress lastAttemptedAddress;
 
         private NodeConnectionState(ConnectionState state, long lastConnectAttemptMs, long reconnectBackoffMs,
-                long connectionSetupTimeoutMs, String host, HostResolver hostResolver, Logger log) {
+            long connectionSetupTimeoutMs, String host, HostResolver hostResolver, Logger log) {
             this.state = state;
             this.addresses = Collections.emptyList();
             this.addressIndex = -1;

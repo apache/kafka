@@ -118,7 +118,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         // (which KafkaFuture does not) so wrap CompletionException in an extra one to avoid losing the
         // first CompletionException in the exception chain.
         return completableFuture.kafkaCompleteExceptionally(
-                newException instanceof CompletionException ? new CompletionException(newException) : newException);
+            newException instanceof CompletionException ? new CompletionException(newException) : newException);
     }
 
     /**
@@ -168,7 +168,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      */
     @Override
     public T get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException,
-            TimeoutException {
+        TimeoutException {
         try {
             return completableFuture.get(timeout, unit);
             // In Java 23, When a CompletableFuture is cancelled, get() will throw a CancellationException wrapping a
@@ -223,7 +223,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
                 return false;
             } catch (Exception e) {
                 return e instanceof CompletionException
-                        && e.getCause() instanceof CancellationException;
+                    && e.getCause() instanceof CancellationException;
             }
         } else {
             return completableFuture.isCancelled();
@@ -258,7 +258,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
             // see https://bugs.openjdk.org/browse/JDK-8331987
             if (e.getCause() instanceof CancellationException) {
                 exception = e.getCause();
-            } else { 
+            } else {
                 exception = e;
             }
         } catch (CompletionException e) {

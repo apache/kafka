@@ -37,22 +37,22 @@ interface StandbyTaskAssignor extends LegacyTaskAssignor {
      * @return True if task can be moved, false otherwise
      */
     default boolean isAllowedTaskMovement(final ClientState source,
-                                          final ClientState destination,
-                                          final TaskId sourceTask,
-                                          final Map<ProcessId, ClientState> clientStateMap) {
+        final ClientState destination,
+        final TaskId sourceTask,
+        final Map<ProcessId, ClientState> clientStateMap) {
         return true;
     }
 
     default boolean assign(final Map<ProcessId, ClientState> clients,
-                           final Set<TaskId> allTaskIds,
-                           final Set<TaskId> statefulTaskIds,
-                           final RackAwareTaskAssignor rackAwareTaskAssignor,
-                           final AssignmentConfigs configs) {
+        final Set<TaskId> allTaskIds,
+        final Set<TaskId> statefulTaskIds,
+        final RackAwareTaskAssignor rackAwareTaskAssignor,
+        final AssignmentConfigs configs) {
         return assign(clients, allTaskIds, statefulTaskIds, configs);
     }
 
     boolean assign(final Map<ProcessId, ClientState> clients,
-                   final Set<TaskId> allTaskIds,
-                   final Set<TaskId> statefulTaskIds,
-                   final AssignmentConfigs configs);
+        final Set<TaskId> allTaskIds,
+        final Set<TaskId> statefulTaskIds,
+        final AssignmentConfigs configs);
 }

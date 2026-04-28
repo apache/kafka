@@ -58,25 +58,25 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class ShareSessionHandlerTest {
     private static final LogContext LOG_CONTEXT = new LogContext("[ShareSessionHandler]=");
     private static final ShareFetchConfig DEFAULT_SHARE_FETCH_CONFIG = new ShareFetchConfig(
-            ConsumerConfig.DEFAULT_FETCH_MIN_BYTES,
-            ConsumerConfig.DEFAULT_FETCH_MAX_BYTES,
-            ConsumerConfig.DEFAULT_FETCH_MAX_WAIT_MS,
-            ConsumerConfig.DEFAULT_MAX_PARTITION_FETCH_BYTES,
-            ConsumerConfig.DEFAULT_MAX_POLL_RECORDS,
-            true,
-            ConsumerConfig.DEFAULT_CLIENT_RACK,
-            IsolationLevel.READ_UNCOMMITTED,
-            ShareAcquireMode.BATCH_OPTIMIZED);
+        ConsumerConfig.DEFAULT_FETCH_MIN_BYTES,
+        ConsumerConfig.DEFAULT_FETCH_MAX_BYTES,
+        ConsumerConfig.DEFAULT_FETCH_MAX_WAIT_MS,
+        ConsumerConfig.DEFAULT_MAX_PARTITION_FETCH_BYTES,
+        ConsumerConfig.DEFAULT_MAX_POLL_RECORDS,
+        true,
+        ConsumerConfig.DEFAULT_CLIENT_RACK,
+        IsolationLevel.READ_UNCOMMITTED,
+        ShareAcquireMode.BATCH_OPTIMIZED);
     private static final ShareFetchConfig SHARE_FETCH_CONFIG_RECORD_LIMIT = new ShareFetchConfig(
-            ConsumerConfig.DEFAULT_FETCH_MIN_BYTES,
-            ConsumerConfig.DEFAULT_FETCH_MAX_BYTES,
-            ConsumerConfig.DEFAULT_FETCH_MAX_WAIT_MS,
-            ConsumerConfig.DEFAULT_MAX_PARTITION_FETCH_BYTES,
-            ConsumerConfig.DEFAULT_MAX_POLL_RECORDS,
-            true,
-            ConsumerConfig.DEFAULT_CLIENT_RACK,
-            IsolationLevel.READ_UNCOMMITTED,
-            ShareAcquireMode.RECORD_LIMIT);
+        ConsumerConfig.DEFAULT_FETCH_MIN_BYTES,
+        ConsumerConfig.DEFAULT_FETCH_MAX_BYTES,
+        ConsumerConfig.DEFAULT_FETCH_MAX_WAIT_MS,
+        ConsumerConfig.DEFAULT_MAX_PARTITION_FETCH_BYTES,
+        ConsumerConfig.DEFAULT_MAX_POLL_RECORDS,
+        true,
+        ConsumerConfig.DEFAULT_CLIENT_RACK,
+        IsolationLevel.READ_UNCOMMITTED,
+        ShareAcquireMode.RECORD_LIMIT);
 
     private static Stream<ShareFetchConfig> shareFetchConfigProvider() {
         return Stream.of(DEFAULT_SHARE_FETCH_CONFIG, SHARE_FETCH_CONFIG_RECORD_LIMIT);
@@ -93,7 +93,7 @@ public class ShareSessionHandlerTest {
     private static ArrayList<TopicIdPartition> reqFetchList(ShareFetchRequestData requestData, Map<Uuid, String> topicNames) {
         ArrayList<TopicIdPartition> tips = new ArrayList<>();
         requestData.topics().forEach(topic -> topic.partitions().forEach(partition -> tips.add(new TopicIdPartition(topic.topicId(), partition.partitionIndex(),
-                topicNames.get(topic.topicId())))));
+            topicNames.get(topic.topicId())))));
         return tips;
     }
 
@@ -104,11 +104,11 @@ public class ShareSessionHandlerTest {
     }
 
     private static void assertMapEquals(Map<TopicPartition, TopicIdPartition> expected,
-                                        Map<TopicPartition, TopicIdPartition> actual) {
+        Map<TopicPartition, TopicIdPartition> actual) {
         Iterator<Map.Entry<TopicPartition, TopicIdPartition>> expectedIter =
-                expected.entrySet().iterator();
+            expected.entrySet().iterator();
         Iterator<Map.Entry<TopicPartition, TopicIdPartition>> actualIter =
-                actual.entrySet().iterator();
+            actual.entrySet().iterator();
         int i = 1;
         while (expectedIter.hasNext()) {
             Map.Entry<TopicPartition, TopicIdPartition> expectedEntry = expectedIter.next();
@@ -117,9 +117,9 @@ public class ShareSessionHandlerTest {
             }
             Map.Entry<TopicPartition, TopicIdPartition> actualEntry = actualIter.next();
             assertEquals(expectedEntry.getKey(), actualEntry.getKey(), "Element " + i +
-                    " had a different TopicPartition than expected.");
+                " had a different TopicPartition than expected.");
             assertEquals(expectedEntry.getValue(), actualEntry.getValue(), "Element " + i +
-                    " had different PartitionData than expected.");
+                " had different PartitionData than expected.");
             i++;
         }
         if (actualIter.hasNext()) {
@@ -129,7 +129,7 @@ public class ShareSessionHandlerTest {
 
     @SafeVarargs
     private static void assertMapsEqual(Map<TopicPartition, TopicIdPartition> expected,
-                                        Map<TopicPartition, TopicIdPartition>... actuals) {
+        Map<TopicPartition, TopicIdPartition>... actuals) {
         for (Map<TopicPartition, TopicIdPartition> actual : actuals) {
             assertMapEquals(expected, actual);
         }
@@ -155,7 +155,7 @@ public class ShareSessionHandlerTest {
         RespEntry(String topic, int partition, Uuid topicId) {
             this.part = new TopicIdPartition(topicId, partition, topic);
             this.data = new ShareFetchResponseData.PartitionData()
-                    .setPartitionIndex(partition);
+                .setPartitionIndex(partition);
         }
     }
 
@@ -204,9 +204,9 @@ public class ShareSessionHandlerTest {
         handler.addPartitionToFetch(bar0, null);
         ShareFetchRequestData requestData2 = handler.newShareFetchBuilder(groupId, DEFAULT_SHARE_FETCH_CONFIG, false).build().data();
         assertMapsEqual(reqMap(new TopicIdPartition(fooId, 0, "foo"),
-                        new TopicIdPartition(fooId, 1, "foo"),
-                        new TopicIdPartition(barId, 0, "bar")),
-                handler.sessionPartitionMap());
+            new TopicIdPartition(fooId, 1, "foo"),
+            new TopicIdPartition(barId, 0, "bar")),
+            handler.sessionPartitionMap());
         ArrayList<TopicIdPartition> expectedToSend2 = new ArrayList<>();
         expectedToSend2.add(new TopicIdPartition(barId, 0, "bar"));
         assertListEquals(expectedToSend2, reqFetchList(requestData2, topicNames));
@@ -226,9 +226,9 @@ public class ShareSessionHandlerTest {
         assertEquals(requestData2.memberId(), requestData4.memberId());
         assertEquals(INITIAL_EPOCH, requestData4.shareSessionEpoch());
         assertMapsEqual(reqMap(new TopicIdPartition(fooId, 0, "foo"),
-                        new TopicIdPartition(fooId, 1, "foo"),
-                        new TopicIdPartition(barId, 0, "bar")),
-                handler.sessionPartitionMap());
+            new TopicIdPartition(fooId, 1, "foo"),
+            new TopicIdPartition(barId, 0, "bar")),
+            handler.sessionPartitionMap());
         ArrayList<TopicIdPartition> expectedToSend4 = new ArrayList<>();
         expectedToSend4.add(new TopicIdPartition(fooId, 0, "foo"));
         expectedToSend4.add(new TopicIdPartition(fooId, 1, "foo"));
@@ -254,10 +254,10 @@ public class ShareSessionHandlerTest {
         handler.addPartitionToFetch(bar0, null);
         ShareFetchRequestData requestData1 = handler.newShareFetchBuilder(groupId, shareFetchConfig, false).build().data();
         assertMapsEqual(reqMap(
-                        new TopicIdPartition(fooId, 0, "foo"),
-                        new TopicIdPartition(fooId, 1, "foo"),
-                        new TopicIdPartition(barId, 0, "bar")),
-                handler.sessionPartitionMap());
+            new TopicIdPartition(fooId, 0, "foo"),
+            new TopicIdPartition(fooId, 1, "foo"),
+            new TopicIdPartition(barId, 0, "bar")),
+            handler.sessionPartitionMap());
         ArrayList<TopicIdPartition> expectedToSend1 = new ArrayList<>();
         expectedToSend1.add(new TopicIdPartition(fooId, 0, "foo"));
         expectedToSend1.add(new TopicIdPartition(fooId, 1, "foo"));
@@ -281,7 +281,7 @@ public class ShareSessionHandlerTest {
         assertEquals(memberId.toString(), requestData2.memberId());
         assertEquals(1, requestData2.shareSessionEpoch());
         assertMapsEqual(reqMap(new TopicIdPartition(fooId, 1, "foo")),
-                handler.sessionPartitionMap());
+            handler.sessionPartitionMap());
         assertTrue(requestData2.topics().isEmpty());
         ArrayList<TopicIdPartition> expectedToForget2 = new ArrayList<>();
         expectedToForget2.add(new TopicIdPartition(fooId, 0, "foo"));
@@ -297,7 +297,7 @@ public class ShareSessionHandlerTest {
         assertEquals(memberId.toString(), requestData3.memberId());
         assertEquals(INITIAL_EPOCH, requestData3.shareSessionEpoch());
         assertMapsEqual(reqMap(new TopicIdPartition(fooId, 1, "foo")),
-                handler.sessionPartitionMap());
+            handler.sessionPartitionMap());
         ArrayList<TopicIdPartition> expectedToSend3 = new ArrayList<>();
         expectedToSend3.add(new TopicIdPartition(fooId, 1, "foo"));
         assertListEquals(expectedToSend3, reqFetchList(requestData3, topicNames));
@@ -316,7 +316,7 @@ public class ShareSessionHandlerTest {
         handler.addPartitionToFetch(tp, null);
         ShareFetchRequestData requestData1 = handler.newShareFetchBuilder(groupId, shareFetchConfig, false).build().data();
         assertMapsEqual(reqMap(new TopicIdPartition(topicId1, 0, "foo")),
-                handler.sessionPartitionMap());
+            handler.sessionPartitionMap());
         ArrayList<TopicIdPartition> expectedToSend1 = new ArrayList<>();
         expectedToSend1.add(new TopicIdPartition(topicId1, 0, "foo"));
         assertListEquals(expectedToSend1, reqFetchList(requestData1, topicNames));
@@ -339,7 +339,7 @@ public class ShareSessionHandlerTest {
         // The old topic ID partition should be forgotten, and the new one should be fetched.
         assertEquals(List.of(tp), reqForgetList(requestData2, topicNames));
         assertMapsEqual(reqMap(new TopicIdPartition(topicId2, 0, "foo")),
-                handler.sessionPartitionMap());
+            handler.sessionPartitionMap());
         assertListEquals(List.of(tp2), reqFetchList(requestData2, topicNames));
 
         // Should have the same session ID, and next epoch and can use topic IDs if it ended with topic IDs.
@@ -428,7 +428,7 @@ public class ShareSessionHandlerTest {
         handler.addPartitionToFetch(new TopicIdPartition(topicId, 0, "foo"), null);
         ShareFetchRequestData requestData1 = handler.newShareFetchBuilder(groupId, shareFetchConfig, false).build().data();
         assertMapsEqual(reqMap(new TopicIdPartition(topicId, 0, "foo")),
-                handler.sessionPartitionMap());
+            handler.sessionPartitionMap());
         ArrayList<TopicIdPartition> expectedToSend1 = new ArrayList<>();
         expectedToSend1.add(new TopicIdPartition(topicId, 0, "foo"));
         assertListEquals(expectedToSend1, reqFetchList(requestData1, topicNames));

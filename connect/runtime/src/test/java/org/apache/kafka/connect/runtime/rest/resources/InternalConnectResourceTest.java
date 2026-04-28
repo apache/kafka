@@ -64,10 +64,12 @@ public class InternalConnectResourceTest {
     private static final String CONNECTOR_NAME = "test";
     private static final HttpHeaders NULL_HEADERS = null;
     private static final List<Map<String, String>> TASK_CONFIGS = new ArrayList<>();
+
     static {
         TASK_CONFIGS.add(Map.of("config", "value"));
         TASK_CONFIGS.add(Map.of("config", "other_value"));
     }
+
     private static final String FENCE_PATH = "/connectors/" + CONNECTOR_NAME + "/fence";
     private static final String TASK_CONFIGS_PATH = "/connectors/" + CONNECTOR_NAME + "/tasks";
     private static final RestRequestTimeout REST_REQUEST_TIMEOUT = RestRequestTimeout.constant(

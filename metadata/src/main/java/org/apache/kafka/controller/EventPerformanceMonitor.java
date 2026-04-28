@@ -61,8 +61,8 @@ class EventPerformanceMonitor {
         EventPerformanceMonitor build() {
             if (logContext == null) logContext = new LogContext();
             return new EventPerformanceMonitor(logContext,
-                    periodNs,
-                    alwaysLogThresholdNs);
+                periodNs,
+                alwaysLogThresholdNs);
         }
     }
 

@@ -99,8 +99,8 @@ public class RepartitionTopicNamingTest {
     public void shouldNotFailWithSameRepartitionTopicNameUsingSameKGroupedStream() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KGroupedStream<String, String> kGroupedStream = builder.<String, String>stream("topic")
-                                                                     .selectKey((k, v) -> k)
-                                                                     .groupByKey(Grouped.as("grouping"));
+            .selectKey((k, v) -> k)
+            .groupByKey(Grouped.as("grouping"));
 
         kGroupedStream.windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMillis(10L))).count().toStream().to("output-one");
         kGroupedStream.windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMillis(30L))).count().toStream().to("output-two");
@@ -114,8 +114,8 @@ public class RepartitionTopicNamingTest {
     public void shouldNotFailWithSameRepartitionTopicNameUsingSameTimeWindowStream() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KGroupedStream<String, String> kGroupedStream = builder.<String, String>stream("topic")
-                                                                     .selectKey((k, v) -> k)
-                                                                     .groupByKey(Grouped.as("grouping"));
+            .selectKey((k, v) -> k)
+            .groupByKey(Grouped.as("grouping"));
 
         final TimeWindowedKStream<String, String> timeWindowedKStream = kGroupedStream.windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMillis(10L)));
 
@@ -132,8 +132,8 @@ public class RepartitionTopicNamingTest {
     public void shouldNotFailWithSameRepartitionTopicNameUsingSameSessionWindowStream() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KGroupedStream<String, String> kGroupedStream = builder.<String, String>stream("topic")
-                                                                     .selectKey((k, v) -> k)
-                                                                     .groupByKey(Grouped.as("grouping"));
+            .selectKey((k, v) -> k)
+            .groupByKey(Grouped.as("grouping"));
 
         final SessionWindowedKStream<String, String> sessionWindowedKStream = kGroupedStream.windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMillis(10L)));
 
@@ -150,7 +150,7 @@ public class RepartitionTopicNamingTest {
     public void shouldNotFailWithSameRepartitionTopicNameUsingSameKGroupedTable() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KGroupedTable<String, String> kGroupedTable = builder.<String, String>table("topic")
-                                                                   .groupBy(KeyValue::pair, Grouped.as("grouping"));
+            .groupBy(KeyValue::pair, Grouped.as("grouping"));
         kGroupedTable.count().toStream().to("output-count");
         kGroupedTable.reduce((v, v2) -> v2, (v, v2) -> v2).toStream().to("output-reduce");
         final String topologyString = builder.build().describe().toString();
@@ -162,8 +162,8 @@ public class RepartitionTopicNamingTest {
     public void shouldNotReuseRepartitionNodeWithUnnamedRepartitionTopics() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KGroupedStream<String, String> kGroupedStream = builder.<String, String>stream("topic")
-                                                                     .selectKey((k, v) -> k)
-                                                                     .groupByKey();
+            .selectKey((k, v) -> k)
+            .groupByKey();
         kGroupedStream.windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMillis(10L))).count().toStream().to("output-one");
         kGroupedStream.windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMillis(30L))).count().toStream().to("output-two");
         final String topologyString = builder.build().describe().toString();
@@ -184,8 +184,8 @@ public class RepartitionTopicNamingTest {
     public void shouldNotFailWithSameRepartitionTopicNameUsingSameKGroupedStreamOptimizationsOn() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KGroupedStream<String, String> kGroupedStream = builder.<String, String>stream("topic")
-                                                                     .selectKey((k, v) -> k)
-                                                                     .groupByKey(Grouped.as("grouping"));
+            .selectKey((k, v) -> k)
+            .groupByKey(Grouped.as("grouping"));
         kGroupedStream.windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMillis(10L))).count();
         kGroupedStream.windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMillis(30L))).count();
         final Properties properties = new Properties();
@@ -219,8 +219,8 @@ public class RepartitionTopicNamingTest {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final KGroupedStream<String, String> kGroupedStream = builder.<String, String>stream("topic")
-                                                                     .selectKey((k, v) -> k)
-                                                                     .groupByKey(Grouped.as("grouping"));
+            .selectKey((k, v) -> k)
+            .groupByKey(Grouped.as("grouping"));
         kGroupedStream.windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMillis(10L))).count();
         kGroupedStream.windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMillis(30L))).count();
         builder.build(properties);
@@ -491,27 +491,27 @@ public class RepartitionTopicNamingTest {
         final KStream<String, String> mappedStream = sourceStream.map((k, v) -> KeyValue.pair(k.toUpperCase(Locale.getDefault()), v));
 
         mappedStream.filter((k, v) -> k.equals("B")).mapValues(v -> v.toUpperCase(Locale.getDefault()))
-                .process(() -> new SimpleProcessor(processorValueCollector));
+            .process(() -> new SimpleProcessor(processorValueCollector));
 
         final KStream<String, Long> countStream = mappedStream.groupByKey(Grouped.as(firstRepartitionTopicName)).count(Materialized.with(Serdes.String(), Serdes.Long())).toStream();
 
         countStream.to(COUNT_TOPIC, Produced.with(Serdes.String(), Serdes.Long()));
 
         mappedStream.groupByKey(Grouped.as(secondRepartitionTopicName)).aggregate(initializer,
-                aggregator,
-                Materialized.with(Serdes.String(), Serdes.Integer()))
-                .toStream().to(AGGREGATION_TOPIC, Produced.with(Serdes.String(), Serdes.Integer()));
+            aggregator,
+            Materialized.with(Serdes.String(), Serdes.Integer()))
+            .toStream().to(AGGREGATION_TOPIC, Produced.with(Serdes.String(), Serdes.Integer()));
 
         // adding operators for case where the repartition node is further downstream
         mappedStream.filter((k, v) -> true).peek((k, v) -> System.out.println(k + ":" + v)).groupByKey(Grouped.as(thirdRepartitionTopicName))
-                .reduce(reducer, Materialized.with(Serdes.String(), Serdes.String()))
-                .toStream().to(REDUCE_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
+            .reduce(reducer, Materialized.with(Serdes.String(), Serdes.String()))
+            .toStream().to(REDUCE_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
 
         mappedStream.filter((k, v) -> k.equals("A"))
-                .join(countStream, (v1, v2) -> v1 + ":" + v2.toString(),
-                        JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMillis(5000L)),
-                        StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.Long()).withStoreName(fourthRepartitionTopicName).withName(fourthRepartitionTopicName))
-                .to(JOINED_TOPIC);
+            .join(countStream, (v1, v2) -> v1 + ":" + v2.toString(),
+                JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMillis(5000L)),
+                StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.Long()).withStoreName(fourthRepartitionTopicName).withName(fourthRepartitionTopicName))
+            .to(JOINED_TOPIC);
 
         final Properties properties = new Properties();
 

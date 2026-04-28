@@ -112,7 +112,7 @@ class AdminApiDriverTest {
     public void testKeyLookupFailure() {
         // Ensure that both generic failures and unhandled UnsupportedVersionExceptions (which could be specifically
         // handled in both the lookup and the fulfillment stages) result in the expected lookup failures.
-        Exception[] keyLookupExceptions = new Exception[] {
+        Exception[] keyLookupExceptions = new Exception[]{
             new UnknownServerException(), new UnsupportedVersionException("")
         };
         for (Exception keyLookupException : keyLookupExceptions) {
@@ -399,7 +399,7 @@ class AdminApiDriverTest {
         Set<String> groupIds = Set.of("g1", "g2");
         DeleteConsumerGroupsHandler handler = new DeleteConsumerGroupsHandler(lc);
         AdminApiFuture<CoordinatorKey, Void> future = AdminApiFuture.forKeys(
-                groupIds.stream().map(CoordinatorKey::byGroupId).collect(Collectors.toSet()));
+            groupIds.stream().map(CoordinatorKey::byGroupId).collect(Collectors.toSet()));
 
         AdminApiDriver<CoordinatorKey, Void> driver = new AdminApiDriver<>(
             handler,
@@ -545,14 +545,14 @@ class AdminApiDriverTest {
         RequestSpec<String> retrySpec = retrySpecs.get(0);
         assertEquals(1, retrySpec.tries);
         assertEquals(ctx.time.milliseconds(), retrySpec.nextAllowedTryMs,
-                (long) (RETRY_BACKOFF_MS * CommonClientConfigs.RETRY_BACKOFF_JITTER));
+            (long) (RETRY_BACKOFF_MS * CommonClientConfigs.RETRY_BACKOFF_JITTER));
     }
 
     private static void assertMappedKey(
         TestContext context,
         String key,
         Integer expectedBrokerId
-    )  {
+    ) {
         OptionalInt brokerIdOpt = context.driver.keyToBrokerId(key);
         assertEquals(OptionalInt.of(expectedBrokerId), brokerIdOpt);
     }

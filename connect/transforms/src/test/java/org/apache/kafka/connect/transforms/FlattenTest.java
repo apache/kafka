@@ -196,8 +196,8 @@ public class FlattenTest {
         Schema schema = builder.build();
 
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null,
-            "topic", 0,
-            schema, null));
+                "topic", 0,
+                schema, null));
 
         assertEquals(Schema.Type.STRUCT, transformed.valueSchema().type());
         assertNull(transformed.value());
@@ -219,8 +219,8 @@ public class FlattenTest {
         oneLevelNestedStruct.put("B", null);
 
         SourceRecord transformed = xformValue.apply(new SourceRecord(null, null,
-            "topic", 0,
-            oneLevelNestedSchema, oneLevelNestedStruct));
+                "topic", 0,
+                oneLevelNestedSchema, oneLevelNestedStruct));
 
         assertEquals(Schema.Type.STRUCT, transformed.valueSchema().type());
         Struct transformedStruct = (Struct) transformed.value();
@@ -276,15 +276,15 @@ public class FlattenTest {
         Schema nestedStructSchema = SchemaBuilder.struct().field("lfg", Schema.STRING_SCHEMA).build();
         Schema innerStructSchema = SchemaBuilder.struct().field("baz", nestedStructSchema).build();
         Schema structSchema = SchemaBuilder.struct()
-            .field("foo", SchemaBuilder.array(innerStructSchema).doc("durk").build())
-            .build();
+                .field("foo", SchemaBuilder.array(innerStructSchema).doc("durk").build())
+                .build();
         Struct nestedValue = new Struct(nestedStructSchema);
         nestedValue.put("lfg", "lfg");
         Struct innerValue = new Struct(innerStructSchema);
         innerValue.put("baz", nestedValue);
         Struct value = new Struct(structSchema);
         value.put("foo", List.of(innerValue));
-        SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", null, null, structSchema, value)); 
+        SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", null, null, structSchema, value));
         assertEquals(value, transformed.value());
         assertEquals(structSchema, transformed.valueSchema());
     }
@@ -370,12 +370,12 @@ public class FlattenTest {
         xformValue.configure(Map.of());
 
         final Schema structSchema = SchemaBuilder.struct()
-            .field("firstNull", Schema.OPTIONAL_STRING_SCHEMA)
-            .field("firstNonNull", Schema.OPTIONAL_STRING_SCHEMA)
-            .field("secondNull", Schema.OPTIONAL_STRING_SCHEMA)
-            .field("secondNonNull", Schema.OPTIONAL_STRING_SCHEMA)
-            .field("thirdNonNull", Schema.OPTIONAL_STRING_SCHEMA)
-            .build();
+                .field("firstNull", Schema.OPTIONAL_STRING_SCHEMA)
+                .field("firstNonNull", Schema.OPTIONAL_STRING_SCHEMA)
+                .field("secondNull", Schema.OPTIONAL_STRING_SCHEMA)
+                .field("secondNonNull", Schema.OPTIONAL_STRING_SCHEMA)
+                .field("thirdNonNull", Schema.OPTIONAL_STRING_SCHEMA)
+                .build();
 
         final Struct value = new Struct(structSchema);
         value.put("firstNull", null);

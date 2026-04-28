@@ -34,15 +34,15 @@ class MergedSortedCacheWindowStoreIterator extends AbstractMergedSortedCacheStor
     private final Function<byte[], Long> timestampExtractor;
 
     MergedSortedCacheWindowStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
-                                         final KeyValueIterator<Long, byte[]> storeIterator,
-                                         final boolean forward) {
+        final KeyValueIterator<Long, byte[]> storeIterator,
+        final boolean forward) {
         this(cacheIterator, storeIterator, forward, WindowKeySchema::extractStoreTimestamp);
     }
 
     MergedSortedCacheWindowStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
-                                         final KeyValueIterator<Long, byte[]> storeIterator,
-                                         final boolean forward,
-                                         final Function<byte[], Long> tsExtractor) {
+        final KeyValueIterator<Long, byte[]> storeIterator,
+        final boolean forward,
+        final Function<byte[], Long> tsExtractor) {
         super(cacheIterator, storeIterator, forward);
         this.timestampExtractor = tsExtractor;
     }

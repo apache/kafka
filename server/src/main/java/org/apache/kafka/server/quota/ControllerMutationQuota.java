@@ -23,7 +23,9 @@ package org.apache.kafka.server.quota;
  */
 public interface ControllerMutationQuota {
     boolean isExceeded();
+
     void record(double permits);
+
     int throttleTime();
 
     ControllerMutationQuota UNBOUNDED_CONTROLLER_MUTATION_QUOTA = new ControllerMutationQuota() {

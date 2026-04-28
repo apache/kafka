@@ -118,7 +118,7 @@ public final class ClientUtils {
         SecurityProtocol securityProtocol = SecurityProtocol.forName(config.getString(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
         String clientSaslMechanism = config.getString(SaslConfigs.SASL_MECHANISM);
         return ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT, config, null,
-                clientSaslMechanism, time, logContext);
+            clientSaslMechanism, time, logContext);
     }
 
     static List<InetAddress> resolve(String host, HostResolver hostResolver) throws UnknownHostException {
@@ -151,77 +151,77 @@ public final class ClientUtils {
     }
 
     public static NetworkClient createNetworkClient(AbstractConfig config,
-                                                    Metrics metrics,
-                                                    String metricsGroupPrefix,
-                                                    LogContext logContext,
-                                                    ApiVersions apiVersions,
-                                                    Time time,
-                                                    int maxInFlightRequestsPerConnection,
-                                                    Metadata metadata,
-                                                    Sensor throttleTimeSensor,
-                                                    ClientTelemetrySender clientTelemetrySender) {
+        Metrics metrics,
+        String metricsGroupPrefix,
+        LogContext logContext,
+        ApiVersions apiVersions,
+        Time time,
+        int maxInFlightRequestsPerConnection,
+        Metadata metadata,
+        Sensor throttleTimeSensor,
+        ClientTelemetrySender clientTelemetrySender) {
         return createNetworkClient(config,
-                config.getString(CommonClientConfigs.CLIENT_ID_CONFIG),
-                metrics,
-                metricsGroupPrefix,
-                logContext,
-                apiVersions,
-                time,
-                maxInFlightRequestsPerConnection,
-                config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
-                metadata,
-                null,
-                new DefaultHostResolver(),
-                throttleTimeSensor,
-                clientTelemetrySender);
+            config.getString(CommonClientConfigs.CLIENT_ID_CONFIG),
+            metrics,
+            metricsGroupPrefix,
+            logContext,
+            apiVersions,
+            time,
+            maxInFlightRequestsPerConnection,
+            config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
+            metadata,
+            null,
+            new DefaultHostResolver(),
+            throttleTimeSensor,
+            clientTelemetrySender);
     }
 
     public static NetworkClient createNetworkClient(AbstractConfig config,
-                                                    String clientId,
-                                                    Metrics metrics,
-                                                    String metricsGroupPrefix,
-                                                    LogContext logContext,
-                                                    ApiVersions apiVersions,
-                                                    Time time,
-                                                    int maxInFlightRequestsPerConnection,
-                                                    int requestTimeoutMs,
-                                                    Metadata metadata,
-                                                    MetadataUpdater metadataUpdater,
-                                                    HostResolver hostResolver,
-                                                    Sensor throttleTimeSensor,
-                                                    ClientTelemetrySender clientTelemetrySender) {
+        String clientId,
+        Metrics metrics,
+        String metricsGroupPrefix,
+        LogContext logContext,
+        ApiVersions apiVersions,
+        Time time,
+        int maxInFlightRequestsPerConnection,
+        int requestTimeoutMs,
+        Metadata metadata,
+        MetadataUpdater metadataUpdater,
+        HostResolver hostResolver,
+        Sensor throttleTimeSensor,
+        ClientTelemetrySender clientTelemetrySender) {
         ChannelBuilder channelBuilder = null;
         Selector selector = null;
 
         try {
             channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
             selector = new Selector(config.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG),
-                    metrics,
-                    time,
-                    metricsGroupPrefix,
-                    channelBuilder,
-                    logContext);
+                metrics,
+                time,
+                metricsGroupPrefix,
+                channelBuilder,
+                logContext);
             return new NetworkClient(metadataUpdater,
-                    metadata,
-                    selector,
-                    clientId,
-                    maxInFlightRequestsPerConnection,
-                    config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG),
-                    config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG),
-                    config.getInt(CommonClientConfigs.SEND_BUFFER_CONFIG),
-                    config.getInt(CommonClientConfigs.RECEIVE_BUFFER_CONFIG),
-                    requestTimeoutMs,
-                    config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
-                    config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
-                    time,
-                    true,
-                    apiVersions,
-                    throttleTimeSensor,
-                    logContext,
-                    hostResolver,
-                    clientTelemetrySender,
-                    config.getLong(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG),
-                    MetadataRecoveryStrategy.forName(config.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG))
+                metadata,
+                selector,
+                clientId,
+                maxInFlightRequestsPerConnection,
+                config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG),
+                config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG),
+                config.getInt(CommonClientConfigs.SEND_BUFFER_CONFIG),
+                config.getInt(CommonClientConfigs.RECEIVE_BUFFER_CONFIG),
+                requestTimeoutMs,
+                config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
+                config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
+                time,
+                true,
+                apiVersions,
+                throttleTimeSensor,
+                logContext,
+                hostResolver,
+                clientTelemetrySender,
+                config.getLong(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG),
+                MetadataRecoveryStrategy.forName(config.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG))
             );
         } catch (Throwable t) {
             closeQuietly(selector, "Selector");
@@ -231,19 +231,19 @@ public final class ClientUtils {
     }
 
     public static <T> List<?> configuredInterceptors(AbstractConfig config,
-                                                    String interceptorClassesConfigName,
-                                                    Class<T> clazz) {
+        String interceptorClassesConfigName,
+        Class<T> clazz) {
         String clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
         return config.getConfiguredInstances(
-                interceptorClassesConfigName,
-                clazz,
-                Collections.singletonMap(CommonClientConfigs.CLIENT_ID_CONFIG, clientId));
+            interceptorClassesConfigName,
+            clazz,
+            Collections.singletonMap(CommonClientConfigs.CLIENT_ID_CONFIG, clientId));
     }
 
     public static ClusterResourceListeners configureClusterResourceListeners(List<?>... candidateLists) {
         ClusterResourceListeners clusterResourceListeners = new ClusterResourceListeners();
 
-        for (List<?> candidateList: candidateLists)
+        for (List<?> candidateList : candidateLists)
             clusterResourceListeners.maybeAddAll(candidateList);
 
         return clusterResourceListeners;

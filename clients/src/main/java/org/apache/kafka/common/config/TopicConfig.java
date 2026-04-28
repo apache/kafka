@@ -82,29 +82,29 @@ public class TopicConfig {
 
     public static final String REMOTE_LOG_STORAGE_ENABLE_CONFIG = "remote.storage.enable";
     public static final String REMOTE_LOG_STORAGE_ENABLE_DOC = "To enable tiered storage for a topic, set this configuration to true. " +
-            "To disable tiered storage for a topic that has it enabled, set this configuration to false. " +
-            "When disabling, you must also set <code>remote.log.delete.on.disable</code> to true.";
+        "To disable tiered storage for a topic that has it enabled, set this configuration to false. " +
+        "When disabling, you must also set <code>remote.log.delete.on.disable</code> to true.";
 
     public static final String LOCAL_LOG_RETENTION_MS_CONFIG = "local.retention.ms";
     public static final String LOCAL_LOG_RETENTION_MS_DOC = "The number of milliseconds to keep the local log segment before it gets deleted. " +
-            "Default value is -2, it represents <code>retention.ms</code> value is to be used. The effective value should always be less than or equal " +
-            "to <code>retention.ms</code> value.";
+        "Default value is -2, it represents <code>retention.ms</code> value is to be used. The effective value should always be less than or equal " +
+        "to <code>retention.ms</code> value.";
 
     public static final String LOCAL_LOG_RETENTION_BYTES_CONFIG = "local.retention.bytes";
     public static final String LOCAL_LOG_RETENTION_BYTES_DOC = "The maximum size of local log segments that can grow for a partition before it " +
-            "deletes the old segments. Default value is -2, it represents <code>retention.bytes</code> value to be used. The effective value should always be " +
-            "less than or equal to <code>retention.bytes</code> value.";
+        "deletes the old segments. Default value is -2, it represents <code>retention.bytes</code> value to be used. The effective value should always be " +
+        "less than or equal to <code>retention.bytes</code> value.";
 
     public static final String REMOTE_LOG_COPY_DISABLE_CONFIG = "remote.log.copy.disable";
     public static final String REMOTE_LOG_COPY_DISABLE_DOC = "Determines whether tiered data for a topic should become read only," +
-            " and no more data uploading on a topic. Once this config is set to true, the local retention configuration " +
-            "(i.e. local.retention.ms/bytes) becomes irrelevant, and all data expiration follows the topic-wide retention configuration" +
-            "(i.e. retention.ms/bytes).";
+        " and no more data uploading on a topic. Once this config is set to true, the local retention configuration " +
+        "(i.e. local.retention.ms/bytes) becomes irrelevant, and all data expiration follows the topic-wide retention configuration" +
+        "(i.e. retention.ms/bytes).";
 
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = "remote.log.delete.on.disable";
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_DOC = "Determines whether tiered data for a topic should be " +
-            "deleted after tiered storage is disabled on a topic. This configuration should be enabled when trying to " +
-            "set <code>remote.storage.enable</code> from true to false";
+        "deleted after tiered storage is disabled on a topic. This configuration should be enabled when trying to " +
+        "set <code>remote.storage.enable</code> from true to false";
 
     public static final String MAX_MESSAGE_BYTES_CONFIG = "max.message.bytes";
     public static final String MAX_MESSAGE_BYTES_DOC =
@@ -112,11 +112,11 @@ public class TopicConfig {
 
     public static final String INDEX_INTERVAL_BYTES_CONFIG = "index.interval.bytes";
     public static final String INDEX_INTERVAL_BYTES_DOC = "This setting controls how frequently Kafka " +
-            "adds entries to its offset index and, conditionally, to its time index. " +
-            "The default setting ensures that we index a message roughly every 4096 bytes. " +
-            "More frequent indexing allows reads to jump closer to the exact position in the log " +
-            "but results in larger index files. You probably don't need to change this." +
-            "<p> Note: the time index will be inserted only when the timestamp is greater than the last indexed timestamp.</p>";
+        "adds entries to its offset index and, conditionally, to its time index. " +
+        "The default setting ensures that we index a message roughly every 4096 bytes. " +
+        "More frequent indexing allows reads to jump closer to the exact position in the log " +
+        "but results in larger index files. You probably don't need to change this." +
+        "<p> Note: the time index will be inserted only when the timestamp is greater than the last indexed timestamp.</p>";
 
     public static final String FILE_DELETE_DELAY_MS_CONFIG = "file.delete.delay.ms";
     public static final String FILE_DELETE_DELAY_MS_DOC = "The time to wait before deleting a file from the " +
@@ -169,7 +169,7 @@ public class TopicConfig {
         "not in the ISR set to be elected as leader as a last resort, even though doing so may result in data " +
         "loss.<p>Note: In KRaft mode, when enabling this config dynamically, it needs to wait for the unclean leader election" +
         "thread to trigger election periodically (default is 5 minutes). Please run <code>kafka-leader-election.sh</code> with <code>unclean</code> option " +
-         "to trigger the unclean leader election immediately if needed.</p>";
+        "to trigger the unclean leader election immediately if needed.</p>";
 
     public static final String MIN_IN_SYNC_REPLICAS_CONFIG = "min.insync.replicas";
     public static final String MIN_IN_SYNC_REPLICAS_DOC = "Specifies the <i>minimum</i> number of in-sync replicas (including the leader) " +

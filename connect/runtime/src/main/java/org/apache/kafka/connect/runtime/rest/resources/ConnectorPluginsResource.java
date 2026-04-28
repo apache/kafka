@@ -92,15 +92,15 @@ public class ConnectorPluginsResource {
     @Path("/{pluginName}/config/validate")
     @Operation(summary = "Validate the provided configuration against the configuration definition for the specified pluginName")
     public ConfigInfos validateConfigs(
-        final @PathParam("pluginName") String pluginName,
-        final Map<String, String> connectorConfig
+            final @PathParam("pluginName") String pluginName,
+            final Map<String, String> connectorConfig
     ) throws Throwable {
         String includedConnType = connectorConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
         if (includedConnType != null
-            && !normalizedPluginName(includedConnType).endsWith(normalizedPluginName(pluginName))) {
+                && !normalizedPluginName(includedConnType).endsWith(normalizedPluginName(pluginName))) {
             throw new BadRequestException(
-                "Included connector type " + includedConnType + " does not match request type "
-                    + pluginName
+                    "Included connector type " + includedConnType + " does not match request type "
+                            + pluginName
             );
         }
 
@@ -143,8 +143,8 @@ public class ConnectorPluginsResource {
         synchronized (this) {
             if (connectorsOnly) {
                 return connectorPlugins.stream()
-                    .filter(p -> p.type() == PluginType.SINK || p.type() == PluginType.SOURCE)
-                    .toList();
+                        .filter(p -> p.type() == PluginType.SINK || p.type() == PluginType.SOURCE)
+                        .toList();
             } else {
                 return List.copyOf(connectorPlugins);
             }
@@ -155,7 +155,7 @@ public class ConnectorPluginsResource {
     @Path("/{pluginName}/config")
     @Operation(summary = "Get the configuration definition for the specified pluginName")
     public List<ConfigKeyInfo> getConnectorConfigDef(final @PathParam("pluginName") String pluginName,
-                                                     final @QueryParam("version") @DefaultValue("latest") String version) {
+            final @QueryParam("version") @DefaultValue("latest") String version) {
 
         VersionRange range;
         try {
@@ -172,8 +172,8 @@ public class ConnectorPluginsResource {
     private String normalizedPluginName(String pluginName) {
         // Works for both full and simple class names. In the latter case, it generates the alias.
         return pluginName.endsWith(ALIAS_SUFFIX) && pluginName.length() > ALIAS_SUFFIX.length()
-            ? pluginName.substring(0, pluginName.length() - ALIAS_SUFFIX.length())
-            : pluginName;
+                ? pluginName.substring(0, pluginName.length() - ALIAS_SUFFIX.length())
+                : pluginName;
     }
 
 }

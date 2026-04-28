@@ -34,7 +34,7 @@ public class ThreadUtilsTest {
     @Test
     public void testThreadNameWithoutNumberNoDemon() {
         assertEquals(THREAD_NAME, ThreadUtils.createThreadFactory(THREAD_NAME, false).
-                newThread(EMPTY_RUNNABLE).getName());
+            newThread(EMPTY_RUNNABLE).getName());
     }
 
     @Test

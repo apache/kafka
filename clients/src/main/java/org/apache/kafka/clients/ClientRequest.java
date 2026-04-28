@@ -45,13 +45,13 @@ public final class ClientRequest {
      * @param callback A callback to execute when the response has been received (or null if no callback is necessary)
      */
     public ClientRequest(String destination,
-                         AbstractRequest.Builder<?> requestBuilder,
-                         int correlationId,
-                         String clientId,
-                         long createdTimeMs,
-                         boolean expectResponse,
-                         int requestTimeoutMs,
-                         RequestCompletionHandler callback) {
+        AbstractRequest.Builder<?> requestBuilder,
+        int correlationId,
+        String clientId,
+        long createdTimeMs,
+        boolean expectResponse,
+        int requestTimeoutMs,
+        RequestCompletionHandler callback) {
         this.destination = destination;
         this.requestBuilder = requestBuilder;
         this.correlationId = correlationId;

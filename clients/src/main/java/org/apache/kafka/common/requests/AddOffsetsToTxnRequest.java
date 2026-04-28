@@ -58,8 +58,8 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
     @Override
     public AddOffsetsToTxnResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         return new AddOffsetsToTxnResponse(new AddOffsetsToTxnResponseData()
-                                               .setErrorCode(Errors.forException(e).code())
-                                               .setThrottleTimeMs(throttleTimeMs));
+            .setErrorCode(Errors.forException(e).code())
+            .setThrottleTimeMs(throttleTimeMs));
     }
 
     public static AddOffsetsToTxnRequest parse(Readable readable, short version) {

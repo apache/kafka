@@ -55,31 +55,31 @@ public class TransactionLogMessageFormatterTest extends CoordinatorRecordMessage
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, TXN_LOG_KEY).array(),
                 MessageUtil.toVersionPrefixedByteBuffer((short) 1, TXN_LOG_VALUE).array(),
                 """
-                    {"key":{"type":0,"data":{"transactionalId":"TXNID"}},
-                     "value":{"version":1,
-                              "data":{"producerId":100,
-                                      "producerEpoch":50,
-                                      "transactionTimeoutMs":500,
-                                      "transactionStatus":4,
-                                      "transactionPartitions":[],
-                                      "transactionLastUpdateTimestampMs":1000,
-                                      "transactionStartTimestampMs":750}}}
-                """
+                        {"key":{"type":0,"data":{"transactionalId":"TXNID"}},
+                         "value":{"version":1,
+                                  "data":{"producerId":100,
+                                          "producerEpoch":50,
+                                          "transactionTimeoutMs":500,
+                                          "transactionStatus":4,
+                                          "transactionPartitions":[],
+                                          "transactionLastUpdateTimestampMs":1000,
+                                          "transactionStartTimestampMs":750}}}
+                    """
             ),
             Arguments.of(
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, TXN_LOG_KEY).array(),
                 MessageUtil.toVersionPrefixedByteBuffer((short) 1, TXN_LOG_VALUE).array(),
                 """
-                    {"key":{"type":0,"data":{"transactionalId":"TXNID"}},
-                     "value":{"version":1,
-                              "data":{"producerId":100,
-                                      "producerEpoch":50,
-                                      "transactionTimeoutMs":500,
-                                      "transactionStatus":4,
-                                      "transactionPartitions":[],
-                                      "transactionLastUpdateTimestampMs":1000,
-                                      "transactionStartTimestampMs":750}}}
-                """
+                        {"key":{"type":0,"data":{"transactionalId":"TXNID"}},
+                         "value":{"version":1,
+                                  "data":{"producerId":100,
+                                          "producerEpoch":50,
+                                          "transactionTimeoutMs":500,
+                                          "transactionStatus":4,
+                                          "transactionPartitions":[],
+                                          "transactionLastUpdateTimestampMs":1000,
+                                          "transactionStartTimestampMs":750}}}
+                    """
             ),
             Arguments.of(
                 MessageUtil.toVersionPrefixedByteBuffer((short) 1, TXN_LOG_KEY).array(),
@@ -90,8 +90,8 @@ public class TransactionLogMessageFormatterTest extends CoordinatorRecordMessage
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, TXN_LOG_KEY).array(),
                 null,
                 """
-                    {"key":{"type":0,"data":{"transactionalId":"TXNID"}},"value":null}
-                """
+                        {"key":{"type":0,"data":{"transactionalId":"TXNID"}},"value":null}
+                    """
             ),
             Arguments.of(
                 null,

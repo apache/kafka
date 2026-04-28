@@ -44,6 +44,7 @@ public class ListSerializerTest {
     private final ListSerializer<?> listSerializer = new ListSerializer<>();
     private final Map<String, Object> props = new HashMap<>();
     private final String nonExistingClass = "non.existing.class";
+
     private static class FakeObject {
     }
 

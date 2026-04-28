@@ -69,16 +69,16 @@ public class AlterUserScramCredentialsRequest extends AbstractRequest {
         short errorCode = apiError.error().code();
         String errorMessage = apiError.message();
         Set<String> users = Stream.concat(
-                this.data.deletions().stream().map(deletion -> deletion.name()),
-                this.data.upsertions().stream().map(upsertion -> upsertion.name()))
-                .collect(Collectors.toSet());
+            this.data.deletions().stream().map(deletion -> deletion.name()),
+            this.data.upsertions().stream().map(upsertion -> upsertion.name()))
+            .collect(Collectors.toSet());
         List<AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult> results =
-                users.stream().sorted().map(user ->
-                        new AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult()
-                                .setUser(user)
-                                .setErrorCode(errorCode)
-                                .setErrorMessage(errorMessage))
-                        .collect(Collectors.toList());
+            users.stream().sorted().map(user ->
+                new AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult()
+                    .setUser(user)
+                    .setErrorCode(errorCode)
+                    .setErrorMessage(errorMessage))
+                .collect(Collectors.toList());
         return new AlterUserScramCredentialsResponse(new AlterUserScramCredentialsResponseData().setResults(results));
     }
 

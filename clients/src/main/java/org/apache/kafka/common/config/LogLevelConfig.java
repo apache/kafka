@@ -63,7 +63,7 @@ public class LogLevelConfig {
     public static final String TRACE_LOG_LEVEL = "TRACE";
 
     public static final Set<String> VALID_LOG_LEVELS = Set.of(
-            FATAL_LOG_LEVEL, ERROR_LOG_LEVEL, WARN_LOG_LEVEL,
-            INFO_LOG_LEVEL, DEBUG_LOG_LEVEL, TRACE_LOG_LEVEL
+        FATAL_LOG_LEVEL, ERROR_LOG_LEVEL, WARN_LOG_LEVEL,
+        INFO_LOG_LEVEL, DEBUG_LOG_LEVEL, TRACE_LOG_LEVEL
     );
 }

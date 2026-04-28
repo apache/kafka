@@ -513,13 +513,13 @@ public class ClientTelemetryReporterTest {
         telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
 
         try (MockedStatic<ClientTelemetryUtils> mockedCompress = Mockito.mockStatic(ClientTelemetryUtils.class, new CallsRealMethods())) {
-            
+
             // === Test 1: NoClassDefFoundError fallback (recoverable) ===
             mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.ZSTD)))
-                    .thenThrow(new NoClassDefFoundError("com/github/luben/zstd/BufferPool"));
-            
+                .thenThrow(new NoClassDefFoundError("com/github/luben/zstd/BufferPool"));
+
             assertEquals(ClientTelemetryState.PUSH_NEEDED, telemetrySender.state());
-            
+
             Optional<AbstractRequest.Builder<?>> request1 = telemetrySender.createRequest();
             assertNotNull(request1);
             assertTrue(request1.isPresent());
@@ -527,20 +527,20 @@ public class ClientTelemetryReporterTest {
             PushTelemetryRequest pushRequest1 = (PushTelemetryRequest) request1.get().build();
             assertEquals(CompressionType.NONE.id, pushRequest1.data().compressionType()); // Fallback to NONE
             assertEquals(ClientTelemetryState.PUSH_IN_PROGRESS, telemetrySender.state());
-            
+
             // Reset state (simulate successful response handling)
             assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
-            
+
             // === Test 2: OutOfMemoryError causes termination (non-recoverable Error) ===
             mockedCompress.reset();
             mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.LZ4)))
-                    .thenThrow(new OutOfMemoryError("Out of memory during compression"));
-            
+                .thenThrow(new OutOfMemoryError("Out of memory during compression"));
+
             assertEquals(ClientTelemetryState.PUSH_NEEDED, telemetrySender.state());
 
             assertThrows(KafkaException.class, telemetrySender::createRequest);
             assertEquals(ClientTelemetryState.TERMINATED, telemetrySender.state());
-            
+
             // === Test 3: After termination, no more requests ===
             Optional<AbstractRequest.Builder<?>> request3 = telemetrySender.createRequest();
             assertNotNull(request3);
@@ -954,7 +954,7 @@ public class ClientTelemetryReporterTest {
         telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
 
-        KafkaException wrappedException = new KafkaException("Version check failed", 
+        KafkaException wrappedException = new KafkaException("Version check failed",
             new UnsupportedVersionException("Broker doesn't support telemetry"));
         telemetrySender.handleFailedGetTelemetrySubscriptionsRequest(wrappedException);
 
@@ -1009,7 +1009,7 @@ public class ClientTelemetryReporterTest {
         assertEquals(ClientTelemetryReporter.DEFAULT_PUSH_INTERVAL_MS, telemetrySender.intervalMs());
         assertTrue(telemetrySender.enabled());
     }
-    
+
     @Test
     public void testHandleFailedRequestWithGenericKafkaException() {
         ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();

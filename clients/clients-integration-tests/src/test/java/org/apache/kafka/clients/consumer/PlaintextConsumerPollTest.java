@@ -344,7 +344,7 @@ public class PlaintextConsumerPollTest {
                 "partition", String.valueOf(tp.partition())
             );
             var lead = consumer.metrics()
-                    .get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags));
+                .get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags));
             assertEquals(maxPollRecords, (Double) lead.metricValue(), "The lead should be " + maxPollRecords);
         }
     }
@@ -379,7 +379,7 @@ public class PlaintextConsumerPollTest {
                 "partition", String.valueOf(tp.partition())
             );
             var lag = consumer.metrics()
-                    .get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags));
+                .get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags));
 
             // Count the number of records received
             var recordCount = records.count();
@@ -461,7 +461,7 @@ public class PlaintextConsumerPollTest {
                     timeoutConsumer.close();
 
                 validateGroupAssignment(consumerPollers, subscriptions,
-                        "Did not get valid assignment for partitions " + subscriptions + " after one consumer left");
+                    "Did not get valid assignment for partitions " + subscriptions + " after one consumer left");
             } finally {
                 // done with pollers and consumers
                 for (ConsumerAssignmentPoller poller : consumerPollers)
@@ -662,13 +662,13 @@ public class PlaintextConsumerPollTest {
     ) throws InterruptedException {
         List<Set<TopicPartition>> assignments = new ArrayList<>();
         TestUtils.waitForCondition(() -> {
-            assignments.clear();
-            for (ConsumerAssignmentPoller poller : consumerPollers) {
-                assignments.add(poller.consumerAssignment());
-            }
-            return isPartitionAssignmentValid(assignments, subscriptions);
-        }, GROUP_MAX_SESSION_TIMEOUT_MS * 3,
-                () -> msg != null ? msg : "Did not get valid assignment for partitions " + subscriptions + ". Instead, got " + assignments
+                assignments.clear();
+                for (ConsumerAssignmentPoller poller : consumerPollers) {
+                    assignments.add(poller.consumerAssignment());
+                }
+                return isPartitionAssignmentValid(assignments, subscriptions);
+            }, GROUP_MAX_SESSION_TIMEOUT_MS * 3,
+            () -> msg != null ? msg : "Did not get valid assignment for partitions " + subscriptions + ". Instead, got " + assignments
         );
     }
 

@@ -29,10 +29,10 @@ import java.util.Map;
  * Convenience class for making asynchronous requests to the OffsetsForLeaderEpoch API
  */
 public class OffsetsForLeaderEpochClient extends AsyncClient<
-        Map<TopicPartition, SubscriptionState.FetchPosition>,
-        OffsetsForLeaderEpochRequest,
-        OffsetsForLeaderEpochResponse,
-        OffsetsForLeaderEpochUtils.OffsetForEpochResult> {
+    Map<TopicPartition, SubscriptionState.FetchPosition>,
+    OffsetsForLeaderEpochRequest,
+    OffsetsForLeaderEpochResponse,
+    OffsetsForLeaderEpochUtils.OffsetForEpochResult> {
 
     OffsetsForLeaderEpochClient(ConsumerNetworkClient client, LogContext logContext) {
         super(client, logContext);
@@ -40,15 +40,15 @@ public class OffsetsForLeaderEpochClient extends AsyncClient<
 
     @Override
     protected AbstractRequest.Builder<OffsetsForLeaderEpochRequest> prepareRequest(
-            Node node, Map<TopicPartition, SubscriptionState.FetchPosition> requestData) {
+        Node node, Map<TopicPartition, SubscriptionState.FetchPosition> requestData) {
         return OffsetsForLeaderEpochUtils.prepareRequest(requestData);
     }
 
     @Override
     protected OffsetsForLeaderEpochUtils.OffsetForEpochResult handleResponse(
-            Node node,
-            Map<TopicPartition, SubscriptionState.FetchPosition> requestData,
-            OffsetsForLeaderEpochResponse response) {
+        Node node,
+        Map<TopicPartition, SubscriptionState.FetchPosition> requestData,
+        OffsetsForLeaderEpochResponse response) {
 
         return OffsetsForLeaderEpochUtils.handleResponse(requestData, response);
     }

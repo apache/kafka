@@ -38,7 +38,7 @@ public class NoOpTaskWorker implements TaskWorker {
 
     @Override
     public void start(Platform platform, WorkerStatusTracker status,
-                      KafkaFutureImpl<String> errorFuture) throws Exception {
+        KafkaFutureImpl<String> errorFuture) throws Exception {
         log.info("{}: Activating NoOpTask.", id);
         this.status = status;
         this.status.update(new TextNode("active"));

@@ -30,7 +30,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 public class StreamsThreadMetricsDelegatingReporter implements MetricsReporter {
-    
+
     private static final Logger log = LoggerFactory.getLogger(StreamsThreadMetricsDelegatingReporter.class);
     private static final String THREAD_ID_TAG = "thread-id";
     private final Consumer<byte[], byte[]> consumer;
@@ -68,7 +68,7 @@ public class StreamsThreadMetricsDelegatingReporter implements MetricsReporter {
     private boolean tagMatchStreamOrStateUpdaterThreadId(final KafkaMetric metric) {
         final Map<String, String> tags = metric.metricName().tags();
         final boolean shouldInclude = tags.containsKey(THREAD_ID_TAG) && (tags.get(THREAD_ID_TAG).equals(threadId) ||
-                Optional.ofNullable(tags.get(THREAD_ID_TAG)).equals(stateUpdaterThreadId));
+            Optional.ofNullable(tags.get(THREAD_ID_TAG)).equals(stateUpdaterThreadId));
         if (!shouldInclude) {
             log.trace("Rejecting metric {}", metric.metricName());
         }

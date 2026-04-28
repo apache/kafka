@@ -81,18 +81,18 @@ public class EligibleLeaderReplicasIntegrationTest {
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_4_0_IV1)
     public void testHighWatermarkShouldNotAdvanceIfUnderMinIsr() throws ExecutionException, InterruptedException {
         try (var admin = clusterInstance.admin();
-            var producer = clusterInstance.producer(Map.of(
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers(),
-                ProducerConfig.ACKS_CONFIG, "1"));
-            var consumer = clusterInstance.consumer(Map.of(
-                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers(),
-                ConsumerConfig.GROUP_ID_CONFIG, "test",
-                ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "10",
-                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
-                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
-                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()))) {
+             var producer = clusterInstance.producer(Map.of(
+                 ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+                 ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+                 ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers(),
+                 ProducerConfig.ACKS_CONFIG, "1"));
+             var consumer = clusterInstance.consumer(Map.of(
+                 ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers(),
+                 ConsumerConfig.GROUP_ID_CONFIG, "test",
+                 ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "10",
+                 ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
+                 ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+                 ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()))) {
             String testTopicName = String.format("%s-%s", "testHighWatermarkShouldNotAdvanceIfUnderMinIsr", "ELR-test");
             admin.updateFeatures(
                 Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,

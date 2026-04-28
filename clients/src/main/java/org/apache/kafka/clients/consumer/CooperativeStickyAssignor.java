@@ -108,7 +108,7 @@ public class CooperativeStickyAssignor extends AbstractStickyAssignor {
 
     @Override
     public Map<String, List<TopicPartition>> assignPartitions(Map<String, List<PartitionInfo>> partitionsPerTopic,
-                                                              Map<String, Subscription> subscriptions) {
+        Map<String, Subscription> subscriptions) {
         Map<String, List<TopicPartition>> assignments = super.assignPartitions(partitionsPerTopic, subscriptions);
 
         Map<TopicPartition, String> partitionsTransferringOwnership = super.partitionsTransferringOwnership == null ?
@@ -121,14 +121,14 @@ public class CooperativeStickyAssignor extends AbstractStickyAssignor {
 
     // Following the cooperative rebalancing protocol requires removing partitions that must first be revoked from the assignment
     private void adjustAssignment(Map<String, List<TopicPartition>> assignments,
-                                  Map<TopicPartition, String> partitionsTransferringOwnership) {
+        Map<TopicPartition, String> partitionsTransferringOwnership) {
         for (Map.Entry<TopicPartition, String> partitionEntry : partitionsTransferringOwnership.entrySet()) {
             assignments.get(partitionEntry.getValue()).remove(partitionEntry.getKey());
         }
     }
 
     private Map<TopicPartition, String> computePartitionsTransferringOwnership(Map<String, Subscription> subscriptions,
-                                                                               Map<String, List<TopicPartition>> assignments) {
+        Map<String, List<TopicPartition>> assignments) {
         Map<TopicPartition, String> allAddedPartitions = new HashMap<>();
         Set<TopicPartition> allRevokedPartitions = new HashSet<>();
 

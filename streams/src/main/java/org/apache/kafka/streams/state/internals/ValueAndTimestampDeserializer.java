@@ -44,21 +44,21 @@ class ValueAndTimestampDeserializer<V> implements WrappingNullableDeserializer<V
 
     @Override
     public void configure(final Map<String, ?> configs,
-                          final boolean isKey) {
+        final boolean isKey) {
         valueDeserializer.configure(configs, isKey);
         timestampDeserializer.configure(configs, isKey);
     }
 
     @Override
     public ValueAndTimestamp<V> deserialize(final String topic,
-                                            final byte[] valueAndTimestamp) {
+        final byte[] valueAndTimestamp) {
         return deserialize(topic, new RecordHeaders(), valueAndTimestamp);
     }
 
     @Override
     public ValueAndTimestamp<V> deserialize(final String topic,
-                                            final Headers headers,
-                                            final byte[] valueAndTimestamp) {
+        final Headers headers,
+        final byte[] valueAndTimestamp) {
         if (valueAndTimestamp == null) {
             return null;
         }

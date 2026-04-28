@@ -58,6 +58,7 @@ public class ByteUtilsBenchmark {
     public static class BaseBenchmarkState {
         private ByteBuffer testBuffer;
         private SecureRandom random;
+
         @Setup(Level.Trial)
         public void setUpBenchmarkLevel() {
             // Initialize the random number generator with a seed so that for each benchmark it produces the same sequence
@@ -94,8 +95,8 @@ public class ByteUtilsBenchmark {
                 throw new IllegalArgumentException();
             }
             return lowerBound +
-                random.longs(lowerBound, upperBound).findFirst()
-                    .orElseThrow(() -> new IllegalStateException("Unable to create a random long in the range=[" + lowerBound + ", " + upperBound + "]"));
+                    random.longs(lowerBound, upperBound).findFirst()
+                            .orElseThrow(() -> new IllegalStateException("Unable to create a random long in the range=[" + lowerBound + ", " + upperBound + "]"));
         }
 
         /**
@@ -315,7 +316,7 @@ public class ByteUtilsBenchmark {
     /*
      * Implementation in Trunk as of Apr 2023 / v3.4
      */
-    private static long readUnsignedVarlongLegacy(ByteBuffer buffer)  {
+    private static long readUnsignedVarlongLegacy(ByteBuffer buffer) {
         long value = 0L;
         int i = 0;
         long b;
@@ -361,11 +362,11 @@ public class ByteUtilsBenchmark {
                 x ^= y << 28;
                 x ^= (~0 << 7) ^ (~0 << 14) ^ (~0 << 21) ^ (~0 << 28);
                 if (y < 0
-                    && buffer[tempPos++] < 0
-                    && buffer[tempPos++] < 0
-                    && buffer[tempPos++] < 0
-                    && buffer[tempPos++] < 0
-                    && buffer[tempPos++] < 0) {
+                        && buffer[tempPos++] < 0
+                        && buffer[tempPos++] < 0
+                        && buffer[tempPos++] < 0
+                        && buffer[tempPos++] < 0
+                        && buffer[tempPos++] < 0) {
                     break fastpath; // Will throw malformedVarint()
                 }
             }

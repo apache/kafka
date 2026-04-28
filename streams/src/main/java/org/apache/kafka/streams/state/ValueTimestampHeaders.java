@@ -49,8 +49,8 @@ public final class ValueTimestampHeaders<V> {
      * otherwise {@code null} is returned
      */
     public static <V> ValueTimestampHeaders<V> make(final V value,
-                                                    final long timestamp,
-                                                    final Headers headers) {
+        final long timestamp,
+        final Headers headers) {
         if (value == null) {
             return null;
         }
@@ -68,8 +68,8 @@ public final class ValueTimestampHeaders<V> {
      * @return a new {@link ValueTimestampHeaders} instance
      */
     public static <V> ValueTimestampHeaders<V> makeAllowNullable(final V value,
-                                                                 final long timestamp,
-                                                                 final Headers headers) {
+        final long timestamp,
+        final Headers headers) {
         return new ValueTimestampHeaders<>(value, timestamp, headers);
     }
 

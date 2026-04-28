@@ -128,8 +128,8 @@ public class CachingKeyValueStore
     @SuppressWarnings("unchecked")
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
+        final PositionBound positionBound,
+        final QueryConfig config) {
         final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
         final QueryResult<R> result;
 
@@ -170,9 +170,9 @@ public class CachingKeyValueStore
 
     @SuppressWarnings("unchecked")
     private <R> QueryResult<R> runKeyQuery(final Query<R> query,
-                                           final Position mergedPosition,
-                                           final PositionBound positionBound,
-                                           final QueryConfig config) {
+        final Position mergedPosition,
+        final PositionBound positionBound,
+        final QueryConfig config) {
         QueryResult<R> result = null;
         final KeyQuery<Bytes, byte[]> keyQuery = (KeyQuery<Bytes, byte[]>) query;
 
@@ -207,7 +207,7 @@ public class CachingKeyValueStore
     }
 
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry,
-                                    final InternalProcessorContext<?, ?> context) {
+        final InternalProcessorContext<?, ?> context) {
         if (flushListener != null) {
             final byte[] rawNewValue = entry.newValue();
             final byte[] rawOldValue = rawNewValue == null || sendOldValues ? wrapped().get(entry.key()) : null;
@@ -243,7 +243,7 @@ public class CachingKeyValueStore
 
     @Override
     public boolean setFlushListener(final CacheFlushListener<byte[], byte[]> flushListener,
-                                    final boolean sendOldValues) {
+        final boolean sendOldValues) {
         this.flushListener = flushListener;
         this.sendOldValues = sendOldValues;
 
@@ -252,7 +252,7 @@ public class CachingKeyValueStore
 
     @Override
     public void put(final Bytes key,
-                    final byte[] value) {
+        final byte[] value) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         lock.writeLock().lock();
@@ -266,7 +266,7 @@ public class CachingKeyValueStore
     }
 
     private void putInternal(final Bytes key,
-                             final byte[] value) {
+        final byte[] value) {
         synchronized (position) {
             internalContext.cache().put(
                 cacheName,
@@ -290,7 +290,7 @@ public class CachingKeyValueStore
 
     @Override
     public byte[] putIfAbsent(final Bytes key,
-                              final byte[] value) {
+        final byte[] value) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         lock.writeLock().lock();
@@ -382,7 +382,7 @@ public class CachingKeyValueStore
 
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
-                                                 final Bytes to) {
+        final Bytes to) {
         if (Objects.nonNull(from) && Objects.nonNull(to) && from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
                 "This may be due to range arguments set in the wrong order, " +
@@ -399,7 +399,7 @@ public class CachingKeyValueStore
 
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
-                                                        final Bytes to) {
+        final Bytes to) {
         if (Objects.nonNull(from) && Objects.nonNull(to) && from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
                 "This may be due to range arguments set in the wrong order, " +

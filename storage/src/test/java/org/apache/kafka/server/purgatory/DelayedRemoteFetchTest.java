@@ -72,8 +72,8 @@ public class DelayedRemoteFetchTest {
     private final int remoteFetchMaxWaitMs = 500;
 
     private final FetchPartitionStatus fetchStatus = new FetchPartitionStatus(
-        new LogOffsetMetadata(fetchOffset),
-        new FetchRequest.PartitionData(Uuid.ZERO_UUID, fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch)
+            new LogOffsetMetadata(fetchOffset),
+            new FetchRequest.PartitionData(Uuid.ZERO_UUID, fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch)
     );
     private final FetchParams fetchParams = buildFetchParams(-1, 500);
 
@@ -98,15 +98,15 @@ public class DelayedRemoteFetchTest {
         LogReadResult logReadInfo = buildReadResult(Errors.NONE, highWatermark, leaderLogStartOffset);
 
         DelayedRemoteFetch delayedRemoteFetch = new DelayedRemoteFetch(
-            Map.of(),
-            Map.of(topicIdPartition, future),
-            Map.of(topicIdPartition, fetchInfo),
-            remoteFetchMaxWaitMs,
-            Map.of(topicIdPartition, fetchStatus),
-            fetchParams,
-            Map.of(topicIdPartition, logReadInfo),
-            partitionOrException,
-            callback
+                Map.of(),
+                Map.of(topicIdPartition, future),
+                Map.of(topicIdPartition, fetchInfo),
+                remoteFetchMaxWaitMs,
+                Map.of(topicIdPartition, fetchStatus),
+                fetchParams,
+                Map.of(topicIdPartition, logReadInfo),
+                partitionOrException,
+                callback
         );
 
         assertTrue(delayedRemoteFetch.tryComplete());
@@ -133,17 +133,17 @@ public class DelayedRemoteFetchTest {
         LogReadResult logReadInfo = buildReadResult(Errors.NONE, 100L, 10L);
 
         assertThrows(IllegalStateException.class, () ->
-            new DelayedRemoteFetch(
-                Map.of(),
-                Map.of(topicIdPartition, future),
-                Map.of(topicIdPartition, fetchInfo),
-                remoteFetchMaxWaitMs,
-                Map.of(topicIdPartition, fetchStatus),
-                buildFetchParams(1, 500),
-                Map.of(topicIdPartition, logReadInfo),
-                partitionOrException,
-                callback
-            ));
+                new DelayedRemoteFetch(
+                        Map.of(),
+                        Map.of(topicIdPartition, future),
+                        Map.of(topicIdPartition, fetchInfo),
+                        remoteFetchMaxWaitMs,
+                        Map.of(topicIdPartition, fetchStatus),
+                        buildFetchParams(1, 500),
+                        Map.of(topicIdPartition, logReadInfo),
+                        partitionOrException,
+                        callback
+                ));
     }
 
     @Test
@@ -160,7 +160,7 @@ public class DelayedRemoteFetchTest {
 
         // throw exception while getPartition
         doThrow(new NotLeaderOrFollowerException(String.format("Replica for %s not available", topicIdPartition)))
-            .when(partitionOrException).accept(topicIdPartition.topicPartition());
+                .when(partitionOrException).accept(topicIdPartition.topicPartition());
 
         CompletableFuture<RemoteLogReadResult> future = new CompletableFuture<>();
         RemoteStorageFetchInfo fetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null);
@@ -168,15 +168,15 @@ public class DelayedRemoteFetchTest {
         LogReadResult logReadInfo = buildReadResult(Errors.NONE);
 
         DelayedRemoteFetch delayedRemoteFetch = new DelayedRemoteFetch(
-            Map.of(),
-            Map.of(topicIdPartition, future),
-            Map.of(topicIdPartition, fetchInfo),
-            remoteFetchMaxWaitMs,
-            Map.of(topicIdPartition, fetchStatus),
-            fetchParams,
-            Map.of(topicIdPartition, logReadInfo),
-            partitionOrException,
-            callback
+                Map.of(),
+                Map.of(topicIdPartition, future),
+                Map.of(topicIdPartition, fetchInfo),
+                remoteFetchMaxWaitMs,
+                Map.of(topicIdPartition, fetchStatus),
+                fetchParams,
+                Map.of(topicIdPartition, logReadInfo),
+                partitionOrException,
+                callback
         );
 
         // delayed remote fetch should still be able to complete
@@ -207,15 +207,15 @@ public class DelayedRemoteFetchTest {
         LogReadResult logReadInfo = buildReadResult(Errors.FENCED_LEADER_EPOCH);
 
         DelayedRemoteFetch delayedRemoteFetch = new DelayedRemoteFetch(
-            Map.of(),
-            Map.of(topicIdPartition, future),
-            Map.of(topicIdPartition, fetchInfo),
-            remoteFetchMaxWaitMs,
-            Map.of(topicIdPartition, fetchStatus),
-            fetchParams,
-            Map.of(topicIdPartition, logReadInfo),
-            partitionOrException,
-            callback
+                Map.of(),
+                Map.of(topicIdPartition, future),
+                Map.of(topicIdPartition, fetchInfo),
+                remoteFetchMaxWaitMs,
+                Map.of(topicIdPartition, fetchStatus),
+                fetchParams,
+                Map.of(topicIdPartition, logReadInfo),
+                partitionOrException,
+                callback
         );
 
         assertTrue(delayedRemoteFetch.tryComplete());
@@ -228,14 +228,14 @@ public class DelayedRemoteFetchTest {
     private long expiresPerSecValue() {
         Map<MetricName, Metric> allMetrics = KafkaYammerMetrics.defaultRegistry().allMetrics();
         return allMetrics.entrySet()
-            .stream()
-            .filter(e -> e.getKey().getMBeanName().endsWith("kafka.server:type=DelayedRemoteFetchMetrics,name=ExpiresPerSec"))
-            .findFirst()
-            .map(Map.Entry::getValue)
-            .filter(Meter.class::isInstance)
-            .map(Meter.class::cast)
-            .map(Meter::count)
-            .orElse(0L);
+                .stream()
+                .filter(e -> e.getKey().getMBeanName().endsWith("kafka.server:type=DelayedRemoteFetchMetrics,name=ExpiresPerSec"))
+                .findFirst()
+                .map(Map.Entry::getValue)
+                .filter(Meter.class::isInstance)
+                .map(Meter.class::cast)
+                .map(Meter::count)
+                .orElse(0L);
     }
 
     @Test
@@ -265,12 +265,12 @@ public class DelayedRemoteFetchTest {
         LogReadResult logReadInfo2 = buildReadResult(Errors.NONE);
 
         FetchPartitionStatus fetchStatus1 = new FetchPartitionStatus(
-            new LogOffsetMetadata(fetchOffset),
-            new FetchRequest.PartitionData(Uuid.ZERO_UUID, fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch));
+                new LogOffsetMetadata(fetchOffset),
+                new FetchRequest.PartitionData(Uuid.ZERO_UUID, fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch));
 
         FetchPartitionStatus fetchStatus2 = new FetchPartitionStatus(
-            new LogOffsetMetadata(fetchOffset + 100L),
-            new FetchRequest.PartitionData(Uuid.ZERO_UUID, fetchOffset + 100L, logStartOffset, maxBytes, currentLeaderEpoch));
+                new LogOffsetMetadata(fetchOffset + 100L),
+                new FetchRequest.PartitionData(Uuid.ZERO_UUID, fetchOffset + 100L, logStartOffset, maxBytes, currentLeaderEpoch));
 
         // Set up maps for multiple partitions
         Map<TopicIdPartition, Future<Void>> remoteFetchTasks = Map.of(topicIdPartition, remoteFetchTaskExpired, topicIdPartition2, remoteFetchTask2);
@@ -278,15 +278,15 @@ public class DelayedRemoteFetchTest {
         Map<TopicIdPartition, RemoteStorageFetchInfo> remoteFetchInfos = Map.of(topicIdPartition, fetchInfo1, topicIdPartition2, fetchInfo2);
 
         DelayedRemoteFetch delayedRemoteFetch = new DelayedRemoteFetch(
-            remoteFetchTasks,
-            remoteFetchResults,
-            remoteFetchInfos,
-            remoteFetchMaxWaitMs,
-            Map.of(topicIdPartition, fetchStatus1, topicIdPartition2, fetchStatus2),
-            fetchParams,
-            Map.of(topicIdPartition, logReadInfo1, topicIdPartition2, logReadInfo2),
-            partitionOrException,
-            callback
+                remoteFetchTasks,
+                remoteFetchResults,
+                remoteFetchInfos,
+                remoteFetchMaxWaitMs,
+                Map.of(topicIdPartition, fetchStatus1, topicIdPartition2, fetchStatus2),
+                fetchParams,
+                Map.of(topicIdPartition, logReadInfo1, topicIdPartition2, logReadInfo2),
+                partitionOrException,
+                callback
         );
 
         // Verify that the ExpiresPerSec metric is zero before fetching
@@ -341,23 +341,23 @@ public class DelayedRemoteFetchTest {
         LogReadResult logReadInfo2 = buildReadResult(Errors.NONE, highWatermark2, leaderLogStartOffset2);
 
         FetchPartitionStatus fetchStatus1 = new FetchPartitionStatus(
-            new LogOffsetMetadata(fetchOffset),
-            new FetchRequest.PartitionData(Uuid.ZERO_UUID, fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch));
+                new LogOffsetMetadata(fetchOffset),
+                new FetchRequest.PartitionData(Uuid.ZERO_UUID, fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch));
 
         FetchPartitionStatus fetchStatus2 = new FetchPartitionStatus(
-            new LogOffsetMetadata(fetchOffset + 100L),
-            new FetchRequest.PartitionData(Uuid.ZERO_UUID, fetchOffset + 100L, logStartOffset, maxBytes, currentLeaderEpoch));
+                new LogOffsetMetadata(fetchOffset + 100L),
+                new FetchRequest.PartitionData(Uuid.ZERO_UUID, fetchOffset + 100L, logStartOffset, maxBytes, currentLeaderEpoch));
 
         DelayedRemoteFetch delayedRemoteFetch = new DelayedRemoteFetch(
-            Map.of(),
-            Map.of(topicIdPartition, future1, topicIdPartition2, future2),
-            Map.of(topicIdPartition, fetchInfo1, topicIdPartition2, fetchInfo2),
-            remoteFetchMaxWaitMs,
-            Map.of(topicIdPartition, fetchStatus1, topicIdPartition2, fetchStatus2),
-            fetchParams,
-            Map.of(topicIdPartition, logReadInfo1, topicIdPartition2, logReadInfo2),
-            partitionOrException,
-            callback
+                Map.of(),
+                Map.of(topicIdPartition, future1, topicIdPartition2, future2),
+                Map.of(topicIdPartition, fetchInfo1, topicIdPartition2, fetchInfo2),
+                remoteFetchMaxWaitMs,
+                Map.of(topicIdPartition, fetchStatus1, topicIdPartition2, fetchStatus2),
+                fetchParams,
+                Map.of(topicIdPartition, logReadInfo1, topicIdPartition2, logReadInfo2),
+                partitionOrException,
+                callback
         );
 
         // Should not complete since future2 is not done
@@ -406,23 +406,23 @@ public class DelayedRemoteFetchTest {
         LogReadResult logReadInfo2 = buildReadResult(Errors.NONE, 100, 10);
 
         FetchPartitionStatus fetchStatus1 = new FetchPartitionStatus(
-            new LogOffsetMetadata(fetchOffset),
-            new FetchRequest.PartitionData(Uuid.ZERO_UUID, fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch));
+                new LogOffsetMetadata(fetchOffset),
+                new FetchRequest.PartitionData(Uuid.ZERO_UUID, fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch));
 
         FetchPartitionStatus fetchStatus2 = new FetchPartitionStatus(
-            new LogOffsetMetadata(fetchOffset + 100),
-            new FetchRequest.PartitionData(Uuid.ZERO_UUID, fetchOffset + 100, logStartOffset, maxBytes, currentLeaderEpoch));
+                new LogOffsetMetadata(fetchOffset + 100),
+                new FetchRequest.PartitionData(Uuid.ZERO_UUID, fetchOffset + 100, logStartOffset, maxBytes, currentLeaderEpoch));
 
         DelayedRemoteFetch delayedRemoteFetch = new DelayedRemoteFetch(
-            Map.of(),
-            Map.of(topicIdPartition, future1, topicIdPartition2, future2),
-            Map.of(topicIdPartition, fetchInfo1, topicIdPartition2, fetchInfo2),
-            remoteFetchMaxWaitMs,
-            Map.of(topicIdPartition, fetchStatus1, topicIdPartition2, fetchStatus2),
-            fetchParams,
-            Map.of(topicIdPartition, logReadInfo1, topicIdPartition2, logReadInfo2),
-            partitionOrException,
-            callback
+                Map.of(),
+                Map.of(topicIdPartition, future1, topicIdPartition2, future2),
+                Map.of(topicIdPartition, fetchInfo1, topicIdPartition2, fetchInfo2),
+                remoteFetchMaxWaitMs,
+                Map.of(topicIdPartition, fetchStatus1, topicIdPartition2, fetchStatus2),
+                fetchParams,
+                Map.of(topicIdPartition, logReadInfo1, topicIdPartition2, logReadInfo2),
+                partitionOrException,
+                callback
         );
 
         assertTrue(delayedRemoteFetch.tryComplete());
@@ -444,13 +444,13 @@ public class DelayedRemoteFetchTest {
 
     private FetchParams buildFetchParams(int replicaId, int maxWaitMs) {
         return new FetchParams(
-            replicaId,
-            1,
-            maxWaitMs,
-            1,
-            maxBytes,
-            FetchIsolation.LOG_END,
-            Optional.empty()
+                replicaId,
+                1,
+                maxWaitMs,
+                1,
+                maxBytes,
+                FetchIsolation.LOG_END,
+                Optional.empty()
         );
     }
 
@@ -460,21 +460,21 @@ public class DelayedRemoteFetchTest {
 
     private LogReadResult buildReadResult(Errors error, long highWatermark, long leaderLogStartOffset) {
         return new LogReadResult(
-            new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY, false, Optional.empty(),
-            Optional.of(mock(RemoteStorageFetchInfo.class))),
-            Optional.empty(),
-            highWatermark,
-            leaderLogStartOffset,
-            -1L,
-            -1L,
-            -1L,
-            OptionalLong.empty(),
-            error);
+                new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY, false, Optional.empty(),
+                        Optional.of(mock(RemoteStorageFetchInfo.class))),
+                Optional.empty(),
+                highWatermark,
+                leaderLogStartOffset,
+                -1L,
+                -1L,
+                -1L,
+                OptionalLong.empty(),
+                error);
     }
 
     private RemoteLogReadResult buildRemoteReadResult(Errors error) {
         return new RemoteLogReadResult(
-            Optional.of(new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY)),
-            error != Errors.NONE ? Optional.of(error.exception()) : Optional.empty());
+                Optional.of(new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY)),
+                error != Errors.NONE ? Optional.of(error.exception()) : Optional.empty());
     }
 }

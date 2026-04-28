@@ -76,14 +76,14 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final AsyncConsumerMetrics asyncConsumerMetrics;
 
     public NetworkClientDelegate(
-            final Time time,
-            final ConsumerConfig config,
-            final LogContext logContext,
-            final KafkaClient client,
-            final Metadata metadata,
-            final BackgroundEventHandler backgroundEventHandler,
-            final boolean notifyMetadataErrorsViaErrorQueue,
-            final AsyncConsumerMetrics asyncConsumerMetrics) {
+        final Time time,
+        final ConsumerConfig config,
+        final LogContext logContext,
+        final KafkaClient client,
+        final Metadata metadata,
+        final BackgroundEventHandler backgroundEventHandler,
+        final boolean notifyMetadataErrorsViaErrorQueue,
+        final AsyncConsumerMetrics asyncConsumerMetrics) {
         this.time = time;
         this.client = client;
         this.metadata = metadata;
@@ -265,7 +265,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             unsent.handler
         );
     }
-    
+
     public Optional<Exception> getAndClearMetadataError() {
         Optional<Exception> metadataError = this.metadataError;
         this.metadataError = Optional.empty();
@@ -345,7 +345,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         private long enqueueTimeMs; // time when the request was enqueued to unsentRequests, not duration in the queue.
 
         public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder,
-                             final Optional<Node> node) {
+            final Optional<Node> node) {
             Objects.requireNonNull(requestBuilder);
             this.requestBuilder = requestBuilder;
             this.node = node;
@@ -407,11 +407,11 @@ public class NetworkClientDelegate implements AutoCloseable {
             }
 
             return "UnsentRequest{" +
-                    "requestBuilder=" + requestBuilder +
-                    ", handler=" + handler +
-                    ", node=" + node +
-                    ", remainingMs=" + remainingMs +
-                    '}';
+                "requestBuilder=" + requestBuilder +
+                ", handler=" + handler +
+                ", node=" + node +
+                ", remainingMs=" + remainingMs +
+                '}';
         }
     }
 
@@ -462,29 +462,29 @@ public class NetworkClientDelegate implements AutoCloseable {
      * {@link ConsumerNetworkThread}.
      */
     public static Supplier<NetworkClientDelegate> supplier(final Time time,
-                                                           final LogContext logContext,
-                                                           final Metadata metadata,
-                                                           final ConsumerConfig config,
-                                                           final ApiVersions apiVersions,
-                                                           final Metrics metrics,
-                                                           final Sensor throttleTimeSensor,
-                                                           final ClientTelemetrySender clientTelemetrySender,
-                                                           final BackgroundEventHandler backgroundEventHandler,
-                                                           final boolean notifyMetadataErrorsViaErrorQueue,
-                                                           final AsyncConsumerMetrics asyncConsumerMetrics) {
+        final LogContext logContext,
+        final Metadata metadata,
+        final ConsumerConfig config,
+        final ApiVersions apiVersions,
+        final Metrics metrics,
+        final Sensor throttleTimeSensor,
+        final ClientTelemetrySender clientTelemetrySender,
+        final BackgroundEventHandler backgroundEventHandler,
+        final boolean notifyMetadataErrorsViaErrorQueue,
+        final AsyncConsumerMetrics asyncConsumerMetrics) {
         return new CachedSupplier<>() {
             @Override
             protected NetworkClientDelegate create() {
                 KafkaClient client = ClientUtils.createNetworkClient(config,
-                        metrics,
-                        CONSUMER_METRIC_GROUP_PREFIX,
-                        logContext,
-                        apiVersions,
-                        time,
-                        CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
-                        metadata,
-                        throttleTimeSensor,
-                        clientTelemetrySender);
+                    metrics,
+                    CONSUMER_METRIC_GROUP_PREFIX,
+                    logContext,
+                    apiVersions,
+                    time,
+                    CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
+                    metadata,
+                    throttleTimeSensor,
+                    clientTelemetrySender);
                 return new NetworkClientDelegate(time, config, logContext, client, metadata, backgroundEventHandler, notifyMetadataErrorsViaErrorQueue, asyncConsumerMetrics);
             }
         };
@@ -495,13 +495,13 @@ public class NetworkClientDelegate implements AutoCloseable {
      * {@link ConsumerNetworkThread}.
      */
     public static Supplier<NetworkClientDelegate> supplier(final Time time,
-                                                           final ConsumerConfig config,
-                                                           final LogContext logContext,
-                                                           final KafkaClient client,
-                                                           final Metadata metadata,
-                                                           final BackgroundEventHandler backgroundEventHandler,
-                                                           final boolean notifyMetadataErrorsViaErrorQueue,
-                                                           final AsyncConsumerMetrics asyncConsumerMetrics) {
+        final ConsumerConfig config,
+        final LogContext logContext,
+        final KafkaClient client,
+        final Metadata metadata,
+        final BackgroundEventHandler backgroundEventHandler,
+        final boolean notifyMetadataErrorsViaErrorQueue,
+        final AsyncConsumerMetrics asyncConsumerMetrics) {
         return new CachedSupplier<>() {
             @Override
             protected NetworkClientDelegate create() {

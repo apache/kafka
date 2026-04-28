@@ -186,10 +186,10 @@ public class EndToEndLatency {
             if (!record.headers().iterator().hasNext()) {
                 commitAndThrow(consumer, "Expected message headers but received none");
             }
-            
+
             Iterator<Header> sentIterator = sentHeaders.iterator();
             Iterator<Header> receivedIterator = record.headers().iterator();
-            
+
             while (sentIterator.hasNext() && receivedIterator.hasNext()) {
                 Header sentHeader = sentIterator.next();
                 Header receivedHeader = receivedIterator.next();
@@ -197,10 +197,10 @@ public class EndToEndLatency {
                     String receivedValueStr = receivedHeader.value() == null ? "null" : Arrays.toString(receivedHeader.value());
                     String sentValueStr = sentHeader.value() == null ? "null" : Arrays.toString(sentHeader.value());
                     commitAndThrow(consumer, "The message header read [" + receivedHeader.key() + ":" + receivedValueStr +
-                            "] did not match the message header sent [" + sentHeader.key() + ":" + sentValueStr + "]");
+                        "] did not match the message header sent [" + sentHeader.key() + ":" + sentValueStr + "]");
                 }
             }
-            
+
             if (sentIterator.hasNext() || receivedIterator.hasNext()) {
                 commitAndThrow(consumer, "Header count mismatch between sent and received messages");
             }
@@ -230,10 +230,10 @@ public class EndToEndLatency {
 
     private static void setupConsumer(String topic, KafkaConsumer<byte[], byte[]> consumer) {
         List<TopicPartition> topicPartitions = consumer
-                .partitionsFor(topic)
-                .stream()
-                .map(p -> new TopicPartition(p.topic(), p.partition()))
-                .collect(Collectors.toList());
+            .partitionsFor(topic)
+            .stream()
+            .map(p -> new TopicPartition(p.topic(), p.partition()))
+            .collect(Collectors.toList());
         consumer.assign(topicPartitions);
         consumer.seekToEnd(topicPartitions);
         consumer.assignment().forEach(consumer::position);
@@ -256,8 +256,8 @@ public class EndToEndLatency {
 
     private static void createTopic(Optional<String> propertiesFile, String brokers, String topic) throws IOException {
         System.out.printf("Topic \"%s\" does not exist. "
-                        + "Will create topic with %d partition(s) and replication factor = %d%n",
-                topic, DEFAULT_NUM_PARTITIONS, DEFAULT_REPLICATION_FACTOR);
+            + "Will create topic with %d partition(s) and replication factor = %d%n",
+            topic, DEFAULT_NUM_PARTITIONS, DEFAULT_REPLICATION_FACTOR);
 
         Properties adminProps = loadPropsWithBootstrapServers(propertiesFile, brokers);
         Admin adminClient = Admin.create(adminProps);
@@ -314,19 +314,19 @@ public class EndToEndLatency {
             return args;
         }
 
-        boolean hasRequiredNamedArgs = Arrays.stream(args).anyMatch(arg -> 
-            arg.equals("--bootstrap-server") || 
-            arg.equals("--topic") || 
-            arg.equals("--num-records") || 
-            arg.equals("--producer-acks") || 
-            arg.equals("--record-size"));
+        boolean hasRequiredNamedArgs = Arrays.stream(args).anyMatch(arg ->
+            arg.equals("--bootstrap-server") ||
+                arg.equals("--topic") ||
+                arg.equals("--num-records") ||
+                arg.equals("--producer-acks") ||
+                arg.equals("--record-size"));
         if (hasRequiredNamedArgs) {
             return args;
         }
 
         if (args.length != 5 && args.length != 6) {
             throw new TerseException("Invalid number of arguments. Expected 5 or 6 positional arguments, but got " + args.length + ". " +
-                    "Usage: bootstrap-server topic num-records producer-acks record-size [optional] command-config");
+                "Usage: bootstrap-server topic num-records producer-acks record-size [optional] command-config");
         }
 
         return convertLegacyArgs(args);
@@ -361,7 +361,7 @@ public class EndToEndLatency {
             newArgs.add(legacyArgs[5]);
         }
         System.out.println("WARNING: Positional argument usage is deprecated and will be removed in Apache Kafka 5.0. " +
-                "Please use named arguments instead: --bootstrap-server, --topic, --num-records, --producer-acks, --record-size, --command-config");
+            "Please use named arguments instead: --bootstrap-server, --topic, --num-records, --producer-acks, --record-size, --command-config");
         return newArgs.toArray(new String[0]);
     }
 
@@ -381,49 +381,49 @@ public class EndToEndLatency {
             super(args);
 
             bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: The Kafka broker list string in the form HOST1:PORT1,HOST2:PORT2.")
-                    .withRequiredArg()
-                    .describedAs("bootstrap-server")
-                    .ofType(String.class);
+                .withRequiredArg()
+                .describedAs("bootstrap-server")
+                .ofType(String.class);
             topicOpt = parser.accepts("topic", "REQUIRED: The topic to use for the test.")
-                    .withRequiredArg()
-                    .describedAs("topic-name")
-                    .ofType(String.class);
+                .withRequiredArg()
+                .describedAs("topic-name")
+                .ofType(String.class);
             numRecordsOpt = parser.accepts("num-records", "REQUIRED: The number of messages to send.")
-                    .withRequiredArg()
-                    .describedAs("count")
-                    .ofType(Integer.class);
+                .withRequiredArg()
+                .describedAs("count")
+                .ofType(Integer.class);
             acksOpt = parser.accepts("producer-acks", "REQUIRED: Producer acknowledgements. Must be '1' or 'all'.")
-                    .withRequiredArg()
-                    .describedAs("producer-acks")
-                    .ofType(String.class);
+                .withRequiredArg()
+                .describedAs("producer-acks")
+                .ofType(String.class);
             recordSizeOpt = parser.accepts("record-size", "REQUIRED: The size of each message payload in bytes.")
-                    .withRequiredArg()
-                    .describedAs("bytes")
-                    .ofType(Integer.class);
+                .withRequiredArg()
+                .describedAs("bytes")
+                .ofType(Integer.class);
             recordKeySizeOpt = parser.accepts("record-key-size", "Optional: The size of the message key in bytes. If not set, messages are sent without a key.")
-                    .withOptionalArg()
-                    .describedAs("bytes")
-                    .ofType(Integer.class)
-                    .defaultsTo(0);
+                .withOptionalArg()
+                .describedAs("bytes")
+                .ofType(Integer.class)
+                .defaultsTo(0);
             recordHeaderKeySizeOpt = parser.accepts("record-header-key-size", "Optional: The size of the message header key in bytes. Used together with record-header-size.")
-                    .withOptionalArg()
-                    .describedAs("bytes")
-                    .ofType(Integer.class)
-                    .defaultsTo(0);
+                .withOptionalArg()
+                .describedAs("bytes")
+                .ofType(Integer.class)
+                .defaultsTo(0);
             recordHeaderValueSizeOpt = parser.accepts("record-header-size", "Optional: The size of message header value in bytes. Use -1 for null header value.")
-                    .withOptionalArg()
-                    .describedAs("bytes")
-                    .ofType(Integer.class)
-                    .defaultsTo(0);
+                .withOptionalArg()
+                .describedAs("bytes")
+                .ofType(Integer.class)
+                .defaultsTo(0);
             numHeadersOpt = parser.accepts("num-headers", "Optional: The number of headers to include in each message.")
-                    .withOptionalArg()
-                    .describedAs("count")
-                    .ofType(Integer.class)
-                    .defaultsTo(0);
+                .withOptionalArg()
+                .describedAs("count")
+                .ofType(Integer.class)
+                .defaultsTo(0);
             commandConfigOpt = parser.accepts("command-config", "Optional: A property file for Kafka producer/consumer/admin client configuration.")
-                    .withOptionalArg()
-                    .describedAs("config-file")
-                    .ofType(String.class);
+                .withOptionalArg()
+                .describedAs("config-file")
+                .ofType(String.class);
 
             try {
                 options = parser.parse(args);

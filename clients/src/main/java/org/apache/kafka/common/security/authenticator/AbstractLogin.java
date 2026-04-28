@@ -49,7 +49,7 @@ public abstract class AbstractLogin implements Login {
 
     @Override
     public void configure(Map<String, ?> configs, String contextName, Configuration configuration,
-                          AuthenticateCallbackHandler loginCallbackHandler) {
+        AuthenticateCallbackHandler loginCallbackHandler) {
         this.contextName = contextName;
         this.configuration = configuration;
         this.loginCallbackHandler = loginCallbackHandler;
@@ -97,7 +97,7 @@ public abstract class AbstractLogin implements Login {
                     nc.setName(nc.getDefaultName());
                 } else if (callback instanceof PasswordCallback) {
                     String errorMessage = "Could not login: the client is being asked for a password, but the Kafka" +
-                                 " client code does not currently support obtaining a password from the user.";
+                        " client code does not currently support obtaining a password from the user.";
                     throw new UnsupportedCallbackException(callback, errorMessage);
                 } else if (callback instanceof RealmCallback) {
                     RealmCallback rc = (RealmCallback) callback;

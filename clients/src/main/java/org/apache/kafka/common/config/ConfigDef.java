@@ -154,7 +154,7 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
-                            String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender) {
+        String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender) {
         return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender, false, null));
     }
 
@@ -176,8 +176,8 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
-                            String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender,
-                            String alternativeString) {
+        String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender,
+        String alternativeString) {
         return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender, false, alternativeString));
     }
 
@@ -197,7 +197,7 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
-                            String group, int orderInGroup, Width width, String displayName, List<String> dependents) {
+        String group, int orderInGroup, Width width, String displayName, List<String> dependents) {
         return define(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, null);
     }
 
@@ -217,7 +217,7 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
-                            String group, int orderInGroup, Width width, String displayName, Recommender recommender) {
+        String group, int orderInGroup, Width width, String displayName, Recommender recommender) {
         return define(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, List.of(), recommender);
     }
 
@@ -236,7 +236,7 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
-                            String group, int orderInGroup, Width width, String displayName) {
+        String group, int orderInGroup, Width width, String displayName) {
         return define(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, List.of());
     }
 
@@ -256,7 +256,7 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation,
-                            String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender) {
+        String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender) {
         return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender);
     }
 
@@ -275,7 +275,7 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation,
-                            String group, int orderInGroup, Width width, String displayName, List<String> dependents) {
+        String group, int orderInGroup, Width width, String displayName, List<String> dependents) {
         return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, dependents, null);
     }
 
@@ -294,7 +294,7 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation,
-                            String group, int orderInGroup, Width width, String displayName, Recommender recommender) {
+        String group, int orderInGroup, Width width, String displayName, Recommender recommender) {
         return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, List.of(), recommender);
     }
 
@@ -312,7 +312,7 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation,
-                            String group, int orderInGroup, Width width, String displayName) {
+        String group, int orderInGroup, Width width, String displayName) {
         return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, List.of());
     }
 
@@ -331,7 +331,7 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Importance importance, String documentation, String group, int orderInGroup,
-                            Width width, String displayName, List<String> dependents, Recommender recommender) {
+        Width width, String displayName, List<String> dependents, Recommender recommender) {
         return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender);
     }
 
@@ -349,7 +349,7 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Importance importance, String documentation, String group, int orderInGroup,
-                            Width width, String displayName, List<String> dependents) {
+        Width width, String displayName, List<String> dependents) {
         return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, dependents, null);
     }
 
@@ -367,7 +367,7 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Importance importance, String documentation, String group, int orderInGroup,
-                            Width width, String displayName, Recommender recommender) {
+        Width width, String displayName, Recommender recommender) {
         return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, List.of(), recommender);
     }
 
@@ -384,7 +384,7 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Importance importance, String documentation, String group, int orderInGroup,
-                            Width width, String displayName) {
+        Width width, String displayName) {
         return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, List.of());
     }
 
@@ -427,7 +427,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation, String alternativeString) {
         return define(name, type, defaultValue, null, importance, documentation, null, -1, Width.NONE,
-                name, List.of(), null, alternativeString);
+            name, List.of(), null, alternativeString);
     }
 
     /**
@@ -532,7 +532,7 @@ public class ConfigDef {
         Object parsedValue;
         if (isSet) {
             parsedValue = parseType(key.name, value, key.type);
-        // props map doesn't contain setting, the key is required because no default value specified - its an error
+            // props map doesn't contain setting, the key is required because no default value specified - its an error
         } else if (NO_DEFAULT_VALUE.equals(key.defaultValue)) {
             throw new ConfigException("Missing required configuration \"" + key.name + "\" which has no default value.");
         } else {
@@ -544,7 +544,7 @@ public class ConfigDef {
             parsedValue = originalListValue.stream().distinct().collect(Collectors.toList());
             if (originalListValue.size() != ((List<?>) parsedValue).size()) {
                 LOGGER.warn("Configuration key \"{}\" contains duplicate values. Duplicates will be removed. The original value " +
-                        "is: {}, the updated value is: {}", key.name, originalListValue, parsedValue);
+                    "is: {}, the updated value is: {}", key.name, originalListValue, parsedValue);
             }
         }
         if (key.validator != null) {
@@ -565,12 +565,12 @@ public class ConfigDef {
 
     public Map<String, ConfigValue> validateAll(Map<String, String> props) {
         Map<String, ConfigValue> configValues = new HashMap<>();
-        for (String name: configKeys.keySet()) {
+        for (String name : configKeys.keySet()) {
             configValues.put(name, new ConfigValue(name));
         }
 
         List<String> undefinedConfigKeys = undefinedDependentConfigs();
-        for (String undefinedConfigKey: undefinedConfigKeys) {
+        for (String undefinedConfigKey : undefinedConfigKeys) {
             ConfigValue undefinedConfigValue = new ConfigValue(undefinedConfigKey);
             undefinedConfigValue.addErrorMessage(undefinedConfigKey + " is referred in the dependents, but not defined.");
             undefinedConfigValue.visible(false);
@@ -585,7 +585,7 @@ public class ConfigDef {
     Map<String, Object> parseForValidate(Map<String, String> props, Map<String, ConfigValue> configValues) {
         Map<String, Object> parsed = new HashMap<>();
         Set<String> configsWithNoParent = getConfigsWithNoParent();
-        for (String name: configsWithNoParent) {
+        for (String name : configsWithNoParent) {
             parseForValidate(name, props, parsed, configValues);
         }
         return parsed;
@@ -594,7 +594,7 @@ public class ConfigDef {
 
     private Map<String, ConfigValue> validate(Map<String, Object> parsed, Map<String, ConfigValue> configValues) {
         Set<String> configsWithNoParent = getConfigsWithNoParent();
-        for (String name: configsWithNoParent) {
+        for (String name : configsWithNoParent) {
             validate(name, parsed, configValues);
         }
         return configValues;
@@ -603,7 +603,7 @@ public class ConfigDef {
     private List<String> undefinedDependentConfigs() {
         Set<String> undefinedConfigKeys = new HashSet<>();
         for (ConfigKey configKey : configKeys.values()) {
-            for (String dependent: configKey.dependents) {
+            for (String dependent : configKey.dependents) {
                 if (!configKeys.containsKey(dependent)) {
                     undefinedConfigKeys.add(dependent);
                 }
@@ -619,7 +619,7 @@ public class ConfigDef {
         }
         Set<String> configsWithParent = new HashSet<>();
 
-        for (ConfigKey configKey: configKeys.values()) {
+        for (ConfigKey configKey : configKeys.values()) {
             List<String> dependents = configKey.dependents;
             configsWithParent.addAll(dependents);
         }
@@ -659,7 +659,7 @@ public class ConfigDef {
         }
         config.value(value);
         parsed.put(name, value);
-        for (String dependent: key.dependents) {
+        for (String dependent : key.dependents) {
             parseForValidate(dependent, props, parsed, configs);
         }
     }
@@ -686,7 +686,7 @@ public class ConfigDef {
         }
 
         configs.put(name, value);
-        for (String dependent: key.dependents) {
+        for (String dependent : key.dependents) {
             validate(dependent, parsed, configs);
         }
     }
@@ -835,7 +835,7 @@ public class ConfigDef {
      * is converted to a string. This method should be used with care since it stores
      * actual password values to String. Values from this map should never be used in log entries.
      */
-    public static  Map<String, String> convertToStringMapWithPasswordValues(Map<String, ?> configs) {
+    public static Map<String, String> convertToStringMapWithPasswordValues(Map<String, ?> configs) {
         Map<String, String> result = new HashMap<>();
         for (Map.Entry<String, ?> entry : configs.entrySet()) {
             Object value = entry.getValue();
@@ -1167,13 +1167,13 @@ public class ConfigDef {
         Supplier<String> toStringFunction;
 
         private LambdaValidator(BiConsumer<String, Object> ensureValid,
-                                Supplier<String> toStringFunction) {
+            Supplier<String> toStringFunction) {
             this.ensureValid = ensureValid;
             this.toStringFunction = toStringFunction;
         }
 
         public static LambdaValidator with(BiConsumer<String, Object> ensureValid,
-                                           Supplier<String> toStringFunction) {
+            Supplier<String> toStringFunction) {
             return new LambdaValidator(ensureValid, toStringFunction);
         }
 
@@ -1201,7 +1201,7 @@ public class ConfigDef {
 
         @Override
         public void ensureValid(String name, Object value) {
-            for (Validator validator: validators) {
+            for (Validator validator : validators) {
                 validator.ensureValid(name, value);
             }
         }
@@ -1210,7 +1210,7 @@ public class ConfigDef {
         public String toString() {
             if (validators == null) return "";
             StringBuilder desc = new StringBuilder();
-            for (Validator v: validators) {
+            for (Validator v : validators) {
                 if (desc.length() > 0) {
                     desc.append(',').append(' ');
                 }
@@ -1258,7 +1258,7 @@ public class ConfigDef {
             // Check name string for illegal characters
             ArrayList<Integer> foundIllegalCharacters = new ArrayList<>();
 
-            for (int i = 0; i < s.length(); i++) {
+            for (int i = 0;i < s.length();i++) {
                 if (Character.isISOControl(s.codePointAt(i))) {
                     foundIllegalCharacters.add(s.codePointAt(i));
                 }
@@ -1266,7 +1266,7 @@ public class ConfigDef {
 
             if (!foundIllegalCharacters.isEmpty()) {
                 throw new ConfigException(name, value, "String may not contain control sequences but had the following ASCII chars: " +
-                        foundIllegalCharacters.stream().map(Object::toString).collect(Collectors.joining(", ")));
+                    foundIllegalCharacters.stream().map(Object::toString).collect(Collectors.joining(", ")));
             }
         }
 
@@ -1319,19 +1319,19 @@ public class ConfigDef {
 
         // This constructor is present for backward compatibility reasons.
         public ConfigKey(String name, Type type, Object defaultValue, Validator validator,
-                         Importance importance, String documentation, String group,
-                         int orderInGroup, Width width, String displayName,
-                         List<String> dependents, Recommender recommender,
-                         boolean internalConfig) {
+            Importance importance, String documentation, String group,
+            int orderInGroup, Width width, String displayName,
+            List<String> dependents, Recommender recommender,
+            boolean internalConfig) {
             this(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName,
                 dependents, recommender, internalConfig, null);
         }
 
         private ConfigKey(String name, Type type, Object defaultValue, Validator validator,
-                         Importance importance, String documentation, String group,
-                         int orderInGroup, Width width, String displayName,
-                         List<String> dependents, Recommender recommender,
-                         boolean internalConfig, String alternativeString) {
+            Importance importance, String documentation, String group,
+            int orderInGroup, Width width, String displayName,
+            List<String> dependents, Recommender recommender,
+            boolean internalConfig, String alternativeString) {
             this.name = name;
             this.type = type;
             boolean hasDefault = !NO_DEFAULT_VALUE.equals(defaultValue);
@@ -1594,7 +1594,7 @@ public class ConfigDef {
     private List<ConfigKey> sortedConfigs() {
         final Map<String, Integer> groupOrd = new HashMap<>(groups.size());
         int ord = 0;
-        for (String group: groups) {
+        for (String group : groups) {
             groupOrd.put(group, ord++);
         }
 
@@ -1629,20 +1629,20 @@ public class ConfigDef {
         int orderInGroup = startingOrd;
         for (ConfigKey key : child.sortedConfigs()) {
             define(new ConfigKey(
-                    keyPrefix + key.name,
-                    key.type,
-                    key.defaultValue,
-                    embeddedValidator(keyPrefix, key.validator),
-                    key.importance,
-                    key.documentation,
-                    groupPrefix + (key.group == null ? "" : ": " + key.group),
-                    orderInGroup++,
-                    key.width,
-                    key.displayName,
-                    embeddedDependents(keyPrefix, key.dependents),
-                    embeddedRecommender(keyPrefix, key.recommender),
-                    key.internalConfig,
-                    key.alternativeString));
+                keyPrefix + key.name,
+                key.type,
+                key.defaultValue,
+                embeddedValidator(keyPrefix, key.validator),
+                key.importance,
+                key.documentation,
+                groupPrefix + (key.group == null ? "" : ": " + key.group),
+                orderInGroup++,
+                key.width,
+                key.displayName,
+                embeddedDependents(keyPrefix, key.dependents),
+                embeddedRecommender(keyPrefix, key.recommender),
+                key.internalConfig,
+                key.alternativeString));
         }
     }
 
@@ -1733,7 +1733,7 @@ public class ConfigDef {
      * @param dynamicUpdateModes Config name -&gt; update mode mapping.
      */
     public String toHtml(int headerDepth, Function<String, String> idGenerator,
-                         Map<String, String> dynamicUpdateModes) {
+        Map<String, String> dynamicUpdateModes) {
         boolean hasUpdateModes = !dynamicUpdateModes.isEmpty();
         List<ConfigKey> configs = sortedConfigs();
         StringBuilder b = new StringBuilder();
@@ -1744,8 +1744,8 @@ public class ConfigDef {
             }
             b.append("<li>\n");
             b.append(String.format("<h%1$d>" +
-                    "<a id=\"%3$s\"></a><a id=\"%2$s\" href=\"#%2$s\">%3$s</a>" +
-                    "</h%1$d>%n", headerDepth, idGenerator.apply(key.name), key.name));
+                "<a id=\"%3$s\"></a><a id=\"%2$s\" href=\"#%2$s\">%3$s</a>" +
+                "</h%1$d>%n", headerDepth, idGenerator.apply(key.name), key.name));
             b.append("<p>");
             if (key.documentation != null) {
                 b.append(key.documentation.replaceAll("\n", "<br>"));
@@ -1753,7 +1753,7 @@ public class ConfigDef {
             b.append("</p>\n");
 
             b.append("<table>" +
-                    "<tbody>\n");
+                "<tbody>\n");
             for (String detail : headers()) {
                 if (detail.equals("Name") || detail.equals("Description")) continue;
                 if (detail.equals("Default") && key.alternativeString != null) {
@@ -1777,9 +1777,9 @@ public class ConfigDef {
 
     private static void addConfigDetail(StringBuilder builder, String name, String value) {
         builder.append("<tr>" +
-                "<th>" + name + ":</th>" +
-                "<td>" + value + "</td>" +
-                "</tr>\n");
+            "<th>" + name + ":</th>" +
+            "<td>" + value + "</td>" +
+            "</tr>\n");
     }
 
 }

@@ -76,12 +76,12 @@ public class BrokerRegistrationRequest extends AbstractRequest {
     public BrokerRegistrationResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
         return new BrokerRegistrationResponse(new BrokerRegistrationResponseData()
-                .setThrottleTimeMs(throttleTimeMs)
-                .setErrorCode(error.code()));
+            .setThrottleTimeMs(throttleTimeMs)
+            .setErrorCode(error.code()));
     }
 
     public static BrokerRegistrationRequest parse(Readable readable, short version) {
         return new BrokerRegistrationRequest(new BrokerRegistrationRequestData(readable, version),
-                version);
+            version);
     }
 }

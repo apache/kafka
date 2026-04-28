@@ -90,22 +90,22 @@ public class UpdateFollowerFetchStateBenchmark {
         scheduler.startup();
         LogConfig logConfig = createLogConfig();
         logManager = new LogManagerBuilder().
-            setLogDirs(List.of(logDir)).
-            setInitialOfflineDirs(List.of()).
-            setConfigRepository(new MockConfigRepository()).
-            setInitialDefaultConfig(logConfig).
-            setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false)).
-            setRecoveryThreadsPerDataDir(1).
-            setFlushCheckMs(1000L).
-            setFlushRecoveryOffsetCheckpointMs(10000L).
-            setFlushStartOffsetCheckpointMs(10000L).
-            setRetentionCheckMs(1000L).
-            setProducerStateManagerConfig(60000, false).
-            setScheduler(scheduler).
-            setBrokerTopicStats(brokerTopicStats).
-            setLogDirFailureChannel(logDirFailureChannel).
-            setTime(Time.SYSTEM).
-            build();
+                setLogDirs(List.of(logDir)).
+                setInitialOfflineDirs(List.of()).
+                setConfigRepository(new MockConfigRepository()).
+                setInitialDefaultConfig(logConfig).
+                setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false)).
+                setRecoveryThreadsPerDataDir(1).
+                setFlushCheckMs(1000L).
+                setFlushRecoveryOffsetCheckpointMs(10000L).
+                setFlushStartOffsetCheckpointMs(10000L).
+                setRetentionCheckMs(1000L).
+                setProducerStateManagerConfig(60000, false).
+                setScheduler(scheduler).
+                setBrokerTopicStats(brokerTopicStats).
+                setLogDirFailureChannel(logDirFailureChannel).
+                setTime(Time.SYSTEM).
+                build();
         OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
         Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), topicPartition)).thenReturn(Optional.of(0L));
         DelayedOperations delayedOperations = new DelayedOperationsMock();
@@ -113,14 +113,14 @@ public class UpdateFollowerFetchStateBenchmark {
         // one leader, plus two followers
         int[] replicas = {0, 1, 2};
         PartitionRegistration partitionRegistration = new PartitionRegistration.Builder()
-            .setLeader(0)
-            .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
-            .setLeaderEpoch(0)
-            .setIsr(replicas)
-            .setPartitionEpoch(1)
-            .setReplicas(replicas)
-            .setDirectories(DirectoryId.unassignedArray(replicas.length))
-            .build();
+                .setLeader(0)
+                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
+                .setLeaderEpoch(0)
+                .setIsr(replicas)
+                .setPartitionEpoch(1)
+                .setReplicas(replicas)
+                .setDirectories(DirectoryId.unassignedArray(replicas.length))
+                .build();
         AlterPartitionListener alterPartitionListener = Mockito.mock(AlterPartitionListener.class);
         AlterPartitionManager alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
         partition = new Partition(topicPartition, 100,

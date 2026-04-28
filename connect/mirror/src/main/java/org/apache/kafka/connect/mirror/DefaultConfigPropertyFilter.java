@@ -30,19 +30,19 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
     public static final String CONFIG_PROPERTIES_EXCLUDE_CONFIG = "config.properties.exclude";
     public static final String USE_DEFAULTS_FROM = "use.defaults.from";
     private static final String USE_DEFAULTS_FROM_DOC = "Which cluster's defaults (source or target) to use "
-                                                        + "when syncing topic configurations that have default values.";
+            + "when syncing topic configurations that have default values.";
     private static final String USE_DEFAULTS_FROM_DEFAULT = "target";
 
     private static final String CONFIG_PROPERTIES_EXCLUDE_DOC = "List of topic configuration properties and/or regexes "
-                                                                + "that should not be replicated.";
+            + "that should not be replicated.";
     public static final String CONFIG_PROPERTIES_EXCLUDE_DEFAULT = "follower.replication.throttled.replicas, "
-                                                                   + "leader.replication.throttled.replicas, "
-                                                                   + "message.timestamp.difference.max.ms, "
-                                                                   + "log.message.timestamp.before.max.ms, "
-                                                                   + "log.message.timestamp.after.max.ms, "
-                                                                   + "message.timestamp.type, "
-                                                                   + "unclean.leader.election.enable, "
-                                                                   + "min.insync.replicas";
+            + "leader.replication.throttled.replicas, "
+            + "message.timestamp.difference.max.ms, "
+            + "log.message.timestamp.before.max.ms, "
+            + "log.message.timestamp.after.max.ms, "
+            + "message.timestamp.type, "
+            + "unclean.leader.election.enable, "
+            + "min.insync.replicas";
     private Pattern excludePattern = MirrorUtils.compilePatternList(CONFIG_PROPERTIES_EXCLUDE_DEFAULT);
     private String useDefaultsFrom = USE_DEFAULTS_FROM_DEFAULT;
 
@@ -70,17 +70,17 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
     static class ConfigPropertyFilterConfig extends AbstractConfig {
 
         static final ConfigDef DEF = new ConfigDef()
-            .define(CONFIG_PROPERTIES_EXCLUDE_CONFIG,
-                    Type.LIST,
-                    CONFIG_PROPERTIES_EXCLUDE_DEFAULT,
-                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                    Importance.HIGH,
-                    CONFIG_PROPERTIES_EXCLUDE_DOC)
-            .define(USE_DEFAULTS_FROM,
-                    Type.STRING,
-                    USE_DEFAULTS_FROM_DEFAULT,
-                    Importance.MEDIUM,
-                    USE_DEFAULTS_FROM_DOC);
+                .define(CONFIG_PROPERTIES_EXCLUDE_CONFIG,
+                        Type.LIST,
+                        CONFIG_PROPERTIES_EXCLUDE_DEFAULT,
+                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                        Importance.HIGH,
+                        CONFIG_PROPERTIES_EXCLUDE_DOC)
+                .define(USE_DEFAULTS_FROM,
+                        Type.STRING,
+                        USE_DEFAULTS_FROM_DEFAULT,
+                        Importance.MEDIUM,
+                        USE_DEFAULTS_FROM_DOC);
 
 
         ConfigPropertyFilterConfig(Map<String, ?> props) {

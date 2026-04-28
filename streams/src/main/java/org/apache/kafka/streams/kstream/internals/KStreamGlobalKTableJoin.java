@@ -31,9 +31,9 @@ class KStreamGlobalKTableJoin<K1, V1, K2, V2, VOut> implements ProcessorSupplier
     private final boolean leftJoin;
 
     KStreamGlobalKTableJoin(final KTableValueGetterSupplier<K2, V2> valueGetterSupplier,
-                            final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends VOut> joiner,
-                            final KeyValueMapper<? super K1, ? super V1, ? extends K2> mapper,
-                            final boolean leftJoin) {
+        final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends VOut> joiner,
+        final KeyValueMapper<? super K1, ? super V1, ? extends K2> mapper,
+        final boolean leftJoin) {
         this.valueGetterSupplier = valueGetterSupplier;
         this.joiner = joiner;
         this.mapper = mapper;

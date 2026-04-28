@@ -123,7 +123,7 @@ public final class BatchFileReader implements Iterator<BatchFileReader.BatchAndT
                     }
                     default:
                         throw new RuntimeException("Unsupported control record type " + type + " at offset " +
-                                record.offset());
+                            record.offset());
                 }
             } catch (Throwable e) {
                 throw new RuntimeException("Unable to read control record at offset " + record.offset(), e);

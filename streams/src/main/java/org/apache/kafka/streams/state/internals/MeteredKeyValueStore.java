@@ -182,7 +182,7 @@ public class MeteredKeyValueStore<K, V>
         );
         if (!persistent()) {
             StateStoreMetrics.addNumKeysGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
-                    (config, now) -> wrapped().approximateNumEntries());
+                (config, now) -> wrapped().approximateNumEntries());
         }
     }
 
@@ -269,8 +269,8 @@ public class MeteredKeyValueStore<K, V>
 
     @SuppressWarnings("unchecked")
     private <R> QueryResult<R> runRangeQuery(final Query<R> query,
-                                             final PositionBound positionBound,
-                                             final QueryConfig config) {
+        final PositionBound positionBound,
+        final QueryConfig config) {
 
         final QueryResult<R> result;
         final RangeQuery<K, V> typedQuery = (RangeQuery<K, V>) query;
@@ -308,9 +308,9 @@ public class MeteredKeyValueStore<K, V>
     }
 
     @SuppressWarnings("unchecked")
-    private  <R> QueryResult<R> runKeyQuery(final Query<R> query,
-                                            final PositionBound positionBound,
-                                            final QueryConfig config) {
+    private <R> QueryResult<R> runKeyQuery(final Query<R> query,
+        final PositionBound positionBound,
+        final QueryConfig config) {
         final QueryResult<R> result;
         final KeyQuery<K, V> typedKeyQuery = (KeyQuery<K, V>) query;
         final KeyQuery<Bytes, byte[]> rawKeyQuery =
@@ -343,7 +343,7 @@ public class MeteredKeyValueStore<K, V>
 
     @Override
     public void put(final K key,
-                    final V value) {
+        final V value) {
         Objects.requireNonNull(key, "key cannot be null");
         try {
             maybeMeasureLatency(() -> wrapped().put(serializeKey(key), serializeValue(value)), time, putSensor);
@@ -356,7 +356,7 @@ public class MeteredKeyValueStore<K, V>
 
     @Override
     public V putIfAbsent(final K key,
-                         final V value) {
+        final V value) {
         Objects.requireNonNull(key, "key cannot be null");
         final V currentValue = maybeMeasureLatency(
             () -> deserializeValue(wrapped().putIfAbsent(serializeKey(key), serializeValue(value))),
@@ -393,7 +393,7 @@ public class MeteredKeyValueStore<K, V>
 
     @Override
     public KeyValueIterator<K, V> range(final K from,
-                                        final K to) {
+        final K to) {
         return new MeteredKeyValueStoreIterator(
             wrapped().range(serializeKey(from), serializeKey(to)),
             rangeSensor
@@ -402,7 +402,7 @@ public class MeteredKeyValueStore<K, V>
 
     @Override
     public KeyValueIterator<K, V> reverseRange(final K from,
-                                               final K to) {
+        final K to) {
         return new MeteredKeyValueStoreIterator(
             wrapped().reverseRange(serializeKey(from), serializeKey(to)),
             rangeSensor
@@ -465,7 +465,7 @@ public class MeteredKeyValueStore<K, V>
     protected void maybeRecordE2ELatency() {
         if (e2eLatencySensor.shouldRecord() && internalContext != null) {
             final long currentTime = time.milliseconds();
-            final long e2eLatency =  currentTime - internalContext.recordContext().timestamp();
+            final long e2eLatency = currentTime - internalContext.recordContext().timestamp();
             e2eLatencySensor.record(e2eLatency, currentTime);
         }
     }
@@ -478,7 +478,7 @@ public class MeteredKeyValueStore<K, V>
         private final long startTimestamp;
 
         private MeteredKeyValueStoreIterator(final KeyValueIterator<Bytes, byte[]> iter,
-                                             final Sensor sensor) {
+            final Sensor sensor) {
             this.iter = iter;
             this.sensor = sensor;
             this.startTimestamp = time.milliseconds();

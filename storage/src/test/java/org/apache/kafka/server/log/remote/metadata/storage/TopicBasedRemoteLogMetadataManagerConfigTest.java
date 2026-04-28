@@ -169,9 +169,9 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
     }
 
     private Map<String, Object> createValidConfigProps(Map<String, Object> commonClientConfig,
-                                                       Map<String, Object> producerConfig,
-                                                       Map<String, Object> consumerConfig,
-                                                       Map<String, Object> adminConfig) {
+            Map<String, Object> producerConfig,
+            Map<String, Object> consumerConfig,
+            Map<String, Object> adminConfig) {
         Map<String, Object> props = new HashMap<>();
         props.put(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP_SERVERS);
         props.put(BROKER_ID, 1);
@@ -214,13 +214,13 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
 
     private void assertMaskedSensitiveConfigurations(String configString) {
         String[] sensitiveConfigKeys = {
-            SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
-            SslConfigs.SSL_KEY_PASSWORD_CONFIG,
-            SslConfigs.SSL_KEYSTORE_KEY_CONFIG,
-            SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG,
-            SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG,
-            SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
-            SaslConfigs.SASL_JAAS_CONFIG
+                SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
+                SslConfigs.SSL_KEY_PASSWORD_CONFIG,
+                SslConfigs.SSL_KEYSTORE_KEY_CONFIG,
+                SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG,
+                SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG,
+                SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
+                SaslConfigs.SASL_JAAS_CONFIG
         };
         Arrays.stream(sensitiveConfigKeys)
                 .forEach(config -> assertTrue(configString.contains(config + "=(redacted)")));

@@ -30,7 +30,7 @@ import java.util.List;
  * @param records        The records *expected* in the remote log segment.
  */
 public record OffloadedSegmentSpec(int sourceBrokerId, TopicPartition topicPartition, int baseOffset,
-                                   List<ProducerRecord<String, String>> records) {
+List<ProducerRecord<String, String>> records) {
 
     @Override
     public String toString() {

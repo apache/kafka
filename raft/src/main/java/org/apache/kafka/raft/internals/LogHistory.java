@@ -75,5 +75,6 @@ public interface LogHistory<T> {
      */
     void clear();
 
-    record Entry<T>(long offset, T value) { }
+    record Entry<T>(long offset, T value) {
+    }
 }

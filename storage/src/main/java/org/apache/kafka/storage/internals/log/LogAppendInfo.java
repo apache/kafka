@@ -62,17 +62,17 @@ public class LogAppendInfo {
      * @param lastOffsetOfFirstBatch The last offset of the first batch
      */
     public LogAppendInfo(long firstOffset,
-                         long lastOffset,
-                         Optional<Integer> lastLeaderEpoch,
-                         long maxTimestamp,
-                         long logAppendTime,
-                         long logStartOffset,
-                         RecordValidationStats recordValidationStats,
-                         CompressionType sourceCompression,
-                         int validBytes,
-                         long lastOffsetOfFirstBatch) {
+            long lastOffset,
+            Optional<Integer> lastLeaderEpoch,
+            long maxTimestamp,
+            long logAppendTime,
+            long logStartOffset,
+            RecordValidationStats recordValidationStats,
+            CompressionType sourceCompression,
+            int validBytes,
+            long lastOffsetOfFirstBatch) {
         this(firstOffset, lastOffset, lastLeaderEpoch, maxTimestamp, logAppendTime, logStartOffset,
-            recordValidationStats, sourceCompression, validBytes, lastOffsetOfFirstBatch, List.of(),
+                recordValidationStats, sourceCompression, validBytes, lastOffsetOfFirstBatch, List.of(),
                 LeaderHwChange.NONE);
     }
 
@@ -95,17 +95,17 @@ public class LogAppendInfo {
      *                               Same if high watermark is not changed. None is the default value and it means append failed
      */
     public LogAppendInfo(long firstOffset,
-                         long lastOffset,
-                         Optional<Integer> lastLeaderEpoch,
-                         long maxTimestamp,
-                         long logAppendTime,
-                         long logStartOffset,
-                         RecordValidationStats recordValidationStats,
-                         CompressionType sourceCompression,
-                         int validBytes,
-                         long lastOffsetOfFirstBatch,
-                         List<RecordError> recordErrors,
-                         LeaderHwChange leaderHwChange) {
+            long lastOffset,
+            Optional<Integer> lastLeaderEpoch,
+            long maxTimestamp,
+            long logAppendTime,
+            long logStartOffset,
+            RecordValidationStats recordValidationStats,
+            CompressionType sourceCompression,
+            int validBytes,
+            long lastOffsetOfFirstBatch,
+            List<RecordError> recordErrors,
+            LeaderHwChange leaderHwChange) {
         this.firstOffset = firstOffset;
         this.lastOffset = lastOffset;
         this.lastLeaderEpoch = lastLeaderEpoch;

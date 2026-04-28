@@ -45,8 +45,8 @@ public interface CoordinatorExecutor<T> {
      */
     interface TaskOperation<T, R> {
         CoordinatorResult<Void, T> onComplete(
-            R result,
-            Throwable exception
+                R result,
+                Throwable exception
         ) throws KafkaException;
     }
 
@@ -62,9 +62,9 @@ public interface CoordinatorExecutor<T> {
      * @param <R> The return type of the task.
      */
     <R> boolean schedule(
-        String key,
-        TaskRunnable<R> task,
-        TaskOperation<T, R> operation
+            String key,
+            TaskRunnable<R> task,
+            TaskOperation<T, R> operation
     );
 
     /**

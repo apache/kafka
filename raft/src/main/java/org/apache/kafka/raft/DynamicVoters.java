@@ -72,7 +72,7 @@ public final class DynamicVoters {
         for (DynamicVoter voter : voters) {
             if (votersMap.put(voter.nodeId(), voter) != null) {
                 throw new IllegalArgumentException("Node id " + voter.nodeId() +
-                        " was specified more than once.");
+                    " was specified more than once.");
             }
         }
         this.voters = Collections.unmodifiableNavigableMap(votersMap);

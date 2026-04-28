@@ -65,29 +65,29 @@ public class FetchMetricsManager extends AbstractConsumerMetricsManager {
         this.metricsRegistry = metricsRegistry;
 
         this.throttleTime = new SensorBuilder(metrics, "fetch-throttle-time")
-                .withAvg(metricsRegistry.fetchThrottleTimeAvg)
-                .withMax(metricsRegistry.fetchThrottleTimeMax)
-                .build();
+            .withAvg(metricsRegistry.fetchThrottleTimeAvg)
+            .withMax(metricsRegistry.fetchThrottleTimeMax)
+            .build();
         this.bytesFetched = new SensorBuilder(metrics, "bytes-fetched")
-                .withAvg(metricsRegistry.fetchSizeAvg)
-                .withMax(metricsRegistry.fetchSizeMax)
-                .withMeter(metricsRegistry.bytesConsumedRate, metricsRegistry.bytesConsumedTotal)
-                .build();
+            .withAvg(metricsRegistry.fetchSizeAvg)
+            .withMax(metricsRegistry.fetchSizeMax)
+            .withMeter(metricsRegistry.bytesConsumedRate, metricsRegistry.bytesConsumedTotal)
+            .build();
         this.recordsFetched = new SensorBuilder(metrics, "records-fetched")
-                .withAvg(metricsRegistry.recordsPerRequestAvg)
-                .withMeter(metricsRegistry.recordsConsumedRate, metricsRegistry.recordsConsumedTotal)
-                .build();
+            .withAvg(metricsRegistry.recordsPerRequestAvg)
+            .withMeter(metricsRegistry.recordsConsumedRate, metricsRegistry.recordsConsumedTotal)
+            .build();
         this.fetchLatency = new SensorBuilder(metrics, "fetch-latency")
-                .withAvg(metricsRegistry.fetchLatencyAvg)
-                .withMax(metricsRegistry.fetchLatencyMax)
-                .withMeter(new WindowedCount(), metricsRegistry.fetchRequestRate, metricsRegistry.fetchRequestTotal)
-                .build();
+            .withAvg(metricsRegistry.fetchLatencyAvg)
+            .withMax(metricsRegistry.fetchLatencyMax)
+            .withMeter(new WindowedCount(), metricsRegistry.fetchRequestRate, metricsRegistry.fetchRequestTotal)
+            .build();
         this.recordsLag = new SensorBuilder(metrics, "records-lag")
-                .withMax(metricsRegistry.recordsLagMax)
-                .build();
+            .withMax(metricsRegistry.recordsLagMax)
+            .build();
         this.recordsLead = new SensorBuilder(metrics, "records-lead")
-                .withMin(metricsRegistry.recordsLeadMin)
-                .build();
+            .withMin(metricsRegistry.recordsLeadMin)
+            .build();
     }
 
     public Sensor throttleTimeSensor() {

@@ -42,8 +42,8 @@ public class ConsumerPartitionAssignorTest {
     @Test
     public void shouldInstantiateAssignor() {
         List<ConsumerPartitionAssignor> assignors = getAssignorInstances(
-                Collections.singletonList(StickyAssignor.class.getName()),
-                Collections.emptyMap()
+            Collections.singletonList(StickyAssignor.class.getName()),
+            Collections.emptyMap()
         );
         assertInstanceOf(StickyAssignor.class, assignors.get(0));
     }
@@ -51,8 +51,8 @@ public class ConsumerPartitionAssignorTest {
     @Test
     public void shouldInstantiateListOfAssignors() {
         List<ConsumerPartitionAssignor> assignors = getAssignorInstances(
-                Arrays.asList(StickyAssignor.class.getName(), CooperativeStickyAssignor.class.getName()),
-                Collections.emptyMap()
+            Arrays.asList(StickyAssignor.class.getName(), CooperativeStickyAssignor.class.getName()),
+            Collections.emptyMap()
         );
         assertInstanceOf(StickyAssignor.class, assignors.get(0));
         assertInstanceOf(CooperativeStickyAssignor.class, assignors.get(1));
@@ -77,7 +77,7 @@ public class ConsumerPartitionAssignorTest {
     @Test
     public void shouldInstantiateFromClassType() {
         List<String> classTypes =
-                initConsumerConfigWithClassTypes(Collections.singletonList(StickyAssignor.class))
+            initConsumerConfigWithClassTypes(Collections.singletonList(StickyAssignor.class))
                 .getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG);
         List<ConsumerPartitionAssignor> assignors = getAssignorInstances(classTypes, Collections.emptyMap());
         assertInstanceOf(StickyAssignor.class, assignors.get(0));
@@ -86,7 +86,7 @@ public class ConsumerPartitionAssignorTest {
     @Test
     public void shouldInstantiateFromListOfClassTypes() {
         List<String> classTypes = initConsumerConfigWithClassTypes(
-                Arrays.asList(StickyAssignor.class, CooperativeStickyAssignor.class)
+            Arrays.asList(StickyAssignor.class, CooperativeStickyAssignor.class)
         ).getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG);
 
         List<ConsumerPartitionAssignor> assignors = getAssignorInstances(classTypes, Collections.emptyMap());
@@ -98,7 +98,7 @@ public class ConsumerPartitionAssignorTest {
     @Test
     public void shouldThrowKafkaExceptionOnListWithNonAssignorClassType() {
         List<String> classTypes =
-                initConsumerConfigWithClassTypes(Arrays.asList(StickyAssignor.class, String.class))
+            initConsumerConfigWithClassTypes(Arrays.asList(StickyAssignor.class, String.class))
                 .getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG);
 
         assertThrows(KafkaException.class, () -> getAssignorInstances(classTypes, Collections.emptyMap()));

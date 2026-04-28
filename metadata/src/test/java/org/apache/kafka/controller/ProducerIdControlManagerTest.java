@@ -47,25 +47,26 @@ public class ProducerIdControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultSupportedFeatureMap(true),
-                List.of(0))).
+            QuorumFeatures.defaultSupportedFeatureMap(true),
+            List.of(0))).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setTime(time).
             setSnapshotRegistry(snapshotRegistry).
             setSessionTimeoutNs(1000).
             setFeatureControlManager(featureControl).
-            setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> { }).
+            setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> {
+        }).
             build();
 
         clusterControl.activate();
         for (int i = 0; i < 4; i++) {
             RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().setBrokerEpoch(100).setBrokerId(i);
             brokerRecord.endPoints().add(new RegisterBrokerRecord.BrokerEndpoint().
-                    setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
-                    setPort((short) 9092).
-                    setName("PLAINTEXT").
-                    setHost(String.format("broker-%02d.example.org", i)));
+                setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
+                setPort((short) 9092).
+                setName("PLAINTEXT").
+                setHost(String.format("broker-%02d.example.org", i)));
             clusterControl.replay(brokerRecord, 100L);
         }
 
@@ -99,18 +100,18 @@ public class ProducerIdControlManagerTest {
 
         // Can't go backwards in Producer IDs
         assertThrows(RuntimeException.class, () ->
-            producerIdControlManager.replay(
-                new ProducerIdsRecord()
-                    .setBrokerId(1)
-                    .setBrokerEpoch(100)
-                    .setNextProducerId(40)),
+                producerIdControlManager.replay(
+                    new ProducerIdsRecord()
+                        .setBrokerId(1)
+                        .setBrokerEpoch(100)
+                        .setNextProducerId(40)),
             "Producer ID range must only increase");
         assertThrows(RuntimeException.class, () ->
-            producerIdControlManager.replay(
-                new ProducerIdsRecord()
-                    .setBrokerId(2)
-                    .setBrokerEpoch(100)
-                    .setNextProducerId(42)),
+                producerIdControlManager.replay(
+                    new ProducerIdsRecord()
+                        .setBrokerId(2)
+                        .setBrokerEpoch(100)
+                        .setNextProducerId(42)),
             "Producer ID range must only increase");
         range = producerIdControlManager.generateNextProducerId(3, 100).response();
         assertEquals(42, range.firstProducerId());
@@ -155,7 +156,7 @@ public class ProducerIdControlManagerTest {
     }
 
     static void generateProducerIds(
-            ProducerIdControlManager producerIdControlManager, int brokerId, long brokerEpoch) {
+        ProducerIdControlManager producerIdControlManager, int brokerId, long brokerEpoch) {
         ControllerResult<ProducerIdsBlock> result =
             producerIdControlManager.generateNextProducerId(brokerId, brokerEpoch);
         result.records().forEach(apiMessageAndVersion ->

@@ -163,7 +163,7 @@ class ReadOnlyTaskTest {
     }
 
     private void shouldThrowUnsupportedOperationException(final ReadOnlyTask readOnlyTask,
-                                                          final Method method) {
+        final Method method) {
         final Exception exception = assertThrows(
             UnsupportedOperationException.class,
             () -> {
@@ -208,7 +208,8 @@ class ReadOnlyTaskTest {
                     parameters[i] = new IllegalStateException();
                     break;
                 case "java.util.function.Consumer":
-                    parameters[i] = (Consumer) ignored -> { };
+                    parameters[i] = (Consumer) ignored -> {
+                    };
                     break;
                 case "java.lang.Iterable":
                     parameters[i] = Collections.emptySet();

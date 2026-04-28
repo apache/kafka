@@ -691,21 +691,21 @@ public class StreamsGroupTest {
     @Test
     public void testValidateOffsetCommitWithOlderEpoch() {
         StreamsGroup group = createStreamsGroup("group-foo");
-        
+
         group.setTopology(new StreamsTopology(1, Map.of("0", new StreamsGroupTopologyValue.Subtopology()
             .setSubtopologyId("0")
             .setSourceTopics(List.of("input-topic")))));
-        
+
         group.updateMember(new StreamsGroupMember.Builder("member-1")
             .setMemberEpoch(2)
             .setAssignedTasks(new TasksTupleWithEpochs(
                 Map.of("0", Map.of(0, 2, 1, 1)),
                 Map.of(), Map.of()))
             .build());
-        
+
         CommitPartitionValidator validator = group.validateOffsetCommit(
             "member-1", "", 1, false, ApiKeys.OFFSET_COMMIT.latestVersion());
-        
+
         // Received epoch (1) < assignment epoch (2) should throw
         assertThrows(StaleMemberEpochException.class, () ->
             validator.validate("input-topic", Uuid.ZERO_UUID, 0));
@@ -714,11 +714,11 @@ public class StreamsGroupTest {
     @Test
     public void testValidateOffsetCommitWithOlderEpochMissingTopology() {
         StreamsGroup group = createStreamsGroup("group-foo");
-        
+
         group.updateMember(new StreamsGroupMember.Builder("member-1")
             .setMemberEpoch(2)
             .build());
-        
+
         // Topology is retrieved when creating validator, so exception is thrown here
         assertThrows(StaleMemberEpochException.class, () ->
             group.validateOffsetCommit("member-1", "", 1, false, ApiKeys.OFFSET_COMMIT.latestVersion()));
@@ -727,18 +727,18 @@ public class StreamsGroupTest {
     @Test
     public void testValidateOffsetCommitWithOlderEpochMissingSubtopology() {
         StreamsGroup group = createStreamsGroup("group-foo");
-        
+
         group.setTopology(new StreamsTopology(1, Map.of("0", new StreamsGroupTopologyValue.Subtopology()
             .setSubtopologyId("0")
             .setSourceTopics(List.of("input-topic")))));
-        
+
         group.updateMember(new StreamsGroupMember.Builder("member-1")
             .setMemberEpoch(2)
             .build());
-        
+
         CommitPartitionValidator validator = group.validateOffsetCommit(
             "member-1", "", 1, false, ApiKeys.OFFSET_COMMIT.latestVersion());
-        
+
         assertThrows(StaleMemberEpochException.class, () ->
             validator.validate("unknown-topic", Uuid.ZERO_UUID, 0));
     }
@@ -746,11 +746,11 @@ public class StreamsGroupTest {
     @Test
     public void testValidateOffsetCommitWithOlderEpochUnassignedPartition() {
         StreamsGroup group = createStreamsGroup("group-foo");
-        
+
         group.setTopology(new StreamsTopology(1, Map.of("0", new StreamsGroupTopologyValue.Subtopology()
             .setSubtopologyId("0")
             .setSourceTopics(List.of("input-topic")))));
-        
+
         group.updateMember(new StreamsGroupMember.Builder("member-1")
             .setMemberEpoch(2)
             .setAssignedTasks(new TasksTupleWithEpochs(
@@ -758,7 +758,7 @@ public class StreamsGroupTest {
                 Map.of(), Map.of()))
             .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
             .build());
-        
+
         CommitPartitionValidator validator = group.validateOffsetCommit(
             "member-1", "", 1, false, ApiKeys.OFFSET_COMMIT.latestVersion());
 
@@ -770,21 +770,21 @@ public class StreamsGroupTest {
     @Test
     public void testValidateOffsetCommitWithOlderEpochValidAssignment() {
         StreamsGroup group = createStreamsGroup("group-foo");
-        
+
         group.setTopology(new StreamsTopology(1, Map.of("0", new StreamsGroupTopologyValue.Subtopology()
             .setSubtopologyId("0")
             .setSourceTopics(List.of("input-topic")))));
-        
+
         group.updateMember(new StreamsGroupMember.Builder("member-1")
             .setMemberEpoch(5)
             .setAssignedTasks(new TasksTupleWithEpochs(
                 Map.of("0", Map.of(0, 2, 1, 2)),
                 Map.of(), Map.of()))
             .build());
-        
+
         CommitPartitionValidator validator = group.validateOffsetCommit(
             "member-1", "", 2, false, ApiKeys.OFFSET_COMMIT.latestVersion());
-        
+
         // Received epoch 2 == assignment epoch 2 should succeed
         validator.validate("input-topic", Uuid.ZERO_UUID, 0);
         validator.validate("input-topic", Uuid.ZERO_UUID, 1);
@@ -1075,7 +1075,7 @@ public class StreamsGroupTest {
         streamsGroup.setTopology(topology);
 
         streamsGroup.updateMember(streamsGroup.getOrCreateDefaultMember("member-id"));
-        
+
         assertTrue(streamsGroup.isSubscribedToTopic("test-topic1"));
         assertTrue(streamsGroup.isSubscribedToTopic("test-topic2"));
         assertFalse(streamsGroup.isSubscribedToTopic("non-existent-topic"));
@@ -1127,14 +1127,14 @@ public class StreamsGroupTest {
         // Create a topology with subtopologies
         Map<String, StreamsGroupTopologyValue.Subtopology> subtopologies = Map.of(
             "sub-1", new StreamsGroupTopologyValue.Subtopology()
-                .setSubtopologyId("sub-1")
-                .setSourceTopics(List.of("input-topic"))
-                .setRepartitionSourceTopics(List.of(
-                    new StreamsGroupTopologyValue.TopicInfo().setName("repartition-topic")
-                ))
-                .setStateChangelogTopics(List.of(
-                    new StreamsGroupTopologyValue.TopicInfo().setName("changelog-topic")
-                ))
+            .setSubtopologyId("sub-1")
+            .setSourceTopics(List.of("input-topic"))
+            .setRepartitionSourceTopics(List.of(
+                new StreamsGroupTopologyValue.TopicInfo().setName("repartition-topic")
+            ))
+            .setStateChangelogTopics(List.of(
+                new StreamsGroupTopologyValue.TopicInfo().setName("changelog-topic")
+            ))
         );
 
         group.setGroupEpoch(2);
@@ -1191,8 +1191,8 @@ public class StreamsGroupTest {
         // Create both StreamsTopology and ConfiguredTopology
         Map<String, StreamsGroupTopologyValue.Subtopology> subtopologies = Map.of(
             "sub-1", new StreamsGroupTopologyValue.Subtopology()
-                .setSubtopologyId("sub-1")
-                .setSourceTopics(List.of("streams-topic"))
+            .setSubtopologyId("sub-1")
+            .setSourceTopics(List.of("streams-topic"))
         );
 
         group.setGroupEpoch(3);
@@ -1218,8 +1218,8 @@ public class StreamsGroupTest {
         // Create StreamsTopology with subtopologies
         Map<String, StreamsGroupTopologyValue.Subtopology> subtopologies = Map.of(
             "sub-1", new StreamsGroupTopologyValue.Subtopology()
-                .setSubtopologyId("sub-1")
-                .setSourceTopics(List.of("fallback-topic"))
+            .setSubtopologyId("sub-1")
+            .setSourceTopics(List.of("fallback-topic"))
         );
 
         group.setGroupEpoch(4);

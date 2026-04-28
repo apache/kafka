@@ -100,7 +100,7 @@ public class InternalMockProcessorContext<KOut, VOut>
     }
 
     public InternalMockProcessorContext(final File stateDir,
-                                        final StreamsConfig config) {
+        final StreamsConfig config) {
         this(
             stateDir,
             null,
@@ -131,8 +131,8 @@ public class InternalMockProcessorContext<KOut, VOut>
     }
 
     public InternalMockProcessorContext(final File stateDir,
-                                        final StreamsConfig config,
-                                        final RecordCollector collector) {
+        final StreamsConfig config,
+        final RecordCollector collector) {
         this(
             stateDir,
             null,
@@ -150,9 +150,9 @@ public class InternalMockProcessorContext<KOut, VOut>
     }
 
     public InternalMockProcessorContext(final File stateDir,
-                                        final Serde<?> keySerde,
-                                        final Serde<?> valueSerde,
-                                        final StreamsConfig config) {
+        final Serde<?> keySerde,
+        final Serde<?> valueSerde,
+        final StreamsConfig config) {
         this(
             stateDir,
             keySerde,
@@ -166,13 +166,13 @@ public class InternalMockProcessorContext<KOut, VOut>
     }
 
     public InternalMockProcessorContext(final StateSerdes<?, ?> serdes,
-                                        final RecordCollector collector) {
+        final RecordCollector collector) {
         this(null, serdes.keySerde(), serdes.valueSerde(), collector, null);
     }
 
     public InternalMockProcessorContext(final StateSerdes<?, ?> serdes,
-                                        final RecordCollector collector,
-                                        final Metrics metrics) {
+        final RecordCollector collector,
+        final Metrics metrics) {
         this(
             null,
             serdes.keySerde(),
@@ -186,10 +186,10 @@ public class InternalMockProcessorContext<KOut, VOut>
     }
 
     public InternalMockProcessorContext(final File stateDir,
-                                        final Serde<?> keySerde,
-                                        final Serde<?> valueSerde,
-                                        final RecordCollector collector,
-                                        final ThreadCache cache) {
+        final Serde<?> keySerde,
+        final Serde<?> valueSerde,
+        final RecordCollector collector,
+        final ThreadCache cache) {
         this(
             stateDir,
             keySerde,
@@ -203,44 +203,44 @@ public class InternalMockProcessorContext<KOut, VOut>
     }
 
     public InternalMockProcessorContext(final File stateDir,
-                                        final Serde<?> keySerde,
-                                        final Serde<?> valueSerde,
-                                        final RecordCollector collector,
-                                        final ThreadCache cache,
-                                        final StreamsConfig config) {
+        final Serde<?> keySerde,
+        final Serde<?> valueSerde,
+        final RecordCollector collector,
+        final ThreadCache cache,
+        final StreamsConfig config) {
         this(
-                stateDir,
-                keySerde,
-                valueSerde,
-                new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
-                config,
-                () -> collector,
-                cache,
-                Time.SYSTEM
+            stateDir,
+            keySerde,
+            valueSerde,
+            new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
+            config,
+            () -> collector,
+            cache,
+            Time.SYSTEM
         );
     }
 
     public InternalMockProcessorContext(final File stateDir,
-                                        final Serde<?> keySerde,
-                                        final Serde<?> valueSerde,
-                                        final StreamsMetricsImpl metrics,
-                                        final StreamsConfig config,
-                                        final RecordCollector.Supplier collectorSupplier,
-                                        final ThreadCache cache,
-                                        final Time time) {
+        final Serde<?> keySerde,
+        final Serde<?> valueSerde,
+        final StreamsMetricsImpl metrics,
+        final StreamsConfig config,
+        final RecordCollector.Supplier collectorSupplier,
+        final ThreadCache cache,
+        final Time time) {
         this(stateDir, keySerde, valueSerde, metrics, config, collectorSupplier, cache, time, new TaskId(0, 0));
     }
 
     @SuppressWarnings("this-escape")
     public InternalMockProcessorContext(final File stateDir,
-                                        final Serde<?> keySerde,
-                                        final Serde<?> valueSerde,
-                                        final StreamsMetricsImpl metrics,
-                                        final StreamsConfig config,
-                                        final RecordCollector.Supplier collectorSupplier,
-                                        final ThreadCache cache,
-                                        final Time time,
-                                        final TaskId taskId) {
+        final Serde<?> keySerde,
+        final Serde<?> valueSerde,
+        final StreamsMetricsImpl metrics,
+        final StreamsConfig config,
+        final RecordCollector.Supplier collectorSupplier,
+        final ThreadCache cache,
+        final Time time,
+        final TaskId taskId) {
         super(
             taskId,
             config,
@@ -254,17 +254,17 @@ public class InternalMockProcessorContext<KOut, VOut>
         this.recordCollectorSupplier = collectorSupplier;
         this.time = time;
         consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-                appConfigs(),
-                IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
-                false);
+            appConfigs(),
+            IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+            false);
         this.recordContext = new ProcessorRecordContext(
-                0,
-                0,
-                0,
-                "topic",
-                new RecordHeaders(),
-                "sourceKey".getBytes(StandardCharsets.UTF_8),
-                "sourceValue".getBytes(StandardCharsets.UTF_8)
+            0,
+            0,
+            0,
+            "topic",
+            new RecordHeaders(),
+            "sourceKey".getBytes(StandardCharsets.UTF_8),
+            "sourceValue".getBytes(StandardCharsets.UTF_8)
         );
     }
 
@@ -307,7 +307,8 @@ public class InternalMockProcessorContext<KOut, VOut>
 
     // state mgr will be overridden by the state dir and store maps
     @Override
-    public void initialize() {}
+    public void initialize() {
+    }
 
     @Override
     public File stateDir() {
@@ -319,8 +320,8 @@ public class InternalMockProcessorContext<KOut, VOut>
 
     @Override
     public void register(final StateStore store,
-                         final StateRestoreCallback func,
-                         final CommitCallback checkpoint) {
+        final StateRestoreCallback func,
+        final CommitCallback checkpoint) {
         storeMap.put(store.name(), store);
         restoreFuncs.put(store.name(), func);
         stateManager().registerStore(store, func, checkpoint);
@@ -334,21 +335,22 @@ public class InternalMockProcessorContext<KOut, VOut>
 
     @Override
     public Cancellable schedule(final Duration interval,
-                                final PunctuationType type,
-                                final Punctuator callback) throws IllegalArgumentException {
+        final PunctuationType type,
+        final Punctuator callback) throws IllegalArgumentException {
         throw new UnsupportedOperationException("schedule() not supported.");
     }
 
     @Override
     public Cancellable schedule(final Instant startTime,
-                                final Duration interval,
-                                final PunctuationType type,
-                                final Punctuator callback) throws IllegalArgumentException {
+        final Duration interval,
+        final PunctuationType type,
+        final Punctuator callback) throws IllegalArgumentException {
         throw new UnsupportedOperationException("schedule() not supported.");
     }
 
     @Override
-    public void commit() {}
+    public void commit() {
+    }
 
     @Override
     public <K extends KOut, V extends VOut> void forward(final Record<K, V> record) {
@@ -392,7 +394,7 @@ public class InternalMockProcessorContext<KOut, VOut>
                     final Record<Object, Object> record = new Record<>(key, value, toInternal.timestamp(), headers());
                     ((ProcessorNode<Object, Object, ?, ?>) childNode).process(record);
                     toInternal.update(to); // need to reset because MockProcessorContext is shared over multiple
-                                           // Processors and toInternal might have been modified
+                    // Processors and toInternal might have been modified
                 }
             }
         } finally {
@@ -432,11 +434,11 @@ public class InternalMockProcessorContext<KOut, VOut>
 
     @Override
     public void logChange(final String storeName,
-                          final Bytes key,
-                          final byte[] value,
-                          final long timestamp,
-                          final Headers headers,
-                          final Position position) {
+        final Bytes key,
+        final byte[] value,
+        final long timestamp,
+        final Headers headers,
+        final Position position) {
 
         if (consistencyEnabled) {
             addVectorClockToHeaders(headers, position);
@@ -508,7 +510,7 @@ public class InternalMockProcessorContext<KOut, VOut>
 
     @Override
     public <K extends KOut, V extends VOut> void forward(final FixedKeyRecord<K, V> record,
-                                                         final String childName) {
+        final String childName) {
         forward(
             new Record<>(record.key(), record.value(), record.timestamp(), record.headers()),
             childName

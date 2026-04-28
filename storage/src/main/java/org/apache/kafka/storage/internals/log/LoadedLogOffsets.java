@@ -20,8 +20,8 @@ import java.util.Objects;
 
 public record LoadedLogOffsets(long logStartOffset, long recoveryPoint, LogOffsetMetadata nextOffsetMetadata) {
     public LoadedLogOffsets(final long logStartOffset,
-                            final long recoveryPoint,
-                            final LogOffsetMetadata nextOffsetMetadata) {
+            final long recoveryPoint,
+            final LogOffsetMetadata nextOffsetMetadata) {
         this.logStartOffset = logStartOffset;
         this.recoveryPoint = recoveryPoint;
         this.nextOffsetMetadata = Objects.requireNonNull(nextOffsetMetadata, "nextOffsetMetadata should not be null");

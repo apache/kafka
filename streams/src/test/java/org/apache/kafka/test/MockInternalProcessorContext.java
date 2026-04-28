@@ -127,10 +127,12 @@ public class MockInternalProcessorContext<KOut, VOut> extends MockProcessorConte
     }
 
     @Override
-    public void initialize() {}
+    public void initialize() {
+    }
 
     @Override
-    public void uninitialize() {}
+    public void uninitialize() {
+    }
 
     @Override
     public RecordCollector recordCollector() {
@@ -143,15 +145,15 @@ public class MockInternalProcessorContext<KOut, VOut> extends MockProcessorConte
 
     @Override
     public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {
+        final StateRestoreCallback stateRestoreCallback) {
         restoreCallbacks.put(store.name(), stateRestoreCallback);
         addStateStore(store);
     }
 
     @Override
     public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback,
-                         final CommitCallback checkpoint) {
+        final StateRestoreCallback stateRestoreCallback,
+        final CommitCallback checkpoint) {
         restoreCallbacks.put(store.name(), stateRestoreCallback);
         addStateStore(store);
     }
@@ -205,11 +207,11 @@ public class MockInternalProcessorContext<KOut, VOut> extends MockProcessorConte
 
     @Override
     public void logChange(final String storeName,
-                          final Bytes key,
-                          final byte[] value,
-                          final long timestamp,
-                          final Headers headers,
-                          final Position position) {
+        final Bytes key,
+        final byte[] value,
+        final long timestamp,
+        final Headers headers,
+        final Position position) {
     }
 
     @Override
@@ -262,7 +264,7 @@ public class MockInternalProcessorContext<KOut, VOut> extends MockProcessorConte
 
     @Override
     public <K extends KOut, V extends VOut> void forward(final FixedKeyRecord<K, V> record,
-                                                         final String childName) {
+        final String childName) {
         forward(
             new Record<>(record.key(), record.value(), record.timestamp(), record.headers()),
             childName

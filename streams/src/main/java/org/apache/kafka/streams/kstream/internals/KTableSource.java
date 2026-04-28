@@ -51,7 +51,7 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
     private boolean sendOldValues;
 
     public KTableSource(
-            final MaterializedInternal<KIn, VIn, KeyValueStore<Bytes, byte[]>> materialized) {
+        final MaterializedInternal<KIn, VIn, KeyValueStore<Bytes, byte[]>> materialized) {
         this.storeName = materialized.storeName();
         Objects.requireNonNull(storeName, "storeName can't be null");
         this.queryableName = materialized.queryableStoreName();
@@ -152,7 +152,7 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
                                     + "topic=[{}] partition=[{}] offset=[{}].",
                                 store.name(),
                                 oldValueAndTimestamp.timestamp(), record.timestamp(),
-                                recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset() 
+                                recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
                             );
                         } else {
                             LOG.warn(

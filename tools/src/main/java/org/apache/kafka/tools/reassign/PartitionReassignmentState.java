@@ -28,7 +28,8 @@ import java.util.List;
  * @param done            True if the reassignment is done.
  */
 record PartitionReassignmentState(
-        List<Integer> currentReplicas,
-        List<Integer> targetReplicas,
-        boolean done
-) { }
+List<Integer> currentReplicas,
+List<Integer> targetReplicas,
+boolean done
+) {
+}

@@ -327,9 +327,9 @@ public class ListConsumerGroupOffsetsHandlerTest {
         );
         return handler.handleResponse(new Node(1, "host", 1234),
             errorMap.keySet()
-                    .stream()
-                    .map(CoordinatorKey::byGroupId)
-                    .collect(Collectors.toSet()),
+                .stream()
+                .map(CoordinatorKey::byGroupId)
+                .collect(Collectors.toSet()),
             response
         );
     }
@@ -404,7 +404,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
                                     .setMetadata(OffsetFetchResponse.NO_METADATA)
                                     .setErrorCode(Errors.NONE.code())
                             ))
-                        )),
+                    )),
                 new OffsetFetchResponseData.OffsetFetchResponseGroup()
                     .setGroupId(group2)
                     .setTopics(List.of(
@@ -511,7 +511,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
     }
 
     private void assertUnmappedWithMultipleGroups(
-            AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> result
+        AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> result
     ) {
         assertEquals(emptySet(), result.completedKeys.keySet());
         assertEquals(emptySet(), result.failedKeys.keySet());
@@ -519,7 +519,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
     }
 
     private void assertRetriable(
-            AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> result
+        AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> result
     ) {
         assertEquals(emptySet(), result.completedKeys.keySet());
         assertEquals(emptySet(), result.failedKeys.keySet());
@@ -576,15 +576,15 @@ public class ListConsumerGroupOffsetsHandlerTest {
 
     private Set<CoordinatorKey> coordinatorKeys(String... groups) {
         return Stream.of(groups)
-                .map(CoordinatorKey::byGroupId)
-                .collect(Collectors.toSet());
+            .map(CoordinatorKey::byGroupId)
+            .collect(Collectors.toSet());
     }
 
     private Set<String> requestGroups(OffsetFetchRequest request) {
         return request.data().groups()
-                .stream()
-                .map(OffsetFetchRequestGroup::groupId)
-                .collect(Collectors.toSet());
+            .stream()
+            .map(OffsetFetchRequestGroup::groupId)
+            .collect(Collectors.toSet());
     }
 
     private Map<String, Errors> errorMap(Collection<String> groups, Errors error) {

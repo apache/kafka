@@ -34,8 +34,8 @@ public class ShareAcquiredRecords {
      */
     private final List<AcquiredRecords> acquiredRecords;
     /**
-      * The number of offsets acquired. The acquired records has a first and last offset, and the count
-      * is the actual number of offsets acquired.
+     * The number of offsets acquired. The acquired records has a first and last offset, and the count
+     * is the actual number of offsets acquired.
      */
     private final int count;
 

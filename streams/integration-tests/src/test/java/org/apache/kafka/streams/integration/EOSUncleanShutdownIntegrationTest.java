@@ -120,12 +120,12 @@ public class EOSUncleanShutdownIntegrationTest {
             mkEntry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ((Serializer<String>) STRING_SERIALIZER).getClass().getName()),
             mkEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
         ));
-        final KafkaStreams driver =  new KafkaStreams(builder.build(), STREAMS_CONFIG);
+        final KafkaStreams driver = new KafkaStreams(builder.build(), STREAMS_CONFIG);
         driver.cleanUp();
         driver.start();
 
         TestUtils.waitForCondition(() -> driver.state().equals(State.RUNNING),
-                () -> "Expected RUNNING state but driver is on " + driver.state());
+            () -> "Expected RUNNING state but driver is on " + driver.state());
 
         // Task's StateDir
         final File taskStateDir = new File(String.join("/", TEST_FOLDER.getPath(), appId, "0_0"));
@@ -143,12 +143,12 @@ public class EOSUncleanShutdownIntegrationTest {
                     new KeyValueTimestamp<>("k3", "v3", 2L)));
 
             TestUtils.waitForCondition(() -> recordCount.get() == RECORD_TOTAL,
-                    () -> "Expected " + RECORD_TOTAL + " records processed but only got " + recordCount.get());
+                () -> "Expected " + RECORD_TOTAL + " records processed but only got " + recordCount.get());
         } catch (final Exception e) {
             e.printStackTrace();
         } finally {
             TestUtils.waitForCondition(() -> driver.state().equals(State.ERROR),
-                    () -> "Expected ERROR state but driver is on " + driver.state());
+                () -> "Expected ERROR state but driver is on " + driver.state());
 
             driver.close();
 

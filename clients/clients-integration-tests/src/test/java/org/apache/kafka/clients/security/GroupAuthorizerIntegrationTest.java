@@ -89,26 +89,26 @@ public class GroupAuthorizerIntegrationTest {
 
     private Authorizer getAuthorizer(ClusterInstance clusterInstance) {
         return clusterInstance.controllers().values().stream()
-                .filter(server -> server.authorizerPlugin().isDefined())
-                .map(server -> server.authorizerPlugin().get().get()).findFirst().get();
+            .filter(server -> server.authorizerPlugin().isDefined())
+            .map(server -> server.authorizerPlugin().get().get()).findFirst().get();
     }
 
     private void setup(ClusterInstance clusterInstance) throws InterruptedException {
         // Allow inter-broker communication
         addAndVerifyAcls(
-                Set.of(createAcl(AclOperation.CLUSTER_ACTION, AclPermissionType.ALLOW, BROKER_PRINCIPAL)),
-                new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL),
-                clusterInstance
+            Set.of(createAcl(AclOperation.CLUSTER_ACTION, AclPermissionType.ALLOW, BROKER_PRINCIPAL)),
+            new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL),
+            clusterInstance
         );
         addAndVerifyAcls(
-                Set.of(createAcl(AclOperation.CREATE, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
-                new ResourcePattern(ResourceType.TOPIC, Topic.GROUP_METADATA_TOPIC_NAME, PatternType.LITERAL),
-                clusterInstance
+            Set.of(createAcl(AclOperation.CREATE, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
+            new ResourcePattern(ResourceType.TOPIC, Topic.GROUP_METADATA_TOPIC_NAME, PatternType.LITERAL),
+            clusterInstance
         );
 
         NewTopic offsetTopic = new NewTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1);
         try (Admin admin = clusterInstance.admin(Map.of(
-                AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, true))
+                 AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, true))
         ) {
             admin.createTopics(Collections.singleton(offsetTopic));
             clusterInstance.waitTopicCreation(Topic.GROUP_METADATA_TOPIC_NAME, 1);
@@ -133,43 +133,43 @@ public class GroupAuthorizerIntegrationTest {
 
     private AccessControlEntry createAcl(AclOperation aclOperation, AclPermissionType aclPermissionType, KafkaPrincipal principal) {
         return new AccessControlEntry(
-                principal.toString(),
-                WILDCARD_HOST,
-                aclOperation,
-                aclPermissionType
+            principal.toString(),
+            WILDCARD_HOST,
+            aclOperation,
+            aclPermissionType
         );
     }
 
     private void addAndVerifyAcls(Set<AccessControlEntry> acls, ResourcePattern resource, ClusterInstance clusterInstance) throws InterruptedException {
         List<AclBinding> aclBindings = acls.stream()
-                .map(acl -> new AclBinding(resource, acl))
-                .toList();
+            .map(acl -> new AclBinding(resource, acl))
+            .toList();
         Authorizer authorizer = getAuthorizer(clusterInstance);
         authorizer.createAcls(ANONYMOUS_CONTEXT, aclBindings)
-                .forEach(future -> {
-                    try {
-                        future.toCompletableFuture().get();
-                    } catch (InterruptedException | ExecutionException e) {
-                        throw new RuntimeException("Failed to create ACLs", e);
-                    }
-                });
+            .forEach(future -> {
+                try {
+                    future.toCompletableFuture().get();
+                } catch (InterruptedException | ExecutionException e) {
+                    throw new RuntimeException("Failed to create ACLs", e);
+                }
+            });
         AclBindingFilter aclBindingFilter = new AclBindingFilter(resource.toFilter(), AccessControlEntryFilter.ANY);
         clusterInstance.waitAcls(aclBindingFilter, acls);
     }
 
     private void removeAndVerifyAcls(Set<AccessControlEntry> deleteAcls, ResourcePattern resource, ClusterInstance clusterInstance) throws InterruptedException {
         List<AclBindingFilter> aclBindingFilters = deleteAcls.stream()
-                .map(acl -> new AclBindingFilter(resource.toFilter(), acl.toFilter()))
-                .toList();
+            .map(acl -> new AclBindingFilter(resource.toFilter(), acl.toFilter()))
+            .toList();
         Authorizer authorizer = getAuthorizer(clusterInstance);
         authorizer.deleteAcls(ANONYMOUS_CONTEXT, aclBindingFilters)
-                .forEach(future -> {
-                    try {
-                        future.toCompletableFuture().get();
-                    } catch (InterruptedException | ExecutionException e) {
-                        throw new RuntimeException("Failed to delete ACLs", e);
-                    }
-                });
+            .forEach(future -> {
+                try {
+                    future.toCompletableFuture().get();
+                } catch (InterruptedException | ExecutionException e) {
+                    throw new RuntimeException("Failed to delete ACLs", e);
+                }
+            });
 
         AclBindingFilter aclBindingFilter = new AclBindingFilter(resource.toFilter(), AccessControlEntryFilter.ANY);
         TestUtils.waitForCondition(() -> {
@@ -238,20 +238,20 @@ public class GroupAuthorizerIntegrationTest {
         String group = "group";
 
         addAndVerifyAcls(
-                Set.of(createAcl(AclOperation.CREATE, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
-                new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL),
-                clusterInstance
+            Set.of(createAcl(AclOperation.CREATE, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
+            new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL),
+            clusterInstance
         );
         addAndVerifyAcls(
-                Set.of(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
-                new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
-                clusterInstance
+            Set.of(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
+            new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
+            clusterInstance
         );
 
         Producer<byte[], byte[]> producer = clusterInstance.producer();
         Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(
-                GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT),
-                ConsumerConfig.GROUP_ID_CONFIG, group
+            GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT),
+            ConsumerConfig.GROUP_ID_CONFIG, group
         ));
 
         try {
@@ -314,16 +314,16 @@ public class GroupAuthorizerIntegrationTest {
             clusterInstance
         );
         addAndVerifyAcls(
-                Set.of(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
-                new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
-                clusterInstance
+            Set.of(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
+            new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
+            clusterInstance
         );
 
         try (Producer<byte[], byte[]> producer = clusterInstance.producer();
-            Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(
-                ConsumerConfig.GROUP_ID_CONFIG, group,
-                ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
-                GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT)))
+             Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(
+                 ConsumerConfig.GROUP_ID_CONFIG, group,
+                 ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
+                 GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT)))
         ) {
             clusterInstance.createTopic(topic, 1, (short) 1);
             producer.send(new ProducerRecord<>(topic, "message".getBytes())).get();
@@ -334,9 +334,9 @@ public class GroupAuthorizerIntegrationTest {
             }, "consumer failed to receive message");
             if (!withGroupPermission) {
                 removeAndVerifyAcls(
-                        Set.of(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
-                        new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
-                        clusterInstance
+                    Set.of(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
+                    new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
+                    clusterInstance
                 );
             }
             assertDoesNotThrow(consumer::unsubscribe);
@@ -364,21 +364,21 @@ public class GroupAuthorizerIntegrationTest {
         acls.add(createAcl(AclOperation.WRITE, AclPermissionType.ALLOW, CLIENT_PRINCIPAL));
         acls.add(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL));
         addAndVerifyAcls(
-                acls,
-                new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL),
-                clusterInstance
+            acls,
+            new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL),
+            clusterInstance
         );
         addAndVerifyAcls(
-                Set.of(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
-                new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
-                clusterInstance
+            Set.of(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
+            new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
+            clusterInstance
         );
 
         Producer<Object, Object> producer = clusterInstance.producer();
         Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(
-                ConsumerConfig.GROUP_ID_CONFIG, group,
-                ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
-                GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT)));
+            ConsumerConfig.GROUP_ID_CONFIG, group,
+            ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
+            GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT)));
 
         try {
             clusterInstance.createTopic(topic, 1, (short) 1);
@@ -414,21 +414,21 @@ public class GroupAuthorizerIntegrationTest {
         acls.add(createAcl(AclOperation.WRITE, AclPermissionType.ALLOW, CLIENT_PRINCIPAL));
         acls.add(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL));
         addAndVerifyAcls(
-                acls,
-                new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL),
-                clusterInstance
+            acls,
+            new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL),
+            clusterInstance
         );
         addAndVerifyAcls(
-                Set.of(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
-                new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
-                clusterInstance
+            Set.of(createAcl(AclOperation.READ, AclPermissionType.ALLOW, CLIENT_PRINCIPAL)),
+            new ResourcePattern(ResourceType.GROUP, group, PatternType.LITERAL),
+            clusterInstance
         );
 
         try (Producer<byte[], byte[]> producer = clusterInstance.producer();
              Consumer<byte[], byte[]> consumer = clusterInstance.consumer(Map.of(
-                     ConsumerConfig.GROUP_ID_CONFIG, group,
-                     ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
-                     GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT)))
+                 ConsumerConfig.GROUP_ID_CONFIG, group,
+                 ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
+                 GROUP_PROTOCOL_CONFIG, groupProtocol.name.toLowerCase(Locale.ROOT)))
         ) {
             clusterInstance.createTopic(topic, 1, (short) 1);
             producer.send(new ProducerRecord<>(topic, "message".getBytes())).get();

@@ -136,8 +136,8 @@ public class KGroupedTableImplTest {
     }
 
     private void assertReduced(final Map<String, ValueAndTimestamp<Integer>> reducedResults,
-                               final String topic,
-                               final TopologyTestDriver driver) {
+        final String topic,
+        final TopologyTestDriver driver) {
         final TestInputTopic<String, Double> inputTopic =
             driver.createInputTopic(topic, new StringSerializer(), new DoubleSerializer());
         inputTopic.pipeInput("A", 1.1, 10);
@@ -366,7 +366,7 @@ public class KGroupedTableImplTest {
     }
 
     private void processData(final String topic,
-                             final TopologyTestDriver driver) {
+        final TopologyTestDriver driver) {
         final TestInputTopic<String, String> inputTopic =
             driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
         inputTopic.pipeInput("A", "1", 10L);

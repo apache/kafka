@@ -203,14 +203,14 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
 
         final List<KafkaStreams> kafkaStreamsList = asList(streams, streamsTwo, streamsThree);
 
-        for (final KafkaStreams stream: kafkaStreamsList) {
+        for (final KafkaStreams stream : kafkaStreamsList) {
             stream.setUncaughtExceptionHandler(e -> {
                 assertThat(e.getCause().getMessage(), equalTo("The partitions returned by StreamPartitioner#partitions method when used for FK join should be a singleton set"));
                 return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
             });
         }
 
-        for (final KafkaStreams stream: kafkaStreamsList) {
+        for (final KafkaStreams stream : kafkaStreamsList) {
             stream.start();
         }
 
@@ -300,22 +300,22 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KTable<String, String> table1 = builder.stream(TABLE_1,
-                        Consumed.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true), serdeScope.decorateSerde(Serdes.String(), streamsConfig, false)))
-                .repartition(repartitionA())
-                .toTable(Named.as("table.a"));
+            Consumed.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true), serdeScope.decorateSerde(Serdes.String(), streamsConfig, false)))
+            .repartition(repartitionA())
+            .toTable(Named.as("table.a"));
 
         final KTable<String, String> table2 = builder
-                .stream(TABLE_2,
-                        Consumed.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true), serdeScope.decorateSerde(Serdes.String(), streamsConfig, false)))
-                .repartition(repartitionB())
-                .toTable(Named.as("table.b"));
+            .stream(TABLE_2,
+                Consumed.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true), serdeScope.decorateSerde(Serdes.String(), streamsConfig, false)))
+            .repartition(repartitionB())
+            .toTable(Named.as("table.b"));
 
         final Materialized<String, String, KeyValueStore<Bytes, byte[]>> materialized;
         if (queryableName != null) {
             materialized = Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(queryableName)
-                    .withKeySerde(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true))
-                    .withValueSerde(serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
-                    .withCachingDisabled();
+                .withKeySerde(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true))
+                .withValueSerde(serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
+                .withCachingDisabled();
         } else {
             throw new RuntimeException("Current implementation of joinOnForeignKey requires a materialized store");
         }
@@ -323,15 +323,15 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         final ValueJoiner<String, String, String> joiner = (value1, value2) -> "value1=" + value1 + ",value2=" + value2;
 
         final TableJoined<String, String> tableJoined = TableJoined.with(
-                new MultiPartitioner(),
-                (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(Math.abs(key.hashCode()) % numPartitions))
+            new MultiPartitioner(),
+            (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(Math.abs(key.hashCode()) % numPartitions))
         );
 
         table1.join(table2, KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest::getKeyB, joiner, tableJoined, materialized)
-                .toStream()
-                .to(OUTPUT,
-                        Produced.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true),
-                                serdeScope.decorateSerde(Serdes.String(), streamsConfig, false)));
+            .toStream()
+            .to(OUTPUT,
+                Produced.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true),
+                    serdeScope.decorateSerde(Serdes.String(), streamsConfig, false)));
 
         return new KafkaStreams(builder.build(streamsConfig), streamsConfig);
     }

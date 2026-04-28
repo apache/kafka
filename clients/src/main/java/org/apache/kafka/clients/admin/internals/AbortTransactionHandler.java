@@ -168,7 +168,7 @@ public class AbortTransactionHandler extends AdminApiHandler.Batched<TopicPartit
             case BROKER_NOT_AVAILABLE:
             case UNKNOWN_TOPIC_OR_PARTITION:
                 log.debug("WriteTxnMarkers request for abort spec {} failed due to {}. Will retry after attempting to " +
-                        "find the leader again", abortSpec, error);
+                    "find the leader again", abortSpec, error);
                 return ApiResult.unmapped(singletonList(abortSpec.topicPartition()));
 
             default:

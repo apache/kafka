@@ -72,19 +72,19 @@ public abstract class KafkaFuture<T> implements Future<T> {
     public static KafkaFuture<Void> allOf(KafkaFuture<?>... futures) {
         KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
         CompletableFuture.allOf(Arrays.stream(futures)
-                .map(kafkaFuture -> {
-                    // Safe since KafkaFuture's only subclass is KafkaFuture for which toCompletionStage()
-                    // always return a CF.
-                    return (CompletableFuture<?>) kafkaFuture.toCompletionStage();
-                })
-                .toArray(CompletableFuture[]::new)).whenComplete((value, ex) -> {
-                    if (ex == null) {
-                        result.complete(value);
-                    } else {
-                        // Have to unwrap the CompletionException which allOf() introduced
-                        result.completeExceptionally(ex.getCause());
-                    }
-                });
+            .map(kafkaFuture -> {
+                // Safe since KafkaFuture's only subclass is KafkaFuture for which toCompletionStage()
+                // always return a CF.
+                return (CompletableFuture<?>) kafkaFuture.toCompletionStage();
+            })
+            .toArray(CompletableFuture[]::new)).whenComplete((value, ex) -> {
+            if (ex == null) {
+                result.complete(value);
+            } else {
+                // Have to unwrap the CompletionException which allOf() introduced
+                result.completeExceptionally(ex.getCause());
+            }
+        });
 
         return result;
     }

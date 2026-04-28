@@ -81,8 +81,8 @@ class Unifier {
         // types do match, we might be looking at two different structs, or something like that.
         if (!field2.type().toString().equals(field1.type().toString())) {
             throw new UnificationException("Field type for field2 " + field2.name() + " is " +
-                    field2.type() + ", but field type for field1 " + field1.name() + " is " +
-                    field1.type());
+                field2.type() + ", but field type for field1 " + field1.name() + " is " +
+                field1.type());
         }
 
         // The maximum supported version in field2 must not be lower than the maximum supported
@@ -129,9 +129,9 @@ class Unifier {
         // used in RequestHeader.json In every other case, FieldSpec.flexibleVersions() will be
         // Optional.empty.
         Versions field2EffectiveFlexibleVersions = field2.flexibleVersions().
-                orElseGet(topLevelMessage2::flexibleVersions);
+            orElseGet(topLevelMessage2::flexibleVersions);
         Versions field1EffectiveFlexibleVersions = field1.flexibleVersions().
-                orElseGet(topLevelMessage1::flexibleVersions);
+            orElseGet(topLevelMessage1::flexibleVersions);
         if (!field2EffectiveFlexibleVersions.contains(field1EffectiveFlexibleVersions)) {
             throw new UnificationException("Flexible versions for field2 " + field2.name() +
                 " is " + field2.flexibleVersions().orElse(Versions.NONE) +

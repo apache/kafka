@@ -63,11 +63,11 @@ public class Consumed<K, V> implements NamedOperation<Consumed<K, V>> {
 
     @SuppressWarnings("deprecation")
     private Consumed(final Serde<K> keySerde,
-                     final Serde<V> valueSerde,
-                     final TimestampExtractor timestampExtractor,
-                     final Topology.AutoOffsetReset legacyResetPolicy,
-                     final AutoOffsetReset resetPolicy,
-                     final String processorName) {
+        final Serde<V> valueSerde,
+        final TimestampExtractor timestampExtractor,
+        final Topology.AutoOffsetReset legacyResetPolicy,
+        final AutoOffsetReset resetPolicy,
+        final String processorName) {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.timestampExtractor = timestampExtractor;
@@ -119,9 +119,9 @@ public class Consumed<K, V> implements NamedOperation<Consumed<K, V>> {
      */
     @Deprecated
     public static <K, V> Consumed<K, V> with(final Serde<K> keySerde,
-                                             final Serde<V> valueSerde,
-                                             final TimestampExtractor timestampExtractor,
-                                             final Topology.AutoOffsetReset resetPolicy) {
+        final Serde<V> valueSerde,
+        final TimestampExtractor timestampExtractor,
+        final Topology.AutoOffsetReset resetPolicy) {
         return new Consumed<>(keySerde, valueSerde, timestampExtractor, resetPolicy, convertOldToNew(resetPolicy), null);
     }
 
@@ -143,9 +143,9 @@ public class Consumed<K, V> implements NamedOperation<Consumed<K, V>> {
      * @return a new instance of {@link Consumed}
      */
     public static <K, V> Consumed<K, V> with(final Serde<K> keySerde,
-                                             final Serde<V> valueSerde,
-                                             final TimestampExtractor timestampExtractor,
-                                             final AutoOffsetReset resetPolicy) {
+        final Serde<V> valueSerde,
+        final TimestampExtractor timestampExtractor,
+        final AutoOffsetReset resetPolicy) {
         return new Consumed<>(keySerde, valueSerde, timestampExtractor, null, resetPolicy, null);
     }
 
@@ -163,7 +163,7 @@ public class Consumed<K, V> implements NamedOperation<Consumed<K, V>> {
      * @return a new instance of {@link Consumed}
      */
     public static <K, V> Consumed<K, V> with(final Serde<K> keySerde,
-                                             final Serde<V> valueSerde) {
+        final Serde<V> valueSerde) {
         return new Consumed<>(keySerde, valueSerde, null, null, null, null);
     }
 
@@ -323,10 +323,10 @@ public class Consumed<K, V> implements NamedOperation<Consumed<K, V>> {
         }
         final Consumed<?, ?> consumed = (Consumed<?, ?>) o;
         return Objects.equals(keySerde, consumed.keySerde) &&
-               Objects.equals(valueSerde, consumed.valueSerde) &&
-               Objects.equals(timestampExtractor, consumed.timestampExtractor) &&
-               legacyResetPolicy == consumed.legacyResetPolicy &&
-               resetPolicy == consumed.resetPolicy;
+            Objects.equals(valueSerde, consumed.valueSerde) &&
+            Objects.equals(timestampExtractor, consumed.timestampExtractor) &&
+            legacyResetPolicy == consumed.legacyResetPolicy &&
+            resetPolicy == consumed.resetPolicy;
     }
 
     @Override

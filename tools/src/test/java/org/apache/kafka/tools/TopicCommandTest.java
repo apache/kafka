@@ -117,10 +117,10 @@ public class TopicCommandTest {
         }
 
         TopicCommand.PartitionDescription partitionDescription = new TopicCommand.PartitionDescription("test-topic",
-                new TopicPartitionInfo(0, new Node(1, "localhost", 9091), replicas,
-                        List.of(new Node(1, "localhost", 9091))),
-                null,
-                new PartitionReassignment(replicaIds, List.of(2), List.of())
+            new TopicPartitionInfo(0, new Node(1, "localhost", 9091), replicas,
+                List.of(new Node(1, "localhost", 9091))),
+            null,
+            new PartitionReassignment(replicaIds, List.of(2), List.of())
         );
 
         assertFalse(partitionDescription.isUnderReplicated());
@@ -128,18 +128,18 @@ public class TopicCommandTest {
 
     @Test
     public void testAlterWithUnspecifiedPartitionCount() {
-        String[] options = new String[] {" --bootstrap-server", bootstrapServer, "--alter", "--topic", topicName};
+        String[] options = new String[]{" --bootstrap-server", bootstrapServer, "--alter", "--topic", topicName};
         assertInitializeInvalidOptionsExitCode(1, options);
     }
 
     @Test
     public void testConfigOptWithBootstrapServers() {
         assertInitializeInvalidOptionsExitCode(1,
-            new String[] {"--bootstrap-server", bootstrapServer, "--alter", "--topic", topicName,
+            new String[]{"--bootstrap-server", bootstrapServer, "--alter", "--topic", topicName,
                 "--partitions", "3", "--config", "cleanup.policy=compact"});
         TopicCommand.TopicCommandOptions opts =
             new TopicCommand.TopicCommandOptions(
-                new String[] {"--bootstrap-server", bootstrapServer, "--create", "--topic", topicName, "--partitions", "3",
+                new String[]{"--bootstrap-server", bootstrapServer, "--create", "--topic", topicName, "--partitions", "3",
                     "--replication-factor", "3", "--config", "cleanup.policy=compact"});
         assertTrue(opts.hasCreateOption());
         assertEquals(bootstrapServer, opts.bootstrapServer().get());
@@ -149,7 +149,7 @@ public class TopicCommandTest {
     @Test
     public void testCreateWithPartitionCountWithoutReplicationFactorShouldSucceed() {
         TopicCommand.TopicCommandOptions opts = new TopicCommand.TopicCommandOptions(
-            new String[] {"--bootstrap-server", bootstrapServer,
+            new String[]{"--bootstrap-server", bootstrapServer,
                 "--create",
                 "--partitions", "2",
                 "--topic", topicName});
@@ -161,7 +161,7 @@ public class TopicCommandTest {
     @Test
     public void testCreateWithReplicationFactorWithoutPartitionCountShouldSucceed() {
         TopicCommand.TopicCommandOptions opts = new TopicCommand.TopicCommandOptions(
-            new String[] {"--bootstrap-server", bootstrapServer,
+            new String[]{"--bootstrap-server", bootstrapServer,
                 "--create",
                 "--replication-factor", "3",
                 "--topic", topicName});
@@ -183,7 +183,7 @@ public class TopicCommandTest {
     @Test
     public void testCreateWithAssignmentAndReplicationFactor() {
         assertInitializeInvalidOptionsExitCode(1,
-            new String[] {"--bootstrap-server", bootstrapServer,
+            new String[]{"--bootstrap-server", bootstrapServer,
                 "--create",
                 "--replica-assignment", "3:0,5:1",
                 "--replication-factor", "2",
@@ -193,7 +193,7 @@ public class TopicCommandTest {
     @Test
     public void testCreateWithoutPartitionCountAndReplicationFactorShouldSucceed() {
         TopicCommand.TopicCommandOptions opts = new TopicCommand.TopicCommandOptions(
-            new String[] {"--bootstrap-server", bootstrapServer,
+            new String[]{"--bootstrap-server", bootstrapServer,
                 "--create",
                 "--topic", topicName});
         assertTrue(opts.hasCreateOption());
@@ -204,7 +204,7 @@ public class TopicCommandTest {
     @Test
     public void testDescribeShouldSucceed() {
         TopicCommand.TopicCommandOptions opts = new TopicCommand.TopicCommandOptions(
-            new String[] {"--bootstrap-server", bootstrapServer,
+            new String[]{"--bootstrap-server", bootstrapServer,
                 "--describe",
                 "--topic", topicName});
         assertTrue(opts.hasDescribeOption());
@@ -214,7 +214,7 @@ public class TopicCommandTest {
     @Test
     public void testDescribeWithDescribeTopicsApiShouldSucceed() {
         TopicCommand.TopicCommandOptions opts = new TopicCommand.TopicCommandOptions(
-            new String[] {"--bootstrap-server", bootstrapServer,
+            new String[]{"--bootstrap-server", bootstrapServer,
                 "--describe",
                 "--topic", topicName});
         assertTrue(opts.hasDescribeOption());
@@ -235,7 +235,7 @@ public class TopicCommandTest {
     @Test
     public void testParseAssignment() {
         Map<Integer, List<Integer>> actualAssignment = TopicCommand.parseReplicaAssignment("5:4,3:2,1:0");
-        Map<Integer, List<Integer>>  expectedAssignment = new HashMap<>();
+        Map<Integer, List<Integer>> expectedAssignment = new HashMap<>();
         expectedAssignment.put(0, List.of(5, 4));
         expectedAssignment.put(1, List.of(3, 2));
         expectedAssignment.put(2, List.of(1, 0));
@@ -257,11 +257,11 @@ public class TopicCommandTest {
             })));
 
         NewTopic expectedNewTopic = new NewTopic(topicName, Optional.empty(), Optional.empty())
-                .configs(Map.of());
+            .configs(Map.of());
 
         verify(adminClient, times(1)).createTopics(
-                eq(Set.of(expectedNewTopic)),
-                argThat(exception -> !exception.shouldRetryOnQuotaViolation())
+            eq(Set.of(expectedNewTopic)),
+            argThat(exception -> !exception.shouldRetryOnQuotaViolation())
         );
     }
 
@@ -285,8 +285,8 @@ public class TopicCommandTest {
         assertInstanceOf(ThrottlingQuotaExceededException.class, exception.getCause());
 
         verify(adminClient).deleteTopics(
-                argThat((Collection<String> topics) -> topics.equals(List.of(topicName))),
-                argThat((DeleteTopicsOptions options) -> !options.shouldRetryOnQuotaViolation()));
+            argThat((Collection<String> topics) -> topics.equals(List.of(topicName))),
+            argThat((DeleteTopicsOptions options) -> !options.shouldRetryOnQuotaViolation()));
     }
 
     @Test
@@ -298,9 +298,9 @@ public class TopicCommandTest {
         when(adminClient.listTopics(any())).thenReturn(listResult);
 
         TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, new Node(0, "", 0),
-                List.of(), List.of());
+            List.of(), List.of());
         DescribeTopicsResult describeResult = AdminClientTestUtils.describeTopicsResult(topicName,
-                new TopicDescription(topicName, false, List.of(topicPartitionInfo)));
+            new TopicDescription(topicName, false, List.of(topicPartitionInfo)));
         when(adminClient.describeTopics(anyCollection())).thenReturn(describeResult);
 
         CreatePartitionsResult result = AdminClientTestUtils.createPartitionsResult(topicName, Errors.THROTTLING_QUOTA_EXCEEDED.exception());
@@ -314,8 +314,8 @@ public class TopicCommandTest {
         assertInstanceOf(ThrottlingQuotaExceededException.class, exception.getCause());
 
         verify(adminClient, times(1)).createPartitions(
-                argThat(newPartitions -> newPartitions.get(topicName).totalCount() == 3),
-                argThat(createPartitionOption -> !createPartitionOption.shouldRetryOnQuotaViolation()));
+            argThat(newPartitions -> newPartitions.get(topicName).totalCount() == 3),
+            argThat(createPartitionOption -> !createPartitionOption.shouldRetryOnQuotaViolation()));
     }
 
     public void assertInitializeInvalidOptionsExitCode(int expected, String[] options) {
@@ -333,7 +333,7 @@ public class TopicCommandTest {
     private TopicCommand.TopicCommandOptions buildTopicCommandOptionsWithBootstrap(ClusterInstance clusterInstance, String... opts) {
         String bootstrapServer = clusterInstance.bootstrapServers();
         String[] finalOptions = Stream.concat(Arrays.stream(opts),
-                Stream.of("--bootstrap-server", bootstrapServer)
+            Stream.of("--bootstrap-server", bootstrapServer)
         ).toArray(String[]::new);
         return new TopicCommand.TopicCommandOptions(finalOptions);
     }
@@ -366,11 +366,11 @@ public class TopicCommandTest {
         rackInfo.put(5, infoPerBroker6);
 
         return List.of(ClusterConfig.defaultBuilder()
-                .setBrokers(6)
-                .setServerProperties(serverProp)
-                .setPerServerProperties(rackInfo)
-                .setTypes(Stream.of(Type.KRAFT).collect(Collectors.toSet()))
-                .build()
+            .setBrokers(6)
+            .setServerProperties(serverProp)
+            .setPerServerProperties(rackInfo)
+            .setTypes(Stream.of(Type.KRAFT).collect(Collectors.toSet()))
+            .build()
         );
     }
 
@@ -389,12 +389,12 @@ public class TopicCommandTest {
 
             clusterInstance.waitTopicCreation(testTopicName, defaultNumPartitions);
             Assertions.assertTrue(adminClient.listTopics().names().get().contains(testTopicName),
-                    "Admin client didn't see the created topic. It saw: " + adminClient.listTopics().names().get());
+                "Admin client didn't see the created topic. It saw: " + adminClient.listTopics().names().get());
 
             adminClient.deleteTopics(List.of(testTopicName));
             clusterInstance.waitTopicDeletion(testTopicName);
             Assertions.assertTrue(adminClient.listTopics().names().get().isEmpty(),
-                    "Admin client see the created topic. It saw: " + adminClient.listTopics().names().get());
+                "Admin client see the created topic. It saw: " + adminClient.listTopics().names().get());
         }
     }
 
@@ -413,21 +413,21 @@ public class TopicCommandTest {
 
             clusterInstance.waitTopicCreation(testTopicName, defaultNumPartitions);
             Assertions.assertTrue(adminClient.listTopics().names().get().contains(testTopicName),
-                    "Admin client didn't see the created topic. It saw: " + adminClient.listTopics().names().get());
+                "Admin client didn't see the created topic. It saw: " + adminClient.listTopics().names().get());
 
             List<TopicPartitionInfo> partitions = adminClient
-                    .describeTopics(List.of(testTopicName))
-                    .allTopicNames()
-                    .get()
-                    .get(testTopicName)
-                    .partitions();
+                .describeTopics(List.of(testTopicName))
+                .allTopicNames()
+                .get()
+                .get(testTopicName)
+                .partitions();
             Assertions.assertEquals(defaultNumPartitions, partitions.size(), "Unequal partition size: " + partitions.size());
             Assertions.assertEquals(defaultReplicationFactor, (short) partitions.get(0).replicas().size(), "Unequal replication factor: " + partitions.get(0).replicas().size());
 
             adminClient.deleteTopics(List.of(testTopicName));
             clusterInstance.waitTopicDeletion(testTopicName);
             Assertions.assertTrue(adminClient.listTopics().names().get().isEmpty(),
-                    "Admin client see the created topic. It saw: " + adminClient.listTopics().names().get());
+                "Admin client see the created topic. It saw: " + adminClient.listTopics().names().get());
         }
     }
 
@@ -444,12 +444,12 @@ public class TopicCommandTest {
         try (Admin adminClient = clusterInstance.admin()) {
             adminClient.createTopics(List.of(new NewTopic(testTopicName, 2, defaultReplicationFactor)));
             clusterInstance.waitTopicCreation(testTopicName, 2);
-            List<TopicPartitionInfo>  partitions = adminClient
-                    .describeTopics(List.of(testTopicName))
-                    .allTopicNames()
-                    .get()
-                    .get(testTopicName)
-                    .partitions();
+            List<TopicPartitionInfo> partitions = adminClient
+                .describeTopics(List.of(testTopicName))
+                .allTopicNames()
+                .get()
+                .get(testTopicName)
+                .partitions();
             assertEquals(2, partitions.size(), "Unequal partition size: " + partitions.size());
             assertEquals(defaultReplicationFactor, (short) partitions.get(0).replicas().size(), "Unequal replication factor: " + partitions.get(0).replicas().size());
         }
@@ -463,11 +463,11 @@ public class TopicCommandTest {
             adminClient.createTopics(List.of(new NewTopic(testTopicName, defaultNumPartitions, (short) 2)));
             clusterInstance.waitTopicCreation(testTopicName, defaultNumPartitions);
             List<TopicPartitionInfo> partitions = adminClient
-                    .describeTopics(List.of(testTopicName))
-                    .allTopicNames()
-                    .get()
-                    .get(testTopicName)
-                    .partitions();
+                .describeTopics(List.of(testTopicName))
+                .allTopicNames()
+                .get()
+                .get(testTopicName)
+                .partitions();
 
             assertEquals(defaultNumPartitions, partitions.size(), "Unequal partition size: " + partitions.size());
             assertEquals(2, (short) partitions.get(0).replicas().size(), "Partitions not replicated: " + partitions.get(0).replicas().size());
@@ -489,7 +489,7 @@ public class TopicCommandTest {
 
             Config configs = adminClient.describeConfigs(Set.of(configResource)).all().get().get(configResource);
             assertEquals(1000, Integer.valueOf(configs.get("delete.retention.ms").value()),
-                    "Config not set correctly: " + configs.get("delete.retention.ms").value());
+                "Config not set correctly: " + configs.get("delete.retention.ms").value());
         }
     }
 
@@ -499,15 +499,15 @@ public class TopicCommandTest {
         try (Admin adminClient = clusterInstance.admin();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
             TopicCommand.TopicCommandOptions createOpts = buildTopicCommandOptionsWithBootstrap(
-                    clusterInstance, "--create", "--partitions", Integer.toString(defaultNumPartitions), "--replication-factor", "1",
-                    "--topic", testTopicName);
+                clusterInstance, "--create", "--partitions", Integer.toString(defaultNumPartitions), "--replication-factor", "1",
+                "--topic", testTopicName);
 
             adminClient.createTopics(List.of(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
             clusterInstance.waitTopicCreation(testTopicName, defaultNumPartitions);
 
             // try to re-create the topic
             assertThrows(TopicExistsException.class, () -> topicService.createTopic(createOpts),
-                    "Expected TopicExistsException to throw");
+                "Expected TopicExistsException to throw");
         }
     }
 
@@ -520,7 +520,7 @@ public class TopicCommandTest {
             clusterInstance.waitTopicCreation(testTopicName, defaultNumPartitions);
 
             TopicCommand.TopicCommandOptions createOpts =
-                    buildTopicCommandOptionsWithBootstrap(clusterInstance, "--create", "--topic", testTopicName, "--if-not-exists");
+                buildTopicCommandOptionsWithBootstrap(clusterInstance, "--create", "--topic", testTopicName, "--if-not-exists");
             topicService.createTopic(createOpts);
         }
     }
@@ -543,20 +543,20 @@ public class TopicCommandTest {
             clusterInstance.waitTopicCreation(testTopicName, 3);
 
             List<TopicPartitionInfo> partitions = adminClient
-                    .describeTopics(List.of(testTopicName))
-                    .allTopicNames()
-                    .get()
-                    .get(testTopicName)
-                    .partitions();
+                .describeTopics(List.of(testTopicName))
+                .allTopicNames()
+                .get()
+                .get(testTopicName)
+                .partitions();
 
             assertEquals(3, partitions.size(),
-                    "Unequal partition size: " + partitions.size());
+                "Unequal partition size: " + partitions.size());
             assertEquals(List.of(5, 4), getPartitionReplicas(partitions, 0),
-                    "Unexpected replica assignment: " + getPartitionReplicas(partitions, 0));
+                "Unexpected replica assignment: " + getPartitionReplicas(partitions, 0));
             assertEquals(List.of(3, 2), getPartitionReplicas(partitions, 1),
-                    "Unexpected replica assignment: " + getPartitionReplicas(partitions, 1));
+                "Unexpected replica assignment: " + getPartitionReplicas(partitions, 1));
             assertEquals(List.of(1, 0), getPartitionReplicas(partitions, 2),
-                    "Unexpected replica assignment: " + getPartitionReplicas(partitions, 2));
+                "Unexpected replica assignment: " + getPartitionReplicas(partitions, 2));
         }
     }
 
@@ -567,7 +567,7 @@ public class TopicCommandTest {
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
 
             TopicCommand.TopicCommandOptions opts = buildTopicCommandOptionsWithBootstrap(clusterInstance, "--create", "--partitions", "2", "--replication-factor", Integer.toString(Short.MAX_VALUE + 1),
-                    "--topic", testTopicName);
+                "--topic", testTopicName);
             assertThrows(IllegalArgumentException.class, () -> topicService.createTopic(opts), "Expected IllegalArgumentException to throw");
         }
     }
@@ -578,7 +578,7 @@ public class TopicCommandTest {
         try (Admin adminClient = clusterInstance.admin();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
             TopicCommand.TopicCommandOptions opts = buildTopicCommandOptionsWithBootstrap(clusterInstance, "--create",
-                    "--partitions", "2", "--replication-factor", "-1", "--topic", testTopicName);
+                "--partitions", "2", "--replication-factor", "-1", "--topic", testTopicName);
             assertThrows(IllegalArgumentException.class, () -> topicService.createTopic(opts), "Expected IllegalArgumentException to throw");
         }
     }
@@ -600,8 +600,8 @@ public class TopicCommandTest {
             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);
 
             TopicCommand.TopicCommandOptions createOpts = buildTopicCommandOptionsWithBootstrap(clusterInstance, "--create",
-                    "--partitions", "1", "--replication-factor", "1", "--topic", testTopicName,
-                    "--config", "message.timestamp.type=boom");
+                "--partitions", "1", "--replication-factor", "1", "--topic", testTopicName,
+                "--config", "message.timestamp.type=boom");
             assertThrows(ConfigException.class, () -> topicService.createTopic(createOpts), "Expected ConfigException to throw");
         }
     }
@@ -668,14 +668,14 @@ public class TopicCommandTest {
             topicService.alterTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter", "--topic", testTopicName, "--partitions", "3"));
 
             TestUtils.waitForCondition(
-                    () -> adminClient.listPartitionReassignments().reassignments().get().isEmpty(),
-                    CLUSTER_WAIT_MS, testTopicName + String.format("reassignmet not finished after %s ms", CLUSTER_WAIT_MS)
+                () -> adminClient.listPartitionReassignments().reassignments().get().isEmpty(),
+                CLUSTER_WAIT_MS, testTopicName + String.format("reassignmet not finished after %s ms", CLUSTER_WAIT_MS)
             );
 
             TestUtils.waitForCondition(
-                    () -> clusterInstance.brokers().values().stream().allMatch(
-                            b -> b.metadataCache().numPartitions(testTopicName).orElse(0) == 3),
-                    TestUtils.DEFAULT_MAX_WAIT_MS, "Timeout waiting for new assignment propagating to broker");
+                () -> clusterInstance.brokers().values().stream().allMatch(
+                    b -> b.metadataCache().numPartitions(testTopicName).orElse(0) == 3),
+                TestUtils.DEFAULT_MAX_WAIT_MS, "Timeout waiting for new assignment propagating to broker");
             TopicDescription topicDescription = adminClient.describeTopics(List.of(testTopicName)).topicNameValues().get(testTopicName).get();
             assertEquals(3, topicDescription.partitions().size(), "Expected partition count to be 3. Got: " + topicDescription.partitions().size());
         }
@@ -693,17 +693,17 @@ public class TopicCommandTest {
             clusterInstance.waitTopicCreation(testTopicName, partition);
 
             topicService.alterTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter",
-                    "--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "3"));
+                "--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "3"));
 
             TestUtils.waitForCondition(
-                    () -> adminClient.listPartitionReassignments().reassignments().get().isEmpty(),
-                    CLUSTER_WAIT_MS, testTopicName + String.format("reassignmet not finished after %s ms", CLUSTER_WAIT_MS)
+                () -> adminClient.listPartitionReassignments().reassignments().get().isEmpty(),
+                CLUSTER_WAIT_MS, testTopicName + String.format("reassignmet not finished after %s ms", CLUSTER_WAIT_MS)
             );
 
             TestUtils.waitForCondition(
-                    () -> clusterInstance.brokers().values().stream().allMatch(
-                            b -> b.metadataCache().numPartitions(testTopicName).orElse(0) == 3),
-                    TestUtils.DEFAULT_MAX_WAIT_MS, "Timeout waiting for new assignment propagating to broker");
+                () -> clusterInstance.brokers().values().stream().allMatch(
+                    b -> b.metadataCache().numPartitions(testTopicName).orElse(0) == 3),
+                TestUtils.DEFAULT_MAX_WAIT_MS, "Timeout waiting for new assignment propagating to broker");
 
             TopicDescription topicDescription = adminClient.describeTopics(List.of(testTopicName)).topicNameValues().get(testTopicName).get();
             assertEquals(3, topicDescription.partitions().size(), "Expected partition count to be 3. Got: " + topicDescription.partitions().size());
@@ -725,9 +725,9 @@ public class TopicCommandTest {
             clusterInstance.waitTopicCreation(testTopicName, partition);
 
             assertThrows(ExecutionException.class,
-                    () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter",
-                            "--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2,3:2", "--partitions", "3")),
-                    "Expected to fail with ExecutionException");
+                () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter",
+                    "--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2,3:2", "--partitions", "3")),
+                "Expected to fail with ExecutionException");
 
         }
     }
@@ -743,9 +743,9 @@ public class TopicCommandTest {
             clusterInstance.waitTopicCreation(testTopicName, partition);
 
             assertThrows(ExecutionException.class,
-                    () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter", "--topic", testTopicName,
-                            "--replica-assignment", "5:3,3:1,4:2", "--partitions", "6")),
-                    "Expected to fail with ExecutionException");
+                () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter", "--topic", testTopicName,
+                    "--replica-assignment", "5:3,3:1,4:2", "--partitions", "6")),
+                "Expected to fail with ExecutionException");
 
         }
     }
@@ -760,8 +760,8 @@ public class TopicCommandTest {
             clusterInstance.waitTopicCreation(testTopicName, defaultNumPartitions);
 
             assertThrows(ExecutionException.class,
-                    () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter", "--partitions", "-1", "--topic", testTopicName)),
-                    "Expected to fail with ExecutionException");
+                () -> topicService.alterTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter", "--partitions", "-1", "--topic", testTopicName)),
+                "Expected to fail with ExecutionException");
         }
     }
 
@@ -809,34 +809,34 @@ public class TopicCommandTest {
             clusterInstance.waitTopicCreation(testTopicName, numPartitions);
 
             Map<Integer, List<Integer>> assignment = adminClient.describeTopics(List.of(testTopicName))
-                    .allTopicNames().get().get(testTopicName).partitions()
-                    .stream()
-                    .collect(Collectors.toMap(
-                        TopicPartitionInfo::partition,
-                        info -> info.replicas().stream().map(Node::id).toList()));
+                .allTopicNames().get().get(testTopicName).partitions()
+                .stream()
+                .collect(Collectors.toMap(
+                    TopicPartitionInfo::partition,
+                    info -> info.replicas().stream().map(Node::id).toList()));
             checkReplicaDistribution(assignment, rackInfo, rackInfo.size(), numPartitions,
-                    replicationFactor, true, true, true);
+                replicationFactor, true, true, true);
 
             int alteredNumPartitions = 36;
             // verify that adding partitions will also be rack aware
             TopicCommand.TopicCommandOptions alterOpts = buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter",
-                    "--partitions", Integer.toString(alteredNumPartitions),
-                    "--topic", testTopicName);
+                "--partitions", Integer.toString(alteredNumPartitions),
+                "--topic", testTopicName);
             topicService.alterTopic(alterOpts);
 
             TestUtils.waitForCondition(
-                    () -> adminClient.listPartitionReassignments().reassignments().get().isEmpty(),
-                    CLUSTER_WAIT_MS, testTopicName + String.format("reassignmet not finished after %s ms", CLUSTER_WAIT_MS)
+                () -> adminClient.listPartitionReassignments().reassignments().get().isEmpty(),
+                CLUSTER_WAIT_MS, testTopicName + String.format("reassignmet not finished after %s ms", CLUSTER_WAIT_MS)
             );
             TestUtils.waitForCondition(
-                    () -> clusterInstance.brokers().values().stream().allMatch(p -> p.metadataCache().numPartitions(testTopicName).orElse(0) == alteredNumPartitions),
-                    TestUtils.DEFAULT_MAX_WAIT_MS, "Timeout waiting for new assignment propagating to broker");
+                () -> clusterInstance.brokers().values().stream().allMatch(p -> p.metadataCache().numPartitions(testTopicName).orElse(0) == alteredNumPartitions),
+                TestUtils.DEFAULT_MAX_WAIT_MS, "Timeout waiting for new assignment propagating to broker");
 
             assignment = adminClient.describeTopics(List.of(testTopicName))
-                    .allTopicNames().get().get(testTopicName).partitions().stream()
-                    .collect(Collectors.toMap(TopicPartitionInfo::partition, info -> info.replicas().stream().map(Node::id).toList()));
+                .allTopicNames().get().get(testTopicName).partitions().stream()
+                .collect(Collectors.toMap(TopicPartitionInfo::partition, info -> info.replicas().stream().map(Node::id).toList()));
             checkReplicaDistribution(assignment, rackInfo, rackInfo.size(), alteredNumPartitions, replicationFactor,
-                    true, true, true);
+                true, true, true);
 
         }
     }
@@ -861,12 +861,12 @@ public class TopicCommandTest {
             // modify the topic to add new partitions
             int numPartitionsModified = 3;
             TopicCommand.TopicCommandOptions alterOpts = buildTopicCommandOptionsWithBootstrap(clusterInstance, "--alter",
-                    "--partitions", Integer.toString(numPartitionsModified), "--topic", testTopicName);
+                "--partitions", Integer.toString(numPartitionsModified), "--topic", testTopicName);
             topicService.alterTopic(alterOpts);
 
             TestUtils.waitForCondition(
-                    () -> clusterInstance.brokers().values().stream().allMatch(p -> p.metadataCache().numPartitions(testTopicName).orElse(0) == numPartitionsModified),
-                    TestUtils.DEFAULT_MAX_WAIT_MS, "Timeout waiting for new assignment propagating to broker");
+                () -> clusterInstance.brokers().values().stream().allMatch(p -> p.metadataCache().numPartitions(testTopicName).orElse(0) == numPartitionsModified),
+                TestUtils.DEFAULT_MAX_WAIT_MS, "Timeout waiting for new assignment propagating to broker");
 
             Config newProps = adminClient.describeConfigs(Set.of(configResource)).all().get().get(configResource);
             assertNotNull(newProps.get(TopicConfig.CLEANUP_POLICY_CONFIG), "Updated properties do not contain " + TopicConfig.CLEANUP_POLICY_CONFIG);
@@ -895,8 +895,8 @@ public class TopicCommandTest {
             topicService.deleteTopic(deleteOpts);
 
             TestUtils.waitForCondition(
-                    () -> adminClient.listTopics().listings().get().stream().noneMatch(topic -> topic.name().equals(testTopicName)),
-                    CLUSTER_WAIT_MS, String.format("Delete topic fail in %s ms", CLUSTER_WAIT_MS)
+                () -> adminClient.listTopics().listings().get().stream().noneMatch(topic -> topic.name().equals(testTopicName)),
+                CLUSTER_WAIT_MS, String.format("Delete topic fail in %s ms", CLUSTER_WAIT_MS)
             );
         }
     }
@@ -920,8 +920,8 @@ public class TopicCommandTest {
             TopicCommand.TopicCommandOptions deleteOpts = buildTopicCommandOptionsWithBootstrap(clusterInstance, "--delete", "--topic", topicWithCollidingChar);
             topicService.deleteTopic(deleteOpts);
             TestUtils.waitForCondition(
-                    () -> adminClient.listTopics().listings().get().stream().noneMatch(topic -> topic.name().equals(topicWithCollidingChar)),
-                        CLUSTER_WAIT_MS, String.format("Delete topic fail in %s ms", CLUSTER_WAIT_MS)
+                () -> adminClient.listTopics().listings().get().stream().noneMatch(topic -> topic.name().equals(topicWithCollidingChar)),
+                CLUSTER_WAIT_MS, String.format("Delete topic fail in %s ms", CLUSTER_WAIT_MS)
             );
 
             clusterInstance.waitTopicDeletion(topicWithCollidingChar);
@@ -951,12 +951,12 @@ public class TopicCommandTest {
             // This is a difference between the new and the old command as the old one didn't allow internal topic deletion.
             // If deleting internal topics is not desired, ACLS should be used to control it.
             TopicCommand.TopicCommandOptions deleteOffsetTopicOpts =
-                    buildTopicCommandOptionsWithBootstrap(clusterInstance, "--delete", "--topic", Topic.GROUP_METADATA_TOPIC_NAME);
+                buildTopicCommandOptionsWithBootstrap(clusterInstance, "--delete", "--topic", Topic.GROUP_METADATA_TOPIC_NAME);
 
             topicService.deleteTopic(deleteOffsetTopicOpts);
             TestUtils.waitForCondition(
-                    () -> adminClient.listTopics().listings().get().stream().noneMatch(topic -> topic.name().equals(Topic.GROUP_METADATA_TOPIC_NAME)),
-                    CLUSTER_WAIT_MS, String.format("Delete topic fail in %s ms", CLUSTER_WAIT_MS)
+                () -> adminClient.listTopics().listings().get().stream().noneMatch(topic -> topic.name().equals(Topic.GROUP_METADATA_TOPIC_NAME)),
+                CLUSTER_WAIT_MS, String.format("Delete topic fail in %s ms", CLUSTER_WAIT_MS)
             );
 
         }
@@ -976,7 +976,7 @@ public class TopicCommandTest {
             // delete a topic that does not exist
             TopicCommand.TopicCommandOptions deleteOpts = buildTopicCommandOptionsWithBootstrap(clusterInstance, "--delete", "--topic", testTopicName);
             assertThrows(IllegalArgumentException.class, () -> topicService.deleteTopic(deleteOpts),
-                    "Expected an exception when trying to delete a topic that does not exist.");
+                "Expected an exception when trying to delete a topic that does not exist.");
         }
     }
 
@@ -1032,7 +1032,7 @@ public class TopicCommandTest {
             clusterInstance.waitTopicCreation("test-5", 100);
 
             String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance,
-                    "--describe", "--partition-size-limit-per-response=20", "--exclude-internal"));
+                "--describe", "--partition-size-limit-per-response=20", "--exclude-internal"));
             String[] rows = output.split("\n");
 
             assertEquals(176, rows.length, String.join("\n", rows));
@@ -1049,8 +1049,8 @@ public class TopicCommandTest {
             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);
 
             assertThrows(IllegalArgumentException.class,
-                    () -> topicService.describeTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--topic", testTopicName)),
-                    "Expected an exception when trying to describe a topic that does not exist.");
+                () -> topicService.describeTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--topic", testTopicName)),
+                "Expected an exception when trying to describe a topic that does not exist.");
         }
 
     }
@@ -1089,9 +1089,9 @@ public class TopicCommandTest {
             String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--topic", testTopicName, "--unavailable-partitions"));
             String[] rows = output.split(System.lineSeparator());
             assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)),
-                    "Unexpected Topic " + rows[0] + " received. Expect " + String.format("Topic: %s", testTopicName));
+                "Unexpected Topic " + rows[0] + " received. Expect " + String.format("Topic: %s", testTopicName));
             assertTrue(rows[0].contains("Leader: none\tReplicas: 0\tIsr:"),
-                    "Rows did not contain 'Leader: none\tReplicas: 0\tIsr:'");
+                "Rows did not contain 'Leader: none\tReplicas: 0\tIsr:'");
 
         }
     }
@@ -1109,13 +1109,13 @@ public class TopicCommandTest {
             Assertions.assertEquals(2, clusterInstance.aliveBrokers().size());
 
             TestUtils.waitForCondition(
-                    () -> clusterInstance.aliveBrokers().values().stream().allMatch(
-                            broker -> {
-                                Optional<LeaderAndIsr> partitionState = Optional.ofNullable(
-                                        broker.metadataCache().getLeaderAndIsr(testTopicName, 0).orElseGet(null));
-                                return partitionState.map(s -> FetchRequest.isValidBrokerId(s.leader())).orElse(false);
-                            }
-                    ), CLUSTER_WAIT_MS, String.format("Metadata propagation fail in %s ms", CLUSTER_WAIT_MS));
+                () -> clusterInstance.aliveBrokers().values().stream().allMatch(
+                    broker -> {
+                        Optional<LeaderAndIsr> partitionState = Optional.ofNullable(
+                            broker.metadataCache().getLeaderAndIsr(testTopicName, 0).orElseGet(null));
+                        return partitionState.map(s -> FetchRequest.isValidBrokerId(s.leader())).orElse(false);
+                    }
+                ), CLUSTER_WAIT_MS, String.format("Metadata propagation fail in %s ms", CLUSTER_WAIT_MS));
 
             String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--under-replicated-partitions"));
             String[] rows = output.split(System.lineSeparator());
@@ -1140,14 +1140,14 @@ public class TopicCommandTest {
             assertEquals(2, clusterInstance.aliveBrokers().size());
 
             TestUtils.waitForCondition(
-                    () -> clusterInstance.aliveBrokers().values().stream().allMatch(broker -> broker.metadataCache().getLeaderAndIsr(testTopicName, 0).get().isr().size() == 2),
-                    CLUSTER_WAIT_MS, String.format("Timeout waiting for partition metadata propagating to brokers for %s topic", testTopicName)
+                () -> clusterInstance.aliveBrokers().values().stream().allMatch(broker -> broker.metadataCache().getLeaderAndIsr(testTopicName, 0).get().isr().size() == 2),
+                CLUSTER_WAIT_MS, String.format("Timeout waiting for partition metadata propagating to brokers for %s topic", testTopicName)
             );
 
             String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--under-min-isr-partitions", "--exclude-internal"));
             String[] rows = output.split(System.lineSeparator());
             assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)),
-                    "Unexpected topic: " + rows[0]);
+                "Unexpected topic: " + rows[0]);
         }
     }
 
@@ -1181,12 +1181,12 @@ public class TopicCommandTest {
             Integer targetReplica = replicasDiff.get(0);
 
             adminClient.alterPartitionReassignments(Map.of(tp,
-                    Optional.of(new NewPartitionReassignment(List.of(targetReplica))))).all().get();
+                Optional.of(new NewPartitionReassignment(List.of(targetReplica))))).all().get();
 
             // let's wait until the LAIR is propagated
             TestUtils.waitForCondition(
-                    () -> !adminClient.listPartitionReassignments(Set.of(tp)).reassignments().get()
-                                    .get(tp).addingReplicas().isEmpty(), CLUSTER_WAIT_MS, "Reassignment didn't add the second node"
+                () -> !adminClient.listPartitionReassignments(Set.of(tp)).reassignments().get()
+                    .get(tp).addingReplicas().isEmpty(), CLUSTER_WAIT_MS, "Reassignment didn't add the second node"
             );
 
             // describe the topic and test if it's under-replicated
@@ -1194,13 +1194,13 @@ public class TopicCommandTest {
             String[] simpleDescribeOutputRows = simpleDescribeOutput.split(System.lineSeparator());
             String testTopicNameLogLine = String.format("Topic: %s", testTopicName);
             assertTrue(simpleDescribeOutputRows[0].startsWith(testTopicNameLogLine),
-                    "Unexpected describe output: " + simpleDescribeOutputRows[0]);
+                "Unexpected describe output: " + simpleDescribeOutputRows[0]);
             assertEquals(2, simpleDescribeOutputRows.length,
-                    "Unexpected describe output length: " + simpleDescribeOutputRows.length);
+                "Unexpected describe output length: " + simpleDescribeOutputRows.length);
 
             String underReplicatedOutput = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--under-replicated-partitions"));
             assertFalse(underReplicatedOutput.contains(testTopicNameLogLine),
-                    String.format("--under-replicated-partitions shouldn't contain '%s': '%s'", testTopicNameLogLine, underReplicatedOutput));
+                String.format("--under-replicated-partitions shouldn't contain '%s': '%s'", testTopicNameLogLine, underReplicatedOutput));
 
             int maxRetries = 20;
             long pause = 100L;
@@ -1208,19 +1208,19 @@ public class TopicCommandTest {
             AtomicReference<PartitionReassignment> reassignmentsRef = new AtomicReference<>();
 
             TestUtils.waitForCondition(
-                    () -> {
-                        PartitionReassignment tempReassignments = adminClient.listPartitionReassignments(Set.of(tp)).reassignments().get().get(tp);
-                        reassignmentsRef.set(tempReassignments);
-                        return reassignmentsRef.get() != null;
-                    }, waitTimeMs, "Reassignments did not become non-null within the specified time"
+                () -> {
+                    PartitionReassignment tempReassignments = adminClient.listPartitionReassignments(Set.of(tp)).reassignments().get().get(tp);
+                    reassignmentsRef.set(tempReassignments);
+                    return reassignmentsRef.get() != null;
+                }, waitTimeMs, "Reassignments did not become non-null within the specified time"
             );
 
             assertFalse(reassignmentsRef.get().addingReplicas().isEmpty());
 
             ToolsTestUtils.removeReplicationThrottleForPartitions(adminClient, brokerIds, Set.of(tp));
             TestUtils.waitForCondition(
-                    () -> adminClient.listPartitionReassignments().reassignments().get().isEmpty(),
-                    CLUSTER_WAIT_MS,  String.format("reassignmet not finished after %s ms", CLUSTER_WAIT_MS)
+                () -> adminClient.listPartitionReassignments().reassignments().get().isEmpty(),
+                CLUSTER_WAIT_MS, String.format("reassignmet not finished after %s ms", CLUSTER_WAIT_MS)
             );
         }
     }
@@ -1244,15 +1244,15 @@ public class TopicCommandTest {
             assertEquals(4, clusterInstance.aliveBrokers().size());
 
             TestUtils.waitForCondition(
-                    () -> clusterInstance.aliveBrokers().values().stream().allMatch(broker -> broker.metadataCache().getLeaderAndIsr(testTopicName, 0).get().isr().size() == 4),
-                    CLUSTER_WAIT_MS, String.format("Timeout waiting for partition metadata propagating to brokers for %s topic", testTopicName)
+                () -> clusterInstance.aliveBrokers().values().stream().allMatch(broker -> broker.metadataCache().getLeaderAndIsr(testTopicName, 0).get().isr().size() == 4),
+                CLUSTER_WAIT_MS, String.format("Timeout waiting for partition metadata propagating to brokers for %s topic", testTopicName)
             );
 
 
             String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--at-min-isr-partitions", "--exclude-internal"));
             String[] rows = output.split(System.lineSeparator());
             assertTrue(rows[0].startsWith(String.format("Topic: %s", testTopicName)),
-                    "Unexpected output: " + rows[0]);
+                "Unexpected output: " + rows[0]);
             assertEquals(1, rows.length);
         }
     }
@@ -1293,7 +1293,7 @@ public class TopicCommandTest {
             newTopics.add(new NewTopic(fullyReplicatedTopic, fullyReplicatedReplicaAssignmentMap));
 
             adminClient.createTopics(newTopics);
-            for (NewTopic topioc: newTopics) {
+            for (NewTopic topioc : newTopics) {
                 clusterInstance.waitTopicCreation(topioc.name(), partitions);
             }
 
@@ -1301,23 +1301,23 @@ public class TopicCommandTest {
             Assertions.assertEquals(5, clusterInstance.aliveBrokers().size());
 
             TestUtils.waitForCondition(
-                    () -> clusterInstance.aliveBrokers().values().stream().allMatch(broker ->
-                            broker.metadataCache().getLeaderAndIsr(underMinIsrTopic, 0).get().isr().size() < 6 &&
-                            broker.metadataCache().getLeaderAndIsr(offlineTopic, 0).get().leader() == MetadataResponse.NO_LEADER_ID),
-                    CLUSTER_WAIT_MS, "Timeout waiting for partition metadata propagating to brokers for underMinIsrTopic topic"
+                () -> clusterInstance.aliveBrokers().values().stream().allMatch(broker ->
+                    broker.metadataCache().getLeaderAndIsr(underMinIsrTopic, 0).get().isr().size() < 6 &&
+                        broker.metadataCache().getLeaderAndIsr(offlineTopic, 0).get().leader() == MetadataResponse.NO_LEADER_ID),
+                CLUSTER_WAIT_MS, "Timeout waiting for partition metadata propagating to brokers for underMinIsrTopic topic"
             );
 
             TestUtils.waitForCondition(
-                    () -> adminClient.listPartitionReassignments().reassignments().get().isEmpty(),
-                    CLUSTER_WAIT_MS,  String.format("reassignmet not finished after %s ms", CLUSTER_WAIT_MS)
+                () -> adminClient.listPartitionReassignments().reassignments().get().isEmpty(),
+                CLUSTER_WAIT_MS, String.format("reassignmet not finished after %s ms", CLUSTER_WAIT_MS)
             );
 
             String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--under-min-isr-partitions", "--exclude-internal"));
             String[] rows = output.split(System.lineSeparator());
             assertTrue(rows[0].startsWith(String.format("Topic: %s", underMinIsrTopic)),
-                    "Unexpected output: " + rows[0]);
+                "Unexpected output: " + rows[0]);
             assertTrue(rows[1].startsWith(String.format("\tTopic: %s", offlineTopic)),
-                    "Unexpected output: " + rows[1]);
+                "Unexpected output: " + rows[1]);
             assertEquals(2, rows.length);
 
         }
@@ -1352,15 +1352,15 @@ public class TopicCommandTest {
             // test describe
             String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--describe", "--exclude-internal"));
             assertTrue(output.contains(testTopicName),
-                    String.format("Output should have contained %s", testTopicName));
+                String.format("Output should have contained %s", testTopicName));
             assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME),
-                    "Output should not have contained " + Topic.GROUP_METADATA_TOPIC_NAME);
+                "Output should not have contained " + Topic.GROUP_METADATA_TOPIC_NAME);
 
             // test list
             output = captureListTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--list", "--exclude-internal"));
             assertTrue(output.contains(testTopicName), String.format("Output should have contained %s", testTopicName));
             assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME),
-                    "Output should not have contained " + Topic.GROUP_METADATA_TOPIC_NAME);
+                "Output should not have contained " + Topic.GROUP_METADATA_TOPIC_NAME);
         }
     }
 
@@ -1372,10 +1372,10 @@ public class TopicCommandTest {
         adminClient = spy(adminClient);
 
         ListPartitionReassignmentsResult result = AdminClientTestUtils.listPartitionReassignmentsResult(
-                new ClusterAuthorizationException("Unauthorized"));
+            new ClusterAuthorizationException("Unauthorized"));
 
         doReturn(result).when(adminClient).listPartitionReassignments(
-                Set.of(new TopicPartition(testTopicName, 0))
+            Set.of(new TopicPartition(testTopicName, 0))
         );
         adminClient.createTopics(List.of(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
         clusterInstance.waitTopicCreation(testTopicName, defaultNumPartitions);
@@ -1400,7 +1400,7 @@ public class TopicCommandTest {
             clusterInstance.waitTopicCreation(topic, defaultNumPartitions);
 
             assertThrows(TopicExistsException.class,
-                    () -> topicService.createTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--create", "--topic", topic)));
+                () -> topicService.createTopic(buildTopicCommandOptionsWithBootstrap(clusterInstance, "--create", "--topic", topic)));
 
         }
     }
@@ -1420,23 +1420,23 @@ public class TopicCommandTest {
             assertEquals("1000", internalConfigEntry.value());
 
             CreateTopicsResult nonInternalResult = adminClient.createTopics(List.of(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
-            
+
             ConfigEntry nonInternalConfigEntry = nonInternalResult.config(testTopicName).get().get(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG);
             assertNull(nonInternalConfigEntry, "Non-internal config entry should be null");
         }
     }
 
     private void checkReplicaDistribution(Map<Integer, List<Integer>> assignment,
-                                          Map<Integer, String> brokerRackMapping,
-                                          int numBrokers,
-                                          int numPartitions,
-                                          int replicationFactor,
-                                          boolean verifyRackAware,
-                                          boolean verifyLeaderDistribution,
-                                          boolean verifyReplicasDistribution) {
+        Map<Integer, String> brokerRackMapping,
+        int numBrokers,
+        int numPartitions,
+        int replicationFactor,
+        boolean verifyRackAware,
+        boolean verifyLeaderDistribution,
+        boolean verifyReplicasDistribution) {
         // always verify that no broker will be assigned for more than one replica
         assignment.forEach((partition, assignedNodes) -> assertEquals(new HashSet<>(assignedNodes).size(), assignedNodes.size(),
-                "More than one replica is assigned to same broker for the same partition"));
+            "More than one replica is assigned to same broker for the same partition"));
 
         ReplicaDistributions distribution = getReplicaDistribution(assignment, brokerRackMapping);
 
@@ -1444,8 +1444,8 @@ public class TopicCommandTest {
             Map<Integer, List<String>> partitionRackMap = distribution.partitionRacks;
 
             List<Integer> partitionRackMapValueSize = partitionRackMap.values().stream()
-                    .map(value -> (int) value.stream().distinct().count())
-                    .toList();
+                .map(value -> (int) value.stream().distinct().count())
+                .toList();
 
             List<Integer> expected = Collections.nCopies(numPartitions, replicationFactor);
             assertEquals(expected, partitionRackMapValueSize, "More than one replica of the same partition is assigned to the same rack");
@@ -1493,7 +1493,7 @@ public class TopicCommandTest {
     private static ReplicaDistributions getReplicaDistribution(Map<Integer, List<Integer>> assignment, Map<Integer, String> brokerRackMapping) {
         Map<Integer, Integer> leaderCount = new HashMap<>();
         Map<Integer, Integer> partitionCount = new HashMap<>();
-        Map<Integer, List<String>>  partitionRackMap = new HashMap<>();
+        Map<Integer, List<String>> partitionRackMap = new HashMap<>();
 
         assignment.forEach((partitionId, replicaList) -> {
             Integer leader = replicaList.get(0);
@@ -1504,8 +1504,8 @@ public class TopicCommandTest {
                 if (brokerRackMapping.containsKey(brokerId)) {
                     rack = brokerRackMapping.get(brokerId);
                     List<String> partitionRackValues = Stream.of(List.of(rack), partitionRackMap.getOrDefault(partitionId, List.of()))
-                            .flatMap(List::stream)
-                            .toList();
+                        .flatMap(List::stream)
+                        .toList();
                     partitionRackMap.put(partitionId, partitionRackValues);
                 } else {
                     System.err.printf("No mapping found for %s in `brokerRackMapping`%n", brokerId);
@@ -1516,8 +1516,8 @@ public class TopicCommandTest {
     }
 
     private record ReplicaDistributions(Map<Integer, List<String>> partitionRacks,
-                                        Map<Integer, Integer> brokerLeaderCount,
-                                        Map<Integer, Integer> brokerReplicasCount) {
+    Map<Integer, Integer> brokerLeaderCount,
+    Map<Integer, Integer> brokerReplicasCount) {
     }
 
     private KafkaProducer<String, String> createProducer(ClusterInstance clusterInstance) {

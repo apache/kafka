@@ -49,7 +49,7 @@ public class StreamTableJoinWithGraceIntegrationTest extends AbstractJoinIntegra
     private static final String STORE_NAME = "table-store";
     private static final String APP_ID = "stream-table-join-integration-test";
     private static final Joined<Long, String, String> JOINED =
-            Joined.with(Serdes.Long(), Serdes.String(), Serdes.String(), "Grace", Duration.ofMillis(2));
+        Joined.with(Serdes.Long(), Serdes.String(), Serdes.String(), "Grace", Duration.ofMillis(2));
 
     @ParameterizedTest
     @CsvSource({"true, false", "true, true", "false, false", "false, true"})
@@ -57,7 +57,7 @@ public class StreamTableJoinWithGraceIntegrationTest extends AbstractJoinIntegra
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT, Consumed.with(Serdes.Long(), Serdes.String()));
         final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT, Consumed.with(Serdes.Long(), Serdes.String()), Materialized.as(
-                Stores.persistentVersionedKeyValueStore(STORE_NAME, Duration.ofMinutes(5))));
+            Stores.persistentVersionedKeyValueStore(STORE_NAME, Duration.ofMinutes(5))));
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled, false);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-inner");
 
@@ -80,14 +80,14 @@ public class StreamTableJoinWithGraceIntegrationTest extends AbstractJoinIntegra
             null,
             null,
             null,
-            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null,  6L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null, 6L)),
             null,
             null,
             null,
             null,
             null,
             null,
-            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "F-a", null,  4L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "F-a", null, 4L)),
             null
         );
 
@@ -100,7 +100,7 @@ public class StreamTableJoinWithGraceIntegrationTest extends AbstractJoinIntegra
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, String> leftStream = builder.stream(INPUT_TOPIC_LEFT);
         final KTable<Long, String> rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.as(
-                Stores.persistentVersionedKeyValueStore(STORE_NAME, Duration.ofMinutes(5))));
+            Stores.persistentVersionedKeyValueStore(STORE_NAME, Duration.ofMinutes(5))));
         final Properties streamsConfig = setupConfigsAndUtils(cacheEnabled, true);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID + "-left");
 
@@ -129,7 +129,7 @@ public class StreamTableJoinWithGraceIntegrationTest extends AbstractJoinIntegra
             Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "C-null", null, 9L)),
             null,
             null,
-            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "F-a", null,  4L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "F-a", null, 4L)),
             null
         );
 

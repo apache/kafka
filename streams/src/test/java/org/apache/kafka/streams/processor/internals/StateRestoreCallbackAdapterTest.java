@@ -136,7 +136,7 @@ public class StateRestoreCallbackAdapterTest {
     }
 
     private void validate(final List<ConsumerRecord<byte[], byte[]>> actual,
-                          final List<ConsumerRecord<byte[], byte[]>> expected) {
+        final List<ConsumerRecord<byte[], byte[]>> expected) {
         assertThat(actual.size(), is(expected.size()));
         for (int i = 0; i < actual.size(); i++) {
             final ConsumerRecord<byte[], byte[]> actual1 = actual.get(i);

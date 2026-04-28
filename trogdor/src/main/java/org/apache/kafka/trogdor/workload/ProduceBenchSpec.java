@@ -77,21 +77,21 @@ public final class ProduceBenchSpec extends TaskSpec {
 
     @JsonCreator
     public ProduceBenchSpec(@JsonProperty("startMs") long startMs,
-                         @JsonProperty("durationMs") long durationMs,
-                         @JsonProperty("producerNode") String producerNode,
-                         @JsonProperty("bootstrapServers") String bootstrapServers,
-                         @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
-                         @JsonProperty("maxMessages") long maxMessages,
-                         @JsonProperty("keyGenerator") PayloadGenerator keyGenerator,
-                         @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
-                         @JsonProperty("transactionGenerator") Optional<TransactionGenerator> txGenerator,
-                         @JsonProperty("producerConf") Map<String, String> producerConf,
-                         @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
-                         @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
-                         @JsonProperty("activeTopics") TopicsSpec activeTopics,
-                         @JsonProperty("inactiveTopics") TopicsSpec inactiveTopics,
-                         @JsonProperty("useConfiguredPartitioner") boolean useConfiguredPartitioner, 
-                         @JsonProperty("skipFlush") boolean skipFlush) {
+        @JsonProperty("durationMs") long durationMs,
+        @JsonProperty("producerNode") String producerNode,
+        @JsonProperty("bootstrapServers") String bootstrapServers,
+        @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
+        @JsonProperty("maxMessages") long maxMessages,
+        @JsonProperty("keyGenerator") PayloadGenerator keyGenerator,
+        @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
+        @JsonProperty("transactionGenerator") Optional<TransactionGenerator> txGenerator,
+        @JsonProperty("producerConf") Map<String, String> producerConf,
+        @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
+        @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
+        @JsonProperty("activeTopics") TopicsSpec activeTopics,
+        @JsonProperty("inactiveTopics") TopicsSpec inactiveTopics,
+        @JsonProperty("useConfiguredPartitioner") boolean useConfiguredPartitioner,
+        @JsonProperty("skipFlush") boolean skipFlush) {
         super(startMs, durationMs);
         this.producerNode = (producerNode == null) ? "" : producerNode;
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;

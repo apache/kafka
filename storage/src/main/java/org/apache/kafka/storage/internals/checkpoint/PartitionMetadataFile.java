@@ -50,8 +50,8 @@ public class PartitionMetadataFile {
     private volatile Optional<Uuid> dirtyTopicIdOpt = Optional.empty();
 
     public PartitionMetadataFile(
-        final File file,
-        final LogDirFailureChannel logDirFailureChannel
+            final File file,
+            final LogDirFailureChannel logDirFailureChannel
     ) {
         this.file = file;
         this.logDirFailureChannel = logDirFailureChannel;
@@ -135,7 +135,7 @@ public class PartitionMetadataFile {
     @Override
     public String toString() {
         return "PartitionMetadataFile(" +
-            "path=" + path() +
-            ')';
+                "path=" + path() +
+                ')';
     }
 }

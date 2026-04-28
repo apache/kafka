@@ -106,4 +106,4 @@ public class SharePartitionCacheTest {
         assertEquals(1, cache.groups().size());
         assertTrue(cache.groups().containsKey(group2));
     }
-} 
+}

@@ -63,15 +63,15 @@ public class DescribeUserScramCredentialsResult {
                  * not be described because it does not exist; such a user will not appear as a key in the returned map.
                  */
                 Optional<DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult> optionalFirstFailedDescribe =
-                        data.results().stream().filter(result ->
-                                result.errorCode() != Errors.NONE.code() && result.errorCode() != Errors.RESOURCE_NOT_FOUND.code()).findFirst();
+                    data.results().stream().filter(result ->
+                        result.errorCode() != Errors.NONE.code() && result.errorCode() != Errors.RESOURCE_NOT_FOUND.code()).findFirst();
                 if (optionalFirstFailedDescribe.isPresent()) {
                     retval.completeExceptionally(Errors.forCode(optionalFirstFailedDescribe.get().errorCode()).exception(optionalFirstFailedDescribe.get().errorMessage()));
                 } else {
                     Map<String, UserScramCredentialsDescription> retvalMap = new HashMap<>();
                     data.results().forEach(userResult ->
-                            retvalMap.put(userResult.user(), new UserScramCredentialsDescription(userResult.user(),
-                                    getScramCredentialInfosFor(userResult))));
+                        retvalMap.put(userResult.user(), new UserScramCredentialsDescription(userResult.user(),
+                            getScramCredentialInfosFor(userResult))));
                     retval.complete(retvalMap);
                 }
             }
@@ -96,8 +96,8 @@ public class DescribeUserScramCredentialsResult {
                 retval.completeExceptionally(throwable);
             } else {
                 retval.complete(data.results().stream()
-                        .filter(result -> result.errorCode() != Errors.RESOURCE_NOT_FOUND.code())
-                        .map(result -> result.user()).collect(Collectors.toList()));
+                    .filter(result -> result.errorCode() != Errors.RESOURCE_NOT_FOUND.code())
+                    .map(result -> result.user()).collect(Collectors.toList()));
             }
         });
         return retval;
@@ -120,7 +120,7 @@ public class DescribeUserScramCredentialsResult {
                 // it is possible that there is no future for this user (for example, the original describe request was
                 // for users 1, 2, and 3 but this is looking for user 4), so explicitly take care of that case
                 Optional<DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult> optionalUserResult =
-                        data.results().stream().filter(result -> result.user().equals(userName)).findFirst();
+                    data.results().stream().filter(result -> result.user().equals(userName)).findFirst();
                 if (optionalUserResult.isEmpty()) {
                     retval.completeExceptionally(new ResourceNotFoundException("No such user: " + userName));
                 } else {
@@ -138,9 +138,9 @@ public class DescribeUserScramCredentialsResult {
     }
 
     private static List<ScramCredentialInfo> getScramCredentialInfosFor(
-            DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult userResult) {
+        DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult userResult) {
         return userResult.credentialInfos().stream().map(c ->
-                new ScramCredentialInfo(ScramMechanism.fromType(c.mechanism()), c.iterations()))
-                .collect(Collectors.toList());
+            new ScramCredentialInfo(ScramMechanism.fromType(c.mechanism()), c.iterations()))
+            .collect(Collectors.toList());
     }
 }

@@ -54,10 +54,10 @@ public class KeyValueStoreBuilderTest {
         when(supplier.name()).thenReturn("name");
         when(supplier.metricsScope()).thenReturn("metricScope");
         builder = new KeyValueStoreBuilder<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
         );
     }
 
@@ -103,8 +103,8 @@ public class KeyValueStoreBuilderTest {
     public void shouldHaveChangeLoggingStoreWhenLoggingEnabled() {
         setUp();
         final KeyValueStore<String, String> store = builder
-                .withLoggingEnabled(Collections.emptyMap())
-                .build();
+            .withLoggingEnabled(Collections.emptyMap())
+            .build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(store, instanceOf(MeteredKeyValueStore.class));
         assertThat(wrapped, instanceOf(ChangeLoggingKeyValueBytesStore.class));
@@ -115,9 +115,9 @@ public class KeyValueStoreBuilderTest {
     public void shouldHaveCachingAndChangeLoggingWhenBothEnabled() {
         setUp();
         final KeyValueStore<String, String> store = builder
-                .withLoggingEnabled(Collections.emptyMap())
-                .withCachingEnabled()
-                .build();
+            .withLoggingEnabled(Collections.emptyMap())
+            .withCachingEnabled()
+            .build();
         final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
         final WrappedStateStore changeLogging = (WrappedStateStore) caching.wrapped();
         assertThat(store, instanceOf(MeteredKeyValueStore.class));

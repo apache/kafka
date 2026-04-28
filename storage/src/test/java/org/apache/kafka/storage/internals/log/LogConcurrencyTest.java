@@ -48,7 +48,6 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
-
 public class LogConcurrencyTest {
     private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
     private final KafkaScheduler scheduler = new KafkaScheduler(1);
@@ -125,8 +124,8 @@ public class LogConcurrencyTest {
                         final long logEndOffset = logEndOffsetMetadata.messageOffset;
                         final int batchSize = TestUtils.RANDOM.nextInt(9) + 1;
                         final SimpleRecord[] records = IntStream.rangeClosed(0, batchSize)
-                            .mapToObj(i -> new SimpleRecord(String.valueOf(i).getBytes()))
-                            .toArray(SimpleRecord[]::new);
+                                .mapToObj(i -> new SimpleRecord(String.valueOf(i).getBytes()))
+                                .toArray(SimpleRecord[]::new);
 
                         if (isLeader) {
                             log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records), leaderEpoch);
@@ -134,10 +133,10 @@ public class LogConcurrencyTest {
                         } else {
                             log.appendAsFollower(
                                     MemoryRecords.withRecords(
-                                        logEndOffset,
-                                        Compression.NONE,
-                                        leaderEpoch,
-                                        records
+                                            logEndOffset,
+                                            Compression.NONE,
+                                            leaderEpoch,
+                                            records
                                     ),
                                     Integer.MAX_VALUE
                             );
@@ -163,19 +162,19 @@ public class LogConcurrencyTest {
 
     private UnifiedLog createLog(LogConfig config) throws IOException {
         log = UnifiedLog.create(
-            logDir,
-            config,
-            0L,
-            0L,
-            scheduler,
-            brokerTopicStats,
-            Time.SYSTEM,
-            5 * 60 * 1000,
-            new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
-            TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
-            new LogDirFailureChannel(10),
-            true,
-            Optional.empty()
+                logDir,
+                config,
+                0L,
+                0L,
+                scheduler,
+                brokerTopicStats,
+                Time.SYSTEM,
+                5 * 60 * 1000,
+                new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
+                TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+                new LogDirFailureChannel(10),
+                true,
+                Optional.empty()
         );
 
         return log;
@@ -194,12 +193,12 @@ public class LogConcurrencyTest {
                         assertEquals(logBatchBaseOffset,
                                 consumedBatchBaseOffset,
                                 "Consumed batch (offset=" + consumedBatchBaseOffset + ", epoch=" + consumedBatchEpoch + ") " +
-                                "does not match next expected batch in log (offset=" + logBatchBaseOffset + ", epoch=" + logBatchEpoch + ")"
+                                        "does not match next expected batch in log (offset=" + logBatchBaseOffset + ", epoch=" + logBatchEpoch + ")"
                         );
                         assertEquals(logBatchEpoch,
                                 consumedBatchEpoch,
                                 "Consumed batch (offset=" + consumedBatchBaseOffset + ", epoch=" + consumedBatchEpoch + ") " +
-                                "does not match next expected batch in log (offset=" + logBatchBaseOffset + ", epoch=" + logBatchEpoch + ")"
+                                        "does not match next expected batch in log (offset=" + logBatchBaseOffset + ", epoch=" + logBatchEpoch + ")"
                         );
                     }
                 })

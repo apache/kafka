@@ -54,14 +54,14 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
     private long lastFlush;
 
     public GlobalStateUpdateTask(final LogContext logContext,
-                                 final ProcessorTopology topology,
-                                 final InternalProcessorContext<?, ?> processorContext,
-                                 final GlobalStateManager stateMgr,
-                                 final DeserializationExceptionHandler deserializationExceptionHandler,
-                                 final ProcessingExceptionHandler processingExceptionHandler,
-                                 final Time time,
-                                 final long flushInterval
-                                 ) {
+        final ProcessorTopology topology,
+        final InternalProcessorContext<?, ?> processorContext,
+        final GlobalStateManager stateMgr,
+        final DeserializationExceptionHandler deserializationExceptionHandler,
+        final ProcessingExceptionHandler processingExceptionHandler,
+        final Time time,
+        final long flushInterval
+    ) {
         this.logContext = logContext;
         this.log = logContext.logger(getClass());
         this.topology = topology;

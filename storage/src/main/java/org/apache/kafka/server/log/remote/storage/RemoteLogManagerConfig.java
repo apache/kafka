@@ -202,7 +202,7 @@ public final class RemoteLogManagerConfig {
 
     public static final String REMOTE_FETCH_MAX_WAIT_MS_PROP = "remote.fetch.max.wait.ms";
     public static final String REMOTE_FETCH_MAX_WAIT_MS_DOC = "The maximum amount of time the server will wait before answering the fetch request containing remote fetch partitions. " +
-        "It's important to be aware that the request will only be responded after all remote partitions have been successfully fetched, have failed, or this timeout is exceeded.";
+            "It's important to be aware that the request will only be responded after all remote partitions have been successfully fetched, have failed, or this timeout is exceeded.";
     public static final int DEFAULT_REMOTE_FETCH_MAX_WAIT_MS = 500;
 
     public static final String REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_PROP = "remote.list.offsets.request.timeout.ms";
@@ -396,7 +396,7 @@ public final class RemoteLogManagerConfig {
                         MEDIUM,
                         REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_DOC);
     }
-    
+
     public RemoteLogManagerConfig(AbstractConfig config) {
         this.config = config;
     }

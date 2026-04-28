@@ -100,7 +100,7 @@ public class ImplicitLinkedHashMultiCollectionTest {
             i = i + 1;
         }
         assertEquals(sequence.length, i, "Iterator yielded " + (i + 1) + " elements, but " +
-                sequence.length + " were expected.");
+            sequence.length + " were expected.");
     }
 
     @Test
@@ -134,8 +134,8 @@ public class ImplicitLinkedHashMultiCollectionTest {
         Random random = new Random(123);
         LinkedList<TestElement> existing = new LinkedList<>();
         ImplicitLinkedHashMultiCollection<TestElement> multiSet = new ImplicitLinkedHashMultiCollection<>();
-        for (int i = 0; i < 100; i++) {
-            for (int j = 0; j < 4; j++) {
+        for (int i = 0;i < 100;i++) {
+            for (int j = 0;j < 4;j++) {
                 TestElement testElement = new TestElement(random.nextInt());
                 multiSet.mustAdd(testElement);
                 existing.add(testElement);
@@ -143,7 +143,7 @@ public class ImplicitLinkedHashMultiCollectionTest {
             int elementToRemove = random.nextInt(multiSet.size());
             Iterator<TestElement> iter1 = multiSet.iterator();
             Iterator<TestElement> iter2 = existing.iterator();
-            for (int j = 0; j <= elementToRemove; j++) {
+            for (int j = 0;j <= elementToRemove;j++) {
                 iter1.next();
                 iter2.next();
             }

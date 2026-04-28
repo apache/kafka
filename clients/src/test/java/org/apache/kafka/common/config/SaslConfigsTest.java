@@ -30,13 +30,13 @@ public class SaslConfigsTest {
     public void testSaslLoginRefreshDefaults() {
         Map<String, Object> vals = new ConfigDef().withClientSaslSupport().parse(Collections.emptyMap());
         assertEquals(SaslConfigs.DEFAULT_LOGIN_REFRESH_WINDOW_FACTOR,
-                vals.get(SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_FACTOR));
+            vals.get(SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_FACTOR));
         assertEquals(SaslConfigs.DEFAULT_LOGIN_REFRESH_WINDOW_JITTER,
-                vals.get(SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_JITTER));
+            vals.get(SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_JITTER));
         assertEquals(SaslConfigs.DEFAULT_LOGIN_REFRESH_MIN_PERIOD_SECONDS,
-                vals.get(SaslConfigs.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS));
+            vals.get(SaslConfigs.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS));
         assertEquals(SaslConfigs.DEFAULT_LOGIN_REFRESH_BUFFER_SECONDS,
-                vals.get(SaslConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS));
+            vals.get(SaslConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS));
     }
 
     @Test

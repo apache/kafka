@@ -66,7 +66,7 @@ public class DescribeQuorumRequest extends AbstractRequest {
                     .setPartitions(List.of(
                         new DescribeQuorumRequestData.PartitionData()
                             .setPartitionIndex(topicPartition.partition()))
-            )));
+                    )));
     }
 
     @Override
@@ -90,9 +90,9 @@ public class DescribeQuorumRequest extends AbstractRequest {
                     .setTopicName(topic.topicName())
                     .setPartitions(topic.partitions().stream().map(
                         requestPartition -> new DescribeQuorumResponseData.PartitionData()
-                                                .setPartitionIndex(requestPartition.partitionIndex())
-                                                .setErrorCode(errorCode)
-                                                .setErrorMessage(errorMessage)
+                            .setPartitionIndex(requestPartition.partitionIndex())
+                            .setErrorCode(errorCode)
+                            .setErrorMessage(errorMessage)
                     ).collect(Collectors.toList())));
         }
 

@@ -71,11 +71,11 @@ public final class MultiThreadedEventProcessor implements CoordinatorEventProces
     private final Time time;
 
     public MultiThreadedEventProcessor(
-        LogContext logContext,
-        String threadPrefix,
-        int numThreads,
-        Time time,
-        CoordinatorRuntimeMetrics metrics
+            LogContext logContext,
+            String threadPrefix,
+            int numThreads,
+            Time time,
+            CoordinatorRuntimeMetrics metrics
     ) {
         this(logContext, threadPrefix, numThreads, time, metrics, new EventAccumulator<>());
     }
@@ -91,12 +91,12 @@ public final class MultiThreadedEventProcessor implements CoordinatorEventProces
      * @param eventAccumulator  The event accumulator.
      */
     public MultiThreadedEventProcessor(
-        LogContext logContext,
-        String threadPrefix,
-        int numThreads,
-        Time time,
-        CoordinatorRuntimeMetrics metrics,
-        EventAccumulator<TopicPartition, CoordinatorEvent> eventAccumulator
+            LogContext logContext,
+            String threadPrefix,
+            int numThreads,
+            Time time,
+            CoordinatorRuntimeMetrics metrics,
+            EventAccumulator<TopicPartition, CoordinatorEvent> eventAccumulator
     ) {
         this.log = logContext.logger(MultiThreadedEventProcessor.class);
         this.shuttingDown = false;
@@ -105,9 +105,9 @@ public final class MultiThreadedEventProcessor implements CoordinatorEventProces
         this.metrics = Objects.requireNonNull(metrics);
         this.metrics.registerEventQueueSizeGauge(accumulator::size);
         this.threads = IntStream.range(0, numThreads).mapToObj(threadId ->
-            new EventProcessorThread(
-                threadPrefix + threadId
-            )
+                new EventProcessorThread(
+                        threadPrefix + threadId
+                )
         ).collect(Collectors.toList());
         this.threads.forEach(EventProcessorThread::start);
     }
@@ -120,7 +120,7 @@ public final class MultiThreadedEventProcessor implements CoordinatorEventProces
         private final Logger log;
 
         EventProcessorThread(
-            String name
+                String name
         ) {
             super(name);
             log = new LogContext("[" + name + "]: ").logger(EventProcessorThread.class);

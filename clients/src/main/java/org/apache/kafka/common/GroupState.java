@@ -57,7 +57,7 @@ public enum GroupState {
     NOT_READY("NotReady");
 
     private static final Map<String, GroupState> NAME_TO_ENUM = Arrays.stream(values())
-            .collect(Collectors.toMap(state -> state.name.toUpperCase(Locale.ROOT), Function.identity()));
+        .collect(Collectors.toMap(state -> state.name.toUpperCase(Locale.ROOT), Function.identity()));
 
     private final String name;
 

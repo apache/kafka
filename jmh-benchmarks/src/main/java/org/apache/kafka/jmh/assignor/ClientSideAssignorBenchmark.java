@@ -228,11 +228,11 @@ public class ClientSideAssignorBenchmark {
     private ConsumerPartitionAssignor.Subscription subscription(List<String> topics, int consumerIndex) {
         Optional<String> rackId = rackId(consumerIndex);
         return new ConsumerPartitionAssignor.Subscription(
-            topics,
-            null,
-            List.of(),
-            DEFAULT_GENERATION,
-            rackId
+                topics,
+                null,
+                List.of(),
+                DEFAULT_GENERATION,
+                rackId
         );
     }
 
@@ -241,15 +241,15 @@ public class ClientSideAssignorBenchmark {
     }
 
     private ConsumerPartitionAssignor.Subscription subscriptionWithOwnedPartitions(
-        List<TopicPartition> ownedPartitions,
-        ConsumerPartitionAssignor.Subscription prevSubscription
+            List<TopicPartition> ownedPartitions,
+            ConsumerPartitionAssignor.Subscription prevSubscription
     ) {
         return new ConsumerPartitionAssignor.Subscription(
-            prevSubscription.topics(),
-            null,
-            ownedPartitions,
-            DEFAULT_GENERATION,
-            prevSubscription.rackId()
+                prevSubscription.topics(),
+                null,
+                ownedPartitions,
+                DEFAULT_GENERATION,
+                prevSubscription.rackId()
         );
     }
 
@@ -257,13 +257,13 @@ public class ClientSideAssignorBenchmark {
         ConsumerPartitionAssignor.GroupAssignment initialAssignment = assignor.assign(metadata, groupSubscription);
         Map<String, ConsumerPartitionAssignor.Subscription> newSubscriptions = new HashMap<>();
         subscriptions.forEach((member, subscription) ->
-            newSubscriptions.put(
-                member,
-                subscriptionWithOwnedPartitions(
-                    initialAssignment.groupAssignment().get(member).partitions(),
-                    subscription
+                newSubscriptions.put(
+                        member,
+                        subscriptionWithOwnedPartitions(
+                                initialAssignment.groupAssignment().get(member).partitions(),
+                                subscription
+                        )
                 )
-            )
         );
 
         List<String> subscribedTopicsForNewMember;
@@ -275,8 +275,8 @@ public class ClientSideAssignorBenchmark {
 
         // Add new member to trigger a reassignment.
         newSubscriptions.put("newMember", subscription(
-            subscribedTopicsForNewMember,
-            memberCount - 1
+                subscribedTopicsForNewMember,
+                memberCount - 1
         ));
 
         subscriptions = newSubscriptions;

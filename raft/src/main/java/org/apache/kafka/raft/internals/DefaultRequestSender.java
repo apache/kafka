@@ -34,7 +34,7 @@ import org.slf4j.Logger;
 import java.util.OptionalLong;
 import java.util.function.Supplier;
 
-public final class DefaultRequestSender  implements RequestSender {
+public final class DefaultRequestSender implements RequestSender {
     private final RequestManager requestManager;
     private final NetworkChannel channel;
     private final RaftMessageQueue messageQueue;

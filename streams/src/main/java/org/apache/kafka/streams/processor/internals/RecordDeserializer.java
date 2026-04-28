@@ -40,9 +40,9 @@ public class RecordDeserializer {
     private final DeserializationExceptionHandler deserializationExceptionHandler;
 
     RecordDeserializer(final SourceNode<?, ?> sourceNode,
-                       final DeserializationExceptionHandler deserializationExceptionHandler,
-                       final LogContext logContext,
-                       final Sensor droppedRecordsSensor) {
+        final DeserializationExceptionHandler deserializationExceptionHandler,
+        final LogContext logContext,
+        final Sensor droppedRecordsSensor) {
         this.sourceNode = sourceNode;
         this.deserializationExceptionHandler = deserializationExceptionHandler;
         this.log = logContext.logger(RecordDeserializer.class);
@@ -55,7 +55,7 @@ public class RecordDeserializer {
      *                          or throws an exception itself
      */
     ConsumerRecord<Object, Object> deserialize(final ProcessorContext<?, ?> processorContext,
-                                               final ConsumerRecord<byte[], byte[]> rawRecord) {
+        final ConsumerRecord<byte[], byte[]> rawRecord) {
 
         try {
             return new ConsumerRecord<>(
@@ -81,12 +81,12 @@ public class RecordDeserializer {
     }
 
     public static void handleDeserializationFailure(final DeserializationExceptionHandler deserializationExceptionHandler,
-                                                    final ProcessorContext<?, ?> processorContext,
-                                                    final Exception deserializationException,
-                                                    final ConsumerRecord<byte[], byte[]> rawRecord,
-                                                    final Logger log,
-                                                    final Sensor droppedRecordsSensor,
-                                                    final String sourceNodeName) {
+        final ProcessorContext<?, ?> processorContext,
+        final Exception deserializationException,
+        final ConsumerRecord<byte[], byte[]> rawRecord,
+        final Logger log,
+        final Sensor droppedRecordsSensor,
+        final String sourceNodeName) {
 
         final DefaultErrorHandlerContext errorHandlerContext = new DefaultErrorHandlerContext(
             (InternalProcessorContext<?, ?>) processorContext,
@@ -124,11 +124,11 @@ public class RecordDeserializer {
             final RecordCollector collector = ((RecordCollector.Supplier) processorContext).recordCollector();
             for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
                 collector.send(
-                        deadLetterQueueRecord.key(),
-                        deadLetterQueueRecord.value(),
-                        sourceNodeName,
-                        (InternalProcessorContext) processorContext,
-                        deadLetterQueueRecord
+                    deadLetterQueueRecord.key(),
+                    deadLetterQueueRecord.value(),
+                    sourceNodeName,
+                    (InternalProcessorContext) processorContext,
+                    deadLetterQueueRecord
                 );
             }
         }

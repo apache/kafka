@@ -55,8 +55,8 @@ public class KStreamAggregate<KIn, VIn, VAgg> implements KStreamAggProcessorSupp
     private boolean sendOldValues = false;
 
     KStreamAggregate(final StoreFactory storeFactory,
-                     final Initializer<VAgg> initializer,
-                     final Aggregator<? super KIn, ? super VIn, VAgg> aggregator) {
+        final Initializer<VAgg> initializer,
+        final Aggregator<? super KIn, ? super VIn, VAgg> aggregator) {
         this.storeFactory = storeFactory;
         this.storeName = storeFactory.storeName();
         this.initializer = initializer;

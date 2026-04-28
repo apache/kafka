@@ -248,7 +248,7 @@ public class BrokerRegistration {
         }
         return Optional.of(new Node(id, endpoint.host(), endpoint.port(), rack.orElse(null), fenced));
     }
-    
+
     public List<Node> nodes() {
         return listeners.keySet().stream().flatMap(l -> node(l).stream()).toList();
     }
@@ -382,24 +382,24 @@ public class BrokerRegistration {
     @Override
     public String toString() {
         return "BrokerRegistration(id=" + id +
-                ", epoch=" + epoch +
-                ", incarnationId=" + incarnationId +
-                ", listeners=[" +
-                listeners.keySet().stream().sorted().
-                        map(n -> listeners.get(n).toString()).
-                        collect(Collectors.joining(", ")) +
-                "], supportedFeatures={" +
-                supportedFeatures.keySet().stream().sorted().
-                        map(k -> k + ": " + supportedFeatures.get(k)).
-                        collect(Collectors.joining(", ")) +
-                "}" +
-                ", rack=" + rack +
-                ", fenced=" + fenced +
-                ", inControlledShutdown=" + inControlledShutdown +
-                ", isMigratingZkBroker=" + isMigratingZkBroker +
-                ", directories=" + directories +
-                ", cordonedDirectories=" + cordonedDirectories +
-                ")";
+            ", epoch=" + epoch +
+            ", incarnationId=" + incarnationId +
+            ", listeners=[" +
+            listeners.keySet().stream().sorted().
+                map(n -> listeners.get(n).toString()).
+                collect(Collectors.joining(", ")) +
+            "], supportedFeatures={" +
+            supportedFeatures.keySet().stream().sorted().
+                map(k -> k + ": " + supportedFeatures.get(k)).
+                collect(Collectors.joining(", ")) +
+            "}" +
+            ", rack=" + rack +
+            ", fenced=" + fenced +
+            ", inControlledShutdown=" + inControlledShutdown +
+            ", isMigratingZkBroker=" + isMigratingZkBroker +
+            ", directories=" + directories +
+            ", cordonedDirectories=" + cordonedDirectories +
+            ")";
     }
 
     public BrokerRegistration cloneWith(
@@ -414,9 +414,9 @@ public class BrokerRegistration {
         List<Uuid> newCordonedDirectories = cordonedDirectoriesChange.orElse(cordonedDirectories);
 
         if (newFenced == fenced
-                && newInControlledShutdownChange == inControlledShutdown
-                && newDirectories.equals(directories)
-                && newCordonedDirectories.equals(cordonedDirectories))
+            && newInControlledShutdownChange == inControlledShutdown
+            && newDirectories.equals(directories)
+            && newCordonedDirectories.equals(cordonedDirectories))
             return this;
 
         return new BrokerRegistration(

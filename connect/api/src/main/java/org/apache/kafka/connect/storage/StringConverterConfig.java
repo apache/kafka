@@ -39,7 +39,7 @@ public class StringConverterConfig extends ConverterConfig {
     static {
         CONFIG = ConverterConfig.newConfigDef();
         CONFIG.define(ENCODING_CONFIG, Type.STRING, ENCODING_DEFAULT, Importance.HIGH, ENCODING_DOC, null, -1, Width.MEDIUM,
-                      ENCODING_DISPLAY);
+                ENCODING_DISPLAY);
     }
 
     public static ConfigDef configDef() {

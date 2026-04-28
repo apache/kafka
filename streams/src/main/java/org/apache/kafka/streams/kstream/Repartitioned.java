@@ -39,10 +39,10 @@ public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> 
     protected final StreamPartitioner<K, V> partitioner;
 
     private Repartitioned(final String name,
-                          final Serde<K> keySerde,
-                          final Serde<V> valueSerde,
-                          final Integer numberOfPartitions,
-                          final StreamPartitioner<K, V> partitioner) {
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde,
+        final Integer numberOfPartitions,
+        final StreamPartitioner<K, V> partitioner) {
         this.name = name;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
@@ -84,7 +84,7 @@ public class Repartitioned<K, V> implements NamedOperation<Repartitioned<K, V>> 
      * @see KStream#repartition(Repartitioned)
      */
     public static <K, V> Repartitioned<K, V> with(final Serde<K> keySerde,
-                                                  final Serde<V> valueSerde) {
+        final Serde<V> valueSerde) {
         return new Repartitioned<>(null, keySerde, valueSerde, null, null);
     }
 

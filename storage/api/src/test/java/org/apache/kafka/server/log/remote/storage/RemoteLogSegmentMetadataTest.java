@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class RemoteLogSegmentMetadataTest {
     private static final TopicIdPartition TP0 = new TopicIdPartition(Uuid.randomUuid(),
-            new TopicPartition("foo", 0));
+           new TopicPartition("foo", 0));
 
     @Test
     void createWithUpdates() {
@@ -48,20 +48,20 @@ class RemoteLogSegmentMetadataTest {
         segmentLeaderEpochs.put(0, 0L);
         RemoteLogSegmentId segmentId = new RemoteLogSegmentId(TP0, Uuid.randomUuid());
         RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, startOffset, endOffset,
-                maxTimestamp, brokerId, eventTimestamp, segmentSize,
-                segmentLeaderEpochs);
+               maxTimestamp, brokerId, eventTimestamp, segmentSize,
+               segmentLeaderEpochs);
 
         CustomMetadata customMetadata = new CustomMetadata(new byte[]{0, 1, 2, 3});
         RemoteLogSegmentMetadataUpdate segmentMetadataUpdate = new RemoteLogSegmentMetadataUpdate(
-                segmentId, timestampFinished, Optional.of(customMetadata), RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
-                brokerIdFinished);
+               segmentId, timestampFinished, Optional.of(customMetadata), RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
+               brokerIdFinished);
         RemoteLogSegmentMetadata updatedMetadata = segmentMetadata.createWithUpdates(segmentMetadataUpdate);
 
         RemoteLogSegmentMetadata expectedUpdatedMetadata = new RemoteLogSegmentMetadata(
-                segmentId, startOffset, endOffset,
-                maxTimestamp, brokerIdFinished, timestampFinished, segmentSize, Optional.of(customMetadata),
-                RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
-                segmentLeaderEpochs
+               segmentId, startOffset, endOffset,
+               maxTimestamp, brokerIdFinished, timestampFinished, segmentSize, Optional.of(customMetadata),
+               RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
+               segmentLeaderEpochs
         );
         assertEquals(expectedUpdatedMetadata, updatedMetadata);
 

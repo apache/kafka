@@ -65,8 +65,8 @@ public class FieldSyntaxVersionTest {
         configs.put("field.syntax.version", input);
         ConfigException e = assertThrows(ConfigException.class, () -> new AbstractConfig(FieldSyntaxVersion.appendConfigTo(new ConfigDef()), configs));
         assertEquals(
-            "Invalid value " + input + " for configuration field.syntax.version: " +
-                "String must be one of (case insensitive): V1, V2",
-            e.getMessage());
+                "Invalid value " + input + " for configuration field.syntax.version: " +
+                        "String must be one of (case insensitive): V1, V2",
+                e.getMessage());
     }
 }

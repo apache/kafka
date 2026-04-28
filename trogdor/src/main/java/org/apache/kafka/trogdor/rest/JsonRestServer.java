@@ -174,7 +174,7 @@ public class JsonRestServer {
      * @return The deserialized response to the HTTP request, or null if no data is expected.
      */
     public static <T> HttpResponse<T> httpRequest(Logger logger, String url, String method,
-            Object requestBodyData, TypeReference<T> responseFormat) throws IOException {
+        Object requestBodyData, TypeReference<T> responseFormat) throws IOException {
         HttpURLConnection connection = null;
         try {
             String serializedBody = requestBodyData == null ? null :
@@ -240,8 +240,8 @@ public class JsonRestServer {
      * @return The deserialized response to the HTTP request, or null if no data is expected.
      */
     public static <T> HttpResponse<T> httpRequest(String url, String method, Object requestBodyData,
-                                                  TypeReference<T> responseFormat, int maxTries)
-            throws IOException, InterruptedException {
+        TypeReference<T> responseFormat, int maxTries)
+        throws IOException, InterruptedException {
         return httpRequest(log, url, method, requestBodyData, responseFormat, maxTries);
     }
 
@@ -257,8 +257,8 @@ public class JsonRestServer {
      * @return The deserialized response to the HTTP request, or null if no data is expected.
      */
     public static <T> HttpResponse<T> httpRequest(Logger logger, String url, String method,
-            Object requestBodyData, TypeReference<T> responseFormat, int maxTries)
-            throws IOException, InterruptedException {
+        Object requestBodyData, TypeReference<T> responseFormat, int maxTries)
+        throws IOException, InterruptedException {
         IOException exc = null;
         for (int tries = 0; tries < maxTries; tries++) {
             if (tries > 0) {

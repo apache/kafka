@@ -38,8 +38,8 @@ import org.apache.kafka.common.utils.Time;
  */
 public class ShareConsumerDelegateCreator {
     public <K, V> ShareConsumerDelegate<K, V> create(final ConsumerConfig config,
-                                                     final Deserializer<K> keyDeserializer,
-                                                     final Deserializer<V> valueDeserializer) {
+        final Deserializer<K> keyDeserializer,
+        final Deserializer<V> valueDeserializer) {
         try {
             return new ShareConsumerImpl<>(config, keyDeserializer, valueDeserializer);
         } catch (KafkaException e) {
@@ -50,27 +50,27 @@ public class ShareConsumerDelegateCreator {
     }
 
     public <K, V> ShareConsumerDelegate<K, V> create(final LogContext logContext,
-                                                     final String clientId,
-                                                     final String groupId,
-                                                     final ConsumerConfig config,
-                                                     final Deserializer<K> keyDeserializer,
-                                                     final Deserializer<V> valueDeserializer,
-                                                     final Time time,
-                                                     final KafkaClient client,
-                                                     final SubscriptionState subscriptions,
-                                                     final ShareConsumerMetadata metadata) {
+        final String clientId,
+        final String groupId,
+        final ConsumerConfig config,
+        final Deserializer<K> keyDeserializer,
+        final Deserializer<V> valueDeserializer,
+        final Time time,
+        final KafkaClient client,
+        final SubscriptionState subscriptions,
+        final ShareConsumerMetadata metadata) {
         try {
             return new ShareConsumerImpl<>(
-                    logContext,
-                    clientId,
-                    groupId,
-                    config,
-                    keyDeserializer,
-                    valueDeserializer,
-                    time,
-                    client,
-                    subscriptions,
-                    metadata
+                logContext,
+                clientId,
+                groupId,
+                config,
+                keyDeserializer,
+                valueDeserializer,
+                time,
+                client,
+                subscriptions,
+                metadata
             );
         } catch (KafkaException e) {
             throw e;

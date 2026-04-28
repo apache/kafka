@@ -44,7 +44,7 @@ public class FindCoordinatorRequest extends AbstractRequest {
         public FindCoordinatorRequest build(short version) {
             if (version < 1 && data.keyType() == CoordinatorType.TRANSACTION.id()) {
                 throw new UnsupportedVersionException("Cannot create a v" + version + " FindCoordinator request " +
-                        "because we require features supported only in 2 or later.");
+                    "because we require features supported only in 2 or later.");
             }
             int batchedKeys = data.coordinatorKeys().size();
             if (version < MIN_BATCHED_VERSION) {

@@ -38,8 +38,8 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
     private final StateStoreProvider provider;
 
     public CompositeReadOnlyWindowStore(final StateStoreProvider provider,
-                                        final QueryableStoreType<ReadOnlyWindowStore<K, V>> windowStoreType,
-                                        final String storeName) {
+        final QueryableStoreType<ReadOnlyWindowStore<K, V>> windowStoreType,
+        final String storeName) {
         this.provider = provider;
         this.windowStoreType = windowStoreType;
         this.storeName = storeName;
@@ -66,8 +66,8 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
 
     @Override
     public WindowStoreIterator<V> fetch(final K key,
-                                        final Instant timeFrom,
-                                        final Instant timeTo) {
+        final Instant timeFrom,
+        final Instant timeTo) {
         Objects.requireNonNull(key, "key can't be null");
         final List<ReadOnlyWindowStore<K, V>> stores = provider.stores(storeName, windowStoreType);
         for (final ReadOnlyWindowStore<K, V> windowStore : stores) {
@@ -89,8 +89,8 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
 
     @Override
     public WindowStoreIterator<V> backwardFetch(final K key,
-                                                final Instant timeFrom,
-                                                final Instant timeTo) throws IllegalArgumentException {
+        final Instant timeFrom,
+        final Instant timeTo) throws IllegalArgumentException {
         Objects.requireNonNull(key, "key can't be null");
         final List<ReadOnlyWindowStore<K, V>> stores = provider.stores(storeName, windowStoreType);
         for (final ReadOnlyWindowStore<K, V> windowStore : stores) {
@@ -112,9 +112,9 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
 
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom,
-                                                  final K keyTo,
-                                                  final Instant timeFrom,
-                                                  final Instant timeTo) {
+        final K keyTo,
+        final Instant timeFrom,
+        final Instant timeTo) {
         final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction =
             store -> store.fetch(keyFrom, keyTo, timeFrom, timeTo);
         return new DelegatingPeekingKeyValueIterator<>(
@@ -126,9 +126,9 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
 
     @Override
     public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
-                                                          final K keyTo,
-                                                          final Instant timeFrom,
-                                                          final Instant timeTo) throws IllegalArgumentException {
+        final K keyTo,
+        final Instant timeFrom,
+        final Instant timeTo) throws IllegalArgumentException {
         final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction =
             store -> store.backwardFetch(keyFrom, keyTo, timeFrom, timeTo);
         return new DelegatingPeekingKeyValueIterator<>(
@@ -162,7 +162,7 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
 
     @Override
     public KeyValueIterator<Windowed<K>, V> fetchAll(final Instant timeFrom,
-                                                     final Instant timeTo) {
+        final Instant timeTo) {
         final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction =
             store -> store.fetchAll(timeFrom, timeTo);
         return new DelegatingPeekingKeyValueIterator<>(
@@ -174,7 +174,7 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
 
     @Override
     public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final Instant timeFrom,
-                                                             final Instant timeTo) throws IllegalArgumentException {
+        final Instant timeTo) throws IllegalArgumentException {
         final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction =
             store -> store.backwardFetchAll(timeFrom, timeTo);
         return new DelegatingPeekingKeyValueIterator<>(

@@ -31,7 +31,7 @@ public class GetTelemetrySubscriptionsResponseTest {
     @Test
     public void testErrorCountsReturnsNoneWhenNoErrors() {
         GetTelemetrySubscriptionsResponseData data = new GetTelemetrySubscriptionsResponseData()
-                .setErrorCode(Errors.NONE.code());
+            .setErrorCode(Errors.NONE.code());
         GetTelemetrySubscriptionsResponse response = new GetTelemetrySubscriptionsResponse(data);
         assertEquals(Collections.singletonMap(Errors.NONE, 1), response.errorCounts());
     }
@@ -39,7 +39,7 @@ public class GetTelemetrySubscriptionsResponseTest {
     @Test
     public void testErrorCountsReturnsOneError() {
         GetTelemetrySubscriptionsResponseData data = new GetTelemetrySubscriptionsResponseData()
-                .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
+            .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
         data.setErrorCode(Errors.INVALID_CONFIG.code());
 
         GetTelemetrySubscriptionsResponse response = new GetTelemetrySubscriptionsResponse(data);

@@ -18,8 +18,8 @@
 package org.apache.kafka.tiered.storage.specs;
 
 public record FetchCountAndOp(
-    int count,
-    RemoteFetchCount.OperationType operationType
+int count,
+RemoteFetchCount.OperationType operationType
 ) {
     public FetchCountAndOp(int count) {
         this(count, RemoteFetchCount.OperationType.EQUALS_TO);
@@ -28,8 +28,8 @@ public record FetchCountAndOp(
     @Override
     public String toString() {
         return "FetchCountAndOp{" +
-            "count=" + count +
-            ", operationType=" + operationType +
-            '}';
+                "count=" + count +
+                ", operationType=" + operationType +
+                '}';
     }
 }

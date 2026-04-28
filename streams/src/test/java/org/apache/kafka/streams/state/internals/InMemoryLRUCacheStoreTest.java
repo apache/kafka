@@ -40,9 +40,9 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
     @Override
     protected <K, V> KeyValueStore<K, V> createKeyValueStore(final StateStoreContext context) {
         final StoreBuilder<KeyValueStore<K, V>> storeBuilder = Stores.keyValueStoreBuilder(
-                Stores.lruMap("my-store", 10),
-                (Serde<K>) context.keySerde(),
-                (Serde<V>) context.valueSerde());
+            Stores.lruMap("my-store", 10),
+            (Serde<K>) context.keySerde(),
+            (Serde<V>) context.valueSerde());
 
         final KeyValueStore<K, V> store = storeBuilder.build();
         store.init(context, store);
@@ -53,8 +53,8 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
     @Test
     public void shouldPutAllKeyValuePairs() {
         final List<KeyValue<Integer, String>> kvPairs = Arrays.asList(KeyValue.pair(1, "1"),
-                KeyValue.pair(2, "2"),
-                KeyValue.pair(3, "3"));
+            KeyValue.pair(2, "2"),
+            KeyValue.pair(3, "3"));
 
         store.putAll(kvPairs);
 
@@ -68,20 +68,20 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
     @Test
     public void shouldUpdateValuesForExistingKeysOnPutAll() {
         final List<KeyValue<Integer, String>> kvPairs = Arrays.asList(KeyValue.pair(1, "1"),
-                KeyValue.pair(2, "2"),
-                KeyValue.pair(3, "3"));
+            KeyValue.pair(2, "2"),
+            KeyValue.pair(3, "3"));
 
         store.putAll(kvPairs);
-        
+
 
         final List<KeyValue<Integer, String>> updatedKvPairs = Arrays.asList(KeyValue.pair(1, "ONE"),
-                KeyValue.pair(2, "TWO"),
-                KeyValue.pair(3, "THREE"));
+            KeyValue.pair(2, "TWO"),
+            KeyValue.pair(3, "THREE"));
 
         store.putAll(updatedKvPairs);
 
         assertThat(store.approximateNumEntries(), equalTo(3L));
-        
+
         for (final KeyValue<Integer, String> kvPair : updatedKvPairs) {
             assertThat(store.get(kvPair.key), equalTo(kvPair.value));
         }

@@ -51,17 +51,17 @@ public class ConnectClusterStateImplTest {
     protected ConnectClusterStateImpl connectClusterState;
     protected long herderRequestTimeoutMs = TimeUnit.SECONDS.toMillis(10);
     protected Collection<String> expectedConnectors;
-    
+
     @BeforeEach
     public void setUp() {
         expectedConnectors = List.of("sink1", "source1", "source2");
         connectClusterState = new ConnectClusterStateImpl(
-            herderRequestTimeoutMs,
-            new ConnectClusterDetailsImpl(KAFKA_CLUSTER_ID),
-            herder
+                herderRequestTimeoutMs,
+                new ConnectClusterDetailsImpl(KAFKA_CLUSTER_ID),
+                herder
         );
     }
-    
+
     @Test
     public void connectors() {
         @SuppressWarnings("unchecked")
@@ -90,8 +90,8 @@ public class ConnectClusterStateImplTest {
 
         assertEquals(expectedConfig, actualConfig);
         assertNotSame(expectedConfig,
-            actualConfig,
-            "Config should be copied in order to avoid mutation by REST extensions");
+                actualConfig,
+                "Config should be copied in order to avoid mutation by REST extensions");
     }
 
     @Test

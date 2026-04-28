@@ -70,10 +70,10 @@ public class ConnectorValidationIntegrationTest {
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(GROUP_ID_CONFIG, WORKER_GROUP_ID);
 
-        TestPlugins.TestPlugin[] testPlugins = new TestPlugins.TestPlugin[] {
-            TestPlugins.TestPlugin.BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONVERTER,
-            TestPlugins.TestPlugin.BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONVERTER,
-            TestPlugins.TestPlugin.BAD_PACKAGING_INNOCUOUS_CONNECTOR
+        TestPlugins.TestPlugin[] testPlugins = new TestPlugins.TestPlugin[]{
+                TestPlugins.TestPlugin.BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONVERTER,
+                TestPlugins.TestPlugin.BAD_PACKAGING_DEFAULT_CONSTRUCTOR_THROWS_CONVERTER,
+                TestPlugins.TestPlugin.BAD_PACKAGING_INNOCUOUS_CONNECTOR
         };
         workerProps.put(
                 WorkerConfig.PLUGIN_PATH_CONFIG,
@@ -548,6 +548,7 @@ public class ConnectorValidationIntegrationTest {
 
     public static class TestConverterWithSinglePropertyConfigDef extends TestConverter {
         public static final String BOOLEAN_PROPERTY_NAME = "prop";
+
         @Override
         public ConfigDef config() {
             return new ConfigDef().define(BOOLEAN_PROPERTY_NAME, ConfigDef.Type.BOOLEAN, ConfigDef.Importance.HIGH, "");

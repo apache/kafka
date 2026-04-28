@@ -55,10 +55,10 @@ public class ExceptionHandlerUtils {
      * @return A list of Dead Letter Queue records to produce
      */
     public static List<ProducerRecord<byte[], byte[]>> maybeBuildDeadLetterQueueRecords(final String deadLetterQueueTopicName,
-                                                                                 final byte[] key,
-                                                                                 final byte[] value,
-                                                                                 final ErrorHandlerContext context,
-                                                                                 final Exception exception) {
+        final byte[] key,
+        final byte[] value,
+        final ErrorHandlerContext context,
+        final Exception exception) {
         if (!shouldBuildDeadLetterQueueRecord(deadLetterQueueTopicName)) {
             return Collections.emptyList();
         }
@@ -76,10 +76,10 @@ public class ExceptionHandlerUtils {
      * @return A dead letter queue record to produce.
      */
     public static ProducerRecord<byte[], byte[]> buildDeadLetterQueueRecord(final String deadLetterQueueTopicName,
-                                                                     final byte[] key,
-                                                                     final byte[] value,
-                                                                     final ErrorHandlerContext context,
-                                                                     final Exception e) {
+        final byte[] key,
+        final byte[] value,
+        final ErrorHandlerContext context,
+        final Exception e) {
         if (deadLetterQueueTopicName == null) {
             throw new InvalidConfigurationException(String.format("%s cannot be null while building dead letter queue record", StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG));
         }

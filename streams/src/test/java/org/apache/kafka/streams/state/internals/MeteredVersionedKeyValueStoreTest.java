@@ -386,7 +386,7 @@ public class MeteredVersionedKeyValueStoreTest {
         final PositionBound bound = PositionBound.unbounded();
         final QueryConfig config = new QueryConfig(false);
         when(inner.query(any(), any(), any())).thenReturn(
-                QueryResult.forResult(new LogicalSegmentIterator(Collections.emptyListIterator(), RAW_KEY, 0L, 0L, ResultOrder.ANY)));
+            QueryResult.forResult(new LogicalSegmentIterator(Collections.emptyListIterator(), RAW_KEY, 0L, 0L, ResultOrder.ANY)));
 
         final KafkaMetric iteratorDurationAvgMetric = getMetric("iterator-duration-avg");
         final KafkaMetric iteratorDurationMaxMetric = getMetric("iterator-duration-max");
@@ -422,7 +422,7 @@ public class MeteredVersionedKeyValueStoreTest {
         final PositionBound bound = PositionBound.unbounded();
         final QueryConfig config = new QueryConfig(false);
         when(inner.query(any(), any(), any())).thenReturn(
-                QueryResult.forResult(new LogicalSegmentIterator(Collections.emptyListIterator(), RAW_KEY, 0L, 0L, ResultOrder.ANY)));
+            QueryResult.forResult(new LogicalSegmentIterator(Collections.emptyListIterator(), RAW_KEY, 0L, 0L, ResultOrder.ANY)));
 
         final KafkaMetric oldestIteratorTimestampMetric = getMetric("oldest-iterator-open-since-ms");
         assertThat(oldestIteratorTimestampMetric, not(nullValue()));

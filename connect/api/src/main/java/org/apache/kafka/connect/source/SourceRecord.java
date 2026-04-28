@@ -46,39 +46,39 @@ public class SourceRecord extends ConnectRecord<SourceRecord> {
     private final Map<String, ?> sourceOffset;
 
     public SourceRecord(Map<String, ?> sourcePartition, Map<String, ?> sourceOffset,
-                        String topic, Integer partition, Schema valueSchema, Object value) {
+            String topic, Integer partition, Schema valueSchema, Object value) {
         this(sourcePartition, sourceOffset, topic, partition, null, null, valueSchema, value);
     }
 
     public SourceRecord(Map<String, ?> sourcePartition, Map<String, ?> sourceOffset,
-                        String topic, Schema valueSchema, Object value) {
+            String topic, Schema valueSchema, Object value) {
         this(sourcePartition, sourceOffset, topic, null, null, null, valueSchema, value);
     }
 
     public SourceRecord(Map<String, ?> sourcePartition, Map<String, ?> sourceOffset,
-                        String topic, Schema keySchema, Object key, Schema valueSchema, Object value) {
+            String topic, Schema keySchema, Object key, Schema valueSchema, Object value) {
         this(sourcePartition, sourceOffset, topic, null, keySchema, key, valueSchema, value);
     }
 
     public SourceRecord(Map<String, ?> sourcePartition, Map<String, ?> sourceOffset,
-                        String topic, Integer partition,
-                        Schema keySchema, Object key, Schema valueSchema, Object value) {
+            String topic, Integer partition,
+            Schema keySchema, Object key, Schema valueSchema, Object value) {
         this(sourcePartition, sourceOffset, topic, partition, keySchema, key, valueSchema, value, null);
     }
 
     public SourceRecord(Map<String, ?> sourcePartition, Map<String, ?> sourceOffset,
-                        String topic, Integer partition,
-                        Schema keySchema, Object key,
-                        Schema valueSchema, Object value,
-                        Long timestamp) {
+            String topic, Integer partition,
+            Schema keySchema, Object key,
+            Schema valueSchema, Object value,
+            Long timestamp) {
         this(sourcePartition, sourceOffset, topic, partition, keySchema, key, valueSchema, value, timestamp, null);
     }
 
     public SourceRecord(Map<String, ?> sourcePartition, Map<String, ?> sourceOffset,
-                        String topic, Integer partition,
-                        Schema keySchema, Object key,
-                        Schema valueSchema, Object value,
-                        Long timestamp, Iterable<Header> headers) {
+            String topic, Integer partition,
+            Schema keySchema, Object key,
+            Schema valueSchema, Object value,
+            Long timestamp, Iterable<Header> headers) {
         super(topic, partition, keySchema, key, valueSchema, value, timestamp, headers);
         this.sourcePartition = sourcePartition;
         this.sourceOffset = sourceOffset;
@@ -99,7 +99,7 @@ public class SourceRecord extends ConnectRecord<SourceRecord> {
 
     @Override
     public SourceRecord newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value,
-                                  Long timestamp, Iterable<Header> headers) {
+            Long timestamp, Iterable<Header> headers) {
         return new SourceRecord(sourcePartition, sourceOffset, topic, kafkaPartition, keySchema, key, valueSchema, value, timestamp, headers);
     }
 

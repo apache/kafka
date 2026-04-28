@@ -31,7 +31,7 @@ import java.util.regex.Pattern;
  * us-west.&lt;TOPIC&gt;. The separator is customizable by setting {@link #SEPARATOR_CONFIG} and defaults to a period.
  */
 public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable {
-    
+
     private static final Logger log = LoggerFactory.getLogger(DefaultReplicationPolicy.class);
 
     // In order to work with various metrics stores, we allow custom separators.
@@ -90,6 +90,7 @@ public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable
     private String internalSeparator() {
         return isInternalTopicSeparatorEnabled ? separator : ".";
     }
+
     private String internalSuffix() {
         return internalSeparator() + "internal";
     }
@@ -110,11 +111,11 @@ public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable
 
     @Override
     public boolean isCheckpointsTopic(String topic) {
-        return  topic.endsWith(checkpointsTopicSuffix());
+        return topic.endsWith(checkpointsTopicSuffix());
     }
 
     @Override
     public boolean isMM2InternalTopic(String topic) {
-        return  topic.startsWith("mm2") && topic.endsWith(internalSuffix()) || isCheckpointsTopic(topic);
+        return topic.startsWith("mm2") && topic.endsWith(internalSuffix()) || isCheckpointsTopic(topic);
     }
 }

@@ -83,15 +83,15 @@ public class EventAccumulatorTest {
         assertNull(accumulator.poll());
 
         List<MockEvent> events = Arrays.asList(
-            new MockEvent(1, 0),
-            new MockEvent(1, 1),
-            new MockEvent(1, 2),
-            new MockEvent(2, 0),
-            new MockEvent(2, 1),
-            new MockEvent(2, 3),
-            new MockEvent(3, 0),
-            new MockEvent(3, 1),
-            new MockEvent(3, 2)
+                new MockEvent(1, 0),
+                new MockEvent(1, 1),
+                new MockEvent(1, 2),
+                new MockEvent(2, 0),
+                new MockEvent(2, 1),
+                new MockEvent(2, 3),
+                new MockEvent(3, 0),
+                new MockEvent(3, 1),
+                new MockEvent(3, 2)
         );
 
         events.forEach(accumulator::addLast);
@@ -118,9 +118,9 @@ public class EventAccumulatorTest {
         EventAccumulator<Integer, MockEvent> accumulator = new EventAccumulator<>();
 
         List<MockEvent> events = Arrays.asList(
-            new MockEvent(1, 0),
-            new MockEvent(1, 1),
-            new MockEvent(1, 2)
+                new MockEvent(1, 0),
+                new MockEvent(1, 1),
+                new MockEvent(1, 2)
         );
 
         events.forEach(accumulator::addFirst);
@@ -191,11 +191,11 @@ public class EventAccumulatorTest {
         MockEvent event2 = new MockEvent(1, 2);
 
         CompletableFuture<MockEvent> future0 = CompletableFuture.supplyAsync(() ->
-            accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
+                accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
         CompletableFuture<MockEvent> future1 = CompletableFuture.supplyAsync(() ->
-            accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
+                accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
         CompletableFuture<MockEvent> future2 = CompletableFuture.supplyAsync(() ->
-            accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
+                accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
         List<CompletableFuture<MockEvent>> futures = Arrays.asList(future0, future1, future2);
 
         assertFalse(future0.isDone());
@@ -208,8 +208,8 @@ public class EventAccumulatorTest {
 
         // One future should be completed with event0.
         assertEquals(event0, CompletableFuture
-            .anyOf(futures.toArray(new CompletableFuture[0]))
-            .get(5, TimeUnit.SECONDS));
+                .anyOf(futures.toArray(new CompletableFuture[0]))
+                .get(5, TimeUnit.SECONDS));
 
         futures = futures.stream().filter(future -> !future.isDone()).collect(Collectors.toList());
         assertEquals(2, futures.size());
@@ -219,8 +219,8 @@ public class EventAccumulatorTest {
 
         // One future should be completed with event1.
         assertEquals(event1, CompletableFuture
-            .anyOf(futures.toArray(new CompletableFuture[0]))
-            .get(5, TimeUnit.SECONDS));
+                .anyOf(futures.toArray(new CompletableFuture[0]))
+                .get(5, TimeUnit.SECONDS));
 
         futures = futures.stream().filter(future -> !future.isDone()).collect(Collectors.toList());
         assertEquals(1, futures.size());
@@ -230,8 +230,8 @@ public class EventAccumulatorTest {
 
         // One future should be completed with event2.
         assertEquals(event2, CompletableFuture
-            .anyOf(futures.toArray(new CompletableFuture[0]))
-            .get(5, TimeUnit.SECONDS));
+                .anyOf(futures.toArray(new CompletableFuture[0]))
+                .get(5, TimeUnit.SECONDS));
 
         futures = futures.stream().filter(future -> !future.isDone()).collect(Collectors.toList());
         assertEquals(0, futures.size());
@@ -249,11 +249,11 @@ public class EventAccumulatorTest {
         EventAccumulator<Integer, MockEvent> accumulator = new EventAccumulator<>();
 
         CompletableFuture<MockEvent> future0 = CompletableFuture.supplyAsync(() ->
-            accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
+                accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
         CompletableFuture<MockEvent> future1 = CompletableFuture.supplyAsync(() ->
-            accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
+                accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
         CompletableFuture<MockEvent> future2 = CompletableFuture.supplyAsync(() ->
-            accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
+                accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
 
         assertFalse(future0.isDone());
         assertFalse(future1.isDone());

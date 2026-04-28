@@ -42,8 +42,8 @@ public class StreamsTasksAssignedEvent extends CompletableBackgroundEvent<Void> 
      * @param assignment The task assignment for the callback
      */
     public StreamsTasksAssignedEvent(final SortedSet<TopicPartition> assignedPartitions,
-                                     final SortedSet<TopicPartition> addedPartitions,
-                                     final StreamsRebalanceData.Assignment assignment) {
+        final SortedSet<TopicPartition> addedPartitions,
+        final StreamsRebalanceData.Assignment assignment) {
         super(Type.STREAMS_TASKS_ASSIGNED, Long.MAX_VALUE);
         this.assignedPartitions = Collections.unmodifiableSortedSet(Objects.requireNonNull(assignedPartitions));
         this.addedPartitions = Collections.unmodifiableSortedSet(Objects.requireNonNull(addedPartitions));
@@ -74,8 +74,8 @@ public class StreamsTasksAssignedEvent extends CompletableBackgroundEvent<Void> 
     @Override
     protected String toStringBase() {
         return super.toStringBase() +
-                ", assignedPartitions=" + assignedPartitions +
-                ", addedPartitions=" + addedPartitions +
-                ", assignment=" + assignment;
+            ", assignedPartitions=" + assignedPartitions +
+            ", addedPartitions=" + addedPartitions +
+            ", assignment=" + assignment;
     }
 }

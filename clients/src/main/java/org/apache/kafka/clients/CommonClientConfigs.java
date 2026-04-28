@@ -45,20 +45,20 @@ public class CommonClientConfigs {
 
     public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
     public static final String BOOTSTRAP_SERVERS_DOC = "A list of host/port pairs used to establish the initial connection to the Kafka cluster. "
-                                                        + "Clients use this list to bootstrap and discover the full set of Kafka brokers. "
-                                                        + "While the order of servers in the list does not matter, we recommend including more than one server to ensure resilience if any servers are down. "
-                                                        + "This list does not need to contain the entire set of brokers, as Kafka clients automatically manage and update connections to the cluster efficiently. "
-                                                        + "This list must be in the form <code>host1:port1,host2:port2,...</code>.";
+        + "Clients use this list to bootstrap and discover the full set of Kafka brokers. "
+        + "While the order of servers in the list does not matter, we recommend including more than one server to ensure resilience if any servers are down. "
+        + "This list does not need to contain the entire set of brokers, as Kafka clients automatically manage and update connections to the cluster efficiently. "
+        + "This list must be in the form <code>host1:port1,host2:port2,...</code>.";
     public static final String CLIENT_DNS_LOOKUP_CONFIG = "client.dns.lookup";
     public static final String CLIENT_DNS_LOOKUP_DOC = "Controls how the client uses DNS lookups. "
-                                                       + "If set to <code>use_all_dns_ips</code>, connect to each returned IP "
-                                                       + "address in sequence until a successful connection is established. "
-                                                       + "After a disconnection, the next IP is used. Once all IPs have been "
-                                                       + "used once, the client resolves the IP(s) from the hostname again "
-                                                       + "(both the JVM and the OS cache DNS name lookups, however). "
-                                                       + "If set to <code>resolve_canonical_bootstrap_servers_only</code>, "
-                                                       + "resolve each bootstrap address into a list of canonical names. After "
-                                                       + "the bootstrap phase, this behaves the same as <code>use_all_dns_ips</code>.";
+        + "If set to <code>use_all_dns_ips</code>, connect to each returned IP "
+        + "address in sequence until a successful connection is established. "
+        + "After a disconnection, the next IP is used. Once all IPs have been "
+        + "used once, the client resolves the IP(s) from the hostname again "
+        + "(both the JVM and the OS cache DNS name lookups, however). "
+        + "If set to <code>resolve_canonical_bootstrap_servers_only</code>, "
+        + "resolve each bootstrap address into a list of canonical names. After "
+        + "the bootstrap phase, this behaves the same as <code>use_all_dns_ips</code>.";
 
     public static final String METADATA_MAX_AGE_CONFIG = "metadata.max.age.ms";
     public static final String METADATA_MAX_AGE_DOC = "The period of time in milliseconds after which we force a refresh of metadata even if we haven't seen any partition leadership changes to proactively discover any new brokers or partitions.";
@@ -119,16 +119,16 @@ public class CommonClientConfigs {
 
     public static final String METRICS_RECORDING_LEVEL_CONFIG = "metrics.recording.level";
     public static final String METRICS_RECORDING_LEVEL_DOC = "The highest recording level for metrics. It has three levels for recording metrics - info, debug, and trace.\n" +
-            " \n" +
-            "INFO level records only essential metrics necessary for monitoring system performance and health. It collects vital data without gathering too much detail, making it suitable for production environments where minimal overhead is desired.\n" +
-            "\n" +
-            "DEBUG level records most metrics, providing more detailed information about the system's operation. It's useful for development and testing environments where you need deeper insights to debug and fine-tune the application.\n" +
-            "\n" +
-            "TRACE level records all possible metrics, capturing every detail about the system's performance and operation. It's best for controlled environments where in-depth analysis is required, though it can introduce significant overhead.";
+        " \n" +
+        "INFO level records only essential metrics necessary for monitoring system performance and health. It collects vital data without gathering too much detail, making it suitable for production environments where minimal overhead is desired.\n" +
+        "\n" +
+        "DEBUG level records most metrics, providing more detailed information about the system's operation. It's useful for development and testing environments where you need deeper insights to debug and fine-tune the application.\n" +
+        "\n" +
+        "TRACE level records all possible metrics, capturing every detail about the system's performance and operation. It's best for controlled environments where in-depth analysis is required, though it can introduce significant overhead.";
     public static final String METRIC_REPORTER_CLASSES_CONFIG = "metric.reporters";
     public static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters. " +
-            "Implementing the <code>org.apache.kafka.common.metrics.MetricsReporter</code> interface allows plugging in classes that will be notified of new metric creation. " +
-            "When custom reporters are set and <code>org.apache.kafka.common.metrics.JmxReporter</code> is needed, it has to be explicitly added to the list.";
+        "Implementing the <code>org.apache.kafka.common.metrics.MetricsReporter</code> interface allows plugging in classes that will be notified of new metric creation. " +
+        "When custom reporters are set and <code>org.apache.kafka.common.metrics.JmxReporter</code> is needed, it has to be explicitly added to the list.";
 
     public static final String METRICS_CONTEXT_PREFIX = "metrics.context.";
 
@@ -154,104 +154,104 @@ public class CommonClientConfigs {
 
     public static final String REQUEST_TIMEOUT_MS_CONFIG = "request.timeout.ms";
     public static final String REQUEST_TIMEOUT_MS_DOC = "The configuration controls the maximum amount of time the client will wait "
-                                                         + "for the response of a request. If the response is not received before the timeout "
-                                                         + "elapses the client will resend the request if necessary or fail the request if "
-                                                         + "retries are exhausted.";
+        + "for the response of a request. If the response is not received before the timeout "
+        + "elapses the client will resend the request if necessary or fail the request if "
+        + "retries are exhausted.";
 
     public static final String DEFAULT_LIST_KEY_SERDE_INNER_CLASS = "default.list.key.serde.inner";
     public static final String DEFAULT_LIST_KEY_SERDE_INNER_CLASS_DOC = "Default inner class of list serde for key that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. "
-            + "This configuration will be read if and only if <code>default.key.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code>";
+        + "This configuration will be read if and only if <code>default.key.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code>";
 
     public static final String DEFAULT_LIST_VALUE_SERDE_INNER_CLASS = "default.list.value.serde.inner";
     public static final String DEFAULT_LIST_VALUE_SERDE_INNER_CLASS_DOC = "Default inner class of list serde for value that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. "
-            + "This configuration will be read if and only if <code>default.value.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code>";
+        + "This configuration will be read if and only if <code>default.value.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code>";
 
     public static final String DEFAULT_LIST_KEY_SERDE_TYPE_CLASS = "default.list.key.serde.type";
     public static final String DEFAULT_LIST_KEY_SERDE_TYPE_CLASS_DOC = "Default class for key that implements the <code>java.util.List</code> interface. "
-            + "This configuration will be read if and only if <code>default.key.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code> "
-            + "Note when list serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
-            + DEFAULT_LIST_KEY_SERDE_INNER_CLASS + "'";
+        + "This configuration will be read if and only if <code>default.key.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code> "
+        + "Note when list serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
+        + DEFAULT_LIST_KEY_SERDE_INNER_CLASS + "'";
 
     public static final String DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS = "default.list.value.serde.type";
     public static final String DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS_DOC = "Default class for value that implements the <code>java.util.List</code> interface. "
-            + "This configuration will be read if and only if <code>default.value.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code> "
-            + "Note when list serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
-            + DEFAULT_LIST_VALUE_SERDE_INNER_CLASS + "'";
+        + "This configuration will be read if and only if <code>default.value.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code> "
+        + "Note when list serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
+        + DEFAULT_LIST_VALUE_SERDE_INNER_CLASS + "'";
 
     public static final String GROUP_ID_CONFIG = "group.id";
     public static final String GROUP_ID_DOC = "A unique string that identifies the consumer group this consumer belongs to. This property is required if the consumer uses either the group management functionality by using <code>subscribe(topic)</code> or the Kafka-based offset management strategy.";
 
     public static final String GROUP_INSTANCE_ID_CONFIG = "group.instance.id";
     public static final String GROUP_INSTANCE_ID_DOC = "A unique identifier of the consumer instance provided by the end user. "
-                                                       + "Only non-empty strings are permitted. If set, the consumer is treated as a static member, "
-                                                       + "which means that only one instance with this ID is allowed in the consumer group at any time. "
-                                                       + "This can be used in combination with a larger session timeout to avoid group rebalances caused by transient unavailability "
-                                                       + "(e.g. process restarts). If not set, the consumer will join the group as a dynamic member, which is the traditional behavior.";
+        + "Only non-empty strings are permitted. If set, the consumer is treated as a static member, "
+        + "which means that only one instance with this ID is allowed in the consumer group at any time. "
+        + "This can be used in combination with a larger session timeout to avoid group rebalances caused by transient unavailability "
+        + "(e.g. process restarts). If not set, the consumer will join the group as a dynamic member, which is the traditional behavior.";
 
     public static final String MAX_POLL_INTERVAL_MS_CONFIG = "max.poll.interval.ms";
     public static final String MAX_POLL_INTERVAL_MS_DOC = "The maximum delay between invocations of poll() when using "
-                                                          + "consumer group management. This places an upper bound on the amount of time that the consumer can be idle "
-                                                          + "before fetching more records. If poll() is not called before expiration of this timeout, then the consumer "
-                                                          + "is considered failed and the group will rebalance in order to reassign the partitions to another member. "
-                                                          + "For consumers using a non-null <code>group.instance.id</code> which reach this timeout, partitions will not be immediately reassigned. "
-                                                          + "Instead, the consumer will stop sending heartbeats and partitions will be reassigned "
-                                                          + "after expiration of the session timeout (defined by the client config <code>session.timeout.ms</code> if using the Classic rebalance protocol, or by the broker config <code>group.consumer.session.timeout.ms</code> if using the Consumer protocol). "
-                                                          + "This mirrors the behavior of a static consumer which has shutdown.";
+        + "consumer group management. This places an upper bound on the amount of time that the consumer can be idle "
+        + "before fetching more records. If poll() is not called before expiration of this timeout, then the consumer "
+        + "is considered failed and the group will rebalance in order to reassign the partitions to another member. "
+        + "For consumers using a non-null <code>group.instance.id</code> which reach this timeout, partitions will not be immediately reassigned. "
+        + "Instead, the consumer will stop sending heartbeats and partitions will be reassigned "
+        + "after expiration of the session timeout (defined by the client config <code>session.timeout.ms</code> if using the Classic rebalance protocol, or by the broker config <code>group.consumer.session.timeout.ms</code> if using the Consumer protocol). "
+        + "This mirrors the behavior of a static consumer which has shutdown.";
 
     public static final String REBALANCE_TIMEOUT_MS_CONFIG = "rebalance.timeout.ms";
     public static final String REBALANCE_TIMEOUT_MS_DOC = "The maximum allowed time for each worker to join the group "
-                                                          + "once a rebalance has begun. This is basically a limit on the amount of time needed for all tasks to "
-                                                          + "flush any pending data and commit offsets. If the timeout is exceeded, then the worker will be removed "
-                                                          + "from the group, which will cause offset commit failures.";
+        + "once a rebalance has begun. This is basically a limit on the amount of time needed for all tasks to "
+        + "flush any pending data and commit offsets. If the timeout is exceeded, then the worker will be removed "
+        + "from the group, which will cause offset commit failures.";
 
     public static final String SESSION_TIMEOUT_MS_CONFIG = "session.timeout.ms";
     public static final String SESSION_TIMEOUT_MS_DOC = "The timeout used to detect client failures when using "
-                                                        + "Kafka's group management facility. The client sends periodic heartbeats to indicate its liveness "
-                                                        + "to the broker. If no heartbeats are received by the broker before the expiration of this session timeout, "
-                                                        + "then the broker will remove this client from the group and initiate a rebalance. Note that the value "
-                                                        + "must be in the allowable range as configured in the broker configuration by <code>group.min.session.timeout.ms</code> "
-                                                        + "and <code>group.max.session.timeout.ms</code>. Note that this client configuration is not supported when <code>group.protocol</code> "
-                                                        + "is set to \"consumer\". In that case, session timeout is controlled by the broker config <code>group.consumer.session.timeout.ms</code>.";
+        + "Kafka's group management facility. The client sends periodic heartbeats to indicate its liveness "
+        + "to the broker. If no heartbeats are received by the broker before the expiration of this session timeout, "
+        + "then the broker will remove this client from the group and initiate a rebalance. Note that the value "
+        + "must be in the allowable range as configured in the broker configuration by <code>group.min.session.timeout.ms</code> "
+        + "and <code>group.max.session.timeout.ms</code>. Note that this client configuration is not supported when <code>group.protocol</code> "
+        + "is set to \"consumer\". In that case, session timeout is controlled by the broker config <code>group.consumer.session.timeout.ms</code>.";
 
     public static final String HEARTBEAT_INTERVAL_MS_CONFIG = "heartbeat.interval.ms";
     public static final String HEARTBEAT_INTERVAL_MS_DOC = "The expected time between heartbeats to the consumer "
-                                                           + "coordinator when using Kafka's group management facilities. Heartbeats are used to ensure that the "
-                                                           + "consumer's session stays active and to facilitate rebalancing when new consumers join or leave the group. "
-                                                           + "This config is only supported if <code>group.protocol</code> is set to \"classic\". In that case, "
-                                                           + "the value must be set lower than <code>session.timeout.ms</code>, but typically should be set no higher "
-                                                           + "than 1/3 of that value. It can be adjusted even lower to control the expected time for normal rebalances."
-                                                           + "If <code>group.protocol</code> is set to \"consumer\", this config is not supported, as "
-                                                           + "the heartbeat interval is controlled by the broker with <code>group.consumer.heartbeat.interval.ms</code>.";
+        + "coordinator when using Kafka's group management facilities. Heartbeats are used to ensure that the "
+        + "consumer's session stays active and to facilitate rebalancing when new consumers join or leave the group. "
+        + "This config is only supported if <code>group.protocol</code> is set to \"classic\". In that case, "
+        + "the value must be set lower than <code>session.timeout.ms</code>, but typically should be set no higher "
+        + "than 1/3 of that value. It can be adjusted even lower to control the expected time for normal rebalances."
+        + "If <code>group.protocol</code> is set to \"consumer\", this config is not supported, as "
+        + "the heartbeat interval is controlled by the broker with <code>group.consumer.heartbeat.interval.ms</code>.";
 
     public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = "default.api.timeout.ms";
     public static final String DEFAULT_API_TIMEOUT_MS_DOC = "Specifies the timeout (in milliseconds) for client APIs. " +
-            "This configuration is used as the default timeout for all client operations that do not specify a <code>timeout</code> parameter.";
+        "This configuration is used as the default timeout for all client operations that do not specify a <code>timeout</code> parameter.";
 
     public static final String METADATA_RECOVERY_STRATEGY_CONFIG = "metadata.recovery.strategy";
     public static final String METADATA_RECOVERY_STRATEGY_DOC = "Controls how the client recovers when none of the brokers known to it is available. " +
-            "If set to <code>none</code>, the client fails. If set to <code>rebootstrap</code>, " +
-            "the client repeats the bootstrap process using <code>bootstrap.servers</code>. " +
-            "Rebootstrapping is useful when a client communicates with brokers so infrequently " +
-            "that the set of brokers may change entirely before the client refreshes metadata. " +
-            "Metadata recovery is triggered when all last-known brokers appear unavailable simultaneously. " +
-            "Brokers appear unavailable when disconnected and no current retry attempt is in-progress. " +
-            "Consider increasing <code>reconnect.backoff.ms</code> and <code>reconnect.backoff.max.ms</code> and " +
-            "decreasing <code>socket.connection.setup.timeout.ms</code> and <code>socket.connection.setup.timeout.max.ms</code> " +
-            "for the client. Rebootstrap is also triggered if connection cannot be established to any of the brokers for " +
-            "<code>metadata.recovery.rebootstrap.trigger.ms</code> milliseconds or if server requests rebootstrap.";
+        "If set to <code>none</code>, the client fails. If set to <code>rebootstrap</code>, " +
+        "the client repeats the bootstrap process using <code>bootstrap.servers</code>. " +
+        "Rebootstrapping is useful when a client communicates with brokers so infrequently " +
+        "that the set of brokers may change entirely before the client refreshes metadata. " +
+        "Metadata recovery is triggered when all last-known brokers appear unavailable simultaneously. " +
+        "Brokers appear unavailable when disconnected and no current retry attempt is in-progress. " +
+        "Consider increasing <code>reconnect.backoff.ms</code> and <code>reconnect.backoff.max.ms</code> and " +
+        "decreasing <code>socket.connection.setup.timeout.ms</code> and <code>socket.connection.setup.timeout.max.ms</code> " +
+        "for the client. Rebootstrap is also triggered if connection cannot be established to any of the brokers for " +
+        "<code>metadata.recovery.rebootstrap.trigger.ms</code> milliseconds or if server requests rebootstrap.";
     public static final String DEFAULT_METADATA_RECOVERY_STRATEGY = MetadataRecoveryStrategy.REBOOTSTRAP.name;
 
     public static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG = "metadata.recovery.rebootstrap.trigger.ms";
     public static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC = "If a client configured to rebootstrap using " +
-            "<code>metadata.recovery.strategy=rebootstrap</code> is unable to obtain metadata from any of the brokers in the last known " +
-            "metadata for this interval, client repeats the bootstrap process using <code>bootstrap.servers</code> configuration.";
+        "<code>metadata.recovery.strategy=rebootstrap</code> is unable to obtain metadata from any of the brokers in the last known " +
+        "metadata for this interval, client repeats the bootstrap process using <code>bootstrap.servers</code> configuration.";
     public static final long DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS = 300 * 1000;
 
     public static final String METADATA_CLUSTER_CHECK_ENABLE_CONFIG = "metadata.cluster.check.enable";
     public static final String METADATA_CLUSTER_CHECK_ENABLE_DOC = "Whether the client should send cluster and node information " +
-            "when connecting to a broker to enable it to check for a misrouted connection. This configuration is ignored if " +
-            "rebootstrapping is disabled by setting the configuration <code>metadata.recovery.strategy=none</code>. If the client " +
-            "is connecting to a broker older than Apache Kafka 4.4, no checking is performed and this configuration has no effect.";
+        "when connecting to a broker to enable it to check for a misrouted connection. This configuration is ignored if " +
+        "rebootstrapping is disabled by setting the configuration <code>metadata.recovery.strategy=none</code>. If the client " +
+        "is connecting to a broker older than Apache Kafka 4.4, no checking is performed and this configuration has no effect.";
 
     /**
      * Postprocess the configuration so that exponential backoff is disabled when reconnect backoff
@@ -263,13 +263,13 @@ public class CommonClientConfigs {
      * @return                          The new values which have been set as described in postProcessParsedConfig.
      */
     public static Map<String, Object> postProcessReconnectBackoffConfigs(AbstractConfig config,
-                                                                         Map<String, Object> parsedValues) {
+        Map<String, Object> parsedValues) {
         HashMap<String, Object> rval = new HashMap<>();
         Map<String, Object> originalConfig = config.originals();
         if ((!originalConfig.containsKey(RECONNECT_BACKOFF_MAX_MS_CONFIG)) &&
             originalConfig.containsKey(RECONNECT_BACKOFF_MS_CONFIG)) {
             log.warn("Disabling exponential reconnect backoff because {} is set, but {} is not.",
-                    RECONNECT_BACKOFF_MS_CONFIG, RECONNECT_BACKOFF_MAX_MS_CONFIG);
+                RECONNECT_BACKOFF_MS_CONFIG, RECONNECT_BACKOFF_MAX_MS_CONFIG);
             rval.put(RECONNECT_BACKOFF_MAX_MS_CONFIG, parsedValues.get(RECONNECT_BACKOFF_MS_CONFIG));
         }
         return rval;
@@ -285,7 +285,7 @@ public class CommonClientConfigs {
         long retryBackoffMaxMs = config.getLong(RETRY_BACKOFF_MAX_MS_CONFIG);
         if (retryBackoffMs > retryBackoffMaxMs) {
             log.warn("Configuration '{}' with value '{}' is greater than configuration '{}' with value '{}'. " +
-                    "A static backoff with value '{}' will be applied.",
+                "A static backoff with value '{}' will be applied.",
                 RETRY_BACKOFF_MS_CONFIG, retryBackoffMs,
                 RETRY_BACKOFF_MAX_MS_CONFIG, retryBackoffMaxMs, retryBackoffMaxMs);
         }
@@ -294,7 +294,7 @@ public class CommonClientConfigs {
         long connectionSetupTimeoutMaxMs = config.getLong(SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG);
         if (connectionSetupTimeoutMs > connectionSetupTimeoutMaxMs) {
             log.warn("Configuration '{}' with value '{}' is greater than configuration '{}' with value '{}'. " +
-                    "A static connection setup timeout with value '{}' will be applied.",
+                "A static connection setup timeout with value '{}' will be applied.",
                 SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, connectionSetupTimeoutMs,
                 SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG, connectionSetupTimeoutMaxMs, connectionSetupTimeoutMaxMs);
         }
@@ -306,7 +306,7 @@ public class CommonClientConfigs {
         if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL) {
             if (clientSaslMechanism == null || clientSaslMechanism.isEmpty()) {
                 throw new ConfigException(SaslConfigs.SASL_MECHANISM, null, "When the " + CommonClientConfigs.SECURITY_PROTOCOL_CONFIG +
-                        " configuration enables SASL, mechanism must be non-null and non-empty string.");
+                    " configuration enables SASL, mechanism must be non-null and non-empty string.");
             }
         }
     }
@@ -321,7 +321,7 @@ public class CommonClientConfigs {
 
     public static List<MetricsReporter> metricsReporters(Map<String, Object> clientIdOverride, AbstractConfig config) {
         return config.getConfiguredInstances(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
-                MetricsReporter.class, clientIdOverride);
+            MetricsReporter.class, clientIdOverride);
     }
 
     public static Optional<ClientTelemetryReporter> telemetryReporter(String clientId, AbstractConfig config) {
