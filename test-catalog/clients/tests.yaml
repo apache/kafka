@@ -1205,6 +1205,7 @@ org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumerTest:
 - testPollDoesNotAddNewAsyncPollEventWhenOneIsAlreadyInFlight
 - testPollThrowsInterruptExceptionIfInterrupted
 - testPollWaitsForReconciliationCheckComplete
+- testPollWithManualAssignmentDoesNotBusyLoop
 - testProcessBackgroundEventsTimesOut
 - testProcessBackgroundEventsWithInitialDelay
 - testProcessBackgroundEventsWithoutDelay
@@ -1324,6 +1325,7 @@ org.apache.kafka.clients.consumer.internals.ConsumerHeartbeatRequestManagerTest:
 - testHeartbeatResponseErrorNotifiedToGroupManagerAfterErrorPropagated
 - testHeartbeatResponseOnErrorHandling
 - testHeartbeatState
+- testMaximumTimeToWaitWhenHeartbeatShouldBeSkipped
 - testNetworkTimeout
 - testNoCoordinator
 - testPollOnCloseGeneratesRequestIfNeeded
@@ -4579,8 +4581,14 @@ org.apache.kafka.common.requests.TxnOffsetCommitRequestTest:
 - testVersionSupportForGroupInstanceId
 - testVersionSupportForGroupMetadata
 org.apache.kafka.common.requests.TxnOffsetCommitResponseTest:
+- testBuilderAddPartition
+- testBuilderAddPartitions
+- testBuilderMergeAddsNewTopic
+- testBuilderMergeAppendsToExistingTopic
+- testBuilderMergeIntoEmpty
 - testConstructorWithErrorResponse
 - testParse
+- testTopicNameBuilderRejectsNullTopicName
 org.apache.kafka.common.requests.UpdateFeaturesRequestTest:
 - testGetErrorResponse
 - testUpdateFeaturesV0
