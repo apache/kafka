@@ -248,8 +248,8 @@ public class LogConfig extends AbstractConfig {
                         TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC)
                 .define(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_COPY_DISABLE_DOC)
                 .define(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_DOC)
-                .defineInternal(INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, MEDIUM, INTERNAL_SEGMENT_BYTES_DOC)
-                .define(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_DOC);
+                .define(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_DOC)
+                .defineInternal(INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, MEDIUM, INTERNAL_SEGMENT_BYTES_DOC);
     }
 
     public final Set<String> overriddenConfigs;
@@ -280,7 +280,7 @@ public class LogConfig extends AbstractConfig {
     public final BrokerCompressionType compressionType;
     public final Optional<Compression> compression;
     public final boolean preallocate;
-    public final boolean dlqEnabled;
+    public final boolean errorsDeadletterqueueGroupEnable;
 
     public final TimestampType messageTimestampType;
 
@@ -337,7 +337,7 @@ public class LogConfig extends AbstractConfig {
         this.messageTimestampAfterMaxMs = getLong(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG);
         this.leaderReplicationThrottledReplicas = Collections.unmodifiableList(getList(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
         this.followerReplicationThrottledReplicas = Collections.unmodifiableList(getList(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
-        this.dlqEnabled = getBoolean(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG);
+        this.errorsDeadletterqueueGroupEnable = getBoolean(TopicConfig.ERRORS_DEADLETTERQUEUE_GROUP_ENABLE_CONFIG);
 
         remoteLogConfig = new RemoteLogConfig(this);
     }
@@ -390,8 +390,8 @@ public class LogConfig extends AbstractConfig {
             return 0;
     }
 
-    public boolean dlqEnabled() {
-        return dlqEnabled;
+    public boolean errorsDeadletterqueueGroupEnable() {
+        return errorsDeadletterqueueGroupEnable;
     }
 
     public boolean remoteStorageEnable() {
@@ -659,7 +659,7 @@ public class LogConfig extends AbstractConfig {
                 ", followerReplicationThrottledReplicas=" + followerReplicationThrottledReplicas +
                 ", remoteLogConfig=" + remoteLogConfig +
                 ", maxMessageSize=" + maxMessageSize +
-                ", dlqEnabled=" + dlqEnabled +
+                ", errorsDeadletterqueueGroupEnable=" + errorsDeadletterqueueGroupEnable +
                 '}';
     }
 
