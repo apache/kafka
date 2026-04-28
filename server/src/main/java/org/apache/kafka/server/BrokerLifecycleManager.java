@@ -153,7 +153,7 @@ public class BrokerLifecycleManager {
      * Set of cordoned log directories.
      * This variable can only be read or written from the event queue thread.
      */
-    private final Set<Uuid> cordonedLogDirs = new HashSet<>();
+    private Set<Uuid> cordonedLogDirs = new HashSet<>();
 
     /**
      * True if we sent an event queue to the active controller requesting controlled
@@ -296,16 +296,6 @@ public class BrokerLifecycleManager {
         }
     }
 
-    /**
-     * Propagate directory uncordoned to the controller.
-     * @param directories The IDs for the directories that is uncordoned.
-     */
-    public void propagateDirectoryUncordoned(Set<Uuid> directories) {
-        if (cordonedLogDirsSupported.get()) {
-            eventQueue.append(new UncordonedDirEvent(directories));
-        }
-    }
-
     public void resendBrokerRegistration() {
         eventQueue.append(new ResendBrokerRegistrationEvent());
     }
@@ -438,24 +428,7 @@ public class BrokerLifecycleManager {
 
         @Override
         public void run() {
-            cordonedLogDirs.addAll(dirs);
-            if (registered) {
-                scheduleNextCommunicationImmediately();
-            }
-        }
-    }
-
-    private class UncordonedDirEvent implements EventQueue.Event {
-
-        private final Set<Uuid> dirs;
-
-        UncordonedDirEvent(Set<Uuid> dirs) {
-            this.dirs = dirs;
-        }
-
-        @Override
-        public void run() {
-            cordonedLogDirs.removeAll(dirs);
+            cordonedLogDirs = dirs;
             if (registered) {
                 scheduleNextCommunicationImmediately();
             }
@@ -597,7 +570,7 @@ public class BrokerLifecycleManager {
             .setWantFence(!readyToUnfence)
             .setWantShutDown(state == BrokerState.PENDING_CONTROLLED_SHUTDOWN)
             .setOfflineLogDirs(new ArrayList<>(offlineDirs.keySet()));
-        if (initialCatchUpFuture.isDone() && !initialCatchUpFuture.isCompletedExceptionally()) {
+        if (initialCatchUpFuture.isDone() && !initialCatchUpFuture.isCompletedExceptionally() && cordonedLogDirsSupported.get()) {
             data.setCordonedLogDirs(List.copyOf(cordonedLogDirs));
         }
         if (logger.isTraceEnabled()) {

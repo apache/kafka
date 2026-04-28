@@ -1546,6 +1546,8 @@ public class ReplicationControlManager {
             List<Uuid> cordonedDirs,
             List<ApiMessageAndVersion> records
     ) {
+        // cordonedDirs is null until a broker has caught up with the latest metadata, so just ignore
+        if (cordonedDirs == null) return;
         BrokerRegistration registration = clusterControl.registration(brokerId);
         boolean cordonedDirsChanged = registration.cordonedDirChanged(cordonedDirs);
         if (cordonedDirsChanged) {
@@ -1695,7 +1697,7 @@ public class ReplicationControlManager {
         if (featureControl.metadataVersionOrThrow().isDirectoryAssignmentSupported()) {
             handleDirectoriesOffline(brokerId, brokerEpoch, request.offlineLogDirs(), records);
         }
-        if (featureControl.metadataVersionOrThrow().isCordonedLogDirsSupported() && request.cordonedLogDirs() != null) {
+        if (featureControl.metadataVersionOrThrow().isCordonedLogDirsSupported()) {
             handleDirectoriesCordoned(brokerId, brokerEpoch, request.cordonedLogDirs(), records);
         }
         boolean isCaughtUp = request.currentMetadataOffset() >= registerBrokerRecordOffset;

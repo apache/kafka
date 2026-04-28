@@ -439,8 +439,19 @@ public class ConfigurationControlManager {
         return false;
     }
 
-    // Prevent updating cordoned.log.dirs if the request is not forwarded and the new value adds directories not
-    // already cordoned
+    /**
+     * Return whether the update to cordoned.log.dirs is valid or not
+     *
+     * Updates to cordoned.log.dirs normally go through the concerned broker which is able to validate the new value
+     * before forwarding the request to the controller.
+     * However, it's also possible to directly go to controllers, but since controllers only have directory ids, they
+     * cannot fully validate updates (cordoned.log.dirs is a list of paths). So if the request has not been forwarded
+     * by a broker, controllers can only accept updates that remove entries in cordoned.log.dirs.
+     *
+     * @param configRecord The configuration record
+     * @param currentValue The current cordoned.log.dirs value
+     * @param forwarded    True is the request has been forwarded by a broker
+     */
     boolean isCordonedLogDirsInvalid(ConfigRecord configRecord, String currentValue, boolean forwarded) {
         if (!configRecord.name().equals(CORDONED_LOG_DIRS_CONFIG) || configRecord.resourceType() != BROKER.id() ||
                 forwarded || configRecord.value() == null || configRecord.value().isEmpty()) {
@@ -480,6 +491,7 @@ public class ConfigurationControlManager {
      *
      * @param newConfigs        The new configurations to install for each resource.
      *                          All existing configurations will be overwritten.
+     * @param forwarded         True if the request was forwarded.
      * @return                  The result.
      */
     ControllerResult<Map<ConfigResource, ApiError>> legacyAlterConfigs(
@@ -496,7 +508,8 @@ public class ConfigurationControlManager {
                 resourceEntry.getValue(),
                 newlyCreatedResource,
                 outputRecords,
-                outputResults, forwarded);
+                outputResults,
+                forwarded);
         }
         outputRecords.addAll(createClearElrRecordsAsNeeded(outputRecords));
         return ControllerResult.atomicOf(outputRecords, outputResults);

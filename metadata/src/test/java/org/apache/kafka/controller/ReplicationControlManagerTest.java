@@ -3419,10 +3419,15 @@ public class ReplicationControlManagerTest {
         Uuid dir2b1 = Uuid.fromString("yh3acnzGSeurSTj8aIhOjw");
         ctx.registerBrokersWithDirs(b1, List.of(dir1b1, dir2b1));
         ctx.unfenceBrokers(b1);
-        assertEquals(null, ctx.clusterControl.registration(b1).cordonedDirectories());
+        assertNull(ctx.clusterControl.registration(b1).cordonedDirectories());
+
+        // If cordonedDirs is null, it's a no-op
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        ctx.replicationControl.handleDirectoriesCordoned(b1, defaultBrokerEpoch(b1), null, records);
+        assertTrue(records.isEmpty());
 
         // Cordon dir1b1, this will emit a BrokerRegistrationChangeRecord
-        List<ApiMessageAndVersion> records = new ArrayList<>();
+        records = new ArrayList<>();
         ctx.replicationControl.handleDirectoriesCordoned(b1, defaultBrokerEpoch(b1), List.of(dir1b1), records);
         assertEquals(
                 List.of(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord()

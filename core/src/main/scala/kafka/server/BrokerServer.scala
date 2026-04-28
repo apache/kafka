@@ -341,9 +341,6 @@ class BrokerServer(
 
         override def handleCordoned(directoryIds: util.Set[Uuid]): Unit =
           lifecycleManager.propagateDirectoryCordoned(directoryIds)
-
-        override def handleUncordoned(directoryIds: util.Set[Uuid]): Unit =
-          lifecycleManager.propagateDirectoryUncordoned(directoryIds)
 }
 
       /**

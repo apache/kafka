@@ -304,7 +304,7 @@ class BrokerLifecycleManagerTest {
   }
 
   @Test
-  def testAlwaysSendsAccumulatedCordonedDirs(): Unit = {
+  def testCordonedLogDirs(): Unit = {
     val ctx = new RegistrationTestContext(configProperties)
     var enabled = false
     def cordonedLogDirsEnabled(): Boolean  = {
@@ -330,21 +330,21 @@ class BrokerLifecycleManagerTest {
     while (!manager.initialCatchUpFuture().isDone) {
       nextRequest()
     }
-    assertEquals(Set(), nextHeartbeatDirs())
+    assertNull(nextRequest().data().cordonedLogDirs())
 
     val dir1 = Uuid.randomUuid()
     val dir2 = Uuid.randomUuid()
     manager.propagateDirectoryCordoned(util.Set.of(dir1))
-    assertEquals(Set(), nextHeartbeatDirs())
+    assertNull(nextRequest().data().cordonedLogDirs())
 
     enabled = true
     manager.propagateDirectoryCordoned(util.Set.of(dir1))
     assertEquals(Set(dir1), nextHeartbeatDirs())
     manager.propagateDirectoryCordoned(util.Set.of(dir2))
-    assertEquals(Set(dir1, dir2), nextHeartbeatDirs())
-    manager.propagateDirectoryUncordoned(util.Set.of(dir1))
     assertEquals(Set(dir2), nextHeartbeatDirs())
-    manager.propagateDirectoryUncordoned(util.Set.of(dir2))
+    manager.propagateDirectoryCordoned(util.Set.of(dir1, dir2))
+    assertEquals(Set(dir1, dir2), nextHeartbeatDirs())
+    manager.propagateDirectoryCordoned(util.Set.of())
     assertEquals(Set(), nextHeartbeatDirs())
   }
 }

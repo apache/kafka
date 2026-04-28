@@ -311,6 +311,8 @@ public class BrokerRegistration {
     }
 
     public boolean cordonedDirChanged(List<Uuid> otherDirectories) {
+        // Brokers only start sending their cordoned log dirs once they are fully caught up with the metadata
+        // until then cordonedDirectories defaults to null to indicate the value is unknown
         if (cordonedDirectories == null) return true;
         Set<Uuid> cordonedDirs = Set.copyOf(cordonedDirectories);
         Set<Uuid> otherDirs = Set.copyOf(otherDirectories);
@@ -340,12 +342,10 @@ public class BrokerRegistration {
             options.handleLoss("the online log directories of one or more brokers");
         }
 
-        if (cordonedDirectories != null) {
-            if (cordonedDirectories.isEmpty() || options.metadataVersion().isCordonedLogDirsSupported()) {
-                registrationRecord.setCordonedLogDirs(cordonedDirectories);
-            } else {
-                options.handleLoss("the cordoned log directories of one or more brokers");
-            }
+        if (cordonedDirectories == null || options.metadataVersion().isCordonedLogDirsSupported()) {
+            registrationRecord.setCordonedLogDirs(cordonedDirectories);
+        } else {
+            options.handleLoss("the cordoned log directories of one or more brokers");
         }
 
         for (Entry<String, Endpoint> entry : listeners.entrySet()) {

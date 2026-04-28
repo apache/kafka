@@ -610,29 +610,14 @@ class DynamicLogConfig(logManager: LogManager, directoryEventHandler: DirectoryE
 
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
     val newBrokerDefaults = new util.HashMap[String, Object](newConfig.extractLogConfigMap)
+    logManager.reconfigureDefaultLogConfig(new LogConfig(newBrokerDefaults))
+    updateLogsConfig(newBrokerDefaults.asScala)
 
     logManager.updateCordonedLogDirs(util.Set.copyOf(newConfig.cordonedLogDirs))
-    val newCordoned = new util.HashSet[String](newConfig.cordonedLogDirs)
-    newCordoned.removeAll(oldConfig.cordonedLogDirs)
-
-    val newUncordoned = new util.HashSet[String](oldConfig.cordonedLogDirs)
-    newUncordoned.removeAll(newConfig.cordonedLogDirs)
-    if (!newCordoned.isEmpty) {
-      directoryEventHandler.handleCordoned(newCordoned.stream
-        .map[Uuid](dir => logManager.directoryId(dir).orElse(null))
-        .filter(Objects.nonNull)
-        .collect(Collectors.toSet[Uuid]))
-    }
-    if (!newUncordoned.isEmpty) {
-      directoryEventHandler.handleUncordoned(newUncordoned.stream
-        .map[Uuid](dir => logManager.directoryId(dir).orElse(null))
-        .filter(Objects.nonNull)
-        .collect(Collectors.toSet[Uuid]))
-    }
-
-    logManager.reconfigureDefaultLogConfig(new LogConfig(newBrokerDefaults))
-
-    updateLogsConfig(newBrokerDefaults.asScala)
+    directoryEventHandler.handleCordoned(newConfig.cordonedLogDirs.stream
+      .map[Uuid](dir => logManager.directoryId(dir).orElse(null))
+      .filter(Objects.nonNull)
+      .collect(Collectors.toSet[Uuid]))
   }
 }
 

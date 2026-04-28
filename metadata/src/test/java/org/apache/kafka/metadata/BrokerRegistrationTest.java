@@ -273,4 +273,15 @@ public class BrokerRegistrationTest {
         assertEquals(List.of(Uuid.fromString("r4HpEsMuST6nQ4rznIEJVA")), REGISTRATIONS.get(3).cordonedDirectories());
         assertNull(REGISTRATIONS.get(4).cordonedDirectories());
     }
+
+    @Test
+    void testCordonedLogDirsRoundTrip() {
+        ImageWriterOptions options = new ImageWriterOptions.Builder(MetadataVersion.IBP_4_2_IV1).build();
+        ApiMessageAndVersion record = REGISTRATIONS.get(4).toRecord(options);
+        assertNull(((RegisterBrokerRecord) record.message()).cordonedLogDirs());
+
+        options = new ImageWriterOptions.Builder(MetadataVersion.latestProduction()).build();
+        record = REGISTRATIONS.get(4).toRecord(options);
+        assertEquals(REGISTRATIONS.get(4).cordonedDirectories(), ((RegisterBrokerRecord) record.message()).cordonedLogDirs());
+    }
 }
