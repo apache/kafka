@@ -38,7 +38,7 @@ The `LISTENER_NAME` is usually a descriptive name which defines the purpose of t
     
     listeners=CLIENT://localhost:9092
 
-The security protocol of each listener is defined in a separate configuration: `listener.security.protocol.map`. The value is a comma-separated list of each listener mapped to its security protocol. For example, the follow value configuration specifies that the `CLIENT` listener will use SSL while the `BROKER` listener will use plaintext.
+The security protocol of each listener is defined in a separate configuration: `listener.security.protocol.map`. The value is a comma-separated list of each listener mapped to its security protocol. For example, the following value configuration specifies that the `CLIENT` listener will use SSL while the `BROKER` listener will use plaintext.
     
     
     listener.security.protocol.map=CLIENT:SSL,BROKER:PLAINTEXT
