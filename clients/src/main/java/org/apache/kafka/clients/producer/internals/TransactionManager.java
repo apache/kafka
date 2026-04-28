@@ -1255,7 +1255,7 @@ public class TransactionManager {
             .setProducerId(producerIdAndEpoch.producerId)
             .setProducerEpoch(producerIdAndEpoch.epoch)
             .setMemberId(groupMetadata.memberId())
-            .setGenerationId(groupMetadata.generationId())
+            .setGenerationIdOrMemberEpoch(groupMetadata.generationId())
             .setGroupInstanceId(groupMetadata.groupInstanceId().orElse(null))
             .setTopics(TxnOffsetCommitRequest.getTopics(pendingTxnOffsetCommits));
         final TxnOffsetCommitRequest.Builder builder =

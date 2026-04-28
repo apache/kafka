@@ -262,7 +262,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
       new TxnOffsetCommitRequestData()
         .setGroupId(groupId)
         .setMemberId(memberId)
-        .setGenerationId(generationId)
+        .setGenerationIdOrMemberEpoch(generationId)
         .setProducerId(producerId)
         .setProducerEpoch(producerEpoch)
         .setTransactionalId(transactionalId)

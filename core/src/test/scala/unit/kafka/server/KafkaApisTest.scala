@@ -1507,7 +1507,7 @@ class KafkaApisTest extends Logging {
     val txnOffsetCommitRequest = new TxnOffsetCommitRequestData()
       .setGroupId("group")
       .setMemberId("member")
-      .setGenerationId(10)
+      .setGenerationIdOrMemberEpoch(10)
       .setProducerId(20)
       .setProducerEpoch(30)
       .setGroupInstanceId("instance-id")

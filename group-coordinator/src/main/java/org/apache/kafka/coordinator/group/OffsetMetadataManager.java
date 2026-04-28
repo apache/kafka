@@ -522,7 +522,7 @@ public class OffsetMetadataManager {
         try {
             group = groupMetadataManager.group(request.groupId());
         } catch (GroupIdNotFoundException ex) {
-            if (request.generationId() < 0) {
+            if (request.generationIdOrMemberEpoch() < 0) {
                 // If the group does not exist and generation id is -1, the request comes from
                 // either the admin client or a consumer which does not use the group management
                 // facility. In this case, a so-called simple group is created and the request
@@ -537,7 +537,7 @@ public class OffsetMetadataManager {
             return group.validateOffsetCommit(
                 request.memberId(),
                 request.groupInstanceId(),
-                request.generationId(),
+                request.generationIdOrMemberEpoch(),
                 true,
                 context.requestVersion()
             );

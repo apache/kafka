@@ -2227,7 +2227,7 @@ public class KafkaProducerTest {
             TxnOffsetCommitRequestData data = ((TxnOffsetCommitRequest) request).data();
             return data.groupId().equals(groupId) &&
                 data.memberId().equals(memberId) &&
-                data.generationId() == generationId &&
+                data.generationIdOrMemberEpoch() == generationId &&
                 data.groupInstanceId().equals(groupInstanceId);
         }, txnOffsetsCommitResponse(Collections.singletonMap(
             new TopicPartition("topic", 0), Errors.NONE)));

@@ -2095,7 +2095,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         val txnOffsetCommitRequestData = new TxnOffsetCommitRequestData()
           .setGroupId(txnOffsetCommitRequest.data.groupId)
           .setMemberId(txnOffsetCommitRequest.data.memberId)
-          .setGenerationId(txnOffsetCommitRequest.data.generationId)
+          .setGenerationIdOrMemberEpoch(txnOffsetCommitRequest.data.generationIdOrMemberEpoch)
           .setGroupInstanceId(txnOffsetCommitRequest.data.groupInstanceId)
           .setProducerEpoch(txnOffsetCommitRequest.data.producerEpoch)
           .setProducerId(txnOffsetCommitRequest.data.producerId)

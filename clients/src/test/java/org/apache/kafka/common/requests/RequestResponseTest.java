@@ -2851,7 +2851,7 @@ public class RequestResponseTest {
 
         if (version >= 3) {
             data.setMemberId("member")
-                .setGenerationId(2)
+                .setGenerationIdOrMemberEpoch(2)
                 .setGroupInstanceId("instance");
         }
 
@@ -2871,7 +2871,7 @@ public class RequestResponseTest {
             .setProducerId(21L)
             .setProducerEpoch((short) 42)
             .setMemberId("member")
-            .setGenerationId(2)
+            .setGenerationIdOrMemberEpoch(2)
             .setGroupInstanceId("instance")
             .setTopics(TxnOffsetCommitRequest.getTopics(offsets));
         return TxnOffsetCommitRequest.Builder.forTopicNames(data, false).build();

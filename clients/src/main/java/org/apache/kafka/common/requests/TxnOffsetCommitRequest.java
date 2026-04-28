@@ -49,9 +49,11 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
 
         private Builder(
             final TxnOffsetCommitRequestData data,
-            final boolean isTransactionV2Enabled
+            final boolean isTransactionV2Enabled,
+            final short oldestAllowedVersion,
+            final short latestAllowedVersion
         ) {
-            super(ApiKeys.TXN_OFFSET_COMMIT);
+            super(ApiKeys.TXN_OFFSET_COMMIT, oldestAllowedVersion, latestAllowedVersion);
             this.data = data;
             this.isTransactionV2Enabled = isTransactionV2Enabled;
         }
@@ -60,7 +62,12 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
             final TxnOffsetCommitRequestData data,
             final boolean isTransactionV2Enabled
         ) {
-            return new Builder(data, isTransactionV2Enabled);
+            return new Builder(
+                data,
+                isTransactionV2Enabled,
+                ApiKeys.TXN_OFFSET_COMMIT.oldestVersion(),
+                (short) 5
+            );
         }
 
         @Override
@@ -77,7 +84,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
 
         private boolean groupMetadataSet() {
             return !data.memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID) ||
-                       data.generationId() != JoinGroupRequest.UNKNOWN_GENERATION_ID ||
+                       data.generationIdOrMemberEpoch() != JoinGroupRequest.UNKNOWN_GENERATION_ID ||
                        data.groupInstanceId() != null;
         }
 
