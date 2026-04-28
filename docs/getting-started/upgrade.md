@@ -30,7 +30,7 @@ type: docs
 
 ### Notable changes in 4.1.2
 
-* Includes a fix for the rare Kafka producer bug ([KAFKA-19012](https://issues.apache.org/jira/browse/KAFKA-19748)), in which a record could end up on the incorrect topic.
+* Includes a fix for the rare Kafka producer bug ([KAFKA-19012](https://issues.apache.org/jira/browse/KAFKA-19012)), in which a record could end up on the incorrect topic.
 
 
 
