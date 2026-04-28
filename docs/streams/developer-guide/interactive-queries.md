@@ -135,13 +135,13 @@ Every application instance can directly query any of its local state stores.
 
 The _name_ of a state store is defined when you create the store. You can create the store explicitly by using the Processor API or implicitly by using stateful operations in the DSL.
 
-The _type_ of a state store is defined by `QueryableStoreType`. You can access the built-in store types via [`QueryableStoreTypes`](/{version}/javadoc/org/apache/kafka/streams/state/QueryableStoreTypes.html). The supported types are:
+The _type_ of a state store is defined by `QueryableStoreType`. Pass a built-in implementation from [`QueryableStoreTypes`](/{version}/javadoc/org/apache/kafka/streams/state/QueryableStoreTypes.html) as the second argument to `KafkaStreams#store(...)`. The helpers below are those implementations:
 
-  * **`QueryableStoreTypes#keyValueStore()`** — [`KeyValueStoreType`](/{version}/javadoc/org/apache/kafka/streams/state/QueryableStoreTypes.KeyValueStoreType.html). See [Querying local key-value stores](#querying-local-key-value-stores).
-  * **`QueryableStoreTypes#timestampedKeyValueStore()`** — [`TimestampedKeyValueStoreType`](/{version}/javadoc/org/apache/kafka/streams/state/QueryableStoreTypes.TimestampedKeyValueStoreType.html). See [Querying local key-value stores](#querying-local-key-value-stores).
-  * **`QueryableStoreTypes#windowStore()`** — [`WindowStoreType`](/{version}/javadoc/org/apache/kafka/streams/state/QueryableStoreTypes.WindowStoreType.html). See [Querying local window stores](#querying-local-window-stores).
-  * **`QueryableStoreTypes#timestampedWindowStore()`** — [`TimestampedWindowStoreType`](/{version}/javadoc/org/apache/kafka/streams/state/QueryableStoreTypes.TimestampedWindowStoreType.html). See [Querying local window stores](#querying-local-window-stores).
-  * **`QueryableStoreTypes#sessionStore()`** — [`SessionStoreType`](/{version}/javadoc/org/apache/kafka/streams/state/QueryableStoreTypes.SessionStoreType.html). See [Querying local window stores](#querying-local-window-stores).
+  * **`QueryableStoreTypes#keyValueStore()`** — see [Querying local key-value stores](#querying-local-key-value-stores).
+  * **`QueryableStoreTypes#timestampedKeyValueStore()`** — see [Querying local key-value stores](#querying-local-key-value-stores).
+  * **`QueryableStoreTypes#windowStore()`** — see [Querying local window stores](#querying-local-window-stores).
+  * **`QueryableStoreTypes#timestampedWindowStore()`** — see [Querying local window stores](#querying-local-window-stores).
+  * **`QueryableStoreTypes#sessionStore()`** — see [Querying local window stores](#querying-local-window-stores).
 
 ### Header-aware stores and interactive queries (Kafka 4.3+) {#header-aware-stores-interactive-queries}
 
@@ -159,7 +159,7 @@ Kafka Streams materializes one state store per stream partition. This means your
 
 To query key-value state, you first build a topology that includes a state store. This example uses the DSL `count()` operator on a grouped stream, which creates a timestamped key-value store named `CountsKeyValueStore`. That store holds the latest count for each word from the topic `word-count-input`.
 
-Note: The snippets below still use `QueryableStoreTypes.keyValueStore()` and `ReadOnlyKeyValueStore<String, Long>`, which return values only (the counts). The state store keeps values together with their timestamps; use `QueryableStoreTypes.timestampedKeyValueStore()` and `ReadOnlyKeyValueStore<String, ValueAndTimestamp<Long>>` if you need access to timestamps via interactive queries.
+Note: These examples use `QueryableStoreTypes.keyValueStore()` and `ReadOnlyKeyValueStore<String, Long>`, so interactive queries return values only (the counts). The materialized store also retains timestamps; use `QueryableStoreTypes.timestampedKeyValueStore()` and `ReadOnlyKeyValueStore<String, ValueAndTimestamp<Long>>` if you need timestamps in query results.
 
     
     Properties  props = ...;
