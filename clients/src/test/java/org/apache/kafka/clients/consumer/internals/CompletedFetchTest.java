@@ -92,7 +92,7 @@ public class CompletedFetchTest {
     @Test
     public void testAbortedTransactionRecordsRemoved() {
         int numRecords = 10;
-        Records rawRecords = newTranscactionalRecords(ControlRecordType.ABORT, numRecords);
+        Records rawRecords = newTransactionalRecords(ControlRecordType.ABORT, numRecords);
 
         FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
                 .setRecords(rawRecords)

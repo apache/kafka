@@ -332,7 +332,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
         final ByteBuffer buffer = value.serialize(sizeOfBufferTime);
         buffer.putLong(bufferKey.time());
         final byte[] array = buffer.array();
-        ((RecordCollector.Supplier) iternalContext).recordCollector().send(
+        ((RecordCollector.Supplier) internalContext).recordCollector().send(
             changelogTopic,
             key,
             array,

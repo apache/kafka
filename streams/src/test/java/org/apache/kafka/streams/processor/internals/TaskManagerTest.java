@@ -254,7 +254,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldLockCommitableTasksOnCorruptionWithProcessingThreads() {
+    public void shouldLockCommittableTasksOnCorruptionWithProcessingThreads() {
         final StreamTask activeTask1 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId00Partitions).build();

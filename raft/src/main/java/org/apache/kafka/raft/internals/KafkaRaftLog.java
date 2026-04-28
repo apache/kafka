@@ -563,9 +563,9 @@ public class KafkaRaftLog implements RaftLog {
         }
 
         boolean didClean = false;
-        List<OffsetAndEpoch> epoches = new ArrayList<>(snapshots.keySet());
-        for (int i = 0; i < epoches.size() - 1; i++) {
-            OffsetAndEpoch epoch = epoches.get(i);
+        List<OffsetAndEpoch> epochs = new ArrayList<>(snapshots.keySet());
+        for (int i = 0; i < epochs.size() - 1; i++) {
+            OffsetAndEpoch epoch = epochs.get(i);
             OffsetAndEpoch nextEpoch = epoches.get(i + 1);
             Optional<SnapshotDeletionReason> reason = predicate.apply(epoch);
             if (reason.isPresent()) {

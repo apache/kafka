@@ -442,7 +442,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
-        final boolean proceessingThreadsEnabled = InternalConfig.processingThreadsEnabled(config.originals());
+        final boolean processingThreadsEnabled = InternalConfig.processingThreadsEnabled(config.originals());
         final ActiveTaskCreator activeTaskCreator = new ActiveTaskCreator(
             topologyMetadata,
             config,
@@ -455,7 +455,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             threadIdx,
             processId,
             logContext,
-            proceessingThreadsEnabled
+            processingThreadsEnabled
         );
         final StandbyTaskCreator standbyTaskCreator = new StandbyTaskCreator(
             topologyMetadata,
@@ -1615,7 +1615,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
             // TODO
             // This may be null if the task we are currently processing was part of a named topology that was just removed.
-            // After named topologies are removed, we can update `topologyMetadata.offsetResetStrateg()` so it
+            // After named topologies are removed, we can update `topologyMetadata.offsetResetStrategy()` so it
             // will not return null any longer, and we can remove this check
             if (offsetResetStrategy != null) {
                 if (offsetResetStrategy.isPresent()) {

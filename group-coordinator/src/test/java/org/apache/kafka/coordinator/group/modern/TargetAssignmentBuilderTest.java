@@ -284,7 +284,7 @@ public class TargetAssignmentBuilderTest {
                     .withSubscriptionType(subscriptionType)
                     .withTargetAssignment(targetAssignment)
                     .withInvertedTargetAssignment(invertedTargetAssignment)
-                    .withMetadataImage(cooridnatorMetadataImage)
+                    .withMetadataImage(coordinatorMetadataImage)
                     .withResolvedRegularExpressions(resolvedRegularExpressions);
 
             // Add the updated members or delete the deleted members.

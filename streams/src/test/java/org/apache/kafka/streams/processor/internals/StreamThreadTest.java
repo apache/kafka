@@ -946,13 +946,13 @@ public class StreamThreadTest {
         runOnce(false);
         assertThat(thread.currentNumIterations(), equalTo(2));
 
-        // system time based punctutation without processing any record, iteration stays as 2
+        // system time based punctuation without processing any record, iteration stays as 2
         mockTime.sleep(11L);
 
         runOnce(false);
         assertThat(thread.currentNumIterations(), equalTo(2));
 
-        // system time based punctutation after processing a record, half iteration to 1
+        // system time based punctuation after processing a record, half iteration to 1
         mockTime.sleep(11L);
         addRecord(mockConsumer, ++offset, 5L);
 
@@ -966,7 +966,7 @@ public class StreamThreadTest {
 
         assertThat(thread.currentNumIterations(), equalTo(3));
 
-        // stream time based punctutation halves to 1
+        // stream time based punctuation halves to 1
         addRecord(mockConsumer, ++offset, 11L);
         runOnce(false);
 

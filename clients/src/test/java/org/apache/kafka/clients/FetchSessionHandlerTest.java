@@ -124,10 +124,10 @@ public class FetchSessionHandlerTest {
             if (!actualIter.hasNext()) {
                 fail("Element " + i + " not found.");
             }
-            Map.Entry<TopicPartition, FetchRequest.PartitionData> actuaLEntry = actualIter.next();
-            assertEquals(expectedEntry.getKey(), actuaLEntry.getKey(), "Element " + i +
+            Map.Entry<TopicPartition, FetchRequest.PartitionData> actualEntry = actualIter.next();
+            assertEquals(expectedEntry.getKey(), actualEntry.getKey(), "Element " + i +
                 " had a different TopicPartition than expected.");
-            assertEquals(expectedEntry.getValue(), actuaLEntry.getValue(), "Element " + i +
+            assertEquals(expectedEntry.getValue(), actualEntry.getValue(), "Element " + i +
                 " had different PartitionData than expected.");
             i++;
         }

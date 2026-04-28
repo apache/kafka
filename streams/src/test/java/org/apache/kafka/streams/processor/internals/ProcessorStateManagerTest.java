@@ -635,7 +635,7 @@ public class ProcessorStateManagerTest {
             assertThat(checkpointedOffsets, is(singletonMap(new TopicPartition(persistentStoreTopicName, 1), -4L)));
 
             try {
-                // Reopen to verify null commited offset
+                // Reopen to verify null committed offset
                 stateMgr.registerStateStores(Arrays.asList(persistentStore, nonPersistentStore), context);
                 assertNull(stateMgr.storeMetadata(persistentStorePartition).offset());
             } finally {

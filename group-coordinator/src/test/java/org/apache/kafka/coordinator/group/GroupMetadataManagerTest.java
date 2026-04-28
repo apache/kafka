@@ -5805,7 +5805,7 @@ public class GroupMetadataManagerTest {
         assertEquals(groupMaxSize, group.numAwaitingJoinResponse());
         assertTrue(group.isInState(PREPARING_REBALANCE));
 
-        // Advance clock by group initial rebalance delay to complete first inital delayed join.
+        // Advance clock by group initial rebalance delay to complete first initial delayed join.
         // This will extend the initial rebalance as new members have joined.
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(50));
         // Advance clock by group initial rebalance delay to complete second inital delayed join.
