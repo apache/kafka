@@ -29,6 +29,7 @@ import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.internals.LogContext;
+import org.apache.kafka.metadata.authorizer.CidrUtils;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.metadata.authorizer.StandardAclWithId;
 import org.apache.kafka.server.authorizer.AclCreateResult;
@@ -45,6 +46,7 @@ import org.apache.commons.net.util.SubnetUtils;
 import org.apache.commons.net.util.SubnetUtils6;
 import org.slf4j.Logger;
 
+import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -239,7 +241,8 @@ public class AclControlManager {
      */
     static void validateCidrNotation(String cidrPattern) {
         try {
-            if (cidrPattern.contains(":")) {
+            InetAddress address = CidrUtils.parseCidrAddress(cidrPattern);
+            if (CidrUtils.isIpv6(address)) {
                 new SubnetUtils6(cidrPattern);
             } else {
                 new SubnetUtils(cidrPattern);

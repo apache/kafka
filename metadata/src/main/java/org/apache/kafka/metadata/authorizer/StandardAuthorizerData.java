@@ -39,6 +39,7 @@ import org.apache.commons.net.util.SubnetUtils6;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.InetAddress;
 import java.util.Iterator;
 import java.util.NavigableSet;
 import java.util.Set;
@@ -615,9 +616,9 @@ public class StandardAuthorizerData {
         }
 
         try {
-            if (cidrPattern.contains(":")) {
-                SubnetUtils6 subnet = new SubnetUtils6(cidrPattern);
-                return subnet.getInfo().isInRange(host);
+            InetAddress address = CidrUtils.parseCidrAddress(cidrPattern);
+            if (CidrUtils.isIpv6(address)) {
+                return new SubnetUtils6(cidrPattern).getInfo().isInRange(host);
             } else {
                 SubnetUtils subnet = new SubnetUtils(cidrPattern);
                 subnet.setInclusiveHostCount(true);
