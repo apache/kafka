@@ -17,8 +17,6 @@
 
 package org.apache.kafka.image.loader;
 
-import org.apache.kafka.common.message.KRaftVersionRecord;
-import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.image.MetadataDelta;
@@ -33,7 +31,6 @@ import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
-import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -83,6 +80,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         private MetadataLoaderMetrics metrics = null;
         private Supplier<OptionalLong> highWaterMarkAccessor = null;
         private SupportedConfigChecker supportedConfigChecker = SupportedConfigChecker.TRUE;
+        private Supplier<KRaftVersion> kraftVersionSupplier = () -> KRaftVersion.KRAFT_VERSION_0;
 
         public Builder setNodeId(int nodeId) {
             this.nodeId = nodeId;
@@ -119,6 +117,11 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             return this;
         }
 
+        public Builder setKraftVersionSupplier(Supplier<KRaftVersion> kraftVersionSupplier) {
+            this.kraftVersionSupplier = kraftVersionSupplier;
+            return this;
+        }
+
         public MetadataLoader build() {
             if (logContext == null) {
                 logContext = new LogContext("[MetadataLoader id=" + nodeId + "] ");
@@ -140,7 +143,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 faultHandler,
                 metrics,
                 highWaterMarkAccessor,
-                supportedConfigChecker);
+                supportedConfigChecker,
+                kraftVersionSupplier);
         }
     }
 
@@ -170,6 +174,11 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
      * A function which supplies the current high water mark, or empty if it is not known.
      */
     private final Supplier<OptionalLong> highWaterMarkAccessor;
+
+    /**
+     * A function which supplies the current finalized kraft.version.
+     */
+    private final Supplier<KRaftVersion> kraftVersionSupplier;
 
     /**
      * Publishers which haven't received any metadata yet.
@@ -216,7 +225,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         FaultHandler faultHandler,
         MetadataLoaderMetrics metrics,
         Supplier<OptionalLong> highWaterMarkAccessor,
-        SupportedConfigChecker supportedConfigChecker
+        SupportedConfigChecker supportedConfigChecker,
+        Supplier<KRaftVersion> kraftVersionSupplier
     ) {
         this.log = logContext.logger(MetadataLoader.class);
         this.time = time;
@@ -224,6 +234,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         this.metrics = metrics;
         this.highWaterMarkAccessor = highWaterMarkAccessor;
         this.supportedConfigChecker = supportedConfigChecker;
+        this.kraftVersionSupplier = kraftVersionSupplier;
         this.uninitializedPublishers = new LinkedHashMap<>();
         this.publishers = new LinkedHashMap<>();
         this.image = MetadataImage.EMPTY;
@@ -387,6 +398,13 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             );
         }
 
+        // kraft.version is intentionally excluded from FeaturesImage (KAFKA-18979),
+        // so source it from the raft client instead of reading the control record directly.
+        metrics.recordFinalizedFeatureLevel(
+            KRaftVersion.FEATURE_NAME,
+            kraftVersionSupplier.get().featureLevel()
+        );
+
         if (!uninitializedPublishers.isEmpty()) {
             scheduleInitializeNewPublishers(0);
         }
@@ -398,7 +416,6 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             try (reader) {
                 while (reader.hasNext()) {
                     Batch<ApiMessageAndVersion> batch = reader.next();
-                    loadControlRecords(batch);
                     long elapsedNs = batchLoader.loadBatch(batch, currentLeaderAndEpoch);
                     metrics.updateBatchSize(batch.records().size());
                     metrics.updateBatchProcessingTimeNs(elapsedNs);
@@ -467,7 +484,6 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         int snapshotIndex = 0;
         while (reader.hasNext()) {
             Batch<ApiMessageAndVersion> batch = reader.next();
-            loadControlRecords(batch);
             for (ApiMessageAndVersion record : batch.records()) {
                 try {
                     delta.replay(record.message());
@@ -483,15 +499,6 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 reader.lastContainedLogEpoch(), reader.lastContainedLogTimestamp(), true);
         return new SnapshotManifest(provenance,
                 time.nanoseconds() - startNs);
-    }
-
-    void loadControlRecords(Batch<ApiMessageAndVersion> batch) {
-        for (ControlRecord controlRecord : batch.controlRecords()) {
-            if (controlRecord.type() == ControlRecordType.KRAFT_VERSION) {
-                final var kRaftVersionRecord = (KRaftVersionRecord) controlRecord.message();
-                metrics.recordFinalizedFeatureLevel(KRaftVersion.FEATURE_NAME, kRaftVersionRecord.kRaftVersion());
-            }
-        }
     }
 
     @Override

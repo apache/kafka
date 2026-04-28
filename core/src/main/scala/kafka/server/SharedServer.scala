@@ -329,6 +329,7 @@ class SharedServer(
           setThreadNamePrefix(s"kafka-${sharedServerConfig.nodeId}-").
           setFaultHandler(metadataLoaderFaultHandler).
           setHighWaterMarkAccessor(() => _raftManager.client.highWatermark()).
+          setKraftVersionSupplier(() => _raftManager.client.kraftVersion()).
           setMetrics(metadataLoaderMetrics).
           setSupportedConfigChecker(supportedConfigChecker)
         loader = loaderBuilder.build()
