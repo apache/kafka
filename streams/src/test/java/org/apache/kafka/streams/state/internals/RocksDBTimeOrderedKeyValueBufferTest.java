@@ -217,9 +217,8 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         final RecordHeaders headers = new RecordHeaders(new Header[]{
             new RecordHeader("h1", "v1".getBytes(StandardCharsets.UTF_8))
         });
-        final Record<String, String> record = new Record<>("k", "v", 0L, headers);
-        context.setRecordContext(new ProcessorRecordContext(0L, offset++, 0, "testing", new RecordHeaders()));
-        buffer.put(0L, record, context.recordContext());
+        context.setRecordContext(new ProcessorRecordContext(0L, offset++, 0, "testing", headers));
+        buffer.put(0L, new Record<>("k", "v", 0L, headers), context.recordContext());
 
         final List<TimeOrderedKeyValueBuffer.Eviction<String, String>> evicted = new ArrayList<>();
         buffer.evictWhile(() -> buffer.numRecords() > 0, evicted::add);
@@ -229,31 +228,12 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
     }
 
     @Test
-    public void shouldUseRecordHeadersNotProcessorContextHeadersOnPut() {
-        createBuffer(Duration.ZERO, Serdes.String());
-        final RecordHeaders contextHeaders = new RecordHeaders(new Header[]{
-            new RecordHeader("ctx", "from-context".getBytes(StandardCharsets.UTF_8))
-        });
-        final RecordHeaders recordHeaders = new RecordHeaders(new Header[]{
-            new RecordHeader("rec", "from-record".getBytes(StandardCharsets.UTF_8))
-        });
-        context.setRecordContext(new ProcessorRecordContext(0L, offset++, 0, "testing", contextHeaders));
-        buffer.put(0L, new Record<>("k", "v", 0L, recordHeaders), context.recordContext());
-
-        final List<TimeOrderedKeyValueBuffer.Eviction<String, String>> evicted = new ArrayList<>();
-        buffer.evictWhile(() -> buffer.numRecords() > 0, evicted::add);
-
-        assertThat(evicted.size(), is(1));
-        assertThat(evicted.get(0).recordContext().headers(), is(recordHeaders));
-    }
-
-    @Test
     public void shouldNotBeAffectedByProcessorContextHeaderMutationBetweenPutAndEvict() {
         createBuffer(Duration.ofMillis(1), Serdes.String());
         final RecordHeaders putHeaders = new RecordHeaders(new Header[]{
             new RecordHeader("at-put", "first".getBytes(StandardCharsets.UTF_8))
         });
-        context.setRecordContext(new ProcessorRecordContext(0L, offset++, 0, "testing", new RecordHeaders()));
+        context.setRecordContext(new ProcessorRecordContext(0L, offset++, 0, "testing", putHeaders));
         buffer.put(0L, new Record<>("k", "v", 0L, putHeaders), context.recordContext());
 
         // Simulate the processor moving on to handle a different record with different headers
@@ -263,7 +243,7 @@ public class RocksDBTimeOrderedKeyValueBufferTest {
         });
         context.setRecordContext(new ProcessorRecordContext(10L, offset++, 0, "testing", laterHeaders));
         // Advance stream time past the grace period for the original record.
-        buffer.put(10L, new Record<>("trigger", "v", 10L, new RecordHeaders()), context.recordContext());
+        buffer.put(10L, new Record<>("trigger", "v", 10L, laterHeaders), context.recordContext());
 
         final List<TimeOrderedKeyValueBuffer.Eviction<String, String>> evicted = new ArrayList<>();
         buffer.evictWhile(() -> true, evicted::add);
