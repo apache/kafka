@@ -77,12 +77,16 @@ Usage: ${script_path} [command] [options]
 help|-h|--help
     Display this help message
 
-up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
+up [-n|--num-nodes NUM_NODES] [-c|--clean-build] [-f|--force] [docker-image]
         [-C|--custom-ducktape DIR] [-e|--expose-ports ports] [-j|--jdk JDK_VERSION] [--ipv6]
         [--memory MEMORY_LIMIT]
     Bring up a cluster with the specified amount of nodes (defaults to ${default_num_nodes}).
     The docker image name defaults to ${default_image_name}.  If --force is specified, we will
     attempt to bring up an image even some parameters are not valid.
+
+    If --clean-build (or -c) is passed and the cluster is brought up in native mode,
+    the Kafka release tarball is rebuilt from scratch even if a cached one exists.
+    Has no effect in JVM mode.
 
     If --custom-ducktape is specified, we will install the provided custom
     ducktape source code directory before bringing up the nodes.  The provided
@@ -105,13 +109,17 @@ up [-n|--num-nodes NUM_NODES] [-f|--force] [docker-image]
     Note that port 5678 will be automatically exposed for ducker01 node and will be mapped to 5678
     on your local machine to enable debugging in VS Code.
 
-test [-d|--debug] [test-name(s)] [-- [ducktape args]]
+test [-d|--debug] [-c|--clean-build] [test-name(s)] [-- [ducktape args]]
     Run a test or set of tests inside the currently active Ducker nodes.
     For example, to run the system test produce_bench_test, you would run:
         ./tests/docker/ducker-ak test ./tests/kafkatest/tests/core/produce_bench_test.py
 
     If --debug is passed, the tests will wait for remote VS Code debugger to connect on port 5678:
         ./tests/docker/ducker-ak test --debug ./tests/kafkatest/tests/core/produce_bench_test.py
+
+    If --clean-build (or -c) is passed, the system test libraries are clean-rebuilt
+    (./gradlew clean systemTestLibs) before running the tests. To force a rebuild
+    of the native Kafka tarball, pass --clean-build to 'ducker-ak up' instead.
 
     To pass arguments to underlying ducktape invocation, pass them after `--`, e.g.:
         ./tests/docker/ducker-ak test ./tests/kafkatest/tests/core/produce_bench_test.py -- --test-runner-timeout 1800000
@@ -373,14 +381,19 @@ cleanup_native_dir() {
 }
 
 prepare_native_dir() {
+    local force_rebuild="${1:-0}"
     echo "Mode provided for system tests run: $kafka_mode"
     must_pushd "${kafka_dir}"
     cleanup_native_dir && mkdir "${tmp_native_dir}"
 
     if [ "$kafka_mode" == "native" ]; then
         kafka_tarball_filename=(core/build/distributions/kafka*SNAPSHOT.tgz)
-        if [ ! -e "${kafka_tarball_filename[0]}" ]; then
-            echo "Kafka tarball not present. Building Kafka tarball for native image."
+        if [ ! -e "${kafka_tarball_filename[0]}" ] || [ "${force_rebuild}" -eq 1 ]; then
+            if [ "${force_rebuild}" -eq 1 ]; then
+                echo "Forcing Kafka tarball rebuild for native image (--clean-build)."
+            else
+                echo "Kafka tarball not present. Building Kafka tarball for native image."
+            fi
             ./gradlew clean releaseTarGz
         fi
 
@@ -394,9 +407,11 @@ prepare_native_dir() {
 ducker_up() {
     detect_container_runtime
     require_commands ${container_runtime}
+    local clean_build=0
     while [[ $# -ge 1 ]]; do
         case "${1}" in
             -C|--custom-ducktape) set_once custom_ducktape "${2}" "the custom ducktape directory"; shift 2;;
+            -c|--clean-build) clean_build=1; shift;;
             -f|--force) force=1; shift;;
             -n|--num-nodes) set_once num_nodes "${2}" "number of nodes"; shift 2;;
             -j|--jdk) set_once jdk_version "${2}" "the OpenJDK base image"; shift 2;;
@@ -427,7 +442,7 @@ use only ${num_nodes}."
 
     ${container_runtime} ps >/dev/null || die "ducker_up: failed to run ${container_runtime}.  Please check that the daemon is started."
 
-    prepare_native_dir
+    prepare_native_dir "${clean_build}"
     ducker_build "${image_name}"
     cleanup_native_dir
 
@@ -580,9 +595,11 @@ ducker_test() {
         die "ducker_test: the ducker01 instance appears to be down. Did you run 'ducker up'?"
     declare -a test_name_args=()
     local debug=0
+    local clean_build=0
     while [[ $# -ge 1 ]]; do
         case "${1}" in
             -d|--debug) debug=1; shift;;
+            -c|--clean-build) clean_build=1; shift;;
             --) shift; break;;
             *) test_name_args+=("${1}"); shift;;
         esac
@@ -604,7 +621,11 @@ ducker_test() {
     done
 
     must_pushd "${kafka_dir}"
-    ( (test -f ./gradlew || gradle) && ./gradlew systemTestLibs ) || die "ducker_test: Failed to build system test libraries, please check the error log."
+    if [[ "${clean_build}" -eq 1 ]]; then
+        ( (test -f ./gradlew || gradle) && ./gradlew clean systemTestLibs ) || die "ducker_test: Failed to clean-build system test libraries, please check the error log."
+    else
+        ( (test -f ./gradlew || gradle) && ./gradlew systemTestLibs ) || die "ducker_test: Failed to build system test libraries, please check the error log."
+    fi
     must_popd
     if [[ "${debug}" -eq 1 ]]; then
         local ducktape_cmd="python3 -m debugpy --listen 0.0.0.0:${debugpy_port} --wait-for-client /usr/local/bin/ducktape"
