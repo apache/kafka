@@ -321,6 +321,30 @@ public class DefaultSslEngineFactoryTest {
         assertNotNull(keyStore.getKey("kafka", KEY_PASSWORD.value().toCharArray()), "Private key not found");
     }
 
+    @Test  // KAFKA-20440
+    public void testPemKeyStoreUsesDefaultKeyStoreType() throws Exception {
+        configs.put(SslConfigs.SSL_KEYSTORE_KEY_CONFIG, pemAsConfigValue(KEY));
+        configs.put(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG, pemAsConfigValue(CERTCHAIN));
+        configs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, null);
+        configs.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, DefaultSslEngineFactory.PEM_TYPE);
+        factory.configure(configs);
+
+        KeyStore keyStore = factory.keystore();
+        assertEquals(KeyStore.getDefaultType(), keyStore.getType(),
+                "PEM keystore should be backed by the JVM-default keystore type");
+    }
+
+    @Test  // KAFKA-20440
+    public void testPemTrustStoreUsesDefaultKeyStoreType() throws Exception {
+        configs.put(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG, pemAsConfigValue(CA1));
+        configs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, DefaultSslEngineFactory.PEM_TYPE);
+        factory.configure(configs);
+
+        KeyStore trustStore = factory.truststore();
+        assertEquals(KeyStore.getDefaultType(), trustStore.getType(),
+                "PEM truststore should be backed by the JVM-default keystore type");
+    }
+
     private String pemFilePath(String pem) throws Exception {
         return TestUtils.tempFile(pem).getAbsolutePath();
     }
