@@ -60,6 +60,9 @@ public class SslFactory implements Reconfigurable, Closeable {
     private final String clientAuthConfigOverride;
     private final boolean keystoreVerifiableUsingTruststore;
     private String endpointIdentification;
+    private boolean sslHotReload;
+    private SslMaterialPoller sslMaterialPoller;
+    private Runnable onSslMaterialChange;
     private SslEngineFactory sslEngineFactory;
     private Map<String, Object> sslEngineFactoryConfig;
 
@@ -107,6 +110,23 @@ public class SslFactory implements Reconfigurable, Closeable {
             }
         }
         this.sslEngineFactory = builder;
+
+        this.sslHotReload = ConfigUtils.getBoolean(nextConfigs, SslConfigs.SSL_HOT_RELOAD_ENABLE_CONFIG, SslConfigs.DEFAULT_SSL_HOT_RELOAD_ENABLE);
+
+        this.sslHotReload = ConfigUtils.getBoolean(nextConfigs,
+           SslConfigs.SSL_HOT_RELOAD_ENABLE_CONFIG,
+           SslConfigs.DEFAULT_SSL_HOT_RELOAD_ENABLE);
+
+        if (this.sslHotReload) {
+            // Deregister any listener from a previous configure() call before re-registering
+            // with potentially new configs (e.g., after a dynamic reconfiguration).
+            if (this.onSslMaterialChange != null) {
+                SslMaterialPollerRegistry.getInstance().deregister(this.sslEngineFactoryConfig, this.onSslMaterialChange);
+            }
+            this.onSslMaterialChange = () -> reconfigure(this.sslEngineFactoryConfig);
+            SslMaterialPollerRegistry.getInstance().register(nextConfigs, this.onSslMaterialChange);
+        }
+
     }
 
     @Override
@@ -131,6 +151,8 @@ public class SslFactory implements Reconfigurable, Closeable {
             this.sslEngineFactory = newSslEngineFactory;
             log.info("Created new {} SSL engine builder with keystore {} truststore {}", connectionMode,
                     newSslEngineFactory.keystore(), newSslEngineFactory.truststore());
+        } else {
+            log.trace("SSL configuration unchanged, no reconfiguration needed");
         }
     }
 
@@ -292,6 +314,10 @@ public class SslFactory implements Reconfigurable, Closeable {
 
     @Override
     public void close() {
+        if (this.sslHotReload && this.onSslMaterialChange != null) {
+            SslMaterialPollerRegistry.getInstance().deregister(this.sslEngineFactoryConfig, this.onSslMaterialChange);
+            this.onSslMaterialChange = null;
+        }
         Utils.closeQuietly(sslEngineFactory, "close engine factory");
     }
 
@@ -327,6 +353,7 @@ public class SslFactory implements Reconfigurable, Closeable {
 
         private static void ensureCompatibleDNs(List<CertificateEntries> newEntries, List<CertificateEntries> oldEntries) {
             if (newEntries.size() != oldEntries.size()) {
+                log.debug("new entries={}, old entries={}", newEntries, oldEntries);
                 throw new ConfigException(String.format("Keystore entries do not match, existing store contains %d entries, new store contains %d entries",
                     oldEntries.size(), newEntries.size()));
             }

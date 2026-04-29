@@ -607,6 +607,274 @@ public abstract class SslFactoryTest {
         return store.get();
     }
 
+
+    @Test
+    public void testFileChangeTriggersReconfigure() throws Exception {
+        File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
+        Map<String, Object> serverSslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
+                .createNewTrustStore(trustStoreFile)
+                .sslHotReload(true)
+                .sslHotReloadPollInterval(1)
+                .sslHotReloadDebounce(0)  // disabled
+                .build();
+
+        try (SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER, null, true)) {
+            sslFactory.configure(serverSslConfig);
+            SslEngineFactory sslEngineFactory = sslFactory.sslEngineFactory();
+
+            trustStoreFile.setLastModified(System.currentTimeMillis() + 10000);
+            Thread.sleep(3000);
+
+            assertNotSame(sslEngineFactory, sslFactory.sslEngineFactory(),
+                    "SslEngineFactory not recreated");
+        }
+    }
+
+    @Test
+    public void testNoReloadWhenHotReloadDisabled() throws Exception {
+        File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
+        Map<String, Object> serverSslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
+                .createNewTrustStore(trustStoreFile)
+                .sslHotReload(false)
+                .build();
+
+        try (SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER, null, true)) {
+            sslFactory.configure(serverSslConfig);
+            SslEngineFactory original = sslFactory.sslEngineFactory();
+
+            trustStoreFile.setLastModified(System.currentTimeMillis() + 10000);
+            Thread.sleep(3000);
+
+            assertSame(original, sslFactory.sslEngineFactory(),
+                    "SslEngineFactory should not be recreated when hot reload is disabled");
+        }
+    }
+
+    @Test
+    public void testNoReloadIfFileUnchanged() throws Exception {
+        File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
+        Map<String, Object> config = sslConfigsBuilder(ConnectionMode.SERVER)
+                .createNewTrustStore(trustStoreFile)
+                .sslHotReload(true)
+                .sslHotReloadPollInterval(1)
+                .sslHotReloadDebounce(0)  // disabled
+                .build();
+
+        try (SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER, null, true)) {
+            sslFactory.configure(config);
+            SslEngineFactory original = sslFactory.sslEngineFactory();
+
+            Thread.sleep(3000);
+
+            assertSame(original, sslFactory.sslEngineFactory(),
+                    "SslEngineFactory should not be recreated when file unchanged");
+        }
+    }
+
+    @Test
+    public void testMultipleFactoriesIsolatedReload() throws Exception {
+        // Two factories with distinct truststores → each gets its own poller entry.
+        File trustStoreFile1 = TestUtils.tempFile("truststore1", ".jks");
+        File trustStoreFile2 = TestUtils.tempFile("truststore2", ".jks");
+
+        Map<String, Object> config1 = sslConfigsBuilder(ConnectionMode.SERVER)
+                .createNewTrustStore(trustStoreFile1)
+                .sslHotReload(true)
+                .sslHotReloadPollInterval(1)
+                .sslHotReloadDebounce(0)  // disabled
+                .build();
+
+        Map<String, Object> config2 = sslConfigsBuilder(ConnectionMode.SERVER)
+                .createNewTrustStore(trustStoreFile2)
+                .sslHotReload(true)
+                .sslHotReloadPollInterval(1)
+                .sslHotReloadDebounce(0)  // disabled
+                .build();
+
+        try (SslFactory factory1 = new SslFactory(ConnectionMode.SERVER, null, true);
+             SslFactory factory2 = new SslFactory(ConnectionMode.SERVER, null, true)) {
+
+            factory1.configure(config1);
+            factory2.configure(config2);
+
+            SslEngineFactory original1 = factory1.sslEngineFactory();
+            SslEngineFactory original2 = factory2.sslEngineFactory();
+
+            // Modify only file1 → only factory1 should reload.
+            trustStoreFile1.setLastModified(System.currentTimeMillis() + 10000);
+            Thread.sleep(3000);
+
+            assertNotSame(original1, factory1.sslEngineFactory(),
+                    "Factory1 should reload after file1 change");
+            assertSame(original2, factory2.sslEngineFactory(),
+                    "Factory2 should NOT reload after file1 change");
+
+            SslEngineFactory afterFirstReload1 = factory1.sslEngineFactory();
+
+            // Modify only file2 → only factory2 should reload.
+            trustStoreFile2.setLastModified(System.currentTimeMillis() + 10000);
+            Thread.sleep(2000);
+
+            assertNotSame(original2, factory2.sslEngineFactory(),
+                    "Factory2 should reload after file2 change");
+            assertSame(afterFirstReload1, factory1.sslEngineFactory(),
+                    "Factory1 should NOT reload again after file2 change");
+        }
+    }
+
+    /**
+     * Two factories sharing identical SSL paths must reuse a single poller entry in the registry.
+     * This verifies the efficiency guarantee: only one polling thread for identical configurations.
+     */
+    @Test
+    public void testSharedPollerForIdenticalConfigs() throws Exception {
+        File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
+
+        Map<String, Object> config = sslConfigsBuilder(ConnectionMode.SERVER)
+                .createNewTrustStore(trustStoreFile)
+                .sslHotReload(true)
+                .sslHotReloadPollInterval(1)
+                .sslHotReloadDebounce(0)  // disabled
+                .build();
+
+        SslMaterialPollerRegistry registry = SslMaterialPollerRegistry.getInstance();
+
+        try (SslFactory factory1 = new SslFactory(ConnectionMode.SERVER, null, true);
+             SslFactory factory2 = new SslFactory(ConnectionMode.SERVER, null, true)) {
+
+            factory1.configure(config);
+            factory2.configure(config);
+
+            // Both factories share the same config → exactly one poller, two listeners.
+            assertEquals(1, registry.pollerCount(),
+                    "Registry should contain exactly one shared poller");
+            assertEquals(2, registry.listenerCount(config),
+                    "Shared poller should have two listeners");
+
+            // Both factories should reload when the file changes.
+            SslEngineFactory original1 = factory1.sslEngineFactory();
+            SslEngineFactory original2 = factory2.sslEngineFactory();
+
+            trustStoreFile.setLastModified(System.currentTimeMillis() + 10000);
+            Thread.sleep(3000);
+
+            assertNotSame(original1, factory1.sslEngineFactory(),
+                    "Factory1 should reload");
+            assertNotSame(original2, factory2.sslEngineFactory(),
+                    "Factory2 should reload");
+        }
+
+        // After both factories are closed, the registry must be empty again.
+        assertEquals(0, registry.pollerCount(),
+                "Registry should be empty after all factories are closed");
+    }
+
+    /**
+     * Closing a factory must deregister it from the registry. If it was the last subscriber,
+     * the poller is stopped and removed.
+     */
+    @Test
+    public void testRegistryCleanupOnFactoryClose() throws Exception {
+        File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
+
+        Map<String, Object> config = sslConfigsBuilder(ConnectionMode.SERVER)
+                .createNewTrustStore(trustStoreFile)
+                .sslHotReload(true)
+                .sslHotReloadPollInterval(1)
+                .sslHotReloadDebounce(0)  // disabled
+                .build();
+
+        SslMaterialPollerRegistry registry = SslMaterialPollerRegistry.getInstance();
+
+        SslFactory factory = new SslFactory(ConnectionMode.SERVER, null, true);
+        factory.configure(config);
+
+        assertEquals(1, registry.pollerCount(), "Poller should be registered");
+
+        factory.close();
+
+        assertEquals(0, registry.pollerCount(),
+                "Registry should be empty after the sole factory is closed");
+    }
+
+    /**
+     * With debouncing enabled, updating both files within the debounce window must produce
+     * exactly one reload, not two.
+     */
+    @Test
+    public void testDebounceCoalescesRapidUpdatesIntoSingleReload() throws Exception {
+        File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
+
+        Map<String, Object> config = sslConfigsBuilder(ConnectionMode.SERVER)
+                .createNewTrustStore(trustStoreFile)
+                .sslHotReload(true)
+                .sslHotReloadPollInterval(1)   // poll every 1 s
+                .sslHotReloadDebounce(3)        // notify 3 s after last change
+                .build();
+
+        File keystoreFile = new File(config.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG).toString());
+
+        try (SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER, null, true)) {
+            sslFactory.configure(config);
+            SslEngineFactory original = sslFactory.sslEngineFactory();
+
+            // Simulate operator updating keystore then truststore 1 s apart.
+            keystoreFile.setLastModified(System.currentTimeMillis() + 10_000);
+            Thread.sleep(1500); // poller fires, detects keystore change, arms debounce for 3 s
+            trustStoreFile.setLastModified(System.currentTimeMillis() + 10_000);
+            // poller fires again, detects truststore change, resets debounce for 3 s
+
+            // Wait for debounce to expire (3 s) + poll margin (1 s) + buffer (1 s)
+            Thread.sleep(5000);
+
+            assertNotSame(original, sslFactory.sslEngineFactory(),
+                    "SslEngineFactory should have been reloaded after both files changed");
+        }
+    }
+
+    /**
+     * A change detected just before the debounce expires must reset the timer, so listeners
+     * are not called until the full debounce window has passed since the *last* change.
+     */
+    @Test
+    public void testDebounceTimerResetsOnSubsequentChange() throws Exception {
+        File trustStoreFile = TestUtils.tempFile("truststore", ".jks");
+
+        int debounceSeconds = 4;
+        int pollSeconds     = 1;
+
+        Map<String, Object> config = sslConfigsBuilder(ConnectionMode.SERVER)
+                .createNewTrustStore(trustStoreFile)
+                .sslHotReload(true)
+                .sslHotReloadPollInterval(pollSeconds)
+                .sslHotReloadDebounce(debounceSeconds)
+                .build();
+
+        File keystoreFile = new File(config.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG).toString());
+
+        try (SslFactory sslFactory = new SslFactory(ConnectionMode.SERVER, null, true)) {
+            sslFactory.configure(config);
+            SslEngineFactory original = sslFactory.sslEngineFactory();
+
+            // t=0: keystore changes → debounce armed for 4 s
+            keystoreFile.setLastModified(System.currentTimeMillis() + 10_000);
+
+            // t=3s: truststore changes within debounce window → timer reset to t+4=7 s
+            Thread.sleep(3000);
+            trustStoreFile.setLastModified(System.currentTimeMillis() + 10_000);
+
+            // t=5s: debounce has NOT expired yet (was reset to t=7) → no reload expected
+            Thread.sleep(2000);
+            assertSame(original, sslFactory.sslEngineFactory(),
+                    "SslEngineFactory must NOT reload before debounce expires after timer reset");
+
+            // t=9s: debounce window (4 s after last change at t=3s) has now expired
+            Thread.sleep(4000);
+            assertNotSame(original, sslFactory.sslEngineFactory(),
+                    "SslEngineFactory must reload after debounce expires");
+        }
+    }
+
     private TestSslUtils.SslConfigsBuilder sslConfigsBuilder(ConnectionMode connectionMode) {
         return new TestSslUtils.SslConfigsBuilder(connectionMode).tlsProtocol(tlsProtocol);
     }

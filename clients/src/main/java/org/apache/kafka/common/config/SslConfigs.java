@@ -98,6 +98,24 @@ public class SslConfigs {
         + "If a password is not set, trust store file configured will still be used, but integrity checking is disabled. "
         + "Trust store password is not supported for PEM format.";
 
+
+    public static final String SSL_HOT_RELOAD_ENABLE_CONFIG = "ssl.hotreload.enable";
+    public static final String SSL_HOT_RELOAD_ENABLE_DOC = "Enable periodic polling of keystore and truststore files to support SSL hot reload.";
+    public static final boolean DEFAULT_SSL_HOT_RELOAD_ENABLE = false;
+
+    public static final String SSL_HOT_RELOAD_POLL_INTERVAL_CONFIG = "ssl.hotreload.poll.interval.seconds";
+    public static final String SSL_HOT_RELOAD_POLL_INTERVAL_DOC = "Polling interval in seconds used to check for modifications in keystore and truststore files when SSL hot reload is enabled.";
+    public static final int DEFAULT_SSL_HOT_RELOAD_POLL_INTERVAL_SECONDS = 60;
+
+    public static final String SSL_HOT_RELOAD_DEBOUNCE_CONFIG = "ssl.hotreload.debounce.seconds";
+    public static final String SSL_HOT_RELOAD_DEBOUNCE_DOC = "Grace period in seconds after a keystore or truststore file change is detected before " +
+                    "listeners are notified. During certificate rotation an operator may update the keystore " +
+                    "and truststore with some delay between them; this window prevents a reload from firing " +
+                    "while the configuration is only half-updated, which would cause transient TLS handshake " +
+                    "failures. The timer resets each time a new file change is detected within the window. " +
+                    "Set to 0 to disable debouncing and notify listeners immediately on the first detected change.";
+    public static final int DEFAULT_SSL_HOT_RELOAD_DEBOUNCE_SECONDS = 5;
+
     public static final String SSL_KEYMANAGER_ALGORITHM_CONFIG = "ssl.keymanager.algorithm";
     public static final String SSL_KEYMANAGER_ALGORITHM_DOC = "The algorithm used by key manager factory for SSL connections. "
             + "Default value is the key manager factory algorithm configured for the Java Virtual Machine.";
@@ -138,6 +156,9 @@ public class SslConfigs {
                 .define(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_TRUSTSTORE_TYPE, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_TRUSTSTORE_TYPE_DOC)
                 .define(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, ConfigDef.Type.STRING, null, ConfigDef.Importance.HIGH, SslConfigs.SSL_TRUSTSTORE_LOCATION_DOC)
                 .define(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ConfigDef.Type.PASSWORD, null, ConfigDef.Importance.HIGH, SslConfigs.SSL_TRUSTSTORE_PASSWORD_DOC)
+                .define(SslConfigs.SSL_HOT_RELOAD_ENABLE_CONFIG, ConfigDef.Type.BOOLEAN, SslConfigs.DEFAULT_SSL_HOT_RELOAD_ENABLE, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_HOT_RELOAD_ENABLE_DOC)
+                .define(SSL_HOT_RELOAD_POLL_INTERVAL_CONFIG, ConfigDef.Type.INT, DEFAULT_SSL_HOT_RELOAD_POLL_INTERVAL_SECONDS, ConfigDef.Range.atLeast(1), ConfigDef.Importance.MEDIUM, SSL_HOT_RELOAD_POLL_INTERVAL_DOC)
+                .define(SSL_HOT_RELOAD_DEBOUNCE_CONFIG, ConfigDef.Type.INT, DEFAULT_SSL_HOT_RELOAD_DEBOUNCE_SECONDS, ConfigDef.Range.atLeast(0), ConfigDef.Importance.MEDIUM, SSL_HOT_RELOAD_DEBOUNCE_DOC)
                 .define(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_KEYMANGER_ALGORITHM, ConfigDef.Importance.LOW, SslConfigs.SSL_KEYMANAGER_ALGORITHM_DOC)
                 .define(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_TRUSTMANAGER_ALGORITHM, ConfigDef.Importance.LOW, SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_DOC)
                 .define(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM, ConfigDef.Importance.LOW, SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC)

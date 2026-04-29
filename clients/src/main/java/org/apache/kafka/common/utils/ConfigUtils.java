@@ -80,4 +80,36 @@ public class ConfigUtils {
             return defaultValue;
         }
     }
+
+    /**
+     * Finds and returns an integer configuration option from the configuration map
+     * or the default value if the option is not set.
+     *
+     * @param configs Map with the configuration options
+     * @param key Configuration option for which the integer value will be returned
+     * @param defaultValue The default value that will be used when the key is not present
+     * @return An integer value of the configuration option or the default value
+     */
+    public static int getInt(final Map<String, Object> configs,
+                             final String key,
+                             final int defaultValue) {
+
+        final Object value = configs.getOrDefault(key, defaultValue);
+
+        if (value instanceof Integer) {
+            return (Integer) value;
+        } else if (value instanceof String) {
+            try {
+                return Integer.parseInt((String) value);
+            } catch (NumberFormatException e) {
+                log.error("Invalid integer value ({}) on configuration '{}'. The default value '{}' will be used instead.",
+                        value, key, defaultValue);
+                return defaultValue;
+            }
+        } else {
+            log.error("Invalid value ({}) on configuration '{}'. The default value '{}' will be used instead. Please specify an integer value.",
+                    value, key, defaultValue);
+            return defaultValue;
+        }
+    }
 }
