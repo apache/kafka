@@ -54,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 
@@ -322,8 +323,12 @@ public class AclControlManager {
         log.info("Replayed RemoveAccessControlEntryRecord for {}, removing {}", record.id(), acl);
     }
 
-    boolean hasCidrAcls() {
-        return idToAcl.values().stream().anyMatch(acl -> acl.host().contains("/"));
+    List<String> cidrAclHosts() {
+        return idToAcl.values().stream()
+            .map(StandardAcl::host)
+            .filter(host -> host.contains("/"))
+            .distinct()
+            .collect(Collectors.toList());
     }
 
     Map<Uuid, StandardAcl> idToAcl() {

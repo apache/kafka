@@ -1623,9 +1623,13 @@ public final class QuorumController implements Controller {
             setFeatureControl(featureControl).
             build();
         this.featureControl.setPreDowngradeValidator(newVersion -> {
-            if (!newVersion.isCidrAclSupported() && aclControlManager.hasCidrAcls()) {
-                return Optional.of("Cannot downgrade below " + MetadataVersion.IBP_4_3_IV0 +
-                    " while CIDR-based ACL host patterns exist. Remove all CIDR ACLs first.");
+            if (!newVersion.isCidrAclSupported()) {
+                List<String> cidrHosts = aclControlManager.cidrAclHosts();
+                if (!cidrHosts.isEmpty()) {
+                    return Optional.of("Cannot downgrade below " + MetadataVersion.IBP_4_3_IV0 +
+                        " while CIDR-based ACL host patterns exist: " + cidrHosts +
+                        ". Remove all CIDR ACLs Ifirst.");
+                }
             }
             return Optional.empty();
         });
