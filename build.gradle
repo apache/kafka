@@ -2350,7 +2350,6 @@ project(':storage') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
-    testImplementation project(':metadata').sourceSets.test.output
     testImplementation project(':storage:storage-api').sourceSets.test.output
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')

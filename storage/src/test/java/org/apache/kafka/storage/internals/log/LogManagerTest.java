@@ -20,6 +20,7 @@ import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
@@ -28,7 +29,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.metadata.ConfigRepository;
-import org.apache.kafka.metadata.MockConfigRepository;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
@@ -61,6 +61,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -470,7 +471,7 @@ public class LogManagerTest {
         Properties properties = new Properties();
         properties.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, String.valueOf(segmentBytes));
         properties.put(TopicConfig.RETENTION_BYTES_CONFIG, String.valueOf(5L * 10L * setSize + 10L));
-        MockConfigRepository configRepository = MockConfigRepository.forTopic(NAME, properties);
+        ConfigRepository configRepository = SimpleConfigRepository.forTopic(NAME, properties);
 
         logManager = createLogManager(configRepository);
         logManager.startup(Set.of());
@@ -524,7 +525,7 @@ public class LogManagerTest {
 
     private void testDoesntCleanLogs(String policy) throws IOException {
         logManager.shutdown();
-        MockConfigRepository configRepository = MockConfigRepository.forTopic(NAME, TopicConfig.CLEANUP_POLICY_CONFIG, policy);
+        ConfigRepository configRepository = SimpleConfigRepository.forTopic(NAME, TopicConfig.CLEANUP_POLICY_CONFIG, policy);
 
         logManager = createLogManager(configRepository);
         UnifiedLog log = logManager.getOrCreateLog(new TopicPartition(NAME, 0), Optional.empty());
@@ -548,7 +549,7 @@ public class LogManagerTest {
     @Test
     public void testTimeBasedFlush() throws Exception {
         logManager.shutdown();
-        MockConfigRepository configRepository = MockConfigRepository.forTopic(NAME, TopicConfig.FLUSH_MS_CONFIG, "1000");
+        ConfigRepository configRepository = SimpleConfigRepository.forTopic(NAME, TopicConfig.FLUSH_MS_CONFIG, "1000");
 
         logManager = createLogManager(configRepository);
         logManager.startup(Set.of());
@@ -688,7 +689,7 @@ public class LogManagerTest {
     }
 
     private LogManager createLogManager(List<File> logDirs) throws IOException {
-        return createLogManager(logDirs, new MockConfigRepository(), 1);
+        return createLogManager(logDirs, new SimpleConfigRepository(), 1);
     }
 
     private LogManager createLogManager(ConfigRepository configRepository) throws IOException {
@@ -696,7 +697,7 @@ public class LogManagerTest {
     }
 
     private LogManager createLogManager(List<File> logDirs, int recoveryThreadsPerDataDir) throws IOException {
-        return createLogManager(logDirs, new MockConfigRepository(), recoveryThreadsPerDataDir);
+        return createLogManager(logDirs, new SimpleConfigRepository(), recoveryThreadsPerDataDir);
     }
 
     private LogManager createLogManager(List<File> logDirs, ConfigRepository configRepository, int recoveryThreadsPerDataDir) throws IOException {
@@ -803,7 +804,7 @@ public class LogManagerTest {
     @Test
     public void testTopicConfigChangeUpdatesLogConfig() throws IOException {
         logManager.shutdown();
-        MockConfigRepository spyConfigRepository = spy(new MockConfigRepository());
+        ConfigRepository spyConfigRepository = spy(new SimpleConfigRepository());
         logManager = createLogManager(spyConfigRepository);
         LogManager spyLogManager = spy(logManager);
         UnifiedLog mockLog = mock(UnifiedLog.class);
@@ -839,7 +840,7 @@ public class LogManagerTest {
     @Test
     public void testConfigChangeGetsCleanedUp() throws IOException {
         logManager.shutdown();
-        MockConfigRepository spyConfigRepository = spy(new MockConfigRepository());
+        ConfigRepository spyConfigRepository = spy(new SimpleConfigRepository());
         logManager = createLogManager(spyConfigRepository);
         LogManager spyLogManager = spy(logManager);
 
@@ -858,7 +859,7 @@ public class LogManagerTest {
     @Test
     public void testBrokerConfigChangeDeliveredToAllLogs() throws IOException {
         logManager.shutdown();
-        MockConfigRepository spyConfigRepository = spy(new MockConfigRepository());
+        ConfigRepository spyConfigRepository = spy(new SimpleConfigRepository());
         logManager = createLogManager(spyConfigRepository);
         LogManager spyLogManager = spy(logManager);
         UnifiedLog mockLog = mock(UnifiedLog.class);
@@ -886,7 +887,7 @@ public class LogManagerTest {
     @Test
     public void testTopicConfigChangeStopCleaningIfCompactIsRemoved() throws IOException {
         logManager.shutdown();
-        logManager = createLogManager(new MockConfigRepository());
+        logManager = createLogManager(new SimpleConfigRepository());
         LogManager spyLogManager = spy(logManager);
 
         String topic = "topic";
@@ -1354,7 +1355,7 @@ public class LogManagerTest {
         logManager = LogTestUtils.createLogManager(
                 List.of(this.logDir),
                 logConfig,
-                new MockConfigRepository(),
+                new SimpleConfigRepository(),
                 time,
                 1,
                 true
@@ -1469,7 +1470,7 @@ public class LogManagerTest {
         KafkaScheduler scheduler = new KafkaScheduler(1, true, "log-manager-test");
         LogManager tmpLogManager = new LogManager(List.of(tmpLogDir.getAbsoluteFile()),
                 List.of(),
-                new MockConfigRepository(),
+                new SimpleConfigRepository(),
                 new LogConfig(tmpProperties),
                 new CleanerConfig(false),
                 1,
@@ -1589,5 +1590,26 @@ public class LogManagerTest {
         assertTrue(LogManager.isStrayReplica(List.of(), 0, log));
         assertTrue(LogManager.isStrayReplica(List.of(1, 2, 3), 0, log));
         assertFalse(LogManager.isStrayReplica(List.of(0, 1, 2), 0, log));
+    }
+
+    private static class SimpleConfigRepository implements ConfigRepository {
+        private final Map<ConfigResource, Properties> configs = new HashMap<>();
+
+        public static SimpleConfigRepository forTopic(String topic, String key, String value) {
+            Properties properties = new Properties();
+            properties.put(key, value);
+            return forTopic(topic, properties);
+        }
+
+        public static SimpleConfigRepository forTopic(String topic, Properties properties) {
+            SimpleConfigRepository repository = new SimpleConfigRepository();
+            repository.configs.put(new ConfigResource(ConfigResource.Type.TOPIC, topic), properties);
+            return repository;
+        }
+
+        @Override
+        public Properties config(ConfigResource configResource) {
+            return configs.getOrDefault(configResource, new Properties());
+        }
     }
 }
