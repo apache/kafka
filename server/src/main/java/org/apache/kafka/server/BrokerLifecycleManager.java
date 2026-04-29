@@ -616,6 +616,7 @@ public class BrokerLifecycleManager {
             this.currentOfflineDirs = currentOfflineDirs;
         }
 
+        @SuppressWarnings({"CyclomaticComplexity"})
         @Override
         public void run() {
             communicationInFlight = false;

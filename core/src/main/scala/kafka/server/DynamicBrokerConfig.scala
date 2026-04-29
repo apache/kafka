@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.util
-import java.util.{Collections, Objects, Properties}
+import java.util.{Collections, Properties}
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.network.DataPlaneAcceptor
@@ -615,8 +615,7 @@ class DynamicLogConfig(logManager: LogManager, directoryEventHandler: DirectoryE
 
     logManager.updateCordonedLogDirs(util.Set.copyOf(newConfig.cordonedLogDirs))
     directoryEventHandler.handleCordoned(newConfig.cordonedLogDirs.stream
-      .map[Uuid](dir => logManager.directoryId(dir).orElse(null))
-      .filter(Objects.nonNull)
+      .flatMap[Uuid](dir => logManager.directoryId(dir).stream)
       .collect(Collectors.toSet[Uuid]))
   }
 }
