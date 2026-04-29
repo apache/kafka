@@ -20,7 +20,6 @@ import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.TopicDescription;
-import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
@@ -65,6 +64,7 @@ public class ProduceRequestTest {
 
     private static final String TOPIC = "topic";
     private static final long FIVE_HOURS_IN_MS = Duration.ofHours(5).toMillis();
+    private static final String INVALID_MESSAGE_CRC_RECORDS_PER_SEC = "InvalidMessageCrcRecordsPerSec";
 
     private final ClusterInstance cluster;
 
@@ -179,14 +179,14 @@ public class ProduceRequestTest {
         assertEquals(-1L, partitionResponse.logAppendTimeMs());
 
         long matchingMetricsCount = KafkaYammerMetrics.defaultRegistry().allMetrics().keySet().stream()
-            .filter(k -> k.getName().endsWith("InvalidMessageCrcRecordsPerSec"))
+            .filter(k -> k.getName().endsWith(INVALID_MESSAGE_CRC_RECORDS_PER_SEC))
             .count();
         assertEquals(1, matchingMetricsCount);
         Meter meter = (Meter) KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
-            .filter(e -> e.getKey().getName().endsWith("InvalidMessageCrcRecordsPerSec"))
+            .filter(e -> e.getKey().getName().endsWith(INVALID_MESSAGE_CRC_RECORDS_PER_SEC))
             .map(Map.Entry::getValue)
             .findFirst()
-            .orElseThrow(() -> new AssertionError("Metric not found: " + "InvalidMessageCrcRecordsPerSec"));
+            .orElseThrow(() -> new AssertionError("Metric not found: " + INVALID_MESSAGE_CRC_RECORDS_PER_SEC));
         assertTrue(meter.count() > 0);
     }
 
@@ -222,8 +222,6 @@ public class ProduceRequestTest {
         assertEquals(0L, partitionResponse.baseOffset());
         assertEquals(-1L, partitionResponse.logAppendTimeMs());
     }
-
-    // --- helpers ---
 
     private ProduceResponse sendProduceRequest(int brokerId, ProduceRequest request) throws IOException {
         KafkaBroker broker = cluster.brokers().get(brokerId);
@@ -291,8 +289,8 @@ public class ProduceRequestTest {
         var topicResponse = response.data().responses().iterator().next();
         assertEquals(1, topicResponse.partitionResponses().size());
         var partitionResponse = topicResponse.partitionResponses().get(0);
-        assertEquals(new TopicIdPartition(topicId, 0, TOPIC),
-            new TopicIdPartition(topicResponse.topicId(), partitionResponse.index(), TOPIC));
+        assertEquals(topicId, topicResponse.topicId());
+        assertEquals(0, partitionResponse.index());
         assertEquals(Errors.INVALID_TIMESTAMP, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(3, partitionResponse.recordErrors().size());
         for (int i = 0; i < partitionResponse.recordErrors().size(); i++) {
