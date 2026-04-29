@@ -1055,8 +1055,8 @@ public class StoreChangelogReader implements ChangelogReader {
                 restoreConsumer.resume(targetPartitions);
 
                 for (final TopicPartition partition : targetPartitions) {
-                    final long endOffset = changelogs.get(partition).restoreEndOffset;
-                    if (endOffset > 0) {
+                    final Long endOffset = changelogs.get(partition).restoreEndOffset;
+                    if (endOffset != null && endOffset > 0) {
                         restoreConsumer.seek(partition, endOffset - 1);
                     } else {
                         partitionsWithoutStartOffset.add(partition);
