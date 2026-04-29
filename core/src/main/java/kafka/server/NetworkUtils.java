@@ -85,7 +85,8 @@ public class NetworkUtils {
             true,
             new ApiVersions(),
             logContext,
-            MetadataRecoveryStrategy.NONE
+            MetadataRecoveryStrategy.NONE,
+            false
         );
     }
 }

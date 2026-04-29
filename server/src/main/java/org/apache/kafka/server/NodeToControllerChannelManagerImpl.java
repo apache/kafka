@@ -129,7 +129,8 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
                 true,
                 apiVersions,
                 logContext,
-                MetadataRecoveryStrategy.NONE
+                MetadataRecoveryStrategy.NONE,
+                false
         );
     }
 

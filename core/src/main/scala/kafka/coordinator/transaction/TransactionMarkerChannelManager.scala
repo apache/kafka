@@ -99,7 +99,8 @@ object TransactionMarkerChannelManager {
       true,
       new ApiVersions,
       logContext,
-      MetadataRecoveryStrategy.NONE
+      MetadataRecoveryStrategy.NONE,
+      false
     )
 
     new TransactionMarkerChannelManager(config,
