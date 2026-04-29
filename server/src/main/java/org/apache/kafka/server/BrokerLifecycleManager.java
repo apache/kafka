@@ -41,7 +41,6 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -49,6 +48,7 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -150,10 +150,10 @@ public class BrokerLifecycleManager {
     private final Map<Uuid, Boolean> offlineDirs = new HashMap<>();
 
     /**
-     * Set of cordoned log directories.
+     * Set of cordoned log directories. The is null at startup until the broker has caught up with the metadata
      * This variable can only be read or written from the event queue thread.
      */
-    private Set<Uuid> cordonedLogDirs = new HashSet<>();
+    private Set<Uuid> cordonedLogDirs;
 
     /**
      * True if we sent an event queue to the active controller requesting controlled
@@ -648,12 +648,12 @@ public class BrokerLifecycleManager {
                                 logger.info("The broker has caught up. Transitioning from STARTING to RECOVERY.");
                                 state = BrokerState.RECOVERY;
                                 initialCatchUpFuture.complete(null);
-                                // Update the known cordoned log dirs so the next heartbeat includes them
-                                config.cordonedLogDirs().forEach(logDir -> {
-                                    if (logDirs.containsKey(logDir)) {
-                                        cordonedLogDirs.add(logDirs.get(logDir));
-                                    }
-                                });
+                                // Now that the broker has caught up with the latest metadata, the configuration should
+                                // be up to date, so we can retrieve the cordoned log dirs to include them in the
+                                // next heartbeat request
+                                cordonedLogDirs = config.cordonedLogDirs().stream()
+                                    .flatMap(logDir -> Optional.ofNullable(logDirs.get(logDir)).stream())
+                                    .collect(Collectors.toSet());
                             } else {
                                 logger.debug("The broker is STARTING. Still waiting to catch up with cluster metadata.");
                             }
