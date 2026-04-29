@@ -4010,7 +4010,7 @@ configurations {
 }
 
 task aggregatedJavadoc(type: Javadoc) {
-  destinationDir = file("${buildDir}/docs/javadoc")
+  destinationDir = file("${layout.buildDirectory.get().asFile.path}/docs/javadoc")
 }
 
 gradle.projectsEvaluated {
