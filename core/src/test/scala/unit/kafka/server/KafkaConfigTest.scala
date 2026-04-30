@@ -394,7 +394,7 @@ class KafkaConfigTest {
     assertEquals(
       Seq(
         new Endpoint("CONTROLLER", SecurityProtocol.PLAINTEXT, "lb1.example.com", 9000),
-        new Endpoint("CONTROLLER_NEW", SecurityProtocol.PLAINTEXT, "lb2.example.com", 9092)
+        new Endpoint("CONTROLLER_NEW", SecurityProtocol.PLAINTEXT, null, 9094)
       ),
       config.effectiveAdvertisedControllerListeners
     )
