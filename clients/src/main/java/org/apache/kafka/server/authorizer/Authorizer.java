@@ -34,7 +34,12 @@ import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.commons.collections4.trie.PatriciaTrie;
 
 import java.io.Closeable;
-import java.util.*;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.concurrent.CompletionStage;
 
 /**
