@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.modern.consumer;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
+import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 
 import java.util.ArrayList;
@@ -40,8 +41,8 @@ public class ConsumerGroupBuilder {
     public ConsumerGroupBuilder(String groupId, int groupEpoch) {
         this.groupId = groupId;
         this.groupEpoch = groupEpoch;
-        this.assignmentEpoch = 0;
-        this.assignmentTimestamp = 0L;
+        this.assignmentEpoch = TargetAssignmentMetadata.INITIAL.assignmentEpoch();
+        this.assignmentTimestamp = TargetAssignmentMetadata.INITIAL.assignmentTimestamp();
     }
 
     public ConsumerGroupBuilder withMember(ConsumerGroupMember member) {

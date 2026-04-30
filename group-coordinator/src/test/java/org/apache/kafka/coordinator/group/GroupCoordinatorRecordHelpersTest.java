@@ -80,8 +80,8 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupEpochRecord;
@@ -308,7 +308,7 @@ public class GroupCoordinatorRecordHelpersTest {
     }
 
     @Test
-    public void testNewConsumerGroupTargetAssignmentEpochRecord() {
+    public void testNewConsumerGroupTargetAssignmentMetadataRecord() {
         CoordinatorRecord expectedRecord = CoordinatorRecord.record(
             new ConsumerGroupTargetAssignmentMetadataKey()
                 .setGroupId("group-id"),
@@ -328,13 +328,13 @@ public class GroupCoordinatorRecordHelpersTest {
     }
 
     @Test
-    public void testNewConsumerGroupTargetAssignmentEpochTombstoneRecord() {
+    public void testNewConsumerGroupTargetAssignmentMetadataTombstoneRecord() {
         CoordinatorRecord expectedRecord = CoordinatorRecord.tombstone(
             new ConsumerGroupTargetAssignmentMetadataKey()
                 .setGroupId("group-id")
         );
 
-        assertEquals(expectedRecord, newConsumerGroupTargetAssignmentEpochTombstoneRecord(
+        assertEquals(expectedRecord, newConsumerGroupTargetAssignmentMetadataTombstoneRecord(
             "group-id"
         ));
     }

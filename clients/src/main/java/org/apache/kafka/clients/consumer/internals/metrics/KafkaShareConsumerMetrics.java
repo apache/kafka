@@ -27,8 +27,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_SHARE_METRIC_GROUP;
 
-public class KafkaShareConsumerMetrics implements AutoCloseable {
-    private final Metrics metrics;
+public class KafkaShareConsumerMetrics extends AbstractConsumerMetricsManager {
     private final MetricName lastPollMetricName;
     private final Sensor timeBetweenPollSensor;
     private final Sensor pollIdleSensor;
@@ -37,7 +36,11 @@ public class KafkaShareConsumerMetrics implements AutoCloseable {
     private long timeSinceLastPollMs;
 
     public KafkaShareConsumerMetrics(Metrics metrics) {
-        this.metrics = metrics;
+        this(new MetricsLedger(metrics));
+    }
+
+    private KafkaShareConsumerMetrics(MetricsLedger metrics) {
+        super(metrics);
         final String metricGroupName = CONSUMER_SHARE_METRIC_GROUP;
         Measurable lastPoll = (mConfig, now) -> {
             if (lastPollMs == 0L)
@@ -78,12 +81,5 @@ public class KafkaShareConsumerMetrics implements AutoCloseable {
         long pollTimeMs = pollEndMs - pollStartMs;
         double pollIdleRatio = pollTimeMs * 1.0 / (pollTimeMs + timeSinceLastPollMs);
         this.pollIdleSensor.record(pollIdleRatio);
-    }
-
-    @Override
-    public void close() {
-        metrics.removeMetric(lastPollMetricName);
-        metrics.removeSensor(timeBetweenPollSensor.name());
-        metrics.removeSensor(pollIdleSensor.name());
     }
 }

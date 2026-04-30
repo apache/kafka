@@ -76,6 +76,28 @@ import java.util.concurrent.TimeUnit;
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
 
+/**
+ * Command line share consumer designed for system testing. It outputs consumer events to STDOUT as JSON
+ * formatted objects. The "name" field in each JSON event identifies the event type. The following
+ * events are currently supported:
+ *
+ * <ul>
+ * <li>startup_complete: emitted when the share consumer has started up.
+ *     See {@link VerifiableShareConsumer.StartupComplete}.</li>
+ * <li>offset_reset_strategy_set: emitted when the offset reset strategy for the share group has been set.
+ *     See {@link VerifiableShareConsumer.OffsetResetStrategySet}.</li>
+ * <li>records_consumed: contains a summary of records consumed in a single call to {@link KafkaShareConsumer#poll(Duration)}.
+ *     See {@link VerifiableShareConsumer.RecordsConsumed}.</li>
+ * <li>offsets_acknowledged: contains the result of acknowledging offsets.
+ *     See {@link VerifiableShareConsumer.OffsetsAcknowledged}.</li>
+ * <li>record_data: contains the key, value, and offset of an individual consumed record (only included if verbose
+ *  *     output is enabled). See {@link VerifiableShareConsumer.RecordData}.</li>
+ * <li>shutdown_requested: emitted as share consumer shutdown is requested.
+ *     See {@link VerifiableShareConsumer.ShutdownRequested}.</li>
+ * <li>shutdown_complete: emitted after the share consumer returns from {@link KafkaShareConsumer#close()}.
+ *     See {@link VerifiableShareConsumer.ShutdownComplete}.</li>
+ * </ul>
+ */
 public class VerifiableShareConsumer implements Closeable, AcknowledgementCommitCallback {
 
     private static final Logger log = LoggerFactory.getLogger(VerifiableShareConsumer.class);
@@ -194,6 +216,14 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
         @JsonProperty
         public String offsetResetStrategy() {
             return offsetResetStrategy;
+        }
+    }
+
+    private static class ShutdownRequested extends ShareConsumerEvent {
+
+        @Override
+        public String name() {
+            return "shutdown_requested";
         }
     }
 
@@ -455,6 +485,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
     public void close() {
         boolean interrupted = false;
         try {
+            printJson(new ShutdownRequested());
             consumer.wakeup();
             while (true) {
                 try {

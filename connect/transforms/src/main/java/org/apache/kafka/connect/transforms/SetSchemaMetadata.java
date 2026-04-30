@@ -19,7 +19,6 @@ package org.apache.kafka.connect.transforms;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Field;
@@ -34,7 +33,7 @@ import java.util.Map;
 
 import static org.apache.kafka.connect.transforms.util.Requirements.requireSchema;
 
-public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
+public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements Transformation<R> {
     private static final Logger log = LoggerFactory.getLogger(SetSchemaMetadata.class);
 
     public static final String OVERVIEW_DOC =

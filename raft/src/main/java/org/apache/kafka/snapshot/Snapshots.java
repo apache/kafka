@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.snapshot;
 
-import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.raft.KafkaRaftClient;
 import org.apache.kafka.raft.internals.IdentitySerde;
 import org.apache.kafka.server.common.OffsetAndEpoch;

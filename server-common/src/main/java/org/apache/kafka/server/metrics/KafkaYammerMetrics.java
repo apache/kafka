@@ -20,8 +20,8 @@ package org.apache.kafka.server.metrics;
 import org.apache.kafka.common.Reconfigurable;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.JmxReporter;
-import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.common.utils.Sanitizer;
+import org.apache.kafka.common.utils.internals.Exit;
+import org.apache.kafka.common.utils.internals.Sanitizer;
 
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;

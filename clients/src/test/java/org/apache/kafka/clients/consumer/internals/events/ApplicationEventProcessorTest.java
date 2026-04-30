@@ -31,6 +31,9 @@ import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.OffsetsRequestManager;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
+import org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManager;
+import org.apache.kafka.clients.consumer.internals.ShareHeartbeatRequestManager;
+import org.apache.kafka.clients.consumer.internals.ShareMembershipManager;
 import org.apache.kafka.clients.consumer.internals.StreamsGroupHeartbeatRequestManager;
 import org.apache.kafka.clients.consumer.internals.StreamsMembershipManager;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
@@ -83,7 +86,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@SuppressWarnings("ClassDataAbstractionCoupling")
+@SuppressWarnings({"ClassDataAbstractionCoupling", "ClassFanOutComplexity"})
 public class ApplicationEventProcessorTest {
     private final Time time = new MockTime();
     private final CommitRequestManager commitRequestManager = mock(CommitRequestManager.class);
@@ -95,6 +98,8 @@ public class ApplicationEventProcessorTest {
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
     private final StreamsGroupHeartbeatRequestManager streamsGroupHeartbeatRequestManager = mock(StreamsGroupHeartbeatRequestManager.class);
     private final StreamsMembershipManager streamsMembershipManager = mock(StreamsMembershipManager.class);
+    private final ShareHeartbeatRequestManager shareHeartbeatRequestManager = mock(ShareHeartbeatRequestManager.class);
+    private final ShareMembershipManager shareMembershipManager = mock(ShareMembershipManager.class);
     private ApplicationEventProcessor processor;
 
     private void setupProcessor(boolean withGroupId) {
@@ -130,6 +135,22 @@ public class ApplicationEventProcessorTest {
             Optional.empty(),
             withGroupId ? Optional.of(streamsGroupHeartbeatRequestManager) : Optional.empty(),
             withGroupId ? Optional.of(streamsMembershipManager) : Optional.empty()
+        );
+        processor = new ApplicationEventProcessor(
+            new LogContext(),
+            requestManagers,
+            metadata,
+            subscriptionState
+        );
+    }
+
+    private void setupShareProcessor() {
+        RequestManagers requestManagers = new RequestManagers(
+            new LogContext(),
+            mock(ShareConsumeRequestManager.class),
+            Optional.of(mock(CoordinatorRequestManager.class)),
+            Optional.of(shareHeartbeatRequestManager),
+            Optional.of(shareMembershipManager)
         );
         processor = new ApplicationEventProcessor(
             new LogContext(),
@@ -284,6 +305,19 @@ public class ApplicationEventProcessorTest {
     }
 
     @Test
+    public void testSharePollEventCallsShareManagers() {
+        SharePollEvent event = new SharePollEvent(12346, 12345);
+
+        setupShareProcessor();
+        when(shareHeartbeatRequestManager.membershipManager()).thenReturn(shareMembershipManager);
+        processor.process(event);
+        assertTrue(event.isComplete());
+        verify(shareMembershipManager).maybeReconcile(true);
+        verify(shareMembershipManager).onConsumerPoll();
+        verify(shareHeartbeatRequestManager).resetPollTimer(event.pollTimeMs());
+    }
+
+    @Test
     public void testTopicSubscriptionChangeEvent() {
         Set<String> topics = Set.of("topic1", "topic2");
         Optional<ConsumerRebalanceListener> listener = Optional.of(new MockRebalanceListener());
@@ -318,7 +352,9 @@ public class ApplicationEventProcessorTest {
         FetchCommittedOffsetsEvent event = new FetchCommittedOffsetsEvent(partitions, 12345);
 
         setupProcessor(true);
-        when(commitRequestManager.fetchOffsets(partitions, 12345)).thenReturn(CompletableFuture.completedFuture(topicPartitionOffsets));
+        CommitRequestManager.OffsetFetchResult fetchResult = new CommitRequestManager.OffsetFetchResult(
+            topicPartitionOffsets, Collections.emptyMap());
+        when(commitRequestManager.fetchOffsets(partitions, 12345)).thenReturn(CompletableFuture.completedFuture(fetchResult));
         processor.process(event);
 
         verify(commitRequestManager).fetchOffsets(partitions, 12345);

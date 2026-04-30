@@ -18,7 +18,7 @@
 package org.apache.kafka.server.share.session;
 
 import org.apache.kafka.common.requests.ShareRequestMetadata;
-import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
+import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.network.ConnectionDisconnectListener;
 import org.apache.kafka.server.share.CachedSharePartition;
@@ -93,10 +93,10 @@ public class ShareSessionCache {
      * Get a session by session key.
      *
      * @param key The share session key.
-     * @return The session, or None if no such session was found.
+     * @return The session, or null if no such session was found.
      */
     public synchronized ShareSession get(ShareSessionKey key) {
-        return sessions.getOrDefault(key, null);
+        return sessions.get(key);
     }
 
     /**

@@ -24,7 +24,6 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -49,7 +48,7 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStructOrNull;
 
-public abstract class TimestampConverter<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
+public abstract class TimestampConverter<R extends ConnectRecord<R>> implements Transformation<R> {
 
     public static final String OVERVIEW_DOC =
             "Convert timestamps between different formats such as Unix epoch, strings, and Connect Date/Timestamp types."

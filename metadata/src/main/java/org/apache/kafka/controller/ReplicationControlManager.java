@@ -1267,14 +1267,14 @@ public class ReplicationControlManager {
         // this case to give the leader an opportunity to find the new controller.
         if (partitionData.leaderEpoch() > partition.leaderEpoch) {
             log.debug("Rejecting AlterPartition request from node {} for {}-{} because " +
-                    "the current leader epoch is {}, which is greater than the local value {}. {}",
+                    "the current leader epoch is {}, which is lower than the request value {}. {}",
                 brokerId, topic.name, partitionId, partition.leaderEpoch, partitionData.leaderEpoch(),
                 logPartitionChangeInfo(partition, partitionData.newIsrWithEpochs()));
             return NOT_CONTROLLER;
         }
         if (partitionData.partitionEpoch() > partition.partitionEpoch) {
             log.debug("Rejecting AlterPartition request from node {} for {}-{} because " +
-                    "the current partition epoch is {}, which is greater than the local value {}. {}",
+                    "the current partition epoch is {}, which is lower than the request value {}. {}",
                 brokerId, topic.name, partitionId, partition.partitionEpoch, partitionData.partitionEpoch(),
                 logPartitionChangeInfo(partition, partitionData.newIsrWithEpochs()));
             return NOT_CONTROLLER;

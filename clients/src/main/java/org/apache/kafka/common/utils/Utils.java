@@ -20,6 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.TransferableChannel;
+import org.apache.kafka.common.utils.internals.OperatingSystem;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -1256,6 +1256,11 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.LOW,
                     CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
+            .define(CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
+                    Type.BOOLEAN,
+                    true,
+                    Importance.LOW,
+                    CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_DOC)
             .define(ROCKSDB_CONFIG_SETTER_CLASS_CONFIG,
                     Type.CLASS,
                     null,
@@ -1362,6 +1367,7 @@ public class StreamsConfig extends AbstractConfig {
             + ".vector.enabled__";
 
         // Private API used to control the prefix of the auto created topics
+        @Deprecated
         public static final String TOPIC_PREFIX_ALTERNATIVE = "__internal.override.topic.prefix__";
 
         // Private API to enable processing threads (i.e. polling is decoupled from processing)
@@ -1664,29 +1670,61 @@ public class StreamsConfig extends AbstractConfig {
         final Map<String, String> clientTags = getClientTags();
 
         if (clientTags.size() > MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE) {
-            throw new ConfigException("At most " + MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE + " client tags " +
-                                      "can be specified using " + CLIENT_TAG_PREFIX + " prefix.");
+            throw new ConfigException(
+                String.format(
+                    "At most %s client tags can be specified using %s prefix.",
+                    MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE,
+                    CLIENT_TAG_PREFIX
+                )
+            );
         }
 
         for (final String rackAwareAssignmentTag : rackAwareAssignmentTags) {
+            // no need to call `trim()` because for LIST type `AbstractConfig` takes already care of this
+            if (rackAwareAssignmentTag.isEmpty()) {
+                throw new ConfigException(
+                    RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+                    rackAwareAssignmentTags,
+                    "Contains invalid value []. Tag key cannot be empty."
+                );
+            }
             if (!clientTags.containsKey(rackAwareAssignmentTag)) {
-                throw new ConfigException(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
-                                          rackAwareAssignmentTags,
-                                          "Contains invalid value [" + rackAwareAssignmentTag + "] " +
-                                          "which doesn't have corresponding tag set via [" + CLIENT_TAG_PREFIX + "] prefix.");
+                throw new ConfigException(
+                    RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+                    rackAwareAssignmentTags,
+                    String.format(
+                        "Contains invalid value [%s] which doesn't have corresponding tag set via [%s] prefix.",
+                        rackAwareAssignmentTag,
+                        CLIENT_TAG_PREFIX
+                    )
+                );
             }
         }
 
         clientTags.forEach((tagKey, tagValue) -> {
+            if (tagKey.trim().isEmpty()) {
+                throw new ConfigException("Invalid config `client.tag.` (missing client tag key).");
+            }
+            if (tagValue.trim().isEmpty()) {
+                throw new ConfigException(
+                    CLIENT_TAG_PREFIX + tagKey,
+                    "[]",
+                    "Tag value cannot be empty."
+                );
+            }
             if (tagKey.length() > MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH) {
-                throw new ConfigException(CLIENT_TAG_PREFIX,
-                                          tagKey,
-                                          "Tag key exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH + ".");
+                throw new ConfigException(
+                    CLIENT_TAG_PREFIX + tagKey,
+                    tagKey,
+                    "Tag key exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH + "."
+                );
             }
             if (tagValue.length() > MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH) {
-                throw new ConfigException(CLIENT_TAG_PREFIX,
-                                          tagValue,
-                                          "Tag value exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH + ".");
+                throw new ConfigException(
+                    CLIENT_TAG_PREFIX + tagKey,
+                    tagValue,
+                    "Tag value exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH + "."
+                );
             }
         });
     }

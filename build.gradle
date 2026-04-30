@@ -29,18 +29,18 @@ buildscript {
 }
 
 plugins {
-  id 'com.github.ben-manes.versions' version '0.53.0'
+  id 'com.github.ben-manes.versions' version '0.54.0'
   id 'idea'
   id 'jacoco'
   id 'java-library'
-  id 'org.owasp.dependencycheck' version '12.1.8'
+  id 'org.owasp.dependencycheck' version '12.2.1'
   id 'org.nosphere.apache.rat' version "0.8.1"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "${swaggerVersion}"
 
-  id "com.github.spotbugs" version '6.4.4' apply false
+  id "com.github.spotbugs" version '6.5.1' apply false
   id 'org.scoverage' version '8.1' apply false
-  id 'com.gradleup.shadow' version '9.3.1' apply false
-  id 'com.diffplug.spotless' version "8.0.0"
+  id 'com.gradleup.shadow' version '9.4.1' apply false
+  id 'com.diffplug.spotless' version "8.4.0"
 }
 
 ext {
@@ -696,6 +696,15 @@ subprojects {
 
   task docsJar(dependsOn: javadocJar)
 
+  // Consumed by root aggregatedJavadoc; mirrors compileClasspath.
+  configurations {
+    javadocClasspathElements {
+      canBeConsumed = true
+      canBeResolved = false
+      extendsFrom configurations.compileClasspath
+    }
+  }
+
   check.dependsOn('javadoc')
 
   task systemTestLibs(dependsOn: jar)
@@ -871,7 +880,11 @@ subprojects {
     java {
       targetExclude('**/generated/**/*.java','**/generated-test/**/*.java')
       importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
-      removeUnusedImports()
+      // removeUnusedImports is intentionally omitted because its engines
+      // (google-java-format, cleanthat) can non-deterministically throw
+      // InvocationTargetException under parallel execution. Unused imports are
+      // still enforced by checkstyle (UnusedImports + RedundantImport).
+      // Re-enable once https://github.com/diffplug/spotless/issues/2850 is fixed.
     }
   }
 
@@ -1114,12 +1127,12 @@ project(':core') {
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':storage:storage-api').sourceSets.test.output
     testImplementation project(':server').sourceSets.test.output
+    testImplementation project(':streams')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-util')
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
-    testImplementation libs.jqwik
     testImplementation(libs.apacheda) {
       exclude group: 'xml-apis', module: 'xml-apis'
       // `mina-core` is a transitive dependency for `apacheds` and `apacheda`.
@@ -1232,7 +1245,7 @@ project(':core') {
 
   task genConsumerMetricsDocs(type: JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
-    mainClass = 'org.apache.kafka.clients.consumer.internals.ConsumerMetrics'
+    mainClass = 'org.apache.kafka.clients.consumer.internals.FetchMetricsRegistry'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "consumer_metrics.html").newOutputStream()
   }
@@ -1319,7 +1332,7 @@ project(':core') {
 
   test {
     useJUnitPlatform {
-      includeEngines 'jqwik', 'junit-jupiter'
+      includeEngines 'junit-jupiter'
     }
   }
 
@@ -1901,6 +1914,8 @@ project(':clients') {
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation testLog4j2Libs
+    testImplementation libs.testcontainersKeycloak
+    testImplementation libs.testcontainersJunitJupiter
 
     testCompileOnly libs.bndlib
 
@@ -2044,6 +2059,7 @@ project(':clients') {
     include "**/org/apache/kafka/common/security/scram/*"
     include "**/org/apache/kafka/common/security/token/delegation/*"
     include "**/org/apache/kafka/common/serialization/*"
+    include "**/org/apache/kafka/common/utils/Bytes.java"
     include "**/org/apache/kafka/server/authorizer/*"
     include "**/org/apache/kafka/server/policy/*"
     include "**/org/apache/kafka/server/quota/*"
@@ -2653,6 +2669,7 @@ project(':shell') {
     implementation project(':core')
     implementation project(':metadata')
     implementation project(':raft')
+    implementation project(':server')
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
     implementation libs.jacksonJakartarsJsonProvider
@@ -3436,6 +3453,7 @@ project(':jmh-benchmarks') {
     implementation project(':connect:json')
     implementation project(':clients').sourceSets.test.output
     implementation project(':server-common').sourceSets.test.output
+    implementation project(':server').sourceSets.test.output
     implementation project(':metadata').sourceSets.test.output
 
     implementation libs.jmhCore
@@ -3983,12 +4001,34 @@ project(':connect:test-plugins') {
   }
 }
 
-task aggregatedJavadoc(type: Javadoc, dependsOn: compileJava) {
+// Gradle 9+ forbids resolving a subproject's Configuration from the root.
+// Consume each subproject's javadocClasspathElements via project dependencies instead.
+configurations {
+  aggregatedJavadocClasspath {
+    canBeConsumed = false
+    canBeResolved = true
+  }
+}
+
+task aggregatedJavadoc(type: Javadoc) {
+  destinationDir = file("${layout.buildDirectory.get().asFile.path}/docs/javadoc")
+}
+
+gradle.projectsEvaluated {
   def projectsWithJavadoc = subprojects.findAll { it.javadoc.enabled }
-  source = projectsWithJavadoc.collect { it.sourceSets.main.allJava }
-  classpath = files(projectsWithJavadoc.collect { it.sourceSets.main.compileClasspath })
-  includes = projectsWithJavadoc.collectMany { it.javadoc.getIncludes() }
-  excludes = projectsWithJavadoc.collectMany { it.javadoc.getExcludes() }
+
+  projectsWithJavadoc.each { sp ->
+    dependencies.add('aggregatedJavadocClasspath',
+        dependencies.project(path: sp.path, configuration: 'javadocClasspathElements'))
+  }
+
+  tasks.named('aggregatedJavadoc').configure {
+    dependsOn projectsWithJavadoc.collect { "${it.path}:compileJava" }
+    source    projectsWithJavadoc.collect { it.sourceSets.main.allJava }
+    classpath = configurations.aggregatedJavadocClasspath
+    includes  = projectsWithJavadoc.collectMany { it.javadoc.getIncludes() }
+    excludes  = projectsWithJavadoc.collectMany { it.javadoc.getExcludes() }
+  }
 }
 
 
@@ -4133,3 +4173,38 @@ def verifyVersionConsistencyTask = tasks.register('verifyVersionConsistency') {
 }
 
 check.dependsOn verifyVersionConsistencyTask
+
+def verifyLatestStableMetadataVersionTask = tasks.register('verifyLatestStableMetadataVersion') {
+  group = "Verification"
+  description = "Verifies that LATEST_STABLE_METADATA_VERSION in version.py matches LATEST_PRODUCTION in MetadataVersion.java"
+
+  doLast {
+    // Extract enum constant name that LATEST_PRODUCTION points to, e.g. LATEST_PRODUCTION = IBP_4_3_IV0 -> IBP_4_3_IV0
+    def mvContent = file("${project.rootDir}/server-common/src/main/java/org/apache/kafka/server/common/MetadataVersion.java").text
+    def pyContent = file("${project.rootDir}/tests/kafkatest/version.py").text
+
+    def latestProductionEnumName = mvContent =~ /LATEST_PRODUCTION\s*=\s*(IBP_\w+)/
+    if (!latestProductionEnumName) throw new GradleException("Could not find LATEST_PRODUCTION in MetadataVersion.java")
+    def latestProductionEnumConstant = latestProductionEnumName[0][1] // e.g. "IBP_4_3_IV0"
+
+    // Extract version from enum constant, e.g. IBP_4_3_IV0(30, "4.3", "IV0", true) -> 4.3-IV0
+    def enumMatch = mvContent =~ /${latestProductionEnumConstant}\(\d+,\s*"(\d+\.\d+)",\s*"(IV\d+)"/
+    if (!enumMatch) throw new GradleException("Could not find enum definition for ${latestProductionEnumConstant} in MetadataVersion.java")
+    def javaVersion = "${enumMatch[0][1]}-${enumMatch[0][2]}" // e.g. "4.3-IV0"
+
+    def pyMatch = pyContent =~ /LATEST_STABLE_METADATA_VERSION\s*=\s*"([^"]+)"/
+    if (!pyMatch) throw new GradleException("LATEST_STABLE_METADATA_VERSION not found in version.py")
+    def pyVersion = pyMatch[0][1] // e.g. "4.3-IV0"
+
+    if (javaVersion != pyVersion) {
+      throw new GradleException(
+        "LATEST_STABLE_METADATA_VERSION mismatch: MetadataVersion.java LATEST_PRODUCTION=${javaVersion}, " +
+        "tests/kafkatest/version.py LATEST_STABLE_METADATA_VERSION=${pyVersion}. " +
+        "Make sure LATEST_PRODUCTION in MetadataVersion.java and LATEST_STABLE_METADATA_VERSION in tests/kafkatest/version.py are in sync."
+      )
+    }
+    println "MetadataVersion.java LATEST_PRODUCTION=${latestProductionEnumConstant} (${javaVersion}) matches version.py LATEST_STABLE_METADATA_VERSION=${pyVersion}"
+  }
+}
+
+check.dependsOn verifyLatestStableMetadataVersionTask

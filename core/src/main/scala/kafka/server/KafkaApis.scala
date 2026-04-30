@@ -65,6 +65,7 @@ import org.apache.kafka.security.DelegationTokenManager
 import org.apache.kafka.server.{ApiVersionManager, ClientMetricsManager, FetchManager, ProcessRole}
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.{GroupVersion, RequestLocal, ShareVersion, StreamsVersion, TransactionVersion}
+import org.apache.kafka.server.quota.{ReplicaQuota, ReplicationQuotaManager}
 import org.apache.kafka.server.share.context.ShareFetchContext
 import org.apache.kafka.server.share.{ErroneousAndValidPartitionData, SharePartitionKey}
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch
@@ -285,9 +286,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       if (useTopicIds) {
         offsetCommitRequest.data.topics.forEach { topic =>
-          if (topic.topicId != Uuid.ZERO_UUID) {
-            metadataCache.getTopicName(topic.topicId).ifPresent(name => topic.setName(name))
-          }
+          metadataCache.getTopicName(topic.topicId).ifPresent(name => topic.setName(name))
         }
       }
 
@@ -311,32 +310,41 @@ class KafkaApis(val requestChannel: RequestChannel,
           // to the response with TOPIC_AUTHORIZATION_FAILED.
           responseBuilder.addPartitions[OffsetCommitRequestData.OffsetCommitRequestPartition](
             topic.topicId, topic.name, topic.partitions, _.partitionIndex, Errors.TOPIC_AUTHORIZATION_FAILED)
-        } else if (!metadataCache.contains(topic.name)) {
-          // If the topic is unknown, we add the topic and all its partitions
-          // to the response with UNKNOWN_TOPIC_OR_PARTITION.
-          responseBuilder.addPartitions[OffsetCommitRequestData.OffsetCommitRequestPartition](
-            topic.topicId, topic.name, topic.partitions, _.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
         } else {
-          // Otherwise, we check all partitions to ensure that they all exist.
-          val topicWithValidPartitions = new OffsetCommitRequestData.OffsetCommitRequestTopic()
-            .setTopicId(topic.topicId)
-            .setName(topic.name)
-
-          topic.partitions.forEach { partition =>
-            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).isPresent) {
-              topicWithValidPartitions.partitions.add(partition)
-            } else {
-              responseBuilder.addPartition(
-                topic.topicId,
-                topic.name,
-                partition.partitionIndex,
-                Errors.UNKNOWN_TOPIC_OR_PARTITION
-              )
-            }
+          // For lower API versions, the topic id may not be included in the request.
+          // In this case, we resolve the topic id from metadata cache to ensure that the topic exists.
+          // If the topic doesn't exist, the topicId will fallback to ZERO_UUID.
+          if (!useTopicIds) {
+            topic.setTopicId(metadataCache.getTopicId(topic.name))
           }
 
-          if (!topicWithValidPartitions.partitions.isEmpty) {
-            authorizedTopicsRequest += topicWithValidPartitions
+          if (topic.topicId == Uuid.ZERO_UUID) {
+            // If the topic is unknown, we add the topic and all its partitions
+            // to the response with UNKNOWN_TOPIC_OR_PARTITION.
+            responseBuilder.addPartitions[OffsetCommitRequestData.OffsetCommitRequestPartition](
+              Uuid.ZERO_UUID, topic.name, topic.partitions, _.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+          } else {
+            // Otherwise, we check all partitions to ensure that they all exist.
+            val topicWithValidPartitions = new OffsetCommitRequestData.OffsetCommitRequestTopic()
+              .setTopicId(topic.topicId)
+              .setName(topic.name)
+
+            topic.partitions.forEach { partition =>
+              if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).isPresent) {
+                topicWithValidPartitions.partitions.add(partition)
+              } else {
+                responseBuilder.addPartition(
+                  topic.topicId,
+                  topic.name,
+                  partition.partitionIndex,
+                  Errors.UNKNOWN_TOPIC_OR_PARTITION
+                )
+              }
+            }
+
+            if (!topicWithValidPartitions.partitions.isEmpty) {
+              authorizedTopicsRequest += topicWithValidPartitions
+            }
           }
         }
       }
@@ -1578,8 +1586,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                 new DeleteRecordsPartitionResult().setPartitionIndex(topicPartition.partition)
                   .setLowWatermark(partitionResult.lowWatermark)
                   .setErrorCode(partitionResult.errorCode)
-              }.toList.asJava.iterator()))
-          }.toList.asJava.iterator()))))
+              }.toList.asJava))
+          }.toList.asJava))))
     }
 
     if (authorizedForDeleteTopicOffsets.isEmpty)
@@ -2049,7 +2057,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         txnOffsetCommitRequest.data.topics.asScala
       )(_.name)
 
-      val responseBuilder = new TxnOffsetCommitResponse.Builder()
+      val responseBuilder = TxnOffsetCommitResponse.newBuilder()
       val authorizedTopicCommittedOffsets = new mutable.ArrayBuffer[TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic]()
       txnOffsetCommitRequest.data.topics.forEach { topic =>
         if (!authorizedTopics.contains(topic.name)) {
@@ -2233,7 +2241,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME)) {
         val partitions =
           if (describeLogDirsDirRequest.isAllTopicPartitions)
-            replicaManager.logManager.allLogs.map(_.topicPartition).toSet
+            replicaManager.logManager.allLogs.asScala.map(_.topicPartition).toSet
           else
             describeLogDirsDirRequest.data.topics.asScala.flatMap(
               logDirTopic => logDirTopic.partitions.asScala.map(partitionIndex =>
@@ -2819,9 +2827,10 @@ class KafkaApis(val requestChannel: RequestChannel,
               }
             } else {
               // Compute group-specific timeout for caching errors (2 * heartbeat interval)
-              val heartbeatIntervalMs = Option(groupConfigManager.groupConfig(streamsGroupHeartbeatRequest.data.groupId).orElse(null))
-                .map(_.streamsHeartbeatIntervalMs().toLong)
-                .getOrElse(config.groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs().toLong)
+              val heartbeatIntervalMs = groupConfigManager.groupConfig(streamsGroupHeartbeatRequest.data.groupId)
+                .flatMap[java.lang.Integer](gc => gc.streamsHeartbeatIntervalMs())
+                .orElseGet(() => config.groupCoordinatorConfig.streamsGroupHeartbeatIntervalMs())
+                .toLong
               val timeoutMs = heartbeatIntervalMs * 2
 
               autoTopicCreationManager.createStreamsInternalTopics(topicsToCreate, requestContext, timeoutMs)
@@ -3452,7 +3461,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         shareFetchRequest.maxWait,
         fetchMinBytes,
         fetchMaxBytes,
-        FetchIsolation.of(FetchRequest.CONSUMER_REPLICA_ID, groupConfigManager.groupConfig(groupId).map(_.shareIsolationLevel()).orElse(GroupConfig.defaultShareIsolationLevel)),
+        FetchIsolation.of(FetchRequest.CONSUMER_REPLICA_ID, groupConfigManager.groupConfig(groupId).flatMap(_.shareIsolationLevel()).orElse(GroupConfig.defaultShareIsolationLevel)),
         clientMetadata,
         true
       )
@@ -4165,10 +4174,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       // record the bytes out metrics only when the response is being sent.
       response.data.responses.forEach { topicResponse =>
         topicResponse.partitions.forEach { data =>
-          // If the topic name was not known, we will have no bytes out.
-          if (topicResponse.topicId != null) {
-            val tp = new TopicIdPartition(topicResponse.topicId, new TopicPartition(topicIdNames.get(topicResponse.topicId), data.partitionIndex))
-            brokerTopicStats.updateBytesOut(tp.topic, false, false, ShareFetchResponse.recordsSize(data))
+          // If the topic name was not known, we will have no bytes out. This can happen if the topic
+          // was deleted and the fetch request was received, or if the topic id in the request was invalid.
+          // In both cases, the error code for the partition will be set accordingly, and we won't have
+          // a topic name to record metrics with.
+          val topicName = topicIdNames.get(topicResponse.topicId)
+          if (topicName != null) {
+            brokerTopicStats.updateBytesOut(topicName, false, false, ShareFetchResponse.recordsSize(data))
           }
         }
       }
@@ -4224,7 +4236,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def isShareGroupProtocolEnabled: Boolean = {
-    config.shareGroupConfig.isShareGroupEnabled || shareVersion().supportsShareGroups
+    shareVersion().supportsShareGroups
   }
 
   /**

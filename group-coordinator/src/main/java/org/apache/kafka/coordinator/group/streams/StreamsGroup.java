@@ -56,6 +56,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.DEAD;
@@ -237,11 +238,12 @@ public class StreamsGroup implements Group {
         this.groupId = Objects.requireNonNull(groupId);
         this.state = new TimelineObject<>(snapshotRegistry, EMPTY);
         this.groupEpoch = new TimelineInteger(snapshotRegistry);
+        this.groupEpoch.set(1);
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.validatedTopologyEpoch = new TimelineInteger(snapshotRegistry);
         this.metadataHash = new TimelineLong(snapshotRegistry);
-        this.targetAssignmentMetadata = new TimelineObject<>(snapshotRegistry, TargetAssignmentMetadata.ZERO);
+        this.targetAssignmentMetadata = new TimelineObject<>(snapshotRegistry, TargetAssignmentMetadata.INITIAL);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentActiveTaskToProcessId = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentStandbyTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -836,7 +838,7 @@ public class StreamsGroup implements Group {
         members().forEach((memberId, member) ->
             records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId(), memberId))
         );
-        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochTombstoneRecord(groupId()));
+        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataTombstoneRecord(groupId()));
 
         members().forEach((memberId, member) ->
             records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId(), memberId))
@@ -1230,7 +1232,7 @@ public class StreamsGroup implements Group {
      * @return The assignment configurations for this streams group.
      */
     public Map<String, String> lastAssignmentConfigs() {
-        return Collections.unmodifiableMap(lastAssignmentConfigs);
+        return Collections.unmodifiableMap(new TreeMap<>(lastAssignmentConfigs));
     }
 
     /**
@@ -1273,11 +1275,11 @@ public class StreamsGroup implements Group {
 
             // Search for the partition in assigned tasks, then in tasks pending revocation
             Integer assignmentEpoch = assignedTasks.activeTasksWithEpochs()
-                .getOrDefault(subtopologyId, Collections.emptyMap())
+                .getOrDefault(subtopologyId, Map.of())
                 .get(partitionId);
             if (assignmentEpoch == null) {
                 assignmentEpoch = tasksPendingRevocation.activeTasksWithEpochs()
-                    .getOrDefault(subtopologyId, Collections.emptyMap())
+                    .getOrDefault(subtopologyId, Map.of())
                     .get(partitionId);
             }
 

@@ -103,8 +103,19 @@ public interface StateStore {
      * <p>
      * Implementations <em>SHOULD</em> ensure that {@code changelogOffsets} are committed to disk atomically with the
      * records they represent, if possible.
+     * <p>
+     * <b>Empty map:</b> If {@code changelogOffsets} is empty, implementations that manage offsets <em>MUST</em>
+     * remove all previously committed offsets. After an empty commit, {@link #committedOffset(TopicPartition)} should
+     * return {@code null} for all partitions. This is used during corruption recovery to clear stale offsets so that
+     * restoration can restart from the beginning.
+     * <p>
+     * <b>Null values:</b> If a value in {@code changelogOffsets} is {@code null}, implementations that manage offsets
+     * <em>MUST</em> remove the committed offset for that partition. After such a commit,
+     * {@link #committedOffset(TopicPartition)} should return {@code null} for the affected partition.
      *
      * @param changelogOffsets The changelog offset(s) corresponding to the most recently written records.
+     *                         An empty map signals that all committed offsets should be cleared.
+     *                         A {@code null} value for a partition signals that its committed offset should be removed.
      */
     default void commit(final Map<TopicPartition, Long> changelogOffsets) {
         flush();
