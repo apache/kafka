@@ -27,6 +27,7 @@ org.apache.kafka.coordinator.group.GroupConfigTest:
 - testValidShareAutoOffsetResetValues
 - testValidShareIsolationLevelValues
 - testValidateWithAllGroupTypeConfigs
+- testValidationErrorMessageIncludesBound
 org.apache.kafka.coordinator.group.GroupCoordinatorConfigTest:
 - testAppendLingerMs
 - testClampDynamicConfigs
