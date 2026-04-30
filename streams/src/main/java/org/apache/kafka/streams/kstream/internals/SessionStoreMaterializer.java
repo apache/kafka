@@ -17,9 +17,11 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.state.DslSessionParams;
+import org.apache.kafka.streams.state.HeadersBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -35,11 +37,11 @@ public class SessionStoreMaterializer<K, V> extends MaterializedStoreFactory<K, 
     private final long retentionPeriod;
 
     public SessionStoreMaterializer(
-            final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materialized,
-            final SessionWindows sessionWindows,
-            final EmitStrategy emitStrategy
+        final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materialized,
+        final SessionWindows sessionWindows,
+        final EmitStrategy emitStrategy
     ) {
-        super(materialized);
+        super(materialized, DslStoreFormat.PLAIN);
         this.materialized = materialized;
         this.sessionWindows = sessionWindows;
         this.emitStrategy = emitStrategy;
@@ -57,19 +59,29 @@ public class SessionStoreMaterializer<K, V> extends MaterializedStoreFactory<K, 
     }
 
     @Override
-    public StoreBuilder<?> builder() {
+    public  StoreBuilder<?> builder() {
         final SessionBytesStoreSupplier supplier = materialized.storeSupplier() == null
-                ? dslStoreSuppliers().sessionStore(new DslSessionParams(
-                        materialized.storeName(),
-                        Duration.ofMillis(retentionPeriod),
-                        emitStrategy))
-                : (SessionBytesStoreSupplier) materialized.storeSupplier();
+            ? dslStoreSuppliers().sessionStore(new DslSessionParams(
+                materialized.storeName(),
+                Duration.ofMillis(retentionPeriod),
+                emitStrategy,
+                dslStoreFormat()))
+            : (SessionBytesStoreSupplier) materialized.storeSupplier();
 
-        final StoreBuilder<SessionStore<K, V>> builder = Stores.sessionStoreBuilder(
+        final StoreBuilder<?> builder;
+        if (supplier instanceof HeadersBytesStoreSupplier) {
+            builder = Stores.sessionStoreWithHeadersBuilder(
                 supplier,
                 materialized.keySerde(),
                 materialized.valueSerde()
-        );
+            );
+        } else {
+            builder = Stores.sessionStoreBuilder(
+                supplier,
+                materialized.keySerde(),
+                materialized.valueSerde()
+            );
+        }
 
         if (materialized.loggingEnabled()) {
             builder.withLoggingEnabled(materialized.logConfig());

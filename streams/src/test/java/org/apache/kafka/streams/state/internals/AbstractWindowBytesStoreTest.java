@@ -1163,7 +1163,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     <K> K extractStoreKey(final byte[] binaryKey,
                           final StateSerdes<K, ?> serdes) {
-        return WindowKeySchema.extractStoreKey(binaryKey, serdes);
+        return WindowKeySchema.extractStoreKey(binaryKey, new RecordHeaders(), serdes);
     }
 
     private Map<Integer, Set<String>> entriesByKey(final List<KeyValue<byte[], byte[]>> changeLog,

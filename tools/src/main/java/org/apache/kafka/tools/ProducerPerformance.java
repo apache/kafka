@@ -22,8 +22,8 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.server.util.ThroughputThrottler;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
@@ -319,7 +319,7 @@ public class ProducerPerformance {
                 .dest("producerConfig")
                 .help("(DEPRECATED) Kafka producer related configuration properties like client.id. " +
                         "These configs take precedence over those passed via --command-config or --producer.config. " +
-                        "This option will be removed in a future version. Use --command-property instead.");
+                        "This option will be removed in a future version. Use --command-property instead. Example: --command-property linger.ms=10 batch.size=32768");
 
         parser.addArgument("--command-property")
                 .nargs("+")
@@ -328,7 +328,7 @@ public class ProducerPerformance {
                 .type(String.class)
                 .dest("commandProperties")
                 .help("Kafka producer related configuration properties like client.id. " +
-                        "These configs take precedence over those passed via --command-config or --producer.config.");
+                        "These configs take precedence over those passed via --command-config or --producer.config. Example: --command-property linger.ms=10 batch.size=32768");
 
         parser.addArgument("--producer.config")
                 .action(store())

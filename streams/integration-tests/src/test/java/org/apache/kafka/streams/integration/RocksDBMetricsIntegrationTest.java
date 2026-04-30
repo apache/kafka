@@ -36,6 +36,7 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -46,7 +47,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -146,12 +147,13 @@ public class RocksDBMetricsIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void shouldExposeRocksDBMetricsBeforeAndAfterFailureWithEmptyStateDir(final boolean streamsProtocolEnabled, final TestInfo testInfo) throws Exception {
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    public void shouldExposeRocksDBMetricsBeforeAndAfterFailureWithEmptyStateDir(final boolean streamsProtocolEnabled, final boolean withHeaders, final TestInfo testInfo) throws Exception {
         final Properties streamsConfiguration = streamsConfig(testInfo);
         if (streamsProtocolEnabled) {
             streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
         }
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
         final StreamsBuilder builder = builderForStateStores();
 

@@ -49,33 +49,34 @@ import java.util.function.Function;
  */
 public class TxnOffsetCommitResponse extends AbstractResponse {
 
-    public static class Builder {
-        TxnOffsetCommitResponseData data = new TxnOffsetCommitResponseData();
-        HashMap<String, TxnOffsetCommitResponseTopic> byTopicName = new HashMap<>();
+    public static Builder newBuilder() {
+        return new TopicNameBuilder();
+    }
 
-        private TxnOffsetCommitResponseTopic getOrCreateTopic(
+    public abstract static class Builder {
+        protected TxnOffsetCommitResponseData data = new TxnOffsetCommitResponseData();
+
+        protected abstract void add(
+            TxnOffsetCommitResponseTopic topic
+        );
+
+        protected abstract TxnOffsetCommitResponseTopic get(
             String topicName
-        ) {
-            TxnOffsetCommitResponseTopic topic = byTopicName.get(topicName);
-            if (topic == null) {
-                topic = new TxnOffsetCommitResponseTopic().setName(topicName);
-                data.topics().add(topic);
-                byTopicName.put(topicName, topic);
-            }
-            return topic;
-        }
+        );
+
+        protected abstract TxnOffsetCommitResponseTopic getOrCreate(
+            String topicName
+        );
 
         public Builder addPartition(
             String topicName,
             int partitionIndex,
             Errors error
         ) {
-            final TxnOffsetCommitResponseTopic topicResponse = getOrCreateTopic(topicName);
-
+            final TxnOffsetCommitResponseTopic topicResponse = getOrCreate(topicName);
             topicResponse.partitions().add(new TxnOffsetCommitResponsePartition()
                 .setPartitionIndex(partitionIndex)
                 .setErrorCode(error.code()));
-
             return this;
         }
 
@@ -85,14 +86,12 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
             Function<P, Integer> partitionIndex,
             Errors error
         ) {
-            final TxnOffsetCommitResponseTopic topicResponse = getOrCreateTopic(topicName);
-
+            final TxnOffsetCommitResponseTopic topicResponse = getOrCreate(topicName);
             partitions.forEach(partition ->
                 topicResponse.partitions().add(new TxnOffsetCommitResponsePartition()
                     .setPartitionIndex(partitionIndex.apply(partition))
                     .setErrorCode(error.code()))
             );
-
             return this;
         }
 
@@ -105,11 +104,10 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
             } else {
                 // Otherwise, we have to merge them together.
                 newData.topics().forEach(newTopic -> {
-                    TxnOffsetCommitResponseTopic existingTopic = byTopicName.get(newTopic.name());
+                    TxnOffsetCommitResponseTopic existingTopic = get(newTopic.name());
                     if (existingTopic == null) {
                         // If no topic exists, we can directly copy the new topic data.
-                        data.topics().add(newTopic);
-                        byTopicName.put(newTopic.name(), newTopic);
+                        add(newTopic);
                     } else {
                         // Otherwise, we add the partitions to the existing one. Note we
                         // expect non-overlapping partitions here as we don't verify
@@ -118,12 +116,46 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
                     }
                 });
             }
-
             return this;
         }
 
         public TxnOffsetCommitResponse build() {
             return new TxnOffsetCommitResponse(data);
+        }
+    }
+
+    public static class TopicNameBuilder extends Builder {
+        private final HashMap<String, TxnOffsetCommitResponseTopic> byTopicName = new HashMap<>();
+
+        @Override
+        protected void add(TxnOffsetCommitResponseTopic topic) {
+            throwIfTopicNameIsNull(topic.name());
+            data.topics().add(topic);
+            byTopicName.put(topic.name(), topic);
+        }
+
+        @Override
+        protected TxnOffsetCommitResponseTopic get(String topicName) {
+            throwIfTopicNameIsNull(topicName);
+            return byTopicName.get(topicName);
+        }
+
+        @Override
+        protected TxnOffsetCommitResponseTopic getOrCreate(String topicName) {
+            throwIfTopicNameIsNull(topicName);
+            TxnOffsetCommitResponseTopic topic = byTopicName.get(topicName);
+            if (topic == null) {
+                topic = new TxnOffsetCommitResponseTopic().setName(topicName);
+                data.topics().add(topic);
+                byTopicName.put(topicName, topic);
+            }
+            return topic;
+        }
+
+        private static void throwIfTopicNameIsNull(String topicName) {
+            if (topicName == null) {
+                throw new IllegalArgumentException("TopicName cannot be null.");
+            }
         }
     }
 

@@ -4,6 +4,9 @@ Trogdor is a test framework for Apache Kafka.
 
 Trogdor can run benchmarks and other workloads. Trogdor can also inject faults in order to stress test the system.
 
+Trogdor should only be used in development environment and it is designed to allow users to inject commands.
+For this reason, Apache Kafka project does not consider this a security issue.
+
 Quickstart
 =========================================================
 First, we want to [start a single-node Kafka cluster](https://github.com/apache/kafka/blob/trunk/README.md#running-a-kafka-broker)

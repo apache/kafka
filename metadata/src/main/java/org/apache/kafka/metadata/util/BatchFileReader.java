@@ -101,8 +101,7 @@ public final class BatchFileReader implements Iterator<BatchFileReader.BatchAndT
         List<ApiMessageAndVersion> messages = new ArrayList<>();
         for (Record record : input) {
             try {
-                short typeId = ControlRecordType.parseTypeId(record.key());
-                ControlRecordType type = ControlRecordType.fromTypeId(typeId);
+                ControlRecordType type = ControlRecordType.parse(record.key());
                 switch (type) {
                     case LEADER_CHANGE: {
                         LeaderChangeMessage message = new LeaderChangeMessage();

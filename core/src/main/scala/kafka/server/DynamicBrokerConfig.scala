@@ -21,7 +21,6 @@ import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import kafka.log.LogManager
 import kafka.network.DataPlaneAcceptor
 import kafka.raft.KafkaRaftManager
 import kafka.server.DynamicBrokerConfig._
@@ -34,20 +33,22 @@ import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.LogContext
-import org.apache.kafka.common.utils.{BufferSupplier, ConfigUtils, Utils}
+import org.apache.kafka.common.utils.internals.BufferSupplier
+import org.apache.kafka.common.utils.{ConfigUtils, Utils}
 import org.apache.kafka.config
 import org.apache.kafka.network.SocketServer
 import org.apache.kafka.raft.KafkaRaftClient
 import org.apache.kafka.server.{DynamicThreadPool, ProcessRole}
-import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler}
 import org.apache.kafka.server.config.{DynamicConfig, DynamicProducerStateManagerConfig, ServerConfigs, ServerLogConfigs, DynamicBrokerConfig => JDynamicBrokerConfig}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, MetricConfigs}
 import org.apache.kafka.server.telemetry.{ClientTelemetry, ClientTelemetryExporterProvider}
 import org.apache.kafka.server.util.LockUtils.{inReadLock, inWriteLock}
 import org.apache.kafka.snapshot.RecordsSnapshotReader
-import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.storage.internals.log.{LogConfig, LogManager}
 
+import java.util.stream.Collectors
 import scala.util.Using
 import scala.collection._
 import scala.jdk.CollectionConverters._
@@ -195,7 +196,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     addReconfigurable(new DynamicClientQuotaCallback(kafkaServer.quotaManagers, kafkaServer.config))
 
     addBrokerReconfigurable(new BrokerDynamicThreadPool(kafkaServer))
-    addBrokerReconfigurable(new DynamicLogConfig(kafkaServer.logManager))
+    addBrokerReconfigurable(new DynamicLogConfig(kafkaServer.logManager, kafkaServer.replicaManager.directoryEventHandler))
     addBrokerReconfigurable(new DynamicListenerConfig(kafkaServer))
     addBrokerReconfigurable(kafkaServer.socketServer)
     addBrokerReconfigurable(new DynamicProducerStateManagerConfig(kafkaServer.logManager.producerStateManagerConfig))
@@ -430,6 +431,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     newProps ++= staticBrokerConfigs
     overrideProps(newProps, dynamicDefaultConfigs)
     overrideProps(newProps, dynamicBrokerConfigs)
+    KafkaConfig.clampDynamicConfigs(newProps.asJava)
 
     val oldConfig = currentConfig
     val (newConfig, brokerReconfigurablesToUpdate) = processReconfiguration(newProps, validateOnly = false, doLog)
@@ -536,7 +538,7 @@ trait BrokerReconfigurable {
   def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit
 }
 
-class DynamicLogConfig(logManager: LogManager) extends BrokerReconfigurable with Logging {
+class DynamicLogConfig(logManager: LogManager, directoryEventHandler: DirectoryEventHandler) extends BrokerReconfigurable with Logging {
 
   override def reconfigurableConfigs: util.Set[String] = {
     JDynamicBrokerConfig.DynamicLogConfig.RECONFIGURABLE_CONFIGS
@@ -577,13 +579,25 @@ class DynamicLogConfig(logManager: LogManager) extends BrokerReconfigurable with
       }
     }
 
+    def validateCordonedLogDirs(): Unit = {
+      val logDirs = newConfig.logDirs()
+      val cordonedLogDirs = newConfig.cordonedLogDirs()
+      cordonedLogDirs.asScala.foreach(dir =>
+        if (!logDirs.contains(dir)) {
+          throw new ConfigException(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, cordonedLogDirs, s"Invalid entry in ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG}: $dir. " +
+            s"All cordoned log dirs must be entries of ${ServerLogConfigs.LOG_DIRS_CONFIG} or ${ServerLogConfigs.LOG_DIR_CONFIG}.")
+        }
+      )
+    }
+
     validateLogLocalRetentionMs()
     validateLogLocalRetentionBytes()
+    validateCordonedLogDirs()
   }
 
   private def updateLogsConfig(newBrokerDefaults: Map[String, Object]): Unit = {
     logManager.brokerConfigUpdated()
-    logManager.allLogs.foreach { log =>
+    logManager.allLogs.forEach { log =>
       val props = mutable.Map.empty[Any, Any]
       props ++= newBrokerDefaults
       props ++= log.config.originals.asScala.filter { case (k, _) =>
@@ -597,6 +611,19 @@ class DynamicLogConfig(logManager: LogManager) extends BrokerReconfigurable with
 
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
     val newBrokerDefaults = new util.HashMap[String, Object](newConfig.extractLogConfigMap)
+
+    logManager.updateCordonedLogDirs(util.Set.copyOf(newConfig.cordonedLogDirs))
+    val newCordoned = new util.HashSet[String](newConfig.cordonedLogDirs)
+    newCordoned.removeAll(oldConfig.cordonedLogDirs)
+
+    val newUncordoned = new util.HashSet[String](oldConfig.cordonedLogDirs)
+    newUncordoned.removeAll(newConfig.cordonedLogDirs)
+    if (!newCordoned.isEmpty) {
+      directoryEventHandler.handleCordoned(newCordoned.stream.map(dir => logManager.directoryId(dir).get).collect(Collectors.toSet()))
+    }
+    if (!newUncordoned.isEmpty) {
+      directoryEventHandler.handleUncordoned(newUncordoned.stream.map(dir => logManager.directoryId(dir).get).collect(Collectors.toSet()))
+    }
 
     logManager.reconfigureDefaultLogConfig(new LogConfig(newBrokerDefaults))
 

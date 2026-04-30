@@ -30,6 +30,7 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.metrics.StreamsThreadMetricsDelegatingReporter;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -394,7 +395,8 @@ public class GlobalStreamThread extends Thread {
             stateMgr.setGlobalProcessorContext(globalProcessorContext);
             final StreamsThreadMetricsDelegatingReporter globalMetricsReporter = new StreamsThreadMetricsDelegatingReporter(globalConsumer, getName(), Optional.empty());
             streamsMetrics.metricsRegistry().addReporter(globalMetricsReporter);
-
+            @SuppressWarnings("deprecation")
+            final ProcessingExceptionHandler processingExceptionHandler = config.getBoolean(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG) ? config.processingExceptionHandler() : null;
             stateConsumer = new StateConsumer(
                 logContext,
                 globalConsumer,
@@ -404,6 +406,7 @@ public class GlobalStreamThread extends Thread {
                     globalProcessorContext,
                     stateMgr,
                     config.deserializationExceptionHandler(),
+                    processingExceptionHandler,
                     time,
                     config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG)
                 ),

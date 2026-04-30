@@ -38,7 +38,7 @@ public class TaskExecutorTest {
         final TaskExecutor taskExecutor = new TaskExecutor(tasks, taskManager, metadata, new LogContext());
 
         taskExecutor.punctuate();
-        verify(tasks).activeTasks();
+        verify(tasks).activeInitializedTasks();
     }
 
     @Test

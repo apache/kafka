@@ -25,6 +25,7 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.VersionedBytesStore;
 
@@ -50,6 +51,16 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
             return true;
         } else if (stateStore instanceof WrappedStateStore) {
             return isVersioned(((WrappedStateStore<?, ?, ?>) stateStore).wrapped());
+        } else {
+            return false;
+        }
+    }
+
+    public static boolean isHeadersAware(final StateStore stateStore) {
+        if (stateStore instanceof HeadersBytesStore) {
+            return true;
+        } else if (stateStore instanceof WrappedStateStore) {
+            return isHeadersAware(((WrappedStateStore<?, ?, ?>) stateStore).wrapped());
         } else {
             return false;
         }
@@ -115,6 +126,17 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
     @Override
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {
         wrapped.commit(changelogOffsets);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public boolean managesOffsets() {
+        return wrapped.managesOffsets();
+    }
+
+    @Override
+    public Long committedOffset(final TopicPartition partition) {
+        return wrapped.committedOffset(partition);
     }
 
     @Override

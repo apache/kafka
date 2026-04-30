@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
-import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
 import java.util.HashMap;
@@ -57,30 +56,18 @@ public class LogicalKeyValueSegments extends AbstractSegments<LogicalKeyValueSeg
     }
 
     @Override
-    public void setPosition(final Position position) {
-        this.physicalStore.position = position;
+    protected LogicalKeyValueSegment createSegment(final long segmentId, final String segmentName) {
+        if (segmentId < 0) {
+            throw new IllegalArgumentException(
+                "Negative segment IDs are reserved for reserved segments, "
+                    + "and should be created through createReservedSegment() instead");
+        }
+        return new LogicalKeyValueSegment(segmentId, segmentName, physicalStore);
     }
 
     @Override
-    public LogicalKeyValueSegment getOrCreateSegment(final long segmentId,
-                                                     final StateStoreContext context) {
-        if (segments.containsKey(segmentId)) {
-            return segments.get(segmentId);
-        } else {
-            if (segmentId < 0) {
-                throw new IllegalArgumentException(
-                    "Negative segment IDs are reserved for reserved segments, "
-                        + "and should be created through createReservedSegment() instead");
-            }
-
-            final LogicalKeyValueSegment newSegment = new LogicalKeyValueSegment(segmentId, segmentName(segmentId), physicalStore);
-
-            if (segments.put(segmentId, newSegment) != null) {
-                throw new IllegalStateException("LogicalKeyValueSegment already exists. Possible concurrent access.");
-            }
-
-            return newSegment;
-        }
+    protected void openSegmentDB(final LogicalKeyValueSegment segment, final StateStoreContext context) {
+        // no-op -- a logical segment is just a view on an underlying physical store
     }
 
     LogicalKeyValueSegment createReservedSegment(final long segmentId,
@@ -99,14 +86,16 @@ public class LogicalKeyValueSegments extends AbstractSegments<LogicalKeyValueSeg
     }
 
     // VisibleForTesting
-    LogicalKeyValueSegment getReservedSegment(final long segmentId) {
-        return reservedSegments.get(segmentId);
+    LogicalKeyValueSegment getReservedSegment() {
+        return reservedSegments.get(-1L);
     }
 
     @Override
     public void openExisting(final StateStoreContext context, final long streamTime) {
         metricsRecorder.init(ProcessorContextUtils.metricsImpl(context), context.taskId());
+        physicalStore.setTaskId(context.taskId());
         physicalStore.openDB(context.appConfigs(), context.stateDir());
+        position.merge(physicalStore.getPosition());
     }
 
     @Override
@@ -117,6 +106,18 @@ public class LogicalKeyValueSegments extends AbstractSegments<LogicalKeyValueSeg
     @Override
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {
         physicalStore.commit(changelogOffsets);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Deprecated
+    @Override
+    public boolean managesOffsets() {
+        return physicalStore.managesOffsets();
+    }
+
+    @Override
+    public Long committedOffset(final TopicPartition partition) {
+        return physicalStore.committedOffset(partition);
     }
 
     @Override

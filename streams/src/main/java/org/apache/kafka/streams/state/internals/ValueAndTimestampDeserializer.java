@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
@@ -50,12 +52,19 @@ class ValueAndTimestampDeserializer<V> implements WrappingNullableDeserializer<V
     @Override
     public ValueAndTimestamp<V> deserialize(final String topic,
                                             final byte[] valueAndTimestamp) {
+        return deserialize(topic, new RecordHeaders(), valueAndTimestamp);
+    }
+
+    @Override
+    public ValueAndTimestamp<V> deserialize(final String topic,
+                                            final Headers headers,
+                                            final byte[] valueAndTimestamp) {
         if (valueAndTimestamp == null) {
             return null;
         }
 
-        final long timestamp = timestampDeserializer.deserialize(topic, rawTimestamp(valueAndTimestamp));
-        final V value = valueDeserializer.deserialize(topic, rawValue(valueAndTimestamp));
+        final long timestamp = timestampDeserializer.deserialize(topic, headers, rawTimestamp(valueAndTimestamp));
+        final V value = valueDeserializer.deserialize(topic, headers, rawValue(valueAndTimestamp));
         return ValueAndTimestamp.make(value, timestamp);
     }
 
@@ -85,7 +94,9 @@ class ValueAndTimestampDeserializer<V> implements WrappingNullableDeserializer<V
     }
 
     static long timestamp(final byte[] rawValueAndTimestamp) {
-        return LONG_DESERIALIZER.deserialize(null, rawTimestamp(rawValueAndTimestamp));
+        // We know we use LongDeserializer here, so we don't need headers
+        // still use headers-aware version to be consistent in codebase
+        return LONG_DESERIALIZER.deserialize(null, null, rawTimestamp(rawValueAndTimestamp));
     }
 
     @Override

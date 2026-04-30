@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.coordinator.common.runtime;
 
-import org.apache.kafka.common.utils.ThreadUtils;
+import org.apache.kafka.common.utils.internals.ThreadUtils;
 
 import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.MetricName;

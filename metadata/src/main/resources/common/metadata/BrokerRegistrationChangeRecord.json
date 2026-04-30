@@ -15,11 +15,12 @@
 
 // Version 1 adds InControlledShutdown
 // Version 2 adds LogDirs
+// Version 3 adds CordonedLogDirs
 {
   "apiKey": 17,
   "type": "metadata",
   "name": "BrokerRegistrationChangeRecord",
-  "validVersions": "0-2",
+  "validVersions": "0-3",
   "flexibleVersions": "0+",
   "fields": [
    { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
@@ -31,6 +32,8 @@
    { "name": "InControlledShutdown", "type": "int8", "versions": "1+", "taggedVersions": "1+", "tag": 1,
      "about": "0 if no change, 1 if the broker is in controlled shutdown." },
    { "name": "LogDirs", "type":  "[]uuid", "versions":  "2+", "taggedVersions": "2+", "tag": 2,
-     "about": "Log directories configured in this broker which are available." }
+     "about": "Log directories configured in this broker which are available." },
+   { "name": "CordonedLogDirs", "type":  "[]uuid", "versions":  "3+", "taggedVersions": "3+", "tag": "3",
+     "about": "Log directories that are cordoned." }
   ]
 }

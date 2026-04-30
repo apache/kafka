@@ -17,10 +17,9 @@
 package org.apache.kafka.common.record.internal;
 
 import org.apache.kafka.common.InvalidRecordException;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.protocol.types.Type;
+import org.apache.kafka.common.message.ControlRecordTypeSchema;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.MessageUtil;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,47 +57,51 @@ public enum ControlRecordType {
     UNKNOWN((short) -1);
 
     private static final Logger log = LoggerFactory.getLogger(ControlRecordType.class);
-
-    static final short CURRENT_CONTROL_RECORD_KEY_VERSION = 0;
-    static final int CURRENT_CONTROL_RECORD_KEY_SIZE = 4;
-    private static final Schema CONTROL_RECORD_KEY_SCHEMA_VERSION_V0 = new Schema(
-            new Field("version", Type.INT16),
-            new Field("type", Type.INT16));
+    private static final int CONTROL_RECORD_KEY_SIZE = 4;
 
     private final short type;
+    private final ByteBuffer buffer;
 
     ControlRecordType(short type) {
         this.type = type;
+        ControlRecordTypeSchema schema = new ControlRecordTypeSchema().setType(type);
+        buffer = MessageUtil.toVersionPrefixedByteBuffer(ControlRecordTypeSchema.HIGHEST_SUPPORTED_VERSION, schema);
     }
 
     public short type() {
         return type;
     }
 
-    public Struct recordKey() {
+    public ByteBuffer recordKey() {
         if (this == UNKNOWN)
             throw new IllegalArgumentException("Cannot serialize UNKNOWN control record type");
+        return buffer.duplicate();
+    }
 
-        Struct struct = new Struct(CONTROL_RECORD_KEY_SCHEMA_VERSION_V0);
-        struct.set("version", CURRENT_CONTROL_RECORD_KEY_VERSION);
-        struct.set("type", type);
-        return struct;
+    public int controlRecordKeySize() {
+        return buffer.remaining();
     }
 
     public static short parseTypeId(ByteBuffer key) {
-        if (key.remaining() < CURRENT_CONTROL_RECORD_KEY_SIZE)
-            throw new InvalidRecordException("Invalid value size found for end control record key. Must have " +
-                    "at least " + CURRENT_CONTROL_RECORD_KEY_SIZE + " bytes, but found only " + key.remaining());
+        // We should duplicate the original buffer since it will be read again in some cases, for example,
+        // read by KafkaRaftClient and RaftClient.Listener
+        ByteBuffer buffer = key.duplicate();
+        if (buffer.remaining() < CONTROL_RECORD_KEY_SIZE)
+            throw new InvalidRecordException("Invalid value size found for control record key. " +
+                    "Must have at least " + CONTROL_RECORD_KEY_SIZE + " bytes, but found only " + buffer.remaining());
 
-        short version = key.getShort(0);
-        if (version < 0)
+        short version = buffer.getShort();
+        if (version < ControlRecordTypeSchema.LOWEST_SUPPORTED_VERSION)
             throw new InvalidRecordException("Invalid version found for control record: " + version +
                     ". May indicate data corruption");
 
-        if (version != CURRENT_CONTROL_RECORD_KEY_VERSION)
+        if (version > ControlRecordTypeSchema.HIGHEST_SUPPORTED_VERSION) {
             log.debug("Received unknown control record key version {}. Parsing as version {}", version,
-                    CURRENT_CONTROL_RECORD_KEY_VERSION);
-        return key.getShort(2);
+                    ControlRecordTypeSchema.HIGHEST_SUPPORTED_VERSION);
+            version = ControlRecordTypeSchema.HIGHEST_SUPPORTED_VERSION;
+        }
+        ControlRecordTypeSchema schema = new ControlRecordTypeSchema(new ByteBufferAccessor(buffer), version);
+        return schema.type();
     }
 
     public static ControlRecordType fromTypeId(short typeId) {
