@@ -16,16 +16,13 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.admin.ConfigCommand;
-
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
-import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.OptionalInt;
@@ -68,8 +65,8 @@ public class UserScramCredentialsCommandTest {
             throw new RuntimeException();
         });
 
-        List<String> commandArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", cluster.bootstrapServers()));
-        commandArgs.addAll(Arrays.asList(args));
+        List<String> commandArgs = new ArrayList<>(List.of("--bootstrap-server", cluster.bootstrapServers()));
+        commandArgs.addAll(List.of(args));
         try {
             String output = captureStandardOut(() -> ConfigCommand.main(commandArgs.toArray(new String[0])));
             return new ConfigCommandResult(output);
@@ -162,7 +159,7 @@ public class UserScramCredentialsCommandTest {
             () -> {
                 try {
                     String output = runConfigCommandViaBroker("--entity-type", "users", "--describe").stdout;
-                    return Arrays.asList(msgs).contains(output);
+                    return List.of(msgs).contains(output);
                 } catch (Exception e) {
                     throw new NoRetryException(e);
                 }

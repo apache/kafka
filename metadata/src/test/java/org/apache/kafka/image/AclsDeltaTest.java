@@ -25,7 +25,6 @@ import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -42,7 +41,7 @@ public class AclsDeltaTest {
 
     @Test
     public void testRemovesDeleteIfNotInImage() {
-        AclsImage image = new AclsImage(Collections.emptyMap());
+        AclsImage image = new AclsImage(Map.of());
         AclsDelta delta = new AclsDelta(image);
         AccessControlEntryRecord inputAclRecord = testAccessControlEntryRecord();
 
@@ -75,7 +74,7 @@ public class AclsDeltaTest {
 
     @Test
     public void testThrowsExceptionOnInvalidStateWhenImageIsEmpty() {
-        AclsImage image = new AclsImage(Collections.emptyMap());
+        AclsImage image = new AclsImage(Map.of());
         AclsDelta delta = new AclsDelta(image);
 
         RemoveAccessControlEntryRecord removeAccessControlEntryRecord = testRemoveAccessControlEntryRecord();

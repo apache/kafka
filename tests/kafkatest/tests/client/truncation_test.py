@@ -53,8 +53,8 @@ class TruncationTest(VerifiableConsumerTest):
         return consumer
 
     @cluster(num_nodes=7)
-    @matrix(metadata_quorum=quorum.all_non_upgrade, use_new_coordinator=[True])
-    def test_offset_truncate(self, metadata_quorum, use_new_coordinator):
+    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    def test_offset_truncate(self, metadata_quorum):
         """
         Verify correct consumer behavior when the brokers are consecutively restarted.
 

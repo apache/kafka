@@ -544,13 +544,11 @@ public class TaskAssignmentUtilsTest {
             new TopicPartition(String.format("test-topic-%d", taskId.subtopology()), taskId.partition()),
             true,
             true,
-            () -> {
-                partitions.forEach(partition -> {
-                    if (partition != null && rackIds != null) {
-                        partition.annotateWithRackIds(rackIds);
-                    }
-                });
-            }
+            () -> partitions.forEach(partition -> {
+                if (partition != null && rackIds != null) {
+                    partition.annotateWithRackIds(rackIds);
+                }
+            })
         ));
         return mkEntry(
             taskId,

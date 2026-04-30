@@ -15,15 +15,14 @@ package kafka.api
 import kafka.security.JaasTestUtils
 
 import java.time.Duration
-import java.util.{Collections, Properties}
+import java.util.Properties
 import java.util.concurrent.{ExecutionException, TimeUnit}
-import scala.jdk.CollectionConverters._
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.SaslAuthenticationException
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.common.config.SaslConfigs
@@ -36,7 +35,6 @@ import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
 
 import scala.jdk.javaapi.OptionConverters
 import scala.util.Using
-
 
 class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
   private val kafkaClientSaslMechanism = "SCRAM-SHA-256"
@@ -63,7 +61,7 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
 
   override def addFormatterSettings(formatter: Formatter): Unit = {
     formatter.setScramArguments(
-      List(s"SCRAM-SHA-256=[name=${JaasTestUtils.KAFKA_SCRAM_ADMIN},password=${JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD}]").asJava)
+      java.util.List.of(s"SCRAM-SHA-256=[name=${JaasTestUtils.KAFKA_SCRAM_ADMIN},password=${JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD}]"))
   }
 
   override def createPrivilegedAdminClient() = {
@@ -91,7 +89,7 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     closeSasl()
   }
 
-  @ParameterizedTest(name="{displayName}.quorum=kraft.isIdempotenceEnabled={0}")
+  @ParameterizedTest(name="{displayName}.isIdempotenceEnabled={0}")
   @ValueSource(booleans = Array(true, false))
   def testProducerWithAuthenticationFailure(isIdempotenceEnabled: Boolean): Unit = {
     val prop = new Properties()
@@ -111,9 +109,8 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     verifyWithRetry(sendOneRecord(producer2))()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testTransactionalProducerWithAuthenticationFailure(quorum: String): Unit = {
+  @Test
+  def testTransactionalProducerWithAuthenticationFailure(): Unit = {
     val txProducer = createTransactionalProducer()
     verifyAuthenticationException(txProducer.initTransactions())
 
@@ -121,52 +118,65 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     assertThrows(classOf[KafkaException], () => txProducer.initTransactions())
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testConsumerWithAuthenticationFailure(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testConsumerWithAuthenticationFailure(groupProtocol: String): Unit = {
     val consumer = createConsumer()
-    consumer.subscribe(List(topic).asJava)
+    consumer.subscribe(java.util.List.of(topic))
     verifyConsumerWithAuthenticationFailure(consumer)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testManualAssignmentConsumerWithAuthenticationFailure(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testManualAssignmentConsumerWithAuthenticationFailure(groupProtocol: String): Unit = {
     val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     verifyConsumerWithAuthenticationFailure(consumer)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testManualAssignmentConsumerWithAutoCommitDisabledWithAuthenticationFailure(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testManualAssignmentConsumerWithAutoCommitDisabledWithAuthenticationFailure(groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false.toString)
     val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     consumer.seek(tp, 0)
     verifyConsumerWithAuthenticationFailure(consumer)
   }
 
   private def verifyConsumerWithAuthenticationFailure(consumer: Consumer[Array[Byte], Array[Byte]]): Unit = {
-    verifyAuthenticationException(consumer.poll(Duration.ofMillis(1000)))
+    val startMs = System.currentTimeMillis
+    TestUtils.pollUntilException(
+      consumer,
+      _ => true,
+      s"Consumer.poll() did not throw an exception within the timeout",
+      pollTimeoutMs = 1000
+    )
+    val elapsedMs = System.currentTimeMillis - startMs
+    assertTrue(elapsedMs <= 5000, s"Poll took too long, elapsed=$elapsedMs")
     verifyAuthenticationException(consumer.partitionsFor(topic))
 
     createClientCredential()
     val producer = createProducer()
     verifyWithRetry(sendOneRecord(producer))()
-    verifyWithRetry(consumer.poll(Duration.ofMillis(1000)))(_.count == 1)
+    TestUtils.waitUntilTrue(() => {
+      try {
+        consumer.poll(Duration.ofMillis(1000)).count() == 1
+      } catch {
+        case _:Throwable => false
+      }
+    }, msg = s"Consumer.poll() did not read the expected number of records within the timeout")
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testKafkaAdminClientWithAuthenticationFailure(quorum: String): Unit = {
+  @Test
+  def testKafkaAdminClientWithAuthenticationFailure(): Unit = {
     val props = JaasTestUtils.adminClientSecurityConfigs(securityProtocol, OptionConverters.toJava(trustStoreFile), OptionConverters.toJava(clientSaslProperties))
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     val adminClient = Admin.create(props)
 
     def describeTopic(): Unit = {
       try {
-        val response = adminClient.describeTopics(Collections.singleton(topic)).allTopicNames.get
+        val response = adminClient.describeTopics(java.util.Set.of(topic)).allTopicNames.get
         assertEquals(1, response.size)
         response.forEach { (_, description) =>
           assertEquals(numPartitions, description.partitions.size)

@@ -16,15 +16,14 @@
  */
 package org.apache.kafka.tiered.storage.integration;
 
-import kafka.log.LogManager;
 import kafka.server.ReplicaManager;
 
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler;
+import org.apache.kafka.storage.internals.log.LogManager;
 import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
 import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -40,18 +39,18 @@ public class FetchFromLeaderWithCorruptedCheckpointTest extends TieredStorageTes
 
     @Override
     protected void writeTestSpecifications(TieredStorageTestBuilder builder) {
-        final Integer broker0 = 0;
-        final Integer broker1 = 1;
+        final int broker0 = 0;
+        final int broker1 = 1;
         final String topicA = "topicA";
-        final Integer p0 = 0;
-        final Integer partitionCount = 1;
-        final Integer replicationFactor = 2;
-        final Integer maxBatchCountPerSegment = 1;
+        final int p0 = 0;
+        final int partitionCount = 1;
+        final int replicationFactor = 2;
+        final int maxBatchCountPerSegment = 1;
         final boolean enableRemoteLogStorage = true;
-        final Map<Integer, List<Integer>> assignment = mkMap(mkEntry(p0, Arrays.asList(broker0, broker1)));
-        final List<String> checkpointFiles = Arrays.asList(
+        final Map<Integer, List<Integer>> assignment = mkMap(mkEntry(p0, List.of(broker0, broker1)));
+        final List<String> checkpointFiles = List.of(
                 ReplicaManager.HighWatermarkFilename(),
-                LogManager.RecoveryPointCheckpointFile(),
+                LogManager.RECOVERY_POINT_CHECKPOINT_FILE,
                 CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME);
 
         builder.createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment, assignment,

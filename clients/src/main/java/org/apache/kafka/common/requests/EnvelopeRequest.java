@@ -19,8 +19,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.EnvelopeRequestData;
 import org.apache.kafka.common.message.EnvelopeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
 import java.nio.ByteBuffer;
 
@@ -76,8 +76,8 @@ public class EnvelopeRequest extends AbstractRequest {
                                         .setErrorCode(Errors.forException(e).code()));
     }
 
-    public static EnvelopeRequest parse(ByteBuffer buffer, short version) {
-        return new EnvelopeRequest(new EnvelopeRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static EnvelopeRequest parse(Readable readable, short version) {
+        return new EnvelopeRequest(new EnvelopeRequestData(readable, version), version);
     }
 
     @Override

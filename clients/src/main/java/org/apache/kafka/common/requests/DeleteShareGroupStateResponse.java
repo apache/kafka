@@ -21,12 +21,10 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
 import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,9 +63,9 @@ public class DeleteShareGroupStateResponse extends AbstractResponse {
         // No op
     }
 
-    public static DeleteShareGroupStateResponse parse(ByteBuffer buffer, short version) {
+    public static DeleteShareGroupStateResponse parse(Readable readable, short version) {
         return new DeleteShareGroupStateResponse(
-                new DeleteShareGroupStateResponseData(new ByteBufferAccessor(buffer), version)
+                new DeleteShareGroupStateResponseData(readable, version)
         );
     }
 
@@ -105,7 +103,7 @@ public class DeleteShareGroupStateResponse extends AbstractResponse {
 
     public static DeleteShareGroupStateResponseData toErrorResponseData(Uuid topicId, int partitionId, Errors error, String errorMessage) {
         return new DeleteShareGroupStateResponseData().setResults(
-            Collections.singletonList(new DeleteShareGroupStateResponseData.DeleteStateResult()
+            List.of(new DeleteShareGroupStateResponseData.DeleteStateResult()
                 .setTopicId(topicId)
                 .setPartitions(List.of(new DeleteShareGroupStateResponseData.PartitionResult()
                     .setPartition(partitionId)

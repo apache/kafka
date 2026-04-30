@@ -18,9 +18,10 @@ package org.apache.kafka.server.share.fetch;
 
 import org.apache.kafka.common.TopicIdPartition;
 
-import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 /**
  * The PartitionRotateStrategy is used to rotate the partitions based on the respective strategy.
@@ -48,7 +49,7 @@ public interface PartitionRotateStrategy {
      *
      * @return the rotated topicIdPartitions
      */
-    LinkedHashMap<TopicIdPartition, Integer> rotate(LinkedHashMap<TopicIdPartition, Integer> topicIdPartitions, PartitionRotateMetadata metadata);
+    List<TopicIdPartition> rotate(List<TopicIdPartition> topicIdPartitions, PartitionRotateMetadata metadata);
 
     static PartitionRotateStrategy type(StrategyType type) {
         return switch (type) {
@@ -64,8 +65,8 @@ public interface PartitionRotateStrategy {
      *
      * @return the rotated topicIdPartitions
      */
-    static LinkedHashMap<TopicIdPartition, Integer> rotateRoundRobin(
-        LinkedHashMap<TopicIdPartition, Integer> topicIdPartitions,
+    static List<TopicIdPartition> rotateRoundRobin(
+        List<TopicIdPartition> topicIdPartitions,
         PartitionRotateMetadata metadata
     ) {
         if (topicIdPartitions.isEmpty() || topicIdPartitions.size() == 1 || metadata.sessionEpoch < 1) {
@@ -80,20 +81,11 @@ public interface PartitionRotateStrategy {
             return topicIdPartitions;
         }
 
-        // TODO: Once the partition max bytes is removed then the partition will be a linked list and rotation
-        //  will be a simple operation. Else consider using ImplicitLinkedHashCollection.
-        LinkedHashMap<TopicIdPartition, Integer> suffixPartitions = new LinkedHashMap<>(rotateAt);
-        LinkedHashMap<TopicIdPartition, Integer> rotatedPartitions = new LinkedHashMap<>(topicIdPartitions.size());
-        int i = 0;
-        for (Map.Entry<TopicIdPartition, Integer> entry : topicIdPartitions.entrySet()) {
-            if (i < rotateAt) {
-                suffixPartitions.put(entry.getKey(), entry.getValue());
-            } else {
-                rotatedPartitions.put(entry.getKey(), entry.getValue());
-            }
-            i++;
-        }
-        rotatedPartitions.putAll(suffixPartitions);
+        // Avoid modifying the original list, create copy.
+        List<TopicIdPartition> rotatedPartitions = new ArrayList<>(topicIdPartitions);
+        // Elements from the list should move left by the distance provided i.e. if the original list is [1,2,3],
+        // and rotation is by 1, then output should be [2,3,1] and not [3,1,2]. Hence, negate the distance here.
+        Collections.rotate(rotatedPartitions, -1 * rotateAt);
         return rotatedPartitions;
     }
 

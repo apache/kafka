@@ -18,10 +18,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.Map;
 
 public class SyncGroupResponse extends AbstractResponse {
@@ -62,8 +61,8 @@ public class SyncGroupResponse extends AbstractResponse {
         return data.toString();
     }
 
-    public static SyncGroupResponse parse(ByteBuffer buffer, short version) {
-        return new SyncGroupResponse(new SyncGroupResponseData(new ByteBufferAccessor(buffer), version));
+    public static SyncGroupResponse parse(Readable readable, short version) {
+        return new SyncGroupResponse(new SyncGroupResponseData(readable, version));
     }
 
     @Override

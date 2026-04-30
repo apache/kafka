@@ -53,7 +53,8 @@ public class ThreadMetricsTest {
     @Test
     public void shouldGetProcessRatioSensor() {
         final String operation = "process-ratio";
-        final String ratioDescription = "The fraction of time the thread spent on processing active tasks";
+        final String ratioDescription = "The ratio, over a rolling measurement window, of the time this thread spent " +
+            "processing active tasks to the total elapsed time in that window.";
         when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
         when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
 
@@ -148,7 +149,8 @@ public class ThreadMetricsTest {
     @Test
     public void shouldGetPollRatioSensor() {
         final String operation = "poll-ratio";
-        final String ratioDescription = "The fraction of time the thread spent on polling records from consumer";
+        final String ratioDescription = "The ratio, over a rolling measurement window, of the time this thread " +
+            "spent polling records from the consumer to the total elapsed time in that window.";
         when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
         when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
 
@@ -268,7 +270,8 @@ public class ThreadMetricsTest {
     @Test
     public void shouldGetCommitRatioSensor() {
         final String operation = "commit-ratio";
-        final String ratioDescription = "The fraction of time the thread spent on committing all tasks";
+        final String ratioDescription = "The ratio, over a rolling measurement window, of the time this thread spent " +
+            "committing all tasks to the total elapsed time in that window.";
         when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
         when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
 
@@ -327,7 +330,8 @@ public class ThreadMetricsTest {
     @Test
     public void shouldGetPunctuateRatioSensor() {
         final String operation = "punctuate-ratio";
-        final String ratioDescription = "The fraction of time the thread spent on punctuating active tasks";
+        final String ratioDescription = "The ratio, over a rolling measurement window, of the time this thread spent " +
+            "punctuating active tasks to the total elapsed time in that window.";
         when(streamsMetrics.threadLevelSensor(THREAD_ID, operation, RecordingLevel.INFO)).thenReturn(expectedSensor);
         when(streamsMetrics.threadLevelTagMap(THREAD_ID)).thenReturn(tagMap);
 
@@ -435,7 +439,7 @@ public class ThreadMetricsTest {
 
     @Test
     public void shouldAddThreadStateJmxMetric() {
-        final Gauge<StreamThread.State> threadStateProvider = (streamsMetrics, startTime) -> StreamThread.State.RUNNING;
+        final Gauge<String> threadStateProvider = (streamsMetrics, startTime) -> StreamThread.State.RUNNING.name();
         ThreadMetrics.addThreadStateMetric(
                 THREAD_ID,
                 streamsMetrics,

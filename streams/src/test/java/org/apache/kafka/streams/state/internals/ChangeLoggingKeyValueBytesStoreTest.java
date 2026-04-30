@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
@@ -97,7 +98,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.Long(),
-            new StreamsMetricsImpl(new Metrics(), "mock", "processId", new MockTime()),
+            new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
             streamsConfig,
             () -> collector,
             new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
@@ -220,7 +221,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     @Test
     public void shouldGetRecordsWithPrefixKey() {
         store.put(hi, there);
-        store.put(Bytes.increment(hi), world);
+        store.put(ByteUtils.increment(hi), world);
 
         final List<Bytes> keys = new ArrayList<>();
         final List<Bytes> values = new ArrayList<>();

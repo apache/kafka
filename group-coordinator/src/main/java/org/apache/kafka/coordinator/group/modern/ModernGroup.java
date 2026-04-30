@@ -19,14 +19,15 @@ package org.apache.kafka.coordinator.group.modern;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
-import org.apache.kafka.image.ClusterImage;
-import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineInteger;
+import org.apache.kafka.timeline.TimelineLong;
 import org.apache.kafka.timeline.TimelineObject;
 
 import java.util.Collections;
@@ -35,6 +36,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
@@ -84,9 +86,9 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     protected final TimelineHashMap<String, SubscriptionCount> subscribedTopicNames;
 
     /**
-     * The metadata associated with each subscribed topic name.
+     * The metadata hash which is computed based on the all subscribed topics.
      */
-    protected final TimelineHashMap<String, TopicMetadata> subscribedTopicMetadata;
+    protected final TimelineLong metadataHash;
 
     /**
      * The group's subscription type.
@@ -95,11 +97,9 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     protected final TimelineObject<SubscriptionType> subscriptionType;
 
     /**
-     * The target assignment epoch. An assignment epoch smaller than the group epoch
-     * means that a new assignment is required. The assignment epoch is updated when
-     * a new assignment is installed.
+     * The target assignment metadata.
      */
-    protected final TimelineInteger targetAssignmentEpoch;
+    protected final TimelineObject<TargetAssignmentMetadata> targetAssignmentMetadata;
 
     /**
      * The target assignment per member id.
@@ -131,11 +131,12 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         this.snapshotRegistry = Objects.requireNonNull(snapshotRegistry);
         this.groupId = Objects.requireNonNull(groupId);
         this.groupEpoch = new TimelineInteger(snapshotRegistry);
+        this.groupEpoch.set(1);
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicNames = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.subscribedTopicMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.metadataHash = new TimelineLong(snapshotRegistry);
         this.subscriptionType = new TimelineObject<>(snapshotRegistry, HOMOGENEOUS);
-        this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
+        this.targetAssignmentMetadata = new TimelineObject<>(snapshotRegistry, TargetAssignmentMetadata.INITIAL);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.invertedTargetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
     }
@@ -180,16 +181,24 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
      * @return The target assignment epoch.
      */
     public int assignmentEpoch() {
-        return targetAssignmentEpoch.get();
+        return targetAssignmentMetadata.get().assignmentEpoch();
     }
 
     /**
-     * Sets the assignment epoch.
+     * @return The time at which the target assignment calculation finished.
+     */
+    public long assignmentTimestamp() {
+        return targetAssignmentMetadata.get().assignmentTimestamp();
+    }
+
+    /**
+     * Sets the assignment metadata.
      *
      * @param targetAssignmentEpoch The new assignment epoch.
+     * @param targetAssignmentTimestamp The time at which the assignment calculation finished.
      */
-    public void setTargetAssignmentEpoch(int targetAssignmentEpoch) {
-        this.targetAssignmentEpoch.set(targetAssignmentEpoch);
+    public void setTargetAssignmentMetadata(int targetAssignmentEpoch, long targetAssignmentTimestamp) {
+        this.targetAssignmentMetadata.set(new TargetAssignmentMetadata(targetAssignmentEpoch, targetAssignmentTimestamp));
         maybeUpdateGroupState();
     }
 
@@ -348,54 +357,32 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     }
 
     /**
-     * @return An immutable Map of subscription metadata for
-     *         each topic that the consumer group is subscribed to.
+     * @return The metadata hash.
      */
-    public Map<String, TopicMetadata> subscriptionMetadata() {
-        return Collections.unmodifiableMap(subscribedTopicMetadata);
+    public long metadataHash() {
+        return metadataHash.get();
     }
 
     /**
-     * Updates the subscription metadata. This replaces the previous one.
+     * Updates the metadata hash.
      *
-     * @param subscriptionMetadata The new subscription metadata.
+     * @param metadataHash The new metadata hash.
      */
-    public void setSubscriptionMetadata(
-        Map<String, TopicMetadata> subscriptionMetadata
-    ) {
-        this.subscribedTopicMetadata.clear();
-        this.subscribedTopicMetadata.putAll(subscriptionMetadata);
+    public void setMetadataHash(long metadataHash) {
+        this.metadataHash.set(metadataHash);
     }
 
-    /**
-     * Computes the subscription metadata based on the current subscription info.
-     *
-     * @param subscribedTopicNames      Map of topic names to the number of subscribers.
-     * @param topicsImage               The current metadata for all available topics.
-     * @param clusterImage              The current metadata for the Kafka cluster.
-     *
-     * @return An immutable map of subscription metadata for each topic that the consumer group is subscribed to.
-     */
-    public Map<String, TopicMetadata> computeSubscriptionMetadata(
+    public static long computeMetadataHash(
         Map<String, SubscriptionCount> subscribedTopicNames,
-        TopicsImage topicsImage,
-        ClusterImage clusterImage
+        Map<String, Long> topicHashCache,
+        CoordinatorMetadataImage metadataImage
     ) {
-        // Create the topic metadata for each subscribed topic.
-        Map<String, TopicMetadata> newSubscriptionMetadata = new HashMap<>(subscribedTopicNames.size());
-
-        subscribedTopicNames.forEach((topicName, count) -> {
-            TopicImage topicImage = topicsImage.getTopic(topicName);
-            if (topicImage != null) {
-                newSubscriptionMetadata.put(topicName, new TopicMetadata(
-                    topicImage.id(),
-                    topicImage.name(),
-                    topicImage.partitions().size()
-                ));
-            }
-        });
-
-        return Collections.unmodifiableMap(newSubscriptionMetadata);
+        Map<String, Long> topicHash = subscribedTopicNames.keySet().stream()
+            .filter(topicName -> metadataImage.topicMetadata(topicName).isPresent())
+            .collect(Collectors.toMap(
+                topicName -> topicName,
+                topicName -> topicHashCache.computeIfAbsent(topicName, k -> Utils.computeTopicHash(k, metadataImage))));
+        return Utils.computeGroupHash(topicHash);
     }
 
     /**
@@ -546,7 +533,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         }
 
         for (SubscriptionCount subscriberCount : subscribedTopicNames.values()) {
-            if (subscriberCount.byNameCount != numberOfMembers) {
+            if (subscriberCount.byNameCount() != numberOfMembers) {
                 return HETEROGENEOUS;
             }
         }

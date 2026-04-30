@@ -24,13 +24,15 @@ import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignorTest;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.utils.CollectionUtils;
+import org.apache.kafka.common.test.api.Flaky;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -45,6 +47,7 @@ import java.util.Optional;
 
 import static java.util.Collections.emptyList;
 import static org.apache.kafka.clients.consumer.StickyAssignor.serializeTopicPartitionAssignment;
+import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.TEST_NAME_WITH_CONSUMER_RACK;
 import static org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.TEST_NAME_WITH_RACK_CONFIG;
 import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -79,6 +82,14 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
     @Override
     public ByteBuffer generateUserData(List<String> topics, List<TopicPartition> partitions, int generation) {
         return serializeTopicPartitionAssignment(new MemberData(partitions, Optional.of(generation)));
+    }
+
+    @Timeout(30)
+    @ParameterizedTest(name = TEST_NAME_WITH_CONSUMER_RACK)
+    @ValueSource(booleans = {false, true})
+    @Flaky(value = "KAFKA-18797", comment = "Remove this override once the flakiness has been resolved.")
+    public void testLargeAssignmentAndGroupWithUniformSubscription(boolean hasConsumerRack) {
+        super.testLargeAssignmentAndGroupWithUniformSubscription(hasConsumerRack);
     }
 
     @ParameterizedTest(name = TEST_NAME_WITH_RACK_CONFIG)
@@ -301,6 +312,7 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         assertTrue(isFullyBalanced(assignment));
     }
 
+    @SuppressWarnings("removal")
     @ParameterizedTest(name = TEST_NAME_WITH_RACK_CONFIG)
     @EnumSource(RackConfig.class)
     public void testMemberDataWithInconsistentData(RackConfig rackConfig) {
@@ -355,7 +367,11 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
     private Subscription buildSubscriptionWithOldSchema(List<String> topics, List<TopicPartition> partitions, int consumerIndex) {
         Struct struct = new Struct(StickyAssignor.STICKY_ASSIGNOR_USER_DATA_V0);
         List<Struct> topicAssignments = new ArrayList<>();
-        for (Map.Entry<String, List<Integer>> topicEntry : CollectionUtils.groupPartitionsByTopic(partitions).entrySet()) {
+        Map<String, List<Integer>> partitionsByTopic = new HashMap<>();
+        for (TopicPartition tp : partitions) {
+            partitionsByTopic.computeIfAbsent(tp.topic(), t -> new ArrayList<>()).add(tp.partition());
+        }
+        for (Map.Entry<String, List<Integer>> topicEntry : partitionsByTopic.entrySet()) {
             Struct topicAssignment = new Struct(StickyAssignor.TOPIC_ASSIGNMENT);
             topicAssignment.set(StickyAssignor.TOPIC_KEY_NAME, topicEntry.getKey());
             topicAssignment.set(StickyAssignor.PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());

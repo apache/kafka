@@ -20,20 +20,18 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
 
@@ -179,7 +177,7 @@ public class FetchBufferTest {
         try (FetchBuffer fetchBuffer = new FetchBuffer(logContext)) {
             final Thread waitingThread = new Thread(() -> {
                 final Timer timer = time.timer(Duration.ofMinutes(1));
-                fetchBuffer.awaitNotEmpty(timer);
+                fetchBuffer.awaitWakeup(timer);
             });
             waitingThread.start();
             fetchBuffer.wakeup();
@@ -198,14 +196,13 @@ public class FetchBufferTest {
                 tp,
                 partitionData,
                 metricsAggregator,
-                0L,
-                ApiKeys.FETCH.latestVersion());
+                0L);
     }
 
     /**
      * This is a handy utility method for returning a set from a varargs array.
      */
     private static Set<TopicPartition> partitions(TopicPartition... partitions) {
-        return new HashSet<>(Arrays.asList(partitions));
+        return Set.of(partitions);
     }
 }

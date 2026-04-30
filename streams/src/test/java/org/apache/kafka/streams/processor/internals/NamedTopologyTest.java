@@ -107,9 +107,9 @@ public class NamedTopologyTest {
         final NamedTopology topology2 = builder2.build();
         final NamedTopology topology3 = builder3.build();
         streams.start(asList(topology1, topology2, topology3));
-        assertThat(streams.getTopologyByName("topology-1").get(), equalTo(topology1));
-        assertThat(streams.getTopologyByName("topology-2").get(), equalTo(topology2));
-        assertThat(streams.getTopologyByName("topology-3").get(), equalTo(topology3));
+        assertThat(streams.getTopologyByName("topology-1").orElseThrow(), equalTo(topology1));
+        assertThat(streams.getTopologyByName("topology-2").orElseThrow(), equalTo(topology2));
+        assertThat(streams.getTopologyByName("topology-3").orElseThrow(), equalTo(topology3));
     }
 
     @Test

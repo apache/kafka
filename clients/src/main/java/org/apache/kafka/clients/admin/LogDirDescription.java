@@ -33,16 +33,22 @@ public class LogDirDescription {
     private final ApiException error;
     private final OptionalLong totalBytes;
     private final OptionalLong usableBytes;
+    private final boolean isCordoned;
 
     public LogDirDescription(ApiException error, Map<TopicPartition, ReplicaInfo> replicaInfos) {
-        this(error, replicaInfos, UNKNOWN_VOLUME_BYTES, UNKNOWN_VOLUME_BYTES);
+        this(error, replicaInfos, UNKNOWN_VOLUME_BYTES, UNKNOWN_VOLUME_BYTES, false);
     }
 
     public LogDirDescription(ApiException error, Map<TopicPartition, ReplicaInfo> replicaInfos, long totalBytes, long usableBytes) {
+        this(error, replicaInfos, totalBytes, usableBytes, false);
+    }
+
+    public LogDirDescription(ApiException error, Map<TopicPartition, ReplicaInfo> replicaInfos, long totalBytes, long usableBytes, boolean isCordoned) {
         this.error = error;
         this.replicaInfos = replicaInfos;
         this.totalBytes = (totalBytes == UNKNOWN_VOLUME_BYTES) ? OptionalLong.empty() : OptionalLong.of(totalBytes);
         this.usableBytes = (usableBytes == UNKNOWN_VOLUME_BYTES) ? OptionalLong.empty() : OptionalLong.of(usableBytes);
+        this.isCordoned = isCordoned;
     }
 
     /**
@@ -67,6 +73,7 @@ public class LogDirDescription {
     /**
      * The total size of the volume this log directory is on or empty if the broker did not return a value.
      * For volumes larger than Long.MAX_VALUE, Long.MAX_VALUE is returned.
+     * This value does not include the size of data stored in remote storage.
      */
     public OptionalLong totalBytes() {
         return totalBytes;
@@ -75,9 +82,17 @@ public class LogDirDescription {
     /**
      * The usable size on the volume this log directory is on or empty if the broker did not return a value.
      * For usable sizes larger than Long.MAX_VALUE, Long.MAX_VALUE is returned.
+     * This value does not include the size of data stored in remote storage.
      */
     public OptionalLong usableBytes() {
         return usableBytes;
+    }
+
+    /**
+     * Whether this log directory is cordoned or not.
+     */
+    public boolean isCordoned() {
+        return isCordoned;
     }
 
     @Override
@@ -87,6 +102,7 @@ public class LogDirDescription {
                 ", error=" + error +
                 ", totalBytes=" + totalBytes +
                 ", usableBytes=" + usableBytes +
+                ", isCordoned=" + isCordoned +
                 ')';
     }
 }

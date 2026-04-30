@@ -18,18 +18,20 @@
   "type": "request",
   "listeners": ["broker"],
   "name": "ReadShareGroupStateSummaryRequest",
-  "validVersions": "0",
+  // Version 0 is the initial version (KIP-932).
+  //
+  // Version 1 introduces DeliveryCompleteCount in the response (KIP-1226).
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
-  "latestVersionUnstable": true,
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+",
-      "about":"The group identifier." },
+      "about": "The group identifier." },
     { "name": "Topics", "type": "[]ReadStateSummaryData", "versions": "0+",
       "about": "The data for the topics.", "fields": [
       { "name": "TopicId", "type": "uuid", "versions": "0+",
         "about": "The topic identifier." },
       { "name": "Partitions", "type": "[]PartitionData", "versions": "0+",
-        "about":  "The data for the partitions.", "fields": [
+        "about": "The data for the partitions.", "fields": [
         { "name": "Partition", "type": "int32", "versions": "0+",
           "about": "The partition index." },
         { "name": "LeaderEpoch", "type": "int32", "versions": "0+",

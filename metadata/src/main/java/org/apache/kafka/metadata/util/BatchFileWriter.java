@@ -20,7 +20,7 @@ package org.apache.kafka.metadata.util;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
-import org.apache.kafka.common.record.ControlRecordUtils;
+import org.apache.kafka.common.record.internal.ControlRecordUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.MetadataRecordSerde;
@@ -32,7 +32,6 @@ import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.Collections;
 import java.util.List;
 
 import static org.apache.kafka.raft.KafkaRaftClient.MAX_BATCH_SIZE_BYTES;
@@ -61,7 +60,7 @@ public class BatchFileWriter implements AutoCloseable {
     }
 
     public void append(ApiMessageAndVersion apiMessageAndVersion) {
-        batchAccumulator.append(0, Collections.singletonList(apiMessageAndVersion), false);
+        batchAccumulator.append(0, List.of(apiMessageAndVersion), false);
     }
 
     public void append(List<ApiMessageAndVersion> messageBatch) {

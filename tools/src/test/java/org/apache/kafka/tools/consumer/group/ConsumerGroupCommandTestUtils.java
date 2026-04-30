@@ -20,16 +20,11 @@ package org.apache.kafka.tools.consumer.group;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.common.Feature;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -38,56 +33,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import static org.apache.kafka.common.test.api.Type.CO_KRAFT;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 
 /**
- * The old test framework {@link kafka.api.BaseConsumerTest#getTestQuorumAndGroupProtocolParametersAll} test for the following cases:
- * <ul>
- *     <li>(KRAFT server) with (group.coordinator.new.enable=true) with (classic group protocol) = 1 case</li>
- *     <li>(KRAFT server) with (group.coordinator.new.enable=true) with (consumer group protocol) = 1 case</li>
- * </ul>
- * <p>
- * The new test framework run seven cases for the following cases:
- * <ul>
- *     <li>(KRAFT / CO_KRAFT servers) with (group.coordinator.new.enable=false) with (classic group protocol) = 2 cases</li>
- *     <li>(KRAFT / CO_KRAFT servers) with (group.coordinator.new.enable=true) with (classic group protocol) = 2 cases</li>
- *     <li>(KRAFT / CO_KRAFT servers) with (group.coordinator.new.enable=true) with (consumer group protocol) = 2 cases</li>
- * </ul>
- * <p>
- * We can reduce the number of cases as same as the old test framework by using the following methods:
- * <ul>
- *     <li>(CO_KRAFT servers) with (group.coordinator.new.enable=true) with (classic / consumer group protocols) = 2 cases</li>
- * </ul>
- * <ul>
- *     <li>(KRAFT server) with (group.coordinator.new.enable=false) with (classic group protocol) = 1 case</li>
- * </ul>
+ * This class provides methods to build and manage consumer instances.
  */
 class ConsumerGroupCommandTestUtils {
 
     private ConsumerGroupCommandTestUtils() {
-    }
-
-    static List<ClusterConfig> generator() {
-        Map<String, String> serverProperties = new HashMap<>();
-        serverProperties.put(OFFSETS_TOPIC_PARTITIONS_CONFIG, "1");
-        serverProperties.put(OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
-        serverProperties.put(GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "1000");
-        serverProperties.put(CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, "500");
-        serverProperties.put(CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, "500");
-
-        return Collections.singletonList(ClusterConfig.defaultBuilder()
-                .setTypes(Collections.singleton(CO_KRAFT))
-                .setServerProperties(serverProperties)
-                .setTags(Collections.singletonList("kraftGroupCoordinator"))
-                .setFeatures(Utils.mkMap(
-                    Utils.mkEntry(Feature.TRANSACTION_VERSION, (short) 2),
-                    Utils.mkEntry(Feature.GROUP_VERSION, (short) 1)))
-                .build());
     }
 
     static <T> AutoCloseable buildConsumers(int numberOfConsumers,
@@ -102,7 +54,7 @@ class ConsumerGroupCommandTestUtils {
                                             String topic,
                                             Supplier<KafkaConsumer<T, T>> consumerSupplier) {
         return buildConsumers(numberOfConsumers, syncCommit, consumerSupplier,
-                consumer -> consumer.subscribe(Collections.singleton(topic)));
+                consumer -> consumer.subscribe(Set.of(topic)));
     }
 
     static <T> AutoCloseable buildConsumers(

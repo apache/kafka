@@ -20,10 +20,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.DescribeLogDirsRequestData;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.protocol.Readable;
 
 public class DescribeLogDirsRequest extends AbstractRequest {
 
@@ -69,7 +67,7 @@ public class DescribeLogDirsRequest extends AbstractRequest {
         return data.topics() == null;
     }
 
-    public static DescribeLogDirsRequest parse(ByteBuffer buffer, short version) {
-        return new DescribeLogDirsRequest(new DescribeLogDirsRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static DescribeLogDirsRequest parse(Readable readable, short version) {
+        return new DescribeLogDirsRequest(new DescribeLogDirsRequestData(readable, version), version);
     }
 }

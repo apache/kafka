@@ -18,8 +18,10 @@
 package org.apache.kafka.image.loader;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.AbortTransactionRecord;
 import org.apache.kafka.common.metadata.BeginTransactionRecord;
+import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.EndTransactionRecord;
 import org.apache.kafka.common.metadata.NoOpRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
@@ -28,6 +30,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -38,11 +41,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.OptionalInt;
-import java.util.stream.Collectors;
+import java.util.Properties;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -65,7 +66,7 @@ public class MetadataBatchLoaderTest {
 
     static {
         {
-            TOPIC_TXN_BATCH_1 = Arrays.asList(
+            TOPIC_TXN_BATCH_1 = List.of(
                 new ApiMessageAndVersion(new BeginTransactionRecord().setName("txn-1"), (short) 0),
                 new ApiMessageAndVersion(new TopicRecord()
                     .setName("foo")
@@ -75,7 +76,7 @@ public class MetadataBatchLoaderTest {
                     .setTopicId(TOPIC_FOO), (short) 0)
             );
 
-            TOPIC_TXN_BATCH_2 = Arrays.asList(
+            TOPIC_TXN_BATCH_2 = List.of(
                 new ApiMessageAndVersion(new PartitionRecord()
                     .setPartitionId(1)
                     .setTopicId(TOPIC_FOO), (short) 0),
@@ -85,7 +86,7 @@ public class MetadataBatchLoaderTest {
                 new ApiMessageAndVersion(new EndTransactionRecord(), (short) 0)
             );
 
-            TOPIC_NO_TXN_BATCH = Arrays.asList(
+            TOPIC_NO_TXN_BATCH = List.of(
                 new ApiMessageAndVersion(new TopicRecord()
                     .setName("bar")
                     .setTopicId(TOPIC_BAR), (short) 0),
@@ -97,13 +98,13 @@ public class MetadataBatchLoaderTest {
                     .setTopicId(TOPIC_BAR), (short) 0)
             );
 
-            TXN_BEGIN_SINGLETON = Collections.singletonList(
+            TXN_BEGIN_SINGLETON = List.of(
                 new ApiMessageAndVersion(new BeginTransactionRecord().setName("txn-1"), (short) 0));
 
-            TXN_END_SINGLETON = Collections.singletonList(
+            TXN_END_SINGLETON = List.of(
                 new ApiMessageAndVersion(new EndTransactionRecord(), (short) 0));
 
-            TXN_ABORT_SINGLETON = Collections.singletonList(
+            TXN_ABORT_SINGLETON = List.of(
                 new ApiMessageAndVersion(new AbortTransactionRecord(), (short) 0));
         }
     }
@@ -111,7 +112,7 @@ public class MetadataBatchLoaderTest {
     static List<ApiMessageAndVersion> noOpRecords(int n) {
         return IntStream.range(0, n)
                 .mapToObj(__ -> new ApiMessageAndVersion(new NoOpRecord(), (short) 0))
-                .collect(Collectors.toList());
+                .toList();
     }
 
 
@@ -151,7 +152,8 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             new MockFaultHandler("testAlignedTransactionBatches"),
-            updater
+            updater,
+            SupportedConfigChecker.TRUE
         );
 
         batchLoader.resetToImage(MetadataImage.EMPTY);
@@ -187,7 +189,8 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             new MockFaultHandler("testSingletonBeginAndEnd"),
-            updater
+            updater,
+            SupportedConfigChecker.TRUE
         );
 
         // All in one commit
@@ -236,7 +239,8 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             faultHandler,
-            updater
+            updater,
+            SupportedConfigChecker.TRUE
         );
 
         Batch<ApiMessageAndVersion> batch1 = Batch.data(
@@ -266,7 +270,8 @@ public class MetadataBatchLoaderTest {
                 new LogContext(),
                 new MockTime(),
                 faultHandler,
-                updater
+                updater,
+                SupportedConfigChecker.TRUE
         );
 
         // First batch gets loaded fine
@@ -299,7 +304,8 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             faultHandler,
-            updater
+            updater,
+            SupportedConfigChecker.TRUE
         );
 
         // First batch gets loaded fine
@@ -336,7 +342,8 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             faultHandler,
-            updater
+            updater,
+            SupportedConfigChecker.TRUE
         );
 
         batchLoader.resetToImage(MetadataImage.EMPTY);
@@ -420,7 +427,8 @@ public class MetadataBatchLoaderTest {
             new LogContext(),
             new MockTime(),
             new MockFaultHandler("testOneTransactionInMultipleBatches"),
-            updater
+            updater,
+            SupportedConfigChecker.TRUE
         );
 
         batchLoader.resetToImage(MetadataImage.EMPTY);
@@ -450,6 +458,48 @@ public class MetadataBatchLoaderTest {
         } else {
             assertNotNull(updater.latestImage.topics().getTopic("bar"));
         }
+    }
+
+    @Test
+    public void testUnsupportedConfigFilteredInBatch() {
+        SupportedConfigChecker checker = (type, name) ->
+            !(type == ConfigResource.Type.TOPIC && name.equals("unsupported.config"));
+
+        MockMetadataUpdater updater = new MockMetadataUpdater();
+        MetadataBatchLoader batchLoader = new MetadataBatchLoader(
+            new LogContext(),
+            new MockTime(),
+            new MockFaultHandler("testUnsupportedConfigFilteredInBatch"),
+            updater,
+            checker
+        );
+
+        List<ApiMessageAndVersion> records = List.of(
+            new ApiMessageAndVersion(new TopicRecord()
+                .setName("foo")
+                .setTopicId(TOPIC_FOO), (short) 0),
+            new ApiMessageAndVersion(new ConfigRecord()
+                .setResourceType(ConfigResource.Type.TOPIC.id())
+                .setResourceName("foo")
+                .setName("unsupported.config")
+                .setValue("some-value"), (short) 0),
+            new ApiMessageAndVersion(new ConfigRecord()
+                .setResourceType(ConfigResource.Type.TOPIC.id())
+                .setResourceName("foo")
+                .setName("retention.ms")
+                .setValue("1000"), (short) 0)
+        );
+
+        Batch<ApiMessageAndVersion> batch = Batch.data(10, 42, 0, 100, records);
+        batchLoader.resetToImage(MetadataImage.EMPTY);
+        batchLoader.loadBatch(batch, LEADER_AND_EPOCH);
+        batchLoader.maybeFlushBatches(LEADER_AND_EPOCH, true);
+
+        assertEquals(1, updater.updates);
+        ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, "foo");
+        Properties props = updater.latestImage.configs().configProperties(resource);
+        assertFalse(props.containsKey("unsupported.config"));
+        assertEquals("1000", props.getProperty("retention.ms"));
     }
 
     @Test

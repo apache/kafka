@@ -25,15 +25,14 @@ import java.util.Set;
 
 /**
  * The partition assignment for a modern group member.
+ *
+ * @param partitions The partitions assigned to this member keyed by topicId.
+ *                   The map will not be made immutable, since the server-side assignors rely on
+ *                   being able to mutate the map while building new assignments.
  */
-public class MemberAssignmentImpl implements MemberAssignment {
-    /**
-     * The partitions assigned to this member keyed by topicId.
-     */
-    private final Map<Uuid, Set<Integer>> partitions;
-
-    public MemberAssignmentImpl(Map<Uuid, Set<Integer>> partitions) {
-        this.partitions = Objects.requireNonNull(partitions);
+public record MemberAssignmentImpl(Map<Uuid, Set<Integer>> partitions) implements MemberAssignment {
+    public MemberAssignmentImpl {
+        Objects.requireNonNull(partitions);
     }
 
     /**
@@ -42,19 +41,6 @@ public class MemberAssignmentImpl implements MemberAssignment {
     @Override
     public Map<Uuid, Set<Integer>> partitions() {
         return this.partitions;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        MemberAssignmentImpl that = (MemberAssignmentImpl) o;
-        return partitions.equals(that.partitions);
-    }
-
-    @Override
-    public int hashCode() {
-        return partitions.hashCode();
     }
 
     @Override

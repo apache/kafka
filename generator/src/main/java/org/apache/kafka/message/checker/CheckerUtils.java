@@ -67,7 +67,7 @@ class CheckerUtils {
     }
 
     /**
-     * Validate the a field doesn't have tagged versions that are outside of the top-level flexible
+     * Validate that a field doesn't have tagged versions that are outside of the top-level flexible
      * versions.
      *
      * @param what                      A description of the field.
@@ -121,18 +121,34 @@ class CheckerUtils {
     }
 
     /**
-     * Read a MessageSpec file from remote git repo.
+     * Read the file from the specified git reference.
      *
-     * @param filePath The file to read from remote git repo.
-     * @param ref The specific git reference to be used for testing.
+     * @param filePath The fully qualified file path. The git directory will be derived from this.
+     * @param gitRef The specific git reference to be used for comparison.
      * @return The file contents.
      */
-    static String getDataFromGit(String filePath, Path gitPath, String ref) throws IOException {
-        Git git = Git.open(new File(gitPath + "/.git"));
+    static String readFileFromGitRef(String filePath, String gitRef) throws IOException {
+        Path fileAbsolutePath = Paths.get(filePath).toAbsolutePath();
+
+        // traverse up parent directories until the .git directory is found
+        Path projectRoot = fileAbsolutePath.getParent();
+        if (projectRoot == null) {
+            throw new RuntimeException("The file path provided does not have a parent directory");
+        }
+        while (!Files.exists(projectRoot.resolve(".git"))) {
+            projectRoot = projectRoot.getParent();
+            if (projectRoot == null) {
+                throw new RuntimeException("Invalid path, need to be within a Git repository");
+            }
+        }
+
+        String pathFromProjectRoot = projectRoot.relativize(fileAbsolutePath).toString();
+
+        Git git = Git.open(Paths.get(projectRoot.toString(), ".git").toFile());
         Repository repository = git.getRepository();
-        Ref head = repository.getRefDatabase().findRef(ref);
+        Ref head = repository.getRefDatabase().findRef(gitRef);
         if (head == null) {
-            throw new IllegalStateException("Cannot find " + ref + " in the repository.");
+            throw new IllegalStateException("Cannot find " + gitRef + " in the repository.");
         }
 
         try (RevWalk revWalk = new RevWalk(repository)) {
@@ -141,9 +157,9 @@ class CheckerUtils {
             try (TreeWalk treeWalk = new TreeWalk(repository)) {
                 treeWalk.addTree(tree);
                 treeWalk.setRecursive(true);
-                treeWalk.setFilter(PathFilter.create(String.valueOf(Paths.get(filePath.substring(1)))));
+                treeWalk.setFilter(PathFilter.create(String.valueOf(Paths.get(pathFromProjectRoot))));
                 if (!treeWalk.next()) {
-                    throw new IllegalStateException("Did not find expected file " + filePath.substring(1));
+                    throw new IllegalStateException("Did not find expected file " + pathFromProjectRoot);
                 }
                 ObjectId objectId = treeWalk.getObjectId(0);
                 ObjectLoader loader = repository.open(objectId);

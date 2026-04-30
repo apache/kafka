@@ -17,8 +17,11 @@
 package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.MetadataImageBuilder;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentMemberSpec;
@@ -44,7 +47,7 @@ import java.util.TreeMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedRecordsEquals;
-import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord;
+import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord;
 import static org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.createAssignmentMemberSpec;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
@@ -69,12 +72,13 @@ public class TargetAssignmentBuilderTest {
         when(topology.isReady()).thenReturn(false);
 
         TargetAssignmentBuilder builder = new TargetAssignmentBuilder(groupId, groupEpoch, assignor, assignmentConfigs)
+            .withTime(new MockTime(0, 12345L, 12345L))
             .withTopology(topology);
 
         TargetAssignmentBuilder.TargetAssignmentResult result = builder.build();
 
         List<CoordinatorRecord> expectedRecords = List.of(
-            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, groupEpoch)
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, groupEpoch, 12345L)
         );
 
         assertEquals(expectedRecords, result.records());
@@ -122,13 +126,15 @@ public class TargetAssignmentBuilderTest {
     public void testEmpty() {
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
-            20
+            20,
+            12345L
         );
 
         org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
-        assertEquals(List.of(newStreamsGroupTargetAssignmentEpochRecord(
+        assertEquals(List.of(newStreamsGroupTargetAssignmentMetadataRecord(
             "my-group",
-            20
+            20,
+            12345L
         )), result.records());
         assertEquals(Map.of(), result.targetAssignment());
     }
@@ -139,7 +145,8 @@ public class TargetAssignmentBuilderTest {
     public void testAssignmentHasNotChanged(TaskRole taskRole) {
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
-            20
+            20,
+            12345L
         );
 
         String fooSubtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 6);
@@ -167,9 +174,10 @@ public class TargetAssignmentBuilderTest {
 
         org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
 
-        assertEquals(List.of(newStreamsGroupTargetAssignmentEpochRecord(
+        assertEquals(List.of(newStreamsGroupTargetAssignmentMetadataRecord(
             "my-group",
-            20
+            20,
+            12345L
         )), result.records());
 
         Map<String, TasksTuple> expectedAssignment = new HashMap<>();
@@ -191,7 +199,8 @@ public class TargetAssignmentBuilderTest {
     public void testAssignmentSwapped(TaskRole taskRole) {
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
-            20
+            20,
+            12345L
         );
 
         String fooSubtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 6);
@@ -232,9 +241,10 @@ public class TargetAssignmentBuilderTest {
             ))
         )), result.records().subList(0, 2));
 
-        assertEquals(newStreamsGroupTargetAssignmentEpochRecord(
+        assertEquals(newStreamsGroupTargetAssignmentMetadataRecord(
             "my-group",
-            20
+            20,
+            12345L
         ), result.records().get(2));
 
         Map<String, TasksTuple> expectedAssignment = new HashMap<>();
@@ -256,7 +266,8 @@ public class TargetAssignmentBuilderTest {
     public void testNewMember(TaskRole taskRole) {
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
-            20
+            20,
+            12345L
         );
 
         String fooSubtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 6);
@@ -308,9 +319,10 @@ public class TargetAssignmentBuilderTest {
             ))
         )), result.records().subList(0, 3));
 
-        assertEquals(newStreamsGroupTargetAssignmentEpochRecord(
+        assertEquals(newStreamsGroupTargetAssignmentMetadataRecord(
             "my-group",
-            20
+            20,
+            12345L
         ), result.records().get(3));
 
         Map<String, TasksTuple> expectedAssignment = new HashMap<>();
@@ -336,7 +348,8 @@ public class TargetAssignmentBuilderTest {
     public void testUpdateMember(TaskRole taskRole) {
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
-            20
+            20,
+            12345L
         );
 
         String fooSubtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 6);
@@ -396,9 +409,10 @@ public class TargetAssignmentBuilderTest {
             ))
         )), result.records().subList(0, 3));
 
-        assertEquals(newStreamsGroupTargetAssignmentEpochRecord(
+        assertEquals(newStreamsGroupTargetAssignmentMetadataRecord(
             "my-group",
-            20
+            20,
+            12345L
         ), result.records().get(3));
 
         Map<String, TasksTuple> expectedAssignment = new HashMap<>();
@@ -424,7 +438,8 @@ public class TargetAssignmentBuilderTest {
     public void testPartialAssignmentUpdate(TaskRole taskRole) {
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
-            20
+            20,
+            12345L
         );
 
         String fooSubtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 6);
@@ -476,9 +491,10 @@ public class TargetAssignmentBuilderTest {
             ))
         )), result.records().subList(0, 2));
 
-        assertEquals(newStreamsGroupTargetAssignmentEpochRecord(
+        assertEquals(newStreamsGroupTargetAssignmentMetadataRecord(
             "my-group",
-            20
+            20,
+            12345L
         ), result.records().get(2));
 
         Map<String, TasksTuple> expectedAssignment = new HashMap<>();
@@ -504,7 +520,8 @@ public class TargetAssignmentBuilderTest {
     public void testDeleteMember(TaskRole taskRole) {
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
-            20
+            20,
+            12345L
         );
 
         String fooSubtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 6);
@@ -552,9 +569,10 @@ public class TargetAssignmentBuilderTest {
             ))
         )), result.records().subList(0, 2));
 
-        assertEquals(newStreamsGroupTargetAssignmentEpochRecord(
+        assertEquals(newStreamsGroupTargetAssignmentMetadataRecord(
             "my-group",
-            20
+            20,
+            12345L
         ), result.records().get(2));
 
         Map<String, TasksTuple> expectedAssignment = new HashMap<>();
@@ -576,7 +594,8 @@ public class TargetAssignmentBuilderTest {
     public void testReplaceStaticMember(TaskRole taskRole) {
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
-            20
+            20,
+            12345L
         );
 
         String fooSubtopologyId = context.addSubtopologyWithSingleSourceTopic("foo", 6);
@@ -630,9 +649,10 @@ public class TargetAssignmentBuilderTest {
             ))
         )), result.records().subList(0, 1));
 
-        assertEquals(newStreamsGroupTargetAssignmentEpochRecord(
+        assertEquals(newStreamsGroupTargetAssignmentMetadataRecord(
             "my-group",
-            20
+            20,
+            12345L
         ), result.records().get(1));
 
         Map<String, TasksTuple> expectedAssignment = new HashMap<>();
@@ -657,9 +677,10 @@ public class TargetAssignmentBuilderTest {
 
         private final String groupId;
         private final int groupEpoch;
+        private final long assignmentTimestamp;
         private final TaskAssignor assignor = mock(TaskAssignor.class);
         private final SortedMap<String, ConfiguredSubtopology> subtopologies = new TreeMap<>();
-        private final ConfiguredTopology topology = new ConfiguredTopology(0, Optional.of(subtopologies), new HashMap<>(),
+        private final ConfiguredTopology topology = new ConfiguredTopology(0, 0, Optional.of(subtopologies), new HashMap<>(),
             Optional.empty());
         private final Map<String, StreamsGroupMember> members = new HashMap<>();
         private final Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> subscriptionMetadata = new HashMap<>();
@@ -671,10 +692,12 @@ public class TargetAssignmentBuilderTest {
 
         public TargetAssignmentBuilderTestContext(
             String groupId,
-            int groupEpoch
+            int groupEpoch,
+            long assignmentTimestamp
         ) {
             this.groupId = groupId;
             this.groupEpoch = groupEpoch;
+            this.assignmentTimestamp = assignmentTimestamp;
         }
 
         public void addGroupMember(
@@ -711,13 +734,8 @@ public class TargetAssignmentBuilderTest {
         ) {
             String subtopologyId = Uuid.randomUuid().toString();
             Uuid topicId = Uuid.randomUuid();
-            subscriptionMetadata.put(topicName, new org.apache.kafka.coordinator.group.streams.TopicMetadata(
-                topicId,
-                topicName,
-                numTasks
-            ));
             topicsImageBuilder = topicsImageBuilder.addTopic(topicId, topicName, numTasks);
-            subtopologies.put(subtopologyId, new ConfiguredSubtopology(Set.of(topicId.toString()), Map.of(), Set.of(), Map.of()));
+            subtopologies.put(subtopologyId, new ConfiguredSubtopology(numTasks, Set.of(topicId.toString()), Map.of(), Set.of(), Map.of()));
 
             return subtopologyId;
         }
@@ -805,8 +823,10 @@ public class TargetAssignmentBuilderTest {
                 }
             });
 
+            CoordinatorMetadataImage metadataImage = new KRaftCoordinatorMetadataImage(topicsImageBuilder.build());
+
             // Prepare the expected topology metadata.
-            TopologyMetadata topologyMetadata = new TopologyMetadata(subscriptionMetadata, subtopologies);
+            TopologyMetadata topologyMetadata = new TopologyMetadata(metadataImage, subtopologies);
 
             // Prepare the expected assignment spec.
             GroupSpecImpl groupSpec = new GroupSpecImpl(memberSpecs, new HashMap<>());
@@ -822,7 +842,7 @@ public class TargetAssignmentBuilderTest {
                 .withMembers(members)
                 .withTopology(topology)
                 .withStaticMembers(staticMembers)
-                .withPartitionMetadata(subscriptionMetadata)
+                .withMetadataImage(metadataImage)
                 .withTargetAssignment(targetAssignment);
 
             // Add the updated members or delete the deleted members.
@@ -835,7 +855,9 @@ public class TargetAssignmentBuilderTest {
             });
 
             // Execute the builder.
-            org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult result = builder.build();
+            org.apache.kafka.coordinator.group.streams.TargetAssignmentBuilder.TargetAssignmentResult result = builder
+                .withTime(new MockTime(0, assignmentTimestamp, assignmentTimestamp))
+                .build();
 
             // Verify that the assignor was called once with the expected
             // assignment spec.

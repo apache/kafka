@@ -58,7 +58,7 @@ public class RemoveMembersFromConsumerGroupResultTest {
     }
 
     @Test
-    public void testTopLevelErrorConstructor() throws InterruptedException {
+    public void testTopLevelErrorConstructor() {
         memberFutures.completeExceptionally(Errors.GROUP_AUTHORIZATION_FAILED.exception());
         RemoveMembersFromConsumerGroupResult topLevelErrorResult =
             new RemoveMembersFromConsumerGroupResult(memberFutures, membersToRemove);

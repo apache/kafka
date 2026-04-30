@@ -33,6 +33,7 @@ import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.authorizer.AclMutator;
@@ -48,6 +49,7 @@ import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.AuthorizerServerInfo;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.mutable.BoundedListTooLongException;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
@@ -55,8 +57,6 @@ import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -71,6 +71,7 @@ import static org.apache.kafka.common.acl.AclPermissionType.ALLOW;
 import static org.apache.kafka.common.resource.PatternType.LITERAL;
 import static org.apache.kafka.common.resource.PatternType.MATCH;
 import static org.apache.kafka.common.resource.ResourceType.TOPIC;
+import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 import static org.apache.kafka.metadata.authorizer.StandardAclWithIdTest.TEST_ACLS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -165,7 +166,7 @@ public class AclControlManagerTest {
     }
 
     static class MockClusterMetadataAuthorizer implements ClusterMetadataAuthorizer {
-        Map<Uuid, StandardAcl> acls = Collections.emptyMap();
+        Map<Uuid, StandardAcl> acls = Map.of();
 
         @Override
         public void setAclMutator(AclMutator aclMutator) {
@@ -312,7 +313,7 @@ public class AclControlManagerTest {
         assertFalse(manager.idToAcl().isEmpty());
 
         ControllerResult<List<AclDeleteResult>> deleteResult =
-            manager.deleteAcls(Arrays.asList(
+            manager.deleteAcls(List.of(
                 new AclBindingFilter(
                     new ResourcePatternFilter(ResourceType.ANY, null, LITERAL),
                         AccessControlEntryFilter.ANY),
@@ -326,9 +327,9 @@ public class AclControlManagerTest {
             assertEquals(Optional.empty(), result.exception());
             deleted.add(result.aclBinding());
         }
-        assertEquals(new HashSet<>(Arrays.asList(
+        assertEquals(Set.of(
             TEST_ACLS.get(0).toBinding(),
-                TEST_ACLS.get(2).toBinding())), deleted);
+                TEST_ACLS.get(2).toBinding()), deleted);
         assertEquals(InvalidRequestException.class,
             deleteResult.response().get(1).exception().get().getClass());
         RecordTestUtils.replayAll(manager, deleteResult.records());
@@ -339,31 +340,104 @@ public class AclControlManagerTest {
     }
 
     @Test
-    public void testDeleteDedupe() {
+    public void testCreateDedupe() {
         AclControlManager manager = new AclControlManager.Builder().build();
-        MockClusterMetadataAuthorizer authorizer = new MockClusterMetadataAuthorizer();
-        authorizer.loadSnapshot(manager.idToAcl());
 
         AclBinding aclBinding = new AclBinding(new ResourcePattern(TOPIC, "topic-1", LITERAL),
                 new AccessControlEntry("User:user", "10.0.0.1", AclOperation.ALL, ALLOW));
 
-        ControllerResult<List<AclCreateResult>> createResult = manager.createAcls(Collections.singletonList(aclBinding));
+        ControllerResult<List<AclCreateResult>> createResult = manager.createAcls(List.of(aclBinding, aclBinding));
+        RecordTestUtils.replayAll(manager, createResult.records());
+        assertEquals(1, createResult.records().size());
+        assertEquals(1, manager.idToAcl().size());
+
+        createResult = manager.createAcls(List.of(aclBinding));
+        assertEquals(0, createResult.records().size());
+        assertEquals(1, manager.idToAcl().size());
+    }
+
+    @Test
+    public void testDeleteDedupe() {
+        AclControlManager manager = new AclControlManager.Builder().build();
+
+        AclBinding aclBinding = new AclBinding(new ResourcePattern(TOPIC, "topic-1", LITERAL),
+                new AccessControlEntry("User:user", "10.0.0.1", AclOperation.ALL, ALLOW));
+
+        ControllerResult<List<AclCreateResult>> createResult = manager.createAcls(List.of(aclBinding));
+        RecordTestUtils.replayAll(manager, createResult.records());
         Uuid id = ((AccessControlEntryRecord) createResult.records().get(0).message()).id();
         assertEquals(1, createResult.records().size());
 
-        ControllerResult<List<AclDeleteResult>> deleteAclResultsAnyFilter = manager.deleteAcls(Collections.singletonList(AclBindingFilter.ANY));
+        ControllerResult<List<AclDeleteResult>> deleteAclResultsAnyFilter = manager.deleteAcls(List.of(AclBindingFilter.ANY));
         assertEquals(1, deleteAclResultsAnyFilter.records().size());
         assertEquals(id, ((RemoveAccessControlEntryRecord) deleteAclResultsAnyFilter.records().get(0).message()).id());
         assertEquals(1, deleteAclResultsAnyFilter.response().size());
 
-        ControllerResult<List<AclDeleteResult>> deleteAclResultsSpecificFilter = manager.deleteAcls(Collections.singletonList(aclBinding.toFilter()));
+        ControllerResult<List<AclDeleteResult>> deleteAclResultsSpecificFilter = manager.deleteAcls(List.of(aclBinding.toFilter()));
         assertEquals(1, deleteAclResultsSpecificFilter.records().size());
         assertEquals(id, ((RemoveAccessControlEntryRecord) deleteAclResultsSpecificFilter.records().get(0).message()).id());
         assertEquals(1, deleteAclResultsSpecificFilter.response().size());
 
-        ControllerResult<List<AclDeleteResult>> deleteAclResultsBothFilters = manager.deleteAcls(Arrays.asList(AclBindingFilter.ANY, aclBinding.toFilter()));
+        ControllerResult<List<AclDeleteResult>> deleteAclResultsBothFilters = manager.deleteAcls(List.of(AclBindingFilter.ANY, aclBinding.toFilter()));
         assertEquals(1, deleteAclResultsBothFilters.records().size());
         assertEquals(id, ((RemoveAccessControlEntryRecord) deleteAclResultsBothFilters.records().get(0).message()).id());
         assertEquals(2, deleteAclResultsBothFilters.response().size());
+    }
+
+    @Flaky("KAFKA-19513")
+    @Test
+    public void testDeleteExceedsMaxRecords() {
+        AclControlManager manager = new AclControlManager.Builder().build();
+        MockClusterMetadataAuthorizer authorizer = new MockClusterMetadataAuthorizer();
+        authorizer.loadSnapshot(manager.idToAcl());
+
+        List<AclBinding> firstCreate = new ArrayList<>();
+        List<AclBinding> secondCreate = new ArrayList<>();
+
+        // create MAX_RECORDS_PER_USER_OP + 2 ACLs
+        for (int i = 0; i < MAX_RECORDS_PER_USER_OP + 2; i++) {
+            StandardAclWithId acl = new StandardAclWithId(Uuid.randomUuid(),
+                new StandardAcl(
+                    ResourceType.TOPIC,
+                    "mytopic_" + i,
+                    PatternType.LITERAL,
+                    "User:alice",
+                    "127.0.0.1",
+                    AclOperation.READ,
+                    AclPermissionType.ALLOW));
+
+            // split acl creations between two create requests
+            if (i % 2 == 0) {
+                firstCreate.add(acl.toBinding());
+            } else {
+                secondCreate.add(acl.toBinding());
+            }
+        }
+        ControllerResult<List<AclCreateResult>> firstCreateResult = manager.createAcls(firstCreate);
+        assertEquals((MAX_RECORDS_PER_USER_OP / 2) + 1, firstCreateResult.response().size());
+        for (AclCreateResult result : firstCreateResult.response()) {
+            assertTrue(result.exception().isEmpty());
+        }
+
+        ControllerResult<List<AclCreateResult>> secondCreateResult = manager.createAcls(secondCreate);
+        assertEquals((MAX_RECORDS_PER_USER_OP / 2) + 1, secondCreateResult.response().size());
+        for (AclCreateResult result : secondCreateResult.response()) {
+            assertTrue(result.exception().isEmpty());
+        }
+
+        RecordTestUtils.replayAll(manager, firstCreateResult.records());
+        RecordTestUtils.replayAll(manager, secondCreateResult.records());
+        assertFalse(manager.idToAcl().isEmpty());
+
+        ArrayList<AclBindingFilter> filters = new ArrayList<>();
+        for (int i = 0; i < MAX_RECORDS_PER_USER_OP + 2; i++) {
+            filters.add(new AclBindingFilter(
+                new ResourcePatternFilter(ResourceType.TOPIC, "mytopic_" + i, PatternType.LITERAL),
+                AccessControlEntryFilter.ANY));
+        }
+
+        Exception exception = assertThrows(InvalidRequestException.class, () -> manager.deleteAcls(filters));
+        assertEquals(BoundedListTooLongException.class, exception.getCause().getClass());
+        assertEquals("Cannot remove more than " + MAX_RECORDS_PER_USER_OP + " acls in a single delete operation.", exception.getCause().getMessage());
     }
 }

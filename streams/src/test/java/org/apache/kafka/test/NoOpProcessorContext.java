@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
@@ -42,6 +43,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -76,6 +78,14 @@ public class NoOpProcessorContext extends AbstractProcessorContext<Object, Objec
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {
+        return null;
+    }
+
+    @Override
+    public Cancellable schedule(final Instant startTime,
+                                final Duration interval,
+                                final PunctuationType type,
+                                final Punctuator callback) {
         return null;
     }
 
@@ -133,6 +143,7 @@ public class NoOpProcessorContext extends AbstractProcessorContext<Object, Objec
                           final Bytes key,
                           final byte[] value,
                           final long timestamp,
+                          final Headers headers,
                           final Position position) {
     }
 

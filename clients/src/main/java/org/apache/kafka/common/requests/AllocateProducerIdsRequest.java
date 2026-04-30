@@ -20,10 +20,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.protocol.Readable;
 
 public class AllocateProducerIdsRequest extends AbstractRequest {
     private final AllocateProducerIdsRequestData data;
@@ -65,8 +63,8 @@ public class AllocateProducerIdsRequest extends AbstractRequest {
         }
     }
 
-    public static AllocateProducerIdsRequest parse(ByteBuffer buffer, short version) {
+    public static AllocateProducerIdsRequest parse(Readable readable, short version) {
         return new AllocateProducerIdsRequest(new AllocateProducerIdsRequestData(
-                new ByteBufferAccessor(buffer), version), version);
+                readable, version), version);
     }
 }

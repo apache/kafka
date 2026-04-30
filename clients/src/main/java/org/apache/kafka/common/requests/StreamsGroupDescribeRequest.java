@@ -19,10 +19,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.StreamsGroupDescribeRequestData;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -33,11 +32,7 @@ public class StreamsGroupDescribeRequest extends AbstractRequest {
         private final StreamsGroupDescribeRequestData data;
 
         public Builder(StreamsGroupDescribeRequestData data) {
-            this(data, false);
-        }
-
-        public Builder(StreamsGroupDescribeRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.STREAMS_GROUP_DESCRIBE, enableUnstableLastVersion);
+            super(ApiKeys.STREAMS_GROUP_DESCRIBE);
             this.data = data;
         }
 
@@ -79,9 +74,9 @@ public class StreamsGroupDescribeRequest extends AbstractRequest {
         return data;
     }
 
-    public static StreamsGroupDescribeRequest parse(ByteBuffer buffer, short version) {
+    public static StreamsGroupDescribeRequest parse(Readable readable, short version) {
         return new StreamsGroupDescribeRequest(
-            new StreamsGroupDescribeRequestData(new ByteBufferAccessor(buffer), version),
+            new StreamsGroupDescribeRequestData(readable, version),
             version
         );
     }

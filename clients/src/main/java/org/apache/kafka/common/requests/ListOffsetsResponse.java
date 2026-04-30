@@ -21,13 +21,11 @@ import org.apache.kafka.common.message.ListOffsetsResponseData;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.protocol.Readable;
+import org.apache.kafka.common.record.internal.RecordBatch;
 
-import java.nio.ByteBuffer;
-import java.util.Collections;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
@@ -80,7 +78,7 @@ public class ListOffsetsResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errorCounts = new HashMap<>();
+        Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
         topics().forEach(topic ->
             topic.partitions().forEach(partition ->
                 updateErrorCounts(errorCounts, Errors.forCode(partition.errorCode()))
@@ -89,8 +87,8 @@ public class ListOffsetsResponse extends AbstractResponse {
         return errorCounts;
     }
 
-    public static ListOffsetsResponse parse(ByteBuffer buffer, short version) {
-        return new ListOffsetsResponse(new ListOffsetsResponseData(new ByteBufferAccessor(buffer), version));
+    public static ListOffsetsResponse parse(Readable readable, short version) {
+        return new ListOffsetsResponse(new ListOffsetsResponseData(readable, version));
     }
 
     @Override
@@ -106,7 +104,7 @@ public class ListOffsetsResponse extends AbstractResponse {
     public static ListOffsetsTopicResponse singletonListOffsetsTopicResponse(TopicPartition tp, Errors error, long timestamp, long offset, int epoch) {
         return new ListOffsetsTopicResponse()
                  .setName(tp.topic())
-                 .setPartitions(Collections.singletonList(new ListOffsetsPartitionResponse()
+                 .setPartitions(List.of(new ListOffsetsPartitionResponse()
                          .setPartitionIndex(tp.partition())
                          .setErrorCode(error.code())
                          .setTimestamp(timestamp)

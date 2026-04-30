@@ -29,7 +29,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -57,9 +56,9 @@ public class ExtractFieldTest {
 
     @Test
     public void schemaless() {
-        xformKey.configure(Collections.singletonMap("field", "magic"));
+        xformKey.configure(Map.of("field", "magic"));
 
-        final SinkRecord record = new SinkRecord("test", 0, null, Collections.singletonMap("magic", 42), null, null, 0);
+        final SinkRecord record = new SinkRecord("test", 0, null, Map.of("magic", 42), null, null, 0);
         final SinkRecord transformedRecord = xformKey.apply(record);
 
         assertNull(transformedRecord.keySchema());
@@ -73,7 +72,7 @@ public class ExtractFieldTest {
         configs.put("field", "magic.foo");
         xformKey.configure(configs);
 
-        final Map<String, Object> key = Collections.singletonMap("magic", Collections.singletonMap("foo", 42));
+        final Map<String, Object> key = Map.of("magic", Map.of("foo", 42));
         final SinkRecord record = new SinkRecord("test", 0, null, key, null, null, 0);
         final SinkRecord transformedRecord = xformKey.apply(record);
 
@@ -83,7 +82,7 @@ public class ExtractFieldTest {
 
     @Test
     public void nullSchemaless() {
-        xformKey.configure(Collections.singletonMap("field", "magic"));
+        xformKey.configure(Map.of("field", "magic"));
 
         final Map<String, Object> key = null;
         final SinkRecord record = new SinkRecord("test", 0, null, key, null, null, 0);
@@ -95,7 +94,7 @@ public class ExtractFieldTest {
 
     @Test
     public void withSchema() {
-        xformKey.configure(Collections.singletonMap("field", "magic"));
+        xformKey.configure(Map.of("field", "magic"));
 
         final Schema keySchema = SchemaBuilder.struct().field("magic", Schema.INT32_SCHEMA).build();
         final Struct key = new Struct(keySchema).put("magic", 42);
@@ -125,7 +124,7 @@ public class ExtractFieldTest {
 
     @Test
     public void testNullWithSchema() {
-        xformKey.configure(Collections.singletonMap("field", "magic"));
+        xformKey.configure(Map.of("field", "magic"));
 
         final Schema keySchema = SchemaBuilder.struct().field("magic", Schema.INT32_SCHEMA).optional().build();
         final Struct key = null;
@@ -138,9 +137,9 @@ public class ExtractFieldTest {
 
     @Test
     public void nonExistentFieldSchemalessShouldReturnNull() {
-        xformKey.configure(Collections.singletonMap("field", "nonexistent"));
+        xformKey.configure(Map.of("field", "nonexistent"));
 
-        final SinkRecord record = new SinkRecord("test", 0, null, Collections.singletonMap("magic", 42), null, null, 0);
+        final SinkRecord record = new SinkRecord("test", 0, null, Map.of("magic", 42), null, null, 0);
         final SinkRecord transformedRecord = xformKey.apply(record);
 
         assertNull(transformedRecord.keySchema());
@@ -154,7 +153,7 @@ public class ExtractFieldTest {
         configs.put("field", "magic.nonexistent");
         xformKey.configure(configs);
 
-        final Map<String, Object> key = Collections.singletonMap("magic", Collections.singletonMap("foo", 42));
+        final Map<String, Object> key = Map.of("magic", Map.of("foo", 42));
         final SinkRecord record = new SinkRecord("test", 0, null, key, null, null, 0);
         final SinkRecord transformedRecord = xformKey.apply(record);
 
@@ -164,7 +163,7 @@ public class ExtractFieldTest {
 
     @Test
     public void nonExistentFieldWithSchemaShouldFail() {
-        xformKey.configure(Collections.singletonMap("field", "nonexistent"));
+        xformKey.configure(Map.of("field", "nonexistent"));
 
         final Schema keySchema = SchemaBuilder.struct().field("magic", Schema.INT32_SCHEMA).build();
         final Struct key = new Struct(keySchema).put("magic", 42);

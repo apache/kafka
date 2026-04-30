@@ -18,9 +18,6 @@ package org.apache.kafka.server.purgatory;
 
 import org.apache.kafka.server.util.timer.TimerTask;
 
-import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -29,10 +26,9 @@ import java.util.concurrent.locks.ReentrantLock;
  * a delayed fetch operation could be waiting for a given number of bytes to accumulate.
  * <br/>
  * The logic upon completing a delayed operation is defined in onComplete() and will be called exactly once.
- * Once an operation is completed, isCompleted() will return true. onComplete() can be triggered by either
- * forceComplete(), which forces calling onComplete() after delayMs if the operation is not yet completed,
- * or tryComplete(), which first checks if the operation can be completed or not now, and if yes calls
- * forceComplete().
+ * Once an operation is completed, isCompleted() will return true. onComplete() is called from forceComplete(),
+ * which is triggered by either expiration, if the operation is not completed after delayMs; or tryComplete(),
+ * if the operation can be completed now.
  * <br/>
  * A subclass of DelayedOperation needs to provide an implementation of both onComplete() and tryComplete().
  * <br/>
@@ -41,21 +37,12 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public abstract class DelayedOperation extends TimerTask {
 
-    private final AtomicBoolean completed = new AtomicBoolean(false);
+    private volatile boolean completed = false;
 
-    protected final Lock lock;
-
-    public DelayedOperation(long delayMs, Optional<Lock> lockOpt) {
-        this(delayMs, lockOpt.orElse(new ReentrantLock()));
-    }
+    protected final ReentrantLock lock = new ReentrantLock();
 
     public DelayedOperation(long delayMs) {
-        this(delayMs, new ReentrantLock());
-    }
-
-    public DelayedOperation(long delayMs, Lock lock) {
         super(delayMs);
-        this.lock = lock;
     }
 
     /*
@@ -68,16 +55,28 @@ public abstract class DelayedOperation extends TimerTask {
      * Return true iff the operation is completed by the caller: note that
      * concurrent threads can try to complete the same operation, but only
      * the first thread will succeed in completing the operation and return
-     * true, others will still return false
+     * true, others will still return false.
      */
     public boolean forceComplete() {
-        if (completed.compareAndSet(false, true)) {
-            // cancel the timeout timer
-            cancel();
-            onComplete();
-            return true;
-        } else {
+        // Do not proceed if the operation is already completed.
+        if (completed) {
             return false;
+        }
+        // Attain lock prior completing the request.
+        lock.lock();
+        try {
+            // Re-check, if the operation is already completed by some other thread.
+            if (!completed) {
+                completed = true;
+                // cancel the timeout timer
+                cancel();
+                onComplete();
+                return true;
+            } else {
+                return false;
+            }
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -85,7 +84,7 @@ public abstract class DelayedOperation extends TimerTask {
      * Check if the delayed operation is already completed
      */
     public boolean isCompleted() {
-        return completed.get();
+        return completed;
     }
 
     /**

@@ -24,8 +24,7 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 import static org.apache.kafka.metadata.placement.PartitionAssignmentTest.partitionAssignment;
@@ -39,96 +38,96 @@ public class PartitionReassignmentReplicasTest {
     @Test
     public void testNoneAddedOrRemoved() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-            partitionAssignment(Arrays.asList(3, 2, 1)), partitionAssignment(Arrays.asList(3, 2, 1)));
-        assertEquals(Collections.emptyList(), replicas.removing());
-        assertEquals(Collections.emptyList(), replicas.adding());
-        assertEquals(Arrays.asList(3, 2, 1), replicas.replicas());
+            partitionAssignment(List.of(3, 2, 1)), partitionAssignment(List.of(3, 2, 1)));
+        assertEquals(List.of(), replicas.removing());
+        assertEquals(List.of(), replicas.adding());
+        assertEquals(List.of(3, 2, 1), replicas.replicas());
     }
 
     @Test
     public void testAdditions() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-            partitionAssignment(Arrays.asList(3, 2, 1)), partitionAssignment(Arrays.asList(3, 6, 2, 1, 5)));
-        assertEquals(Collections.emptyList(), replicas.removing());
-        assertEquals(Arrays.asList(5, 6), replicas.adding());
-        assertEquals(Arrays.asList(3, 6, 2, 1, 5), replicas.replicas());
+            partitionAssignment(List.of(3, 2, 1)), partitionAssignment(List.of(3, 6, 2, 1, 5)));
+        assertEquals(List.of(), replicas.removing());
+        assertEquals(List.of(5, 6), replicas.adding());
+        assertEquals(List.of(3, 6, 2, 1, 5), replicas.replicas());
     }
 
     @Test
     public void testRemovals() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-            partitionAssignment(Arrays.asList(3, 2, 1, 0)), partitionAssignment(Arrays.asList(3, 1)));
-        assertEquals(Arrays.asList(0, 2), replicas.removing());
-        assertEquals(Collections.emptyList(), replicas.adding());
-        assertEquals(Arrays.asList(3, 1, 0, 2), replicas.replicas());
+            partitionAssignment(List.of(3, 2, 1, 0)), partitionAssignment(List.of(3, 1)));
+        assertEquals(List.of(0, 2), replicas.removing());
+        assertEquals(List.of(), replicas.adding());
+        assertEquals(List.of(3, 1, 0, 2), replicas.replicas());
     }
 
     @Test
     public void testAdditionsAndRemovals() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-            partitionAssignment(Arrays.asList(3, 2, 1, 0)), partitionAssignment(Arrays.asList(7, 3, 1, 9)));
-        assertEquals(Arrays.asList(0, 2), replicas.removing());
-        assertEquals(Arrays.asList(7, 9), replicas.adding());
-        assertEquals(Arrays.asList(7, 3, 1, 9, 0, 2), replicas.replicas());
+            partitionAssignment(List.of(3, 2, 1, 0)), partitionAssignment(List.of(7, 3, 1, 9)));
+        assertEquals(List.of(0, 2), replicas.removing());
+        assertEquals(List.of(7, 9), replicas.adding());
+        assertEquals(List.of(7, 3, 1, 9, 0, 2), replicas.replicas());
     }
 
     @Test
     public void testRearrangement() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-            partitionAssignment(Arrays.asList(3, 2, 1, 0)), partitionAssignment(Arrays.asList(0, 1, 3, 2)));
-        assertEquals(Collections.emptyList(), replicas.removing());
-        assertEquals(Collections.emptyList(), replicas.adding());
-        assertEquals(Arrays.asList(0, 1, 3, 2), replicas.replicas());
+            partitionAssignment(List.of(3, 2, 1, 0)), partitionAssignment(List.of(0, 1, 3, 2)));
+        assertEquals(List.of(), replicas.removing());
+        assertEquals(List.of(), replicas.adding());
+        assertEquals(List.of(0, 1, 3, 2), replicas.replicas());
     }
 
     @Test
     public void testDoesNotCompleteReassignment() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-            partitionAssignment(Arrays.asList(0, 1, 2)), partitionAssignment(Arrays.asList(3, 4, 5)));
+            partitionAssignment(List.of(0, 1, 2)), partitionAssignment(List.of(3, 4, 5)));
         assertTrue(replicas.isReassignmentInProgress());
         Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
-            replicas.maybeCompleteReassignment(Arrays.asList(0, 1, 2, 3, 4));
+            replicas.maybeCompleteReassignment(List.of(0, 1, 2, 3, 4));
         assertFalse(reassignmentOptional.isPresent());
     }
 
     @Test
     public void testDoesNotCompleteReassignmentIfNoneOngoing() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-            Collections.emptyList(),
-            Collections.emptyList(),
-            Arrays.asList(0, 1, 2)
+            List.of(),
+            List.of(),
+            List.of(0, 1, 2)
         );
         assertFalse(replicas.isReassignmentInProgress());
 
         Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
-            replicas.maybeCompleteReassignment(Arrays.asList(0, 1, 2));
+            replicas.maybeCompleteReassignment(List.of(0, 1, 2));
         assertFalse(reassignmentOptional.isPresent());
     }
 
     @Test
-    public void testDoesCompleteReassignmentAllNewReplicas() {
+    public void testCanCompleteReassignmentAllNewReplicas() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-            partitionAssignment(Arrays.asList(0, 1, 2)), partitionAssignment(Arrays.asList(3, 4, 5)));
+            partitionAssignment(List.of(0, 1, 2)), partitionAssignment(List.of(3, 4, 5)));
         assertTrue(replicas.isReassignmentInProgress());
         Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
-            replicas.maybeCompleteReassignment(Arrays.asList(0, 1, 2, 3, 4, 5));
+            replicas.maybeCompleteReassignment(List.of(0, 1, 2, 3, 4, 5));
         assertTrue(reassignmentOptional.isPresent());
         PartitionReassignmentReplicas.CompletedReassignment completedReassignment = reassignmentOptional.get();
-        assertEquals(Arrays.asList(3, 4, 5), completedReassignment.isr);
-        assertEquals(Arrays.asList(3, 4, 5), completedReassignment.replicas);
+        assertEquals(List.of(3, 4, 5), completedReassignment.isr());
+        assertEquals(List.of(3, 4, 5), completedReassignment.replicas());
     }
 
     @Test
-    public void testDoesCompleteReassignmentSomeNewReplicas() {
+    public void testCanCompleteReassignmentSomeNewReplicas() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-            partitionAssignment(Arrays.asList(0, 1, 2)), partitionAssignment(Arrays.asList(0, 1, 3)));
+            partitionAssignment(List.of(0, 1, 2)), partitionAssignment(List.of(0, 1, 3)));
         assertTrue(replicas.isReassignmentInProgress());
         Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
-            replicas.maybeCompleteReassignment(Arrays.asList(0, 1, 2, 3));
+            replicas.maybeCompleteReassignment(List.of(0, 1, 2, 3));
         assertTrue(reassignmentOptional.isPresent());
         PartitionReassignmentReplicas.CompletedReassignment completedReassignment = reassignmentOptional.get();
-        assertEquals(Arrays.asList(0, 1, 3), completedReassignment.isr);
-        assertEquals(Arrays.asList(0, 1, 3), completedReassignment.replicas);
+        assertEquals(List.of(0, 1, 3), completedReassignment.isr());
+        assertEquals(List.of(0, 1, 3), completedReassignment.replicas());
     }
 
     @Test
@@ -197,20 +196,116 @@ public class PartitionReassignmentReplicasTest {
                 build()));
     }
 
+    // Tests that a reassignment completes when a target replica (that is also present
+    // in the replica set prior to the reassignment) is missing from the ISR.
     @Test
-    public void testDoesNotCompleteReassignmentIfIsrDoesNotHaveAllTargetReplicas() {
+    public void testCanCompleteReassignmentIfIsrDoesNotHaveAnExistingTargetReplica() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-            partitionAssignment(Arrays.asList(0, 1, 2)), partitionAssignment(Arrays.asList(0, 1, 3)));
+                partitionAssignment(List.of(0, 1, 2)), partitionAssignment(List.of(0, 1, 3)));
         assertTrue(replicas.isReassignmentInProgress());
+
+        // Replica 1 is not in sync
         Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
-            replicas.maybeCompleteReassignment(Collections.singletonList(3));
+                replicas.maybeCompleteReassignment(List.of(0, 2, 3));
+        assertTrue(reassignmentOptional.isPresent());
+        PartitionReassignmentReplicas.CompletedReassignment completedReassignment = reassignmentOptional.get();
+        assertEquals(List.of(0, 3), completedReassignment.isr());
+        assertEquals(List.of(0, 1, 3), completedReassignment.replicas());
+    }
+
+    // Tests that a reassignment completes when multiple target replicas (that are also present
+    // in the replica set prior to the reassignment) are missing from the ISR.
+    @Test
+    public void testCanCompleteReassignmentIfIsrDoesNotHaveBothExistingTargetReplica() {
+        PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
+                partitionAssignment(List.of(0, 1, 2)), partitionAssignment(List.of(0, 1, 3)));
+        assertTrue(replicas.isReassignmentInProgress());
+
+        // Replica 0 and 1 are not in sync
+        Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
+                replicas.maybeCompleteReassignment(List.of(2, 3));
+        assertTrue(reassignmentOptional.isPresent());
+        PartitionReassignmentReplicas.CompletedReassignment completedReassignment = reassignmentOptional.get();
+        assertEquals(List.of(3), completedReassignment.isr());
+        assertEquals(List.of(0, 1, 3), completedReassignment.replicas());
+    }
+
+    // Tests that a reassignment does not complete when a target adding replica is missing from the ISR.
+    @Test
+    public void testDoesNotCompleteReassignmentIfIsrDoesNotHaveAnAddingTargetReplica() {
+        PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
+                partitionAssignment(List.of(0, 1, 2)), partitionAssignment(List.of(0, 1, 3)));
+        assertTrue(replicas.isReassignmentInProgress());
+
+        // Replica 3 is not in sync
+        Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
+                replicas.maybeCompleteReassignment(List.of(0, 1, 2));
+        assertFalse(reassignmentOptional.isPresent());
+    }
+
+    // Tests that a reassignment completes when RF is increasing and a target replica (that is also
+    // present in the replica set prior to the reassignment) is missing from the ISR.
+    @Test
+    public void testCanCompleteReassignmentWhenReplicationFactorIncreasesAndMissingAnExistingTargetReplicaFromIsr() {
+        PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
+                partitionAssignment(List.of(0, 1, 2, 3)), partitionAssignment(List.of(1, 2, 3, 4, 5)));
+        assertTrue(replicas.isReassignmentInProgress());
+
+        // Replica 3 is not in sync
+        Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
+                replicas.maybeCompleteReassignment(List.of(0, 1, 2, 4, 5));
+        assertTrue(reassignmentOptional.isPresent());
+        PartitionReassignmentReplicas.CompletedReassignment completedReassignment = reassignmentOptional.get();
+        assertEquals(List.of(1, 2, 4, 5), completedReassignment.isr());
+        assertEquals(List.of(1, 2, 3, 4, 5), completedReassignment.replicas());
+    }
+
+    // Tests that a reassignment does not complete when RF is increasing
+    // and a target adding replica is missing from the ISR
+    @Test
+    public void testDoesNotCompleteReassignmentWhenReplicationFactorIncreasesAndMissingAnAddingReplicaFromIsr() {
+        PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
+                partitionAssignment(List.of(0, 1, 2, 3)), partitionAssignment(List.of(1, 2, 3, 4, 5)));
+        assertTrue(replicas.isReassignmentInProgress());
+
+        // Replica 4 is not in sync
+        Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
+                replicas.maybeCompleteReassignment(List.of(0, 1, 2, 3, 5));
+        assertFalse(reassignmentOptional.isPresent());
+    }
+
+    // Tests that a reassignment does not complete when RF is decreasing and a target replica (that is also
+    // present in the replica set prior to the reassignment) is missing from the ISR.
+    @Test
+    public void testDoesNotCompleteReassignmentWhenReplicationFactorDecreasesAndMissingAnExistingTargetReplicaFromIsr() {
+        PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
+                partitionAssignment(List.of(0, 1, 2, 3, 4)), partitionAssignment(List.of(2, 3, 4, 5)));
+        assertTrue(replicas.isReassignmentInProgress());
+
+        // Replica 4 is not in sync
+        Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
+                replicas.maybeCompleteReassignment(List.of(0, 1, 2, 3, 5));
+        assertFalse(reassignmentOptional.isPresent());
+    }
+
+    // Tests that a reassignment does not complete when RF is decreasing
+    // and a target adding replica is missing from the ISR.
+    @Test
+    public void testDoesNotCompleteReassignmentWhenReplicationFactorDecreasesAndMissingAnAddingReplicasFromISR() {
+        PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
+                partitionAssignment(List.of(0, 1, 2, 3, 4)), partitionAssignment(List.of(2, 3, 4, 5)));
+        assertTrue(replicas.isReassignmentInProgress());
+
+        // Replica 5 is not in sync
+        Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
+                replicas.maybeCompleteReassignment(List.of(0, 1, 2, 3, 4));
         assertFalse(reassignmentOptional.isPresent());
     }
 
     @Test
     public void testOriginalReplicas() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-            partitionAssignment(Arrays.asList(0, 1, 2)), partitionAssignment(Arrays.asList(0, 1, 3)));
-        assertEquals(Arrays.asList(0, 1, 2), replicas.originalReplicas());
+            partitionAssignment(List.of(0, 1, 2)), partitionAssignment(List.of(0, 1, 3)));
+        assertEquals(List.of(0, 1, 2), replicas.originalReplicas());
     }
 }

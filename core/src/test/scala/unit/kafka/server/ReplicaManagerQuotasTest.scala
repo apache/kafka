@@ -16,30 +16,30 @@
   */
 package kafka.server
 
-import java.io.File
 import java.util.{Collections, Optional, Properties}
 import kafka.cluster.{Partition, PartitionTest}
-import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils._
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.internal.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.metadata.{KRaftMetadataCache, LeaderRecoveryState}
 import org.apache.kafka.server.common.KRaftVersion
+import org.apache.kafka.server.partition.AlterPartitionManager
+import org.apache.kafka.server.quota.ReplicaQuota
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogOffsetSnapshot}
+import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchPartitionStatus, LogConfig, LogDirFailureChannel, LogManager, LogOffsetMetadata, LogOffsetSnapshot, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong}
 import org.mockito.Mockito.{mock, when}
 import org.mockito.{AdditionalMatchers, ArgumentMatchers}
 
+import java.util
 import scala.jdk.CollectionConverters._
 
 class ReplicaManagerQuotasTest {
@@ -171,11 +171,10 @@ class ReplicaManagerQuotasTest {
       when(partition.getReplica(1)).thenReturn(None)
 
       val tp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("t1", 0))
-      val fetchPartitionStatus = FetchPartitionStatus(
+      val fetchPartitionStatus = new FetchPartitionStatus(
         new LogOffsetMetadata(50L, 0L, 250),
         new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
       val fetchParams = new FetchParams(
-        ApiKeys.FETCH.latestVersion,
         1,
         1,
         600,
@@ -187,7 +186,7 @@ class ReplicaManagerQuotasTest {
 
       new DelayedFetch(
         params = fetchParams,
-        fetchPartitionStatus = Seq(tp -> fetchPartitionStatus),
+        fetchPartitionStatus = createFetchPartitionStatusMap(tp, fetchPartitionStatus),
         replicaManager = replicaManager,
         quota = null,
         responseCallback = null
@@ -223,11 +222,10 @@ class ReplicaManagerQuotasTest {
         .thenReturn(partition)
 
       val tidp = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("t1", 0))
-      val fetchPartitionStatus = FetchPartitionStatus(
+      val fetchPartitionStatus = new FetchPartitionStatus(
         new LogOffsetMetadata(50L, 0L, 250),
         new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
       val fetchParams = new FetchParams(
-        ApiKeys.FETCH.latestVersion,
         FetchRequest.CONSUMER_REPLICA_ID,
         -1,
         600L,
@@ -239,7 +237,7 @@ class ReplicaManagerQuotasTest {
 
       new DelayedFetch(
         params = fetchParams,
-        fetchPartitionStatus = Seq(tidp -> fetchPartitionStatus),
+        fetchPartitionStatus = createFetchPartitionStatusMap(tidp, fetchPartitionStatus),
         replicaManager = replicaManager,
         quota = null,
         responseCallback = null
@@ -263,14 +261,14 @@ class ReplicaManagerQuotasTest {
     when(log.highWatermark).thenReturn(5)
     when(log.lastStableOffset).thenReturn(5)
     when(log.logEndOffsetMetadata).thenReturn(new LogOffsetMetadata(20L))
-    when(log.topicId).thenReturn(Some(topicId))
+    when(log.topicId).thenReturn(Optional.of(topicId))
     when(log.config).thenReturn(new LogConfig(Collections.emptyMap()))
 
     //if we ask for len 1 return a message
     when(log.read(anyLong,
-      maxLength = AdditionalMatchers.geq(1),
-      isolation = any[FetchIsolation],
-      minOneMessage = anyBoolean)).thenReturn(
+      AdditionalMatchers.geq(1),
+      any[FetchIsolation],
+      anyBoolean)).thenReturn(
       new FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
         MemoryRecords.withRecords(Compression.NONE, record)
@@ -278,9 +276,9 @@ class ReplicaManagerQuotasTest {
 
     //if we ask for len = 0, return 0 messages
     when(log.read(anyLong,
-      maxLength = ArgumentMatchers.eq(0),
-      isolation = any[FetchIsolation],
-      minOneMessage = anyBoolean)).thenReturn(
+      ArgumentMatchers.eq(0),
+      any[FetchIsolation],
+      anyBoolean)).thenReturn(
       new FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
         MemoryRecords.EMPTY
@@ -288,19 +286,19 @@ class ReplicaManagerQuotasTest {
 
     when(log.maybeIncrementHighWatermark(
       any[LogOffsetMetadata]
-    )).thenReturn(None)
+    )).thenReturn(Optional.empty)
 
     //Create log manager
     val logManager: LogManager = mock(classOf[LogManager])
 
     //Return the same log for each partition as it doesn't matter
-    when(logManager.getLog(any[TopicPartition], anyBoolean)).thenReturn(Some(log))
-    when(logManager.liveLogDirs).thenReturn(Array.empty[File])
+    when(logManager.getLog(any[TopicPartition], anyBoolean)).thenReturn(Optional.of(log))
+    when(logManager.liveLogDirs).thenReturn(util.List.of)
 
     val alterIsrManager: AlterPartitionManager = mock(classOf[AlterPartitionManager])
 
     val leaderBrokerId = configs.head.brokerId
-    quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
+    quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "", "")
     replicaManager = new ReplicaManager(
       metrics = metrics,
       config = configs.head,
@@ -308,7 +306,7 @@ class ReplicaManagerQuotasTest {
       scheduler = scheduler,
       logManager = logManager,
       quotaManagers = quotaManager,
-      metadataCache = MetadataCache.kRaftMetadataCache(leaderBrokerId, () => KRaftVersion.KRAFT_VERSION_0),
+      metadataCache = new KRaftMetadataCache(leaderBrokerId, () => KRaftVersion.KRAFT_VERSION_0),
       logDirFailureChannel = new LogDirFailureChannel(configs.head.logDirs.size),
       alterPartitionManager = alterIsrManager)
 
@@ -343,4 +341,9 @@ class ReplicaManagerQuotasTest {
     quota
   }
 
+  private def createFetchPartitionStatusMap(tpId: TopicIdPartition, status: FetchPartitionStatus): util.LinkedHashMap[TopicIdPartition, FetchPartitionStatus] = {
+    val statusMap = new util.LinkedHashMap[TopicIdPartition, FetchPartitionStatus]
+    statusMap.put(tpId, status)
+    statusMap
+  }
 }

@@ -40,7 +40,9 @@
   // Version 9 enables listing offsets by last tiered offset (KIP-1005).
   //
   // Version 10 enables async remote list offsets support (KIP-1075)
-  "validVersions": "1-10",
+  //
+  // Version 11 enables listing offsets by earliest pending upload offset (KIP-1023)
+  "validVersions": "1-11",
   "flexibleVersions": "6+",
   "latestVersionUnstable": false,
   "fields": [

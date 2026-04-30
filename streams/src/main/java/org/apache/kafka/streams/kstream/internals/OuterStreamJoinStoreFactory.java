@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.DslKeyValueParams;
@@ -59,7 +60,7 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
             final JoinWindows windows,
             final Type type
     ) {
-        super(streamJoined.dslStoreSuppliers());
+        super(streamJoined.dslStoreSuppliers(), DslStoreFormat.PLAIN);
 
         // we store this one manually instead of relying on super#dslStoreSuppliers()
         // so that we can differentiate between one that was explicitly passed in and
@@ -95,7 +96,8 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
         final TimestampedKeyAndJoinSideSerde<K> timestampedKeyAndJoinSideSerde = new TimestampedKeyAndJoinSideSerde<>(streamJoined.keySerde());
         final LeftOrRightValueSerde<V1, V2> leftOrRightValueSerde = new LeftOrRightValueSerde<>(streamJoined.valueSerde(), streamJoined.otherValueSerde());
 
-        final DslKeyValueParams dslKeyValueParams = new DslKeyValueParams(name, false);
+        // Once the headers-aware version of ListValueStore is implemented (planned for AK 4.4), replace the PLAIN constant with the dslStoreFormat() method.
+        final DslKeyValueParams dslKeyValueParams = new DslKeyValueParams(name, DslStoreFormat.PLAIN);
         final KeyValueBytesStoreSupplier supplier;
 
         if (passedInDslStoreSuppliers != null) {

@@ -28,7 +28,7 @@ import java.util.Map;
  * is raised from {@link org.apache.kafka.clients.consumer.KafkaConsumer#offsetsForTimes(Map)}, it would
  * be possible to revert to alternative logic to set the consumer's position.
  */
-public class UnsupportedVersionException extends ApiException {
+public class UnsupportedVersionException extends InvalidConfigurationException {
     private static final long serialVersionUID = 1L;
 
     public UnsupportedVersionException(String message, Throwable cause) {

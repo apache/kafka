@@ -48,6 +48,8 @@ import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.lang.reflect.Field;
@@ -71,6 +73,7 @@ import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_C
 import static org.apache.kafka.streams.StreamsConfig.ENABLE_METRICS_PUSH_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
+import static org.apache.kafka.streams.StreamsConfig.GROUP_PROTOCOL_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH;
 import static org.apache.kafka.streams.StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG;
@@ -247,7 +250,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, 99_999L);
         props.put(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, 7L);
         props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "dummy:host");
-        props.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG), 100);
+        props.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG), 1024 * 1024);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> returnedProps = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
 
@@ -262,7 +265,7 @@ public class StreamsConfigTest {
         );
         assertEquals(7L, returnedProps.get(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG));
         assertEquals("dummy:host", returnedProps.get(StreamsConfig.APPLICATION_SERVER_CONFIG));
-        assertEquals(100, returnedProps.get(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG)));
+        assertEquals(1024 * 1024, returnedProps.get(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG)));
     }
 
     @Test
@@ -440,6 +443,79 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldNotAllowAutoCreateTopicsForConsumers_WithCommonConsumerPrefix() {
+        // Test with generic consumer.* prefix (affects all consumer types)
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.ERROR);
+
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+            // Main consumer - verify override is ignored
+            final Map<String, Object> mainConfigs = streamsConfig.getMainConsumerConfigs("group", "client", 0);
+            assertEquals("false", mainConfigs.get(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
+                    "Main consumer should not allow auto topic creation with consumer.* override");
+
+            // Restore consumer - verify override is ignored
+            final Map<String, Object> restoreConfigs = streamsConfig.getRestoreConsumerConfigs("client");
+            assertEquals("false", restoreConfigs.get(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
+                    "Restore consumer should not allow auto topic creation with consumer.* override");
+
+            // Global consumer - verify override is ignored
+            final Map<String, Object> globalConfigs = streamsConfig.getGlobalConsumerConfigs("client");
+            assertEquals("false", globalConfigs.get(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
+                    "Global consumer should not allow auto topic creation with consumer.* override");
+
+            // Verify exactly 1 error is logged (consumer.* prefix is validated once in getCommonConsumerConfigs for each type of consumer)
+            final List<String> errorMessages = appender.getMessages();
+            final long errorCount = errorMessages.stream()
+                    .filter(msg -> msg.contains("Unexpected user-specified consumer config 'allow.auto.create.topics' found"))
+                    .count();
+            assertEquals(3, errorCount,
+                    "Should log exactly 3 error for consumer.* prefix");
+        }
+    }
+
+    @Test
+    public void shouldNotAllowAutoCreateTopicsForConsumers_WithSpecificConsumerPrefixes() {
+        // Test with specific prefixes for each consumer type
+        props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
+        props.put(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
+        props.put(StreamsConfig.globalConsumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.ERROR);
+
+            final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+            // Main consumer - verify override is ignored
+            final Map<String, Object> mainConfigs = streamsConfig.getMainConsumerConfigs("group", "client", 0);
+            assertEquals("false", mainConfigs.get(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
+                    "Main consumer should not allow auto topic creation with main.consumer.* override");
+
+            // Restore consumer - verify override is ignored
+            final Map<String, Object> restoreConfigs = streamsConfig.getRestoreConsumerConfigs("client");
+            assertEquals("false", restoreConfigs.get(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
+                    "Restore consumer should not allow auto topic creation with restore.consumer.* override");
+
+            // Global consumer - verify override is ignored
+            final Map<String, Object> globalConfigs = streamsConfig.getGlobalConsumerConfigs("client");
+            assertEquals("false", globalConfigs.get(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
+                    "Global consumer should not allow auto topic creation with global.consumer.* override");
+
+            // Verify exactly 3 errors are logged (one for each specific prefix)
+            final List<String> errorMessages = appender.getMessages();
+            final long errorCount = errorMessages.stream()
+                    .filter(msg -> msg.contains("Unexpected user-specified consumer config 'allow.auto.create.topics' found"))
+                    .count();
+            assertEquals(3, errorCount,
+                    "Should log exactly 3 errors: one for main.consumer.*, one for restore.consumer.*, one for global.consumer.*");
+        }
+    }
+
+
+    @Test
     public void shouldSupportNonPrefixedAdminConfigs() {
         props.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 10);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
@@ -592,13 +668,6 @@ public class StreamsConfigTest {
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> returnedProps = streamsConfig.getGlobalConsumerConfigs(clientId);
         assertEquals("50", returnedProps.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG));
-    }
-
-    @Test
-    public void shouldSetInternalLeaveGroupOnCloseConfigToFalseInConsumer() {
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
-        assertThat(consumerConfigs.get("internal.leave.group.on.close"), is(false));
     }
 
     @Test
@@ -854,7 +923,7 @@ public class StreamsConfigTest {
 
         try {
             new StreamsConfig(props).getProducerConfigs(clientId);
-            fail("Should throw ConfigException when EOS is enabled and maxInFlight cannot be paresed into an integer");
+            fail("Should throw ConfigException when EOS is enabled and maxInFlight cannot be parsed into an integer");
         } catch (final ConfigException e) {
             assertEquals(
                 "Invalid value not-a-number for configuration max.in.flight.requests.per.connection:" +
@@ -874,8 +943,8 @@ public class StreamsConfigTest {
     @Test
     public void shouldSpecifyNoOptimizationWhenNotExplicitlyAddedToConfigs() {
         final String expectedOptimizeConfig = "none";
-        final String actualOptimizedConifig = streamsConfig.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
-        assertEquals(expectedOptimizeConfig, actualOptimizedConifig, "Optimization should be \"none\"");
+        final String actualOptimizedConfig = streamsConfig.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
+        assertEquals(expectedOptimizeConfig, actualOptimizedConfig, "Optimization should be \"none\"");
     }
 
     @Test
@@ -883,8 +952,8 @@ public class StreamsConfigTest {
         final String expectedOptimizeConfig = "all";
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, "all");
         final StreamsConfig config = new StreamsConfig(props);
-        final String actualOptimizedConifig = config.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
-        assertEquals(expectedOptimizeConfig, actualOptimizedConifig, "Optimization should be \"all\"");
+        final String actualOptimizedConfig = config.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
+        assertEquals(expectedOptimizeConfig, actualOptimizedConfig, "Optimization should be \"all\"");
     }
 
     @Test
@@ -897,7 +966,7 @@ public class StreamsConfigTest {
     @Test
     public void shouldSpecifyRocksdbWhenNotExplicitlyAddedToConfigs() {
         final String expectedDefaultStoreType = StreamsConfig.ROCKS_DB;
-        final String actualDefaultStoreType = streamsConfig.getString(org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG);
+        final String actualDefaultStoreType = streamsConfig.getString(StreamsConfig.DEFAULT_DSL_STORE_CONFIG);
         assertEquals(expectedDefaultStoreType, actualDefaultStoreType, "default.dsl.store should be \"rocksDB\"");
     }
 
@@ -905,17 +974,68 @@ public class StreamsConfigTest {
     @Test
     public void shouldSpecifyInMemoryWhenExplicitlyAddedToConfigs() {
         final String expectedDefaultStoreType = StreamsConfig.IN_MEMORY;
-        props.put(org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG, expectedDefaultStoreType);
+        props.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, expectedDefaultStoreType);
         final StreamsConfig config = new StreamsConfig(props);
-        final String actualDefaultStoreType = config.getString(org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG);
+        final String actualDefaultStoreType = config.getString(StreamsConfig.DEFAULT_DSL_STORE_CONFIG);
         assertEquals(expectedDefaultStoreType, actualDefaultStoreType, "default.dsl.store should be \"in_memory\"");
     }
 
     @Deprecated
     @Test
     public void shouldThrowConfigExceptionWhenStoreTypeConfigNotValueInRange() {
-        props.put(org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG, "bad_config");
+        props.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, "bad_config");
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldUseDefaultStoreFormatWhenNotSpecified() {
+        final StreamsConfig config = new StreamsConfig(props);
+        final String actualFormat = config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
+        assertEquals("DEFAULT", actualFormat, "dsl.store.format should default to 'default'");
+    }
+
+    @Test
+    public void shouldAcceptValidDslStoreFormatDefault() {
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "DEFAULT");
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals("DEFAULT", config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG));
+    }
+
+    @Test
+    public void shouldAcceptValidDslStoreFormatHeaders() {
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "HEADERS");
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals("HEADERS", config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG));
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionForInvalidDslStoreFormat() {
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "invalid_format");
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertTrue(exception.getMessage().contains("Invalid value invalid_format for configuration dsl.store.format"));
+    }
+
+    @Test
+    public void shouldAcceptDslStoreFormatCaseInsensitively() {
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "default");
+        StreamsConfig config = new StreamsConfig(props);
+        assertEquals("default", config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG));
+
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "DEFAULT");
+        config = new StreamsConfig(props);
+        assertEquals("DEFAULT", config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG));
+
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "headers");
+        config = new StreamsConfig(props);
+        assertEquals("headers", config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG));
+
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "HEADERS");
+        config = new StreamsConfig(props);
+        assertEquals("HEADERS", config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG));
+
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "HeAdErS");
+        config = new StreamsConfig(props);
+        assertEquals("HeAdErS", config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG));
     }
 
     @Test
@@ -1062,7 +1182,36 @@ public class StreamsConfigTest {
     @Test
     public void shouldThrowExceptionWhenClientTagRackAwarenessIsConfiguredWithUnknownTags() {
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "cluster");
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertEquals(
+            "Invalid value [cluster] for configuration rack.aware.assignment.tags: Contains invalid value [cluster] which doesn't have corresponding tag set via [client.tag.] prefix.",
+            exception.getMessage()
+        );
+    }
+
+    @Test
+    public void shouldAllowWhitespacesInRackAwareAssignmentTagsList() {
+        // AbstractConfig is supposed to take care of WS handling for LIST type
+        props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, " zone , cluster ");
+        props.put(StreamsConfig.clientTagPrefix("zone"), "eu-central-1a");
+        props.put(StreamsConfig.clientTagPrefix("cluster"), "cluster-1");
+        final StreamsConfig config = new StreamsConfig(props);
+        final Map<String, String> clientTags = config.getClientTags();
+        assertEquals(2, clientTags.size());
+        assertEquals("eu-central-1a", clientTags.get("zone"));
+        assertEquals("cluster-1", clientTags.get("cluster"));
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenClientTagRackAwarenessIsConfiguredWithEmptyTag() {
+        // AbstractConfig is supposed to take care of WS handling for LIST type
+        props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone, ");
+        props.put(StreamsConfig.clientTagPrefix("zone"), "eu-central-1a");
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertEquals(
+            "Invalid value [zone, ] for configuration rack.aware.assignment.tags: Contains invalid value []. Tag key cannot be empty.",
+            exception.getMessage()
+        );
     }
 
     @Test
@@ -1071,8 +1220,12 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.clientTagPrefix(key), "eu-central-1a");
         final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
         assertEquals(
-            String.format("Invalid value %s for configuration %s: Tag key exceeds maximum length of %s.",
-                          key, StreamsConfig.CLIENT_TAG_PREFIX, StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH),
+            String.format(
+                "Invalid value %s for configuration client.tag.%s: Tag key exceeds maximum length of %s.",
+                key,
+                key,
+                StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH
+            ),
             exception.getMessage()
         );
     }
@@ -1083,8 +1236,34 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.clientTagPrefix("x"), value);
         final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
         assertEquals(
-            String.format("Invalid value %s for configuration %s: Tag value exceeds maximum length of %s.",
-                          value, StreamsConfig.CLIENT_TAG_PREFIX, StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH),
+            String.format(
+                "Invalid value %s for configuration client.tag.x: Tag value exceeds maximum length of %s.",
+                value,
+                StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH
+            ),
+            exception.getMessage()
+        );
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenClientTagKeyIsEmpty() {
+        props.put(StreamsConfig.clientTagPrefix(" "), "tagValue");
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertEquals(
+            "Invalid config `client.tag.` (missing client tag key).",
+            exception.getMessage()
+        );
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenClientTagValueIsEmpty() {
+        final Map<String, Object> config = new HashMap<>();
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app.id");
+        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        config.put(StreamsConfig.clientTagPrefix("tagKey"), " ");
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(config));
+        assertEquals(
+            "Invalid value [] for configuration client.tag.tagKey: Tag value cannot be empty.",
             exception.getMessage()
         );
     }
@@ -1215,13 +1394,13 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldtSetMinTrafficRackAwareAssignmentConfig() {
+    public void shouldSetMinTrafficRackAwareAssignmentConfig() {
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC);
         assertEquals("min_traffic", new StreamsConfig(props).getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG));
     }
 
     @Test
-    public void shouldtSetBalanceSubtopologyRackAwareAssignmentConfig() {
+    public void shouldSetBalanceSubtopologyRackAwareAssignmentConfig() {
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY);
         assertEquals("balance_subtopology", new StreamsConfig(props).getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG));
     }
@@ -1594,6 +1773,109 @@ public class StreamsConfigTest {
         props.put(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG, true);
         streamsConfig = new StreamsConfig(props);
         assertTrue(streamsConfig.getBoolean(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG));
+    }
+
+    @Test
+    public void shouldSetGroupProtocolToClassicByDefault() {
+        assertTrue(GroupProtocol.CLASSIC.name().equalsIgnoreCase(streamsConfig.getString(GROUP_PROTOCOL_CONFIG)));
+        assertFalse(streamsConfig.isStreamsProtocolEnabled());
+    }
+
+    @Test
+    public void shouldSetGroupProtocolToClassic() {
+        props.put(GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+        streamsConfig = new StreamsConfig(props);
+        assertTrue(GroupProtocol.CLASSIC.name().equalsIgnoreCase(streamsConfig.getString(GROUP_PROTOCOL_CONFIG)));
+        assertFalse(streamsConfig.isStreamsProtocolEnabled());
+    }
+
+    @Test
+    public void shouldSetGroupProtocolToStreams() {
+        props.put(GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        streamsConfig = new StreamsConfig(props);
+        assertTrue(GroupProtocol.STREAMS.name().equalsIgnoreCase(streamsConfig.getString(GROUP_PROTOCOL_CONFIG)));
+        assertTrue(streamsConfig.isStreamsProtocolEnabled());
+    }
+
+    @Test
+    public void shouldLogWarningWhenWarmupReplicasSetWithStreamsProtocol() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+            props.put(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, 1);
+
+            new StreamsConfig(props);
+
+            assertTrue(appender.getMessages().stream()
+                .anyMatch(msg -> msg.contains("Warmup replicas are not supported yet with the streams protocol and " +
+                    "will be ignored. If you want to use warmup replicas, please set group.protocol=classic.")));
+        }
+    }
+
+    @Test
+    public void shouldLogWarningWhenStandbyReplicasSetWithStreamsProtocol() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLogger(StreamsConfig.class, Level.WARN);
+            props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+            props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
+
+            new StreamsConfig(props);
+
+            assertTrue(appender.getMessages().stream()
+                .anyMatch(msg -> msg.contains("Standby replicas are configured broker-side in the streams group " +
+                    "protocol and will be ignored. Please use the admin client or kafka-configs.sh to set the streams " +
+                    "groups's standby replicas.")));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", StreamsConfig.CONSUMER_PREFIX, StreamsConfig.MAIN_CONSUMER_PREFIX})
+    public void shouldThrowConfigExceptionWhenStreamsProtocolUsedWithStaticMembership(final String prefix) {
+        final Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:9092");
+        props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, "streams");
+        props.put(prefix + ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "static-member-1");
+
+        final ConfigException exception = assertThrows(
+            ConfigException.class,
+            () -> new StreamsConfig(props)
+        );
+        assertTrue(exception.getMessage().contains("Streams rebalance protocol does not support static membership. " +
+            "Please set group.protocol=classic or remove group.instance.id from the configuration."));
+    }
+
+    @Test
+    public void shouldSetDefaultDeadLetterQueue() {
+        final StreamsConfig config = new StreamsConfig(props);
+        assertNull(config.getString(StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG));
+    }
+
+    @Test
+    public void shouldLogWarningWhenProcessingExceptionHandlerIsNotEnabledOnGlobalThread() {
+        try (LogCaptureAppender streamsConfigLogs = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            streamsConfigLogs.setClassLogger(StreamsConfig.class, Level.WARN);
+            streamsConfig = new StreamsConfig(props);
+
+            assertEquals(1, streamsConfigLogs.getMessages().size());
+            assertTrue(streamsConfigLogs
+                .getMessages(Level.WARN.name())
+                .get(0)
+                .startsWith("Processing exception handler is not enabled for the GlobalThread.")
+            );
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldNotLogWarningWhenProcessingExceptionHandlerIsEnabledOnGlobalThread() {
+        props.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, true);
+        try (LogCaptureAppender streamsConfigLogs = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            streamsConfigLogs.setClassLogger(StreamsConfig.class, Level.WARN);
+            streamsConfig = new StreamsConfig(props);
+
+            assertEquals(0, streamsConfigLogs.getMessages().size());
+        }
     }
 
     static class MisconfiguredSerde implements Serde<Object> {

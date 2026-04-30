@@ -38,18 +38,18 @@ import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.SampledStat;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.requests.GetTelemetrySubscriptionsRequest;
 import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.requests.RequestContext;
-import org.apache.kafka.common.utils.Crc32C;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.Crc32C;
 import org.apache.kafka.server.metrics.ClientMetricsConfigs;
 import org.apache.kafka.server.metrics.ClientMetricsInstance;
 import org.apache.kafka.server.metrics.ClientMetricsInstanceMetadata;
-import org.apache.kafka.server.metrics.ClientMetricsReceiverPlugin;
+import org.apache.kafka.server.metrics.ClientTelemetryExporterPlugin;
 import org.apache.kafka.server.network.ConnectionDisconnectListener;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
@@ -90,7 +90,7 @@ public class ClientMetricsManager implements AutoCloseable {
     private static final int CACHE_MAX_SIZE = 16384;
     private static final int DEFAULT_CACHE_EXPIRY_MS = 60 * 1000;
 
-    private final ClientMetricsReceiverPlugin receiverPlugin;
+    private final ClientTelemetryExporterPlugin clientTelemetryExporterPlugin;
     private final Cache<Uuid, ClientMetricsInstance> clientInstanceCache;
     private final Map<String, Uuid> clientConnectionIdMap;
     private final Timer expirationTimer;
@@ -107,13 +107,13 @@ public class ClientMetricsManager implements AutoCloseable {
     // to re-evaluate the client instance subscription id as per changed subscriptions.
     private final AtomicInteger subscriptionUpdateVersion;
 
-    public ClientMetricsManager(ClientMetricsReceiverPlugin receiverPlugin, int clientTelemetryMaxBytes, Time time, Metrics metrics) {
-        this(receiverPlugin, clientTelemetryMaxBytes, time, DEFAULT_CACHE_EXPIRY_MS, metrics);
+    public ClientMetricsManager(ClientTelemetryExporterPlugin clientTelemetryExporterPlugin, int clientTelemetryMaxBytes, Time time, Metrics metrics) {
+        this(clientTelemetryExporterPlugin, clientTelemetryMaxBytes, time, DEFAULT_CACHE_EXPIRY_MS, metrics);
     }
 
     // Visible for testing
-    ClientMetricsManager(ClientMetricsReceiverPlugin receiverPlugin, int clientTelemetryMaxBytes, Time time, int cacheExpiryMs, Metrics metrics) {
-        this.receiverPlugin = receiverPlugin;
+    ClientMetricsManager(ClientTelemetryExporterPlugin clientTelemetryExporterPlugin, int clientTelemetryMaxBytes, Time time, int cacheExpiryMs, Metrics metrics) {
+        this.clientTelemetryExporterPlugin = clientTelemetryExporterPlugin;
         this.subscriptionMap = new ConcurrentHashMap<>();
         this.subscriptionUpdateVersion = new AtomicInteger(0);
         this.clientInstanceCache = new SynchronizedCache<>(new LRUCache<>(CACHE_MAX_SIZE));
@@ -214,9 +214,9 @@ public class ClientMetricsManager implements AutoCloseable {
         if (metrics != null && metrics.limit() > 0) {
             try {
                 long exportTimeStartMs = time.hiResClockMs();
-                receiverPlugin.exportMetrics(requestContext, request);
+                clientTelemetryExporterPlugin.exportMetrics(requestContext, request, clientInstance.pushIntervalMs());
                 clientMetricsStats.recordPluginExport(clientInstanceId, time.hiResClockMs() - exportTimeStartMs);
-            } catch (Exception exception) {
+            } catch (Throwable exception) {
                 clientMetricsStats.recordPluginErrorCount(clientInstanceId);
                 clientInstance.lastKnownError(Errors.INVALID_RECORD);
                 log.error("Error exporting client metrics to the plugin for client instance id: {}", clientInstanceId, exception);
@@ -228,8 +228,8 @@ public class ClientMetricsManager implements AutoCloseable {
         return new PushTelemetryResponse(new PushTelemetryResponseData());
     }
 
-    public boolean isTelemetryReceiverConfigured() {
-        return !receiverPlugin.isEmpty();
+    public boolean isTelemetryExporterConfigured() {
+        return !clientTelemetryExporterPlugin.isEmpty();
     }
 
     public ConnectionDisconnectListener connectionDisconnectListener() {
@@ -244,9 +244,9 @@ public class ClientMetricsManager implements AutoCloseable {
     }
 
     private void updateClientSubscription(String subscriptionName, ClientMetricsConfigs configs) {
-        List<String> metrics = configs.getList(ClientMetricsConfigs.SUBSCRIPTION_METRICS);
-        int pushInterval = configs.getInt(ClientMetricsConfigs.PUSH_INTERVAL_MS);
-        List<String> clientMatchPattern = configs.getList(ClientMetricsConfigs.CLIENT_MATCH_PATTERN);
+        List<String> metrics = configs.getList(ClientMetricsConfigs.METRICS_CONFIG);
+        int pushInterval = configs.getInt(ClientMetricsConfigs.INTERVAL_MS_CONFIG);
+        List<String> clientMatchPattern = configs.getList(ClientMetricsConfigs.MATCH_CONFIG);
 
         SubscriptionInfo newSubscription =
             new SubscriptionInfo(subscriptionName, metrics, pushInterval,
@@ -329,7 +329,7 @@ public class ClientMetricsManager implements AutoCloseable {
 
     private ClientMetricsInstance createClientInstance(Uuid clientInstanceId, ClientMetricsInstanceMetadata instanceMetadata) {
 
-        int pushIntervalMs = ClientMetricsConfigs.DEFAULT_INTERVAL_MS;
+        int pushIntervalMs = ClientMetricsConfigs.INTERVAL_MS_DEFAULT;
         // Keep a set of metrics to avoid duplicates in case of overlapping subscriptions.
         Set<String> subscribedMetrics = new HashSet<>();
         boolean allMetricsSubscribed = false;
@@ -338,7 +338,7 @@ public class ClientMetricsManager implements AutoCloseable {
         for (SubscriptionInfo info : subscriptionMap.values()) {
             if (instanceMetadata.isMatch(info.matchPattern())) {
                 allMetricsSubscribed = allMetricsSubscribed || info.metrics().contains(
-                    ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS_CONFIG);
+                    ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS);
                 subscribedMetrics.addAll(info.metrics());
                 pushIntervalMs = Math.min(pushIntervalMs, info.intervalMs());
             }
@@ -351,7 +351,7 @@ public class ClientMetricsManager implements AutoCloseable {
         if (allMetricsSubscribed) {
             // Only add an * to indicate that all metrics are subscribed.
             subscribedMetrics.clear();
-            subscribedMetrics.add(ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS_CONFIG);
+            subscribedMetrics.add(ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS);
         }
 
         int subscriptionId = computeSubscriptionId(subscribedMetrics, pushIntervalMs, clientInstanceId);
@@ -391,7 +391,7 @@ public class ClientMetricsManager implements AutoCloseable {
         ClientMetricsInstance clientInstance, long timestamp) {
 
         if (!clientInstance.maybeUpdateGetRequestTimestamp(timestamp) && (clientInstance.lastKnownError() != Errors.UNKNOWN_SUBSCRIPTION_ID
-            || clientInstance.lastKnownError() != Errors.UNSUPPORTED_COMPRESSION_TYPE)) {
+            && clientInstance.lastKnownError() != Errors.UNSUPPORTED_COMPRESSION_TYPE)) {
             clientMetricsStats.recordThrottleCount(clientInstance.clientInstanceId());
             String msg = String.format("Request from the client [%s] arrived before the next push interval time",
                 request.data().clientInstanceId());

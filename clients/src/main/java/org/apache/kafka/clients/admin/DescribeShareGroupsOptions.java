@@ -14,19 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients.admin;
-
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
 
 /**
  * Options for {@link Admin#describeShareGroups(Collection, DescribeShareGroupsOptions)}.
- * <p>
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DescribeShareGroupsOptions extends AbstractOptions<DescribeShareGroupsOptions> {
     private boolean includeAuthorizedOperations;
 

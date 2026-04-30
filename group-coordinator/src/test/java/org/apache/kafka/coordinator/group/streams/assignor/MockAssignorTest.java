@@ -38,6 +38,12 @@ public class MockAssignorTest {
     private final MockAssignor assignor = new MockAssignor();
 
     @Test
+    public void testToStringReturnsName() {
+        assertEquals("mock", assignor.name());
+        assertEquals(assignor.name(), assignor.toString());
+    }
+
+    @Test
     public void testZeroMembers() {
 
         TaskAssignorException ex = assertThrows(TaskAssignorException.class, () -> assignor.assign(
@@ -57,7 +63,7 @@ public class MockAssignorTest {
         final AssignmentMemberSpec memberSpec1 = new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Map.of("test-subtopology", new HashSet<>(List.of(0))),
+            Map.of("test-subtopology", Set.of(0)),
             Map.of(),
             Map.of(),
             "test-process",
@@ -69,7 +75,7 @@ public class MockAssignorTest {
         final AssignmentMemberSpec memberSpec2 = new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Map.of("test-subtopology", new HashSet<>(List.of(0))),
+            Map.of("test-subtopology", Set.of(0)),
             Map.of(),
             Map.of(),
             "test-process",

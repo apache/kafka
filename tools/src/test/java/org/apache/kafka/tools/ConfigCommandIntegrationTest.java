@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.admin.ConfigCommand;
+import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
@@ -24,6 +24,7 @@ import org.apache.kafka.clients.admin.AlterConfigsOptions;
 import org.apache.kafka.clients.admin.AlterConfigsResult;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -31,13 +32,13 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.test.TestUtils;
 
 import org.mockito.Mockito;
 
-import java.util.Collections;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,15 +51,14 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static java.util.Arrays.asList;
-import static java.util.Collections.singleton;
-import static java.util.Collections.singletonList;
-import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG;
 import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG;
 import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.STREAMS_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.server.config.ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG;
 import static org.apache.kafka.server.config.ServerConfigs.MESSAGE_MAX_BYTES_CONFIG;
 import static org.apache.kafka.server.config.ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
@@ -70,6 +70,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 
 public class ConfigCommandIntegrationTest {
     private final String defaultBrokerId = "0";
@@ -100,7 +101,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-type", "brokers",
             "--alter",
             "--add-config", "security.inter.broker.protocol=PLAINTEXT")),
-            errOut -> assertTrue(errOut.contains("Cannot update these configs dynamically: Set(security.inter.broker.protocol)"), errOut));
+            errOut -> assertTrue(errOut.contains("Cannot update these configs dynamically: [security.inter.broker.protocol]"), errOut));
     }
 
     @ClusterTest
@@ -128,6 +129,58 @@ public class ConfigCommandIntegrationTest {
             "--alter", "--add-config", "consumer.session.timeout.ms=50000"));
         message = captureStandardOut(run(command));
         assertEquals("Completed updating config for group group.", message);
+
+        // A non-existent group with dynamic configs can be described
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--describe"));
+        message = captureStandardOut(run(command));
+        assertTrue(message.contains("Dynamic configs for group group are:"));
+        assertTrue(message.contains("consumer.session.timeout.ms=50000 sensitive=false synonyms={DYNAMIC_GROUP_CONFIG:consumer.session.timeout.ms=50000, DEFAULT_CONFIG:group.consumer.session.timeout.ms=45000}"));
+
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--describe"));
+        message = captureStandardOut(run(command));
+        assertTrue(message.contains("Dynamic configs for group group are:"));
+        assertTrue(message.contains("consumer.session.timeout.ms=50000 sensitive=false synonyms={DYNAMIC_GROUP_CONFIG:consumer.session.timeout.ms=50000, DEFAULT_CONFIG:group.consumer.session.timeout.ms=45000}"));
+    }
+
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+    })
+    public void testDescribeGroupWithoutDynamicConfigs(ClusterInstance cluster) throws InterruptedException, ExecutionException {
+        cluster.createTopic("topic", 1, (short) 1);
+
+        try (Producer<byte[], byte[]> producer = cluster.producer();
+             org.apache.kafka.clients.consumer.Consumer<byte[], byte[]> consumer = cluster.consumer(Map.of(
+                 "group.protocol", "consumer",
+                 "group.id", "group"
+             ))) {
+            producer.send(new org.apache.kafka.clients.producer.ProducerRecord<>("topic", "key".getBytes(), "value".getBytes())).get();
+            producer.flush();
+            consumer.subscribe(List.of("topic"));
+            consumer.poll(Duration.ofMillis(100));
+
+            TestUtils.waitForCondition(() -> {
+                Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
+                    "--entity-type", "groups",
+                    "--describe"));
+                String message = captureStandardOut(run(command));
+                return message.contains("Dynamic configs for group group are:");
+            }, () -> "cannot describe group without dynamic groups");
+
+            TestUtils.waitForCondition(() -> {
+                Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
+                    "--entity-type", "groups",
+                    "--entity-name", "group",
+                    "--describe"));
+                String message = captureStandardOut(run(command));
+                return message.contains("Dynamic configs for group group are:");
+            }, () -> "cannot describe group without dynamic groups");
+        }
     }
 
     @ClusterTest
@@ -145,14 +198,29 @@ public class ConfigCommandIntegrationTest {
                 "--alter", "--add-config", "metrics=org.apache"));
         message = captureStandardOut(run(command));
         assertEquals("Completed updating config for client-metric cm.", message);
+
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "client-metrics",
+            "--describe"));
+        message = captureStandardOut(run(command));
+        assertTrue(message.contains("Dynamic configs for client-metric cm are:"));
+        assertTrue(message.contains("metrics=org.apache sensitive=false synonyms={DYNAMIC_CLIENT_METRICS_CONFIG:metrics=org.apache}"));
+
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "client-metrics",
+            "--entity-name", "cm",
+            "--describe"));
+        message = captureStandardOut(run(command));
+        assertTrue(message.contains("Dynamic configs for client-metric cm are:"));
+        assertTrue(message.contains("metrics=org.apache sensitive=false synonyms={DYNAMIC_CLIENT_METRICS_CONFIG:metrics=org.apache}"));
     }
 
     @ClusterTest
     public void testAddConfigKeyValuesUsingCommand() throws Exception {
         try (Admin client = cluster.admin()) {
             NewTopic newTopic = new NewTopic("topic", 1, (short) 1);
-            client.createTopics(Collections.singleton(newTopic)).all().get();
-            cluster.waitForTopic("topic", 1);
+            client.createTopics(Set.of(newTopic)).all().get();
+            cluster.waitTopicCreation("topic", 1);
             Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
                     "--entity-type", "topics",
                     "--entity-name", "topic",
@@ -174,27 +242,27 @@ public class ConfigCommandIntegrationTest {
 
         try (Admin client = cluster.admin()) {
             // Add config
-            alterAndVerifyConfig(client, Optional.of(defaultBrokerId), singletonMap(MESSAGE_MAX_BYTES_CONFIG, "110000"), alterOpts);
-            alterAndVerifyConfig(client, Optional.empty(), singletonMap(MESSAGE_MAX_BYTES_CONFIG, "120000"), alterOpts);
+            alterAndVerifyConfig(client, Optional.of(defaultBrokerId), Map.of(MESSAGE_MAX_BYTES_CONFIG, "110000"), alterOpts);
+            alterAndVerifyConfig(client, Optional.empty(), Map.of(MESSAGE_MAX_BYTES_CONFIG, "120000"), alterOpts);
 
             // Change config
-            alterAndVerifyConfig(client, Optional.of(defaultBrokerId), singletonMap(MESSAGE_MAX_BYTES_CONFIG, "130000"), alterOpts);
-            alterAndVerifyConfig(client, Optional.empty(), singletonMap(MESSAGE_MAX_BYTES_CONFIG, "140000"), alterOpts);
+            alterAndVerifyConfig(client, Optional.of(defaultBrokerId), Map.of(MESSAGE_MAX_BYTES_CONFIG, "130000"), alterOpts);
+            alterAndVerifyConfig(client, Optional.empty(), Map.of(MESSAGE_MAX_BYTES_CONFIG, "140000"), alterOpts);
 
             // Delete config
-            deleteAndVerifyConfigValue(client, defaultBrokerId, singleton(MESSAGE_MAX_BYTES_CONFIG), true, alterOpts);
+            deleteAndVerifyConfigValue(client, defaultBrokerId, Set.of(MESSAGE_MAX_BYTES_CONFIG), true, alterOpts);
 
             // Listener configs: should work only with listener name
             alterAndVerifyConfig(client, Optional.of(defaultBrokerId),
-                    singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks"), alterOpts);
+                    Map.of("listener.name.internal.ssl.keystore.location", "/tmp/test.jks"), alterOpts);
             // Per-broker config configured at default cluster-level should fail
             assertThrows(ExecutionException.class,
                     () -> alterConfigWithAdmin(client, Optional.empty(),
-                            singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks"), alterOpts));
+                            Map.of("listener.name.internal.ssl.keystore.location", "/tmp/test.jks"), alterOpts));
             deleteAndVerifyConfigValue(client, defaultBrokerId,
-                    singleton("listener.name.internal.ssl.keystore.location"), false, alterOpts);
+                    Set.of("listener.name.internal.ssl.keystore.location"), false, alterOpts);
             alterConfigWithAdmin(client, Optional.of(defaultBrokerId),
-                    singletonMap("listener.name.external.ssl.keystore.password", "secret"), alterOpts);
+                    Map.of("listener.name.external.ssl.keystore.password", "secret"), alterOpts);
 
             Map<String, String> configs = new HashMap<>();
             configs.put("listener.name.external.ssl.keystore.password", "secret");
@@ -209,12 +277,197 @@ public class ConfigCommandIntegrationTest {
     @ClusterTest
     public void testGroupConfigUpdateUsingKraft() throws Exception {
         List<String> alterOpts = Stream.concat(entityOp(Optional.of(defaultGroupName)).stream(),
-                        Stream.of("--entity-type", "groups", "--alter"))
-                .collect(Collectors.toList());
+            Stream.of("--entity-type", "groups", "--alter")).toList();
         verifyGroupConfigUpdate(alterOpts);
 
         // Test for the --group alias
-        verifyGroupConfigUpdate(asList("--group", defaultGroupName, "--alter"));
+        verifyGroupConfigUpdate(List.of("--group", defaultGroupName, "--alter"));
+    }
+
+    @ClusterTest
+    public void testDescribeStreamsGroupConfigs() {
+        Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--describe", "--all"));
+        String message = captureStandardOut(run(command));
+
+        assertTrue(message.contains("streams.heartbeat.interval.ms=5000 sensitive=false synonyms={DEFAULT_CONFIG:group.streams.heartbeat.interval.ms=5000}"));
+        assertTrue(message.contains("streams.num.standby.replicas=0 sensitive=false synonyms={DEFAULT_CONFIG:group.streams.num.standby.replicas=0}"));
+        assertTrue(message.contains("streams.session.timeout.ms=45000 sensitive=false synonyms={DEFAULT_CONFIG:group.streams.session.timeout.ms=45000}"));
+        assertTrue(message.contains("streams.task.offset.interval.ms=60000 sensitive=false synonyms={DEFAULT_CONFIG:group.streams.task.offset.interval.ms=60000}"));
+    }
+
+    @ClusterTest
+    public void testAlterStreamsGroupSessionTimeout() {
+        // verify session.timeout.ms
+
+        // Verify the initial config
+        Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--describe", "--all"));
+        String message = captureStandardOut(run(command));
+        assertTrue(message.contains("streams.session.timeout.ms=45000"));
+
+        // Should fail to set below min
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--alter", "--add-config", "streams.session.timeout.ms=1"));
+        message = captureStandardErr(run(command));
+        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.session.timeout.ms must be greater than or equal to group.streams.min.session.timeout.ms"));
+
+        // Should fail to set above max
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--alter", "--add-config", "streams.session.timeout.ms=100000"));
+        message = captureStandardErr(run(command));
+        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.session.timeout.ms must be less than or equal to group.streams.max.session.timeout.ms"));
+    }
+
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = STREAMS_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, value = "55000"),
+    })
+    public void testAlterStreamsGroupHeartbeatInterval() {
+        // verify heartbeat.interval.ms
+
+        // Verify the initial config
+        Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--describe", "--all"));
+        String message = captureStandardOut(run(command));
+        assertTrue(message.contains("streams.heartbeat.interval.ms=5000"));
+
+        // Should fail to set below min
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--alter", "--add-config", "streams.heartbeat.interval.ms=1"));
+        message = captureStandardErr(run(command));
+        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.heartbeat.interval.ms must be greater than or equal to group.streams.min.heartbeat.interval.ms"));
+
+        // Should fail to set above max
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--alter", "--add-config", "streams.heartbeat.interval.ms=100000"));
+        message = captureStandardErr(run(command));
+        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.heartbeat.interval.ms must be less than or equal to group.streams.max.heartbeat.interval.ms"));
+
+        // Should fail to set above session timeout
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--alter", "--add-config", "streams.heartbeat.interval.ms=50000"));
+        message = captureStandardErr(run(command));
+        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.session.timeout.ms must be greater than streams.heartbeat.interval.ms"));
+    }
+
+    @ClusterTest
+    public void testAlterStreamsGroupNumOfStandbyReplicas() {
+        // Verify the initial config
+        Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--describe", "--all"));
+        String message = captureStandardOut(run(command));
+        assertTrue(message.contains("streams.num.standby.replicas=0"));
+
+        // Alter number of standby replicas
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--alter", "--add-config", "streams.num.standby.replicas=1"));
+        message = captureStandardOut(run(command));
+        assertEquals("Completed updating config for group group.", message);
+
+        // Verify the updated config
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--describe"));
+        message = captureStandardOut(run(command));
+        assertTrue(message.contains("streams.num.standby.replicas=1"));
+
+        // Should fail to set above max timeout
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--alter", "--add-config", "streams.num.standby.replicas=3"));
+        message = captureStandardErr(run(command));
+        assertTrue(message.contains("streams.num.standby.replicas must be less than or equal to group.streams.max.standby.replicas"));
+    }
+
+    @ClusterTest
+    public void testAlterStreamsGroupTaskOffsetInterval() {
+        // Verify the initial config
+        Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--describe", "--all"));
+        String message = captureStandardOut(run(command));
+        assertTrue(message.contains("streams.task.offset.interval.ms=60000"));
+
+        // Alter task offset interval
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--alter", "--add-config", "streams.task.offset.interval.ms=45000"));
+        message = captureStandardOut(run(command));
+        assertEquals("Completed updating config for group group.", message);
+
+        // Verify the updated config
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--describe"));
+        message = captureStandardOut(run(command));
+        assertTrue(message.contains("streams.task.offset.interval.ms=45000"));
+
+        // Should fail to set below min interval
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--alter", "--add-config", "streams.task.offset.interval.ms=1"));
+        message = captureStandardErr(run(command));
+        assertTrue(message.contains("streams.task.offset.interval.ms must be greater than or equal to group.streams.min.task.offset.interval.ms"));
+
+    }
+
+    @ClusterTest
+    public void testAlterStreamsGroupNumWarmupReplicas() {
+        // Verify the initial config
+        Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--describe", "--all"));
+        String message = captureStandardOut(run(command));
+        assertTrue(message.contains("streams.num.warmup.replicas=2"));
+
+        // Alter num warmup replicas
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--alter", "--add-config", "streams.num.warmup.replicas=5"));
+        message = captureStandardOut(run(command));
+        assertEquals("Completed updating config for group group.", message);
+
+        // Verify the updated config
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--describe"));
+        message = captureStandardOut(run(command));
+        assertTrue(message.contains("streams.num.warmup.replicas=5"));
+
+        // Should fail to set above max
+        command = Stream.concat(quorumArgs(), Stream.of(
+            "--entity-type", "groups",
+            "--entity-name", "group",
+            "--alter", "--add-config", "streams.num.warmup.replicas=25"));
+        message = captureStandardErr(run(command));
+        assertTrue(message.contains("streams.num.warmup.replicas must be less than or equal to group.streams.max.warmup.replicas"));
     }
 
     private void verifyGroupConfigUpdate(List<String> alterOpts) throws Exception {
@@ -231,7 +484,7 @@ public class ConfigCommandIntegrationTest {
             deleteAndVerifyGroupConfigValue(client, defaultGroupName, configs, alterOpts);
 
             // Unknown config configured should fail
-            assertThrows(ExecutionException.class, () -> alterConfigWithAdmin(client, singletonMap("unknown.config", "20000"), alterOpts));
+            assertThrows(ExecutionException.class, () -> alterConfigWithAdmin(client, Map.of("unknown.config", "20000"), alterOpts));
         }
     }
 
@@ -239,27 +492,52 @@ public class ConfigCommandIntegrationTest {
     @ClusterTest(types = {Type.KRAFT})
     public void testClientMetricsConfigUpdate() throws Exception {
         List<String> alterOpts = Stream.concat(entityOp(Optional.of(defaultClientMetricsName)).stream(),
-                        Stream.of("--entity-type", "client-metrics", "--alter"))
-            .collect(Collectors.toList());
+            Stream.of("--entity-type", "client-metrics", "--alter")).toList();
         verifyClientMetricsConfigUpdate(alterOpts);
 
         // Test for the --client-metrics alias
-        verifyClientMetricsConfigUpdate(asList("--client-metrics", defaultClientMetricsName, "--alter"));
+        verifyClientMetricsConfigUpdate(List.of("--client-metrics", defaultClientMetricsName, "--alter"));
     }
 
     private void verifyClientMetricsConfigUpdate(List<String> alterOpts) throws Exception {
         try (Admin client = cluster.admin()) {
             // Add config
             Map<String, String> configs = new HashMap<>();
-            configs.put("metrics", "");
+            configs.put("metrics", "org.apache.kafka.producer.");
             configs.put("interval.ms", "6000");
             alterAndVerifyClientMetricsConfig(client, defaultClientMetricsName, configs, alterOpts);
 
             // Delete config
-            deleteAndVerifyClientMetricsConfigValue(client, defaultClientMetricsName, configs.keySet(), alterOpts);
+            configs.put("metrics", "");
+            configs.put("interval.ms", "300000");
+            deleteAndVerifyClientMetricsConfigValue(client, defaultClientMetricsName, configs, alterOpts);
 
             // Unknown config configured should fail
-            assertThrows(ExecutionException.class, () -> alterConfigWithAdmin(client, singletonMap("unknown.config", "20000"), alterOpts));
+            assertThrows(ExecutionException.class, () -> alterConfigWithAdmin(client, Map.of("unknown.config", "20000"), alterOpts));
+        }
+    }
+
+    @ClusterTest
+    public void testBrokerLoggerConfigUpdate() throws Exception {
+        List<String> alterOpts = Stream.concat(entityOp(Optional.of(defaultBrokerId)).stream(),
+            Stream.of("--entity-type", "broker-loggers", "--alter")).toList();
+
+        verifyBrokerLoggerConfigUpdate(alterOpts);
+
+        // Test for the --broker-logger alias
+        verifyBrokerLoggerConfigUpdate(List.of("--broker-logger", defaultBrokerId, "--alter"));
+    }
+
+    private void verifyBrokerLoggerConfigUpdate(List<String> alterOpts) throws Exception {
+        try (Admin client = cluster.admin()) {
+            // Add config
+            Map<String, String> configs = new HashMap<>();
+            configs.put("org.apache.kafka.server.quota.ClientQuotaManager$ThrottledChannelReaper", "DEBUG");
+            alterAndVerifyBrokerLoggerConfig(client, defaultBrokerId, configs, alterOpts);
+
+            // Delete config
+            configs.put("org.apache.kafka.server.quota.ClientQuotaManager$ThrottledChannelReaper", "ERROR");
+            deleteAndVerifyBrokerLoggerConfigValue(client, defaultBrokerId, configs, alterOpts);
         }
     }
 
@@ -270,13 +548,13 @@ public class ConfigCommandIntegrationTest {
         try (Admin client = cluster.admin()) {
             assertThrows(ExecutionException.class,
                     () -> alterConfigWithAdmin(client, Optional.of(defaultBrokerId),
-                            singletonMap(AUTO_CREATE_TOPICS_ENABLE_CONFIG, "false"), alterOpts));
+                            Map.of(AUTO_CREATE_TOPICS_ENABLE_CONFIG, "false"), alterOpts));
             assertThrows(ExecutionException.class,
                     () -> alterConfigWithAdmin(client, Optional.of(defaultBrokerId),
-                            singletonMap(AUTO_LEADER_REBALANCE_ENABLE_CONFIG, "false"), alterOpts));
+                            Map.of(AUTO_LEADER_REBALANCE_ENABLE_CONFIG, "false"), alterOpts));
             assertThrows(ExecutionException.class,
                     () -> alterConfigWithAdmin(client, Optional.of(defaultBrokerId),
-                            singletonMap("broker.id", "1"), alterOpts));
+                            Map.of("broker.id", "1"), alterOpts));
         }
     }
 
@@ -286,11 +564,11 @@ public class ConfigCommandIntegrationTest {
 
         try (Admin client = cluster.admin()) {
             alterAndVerifyConfig(client, Optional.of(defaultBrokerId),
-                    singletonMap("log.flush.interval.messages", "100"), alterOpts);
+                    Map.of("log.flush.interval.messages", "100"), alterOpts);
             alterAndVerifyConfig(client, Optional.of(defaultBrokerId),
-                    singletonMap("log.retention.bytes", "20"), alterOpts);
+                    Map.of("log.retention.bytes", "20"), alterOpts);
             alterAndVerifyConfig(client, Optional.of(defaultBrokerId),
-                    singletonMap("log.retention.ms", "2"), alterOpts);
+                    Map.of("log.retention.ms", "2"), alterOpts);
         }
     }
 
@@ -301,13 +579,13 @@ public class ConfigCommandIntegrationTest {
 
         try (Admin client = cluster.admin()) {
             alterAndVerifyConfig(client, Optional.of(defaultBrokerId),
-                    singletonMap(listenerName + "ssl.truststore.type", "PKCS12"), alterOpts);
+                    Map.of(listenerName + "ssl.truststore.type", "PKCS12"), alterOpts);
             alterAndVerifyConfig(client, Optional.of(defaultBrokerId),
-                    singletonMap(listenerName + "ssl.truststore.location", "/temp/test.jks"), alterOpts);
+                    Map.of(listenerName + "ssl.truststore.location", "/temp/test.jks"), alterOpts);
             alterConfigWithAdmin(client, Optional.of(defaultBrokerId),
-                    singletonMap(listenerName + "ssl.truststore.password", "password"), alterOpts);
+                    Map.of(listenerName + "ssl.truststore.password", "password"), alterOpts);
             verifyConfigSecretValue(client, Optional.of(defaultBrokerId),
-                    singleton(listenerName + "ssl.truststore.password"));
+                    Set.of(listenerName + "ssl.truststore.password"));
         }
     }
 
@@ -318,46 +596,51 @@ public class ConfigCommandIntegrationTest {
         try (Admin client = cluster.admin()) {
             assertThrows(ExecutionException.class,
                     () -> alterConfigWithAdmin(client, Optional.of(defaultBrokerId),
-                            singletonMap(SSL_TRUSTSTORE_TYPE_CONFIG, "PKCS12"), alterOpts));
+                            Map.of(SSL_TRUSTSTORE_TYPE_CONFIG, "PKCS12"), alterOpts));
             assertThrows(ExecutionException.class,
                     () -> alterConfigWithAdmin(client, Optional.of(defaultBrokerId),
-                            singletonMap(SSL_TRUSTSTORE_LOCATION_CONFIG, "/temp/test.jks"), alterOpts));
+                            Map.of(SSL_TRUSTSTORE_LOCATION_CONFIG, "/temp/test.jks"), alterOpts));
             assertThrows(ExecutionException.class,
                     () -> alterConfigWithAdmin(client, Optional.of(defaultBrokerId),
-                            singletonMap(SSL_TRUSTSTORE_PASSWORD_CONFIG, "password"), alterOpts));
+                            Map.of(SSL_TRUSTSTORE_PASSWORD_CONFIG, "password"), alterOpts));
         }
     }
 
     @ClusterTest
-    public void testUpdateInvalidBrokerConfigs() {
+    public void testUpdateInvalidBrokerConfigs() throws Exception {
         updateAndCheckInvalidBrokerConfig(Optional.empty());
-        updateAndCheckInvalidBrokerConfig(Optional.of(cluster.anyBrokerSocketServer().config().brokerId() + ""));
+        updateAndCheckInvalidBrokerConfig(Optional.of(String.valueOf((cluster.brokers().entrySet().iterator().next().getKey()))));
     }
 
-    private void updateAndCheckInvalidBrokerConfig(Optional<String> brokerIdOrDefault) {
+    private void updateAndCheckInvalidBrokerConfig(Optional<String> brokerIdOrDefault) throws Exception {
         List<String> alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
         try (Admin client = cluster.admin()) {
-            alterConfigWithAdmin(client, brokerIdOrDefault, Collections.singletonMap("invalid", "2"), alterOpts);
+            alterConfigWithAdmin(client, brokerIdOrDefault, Map.of("invalid", "2"), alterOpts);
+            AtomicReference<String> last = new AtomicReference<>("");
 
-            Stream<String> describeCommand = Stream.concat(
-                    Stream.concat(
-                            Stream.of("--bootstrap-server", cluster.bootstrapServers()),
-                            Stream.of(entityOp(brokerIdOrDefault).toArray(new String[0]))),
-                    Stream.of("--entity-type", "brokers", "--describe"));
-            String describeResult = captureStandardOut(run(describeCommand));
+            TestUtils.waitForCondition(() -> {
+                Stream<String> describeCommand = Stream.concat(
+                        Stream.concat(
+                                Stream.of("--bootstrap-server", cluster.bootstrapServers()),
+                                Stream.of(entityOp(brokerIdOrDefault).toArray(new String[0]))),
+                        Stream.of("--entity-type", "brokers", "--describe")
+                );
+                String describeResult = captureStandardOut(run(describeCommand));
+                last.set(describeResult);
 
-            // We will treat unknown config as sensitive
-            assertTrue(describeResult.contains("sensitive=true"), describeResult);
-            // Sensitive config will not return
-            assertTrue(describeResult.contains("invalid=null"), describeResult);
+                return describeResult.contains("invalid=null");
+            }, 5000, () -> "Dynamic broker config was not visible within 5s (missing 'invalid=null').\n" +
+                    "Last describe output:\n" + last.get());
+
+            assertTrue(last.get().contains("sensitive=true"));
         }
     }
 
     @ClusterTest
     public void testUpdateInvalidTopicConfigs() throws ExecutionException, InterruptedException {
-        List<String> alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--entity-type", "topics", "--alter");
+        List<String> alterOpts = List.of("--bootstrap-server", cluster.bootstrapServers(), "--entity-type", "topics", "--alter");
         try (Admin client = cluster.admin()) {
-            client.createTopics(Collections.singletonList(new NewTopic("test-config-topic", 1, (short) 1))).all().get();
+            client.createTopics(List.of(new NewTopic("test-config-topic", 1, (short) 1))).all().get();
             assertInstanceOf(
                     InvalidConfigurationException.class,
                     assertThrows(
@@ -366,9 +649,75 @@ public class ConfigCommandIntegrationTest {
                                     client,
                                     new ConfigCommand.ConfigCommandOptions(
                                             toArray(alterOpts,
-                                                    asList("--add-config", "invalid=2", "--entity-type", "topics", "--entity-name", "test-config-topic"))))
+                                                    List.of("--add-config", "invalid=2", "--entity-type", "topics", "--entity-name", "test-config-topic"))))
                     ).getCause()
             );
+        }
+    }
+
+    @ClusterTest
+    public void testDeleteNonExistentConfigIsIdempotent() throws Exception {
+        String topicName = "test-delete-nonexistent-topic";
+        try (Admin client = cluster.admin()) {
+            client.createTopics(List.of(new NewTopic(topicName, 1, (short) 1))).all().get();
+
+            ConfigCommand.alterConfig(client, new ConfigCommand.ConfigCommandOptions(toArray(
+                List.of("--bootstrap-server", cluster.bootstrapServers(),
+                    "--entity-type", "topics", "--entity-name", topicName,
+                    "--alter", "--delete-config", "non.existent.config"))));
+
+            ConfigCommand.alterConfig(client, new ConfigCommand.ConfigCommandOptions(toArray(
+                List.of("--bootstrap-server", cluster.bootstrapServers(),
+                    "--entity-type", "brokers", "--entity-name", defaultBrokerId,
+                    "--alter", "--delete-config", "non.existent.config"))));
+
+            ConfigCommand.alterConfig(client, new ConfigCommand.ConfigCommandOptions(toArray(
+                List.of("--bootstrap-server", cluster.bootstrapServers(),
+                    "--entity-type", "brokers", "--entity-default",
+                    "--alter", "--delete-config", "non.existent.config"))));
+        }
+    }
+
+    @ClusterTest
+    public void testDeleteNonExistentConfigIsIdempotentWithBootstrapController() throws Exception {
+        String topicName = "test-delete-nonexistent-topic";
+        try (Admin bootstrapControllerClient = cluster.admin(Map.of(), true);
+             Admin bootstrapServerClient = cluster.admin(Map.of())) {
+            bootstrapServerClient.createTopics(List.of(new NewTopic(topicName, 1, (short) 1))).all().get();
+            ConfigCommand.alterConfig(bootstrapControllerClient, new ConfigCommand.ConfigCommandOptions(toArray(
+                List.of("--bootstrap-controller", cluster.bootstrapControllers(),
+                    "--entity-type", "topics", "--entity-name", topicName,
+                    "--alter", "--delete-config", "non.existent.config"))));
+
+            ConfigCommand.alterConfig(bootstrapControllerClient, new ConfigCommand.ConfigCommandOptions(toArray(
+                List.of("--bootstrap-controller", cluster.bootstrapControllers(),
+                    "--entity-type", "brokers", "--entity-name", defaultBrokerId,
+                    "--alter", "--delete-config", "non.existent.config"))));
+
+            ConfigCommand.alterConfig(bootstrapControllerClient, new ConfigCommand.ConfigCommandOptions(toArray(
+                List.of("--bootstrap-controller", cluster.bootstrapControllers(),
+                    "--entity-type", "brokers", "--entity-default",
+                    "--alter", "--delete-config", "non.existent.config"))));
+        }
+    }
+
+    @ClusterTest(brokers = 2)
+    public void testAlterBrokerConfigWithOfflineBroker() throws Exception {
+        int offlineBrokerId = cluster.brokerIds().stream()
+            .filter(id -> !cluster.controllerIds().contains(id))
+            .findFirst()
+            .orElseThrow();
+        cluster.shutdownBroker(offlineBrokerId);
+        TestUtils.waitForCondition(
+            () -> !cluster.aliveBrokers().containsKey(offlineBrokerId),
+            "Broker " + offlineBrokerId + " did not shut down in time"
+        );
+
+        try (Admin client = cluster.admin(Map.of(), true)) {
+            ConfigCommand.alterConfig(client, new ConfigCommand.ConfigCommandOptions(toArray(
+                List.of("--bootstrap-controller", cluster.bootstrapControllers(),
+                    "--entity-type", "brokers", "--entity-name", String.valueOf(offlineBrokerId),
+                    "--alter", "--delete-config", "log.retention.ms"))));
         }
     }
 
@@ -377,23 +726,25 @@ public class ConfigCommandIntegrationTest {
         // Must be at greater than 1MB per cleaner thread, set to 2M+2 so that we can set 2 cleaner threads.
         @ClusterConfigProperty(key = "log.cleaner.dedupe.buffer.size", value = "2097154"),
     })
-    public void testUpdateBrokerConfigNotAffectedByInvalidConfig() {
+    public void testUpdateBrokerConfigNotAffectedByInvalidConfig() throws Exception {
         try (Admin client = cluster.admin()) {
             ConfigCommand.alterConfig(client, new ConfigCommand.ConfigCommandOptions(
-                    toArray(asList("--bootstrap-server", cluster.bootstrapServers(),
+                    toArray(List.of("--bootstrap-server", cluster.bootstrapServers(),
                             "--alter",
                             "--add-config", "log.cleaner.threadzz=2",
                             "--entity-type", "brokers",
                             "--entity-default"))));
 
             ConfigCommand.alterConfig(client, new ConfigCommand.ConfigCommandOptions(
-                    toArray(asList("--bootstrap-server", cluster.bootstrapServers(),
+                    toArray(List.of("--bootstrap-server", cluster.bootstrapServers(),
                             "--alter",
                             "--add-config", "log.cleaner.threads=2",
                             "--entity-type", "brokers",
                             "--entity-default"))));
             kafka.utils.TestUtils.waitUntilTrue(
-                    () -> cluster.brokerSocketServers().stream().allMatch(broker -> broker.config().getInt("log.cleaner.threads") == 2),
+                    () -> cluster.brokers().values().stream()
+                        .map(KafkaBroker::config)
+                        .allMatch(config -> config.getInt("log.cleaner.threads") == 2),
                     () -> "Timeout waiting for topic config propagating to broker",
                     org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS,
                     100L);
@@ -412,20 +763,53 @@ public class ConfigCommandIntegrationTest {
             AlterConfigsResult mockResult = AdminClientTestUtils.alterConfigsResult(
                     new ConfigResource(ConfigResource.Type.BROKER, ""), new UnsupportedVersionException("simulated error"));
             Mockito.doReturn(mockResult).when(spyAdmin)
-                    .incrementalAlterConfigs(any(java.util.Map.class), any(AlterConfigsOptions.class));
+                    .incrementalAlterConfigs(anyMap(), any(AlterConfigsOptions.class));
             assertEquals(
                     "The INCREMENTAL_ALTER_CONFIGS API is not supported by the cluster. The API is supported starting from version 2.3.0. You may want to use an older version of this tool to interact with your cluster, or upgrade your brokers to version 2.3.0 or newer to avoid this error.",
-                    assertThrows(UnsupportedVersionException.class, () -> {
+                    assertThrows(UnsupportedVersionException.class, () ->
                         ConfigCommand.alterConfig(spyAdmin, new ConfigCommand.ConfigCommandOptions(
-                                toArray(asList(
+                                toArray(List.of(
                                         "--bootstrap-server", cluster.bootstrapServers(),
                                         "--alter",
                                         "--add-config", "log.cleaner.threads=2",
                                         "--entity-type", "brokers",
-                                        "--entity-default"))));
-                    }).getMessage()
+                                        "--entity-default"))))
+                    ).getMessage()
             );
-            Mockito.verify(spyAdmin).incrementalAlterConfigs(any(java.util.Map.class), any(AlterConfigsOptions.class));
+            Mockito.verify(spyAdmin).incrementalAlterConfigs(anyMap(), any(AlterConfigsOptions.class));
+        }
+    }
+
+    @ClusterTest
+    public void testDescribeNonExistentConfigResource() {
+        Map<String, String> configResourceTypeAndNames = Map.of(
+            "brokers", "3",
+            "broker-loggers", "3",
+            "topics", "non-existent",
+            "groups", "non-existent",
+            "client-metrics", "non-existent");
+        configResourceTypeAndNames.forEach((type, name) -> {
+            Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
+                "--entity-type", type,
+                "--entity-name", name,
+                "--describe"));
+            String message = captureStandardOut(run(command));
+            assertTrue(
+                message.contains("The " + type.substring(0, type.length() - 1) + " '" + name + "' doesn't exist and doesn't have dynamic config."),
+                "The config resource type " + type + " got unexpected result: " + message
+            );
+        });
+    }
+
+    @ClusterTest
+    public void testIntervalMsParser(ClusterInstance clusterInstance) {
+        List<String> alterOpts = List.of("--bootstrap-server", clusterInstance.bootstrapServers(),
+                "--alter", "--entity-type", "client-metrics", "--entity-name", "test", "--add-config", "interval.ms=bbb");
+        try (Admin client = clusterInstance.admin()) {
+            ConfigCommand.ConfigCommandOptions addOpts = new ConfigCommand.ConfigCommandOptions(alterOpts.toArray(String[]::new));
+
+            Throwable e = assertThrows(ExecutionException.class, () -> ConfigCommand.alterConfig(client, addOpts));
+            assertTrue(e.getMessage().contains(InvalidConfigurationException.class.getSimpleName()));
         }
     }
 
@@ -448,12 +832,12 @@ public class ConfigCommandIntegrationTest {
     }
 
     private List<String> entityOp(Optional<String> entityId) {
-        return entityId.map(id -> asList("--entity-name", id))
-                .orElse(singletonList("--entity-default"));
+        return entityId.map(id -> List.of("--entity-name", id))
+                .orElse(List.of("--entity-default"));
     }
 
     private List<String> generateDefaultAlterOpts(String bootstrapServers) {
-        return asList("--bootstrap-server", bootstrapServers,
+        return List.of("--bootstrap-server", bootstrapServers,
                 "--entity-type", "brokers", "--alter");
     }
 
@@ -462,7 +846,7 @@ public class ConfigCommandIntegrationTest {
                                       Map<String, String> config,
                                       List<String> alterOpts) throws Exception {
         alterConfigWithAdmin(client, brokerId, config, alterOpts);
-        verifyConfig(client, brokerId, config);
+        verifyBrokerConfig(client, brokerId, config);
     }
 
     private void alterAndVerifyGroupConfig(Admin client,
@@ -481,51 +865,58 @@ public class ConfigCommandIntegrationTest {
         verifyClientMetricsConfig(client, clientMetricsName, config);
     }
 
-    private void alterConfigWithAdmin(Admin client, Optional<String> resourceName, Map<String, String> config, List<String> alterOpts) {
+    private void alterAndVerifyBrokerLoggerConfig(Admin client,
+                                                  String brokerId,
+                                                  Map<String, String> config,
+                                                  List<String> alterOpts) throws Exception {
+        alterConfigWithAdmin(client, config, alterOpts);
+        verifyBrokerLoggerConfig(client, brokerId, config);
+    }
+
+    private void alterConfigWithAdmin(Admin client, Optional<String> resourceName, Map<String, String> config, List<String> alterOpts) throws Exception {
         String configStr = transferConfigMapToString(config);
-        List<String> bootstrapOpts = quorumArgs().collect(Collectors.toList());
+        List<String> bootstrapOpts = quorumArgs().toList();
         ConfigCommand.ConfigCommandOptions addOpts =
                 new ConfigCommand.ConfigCommandOptions(toArray(bootstrapOpts,
                         entityOp(resourceName),
                         alterOpts,
-                        asList("--add-config", configStr)));
+                        List.of("--add-config", configStr)));
         addOpts.checkArgs();
         ConfigCommand.alterConfig(client, addOpts);
     }
 
-    private void alterConfigWithAdmin(Admin client, Map<String, String> config, List<String> alterOpts) {
+    private void alterConfigWithAdmin(Admin client, Map<String, String> config, List<String> alterOpts) throws Exception {
         String configStr = transferConfigMapToString(config);
-        List<String> bootstrapOpts = quorumArgs().collect(Collectors.toList());
+        List<String> bootstrapOpts = quorumArgs().toList();
         ConfigCommand.ConfigCommandOptions addOpts =
                 new ConfigCommand.ConfigCommandOptions(toArray(bootstrapOpts,
                         alterOpts,
-                        asList("--add-config", configStr)));
+                        List.of("--add-config", configStr)));
         addOpts.checkArgs();
         ConfigCommand.alterConfig(client, addOpts);
     }
 
-    private void verifyConfig(Admin client, Optional<String> brokerId, Map<String, String> config) throws Exception {
+    private void verifyBrokerConfig(Admin client, Optional<String> brokerId, Map<String, String> config) throws Exception {
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.orElse(""));
-        TestUtils.waitForCondition(() -> {
-            Map<String, String> current = getConfigEntryStream(client, configResource)
-                    .filter(configEntry -> Objects.nonNull(configEntry.value()))
-                    .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
-            return config.entrySet().stream().allMatch(e -> e.getValue().equals(current.get(e.getKey())));
-        }, 10000, config + " are not updated");
+        verifyConfig(client, config, configResource);
     }
 
     private void verifyGroupConfig(Admin client, String groupName, Map<String, String> config) throws Exception {
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, groupName);
-        TestUtils.waitForCondition(() -> {
-            Map<String, String> current = getConfigEntryStream(client, configResource)
-                .filter(configEntry -> Objects.nonNull(configEntry.value()))
-                .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
-            return config.entrySet().stream().allMatch(e -> e.getValue().equals(current.get(e.getKey())));
-        }, 10000, config + " are not updated");
+        verifyConfig(client, config, configResource);
     }
 
     private void verifyClientMetricsConfig(Admin client, String clientMetricsName, Map<String, String> config) throws Exception {
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, clientMetricsName);
+        verifyConfig(client, config, configResource);
+    }
+
+    private void verifyBrokerLoggerConfig(Admin client, String brokerId, Map<String, String> config) throws Exception {
+        ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, brokerId);
+        verifyConfig(client, config, configResource);
+    }
+
+    private void verifyConfig(Admin client, Map<String, String> config, ConfigResource configResource) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
             Map<String, String> current = getConfigEntryStream(client, configResource)
                     .filter(configEntry -> Objects.nonNull(configEntry.value()))
@@ -538,7 +929,7 @@ public class ConfigCommandIntegrationTest {
 
     private Stream<ConfigEntry> getConfigEntryStream(Admin client,
                                                      ConfigResource configResource) throws InterruptedException, ExecutionException {
-        return client.describeConfigs(singletonList(configResource))
+        return client.describeConfigs(List.of(configResource))
                 .all()
                 .get()
                 .values()
@@ -552,8 +943,8 @@ public class ConfigCommandIntegrationTest {
                                             boolean hasDefaultValue,
                                             List<String> alterOpts) throws Exception {
         ConfigCommand.ConfigCommandOptions deleteOpts =
-                new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, asList("--entity-name", brokerId),
-                        asList("--delete-config", String.join(",", config))));
+                new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, List.of("--entity-name", brokerId),
+                        List.of("--delete-config", String.join(",", config))));
         deleteOpts.checkArgs();
         ConfigCommand.alterConfig(client, deleteOpts);
         verifyPerBrokerConfigValue(client, brokerId, config, hasDefaultValue);
@@ -563,11 +954,11 @@ public class ConfigCommandIntegrationTest {
                                                  String groupName,
                                                  Map<String, String> defaultConfigs,
                                                  List<String> alterOpts) throws Exception {
-        List<String> bootstrapOpts = quorumArgs().collect(Collectors.toList());
+        List<String> bootstrapOpts = quorumArgs().toList();
         ConfigCommand.ConfigCommandOptions deleteOpts =
             new ConfigCommand.ConfigCommandOptions(toArray(bootstrapOpts,
                     alterOpts,
-                    asList("--delete-config", String.join(",", defaultConfigs.keySet()))));
+                    List.of("--delete-config", String.join(",", defaultConfigs.keySet()))));
         deleteOpts.checkArgs();
         ConfigCommand.alterConfig(client, deleteOpts);
         verifyGroupConfig(client, groupName, defaultConfigs);
@@ -575,17 +966,30 @@ public class ConfigCommandIntegrationTest {
 
     private void deleteAndVerifyClientMetricsConfigValue(Admin client,
                                                          String clientMetricsName,
-                                                         Set<String> defaultConfigs,
+                                                         Map<String, String> defaultConfigs,
                                                          List<String> alterOpts) throws Exception {
-        List<String> bootstrapOpts = quorumArgs().collect(Collectors.toList());
+        List<String> bootstrapOpts = quorumArgs().toList();
         ConfigCommand.ConfigCommandOptions deleteOpts =
             new ConfigCommand.ConfigCommandOptions(toArray(bootstrapOpts,
                     alterOpts,
-                    asList("--delete-config", String.join(",", defaultConfigs))));
+                    List.of("--delete-config", String.join(",", defaultConfigs.keySet()))));
         deleteOpts.checkArgs();
         ConfigCommand.alterConfig(client, deleteOpts);
-        // There are no default configs returned for client metrics
-        verifyClientMetricsConfig(client, clientMetricsName, Collections.emptyMap());
+        verifyClientMetricsConfig(client, clientMetricsName, defaultConfigs);
+    }
+
+    private void deleteAndVerifyBrokerLoggerConfigValue(Admin client,
+                                                        String brokerId,
+                                                        Map<String, String> defaultConfigs,
+                                                        List<String> alterOpts) throws Exception {
+        List<String> bootstrapOpts = quorumArgs().toList();
+        ConfigCommand.ConfigCommandOptions deleteOpts =
+            new ConfigCommand.ConfigCommandOptions(toArray(bootstrapOpts,
+                    alterOpts,
+                    List.of("--delete-config", String.join(",", defaultConfigs.keySet()))));
+        deleteOpts.checkArgs();
+        ConfigCommand.alterConfig(client, deleteOpts);
+        verifyBrokerLoggerConfig(client, brokerId, defaultConfigs);
     }
 
     private void verifyPerBrokerConfigValue(Admin client,

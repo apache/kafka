@@ -23,10 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.ExecutionException;
@@ -65,26 +62,7 @@ public class DelayedOperationTest {
             executorService.shutdown();
     }
 
-    private static class MockKey implements DelayedOperationKey {
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            MockKey mockKey = (MockKey) o;
-            return Objects.equals(key, mockKey.key);
-        }
-
-        @Override
-        public int hashCode() {
-            return key != null ? key.hashCode() : 0;
-        }
-
-        final String key;
-
-        MockKey(String key) {
-            this.key = key;
-        }
-
+    private record MockKey(String key) implements DelayedOperationKey {
         @Override
         public String keyLabel() {
             return key;
@@ -109,7 +87,7 @@ public class DelayedOperationTest {
                 return super.safeTryComplete();
             }
         };
-        purgatory.tryCompleteElseWatch(op, Collections.singletonList(new MockKey("key")));
+        purgatory.tryCompleteElseWatch(op, List.of(new MockKey("key")));
     }
 
     private DelayedOperation op(boolean shouldComplete) {
@@ -141,9 +119,9 @@ public class DelayedOperationTest {
         MockDelayedOperation r1 = new MockDelayedOperation(100000L);
         MockDelayedOperation r2 = new MockDelayedOperation(100000L);
         assertEquals(0, purgatory.checkAndComplete(test1), "With no waiting requests, nothing should be satisfied");
-        assertFalse(purgatory.tryCompleteElseWatch(r1, Collections.singletonList(new MockKey("test1"))), "r1 not satisfied and hence watched");
+        assertFalse(purgatory.tryCompleteElseWatch(r1, List.of(new MockKey("test1"))), "r1 not satisfied and hence watched");
         assertEquals(0, purgatory.checkAndComplete(test1), "Still nothing satisfied");
-        assertFalse(purgatory.tryCompleteElseWatch(r2, Collections.singletonList(new MockKey("test2"))), "r2 not satisfied and hence watched");
+        assertFalse(purgatory.tryCompleteElseWatch(r2, List.of(new MockKey("test2"))), "r2 not satisfied and hence watched");
         assertEquals(0, purgatory.checkAndComplete(test2), "Still nothing satisfied");
         r1.completable = true;
         assertEquals(1, purgatory.checkAndComplete(test1), "r1 satisfied");
@@ -159,8 +137,8 @@ public class DelayedOperationTest {
         long start = Time.SYSTEM.hiResClockMs();
         MockDelayedOperation r1 = new MockDelayedOperation(expiration);
         MockDelayedOperation r2 = new MockDelayedOperation(200000L);
-        assertFalse(purgatory.tryCompleteElseWatch(r1, Collections.singletonList(test1)), "r1 not satisfied and hence watched");
-        assertFalse(purgatory.tryCompleteElseWatch(r2, Collections.singletonList(test2)), "r2 not satisfied and hence watched");
+        assertFalse(purgatory.tryCompleteElseWatch(r1, List.of(test1)), "r1 not satisfied and hence watched");
+        assertFalse(purgatory.tryCompleteElseWatch(r2, List.of(test2)), "r2 not satisfied and hence watched");
         r1.awaitExpiration();
         long elapsed = Time.SYSTEM.hiResClockMs() - start;
         assertTrue(r1.isCompleted(), "r1 completed due to expiration");
@@ -173,9 +151,9 @@ public class DelayedOperationTest {
         MockDelayedOperation r1 = new MockDelayedOperation(100000L);
         MockDelayedOperation r2 = new MockDelayedOperation(100000L);
         MockDelayedOperation r3 = new MockDelayedOperation(100000L);
-        purgatory.tryCompleteElseWatch(r1, Collections.singletonList(test1));
-        purgatory.tryCompleteElseWatch(r2, Arrays.asList(test1, test2));
-        purgatory.tryCompleteElseWatch(r3, Arrays.asList(test1, test2, test3));
+        purgatory.tryCompleteElseWatch(r1, List.of(test1));
+        purgatory.tryCompleteElseWatch(r2, List.of(test1, test2));
+        purgatory.tryCompleteElseWatch(r3, List.of(test1, test2, test3));
 
         assertEquals(3, purgatory.numDelayed(), "Purgatory should have 3 total delayed operations");
         assertEquals(6, purgatory.watched(), "Purgatory should have 6 watched elements");
@@ -202,9 +180,9 @@ public class DelayedOperationTest {
 
     @Test
     public void shouldCancelForKeyReturningCancelledOperations() {
-        purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), Collections.singletonList(test1));
-        purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), Collections.singletonList(test1));
-        purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), Collections.singletonList(test2));
+        purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), List.of(test1));
+        purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), List.of(test1));
+        purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), List.of(test2));
 
         List<DelayedOperation> cancelledOperations = purgatory.cancelForKey(test1);
         assertEquals(2, cancelledOperations.size());
@@ -232,7 +210,7 @@ public class DelayedOperationTest {
         List<TestDelayOperation> ops = new ArrayList<>();
         for (int i = 0; i < 100; i++) {
             TestDelayOperation op = new TestDelayOperation(i, completionAttempts, maxDelayMs);
-            purgatory.tryCompleteElseWatch(op, Collections.singletonList(op.key));
+            purgatory.tryCompleteElseWatch(op, List.of(op.key));
             ops.add(op);
         }
 

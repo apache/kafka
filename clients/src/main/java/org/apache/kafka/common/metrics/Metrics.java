@@ -19,8 +19,8 @@ package org.apache.kafka.common.metrics;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.metrics.internals.MetricsUtils;
-import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.KafkaThread;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,7 +48,7 @@ import static java.util.Collections.emptyList;
  * A registry of sensors and metrics.
  * <p>
  * A metric is a named, numerical measurement. A sensor is a handle to record numerical measurements as they occur. Each
- * Sensor has zero or more associated metrics. For example a Sensor might represent message sizes and we might associate
+ * Sensor has zero or more associated metrics. For example, a Sensor might represent message sizes, and we might associate
  * with this sensor a metric for the average, maximum, or other statistics computed off the sequence of message sizes
  * that are recorded by the sensor.
  * <p>
@@ -58,9 +58,9 @@ import static java.util.Collections.emptyList;
  * // set up metrics:
  * Metrics metrics = new Metrics(); // this is the global repository of metrics and sensors
  * Sensor sensor = metrics.sensor(&quot;message-sizes&quot;);
- * MetricName metricName = new MetricName(&quot;message-size-avg&quot;, &quot;producer-metrics&quot;);
+ * MetricName metricName = metrics.metricName(&quot;message-size-avg&quot;, &quot;producer-metrics&quot;);
  * sensor.add(metricName, new Avg());
- * metricName = new MetricName(&quot;message-size-max&quot;, &quot;producer-metrics&quot;);
+ * metricName = metrics.metricName(&quot;message-size-max&quot;, &quot;producer-metrics&quot;);
  * sensor.add(metricName, new Max());
  * 
  * // as messages are sent we record the sizes
@@ -369,7 +369,7 @@ public final class Metrics implements Closeable {
      * @param parents The parent sensors
      * @return The sensor that is created
      */
-    public synchronized Sensor sensor(String name, MetricConfig config, Sensor... parents) {
+    public Sensor sensor(String name, MetricConfig config, Sensor... parents) {
         return this.sensor(name, config, Sensor.RecordingLevel.INFO, parents);
     }
 
@@ -383,7 +383,7 @@ public final class Metrics implements Closeable {
      * @param parents The parent sensors
      * @return The sensor that is created
      */
-    public synchronized Sensor sensor(String name, MetricConfig config, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
+    public Sensor sensor(String name, MetricConfig config, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
         return sensor(name, config, Long.MAX_VALUE, recordingLevel, parents);
     }
 
@@ -398,18 +398,23 @@ public final class Metrics implements Closeable {
      * @param recordingLevel The recording level.
      * @return The sensor that is created
      */
-    public synchronized Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
+    public Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor.RecordingLevel recordingLevel, Sensor... parents) {
         Sensor s = getSensor(name);
         if (s == null) {
-            s = new Sensor(this, name, parents, config == null ? this.config : config, time, inactiveSensorExpirationTimeSeconds, recordingLevel);
-            this.sensors.put(name, s);
-            if (parents != null) {
-                for (Sensor parent : parents) {
-                    List<Sensor> children = childrenSensors.computeIfAbsent(parent, k -> new ArrayList<>());
-                    children.add(s);
+            synchronized (this) {
+                s = getSensor(name);
+                if (s == null) {
+                    s = new Sensor(this, name, parents, config == null ? this.config : config, time, inactiveSensorExpirationTimeSeconds, recordingLevel);
+                    this.sensors.put(name, s);
+                    if (parents != null) {
+                        for (Sensor parent : parents) {
+                            List<Sensor> children = childrenSensors.computeIfAbsent(parent, k -> new ArrayList<>());
+                            children.add(s);
+                        }
+                    }
+                    log.trace("Added sensor with name {}", name);
                 }
             }
-            log.trace("Added sensor with name {}", name);
         }
         return s;
     }
@@ -424,7 +429,7 @@ public final class Metrics implements Closeable {
      * @param parents The parent sensors
      * @return The sensor that is created
      */
-    public synchronized Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor... parents) {
+    public Sensor sensor(String name, MetricConfig config, long inactiveSensorExpirationTimeSeconds, Sensor... parents) {
         return this.sensor(name, config, inactiveSensorExpirationTimeSeconds, Sensor.RecordingLevel.INFO, parents);
     }
 
@@ -553,7 +558,7 @@ public final class Metrics implements Closeable {
                 try {
                     reporter.metricRemoval(metric);
                 } catch (Exception e) {
-                    log.error("Error when removing metric from " + reporter.getClass().getName(), e);
+                    log.error("Error when removing metric from {}", reporter.getClass().getName(), e);
                 }
             }
             log.trace("Removed metric named {}", metricName);
@@ -596,7 +601,7 @@ public final class Metrics implements Closeable {
             try {
                 reporter.metricChange(metric);
             } catch (Exception e) {
-                log.error("Error when registering metric on " + reporter.getClass().getName(), e);
+                log.error("Error when registering metric on {}", reporter.getClass().getName(), e);
             }
         }
         log.trace("Registered metric named {}", metricName);
@@ -688,7 +693,7 @@ public final class Metrics implements Closeable {
                 log.info("Closing reporter {}", reporter.getClass().getName());
                 reporter.close();
             } catch (Exception e) {
-                log.error("Error when closing " + reporter.getClass().getName(), e);
+                log.error("Error when closing {}", reporter.getClass().getName(), e);
             }
         }
         log.info("Metrics reporters closed");

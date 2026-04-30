@@ -18,11 +18,10 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.DescribeDelegationTokenRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
-import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -74,8 +73,8 @@ public class DescribeDelegationTokenRequest extends AbstractRequest {
         return new DescribeDelegationTokenResponse(version(), throttleTimeMs, Errors.forException(e));
     }
 
-    public static DescribeDelegationTokenRequest parse(ByteBuffer buffer, short version) {
+    public static DescribeDelegationTokenRequest parse(Readable readable, short version) {
         return new DescribeDelegationTokenRequest(new DescribeDelegationTokenRequestData(
-            new ByteBufferAccessor(buffer), version), version);
+            readable, version), version);
     }
 }

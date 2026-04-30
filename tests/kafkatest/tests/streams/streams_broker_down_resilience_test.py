@@ -41,19 +41,21 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
                                                           num_brokers=1)
 
     def setUp(self):
-        if self.zk:
-            self.zk.start()
+        # do not start kafka
+        pass
 
     @cluster(num_nodes=7)
-    @matrix(metadata_quorum=[quorum.combined_kraft], use_new_coordinator=[True, False])
-    def test_streams_resilient_to_broker_down(self, metadata_quorum, use_new_coordinator=False):
+    @matrix(metadata_quorum=[quorum.combined_kraft],
+            group_protocol=["classic", "streams"])
+    def test_streams_resilient_to_broker_down(self, metadata_quorum, group_protocol):
         self.kafka.start()
 
         # Broker should be down over 2x of retries * timeout ms
         # So with (2 * 15000) = 30 seconds, we'll set downtime to 70 seconds
         broker_down_time_in_seconds = 70
 
-        processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, self.get_configs())
+        processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, self.get_configs(
+            group_protocol=group_protocol))
         processor.start()
 
         self.assert_produce_consume(self.inputTopic,
@@ -82,13 +84,14 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         self.kafka.stop()
 
     @cluster(num_nodes=7)
-    @matrix(metadata_quorum=[quorum.combined_kraft], use_new_coordinator=[True, False])
-    def test_streams_runs_with_broker_down_initially(self, metadata_quorum, use_new_coordinator=False):
+    @matrix(metadata_quorum=[quorum.combined_kraft],
+            group_protocol=["classic", "streams"])
+    def test_streams_runs_with_broker_down_initially(self, metadata_quorum, group_protocol):
         self.kafka.start()
         node = self.kafka.leader(self.inputTopic)
         self.kafka.stop_node(node)
 
-        configs = self.get_configs(extra_configs=",application.id=starting_wo_broker_id")
+        configs = self.get_configs(group_protocol=group_protocol, extra_configs=",application.id=starting_wo_broker_id")
 
         # start streams with broker down initially
         processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
@@ -126,10 +129,12 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
             with processor_2.node.account.monitor_log(processor_2.STDOUT_FILE) as monitor_2:
                 with processor_3.node.account.monitor_log(processor_3.STDOUT_FILE) as monitor_3:
 
+                    # repeating_keys enables production of records with keys, ensuring that we produce to all 3 partitions
                     self.assert_produce(self.inputTopic,
                                         "sending_message_after_broker_down_initially",
                                         num_messages=self.num_messages,
-                                        timeout_sec=120)
+                                        timeout_sec=120,
+                                        repeating_keys=self.num_messages)
 
                     monitor_1.wait_until(self.message,
                                          timeout_sec=120,
@@ -150,14 +155,19 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         self.kafka.stop()
 
     @cluster(num_nodes=9)
-    @matrix(metadata_quorum=[quorum.combined_kraft], use_new_coordinator=[True, False])
-    def test_streams_should_scale_in_while_brokers_down(self, metadata_quorum, use_new_coordinator=False):
+    @matrix(metadata_quorum=[quorum.combined_kraft],
+            group_protocol=["classic", "streams"])
+    def test_streams_should_scale_in_while_brokers_down(self, metadata_quorum, group_protocol):
         self.kafka.start()
+        extra_configs = ",application.id=shutdown_with_broker_down"
 
         # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
+        if group_protocol == "classic":
+            extra_configs += ",internal.task.assignor.class=org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignor"
+
         configs = self.get_configs(
-            extra_configs=",application.id=shutdown_with_broker_down" +
-                          ",internal.task.assignor.class=org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignor"
+            group_protocol=group_protocol,
+            extra_configs=extra_configs
         )
 
         processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
@@ -181,10 +191,12 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
             with processor_2.node.account.monitor_log(processor_2.STDOUT_FILE) as monitor_2:
                 with processor_3.node.account.monitor_log(processor_3.STDOUT_FILE) as monitor_3:
 
+                    # repeating_keys enables production of records with keys, ensuring that we produce to all 3 partitions
                     self.assert_produce(self.inputTopic,
                                         "sending_message_normal_broker_start",
                                         num_messages=self.num_messages,
-                                        timeout_sec=120)
+                                        timeout_sec=120,
+                                        repeating_keys=self.num_messages)
 
                     monitor_1.wait_until(self.message,
                                          timeout_sec=120,
@@ -229,14 +241,19 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         self.kafka.stop()
 
     @cluster(num_nodes=9)
-    @matrix(metadata_quorum=[quorum.combined_kraft], use_new_coordinator=[True, False])
-    def test_streams_should_failover_while_brokers_down(self, metadata_quorum, use_new_coordinator=False):
+    @matrix(metadata_quorum=[quorum.combined_kraft],
+            group_protocol=["classic", "streams"])
+    def test_streams_should_failover_while_brokers_down(self, metadata_quorum, group_protocol):
         self.kafka.start()
+        extra_configs = ",application.id=shutdown_with_broker_down"
 
         # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
+        if group_protocol == "classic":
+            extra_configs += ",internal.task.assignor.class=org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignor"
+
         configs = self.get_configs(
-            extra_configs=",application.id=failover_with_broker_down" +
-                          ",internal.task.assignor.class=org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignor"
+            group_protocol=group_protocol,
+            extra_configs=extra_configs
         )
 
         processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
@@ -260,10 +277,12 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
             with processor_2.node.account.monitor_log(processor_2.STDOUT_FILE) as monitor_2:
                 with processor_3.node.account.monitor_log(processor_3.STDOUT_FILE) as monitor_3:
 
+                    # repeating_keys enables production of records with keys, ensuring that we produce to all 3 partitions
                     self.assert_produce(self.inputTopic,
                                         "sending_message_after_normal_broker_start",
                                         num_messages=self.num_messages,
-                                        timeout_sec=120)
+                                        timeout_sec=120,
+                                        repeating_keys=self.num_messages)
 
                     monitor_1.wait_until(self.message,
                                          timeout_sec=120,
@@ -307,10 +326,12 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
             with processor_2.node.account.monitor_log(processor_2.STDOUT_FILE) as monitor_2:
                 with processor_3.node.account.monitor_log(processor_3.STDOUT_FILE) as monitor_3:
 
+                    # repeating_keys enables production of records with keys, ensuring that we produce to all 3 partitions
                     self.assert_produce(self.inputTopic,
                                         "sending_message_after_hard_bouncing_streams_instance_bouncing_broker",
                                         num_messages=self.num_messages,
-                                        timeout_sec=120)
+                                        timeout_sec=120,
+                                        repeating_keys=self.num_messages)
 
                     monitor_1.wait_until(self.message,
                                          timeout_sec=120,

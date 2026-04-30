@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.test.junit;
 
-
 import org.apache.kafka.common.test.ClusterInstance;
 
 import org.junit.jupiter.api.TestTemplate;

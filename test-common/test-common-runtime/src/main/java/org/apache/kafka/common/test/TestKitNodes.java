@@ -52,7 +52,7 @@ public class TestKitNodes {
         private int numControllerNodes;
         private int numBrokerNodes;
         private int numDisksPerBroker = 1;
-        private Map<Integer, Map<String, String>> perServerProperties = Collections.emptyMap();
+        private Map<Integer, Map<String, String>> perServerProperties = Map.of();
         private BootstrapMetadata bootstrapMetadata;
 
         public Builder() {
@@ -90,11 +90,6 @@ public class TestKitNodes {
 
         public Builder setBootstrapMetadata(BootstrapMetadata bootstrapMetadata) {
             this.bootstrapMetadata = bootstrapMetadata;
-            return this;
-        }
-
-        public Builder setFeature(String featureName, short level) {
-            this.bootstrapMetadata = bootstrapMetadata.copyWithFeatureRecord(featureName, level);
             return this;
         }
 
@@ -175,10 +170,10 @@ public class TestKitNodes {
             int controllerId = combined ? TestKitDefaults.BROKER_ID_OFFSET : TestKitDefaults.BROKER_ID_OFFSET + TestKitDefaults.CONTROLLER_ID_OFFSET;
             List<Integer> controllerNodeIds = IntStream.range(controllerId, controllerId + numControllerNodes)
                 .boxed()
-                .collect(Collectors.toList());
+                .toList();
             List<Integer> brokerNodeIds = IntStream.range(TestKitDefaults.BROKER_ID_OFFSET, TestKitDefaults.BROKER_ID_OFFSET + numBrokerNodes)
                 .boxed()
-                .collect(Collectors.toList());
+                .toList();
 
             String unknownIds = perServerProperties.keySet().stream()
                     .filter(id -> !controllerNodeIds.contains(id))
@@ -201,7 +196,8 @@ public class TestKitNodes {
                     baseDirectory.toFile().getAbsolutePath(),
                     clusterId,
                     brokerNodeIds.contains(id),
-                    perServerProperties.getOrDefault(id, Collections.emptyMap())
+                    perServerProperties.getOrDefault(id, Map.of()),
+                    numDisksPerBroker
                 );
                 controllerNodes.put(id, controllerNode);
             }
@@ -213,7 +209,7 @@ public class TestKitNodes {
                     baseDirectory.toFile().getAbsolutePath(),
                     clusterId,
                     controllerNodeIds.contains(id),
-                    perServerProperties.getOrDefault(id, Collections.emptyMap()),
+                    perServerProperties.getOrDefault(id, Map.of()),
                     numDisksPerBroker
                 );
                 brokerNodes.put(id, brokerNode);
@@ -316,7 +312,7 @@ public class TestKitNodes {
                 }
                 return new File(baseDirectory, logDir).getAbsolutePath();
             })
-            .collect(Collectors.toList());
+            .toList();
         MetaPropertiesEnsemble.Copier copier = new MetaPropertiesEnsemble.Copier(MetaPropertiesEnsemble.EMPTY);
 
         copier.setMetaLogDir(Optional.of(logDataDirectories.get(0)));
@@ -351,21 +347,36 @@ public class TestKitNodes {
                                                   String baseDirectory,
                                                   String clusterId,
                                                   boolean combined,
-                                                  Map<String, String> propertyOverrides) {
+                                                  Map<String, String> propertyOverrides,
+                                                  int numDisksPerController) {
+        List<String> logDataDirectories = combined
+            ? IntStream
+                .range(0, numDisksPerController)
+                .mapToObj(i -> String.format("combined_%d_%d", id, i))
+                .map(logDir -> {
+                    if (Paths.get(logDir).isAbsolute()) {
+                        return logDir;
+                    }
+                    return new File(baseDirectory, logDir).getAbsolutePath();
+                })
+                .toList()
+            : List.of(new File(baseDirectory, String.format("controller_%d", id)).getAbsolutePath());
         String metadataDirectory = new File(baseDirectory,
             combined ? String.format("combined_%d_0", id) : String.format("controller_%d", id)).getAbsolutePath();
         MetaPropertiesEnsemble.Copier copier = new MetaPropertiesEnsemble.Copier(MetaPropertiesEnsemble.EMPTY);
 
         copier.setMetaLogDir(Optional.of(metadataDirectory));
-        copier.setLogDirProps(
-            metadataDirectory,
-            new MetaProperties.Builder()
-                .setVersion(MetaPropertiesVersion.V1)
-                .setClusterId(clusterId)
-                .setNodeId(id)
-                .setDirectoryId(copier.generateValidDirectoryId())
-                .build()
-        );
+        for (String logDir : logDataDirectories) {
+            copier.setLogDirProps(
+                logDir,
+                new MetaProperties.Builder()
+                    .setVersion(MetaPropertiesVersion.V1)
+                    .setClusterId(clusterId)
+                    .setNodeId(id)
+                    .setDirectoryId(copier.generateValidDirectoryId())
+                    .build()
+            );
+        }
 
         return new TestKitNode() {
             private final MetaPropertiesEnsemble ensemble = copier.copy();

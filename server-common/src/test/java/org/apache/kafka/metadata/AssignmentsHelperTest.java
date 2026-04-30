@@ -23,9 +23,8 @@ import org.apache.kafka.server.common.TopicIdPartition;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -51,39 +50,39 @@ public class AssignmentsHelperTest {
         AssignReplicasToDirsRequestData expected = new AssignReplicasToDirsRequestData()
                 .setBrokerId(8)
                 .setBrokerEpoch(100L)
-                .setDirectories(Arrays.asList(
+                .setDirectories(List.of(
                         new AssignReplicasToDirsRequestData.DirectoryData()
                                 .setId(DIR_2)
-                                .setTopics(Arrays.asList(
+                                .setTopics(List.of(
                                         new AssignReplicasToDirsRequestData.TopicData()
                                                 .setTopicId(TOPIC_1)
-                                                .setPartitions(Collections.singletonList(
+                                                .setPartitions(List.of(
                                                         new AssignReplicasToDirsRequestData.PartitionData()
                                                                 .setPartitionIndex(2)
                                                 )),
                                         new AssignReplicasToDirsRequestData.TopicData()
                                                 .setTopicId(TOPIC_2)
-                                                .setPartitions(Collections.singletonList(
+                                                .setPartitions(List.of(
                                                         new AssignReplicasToDirsRequestData.PartitionData()
                                                                 .setPartitionIndex(5)
                                                 ))
                                 )),
                         new AssignReplicasToDirsRequestData.DirectoryData()
                                 .setId(DIR_3)
-                                .setTopics(Collections.singletonList(
+                                .setTopics(List.of(
                                         new AssignReplicasToDirsRequestData.TopicData()
                                                 .setTopicId(TOPIC_1)
-                                                .setPartitions(Collections.singletonList(
+                                                .setPartitions(List.of(
                                                         new AssignReplicasToDirsRequestData.PartitionData()
                                                                 .setPartitionIndex(3)
                                                 ))
                                 )),
                         new AssignReplicasToDirsRequestData.DirectoryData()
                                 .setId(DIR_1)
-                                .setTopics(Collections.singletonList(
+                                .setTopics(List.of(
                                         new AssignReplicasToDirsRequestData.TopicData()
                                                 .setTopicId(TOPIC_1)
-                                                .setPartitions(Arrays.asList(
+                                                .setPartitions(List.of(
                                                         new AssignReplicasToDirsRequestData.PartitionData()
                                                                 .setPartitionIndex(4),
                                                         new AssignReplicasToDirsRequestData.PartitionData()

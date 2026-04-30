@@ -13,6 +13,25 @@ Kafka server can be started using following ways:
 - File input
 - Environment variables
 
+Installation Preparation
+------------
+
+Note that the `Docker` version **must be >= 20.10.4**.
+
+The prior Docker versions may cause permission errors when running the Kafka container, as they do not correctly set directory permissions when creating container paths like `/opt/kafka/config`.
+
+If you are using the prior version, you may encounter the following error during container startup:
+```text
+===> User
+uid=1000(appuser) gid=1000(appuser) groups=1000(appuser)
+===> Setting default values of environment variables if not already set.
+===> Configuring …
+Running in KRaft mode…
+/opt/kafka/config/ file not writable
+```
+
+To avoid this, **please upgrade Docker to 20.10.4 or later**.
+
 Running on default configs
 --------------------------
 
@@ -128,7 +147,7 @@ Single Node
     - To produce messages using client scripts (Ensure that java version >= 17):
     ```
     # Run from root of the repo
-    $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:9093 --producer.config ./docker/examples/fixtures/client-secrets/client-ssl.properties
+    $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:9093 --command-config ./docker/examples/fixtures/client-secrets/client-ssl.properties
     ```
 - File Input:
     - Here ssl configs are provided via file input.
@@ -148,7 +167,7 @@ Single Node
     - To produce messages using client scripts (Ensure that java version >= 17):
     ```
     # Run from root of the repo
-    $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:9093 --producer.config ./docker/examples/fixtures/client-secrets/client-ssl.properties
+    $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:9093 --command-config ./docker/examples/fixtures/client-secrets/client-ssl.properties
     ```
 
 Multi Node Cluster
@@ -200,7 +219,7 @@ Multi Node Cluster
         - To produce messages using client scripts (Ensure that java version >= 17):
         ```
         # Run from root of the repo
-        $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29093 --producer.config ./docker/examples/fixtures/client-secrets/client-ssl.properties
+        $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29093 --command-config ./docker/examples/fixtures/client-secrets/client-ssl.properties
         ```
 - Isolated:
     - Examples are present in `docker-compose-files/cluster/isolated` directory.
@@ -239,7 +258,7 @@ Multi Node Cluster
         - To produce messages using client scripts (Ensure that java version >= 17):
         ```
         # Run from root of the repo
-        $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29093 --producer.config ./docker/examples/fixtures/client-secrets/client-ssl.properties
+        $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29093 --command-config ./docker/examples/fixtures/client-secrets/client-ssl.properties
         ```
 
 - Note that the examples are meant to be tried one at a time, make sure you close an example server before trying out the other to avoid conflicts.

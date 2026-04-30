@@ -30,12 +30,14 @@ import javax.management.ObjectName
  *
  * This is a Scala port of org.apache.cassandra.utils.Mx4jTool written by Ran Tavory for CASSANDRA-1068
  * */
+@deprecated
 object Mx4jLoader extends Logging {
 
   def maybeLoad(): Boolean = {
     val props = new VerifiableProperties(System.getProperties)
     if (!props.getBoolean("kafka_mx4jenable", default = false))
       return false
+    warn("MX4j is deprecated and will be removed in Kafka 5.0")
     val address = props.getString("mx4jaddress", "0.0.0.0")
     val port = props.getInt("mx4jport", 8082)
     try {

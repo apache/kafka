@@ -53,7 +53,7 @@ import org.apache.kafka.connect.util.clusters.ConnectAssertions;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.network.SocketServerConfigs;
-import org.apache.kafka.server.config.KRaftConfigs;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.test.NoRetryException;
 
@@ -67,7 +67,6 @@ import org.slf4j.LoggerFactory;
 import java.io.Closeable;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -306,7 +305,7 @@ public class ExactlyOnceSourceIntegrationTest {
         // consume all records from the source topic or fail, to ensure that they were correctly produced
         ConsumerRecords<byte[], byte[]> records = connect.kafka().consumeAll(
                 CONSUME_RECORDS_TIMEOUT_MS,
-                Collections.singletonMap(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
+                Map.of(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
                 null,
                 topic
         );
@@ -366,7 +365,7 @@ public class ExactlyOnceSourceIntegrationTest {
         // consume all records from the source topic or fail, to ensure that they were correctly produced
         ConsumerRecords<byte[], byte[]> records = connect.kafka().consumeAll(
                 CONSUME_RECORDS_TIMEOUT_MS,
-                Collections.singletonMap(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
+                Map.of(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
                 null,
                 topic
         );
@@ -427,7 +426,7 @@ public class ExactlyOnceSourceIntegrationTest {
         // consume all records from the source topic or fail, to ensure that they were correctly produced
         ConsumerRecords<byte[], byte[]> sourceRecords = connect.kafka().consumeAll(
             CONSUME_RECORDS_TIMEOUT_MS,
-            Collections.singletonMap(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
+            Map.of(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
             null,
             topic
         );
@@ -538,7 +537,7 @@ public class ExactlyOnceSourceIntegrationTest {
         // consume all records from the source topic or fail, to ensure that they were correctly produced
         ConsumerRecords<byte[], byte[]> records = connect.kafka().consumeAll(
                 CONSUME_RECORDS_TIMEOUT_MS,
-                Collections.singletonMap(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
+                Map.of(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
                 null,
                 topic
         );
@@ -601,7 +600,7 @@ public class ExactlyOnceSourceIntegrationTest {
         // consume all records from the source topic or fail, to ensure that they were correctly produced
         ConsumerRecords<byte[], byte[]> records = connect.kafka().consumeAll(
                 CONSUME_RECORDS_TIMEOUT_MS,
-                Collections.singletonMap(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
+                Map.of(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
                 null,
                 topic
         );
@@ -664,7 +663,7 @@ public class ExactlyOnceSourceIntegrationTest {
 
         String topic = "test-topic";
         try (Admin admin = connect.kafka().createAdminClient()) {
-            admin.createTopics(Collections.singleton(new NewTopic(topic, 3, (short) 1))).all().get();
+            admin.createTopics(Set.of(new NewTopic(topic, 3, (short) 1))).all().get();
         }
 
         Map<String, String> props = new HashMap<>();
@@ -690,7 +689,7 @@ public class ExactlyOnceSourceIntegrationTest {
         // Grant the connector's admin permissions to access the topics for its records and offsets
         // Intentionally leave out permissions required for fencing
         try (Admin admin = connect.kafka().createAdminClient()) {
-            admin.createAcls(Arrays.asList(
+            admin.createAcls(List.of(
                     new AclBinding(
                             new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL),
                             new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
@@ -737,7 +736,7 @@ public class ExactlyOnceSourceIntegrationTest {
 
         // Now grant the necessary permissions for fencing to the connector's admin
         try (Admin admin = connect.kafka().createAdminClient()) {
-            admin.createAcls(Arrays.asList(
+            admin.createAcls(List.of(
                     new AclBinding(
                             new ResourcePattern(ResourceType.TRANSACTIONAL_ID, Worker.taskTransactionalId(CLUSTER_GROUP_ID, CONNECTOR_NAME, 0), PatternType.LITERAL),
                             new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
@@ -864,7 +863,7 @@ public class ExactlyOnceSourceIntegrationTest {
                     .consume(
                         MINIMUM_MESSAGES,
                             TimeUnit.MINUTES.toMillis(1),
-                            Collections.singletonMap(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
+                            Map.of(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
                             "test-topic")
                     .count();
             assertTrue(recordNum >= MINIMUM_MESSAGES,
@@ -874,7 +873,7 @@ public class ExactlyOnceSourceIntegrationTest {
             ConsumerRecords<byte[], byte[]> offsetRecords = connectorTargetedCluster
                     .consumeAll(
                             TimeUnit.MINUTES.toMillis(1),
-                            Collections.singletonMap(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
+                            Map.of(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
                             null,
                             offsetsTopic
                     );
@@ -930,7 +929,7 @@ public class ExactlyOnceSourceIntegrationTest {
             // consume all records from the source topic or fail, to ensure that they were correctly produced
             ConsumerRecords<byte[], byte[]> sourceRecords = connectorTargetedCluster.consumeAll(
                     CONSUME_RECORDS_TIMEOUT_MS,
-                    Collections.singletonMap(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
+                    Map.of(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
                     null,
                     topic
             );
@@ -939,7 +938,7 @@ public class ExactlyOnceSourceIntegrationTest {
             // also have to check which offsets have actually been committed, since we no longer have exactly-once semantics
             offsetRecords = connectorTargetedCluster.consumeAll(
                     CONSUME_RECORDS_TIMEOUT_MS,
-                    Collections.singletonMap(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
+                    Map.of(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
                     null,
                     offsetsTopic
             );
@@ -991,7 +990,7 @@ public class ExactlyOnceSourceIntegrationTest {
     }
 
     private ConfigInfo findConfigInfo(String property, ConfigInfos validationResult) {
-        return validationResult.values().stream()
+        return validationResult.configs().stream()
                 .filter(info -> property.equals(info.configKey().name()))
                 .findAny()
                 .orElseThrow(() -> new AssertionError("Failed to find configuration validation result for property '" + property + "'"));
@@ -999,13 +998,13 @@ public class ExactlyOnceSourceIntegrationTest {
 
     private List<Long> parseAndAssertOffsetsForSingleTask(ConsumerRecords<byte[], byte[]> offsetRecords) {
         Map<Integer, List<Long>> parsedOffsets = parseOffsetForTasks(offsetRecords);
-        assertEquals(Collections.singleton(0), parsedOffsets.keySet(), "Expected records to only be produced from a single task");
+        assertEquals(Set.of(0), parsedOffsets.keySet(), "Expected records to only be produced from a single task");
         return parsedOffsets.get(0);
     }
 
     private List<Long> parseAndAssertValuesForSingleTask(ConsumerRecords<byte[], byte[]> sourceRecords) {
         Map<Integer, List<Long>> parsedValues = parseValuesForTasks(sourceRecords);
-        assertEquals(Collections.singleton(0), parsedValues.keySet(), "Expected records to only be produced from a single task");
+        assertEquals(Set.of(0), parsedValues.keySet(), "Expected records to only be produced from a single task");
         return parsedValues.get(0);
     }
 
@@ -1024,7 +1023,7 @@ public class ExactlyOnceSourceIntegrationTest {
         parsedValues.replaceAll((task, values) -> {
             Long committedValue = lastCommittedValues.get(task);
             assertNotNull(committedValue, "No committed offset found for task " + task);
-            return values.stream().filter(v -> v <= committedValue).collect(Collectors.toList());
+            return values.stream().filter(v -> v <= committedValue).toList();
         });
         assertSeqnos(parsedValues, numTasks);
     }
@@ -1102,7 +1101,7 @@ public class ExactlyOnceSourceIntegrationTest {
         JsonConverter offsetsConverter = new JsonConverter();
         // The JSON converter behaves identically for keys and values. If that ever changes, we may need to update this test to use
         // separate converter instances.
-        offsetsConverter.configure(Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false"), false);
+        offsetsConverter.configure(Map.of(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false"), false);
 
         Map<Integer, List<Long>> result = new HashMap<>();
         for (ConsumerRecord<byte[], byte[]> offsetRecord : offsetRecords) {
@@ -1199,7 +1198,7 @@ public class ExactlyOnceSourceIntegrationTest {
                 .mapToObj(i -> transactionalProducer(
                         "simulated-task-producer-" + CONNECTOR_NAME + "-" + i,
                         Worker.taskTransactionalId(CLUSTER_GROUP_ID, CONNECTOR_NAME, i)
-                )).collect(Collectors.toList());
+                )).toList();
 
         producers.forEach(KafkaProducer::initTransactions);
 
@@ -1284,7 +1283,7 @@ public class ExactlyOnceSourceIntegrationTest {
             // Request a read to the end of the offsets topic
             context.offsetStorageReader().offset(Collections.singletonMap("", null));
             // Produce a record to the offsets topic
-            return Collections.singletonList(new SourceRecord(null, null, topic, null, "", null, null));
+            return List.of(new SourceRecord(null, null, topic, null, "", null, null));
         }
 
         @Override

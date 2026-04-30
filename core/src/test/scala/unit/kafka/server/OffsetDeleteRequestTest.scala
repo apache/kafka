@@ -20,49 +20,32 @@ import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, Clu
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
-import org.junit.jupiter.api.Assertions.fail
 
-@ClusterTestDefaults(types = Array(Type.KRAFT))
-class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-    )
+@ClusterTestDefaults(
+  types = Array(Type.KRAFT),
+  serverProperties = Array(
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
   )
-  def testOffsetDeleteWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
+)
+class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
+  @ClusterTest
+  def testOffsetDeleteWithNewConsumerGroupProtocol(): Unit = {
     testOffsetDelete(true)
   }
 
-  @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-  ))
-  def testOffsetDeleteWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
-    testOffsetDelete(false)
-  }
-
-  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), serverProperties = Array(
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-  ))
-  def testOffsetDeleteWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
+  @ClusterTest
+  def testOffsetDeleteWithOldConsumerGroupProtocol(): Unit = {
     testOffsetDelete(false)
   }
 
   private def testOffsetDelete(useNewProtocol: Boolean): Unit = {
-    if (useNewProtocol && !isNewGroupCoordinatorEnabled) {
-      fail("Cannot use the new protocol with the old group coordinator.")
-    }
-
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
 
     // Create the topic.
-    createTopic(
+    val topicId = createTopic(
       topic = "foo",
       numPartitions = 3
     )
@@ -82,6 +65,7 @@ class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinator
           memberId = memberId,
           memberEpoch = memberEpoch,
           topic = "foo",
+          topicId = topicId,
           partition = partitionId,
           offset = 100L + partitionId,
           expectedError = Errors.NONE,

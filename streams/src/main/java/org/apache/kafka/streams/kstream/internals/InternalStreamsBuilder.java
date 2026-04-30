@@ -72,6 +72,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private static final String TABLE_SOURCE_SUFFIX = "-source";
 
     final InternalTopologyBuilder internalTopologyBuilder;
+    private final boolean processProcessValueFixEnabled;
     private final AtomicInteger index = new AtomicInteger(0);
 
     private final AtomicInteger buildPriorityIndex = new AtomicInteger(0);
@@ -91,8 +92,10 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         }
     };
 
-    public InternalStreamsBuilder(final InternalTopologyBuilder internalTopologyBuilder) {
+    public InternalStreamsBuilder(final InternalTopologyBuilder internalTopologyBuilder,
+                                  final boolean processProcessValueFixEnabled) {
         this.internalTopologyBuilder = internalTopologyBuilder;
+        this.processProcessValueFixEnabled = processProcessValueFixEnabled;
     }
 
     public <K, V> KStream<K, V> stream(final Collection<String> topics,
@@ -242,7 +245,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         addGraphNode(root, globalStoreNode);
     }
 
-    void addGraphNode(final GraphNode parent,
+    public void addGraphNode(final GraphNode parent,
                       final GraphNode child) {
         Objects.requireNonNull(parent, "parent node can't be null");
         Objects.requireNonNull(child, "child node can't be null");
@@ -251,7 +254,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         maybeAddNodeForVersionedSemanticsMetadata(child);
     }
 
-    void addGraphNode(final Collection<GraphNode> parents,
+    public void addGraphNode(final Collection<GraphNode> parents,
                       final GraphNode child) {
         Objects.requireNonNull(parents, "parent node can't be null");
         Objects.requireNonNull(child, "child node can't be null");
@@ -685,20 +688,25 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return isVersionedUpstream(startSeekingNode);
     }
 
-    private GraphNode findParentNodeMatching(final GraphNode startSeekingNode,
+    // Visible for testing.
+    GraphNode findParentNodeMatching(final GraphNode startSeekingNode,
                                              final Predicate<GraphNode> parentNodePredicate) {
         if (parentNodePredicate.test(startSeekingNode)) {
             return startSeekingNode;
         }
-        GraphNode foundParentNode = null;
 
         for (final GraphNode parentNode : startSeekingNode.parentNodes()) {
             if (parentNodePredicate.test(parentNode)) {
                 return parentNode;
             }
-            foundParentNode = findParentNodeMatching(parentNode, parentNodePredicate);
+
+            final GraphNode foundParentNode = findParentNodeMatching(parentNode, parentNodePredicate);
+            if (foundParentNode != null) {
+                return foundParentNode;
+            }
         }
-        return foundParentNode;
+
+        return null;
     }
 
     public GraphNode root() {
@@ -709,4 +717,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return internalTopologyBuilder;
     }
 
+    public boolean processProcessValueFixEnabled() {
+        return processProcessValueFixEnabled;
+    }
 }

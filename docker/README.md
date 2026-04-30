@@ -27,11 +27,11 @@ Building image and running tests using github actions
 - This is the recommended way to build, test and get a CVE report for the docker image.
 - Just choose the image type and provide kafka url to `Docker Build Test` workflow. It will generate a test report and CVE report that can be shared with the community.
 
-- kafka-url - This is the url to download kafka tarball from. For example kafka tarball url from (https://archive.apache.org/dist/kafka). For building RC image this will be an RC tarball url.
+- kafka-url - This is the url to download kafka tarball from. For example kafka tarball url from [Kafka archive](https://archive.apache.org/dist/kafka). For building RC image this will be an RC tarball url.
 
 - image-type - This is the type of image that we intend to build. This will be dropdown menu type selection in the workflow.
-  - `jvm` image type is for official docker image (to be hosted on apache/kafka) as described in [KIP-975](https://cwiki.apache.org/confluence/display/KAFKA/KIP-975%3A+Docker+Image+for+Apache+Kafka)
-  - `native` image type is for graalvm based `native` kafka docker image (to be hosted on apache/kafka-native) as described in [KIP-974](https://cwiki.apache.org/confluence/display/KAFKA/KIP-974%3A+Docker+Image+for+GraalVM+based+Native+Kafka+Broker#KIP974:DockerImageforGraalVMbasedNativeKafkaBroker-ImageNaming)
+  - `jvm` image type is for official docker image (to be hosted on apache/kafka) as described in [KIP-975](https://cwiki.apache.org/confluence/x/z5izDw)
+  - `native` image type is for graalvm based `native` Kafka docker image (to be hosted on apache/kafka-native) as described in [KIP-974](https://cwiki.apache.org/confluence/x/KZizDw). Or you can see [native/README.md](native/README.md) for more information.
 
 - Example(jvm):-
 To build and test a jvm image type ensuring kafka to be containerised should be https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz (it is recommended to use scala 2.13 binary tarball), following inputs in github actions workflow are recommended.
@@ -130,6 +130,10 @@ python docker_build_test.py kafka/test --image-tag=3.6.0 --image-type=jvm --kafk
 ```
 python docker_build_test.py kafka/test --image-tag=3.8.0 --image-type=native --kafka-url=https://archive.apache.org/dist/kafka/3.8.0/kafka_2.13-3.8.0.tgz
 ```
+- Example(local build archive with jvm or native image type) :- To build and test an image named test with local build archive
+```
+python docker_build_test.py kafka/test --image-tag=local-build --image-type=<jvm/native> --kafka-archive=</absolute/path/to/core/build/distributions/kafka_2.13-4.1.0-SNAPSHOT.tgz>
+```
 
 Creating a Release Candidate
 ----------------------------
@@ -141,13 +145,13 @@ Creating a Release Candidate
 ```
 # kafka/test is an example repo. Please replace with the docker hub repo you have push access to.
 
-python docker_release.py kafka/test:3.6.0 --kafka-url --image-type=jvm https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz
+python docker_release.py kafka/test:3.6.0 --image-type=jvm --kafka-url=https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz
 ```
 - Example(native):- To push an image named test under kafka-native dockerhub namespace with 3.8.0 tag and native image type ensuring kafka to be containerised should be https://archive.apache.org/dist/kafka/3.8.0/kafka_2.13-3.8.0.tgz (it is recommended to use scala 2.13 binary tarball), following command can be used. (Make sure you have push access to the docker repo)
 ```
 # kafka-native/test is an example repo. Please replace with the docker hub repo you have push access to.
 
-python docker_release.py kafka-native/test:3.8.0 --kafka-url --image-type=native https://archive.apache.org/dist/kafka/3.8.0/kafka_2.13-3.8.0.tgz
+python docker_release.py kafka-native/test:3.8.0 --image-type=native --kafka-url=https://archive.apache.org/dist/kafka/3.8.0/kafka_2.13-3.8.0.tgz
 ```
 
 - Please note that we use docker buildx for preparing the multi-architecture image and pushing it to docker registry. It's possible to encounter build failures because of buildx. Please retry the command in case some buildx related error occurs.
@@ -210,6 +214,6 @@ python generate_kafka_pr_template.py --image-type=jvm
 ```
 
 - kafka-version - This is the version to create the Docker official images static Dockerfile and assets for, as well as the version to build and test the Docker official image for.
-- image-type - This is the type of image that we intend to build. This will be dropdown menu type selection in the workflow. `jvm` image type is for official docker image (to be hosted on apache/kafka) as described in [KIP-975](https://cwiki.apache.org/confluence/display/KAFKA/KIP-975%3A+Docker+Image+for+Apache+Kafka). 
-  - **NOTE:** As of now [KIP-1028](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1028%3A+Docker+Official+Image+for+Apache+Kafka) only aims to release JVM based Docker Official Images and not GraalVM based native Apache Kafka docker image.
+- image-type - This is the type of image that we intend to build. This will be dropdown menu type selection in the workflow. `jvm` image type is for official docker image (to be hosted on apache/kafka) as described in [KIP-975](https://cwiki.apache.org/confluence/x/z5izDw). 
+  - **NOTE:** As of now [KIP-1028](https://cwiki.apache.org/confluence/x/0AmpEQ) only aims to release JVM based Docker Official Images and not GraalVM based native Apache Kafka docker image.
 

@@ -27,7 +27,6 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageCondition.expectEvent;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.DELETE_PARTITION;
@@ -53,15 +52,15 @@ public final class DeleteTopicAction implements TieredStorageTestAction {
             throws ExecutionException, InterruptedException, TimeoutException {
         List<LocalTieredStorage> tieredStorages = context.remoteStorageManagers();
         List<LocalTieredStorageCondition> tieredStorageConditions = deleteSegmentSpecs.stream()
-                .filter(spec -> spec.getEventType() == DELETE_SEGMENT || spec.getEventType() == DELETE_PARTITION)
+                .filter(spec -> spec.eventType() == DELETE_SEGMENT || spec.eventType() == DELETE_PARTITION)
                 .map(spec -> expectEvent(
                         tieredStorages,
-                        spec.getEventType(),
-                        spec.getSourceBrokerId(),
-                        spec.getTopicPartition(),
+                        spec.eventType(),
+                        spec.sourceBrokerId(),
+                        spec.topicPartition(),
                         false,
-                        spec.getEventCount()))
-                .collect(Collectors.toList());
+                        spec.eventCount()))
+                .toList();
         if (shouldDelete) {
             context.deleteTopic(topic);
         }

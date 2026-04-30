@@ -18,8 +18,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.EnvelopeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -72,8 +72,8 @@ public class EnvelopeResponse extends AbstractResponse {
         // Not supported by the response schema
     }
 
-    public static EnvelopeResponse parse(ByteBuffer buffer, short version) {
-        return new EnvelopeResponse(new EnvelopeResponseData(new ByteBufferAccessor(buffer), version));
+    public static EnvelopeResponse parse(Readable readable, short version) {
+        return new EnvelopeResponse(new EnvelopeResponseData(readable, version));
     }
 
 }

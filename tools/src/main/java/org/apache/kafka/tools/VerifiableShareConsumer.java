@@ -61,7 +61,6 @@ import java.io.PrintStream;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -77,6 +76,28 @@ import java.util.concurrent.TimeUnit;
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
 
+/**
+ * Command line share consumer designed for system testing. It outputs consumer events to STDOUT as JSON
+ * formatted objects. The "name" field in each JSON event identifies the event type. The following
+ * events are currently supported:
+ *
+ * <ul>
+ * <li>startup_complete: emitted when the share consumer has started up.
+ *     See {@link VerifiableShareConsumer.StartupComplete}.</li>
+ * <li>offset_reset_strategy_set: emitted when the offset reset strategy for the share group has been set.
+ *     See {@link VerifiableShareConsumer.OffsetResetStrategySet}.</li>
+ * <li>records_consumed: contains a summary of records consumed in a single call to {@link KafkaShareConsumer#poll(Duration)}.
+ *     See {@link VerifiableShareConsumer.RecordsConsumed}.</li>
+ * <li>offsets_acknowledged: contains the result of acknowledging offsets.
+ *     See {@link VerifiableShareConsumer.OffsetsAcknowledged}.</li>
+ * <li>record_data: contains the key, value, and offset of an individual consumed record (only included if verbose
+ *  *     output is enabled). See {@link VerifiableShareConsumer.RecordData}.</li>
+ * <li>shutdown_requested: emitted as share consumer shutdown is requested.
+ *     See {@link VerifiableShareConsumer.ShutdownRequested}.</li>
+ * <li>shutdown_complete: emitted after the share consumer returns from {@link KafkaShareConsumer#close()}.
+ *     See {@link VerifiableShareConsumer.ShutdownComplete}.</li>
+ * </ul>
+ */
 public class VerifiableShareConsumer implements Closeable, AcknowledgementCommitCallback {
 
     private static final Logger log = LoggerFactory.getLogger(VerifiableShareConsumer.class);
@@ -195,6 +216,14 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
         @JsonProperty
         public String offsetResetStrategy() {
             return offsetResetStrategy;
+        }
+    }
+
+    private static class ShutdownRequested extends ShareConsumerEvent {
+
+        @Override
+        public String name() {
+            return "shutdown_requested";
         }
     }
 
@@ -421,7 +450,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
                 printJson(new OffsetResetStrategySet(offsetResetStrategy.type().toString()));
             }
 
-            consumer.subscribe(Collections.singleton(this.topic));
+            consumer.subscribe(Set.of(this.topic));
             consumer.setAcknowledgementCommitCallback(this);
             while (!(maxMessages >= 0 && totalAcknowledged >= maxMessages)) {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(5000));
@@ -456,6 +485,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
     public void close() {
         boolean interrupted = false;
         try {
+            printJson(new ShutdownRequested());
             consumer.wakeup();
             while (true) {
                 try {
@@ -500,8 +530,8 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             .action(store())
             .required(true)
             .type(String.class)
-            .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
             .dest("bootstrapServer")
+            .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
             .help("The server(s) to connect to. Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
 
         parser.addArgument("--topic")
@@ -515,17 +545,17 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             .action(store())
             .required(true)
             .type(String.class)
-            .metavar("GROUP_ID")
             .dest("groupId")
-            .help("The groupId shared among members of the share group");
+            .metavar("GROUP-ID")
+            .help("The group id of the share group");
 
         parser.addArgument("--max-messages")
             .action(store())
             .required(false)
             .type(Integer.class)
             .setDefault(-1)
-            .metavar("MAX-MESSAGES")
             .dest("maxMessages")
+            .metavar("MAX-MESSAGES")
             .help("Consume this many messages. If -1 (the default), the share consumers will consume until the process is killed externally");
 
         parser.addArgument("--verbose")
@@ -540,6 +570,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             .setDefault("auto")
             .type(String.class)
             .dest("acknowledgementMode")
+            .metavar("ACKNOWLEDGEMENT-MODE")
             .help("Acknowledgement mode for the share consumers (must be either 'auto', 'sync' or 'async')");
 
         parser.addArgument("--offset-reset-strategy")
@@ -548,14 +579,15 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             .setDefault("")
             .type(String.class)
             .dest("offsetResetStrategy")
-            .help("Set share group reset strategy (must be either 'earliest' or 'latest')");
+            .metavar("OFFSET-RESET-STRATEGY")
+            .help("Share group offset reset strategy (must be either 'earliest' or 'latest')");
 
         parser.addArgument("--command-config")
             .action(store())
             .required(false)
             .type(String.class)
             .dest("commandConfig")
-            .metavar("CONFIG_FILE")
+            .metavar("CONFIG-FILE")
             .help("Config properties file (config options shared with command line parameters will be overridden).");
 
         return parser;

@@ -18,7 +18,10 @@ package org.apache.kafka.common.security;
 
 public final class JaasUtils {
     public static final String JAVA_LOGIN_CONFIG_PARAM = "java.security.auth.login.config";
+    @Deprecated(since = "4.2")
     public static final String DISALLOWED_LOGIN_MODULES_CONFIG = "org.apache.kafka.disallowed.login.modules";
+    public static final String ALLOWED_LOGIN_MODULES_CONFIG = "org.apache.kafka.allowed.login.modules";
+    @Deprecated(since = "4.2")
     public static final String DISALLOWED_LOGIN_MODULES_DEFAULT =
             "com.sun.security.auth.module.JndiLoginModule,com.sun.security.auth.module.LdapLoginModule";
     public static final String SERVICE_NAME = "serviceName";

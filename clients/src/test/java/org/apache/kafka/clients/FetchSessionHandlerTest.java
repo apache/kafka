@@ -217,7 +217,8 @@ public class FetchSessionHandlerTest {
 
             FetchResponse resp = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID,
                 respMap(new RespEntry("foo", 0, fooId, 0, 0),
-                        new RespEntry("foo", 1, fooId, 0, 0)));
+                        new RespEntry("foo", 1, fooId, 0, 0)),
+                    List.of());
             handler.handleResponse(resp, version);
 
             FetchSessionHandler.Builder builder2 = handler.newBuilder();
@@ -258,7 +259,8 @@ public class FetchSessionHandlerTest {
 
             FetchResponse resp = FetchResponse.of(Errors.NONE, 0, 123,
                 respMap(new RespEntry("foo", 0, fooId, 10, 20),
-                        new RespEntry("foo", 1, fooId, 10, 20)));
+                        new RespEntry("foo", 1, fooId, 10, 20)),
+                    List.of());
             handler.handleResponse(resp, version);
 
             // Test an incremental fetch request which adds one partition and modifies another.
@@ -280,13 +282,15 @@ public class FetchSessionHandlerTest {
                     data2.toSend());
 
             FetchResponse resp2 = FetchResponse.of(Errors.NONE, 0, 123,
-                respMap(new RespEntry("foo", 1, fooId, 20, 20)));
+                respMap(new RespEntry("foo", 1, fooId, 20, 20)),
+                    List.of());
             handler.handleResponse(resp2, version);
 
             // Skip building a new request.  Test that handling an invalid fetch session epoch response results
             // in a request which closes the session.
             FetchResponse resp3 = FetchResponse.of(Errors.INVALID_FETCH_SESSION_EPOCH, 0, INVALID_SESSION_ID,
-                respMap());
+                    respMap(),
+                    List.of());
             handler.handleResponse(resp3, version);
 
             FetchSessionHandler.Builder builder4 = handler.newBuilder();
@@ -346,7 +350,8 @@ public class FetchSessionHandlerTest {
             FetchResponse resp = FetchResponse.of(Errors.NONE, 0, 123,
                 respMap(new RespEntry("foo", 0, fooId, 10, 20),
                         new RespEntry("foo", 1, fooId, 10, 20),
-                        new RespEntry("bar", 0, barId, 10, 20)));
+                        new RespEntry("bar", 0, barId, 10, 20)),
+                    List.of());
             handler.handleResponse(resp, version);
 
             // Test an incremental fetch request which removes two partitions.
@@ -366,8 +371,9 @@ public class FetchSessionHandlerTest {
 
             // A FETCH_SESSION_ID_NOT_FOUND response triggers us to close the session.
             // The next request is a session establishing FULL request.
-            FetchResponse resp2 = FetchResponse.of(Errors.FETCH_SESSION_ID_NOT_FOUND, 0, INVALID_SESSION_ID,
-                respMap());
+            FetchResponse resp2 = FetchResponse.of(Errors.FETCH_SESSION_ID_NOT_FOUND, 0, INVALID_SESSION_ID, 
+                    respMap(), 
+                    List.of());
             handler.handleResponse(resp2, version);
 
             FetchSessionHandler.Builder builder3 = handler.newBuilder();
@@ -399,7 +405,8 @@ public class FetchSessionHandlerTest {
             assertFalse(data.canUseTopicIds());
 
             FetchResponse resp = FetchResponse.of(Errors.NONE, 0, 123,
-                    respMap(new RespEntry("foo", 0, Uuid.ZERO_UUID, 10, 20)));
+                    respMap(new RespEntry("foo", 0, Uuid.ZERO_UUID, 10, 20)),
+                    List.of());
             handler.handleResponse(resp, (short) 12);
 
             // Try to add a topic ID to an already existing topic partition (0) or a new partition (1) in the session.
@@ -436,7 +443,8 @@ public class FetchSessionHandlerTest {
             assertTrue(data.canUseTopicIds());
 
             FetchResponse resp = FetchResponse.of(Errors.NONE, 0, 123,
-                    respMap(new RespEntry("foo", 0, fooId, 10, 20)));
+                    respMap(new RespEntry("foo", 0, fooId, 10, 20)),
+                    List.of());
             handler.handleResponse(resp, ApiKeys.FETCH.latestVersion());
 
             // Try to remove a topic ID from an existing topic partition (0) or add a new topic partition (1) without an ID.
@@ -475,7 +483,7 @@ public class FetchSessionHandlerTest {
         assertTrue(data.metadata().isFull());
         assertEquals(startsWithTopicIds, data.canUseTopicIds());
 
-        FetchResponse resp = FetchResponse.of(Errors.NONE, 0, 123, respMap(new RespEntry("foo", 0, topicId1, 10, 20)));
+        FetchResponse resp = FetchResponse.of(Errors.NONE, 0, 123, respMap(new RespEntry("foo", 0, topicId1, 10, 20)), List.of());
         short version = startsWithTopicIds ? ApiKeys.FETCH.latestVersion() : 12;
         handler.handleResponse(resp, version);
 
@@ -548,7 +556,7 @@ public class FetchSessionHandlerTest {
         assertEquals(startsWithTopicIds, data.canUseTopicIds());
 
         FetchResponse resp = FetchResponse.of(Errors.NONE, 0, 123,
-                respMap(new RespEntry("foo", 0, fooId, 10, 20)));
+                respMap(new RespEntry("foo", 0, fooId, 10, 20)), List.of());
         handler.handleResponse(resp, responseVersion);
 
         // Re-add the first partition. Then add a partition with opposite ID usage.
@@ -583,7 +591,8 @@ public class FetchSessionHandlerTest {
         assertEquals(useTopicIds, data.canUseTopicIds());
 
         FetchResponse resp = FetchResponse.of(Errors.NONE, 0, 123,
-                respMap(new RespEntry("foo", 0, topicId, 10, 20)));
+                respMap(new RespEntry("foo", 0, topicId, 10, 20)),
+                List.of());
         handler.handleResponse(resp, responseVersion);
 
         // Remove the topic from the session
@@ -610,7 +619,8 @@ public class FetchSessionHandlerTest {
         assertTrue(data.canUseTopicIds());
 
         FetchResponse resp = FetchResponse.of(Errors.NONE, 0, 123,
-                respMap(new RespEntry("foo", 0, topicId, 10, 20)));
+                respMap(new RespEntry("foo", 0, topicId, 10, 20)),
+                List.of());
         handler.handleResponse(resp, ApiKeys.FETCH.latestVersion());
 
         // Remove the partition from the session. Return a session ID as though the session is still open.
@@ -619,7 +629,8 @@ public class FetchSessionHandlerTest {
         assertMapsEqual(new LinkedHashMap<>(),
                 data2.toSend(), data2.sessionPartitions());
         FetchResponse resp2 = FetchResponse.of(Errors.NONE, 0, 123,
-                new LinkedHashMap<>());
+                new LinkedHashMap<>(),
+                List.of());
         handler.handleResponse(resp2, ApiKeys.FETCH.latestVersion());
 
         // After the topic is removed, add a recreated topic with a new ID.
@@ -651,7 +662,8 @@ public class FetchSessionHandlerTest {
             FetchResponse resp1 = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID,
                 respMap(new RespEntry("foo", 0, fooId, 10, 20),
                         new RespEntry("foo", 1, fooId, 10, 20),
-                        new RespEntry("bar", 0, barId, 10, 20)));
+                        new RespEntry("bar", 0, barId, 10, 20)),
+                    List.of());
             String issue = handler.verifyFullFetchResponsePartitions(resp1.responseData(topicNames, version).keySet(),
                     resp1.topicIds(), version);
             assertTrue(issue.contains("extraPartitions="));
@@ -664,13 +676,15 @@ public class FetchSessionHandlerTest {
             FetchResponse resp2 = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID,
                 respMap(new RespEntry("foo", 0, fooId, 10, 20),
                         new RespEntry("foo", 1, fooId, 10, 20),
-                        new RespEntry("bar", 0, barId, 10, 20)));
+                        new RespEntry("bar", 0, barId, 10, 20)),
+                    List.of());
             String issue2 = handler.verifyFullFetchResponsePartitions(resp2.responseData(topicNames, version).keySet(),
                     resp2.topicIds(), version);
             assertNull(issue2);
             FetchResponse resp3 = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID,
                 respMap(new RespEntry("foo", 0, fooId, 10, 20),
-                        new RespEntry("foo", 1, fooId, 10, 20)));
+                        new RespEntry("foo", 1, fooId, 10, 20)),
+                    List.of());
             String issue3 = handler.verifyFullFetchResponsePartitions(resp3.responseData(topicNames, version).keySet(),
                     resp3.topicIds(), version);
             assertFalse(issue3.contains("extraPartitions="));
@@ -689,7 +703,8 @@ public class FetchSessionHandlerTest {
         FetchResponse resp1 = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID,
             respMap(new RespEntry("foo", 0, topicIds.get("foo"), 10, 20),
                     new RespEntry("extra2", 1, topicIds.get("extra2"), 10, 20),
-                    new RespEntry("bar", 0, topicIds.get("bar"), 10, 20)));
+                    new RespEntry("bar", 0, topicIds.get("bar"), 10, 20)),
+                List.of());
         String issue = handler.verifyFullFetchResponsePartitions(resp1.responseData(topicNames, ApiKeys.FETCH.latestVersion()).keySet(),
                 resp1.topicIds(), ApiKeys.FETCH.latestVersion());
         assertTrue(issue.contains("extraPartitions="));
@@ -703,14 +718,16 @@ public class FetchSessionHandlerTest {
         FetchResponse resp2 = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID,
             respMap(new RespEntry("foo", 0, topicIds.get("foo"), 10, 20),
                     new RespEntry("extra2", 1, topicIds.get("extra2"), 10, 20),
-                    new RespEntry("bar", 0, topicIds.get("bar"), 10, 20)));
+                    new RespEntry("bar", 0, topicIds.get("bar"), 10, 20)),
+                List.of());
         String issue2 = handler.verifyFullFetchResponsePartitions(resp2.responseData(topicNames, ApiKeys.FETCH.latestVersion()).keySet(),
                 resp2.topicIds(), ApiKeys.FETCH.latestVersion());
         assertTrue(issue2.contains("extraPartitions="));
         assertFalse(issue2.contains("omittedPartitions="));
         FetchResponse resp3 = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID,
             respMap(new RespEntry("foo", 0, topicIds.get("foo"), 10, 20),
-                    new RespEntry("bar", 0, topicIds.get("bar"), 10, 20)));
+                    new RespEntry("bar", 0, topicIds.get("bar"), 10, 20)),
+                List.of());
         String issue3 = handler.verifyFullFetchResponsePartitions(resp3.responseData(topicNames, ApiKeys.FETCH.latestVersion()).keySet(),
                 resp3.topicIds(), ApiKeys.FETCH.latestVersion());
         assertNull(issue3);
@@ -734,7 +751,8 @@ public class FetchSessionHandlerTest {
 
         FetchResponse resp = FetchResponse.of(Errors.NONE, 0, 123,
             respMap(new RespEntry("foo", 0, topicIds.get("foo"), 10, 20),
-                    new RespEntry("foo", 1, topicIds.get("foo"), 10, 20)));
+                    new RespEntry("foo", 1, topicIds.get("foo"), 10, 20)),
+                List.of());
         handler.handleResponse(resp, ApiKeys.FETCH.latestVersion());
 
         // Test an incremental fetch request which adds an ID unknown to the broker.
@@ -749,7 +767,8 @@ public class FetchSessionHandlerTest {
 
         // Return and handle a response with a top level error
         FetchResponse resp2 = FetchResponse.of(Errors.UNKNOWN_TOPIC_ID, 0, 123,
-            respMap(new RespEntry("unknown", 0, Uuid.randomUuid(), Errors.UNKNOWN_TOPIC_ID)));
+            respMap(new RespEntry("unknown", 0, Uuid.randomUuid(), Errors.UNKNOWN_TOPIC_ID)),
+                List.of());
         assertFalse(handler.handleResponse(resp2, ApiKeys.FETCH.latestVersion()));
 
         // Ensure we start with a new epoch. This will close the session in the next request.

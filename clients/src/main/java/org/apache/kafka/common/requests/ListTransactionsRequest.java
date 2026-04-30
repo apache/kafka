@@ -20,10 +20,8 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ListTransactionsRequestData;
 import org.apache.kafka.common.message.ListTransactionsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.protocol.Readable;
 
 public class ListTransactionsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<ListTransactionsRequest> {
@@ -39,6 +37,10 @@ public class ListTransactionsRequest extends AbstractRequest {
             if (data.durationFilter() >= 0 && version < 1) {
                 throw new UnsupportedVersionException("Duration filter can be set only when using API version 1 or higher." +
                         " If client is connected to an older broker, do not specify duration filter or set duration filter to -1.");
+            }
+            if (data.transactionalIdPattern() != null && version < 2) {
+                throw new UnsupportedVersionException("Transactional ID pattern filter can be set only when using API version 2 or higher." +
+                    " If client is connected to an older broker, do not specify the pattern filter.");
             }
             return new ListTransactionsRequest(data, version);
         }
@@ -69,9 +71,9 @@ public class ListTransactionsRequest extends AbstractRequest {
         return new ListTransactionsResponse(response);
     }
 
-    public static ListTransactionsRequest parse(ByteBuffer buffer, short version) {
+    public static ListTransactionsRequest parse(Readable readable, short version) {
         return new ListTransactionsRequest(new ListTransactionsRequestData(
-            new ByteBufferAccessor(buffer), version), version);
+            readable, version), version);
     }
 
     @Override

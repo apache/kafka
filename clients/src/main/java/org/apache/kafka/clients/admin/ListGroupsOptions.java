@@ -14,26 +14,50 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Collections;
 import java.util.Set;
 
 /**
  * Options for {@link Admin#listGroups()}.
- * <p>
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
 
-    private Set<GroupState> groupStates = Collections.emptySet();
-    private Set<GroupType> types = Collections.emptySet();
+    private Set<GroupState> groupStates = Set.of();
+    private Set<GroupType> types = Set.of();
+    private Set<String> protocolTypes = Set.of();
+
+    /**
+     * Only consumer groups will be returned by listGroups().
+     * This operation sets filters on group type and protocol type which select consumer groups.
+     */
+    public static ListGroupsOptions forConsumerGroups() {
+        return new ListGroupsOptions()
+            .withTypes(Set.of(GroupType.CLASSIC, GroupType.CONSUMER))
+            .withProtocolTypes(Set.of("", ConsumerProtocol.PROTOCOL_TYPE));
+    }
+
+    /**
+     * Only share groups will be returned by listGroups().
+     * This operation sets a filter on group type which select share groups.
+     */
+    public static ListGroupsOptions forShareGroups() {
+        return new ListGroupsOptions()
+            .withTypes(Set.of(GroupType.SHARE));
+    }
+
+    /**
+     * Only streams groups will be returned by listGroups().
+     * This operation sets a filter on group type which select streams groups.
+     */
+    public static ListGroupsOptions forStreamsGroups() {
+        return new ListGroupsOptions()
+            .withTypes(Set.of(GroupType.STREAMS));
+    }
 
     /**
      * If groupStates is set, only groups in these states will be returned by listGroups().
@@ -41,7 +65,16 @@ public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
      * This operation is supported by brokers with version 2.6.0 or later.
      */
     public ListGroupsOptions inGroupStates(Set<GroupState> groupStates) {
-        this.groupStates = (groupStates == null || groupStates.isEmpty()) ? Collections.emptySet() : Set.copyOf(groupStates);
+        this.groupStates = (groupStates == null || groupStates.isEmpty()) ? Set.of() : Set.copyOf(groupStates);
+        return this;
+    }
+
+    /**
+     * If protocol types is set, only groups of these protocol types will be returned by listGroups().
+     * Otherwise, all groups are returned.
+     */
+    public ListGroupsOptions withProtocolTypes(Set<String> protocolTypes) {
+        this.protocolTypes = (protocolTypes == null || protocolTypes.isEmpty()) ? Set.of() : Set.copyOf(protocolTypes);
         return this;
     }
 
@@ -59,6 +92,13 @@ public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
      */
     public Set<GroupState> groupStates() {
         return groupStates;
+    }
+
+    /**
+     * Returns the list of protocol types that are requested or empty if no protocol types have been specified.
+     */
+    public Set<String> protocolTypes() {
+        return protocolTypes;
     }
 
     /**

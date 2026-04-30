@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// KIP-932 is in development. This schema is subject to non-backwards-compatible changes.
 {
   "apiKey": 15,
   "type": "coordinator-value",
@@ -21,6 +20,8 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
+    { "name": "InitializingTopics", "versions": "0+", "type": "[]TopicPartitionsInfo",
+      "about": "The topic-partitions whose share-group state is being initialized." },
     { "name": "InitializedTopics", "versions": "0+", "type": "[]TopicPartitionsInfo",
       "about": "The topics with initialized share-group state." },
     { "name": "DeletingTopics", "versions": "0+", "type": "[]TopicInfo",

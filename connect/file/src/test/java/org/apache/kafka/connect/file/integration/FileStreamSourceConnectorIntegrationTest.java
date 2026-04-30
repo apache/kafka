@@ -30,7 +30,6 @@ import java.io.File;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -130,8 +129,8 @@ public class FileStreamSourceConnectorIntegrationTest {
         // Alter the offsets to make the connector re-process the last line in the file
         connect.alterSourceConnectorOffset(
             CONNECTOR_NAME,
-            Collections.singletonMap(FILENAME_FIELD, sourceFile.getAbsolutePath()),
-            Collections.singletonMap(POSITION_FIELD, 28L)
+            Map.of(FILENAME_FIELD, sourceFile.getAbsolutePath()),
+            Map.of(POSITION_FIELD, 28L)
         );
 
         connect.resumeConnector(CONNECTOR_NAME);

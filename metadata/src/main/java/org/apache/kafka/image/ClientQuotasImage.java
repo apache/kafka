@@ -26,7 +26,6 @@ import org.apache.kafka.common.message.DescribeClientQuotasResponseData.EntryDat
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.image.node.ClientQuotasImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
-import org.apache.kafka.image.writer.ImageWriterOptions;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -46,13 +45,11 @@ import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH
 
 /**
  * Represents the client quotas in the metadata image.
- *
+ * <p>
  * This class is thread-safe.
  */
-public final class ClientQuotasImage {
-    public static final ClientQuotasImage EMPTY = new ClientQuotasImage(Collections.emptyMap());
-
-    private final Map<ClientQuotaEntity, ClientQuotaImage> entities;
+public record ClientQuotasImage(Map<ClientQuotaEntity, ClientQuotaImage> entities) {
+    public static final ClientQuotasImage EMPTY = new ClientQuotasImage(Map.of());
 
     public ClientQuotasImage(Map<ClientQuotaEntity, ClientQuotaImage> entities) {
         this.entities = Collections.unmodifiableMap(entities);
@@ -62,16 +59,11 @@ public final class ClientQuotasImage {
         return entities.isEmpty();
     }
 
-    // Visible for testing
-    public Map<ClientQuotaEntity, ClientQuotaImage> entities() {
-        return entities;
-    }
-
-    public void write(ImageWriter writer, ImageWriterOptions options) {
+    public void write(ImageWriter writer) {
         for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entities.entrySet()) {
             ClientQuotaEntity entity = entry.getKey();
             ClientQuotaImage clientQuotaImage = entry.getValue();
-            clientQuotaImage.write(entity, writer, options);
+            clientQuotaImage.write(entity, writer);
         }
     }
 
@@ -83,14 +75,14 @@ public final class ClientQuotasImage {
             if (component.entityType().isEmpty()) {
                 throw new InvalidRequestException("Invalid empty entity type.");
             } else if (exactMatch.containsKey(component.entityType()) ||
-                    typeMatch.contains(component.entityType())) {
+                typeMatch.contains(component.entityType())) {
                 throw new InvalidRequestException("Entity type " + component.entityType() +
                     " cannot appear more than once in the filter.");
             }
             if (!(component.entityType().equals(IP) || component.entityType().equals(USER) ||
-                    component.entityType().equals(CLIENT_ID))) {
+                component.entityType().equals(CLIENT_ID))) {
                 throw new UnsupportedVersionException("Unsupported entity type " +
-                        component.entityType());
+                    component.entityType());
             }
             switch (component.matchType()) {
                 case MATCH_TYPE_EXACT:
@@ -120,7 +112,7 @@ public final class ClientQuotasImage {
         }
         if (exactMatch.containsKey(IP) || typeMatch.contains(IP)) {
             if ((exactMatch.containsKey(USER) || typeMatch.contains(USER)) ||
-                    (exactMatch.containsKey(CLIENT_ID) || typeMatch.contains(CLIENT_ID))) {
+                (exactMatch.containsKey(CLIENT_ID) || typeMatch.contains(CLIENT_ID))) {
                 throw new InvalidRequestException("Invalid entity filter component " +
                     "combination. IP filter component should not be used with " +
                     "user or clientId filter component.");
@@ -172,17 +164,6 @@ public final class ClientQuotasImage {
         }
         data.setValues(quotaImage.toDescribeValues());
         return data;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof ClientQuotasImage other)) return false;
-        return entities.equals(other.entities);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(entities);
     }
 
     @Override

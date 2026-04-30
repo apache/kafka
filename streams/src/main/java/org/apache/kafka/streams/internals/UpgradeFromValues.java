@@ -17,16 +17,6 @@
 package org.apache.kafka.streams.internals;
 
 public enum UpgradeFromValues {
-    UPGRADE_FROM_0100("0.10.0"),
-    UPGRADE_FROM_0101("0.10.1"),
-    UPGRADE_FROM_0102("0.10.2"),
-    UPGRADE_FROM_0110("0.11.0"),
-    UPGRADE_FROM_10("1.0"),
-    UPGRADE_FROM_11("1.1"),
-    UPGRADE_FROM_20("2.0"),
-    UPGRADE_FROM_21("2.1"),
-    UPGRADE_FROM_22("2.2"),
-    UPGRADE_FROM_23("2.3"),
     UPGRADE_FROM_24("2.4"),
     UPGRADE_FROM_25("2.5"),
     UPGRADE_FROM_26("2.6"),
@@ -41,7 +31,10 @@ public enum UpgradeFromValues {
     UPGRADE_FROM_36("3.6"),
     UPGRADE_FROM_37("3.7"),
     UPGRADE_FROM_38("3.8"),
-    UPGRADE_FROM_39("3.9");
+    UPGRADE_FROM_39("3.9"),
+    UPGRADE_FROM_40("4.0"),
+    UPGRADE_FROM_41("4.1"),
+    UPGRADE_FROM_42("4.2");
 
     private final String value;
 

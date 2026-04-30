@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
@@ -36,6 +37,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Assertions;
@@ -60,10 +62,13 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -84,11 +89,13 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         baseTimestamp = time.milliseconds();
     }
 
-    private static Properties getStreamsProperties(final String optimization) {
-        return mkProperties(mkMap(
+    private static Properties getStreamsProperties(final String optimization, final boolean withHeaders) {
+        final Properties props = mkProperties(mkMap(
                 mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
                 mkEntry(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimization)
         ));
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
+        return props;
     }
 
     // versioning is disabled for these tests, even though the code supports building a
@@ -101,7 +108,8 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         final List<Boolean> rejoin = Arrays.asList(true, false);
         final List<Boolean> leftVersioned = Collections.singletonList(false);
         final List<Boolean> rightVersioned = Collections.singletonList(false);
-        return buildParameters(leftJoin, optimization, materialized, rejoin, leftVersioned, rightVersioned);
+        final List<Boolean> withHeaders = Arrays.asList(true, false);
+        return buildParameters(leftJoin, optimization, materialized, rejoin, leftVersioned, rightVersioned, withHeaders);
     }
 
     // optimizations and rejoin are disabled for these tests, as these tests focus on versioning.
@@ -113,7 +121,8 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         final List<Boolean> rejoin = Collections.singletonList(false);
         final List<Boolean> leftVersioned = Arrays.asList(true, false);
         final List<Boolean> rightVersioned = Arrays.asList(true, false);
-        return buildParameters(leftJoin, optimization, materialized, rejoin, leftVersioned, rightVersioned);
+        final List<Boolean> withHeaders = Arrays.asList(true, false);
+        return buildParameters(leftJoin, optimization, materialized, rejoin, leftVersioned, rightVersioned, withHeaders);
     }
 
     // deduplicate test cases in data and versionedData
@@ -167,8 +176,9 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                                                    final boolean materialized,
                                                    final boolean rejoin,
                                                    final boolean leftVersioned,
-                                                   final boolean rightVersioned) {
-        final Properties streamsConfig = getStreamsProperties(optimization);
+                                                   final boolean rightVersioned,
+                                                   final boolean withHeaders) {
+        final Properties streamsConfig = getStreamsProperties(optimization, withHeaders);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
@@ -183,13 +193,13 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             right.pipeInput("rhs3", "rhsValue3", baseTimestamp + 2); // this unreferenced FK won't show up in any results
 
             assertThat(
-                outputTopic.readKeyValuesToMap(),
-                is(emptyMap())
+                outputTopic.readKeyValuesToList(),
+                is(emptyList())
             );
             if (rejoin) {
                 assertThat(
-                    rejoinOutputTopic.readKeyValuesToMap(),
-                    is(emptyMap())
+                    rejoinOutputTopic.readKeyValuesToList(),
+                    is(emptyList())
                 );
             }
             if (materialized) {
@@ -203,27 +213,27 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             left.pipeInput("lhs2", "lhsValue2|rhs2", baseTimestamp + 4);
 
             {
-                final Map<String, String> expected = mkMap(
-                    mkEntry("lhs1", "(lhsValue1|rhs1,rhsValue1)"),
-                    mkEntry("lhs2", "(lhsValue2|rhs2,rhsValue2)")
+                final List<KeyValue<String, String>> expected = Arrays.asList(
+                    KeyValue.pair("lhs1", "(lhsValue1|rhs1,rhsValue1)"),
+                    KeyValue.pair("lhs2", "(lhsValue2|rhs2,rhsValue2)")
                 );
                 assertThat(
-                    outputTopic.readKeyValuesToMap(),
+                    outputTopic.readKeyValuesToList(),
                     is(expected)
                 );
                 if (rejoin) {
                     assertThat(
-                        rejoinOutputTopic.readKeyValuesToMap(),
-                        is(mkMap(
-                            mkEntry("lhs1", "rejoin((lhsValue1|rhs1,rhsValue1),lhsValue1|rhs1)"),
-                            mkEntry("lhs2", "rejoin((lhsValue2|rhs2,rhsValue2),lhsValue2|rhs2)")
+                        rejoinOutputTopic.readKeyValuesToList(),
+                        is(asList(
+                            KeyValue.pair("lhs1", "rejoin((lhsValue1|rhs1,rhsValue1),lhsValue1|rhs1)"),
+                            KeyValue.pair("lhs2", "rejoin((lhsValue2|rhs2,rhsValue2),lhsValue2|rhs2)")
                         ))
                     );
                 }
                 if (materialized) {
                     assertThat(
                         asMap(store),
-                        is(expected)
+                        is(expected.stream().collect(Collectors.toMap(kv -> kv.key, kv -> kv.value)))
                     );
                 }
             }
@@ -232,16 +242,16 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             left.pipeInput("lhs3", "lhsValue3|rhs1", baseTimestamp + 5);
             {
                 assertThat(
-                    outputTopic.readKeyValuesToMap(),
-                    is(mkMap(
-                        mkEntry("lhs3", "(lhsValue3|rhs1,rhsValue1)")
+                    outputTopic.readKeyValuesToList(),
+                    is(List.of(
+                        new KeyValue<>("lhs3", "(lhsValue3|rhs1,rhsValue1)")
                     ))
                 );
                 if (rejoin) {
                     assertThat(
-                        rejoinOutputTopic.readKeyValuesToMap(),
-                        is(mkMap(
-                            mkEntry("lhs3", "rejoin((lhsValue3|rhs1,rhsValue1),lhsValue3|rhs1)")
+                        rejoinOutputTopic.readKeyValuesToList(),
+                        is(List.of(
+                            new KeyValue<>("lhs3", "rejoin((lhsValue3|rhs1,rhsValue1),lhsValue3|rhs1)")
                         ))
                     );
                 }
@@ -256,21 +266,21 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                     );
                 }
             }
+
             // Now delete one LHS entity such that one delete is propagated down to the output.
 
             left.pipeInput("lhs1", null, baseTimestamp + 6);
             assertThat(
-                outputTopic.readKeyValuesToMap(),
-                is(mkMap(
-                    mkEntry("lhs1", null)
+                outputTopic.readKeyValuesToList(),
+                is(List.of(
+                    new KeyValue<>("lhs1", null)
                 ))
             );
             if (rejoin) {
                 assertThat(
-                    rejoinOutputTopic.readKeyValuesToMap(),
-                    is(mkMap(
-                        mkEntry("lhs1", null)
-                    ))
+                    rejoinOutputTopic.readKeyValuesToList(),
+                    hasItem(
+                        KeyValue.pair("lhs1", null))
                 );
             }
             if (materialized) {
@@ -287,13 +297,88 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("testCases")
+    public void doJoinFromLeftThenUpdateFkThenRevertBack(final boolean leftJoin,
+                                                         final String optimization,
+                                                         final boolean materialized,
+                                                         final boolean rejoin,
+                                                         final boolean leftVersioned,
+                                                         final boolean rightVersioned,
+                                                         final boolean withHeaders) {
+        final Properties streamsConfig = getStreamsProperties(optimization, withHeaders);
+        final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
+            final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
+            final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
+            final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
+            final TestOutputTopic<String, String> rejoinOutputTopic = rejoin ? driver.createOutputTopic(REJOIN_OUTPUT, new StringDeserializer(), new StringDeserializer()) : null;
+            final KeyValueStore<String, ValueAndTimestamp<String>> store = driver.getTimestampedKeyValueStore("store");
+
+            // Pre-populate the RHS records. This test is all about what happens when we add/remove LHS records
+            right.pipeInput("rhs1", "rhsValue1", baseTimestamp);
+            right.pipeInput("rhs2", "rhsValue2", baseTimestamp + 1);
+
+            assertThat(
+                outputTopic.readKeyValuesToList(),
+                is(emptyList())
+            );
+            if (rejoin) {
+                assertThat(
+                    rejoinOutputTopic.readKeyValuesToList(),
+                    is(emptyList())
+                );
+            }
+            if (materialized) {
+                assertThat(
+                    asMap(store),
+                    is(emptyMap())
+                );
+            }
+
+            left.pipeInput("lhs1", "lhsValue1|rhs1", baseTimestamp + 3);
+
+            {
+                final List<KeyValue<String, String>> expected = asList(
+                    KeyValue.pair("lhs1", "(lhsValue1|rhs1,rhsValue1)")
+                );
+                assertThat(
+                    outputTopic.readKeyValuesToList(),
+                    is(expected)
+                );
+            }
+
+            // Add another reference to an existing FK
+            left.pipeInput("lhs1", "lhsValue1|rhs2", baseTimestamp + 5);
+            {
+                assertThat(
+                    outputTopic.readKeyValuesToList(),
+                    is(List.of(
+                        new KeyValue<>("lhs1", "(lhsValue1|rhs2,rhsValue2)")
+                    ))
+                );
+            }
+
+            // Now revert back the foreign key to earlier reference
+
+            left.pipeInput("lhs1", "lhsValue1|rhs1", baseTimestamp + 6);
+            assertThat(
+                outputTopic.readKeyValuesToList(),
+                is(List.of(
+                    new KeyValue<>("lhs1", "(lhsValue1|rhs1,rhsValue1)")
+                ))
+            );
+        }
+    }
+
+    @ParameterizedTest
+    @MethodSource("testCases")
     public void doJoinFromRightThenDeleteRightEntity(final boolean leftJoin,
                                                      final String optimization,
                                                      final boolean materialized,
                                                      final boolean rejoin,
                                                      final boolean leftVersioned,
-                                                     final boolean rightVersioned) {
-        final Properties streamsConfig = getStreamsProperties(optimization);
+                                                     final boolean rightVersioned,
+                                                     final boolean withHeaders) {
+        final Properties streamsConfig = getStreamsProperties(optimization, withHeaders);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
@@ -412,8 +497,9 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                                                                  final boolean materialized,
                                                                  final boolean rejoin,
                                                                  final boolean leftVersioned,
-                                                                 final boolean rightVersioned) {
-        final Properties streamsConfig = getStreamsProperties(optimization);
+                                                                 final boolean rightVersioned,
+                                                                 final boolean withHeaders) {
+        final Properties streamsConfig = getStreamsProperties(optimization, withHeaders);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
@@ -478,8 +564,9 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                                                                       final boolean materialized,
                                                                       final boolean rejoin,
                                                                       final boolean leftVersioned,
-                                                                      final boolean rightVersioned) {
-        final Properties streamsConfig = getStreamsProperties(optimization);
+                                                                      final boolean rightVersioned,
+                                                                      final boolean withHeaders) {
+        final Properties streamsConfig = getStreamsProperties(optimization, withHeaders);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
@@ -510,8 +597,9 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                                                                         final boolean materialized,
                                                                         final boolean rejoin,
                                                                         final boolean leftVersioned,
-                                                                        final boolean rightVersioned) {
-        final Properties streamsConfig = getStreamsProperties(optimization);
+                                                                        final boolean rightVersioned,
+                                                                        final boolean withHeaders) {
+        final Properties streamsConfig = getStreamsProperties(optimization, withHeaders);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
@@ -617,8 +705,9 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                                                                   final boolean materialized,
                                                                   final boolean rejoin,
                                                                   final boolean leftVersioned,
-                                                                  final boolean rightVersioned) {
-        final Properties streamsConfig = getStreamsProperties(optimization);
+                                                                  final boolean rightVersioned,
+                                                                  final boolean withHeaders) {
+        final Properties streamsConfig = getStreamsProperties(optimization, withHeaders);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());
@@ -702,8 +791,9 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                                                              final boolean materialized,
                                                              final boolean rejoin,
                                                              final boolean leftVersioned,
-                                                             final boolean rightVersioned) {
-        final Properties streamsConfig = getStreamsProperties(optimization);
+                                                             final boolean rightVersioned,
+                                                             final boolean withHeaders) {
+        final Properties streamsConfig = getStreamsProperties(optimization, withHeaders);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, true, rejoin, leftVersioned, rightVersioned, value -> null);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
@@ -729,7 +819,8 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                                                       final boolean materialized,
                                                       final boolean rejoin,
                                                       final boolean leftVersioned,
-                                                      final boolean rightVersioned) {
+                                                      final boolean rightVersioned,
+                                                      final boolean withHeaders) {
         final Function<String, String> foreignKeyExtractor = value -> {
             final String split = value.split("\\|")[1];
             if (split.equals("returnNull")) {
@@ -740,7 +831,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                 return split;
             }
         };
-        final Properties streamsConfig = getStreamsProperties(optimization);
+        final Properties streamsConfig = getStreamsProperties(optimization, withHeaders);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, true, rejoin, leftVersioned, rightVersioned, foreignKeyExtractor);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
@@ -795,6 +886,12 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         return result;
     }
 
+    protected static List<KeyValue<String, String>> makeList(final KeyValueStore<String, ValueAndTimestamp<String>> store) {
+        final List<KeyValue<String, String>> result = new LinkedList<>();
+        store.all().forEachRemaining(ele -> result.add(new KeyValue<>(ele.key, ele.value.value())));
+        return result;
+    }
+
     protected static Topology getTopology(final Properties streamsConfig,
                                           final String queryableStoreName,
                                           final boolean leftJoin,
@@ -808,7 +905,10 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             rejoin,
             leftVersioned,
             rightVersioned,
-            value -> value.split("\\|")[1]
+            value -> {
+                final String[] tokens = value.split("\\|");
+                return tokens.length == 2 ? tokens[1] : null;
+            }
         );
     }
 
@@ -917,8 +1017,9 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                                                           final boolean materialized,
                                                           final boolean rejoin,
                                                           final boolean leftVersioned,
-                                                          final boolean rightVersioned) {
-        final Properties streamsConfig = getStreamsProperties(optimization);
+                                                          final boolean rightVersioned,
+                                                          final boolean withHeaders) {
+        final Properties streamsConfig = getStreamsProperties(optimization, withHeaders);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> right = driver.createInputTopic(RIGHT_TABLE, new StringSerializer(), new StringSerializer());

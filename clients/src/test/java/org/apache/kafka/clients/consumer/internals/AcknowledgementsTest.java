@@ -17,13 +17,17 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
+import org.apache.kafka.common.KafkaException;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class AcknowledgementsTest {
@@ -83,7 +87,7 @@ public class AcknowledgementsTest {
     }
 
     @Test
-    public void testSingleAcknowledgementTypeExceedingLimit() {
+    public void testSingleAcknowledgeTypeExceedingLimit() {
         int i = 0;
         for (; i < maxRecordsWithSameAcknowledgeType; i++) {
             acks.add(i, AcknowledgeType.ACCEPT);
@@ -119,7 +123,7 @@ public class AcknowledgementsTest {
     }
 
     @Test
-    public void testSingleAcknowledgementTypeWithGap() {
+    public void testSingleAcknowledgeTypeWithGap() {
         for (int i = 0; i < maxRecordsWithSameAcknowledgeType; i++) {
             acks.add(i, null);
         }
@@ -186,7 +190,7 @@ public class AcknowledgementsTest {
     }
 
     @Test
-    public void testSingleAcknowledgementTypeWithinLimit() {
+    public void testSingleAcknowledgeTypeWithinLimit() {
         acks.add(0L, AcknowledgeType.ACCEPT);
         acks.add(1L, AcknowledgeType.ACCEPT);
         acks.add(2L, AcknowledgeType.ACCEPT);
@@ -475,7 +479,6 @@ public class AcknowledgementsTest {
         assertEquals(AcknowledgeType.REJECT.id, ackList2.get(2).acknowledgeTypes().get(0));
     }
 
-
     @Test
     public void testNoncontiguousGaps() {
         acks.addGap(2L);
@@ -502,5 +505,25 @@ public class AcknowledgementsTest {
         assertEquals(4L, ackList2.get(1).lastOffset());
         assertEquals(1, ackList2.get(1).acknowledgeTypes().size());
         assertEquals(Acknowledgements.ACKNOWLEDGE_TYPE_GAP, ackList2.get(1).acknowledgeTypes().get(0));
+    }
+
+    @Test
+    public void testCompleteSuccess() {
+        acks.add(0, AcknowledgeType.RENEW);
+        assertFalse(acks.isCompleted());
+
+        acks.complete(null);
+        assertTrue(acks.isCompleted());
+        assertNull(acks.getAcknowledgeException());
+    }
+
+    @Test
+    public void testCompleteException() {
+        acks.add(0, AcknowledgeType.RENEW);
+        assertFalse(acks.isCompleted());
+
+        acks.complete(new KafkaException());
+        assertTrue(acks.isCompleted());
+        assertNotNull(acks.getAcknowledgeException());
     }
 }

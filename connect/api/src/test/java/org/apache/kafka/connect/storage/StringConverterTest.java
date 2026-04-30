@@ -24,7 +24,7 @@ import org.apache.kafka.connect.data.SchemaAndValue;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -58,7 +58,7 @@ public class StringConverterTest {
 
     @Test
     public void testToBytesNonUtf8Encoding() {
-        converter.configure(Collections.singletonMap("converter.encoding", StandardCharsets.UTF_16.name()), true);
+        converter.configure(Map.of("converter.encoding", StandardCharsets.UTF_16.name()), true);
         assertArrayEquals(SAMPLE_STRING.getBytes(StandardCharsets.UTF_16), converter.fromConnectData(TOPIC, Schema.STRING_SCHEMA, SAMPLE_STRING));
     }
 
@@ -78,7 +78,7 @@ public class StringConverterTest {
 
     @Test
     public void testBytesToStringNonUtf8Encoding() {
-        converter.configure(Collections.singletonMap("converter.encoding", StandardCharsets.UTF_16.name()), true);
+        converter.configure(Map.of("converter.encoding", StandardCharsets.UTF_16.name()), true);
         SchemaAndValue data = converter.toConnectData(TOPIC, SAMPLE_STRING.getBytes(StandardCharsets.UTF_16));
         assertEquals(Schema.OPTIONAL_STRING_SCHEMA, data.schema());
         assertEquals(SAMPLE_STRING, data.value());

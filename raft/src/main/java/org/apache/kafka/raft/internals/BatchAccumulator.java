@@ -24,8 +24,8 @@ import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MutableRecordBatch;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MutableRecordBatch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
@@ -35,7 +35,6 @@ import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
@@ -59,7 +58,7 @@ public class BatchAccumulator<T> implements Closeable {
     private final int epoch;
     private final Time time;
     private final int lingerMs;
-    private final int maxBatchSize;
+    private final int maxBatchSizeBytes;
     private final int maxNumberOfBatches;
     private final Compression compression;
     private final MemoryPool memoryPool;
@@ -83,7 +82,7 @@ public class BatchAccumulator<T> implements Closeable {
         int epoch,
         long baseOffset,
         int lingerMs,
-        int maxBatchSize,
+        int maxBatchSizeBytes,
         int maxNumberOfBatches,
         MemoryPool memoryPool,
         Time time,
@@ -92,7 +91,7 @@ public class BatchAccumulator<T> implements Closeable {
     ) {
         this.epoch = epoch;
         this.lingerMs = lingerMs;
-        this.maxBatchSize = maxBatchSize;
+        this.maxBatchSizeBytes = maxBatchSizeBytes;
         this.maxNumberOfBatches = maxNumberOfBatches;
         this.memoryPool = memoryPool;
         this.time = time;
@@ -141,7 +140,7 @@ public class BatchAccumulator<T> implements Closeable {
             long lastOffset = nextOffset + records.size() - 1;
             maybeCompleteDrain();
 
-            BatchBuilder<T> batch = null;
+            BatchBuilder<T> batch;
             batch = maybeAllocateBatch(records, serializationCache);
             if (batch == null) {
                 throw new BufferAllocationException("Append failed because we failed to allocate memory to write the batch");
@@ -183,12 +182,12 @@ public class BatchAccumulator<T> implements Closeable {
 
         if (currentBatch != null) {
             OptionalInt bytesNeeded = currentBatch.bytesNeeded(records, serializationCache);
-            if (bytesNeeded.isPresent() && bytesNeeded.getAsInt() > maxBatchSize) {
+            if (bytesNeeded.isPresent() && bytesNeeded.getAsInt() > maxBatchSizeBytes) {
                 throw new RecordBatchTooLargeException(
                     String.format(
                         "The total record(s) size of %d exceeds the maximum allowed batch size of %d",
                         bytesNeeded.getAsInt(),
-                        maxBatchSize
+                        maxBatchSizeBytes
                     )
                 );
             } else if (bytesNeeded.isPresent()) {
@@ -232,7 +231,7 @@ public class BatchAccumulator<T> implements Closeable {
     public long appendControlMessages(MemoryRecordsCreator valueCreator) {
         appendLock.lock();
         try {
-            ByteBuffer buffer = memoryPool.tryAllocate(maxBatchSize);
+            ByteBuffer buffer = memoryPool.tryAllocate(maxBatchSizeBytes);
             if (buffer != null) {
                 try {
                     forceDrain();
@@ -422,7 +421,7 @@ public class BatchAccumulator<T> implements Closeable {
     }
 
     private void startNewBatch() {
-        ByteBuffer buffer = memoryPool.tryAllocate(maxBatchSize);
+        ByteBuffer buffer = memoryPool.tryAllocate(maxBatchSizeBytes);
         if (buffer != null) {
             currentBatch = new BatchBuilder<>(
                 buffer,
@@ -431,7 +430,7 @@ public class BatchAccumulator<T> implements Closeable {
                 nextOffset,
                 time.milliseconds(),
                 epoch,
-                maxBatchSize
+                maxBatchSizeBytes
             );
         }
     }
@@ -515,7 +514,7 @@ public class BatchAccumulator<T> implements Closeable {
             drainStatus = DrainStatus.NONE;
             return drainCompleted(drainOffset);
         } else {
-            return Collections.emptyList();
+            return List.of();
         }
     }
 
@@ -577,7 +576,7 @@ public class BatchAccumulator<T> implements Closeable {
             this.pool = pool;
             this.initialBuffer = initialBuffer;
 
-            validateContruction();
+            validateConstruction();
         }
 
         private CompletedBatch(
@@ -594,10 +593,10 @@ public class BatchAccumulator<T> implements Closeable {
             this.pool = pool;
             this.initialBuffer = initialBuffer;
 
-            validateContruction();
+            validateConstruction();
         }
 
-        private void validateContruction() {
+        private void validateConstruction() {
             Objects.requireNonNull(data.firstBatch(), "Expected memory records to contain one batch");
 
             if (numRecords <= 0) {

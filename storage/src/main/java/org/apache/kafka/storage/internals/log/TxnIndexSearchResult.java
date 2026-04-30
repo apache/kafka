@@ -16,13 +16,12 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import org.apache.kafka.common.message.AbortedTxn;
+
 import java.util.Collections;
 import java.util.List;
 
-public class TxnIndexSearchResult {
-    public final List<AbortedTxn> abortedTransactions;
-    public final boolean isComplete;
-
+public record TxnIndexSearchResult(List<AbortedTxn> abortedTransactions, boolean isComplete) {
     public TxnIndexSearchResult(List<AbortedTxn> abortedTransactions, boolean isComplete) {
         this.abortedTransactions = Collections.unmodifiableList(abortedTransactions);
         this.isComplete = isComplete;

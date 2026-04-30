@@ -62,12 +62,12 @@ public interface CoordinatorPlayback<U> {
      *
      * @param offset the offset of the last record in the batch plus one.
      */
-    void updateLastWrittenOffset(Long offset);
+    void updateLastWrittenOffset(long offset);
 
     /**
      * Called when the high watermark advances.
      *
      * @param offset The offset of the new high watermark.
      */
-    void updateLastCommittedOffset(Long offset);
+    void updateLastCommittedOffset(long offset);
 }

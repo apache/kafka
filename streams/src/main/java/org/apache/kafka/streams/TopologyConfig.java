@@ -34,6 +34,7 @@ import org.apache.kafka.streams.state.DslStoreSuppliers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.function.Supplier;
@@ -86,6 +87,28 @@ import static org.apache.kafka.streams.internals.StreamsConfigUtils.totalCacheSi
  */
 @SuppressWarnings("deprecation")
 public final class TopologyConfig extends AbstractConfig {
+
+    public static class InternalConfig {
+        // Cf https://issues.apache.org/jira/browse/KAFKA-19668
+        public static final String ENABLE_PROCESS_PROCESSVALUE_FIX = "__enable.process.processValue.fix__";
+
+        public static boolean getBoolean(final Map<String, Object> configs, final String key, final boolean defaultValue) {
+            final Object value = configs.getOrDefault(key, defaultValue);
+            if (value instanceof Boolean) {
+                return (boolean) value;
+            } else if (value instanceof String) {
+                return Boolean.parseBoolean((String) value);
+            } else {
+                log.warn(
+                    "Invalid value ({}) on internal configuration '{}'. Please specify a true/false value.",
+                    value,
+                    key
+                );
+                return defaultValue;
+            }
+        }
+    }
+
     private static final ConfigDef CONFIG;
     static {
         CONFIG = new ConfigDef()

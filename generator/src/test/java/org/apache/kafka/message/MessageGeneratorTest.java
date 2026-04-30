@@ -74,8 +74,8 @@ public class MessageGeneratorTest {
 
     @Test
     public void testConstants() {
-        assertEquals(MessageGenerator.UNSIGNED_SHORT_MAX, 0xFFFF);
-        assertEquals(MessageGenerator.UNSIGNED_INT_MAX, 0xFFFFFFFFL);
+        assertEquals(0xFFFF, MessageGenerator.UNSIGNED_SHORT_MAX);
+        assertEquals(0xFFFFFFFFL, MessageGenerator.UNSIGNED_INT_MAX);
     }
 
     @Test
@@ -93,7 +93,7 @@ public class MessageGeneratorTest {
                 "{",
                 "  \"apiKey\": 0,",
                 "  \"type\": \"response\",",
-                "  \"name\": \"FooBarRespose\",",
+                "  \"name\": \"FooBarResponse\",",
                 "  \"validVersions\": \"none\"",
                 "}")), MessageSpec.class);
 

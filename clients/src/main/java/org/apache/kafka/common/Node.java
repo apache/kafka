@@ -114,7 +114,10 @@ public class Node {
     }
 
     /**
-     * Whether if this node is fenced
+     * Returns whether this node is fenced.
+     * <p>
+     * This applies to broker nodes only. For controller quorum nodes, this field
+     * is not relevant and is defined to be {@code false}.
      */
     public boolean isFenced() {
         return isFenced;

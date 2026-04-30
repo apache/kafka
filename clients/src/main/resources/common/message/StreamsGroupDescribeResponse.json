@@ -27,6 +27,7 @@
   // - INVALID_REQUEST (version 0+)
   // - INVALID_GROUP_ID (version 0+)
   // - GROUP_ID_NOT_FOUND (version 0+)
+  // - TOPIC_AUTHORIZATION_FAILED (version 0+)
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
@@ -56,9 +57,9 @@
               "fields": [
                 { "name": "SubtopologyId", "type": "string", "versions": "0+",
                   "about": "String to uniquely identify the subtopology." },
-                { "name": "SourceTopics", "type": "[]string", "versions": "0+",
+                { "name": "SourceTopics", "type": "[]string", "versions": "0+", "entityType": "topicName",
                   "about": "The topics the subtopology reads from." },
-                { "name": "RepartitionSinkTopics", "type": "[]string", "versions": "0+",
+                { "name": "RepartitionSinkTopics", "type": "[]string", "versions": "0+", "entityType": "topicName",
                   "about": "The repartition topics the subtopology writes to." },
                 { "name": "StateChangelogTopics", "type": "[]TopicInfo", "versions": "0+",
                   "about": "The set of state changelog topics associated with this subtopology. Created automatically." },
@@ -124,14 +125,6 @@
       { "name": "Offset", "type": "int64", "versions": "0+",
         "about": "The offset." }
     ]},
-    { "name": "TopicPartitions", "versions": "0+", "fields": [
-      { "name": "TopicId", "type": "uuid", "versions": "0+",
-        "about": "The topic ID." },
-      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
-        "about": "The topic name." },
-      { "name": "Partitions", "type": "[]int32", "versions": "0+",
-        "about": "The partitions." }
-    ]},
     { "name": "Assignment", "versions": "0+", "fields": [
       { "name": "ActiveTasks", "type": "[]TaskIds", "versions": "0+",
         "about": "Active tasks for this client." },
@@ -153,7 +146,7 @@
         "about": "value of the config" }
     ]},
     { "name": "TopicInfo", "versions": "0+", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+",
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The name of the topic." },
       { "name": "Partitions", "type": "int32", "versions": "0+",
         "about": "The number of partitions in the topic. Can be 0 if no specific number of partitions is enforced. Always 0 for changelog topics." },

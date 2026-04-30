@@ -32,7 +32,6 @@ import org.apache.kafka.server.quota.SensorAccess;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -102,7 +101,7 @@ public class RLMQuotaManager {
     }
 
     private MetricName metricName() {
-        return metrics.metricName("byte-rate", quotaType.toString(), description, Collections.emptyMap());
+        return metrics.metricName("byte-rate", quotaType.toString(), description, Map.of());
     }
 
     private Sensor sensor() {

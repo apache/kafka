@@ -17,17 +17,26 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.InvalidRegularExpression;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerProtocolAssignment;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentValue;
-import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
+import com.dynatrace.hash4j.hashing.HashStream64;
+import com.dynatrace.hash4j.hashing.Hashing;
+import com.google.re2j.Pattern;
+import com.google.re2j.PatternSyntaxException;
+
+import org.slf4j.Logger;
+
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -87,6 +96,36 @@ public class Utils {
     }
 
     /**
+     * @return The provided assignment with epochs as a String.
+     *
+     * Example:
+     * [topicid1-0@5, topicid1-1@5, topicid2-0@3, topicid2-1@3]
+     */
+    public static String assignmentWithEpochsToString(
+        Map<Uuid, Map<Integer, Integer>> assignmentWithEpochs
+    ) {
+        StringBuilder builder = new StringBuilder("[");
+        Iterator<Map.Entry<Uuid, Map<Integer, Integer>>> topicsIterator = assignmentWithEpochs.entrySet().iterator();
+        while (topicsIterator.hasNext()) {
+            Map.Entry<Uuid, Map<Integer, Integer>> entry = topicsIterator.next();
+            Iterator<Map.Entry<Integer, Integer>> partitionsIterator = entry.getValue().entrySet().iterator();
+            while (partitionsIterator.hasNext()) {
+                Map.Entry<Integer, Integer> partitionEpoch = partitionsIterator.next();
+                builder.append(entry.getKey());
+                builder.append("-");
+                builder.append(partitionEpoch.getKey());
+                builder.append("@");
+                builder.append(partitionEpoch.getValue());
+                if (partitionsIterator.hasNext() || topicsIterator.hasNext()) {
+                    builder.append(", ");
+                }
+            }
+        }
+        builder.append("]");
+        return builder.toString();
+    }
+
+    /**
      * Decrements value by 1; returns null when reaching zero. This helper is
      * meant to be used with Map#compute.
      */
@@ -130,22 +169,20 @@ public class Utils {
      * Converts a map of topic id and partition set to a ConsumerProtocolAssignment.
      *
      * @param assignment    The map to convert.
-     * @param topicsImage   The TopicsImage.
+     * @param image   The CoordinatorMetadataImage.
      * @return The converted ConsumerProtocolAssignment.
      */
     public static ConsumerProtocolAssignment toConsumerProtocolAssignment(
         Map<Uuid, Set<Integer>> assignment,
-        TopicsImage topicsImage
+        CoordinatorMetadataImage image
     ) {
         ConsumerProtocolAssignment.TopicPartitionCollection collection =
             new ConsumerProtocolAssignment.TopicPartitionCollection();
         assignment.forEach((topicId, partitions) -> {
-            TopicImage topicImage = topicsImage.getTopic(topicId);
-            if (topicImage != null) {
+            image.topicMetadata(topicId).ifPresent(topicMetadata ->
                 collection.add(new ConsumerProtocolAssignment.TopicPartition()
-                    .setTopic(topicImage.name())
-                    .setPartitions(new ArrayList<>(partitions)));
-            }
+                    .setTopic(topicMetadata.name())
+                    .setPartitions(new ArrayList<>(partitions))));
         });
         return new ConsumerProtocolAssignment()
             .setAssignedPartitions(collection);
@@ -154,20 +191,19 @@ public class Utils {
     /**
      * Converts a map of topic id and partition set to a ConsumerProtocolAssignment.
      *
-     * @param consumerProtocolAssignment    The ConsumerProtocolAssignment.
-     * @param topicsImage                   The TopicsImage.
+     * @param consumerProtocolAssignment The ConsumerProtocolAssignment.
+     * @param metadataImage              The Metadata image.
      * @return The converted map.
      */
     public static Map<Uuid, Set<Integer>> toTopicPartitionMap(
         ConsumerProtocolAssignment consumerProtocolAssignment,
-        TopicsImage topicsImage
+        CoordinatorMetadataImage metadataImage
     ) {
         Map<Uuid, Set<Integer>> topicPartitionMap = new HashMap<>();
         consumerProtocolAssignment.assignedPartitions().forEach(topicPartition -> {
-            TopicImage topicImage = topicsImage.getTopic(topicPartition.topic());
-            if (topicImage != null) {
-                topicPartitionMap.put(topicImage.id(), new HashSet<>(topicPartition.partitions()));
-            }
+            metadataImage.topicMetadata(topicPartition.topic()).ifPresent(topicMetadata -> {
+                topicPartitionMap.put(topicMetadata.id(), new HashSet<>(topicPartition.partitions()));
+            });
         });
         return topicPartitionMap;
     }
@@ -175,40 +211,101 @@ public class Utils {
     /**
      * Converts a ConsumerProtocolSubscription.TopicPartitionCollection to a list of ConsumerGroupHeartbeatRequestData.TopicPartitions.
      *
-     * @param topicPartitionCollection  The TopicPartitionCollection to convert.
-     * @param topicsImage               The TopicsImage.
+     * @param topicPartitionCollection The TopicPartitionCollection to convert.
+     * @param metadataImage            The Metadata image.
      * @return a list of ConsumerGroupHeartbeatRequestData.TopicPartitions.
      */
     public static List<ConsumerGroupHeartbeatRequestData.TopicPartitions> toTopicPartitions(
         ConsumerProtocolSubscription.TopicPartitionCollection topicPartitionCollection,
-        TopicsImage topicsImage
+        CoordinatorMetadataImage metadataImage
     ) {
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> res = new ArrayList<>();
         for (ConsumerProtocolSubscription.TopicPartition tp : topicPartitionCollection) {
-            TopicImage topicImage = topicsImage.getTopic(tp.topic());
-            if (topicImage != null) {
+            metadataImage.topicMetadata(tp.topic()).ifPresent(topicMetadata -> {
                 res.add(
                     new ConsumerGroupHeartbeatRequestData.TopicPartitions()
-                        .setTopicId(topicImage.id())
+                        .setTopicId(topicMetadata.id())
                         .setPartitions(tp.partitions())
                 );
-            }
+            });
         }
         return res;
     }
 
     /**
-     * Creates a map of topic id and partition set from a list of consumer group TopicPartitions.
+     * Creates a map of topic id and partition with assignment epochs from a list of consumer group TopicPartitions.
      *
-     * @param topicPartitionsList   The list of TopicPartitions.
-     * @return a map of topic id and partition set.
+     * @param log The logger to use for logging errors.
+     * @param groupId The group id for logging context.
+     * @param topicPartitions The list of TopicPartitions.
+     * @param defaultEpoch The default epoch to use when the epoch information is not available for a partition.
+     * @return a map of topic id and partitions with assignment epochs.
      */
-    public static Map<Uuid, Set<Integer>> assignmentFromTopicPartitions(
-        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitionsList
+    public static Map<Uuid, Map<Integer, Integer>> assignmentFromTopicPartitions(
+        Logger log,
+        String groupId,
+        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitions,
+        int defaultEpoch
     ) {
-        return topicPartitionsList.stream().collect(Collectors.toMap(
-            ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions::topicId,
-            topicPartitions -> Collections.unmodifiableSet(new HashSet<>(topicPartitions.partitions()))));
+        // For legacy static member, the defaultEpoch could be -2 (LEAVE_GROUP_STATIC_MEMBER_EPOCH).
+        // But we want to ensure the default memberEpoch assigned is non-negative.
+        int adjustedDefaultEpoch = Math.max(defaultEpoch, 0);
+        Map<Uuid, Map<Integer, Integer>> assignmentWithEpochs = new HashMap<>();
+
+        for (ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions tp : topicPartitions) {
+            Map<Integer, Integer> partitionEpochs = new HashMap<>();
+            List<Integer> partitions = tp.partitions();
+            List<Integer> epochs = tp.assignmentEpochs();
+
+            if (epochs != null && epochs.size() == partitions.size()) {
+                for (int i = 0; i < partitions.size(); i++) {
+                    partitionEpochs.put(partitions.get(i), epochs.get(i));
+                }
+            } else {
+                if (epochs != null) {
+                    log.error("[GroupId {}] Size of assignment epochs {} is not equal to partitions {} for topic {}. " +
+                            "Using default epoch {} for all partitions.",
+                        groupId, epochs.size(), partitions.size(), tp.topicId(), adjustedDefaultEpoch);
+                }
+                for (Integer partition : partitions) {
+                    partitionEpochs.put(partition, adjustedDefaultEpoch);
+                }
+            }
+
+            assignmentWithEpochs.put(tp.topicId(), Collections.unmodifiableMap(partitionEpochs));
+        }
+        return Collections.unmodifiableMap(assignmentWithEpochs);
+    }
+
+    /**
+     * Adds the given assignment epoch to an assignment without epochs.
+     */
+    public static Map<Uuid, Map<Integer, Integer>> toAssignmentWithEpochs(
+        Map<Uuid, Set<Integer>> assignment,
+        int epoch
+    ) {
+        Map<Uuid, Map<Integer, Integer>> result = new HashMap<>();
+        for (Map.Entry<Uuid, Set<Integer>> entry : assignment.entrySet()) {
+            Map<Integer, Integer> partitionEpochs = new HashMap<>();
+            for (Integer partition : entry.getValue()) {
+                partitionEpochs.put(partition, epoch);
+            }
+            result.put(entry.getKey(), Collections.unmodifiableMap(partitionEpochs));
+        }
+        return Collections.unmodifiableMap(result);
+    }
+
+    /**
+     * Discards the assignment epochs from an assignment with epochs.
+     */
+    public static Map<Uuid, Set<Integer>> toAssignmentWithoutEpochs(
+        Map<Uuid, Map<Integer, Integer>> assignmentWithEpochs
+    ) {
+        Map<Uuid, Set<Integer>> result = new HashMap<>();
+        for (Map.Entry<Uuid, Map<Integer, Integer>> entry : assignmentWithEpochs.entrySet()) {
+            result.put(entry.getKey(), Collections.unmodifiableSet(new HashSet<>(entry.getValue().keySet())));
+        }
+        return Collections.unmodifiableMap(result);
     }
 
     /**
@@ -234,5 +331,193 @@ public class Utils {
         } else {
             return apiMessageAndVersion.message();
         }
+    }
+
+    /**
+     * Throws an InvalidRequestException if the value is non-null and empty.
+     * A string containing only whitespaces is also considered empty.
+     *
+     * @param value The value.
+     * @param error The error message.
+     * @throws InvalidRequestException
+     */
+    static void throwIfEmptyString(
+        String value,
+        String error
+    ) throws InvalidRequestException {
+        if (value != null && value.trim().isEmpty()) {
+            throw new InvalidRequestException(error);
+        }
+    }
+
+    /**
+     * Throws an InvalidRequestException if the value is null or non-empty.
+     *
+     * @param value The value.
+     * @param error The error message.
+     * @throws InvalidRequestException
+     */
+    static void throwIfNotEmptyCollection(
+        Collection<?> value,
+        String error
+    ) throws InvalidRequestException {
+        if (value == null || !value.isEmpty()) {
+            throw new InvalidRequestException(error);
+        }
+    }
+
+    /**
+     * Throws an InvalidRequestException if the value is not null and non-empty.
+     *
+     * @param value The value.
+     * @param error The error message.
+     * @throws InvalidRequestException
+     */
+    static void throwIfNotNullOrEmpty(
+        Collection<?> value,
+        String error
+    ) throws InvalidRequestException {
+        if (value != null && !value.isEmpty()) {
+            throw new InvalidRequestException(error);
+        }
+    }
+
+    /**
+     * Throws an InvalidRequestException if the value is non-null.
+     *
+     * @param value The value.
+     * @param error The error message.
+     * @throws InvalidRequestException
+     */
+    static void throwIfNotNull(
+        Object value,
+        String error
+    ) throws InvalidRequestException {
+        if (value != null) {
+            throw new InvalidRequestException(error);
+        }
+    }
+
+    /**
+     * Throws an InvalidRequestException if the value is null.
+     *
+     * @param value The value.
+     * @param error The error message.
+     * @throws InvalidRequestException
+     */
+    static void throwIfNull(
+        Object value,
+        String error
+    ) throws InvalidRequestException {
+        if (value == null) {
+            throw new InvalidRequestException(error);
+        }
+    }
+
+    /**
+     * Validates if the provided regular expression is valid.
+     *
+     * @param regex The regular expression to validate.
+     * @throws InvalidRegularExpression if the regular expression is invalid.
+     */
+    static void throwIfRegularExpressionIsInvalid(
+        String regex
+    ) throws InvalidRegularExpression {
+        try {
+            Pattern.compile(regex);
+        } catch (PatternSyntaxException ex) {
+            throw new InvalidRegularExpression(
+                String.format("SubscribedTopicRegex `%s` is not a valid regular expression: %s.",
+                    regex, ex.getDescription()));
+        }
+    }
+
+    /**
+     * The magic byte used to identify the version of topic hash function.
+     */
+    static final byte TOPIC_HASH_MAGIC_BYTE = 0x00;
+
+    /**
+     * Computes the hash of the topics in a group.
+     * <p>
+     * The computed hash value is stored as the metadata hash in the *GroupMetadataValue.
+     * <p>
+     * If there is no topic, the hash value is set to 0.
+     * The hashing process involves the following steps:
+     * 1. Sort the topic hashes by topic name.
+     * 2. Write each topic hash in order.
+     *
+     * @param topicHashes The map of topic hashes. Key is topic name and value is the topic hash.
+     * @return The hash of the group.
+     */
+    public static long computeGroupHash(Map<String, Long> topicHashes) {
+        if (topicHashes.isEmpty()) {
+            return 0;
+        }
+
+        // Sort entries by topic name
+        List<Map.Entry<String, Long>> sortedEntries = new ArrayList<>(topicHashes.entrySet());
+        sortedEntries.sort(Map.Entry.comparingByKey());
+
+        HashStream64 hasher = Hashing.xxh3_64().hashStream();
+        for (Map.Entry<String, Long> entry : sortedEntries) {
+            hasher.putLong(entry.getValue());
+        }
+
+        return hasher.getAsLong();
+    }
+
+    /**
+     * Computes the hash of the topic id, name, number of partitions, and partition racks by streaming XXH3.
+     * <p>
+     * The computed hash value for the topic is utilized in conjunction with the {@link #computeGroupHash(Map)}
+     * method and is stored as part of the metadata hash in the *GroupMetadataValue.
+     * It is important to note that if the hash algorithm is changed, the magic byte must be updated to reflect the
+     * new hash version.
+     * <p>
+     * For non-existent topics, the hash value is set to 0.
+     * For existent topics, the hashing process involves the following steps:
+     * 1. Write a magic byte to denote the version of the hash function.
+     * 2. Write the hash code of the topic ID with mostSignificantBits and leastSignificantBits.
+     * 3. Write the topic name.
+     * 4. Write the number of partitions associated with the topic.
+     * 5. For each partition, write the partition ID and a sorted list of rack identifiers.
+     * - Rack identifiers are formatted as "<length1><value1><length2><value2>" to prevent issues with simple separators.
+     *
+     * @param topicName The topic name.
+     * @param metadataImage The topic metadata.
+     * @return The hash of the topic.
+     */
+    public static long computeTopicHash(String topicName, CoordinatorMetadataImage metadataImage) {
+        Optional<CoordinatorMetadataImage.TopicMetadata> topicImage = metadataImage.topicMetadata(topicName);
+        if (topicImage.isEmpty()) {
+            return 0;
+        }
+
+        CoordinatorMetadataImage.TopicMetadata topicMetadata = topicImage.get();
+
+        HashStream64 hasher = Hashing.xxh3_64().hashStream();
+        hasher = hasher
+            .putByte(TOPIC_HASH_MAGIC_BYTE)
+            .putLong(topicMetadata.id().getMostSignificantBits())
+            .putLong(topicMetadata.id().getLeastSignificantBits())
+            .putString(topicMetadata.name())
+            .putInt(topicMetadata.partitionCount());
+
+        for (int i = 0; i < topicMetadata.partitionCount(); i++) {
+            hasher = hasher.putInt(i);
+            List<String> partitionRacks = topicMetadata.partitionRacks(i);
+            Collections.sort(partitionRacks);
+
+            for (String rack : partitionRacks) {
+                // Format: "<length><value>"
+                // The rack string combination cannot use simple separator like ",", because there is no limitation for rack character.
+                // If using simple separator like "," it may hit edge case like ",," and ",,," / ",,," and ",,".
+                // Add length before the rack string to avoid the edge case.
+                hasher = hasher.putInt(rack.length()).putString(rack);
+            }
+        }
+
+        return hasher.getAsLong();
     }
 }

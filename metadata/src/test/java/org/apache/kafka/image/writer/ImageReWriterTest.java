@@ -27,7 +27,7 @@ import org.apache.kafka.image.MetadataImage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Collections;
+import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.metadata.RecordTestUtils.testRecord;
@@ -87,8 +87,8 @@ public class ImageReWriterTest {
         writer2.close(true);
         MetadataImage newImage = writer2.image();
 
-        assertEquals(Collections.emptyMap(), newImage.topics().topicsById());
-        assertEquals(Collections.singletonMap("num.io.threads", "12"),
+        assertEquals(Map.of(), newImage.topics().topicsById());
+        assertEquals(Map.of("num.io.threads", "12"),
             newImage.configs().configMapForResource(new ConfigResource(BROKER, "")));
     }
 }

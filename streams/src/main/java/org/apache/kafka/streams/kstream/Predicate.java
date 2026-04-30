@@ -31,6 +31,7 @@ import org.apache.kafka.streams.KeyValue;
  * @see KTable#filter(Predicate)
  * @see KTable#filterNot(Predicate)
  */
+@FunctionalInterface
 public interface Predicate<K, V> {
 
     /**

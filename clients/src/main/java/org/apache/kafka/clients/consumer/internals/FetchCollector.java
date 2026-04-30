@@ -16,17 +16,15 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -37,7 +35,6 @@ import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
 
@@ -45,7 +42,7 @@ import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMeta
 
 /**
  * {@code FetchCollector} operates at the {@link RecordBatch} level, as that is what is stored in the
- * {@link FetchBuffer}. Each {@link org.apache.kafka.common.record.Record} in the {@link RecordBatch} is converted
+ * {@link FetchBuffer}. Each {@link org.apache.kafka.common.record.internal.Record} in the {@link RecordBatch} is converted
  * to a {@link ConsumerRecord} and added to the returned {@link Fetch}.
  *
  * @param <K> Record key type
@@ -81,8 +78,7 @@ public class FetchCollector<K, V> {
      * Return the fetched {@link ConsumerRecord records}, empty the {@link FetchBuffer record buffer}, and
      * update the consumed position.
      *
-     * </p>
-     *
+     * <p>
      * NOTE: returning an {@link Fetch#empty() empty} fetch guarantees the consumed position is not updated.
      *
      * @param fetchBuffer {@link FetchBuffer} from which to retrieve the {@link ConsumerRecord records}
@@ -158,7 +154,10 @@ public class FetchCollector<K, V> {
             log.debug("Not returning fetched records for partition {} since it is no longer assigned", tp);
         } else if (!subscriptions.isFetchable(tp)) {
             // this can happen when a partition is paused before fetched records are returned to the consumer's
-            // poll call or if the offset is being reset
+            // poll call or if the offset is being reset.
+            // It can also happen under the Consumer rebalance protocol, when the consumer changes its subscription.
+            // Until the consumer receives an updated assignment from the coordinator, it can hold assigned partitions
+            // that are not in the subscription anymore, so we make them not fetchable.
             log.debug("Not returning fetched records for assigned partition {} since it is no longer fetchable", tp);
         } else {
             SubscriptionState.FetchPosition position = subscriptions.position(tp);
@@ -185,6 +184,12 @@ public class FetchCollector<K, V> {
                             position, nextPosition, tp, partRecords.size());
                     subscriptions.position(tp, nextPosition);
                     positionAdvanced = true;
+                }
+
+                // Drain after position update to ensure the background thread sees the updated position
+                // before it sees isConsumed=true. This prevents duplicate fetch requests for the old offset.
+                if (nextInLineFetch.isExhausted()) {
+                    nextInLineFetch.drain();
                 }
 
                 Long partitionLag = subscriptions.partitionLag(tp, fetchConfig.isolationLevel);
@@ -263,21 +268,10 @@ public class FetchCollector<K, V> {
         Iterator<? extends RecordBatch> batches = FetchResponse.recordsOrFail(partition).batches().iterator();
 
         if (!batches.hasNext() && FetchResponse.recordsSize(partition) > 0) {
-            if (completedFetch.requestVersion < 3) {
-                // Implement the pre KIP-74 behavior of throwing a RecordTooLargeException.
-                Map<TopicPartition, Long> recordTooLargePartitions = Collections.singletonMap(tp, fetchOffset);
-                throw new RecordTooLargeException("There are some messages at [Partition=Offset]: " +
-                        recordTooLargePartitions + " whose size is larger than the fetch size " + fetchConfig.fetchSize +
-                        " and hence cannot be returned. Please considering upgrading your broker to 0.10.1.0 or " +
-                        "newer to avoid this issue. Alternately, increase the fetch size on the client (using " +
-                        ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG + ")",
-                        recordTooLargePartitions);
-            } else {
-                // This should not happen with brokers that support FetchRequest/Response V3 or higher (i.e. KIP-74)
-                throw new KafkaException("Failed to make progress reading messages at " + tp + "=" +
-                        fetchOffset + ". Received a non-empty fetch response from the server, but no " +
-                        "complete records were found.");
-            }
+            // This should not happen with brokers that support FetchRequest/Response V4 or higher (i.e. KIP-74)
+            throw new KafkaException("Failed to make progress reading messages at " + tp + "=" +
+                    fetchOffset + ". Received a non-empty fetch response from the server, but no " +
+                    "complete records were found.");
         }
 
         if (!updatePartitionState(partition, tp)) {

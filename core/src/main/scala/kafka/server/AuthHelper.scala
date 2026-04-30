@@ -24,6 +24,7 @@ import org.apache.kafka.clients.admin.EndpointType
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.acl.AclOperation.DESCRIBE
 import org.apache.kafka.common.errors.ClusterAuthorizationException
+import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.message.DescribeClusterResponseData
 import org.apache.kafka.common.message.DescribeClusterResponseData.DescribeClusterBrokerCollection
 import org.apache.kafka.common.protocol.Errors
@@ -38,7 +39,7 @@ import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authoriz
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
-class AuthHelper(authorizer: Option[Authorizer]) {
+class AuthHelper(authorizer: Option[Plugin[Authorizer]]) {
   def authorize(requestContext: RequestContext,
                 operation: AclOperation,
                 resourceType: ResourceType,
@@ -49,7 +50,7 @@ class AuthHelper(authorizer: Option[Authorizer]) {
     authorizer.forall { authZ =>
       val resource = new ResourcePattern(resourceType, resourceName, PatternType.LITERAL)
       val actions = Collections.singletonList(new Action(operation, resource, refCount, logIfAllowed, logIfDenied))
-      authZ.authorize(requestContext, actions).get(0) == AuthorizationResult.ALLOWED
+      authZ.get.authorize(requestContext, actions).get(0) == AuthorizationResult.ALLOWED
     }
   }
 
@@ -64,7 +65,7 @@ class AuthHelper(authorizer: Option[Authorizer]) {
       case Some(authZ) =>
         val resourcePattern = new ResourcePattern(resource.resourceType, resource.name, PatternType.LITERAL)
         val actions = supportedOps.map { op => new Action(op, resourcePattern, 1, false, false) }
-        authZ.authorize(request.context, actions.asJava).asScala
+        authZ.get.authorize(request.context, actions.asJava).asScala
           .zip(supportedOps)
           .filter(_._1 == AuthorizationResult.ALLOWED)
           .map(_._2).toSet
@@ -77,7 +78,7 @@ class AuthHelper(authorizer: Option[Authorizer]) {
   def authorizeByResourceType(requestContext: RequestContext, operation: AclOperation,
                               resourceType: ResourceType): Boolean = {
     authorizer.forall { authZ =>
-      authZ.authorizeByResourceType(requestContext, operation, resourceType) == AuthorizationResult.ALLOWED
+      authZ.get.authorizeByResourceType(requestContext, operation, resourceType) == AuthorizationResult.ALLOWED
     }
   }
 
@@ -109,7 +110,7 @@ class AuthHelper(authorizer: Option[Authorizer]) {
           val resource = new ResourcePattern(resourceType, resourceName, PatternType.LITERAL)
           new Action(operation, resource, count, logIfAllowed, logIfDenied)
         }.toBuffer
-        authZ.authorize(requestContext, actions.asJava).asScala
+        authZ.get.authorize(requestContext, actions.asJava).asScala
           .zip(resourceNameToCount.keySet)
           .collect { case (authzResult, resourceName) if authzResult == AuthorizationResult.ALLOWED =>
             resourceName

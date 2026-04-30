@@ -39,6 +39,7 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.REGEX_RESOLUTION_NOT_SUPPORTED_MSG;
 
 /**
@@ -211,6 +212,19 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
         return membershipManager;
     }
 
+    @Override
+    protected boolean shouldSendLeaveHeartbeatNow() {
+        // If the consumer has dynamic membership,
+        // we should skip the leaving heartbeat when leaveGroupOperation is REMAIN_IN_GROUP
+        if (membershipManager.groupInstanceId().isEmpty() && REMAIN_IN_GROUP == membershipManager.leaveGroupOperation()) {
+            logger.debug("Dynamic member {} closed with REMAIN_IN_GROUP. No leave heartbeat will be sent, " +
+                "the member will be removed by the coordinator after session timeout.",
+                membershipManager.memberId());
+            return false;
+        }
+        return membershipManager().state() == MemberState.LEAVING;
+    }
+
     /**
      * Builds the heartbeat requests correctly, ensuring that all information is sent according to
      * the protocol, but subsequent requests do not send information which has not changed. This
@@ -237,6 +251,7 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
             sentFields.reset();
         }
 
+        @SuppressWarnings("NPathComplexity")
         public ConsumerGroupHeartbeatRequestData buildRequestData() {
             ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData();
 
@@ -294,6 +309,12 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
                         buildTopicPartitionsList(local.partitions);
                 data.setTopicPartitions(topicPartitions);
                 sentFields.localAssignment = local;
+            }
+
+            // RackId - sent when joining
+            String rackId = membershipManager.rackId().orElse(null);
+            if (sendAllFields) {
+                data.setRackId(rackId);
             }
 
             return data;

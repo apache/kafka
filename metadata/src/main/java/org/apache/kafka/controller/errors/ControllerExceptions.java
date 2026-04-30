@@ -41,21 +41,6 @@ public class ControllerExceptions {
     }
 
     /**
-     * Check if an exception is a NotController exception.
-     *
-     * @param exception     The exception to check.
-     * @return              True if the exception is a NotController exception.
-     */
-    public static boolean isNotControllerException(Throwable exception) {
-        if (exception == null) return false;
-        if (exception instanceof ExecutionException) {
-            exception = exception.getCause();
-            if (exception == null) return false;
-        }
-        return exception instanceof NotControllerException;
-    }
-
-    /**
      * Create a new exception indicating that the controller is in pre-migration mode, so the
      * operation cannot be completed.
      *

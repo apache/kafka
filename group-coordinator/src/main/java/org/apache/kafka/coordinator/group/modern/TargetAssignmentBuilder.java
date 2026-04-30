@@ -17,6 +17,8 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
@@ -27,7 +29,6 @@ import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
-import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -139,10 +140,15 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         }
 
         @Override
-        protected CoordinatorRecord newTargetAssignmentEpochRecord(String groupId, int assignmentEpoch) {
-            return GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(
+        protected CoordinatorRecord newTargetAssignmentMetadataRecord(
+            String groupId,
+            int assignmentEpoch,
+            long assignmentTimestamp
+        ) {
+            return GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord(
                 groupId,
-                assignmentEpoch
+                assignmentEpoch,
+                assignmentTimestamp
             );
         }
 
@@ -161,12 +167,12 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
                 ResolvedRegularExpression resolvedRegularExpression = resolvedRegularExpressions.get(subscribedTopicRegex);
                 if (resolvedRegularExpression != null) {
                     if (subscriptions.isEmpty()) {
-                        subscriptions = resolvedRegularExpression.topics;
-                    } else if (!resolvedRegularExpression.topics.isEmpty()) {
+                        subscriptions = resolvedRegularExpression.topics();
+                    } else if (!resolvedRegularExpression.topics().isEmpty()) {
                         // We only use a UnionSet when the member uses both type of subscriptions. The
                         // protocol allows it. However, the Apache Kafka Consumer does not support it.
                         // Other clients such as librdkafka may support it.
-                        subscriptions = new UnionSet<>(subscriptions, resolvedRegularExpression.topics);
+                        subscriptions = new UnionSet<>(subscriptions, resolvedRegularExpression.topics());
                     }
                 }
             }
@@ -208,10 +214,15 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         }
 
         @Override
-        protected CoordinatorRecord newTargetAssignmentEpochRecord(String groupId, int assignmentEpoch) {
-            return GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochRecord(
+        protected CoordinatorRecord newTargetAssignmentMetadataRecord(
+            String groupId,
+            int assignmentEpoch,
+            long assignmentTimestamp
+        ) {
+            return GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentMetadataRecord(
                 groupId,
-                assignmentEpoch
+                assignmentEpoch,
+                assignmentTimestamp
             );
         }
 
@@ -229,6 +240,11 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
             );
         }
     }
+
+    /**
+     * The time.
+     */
+    private Time time;
 
     /**
      * The group id.
@@ -251,11 +267,6 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
     private Map<String, T> members = Map.of();
 
     /**
-     * The subscription metadata.
-     */
-    private Map<String, TopicMetadata> subscriptionMetadata = Map.of();
-
-    /**
      * The subscription type of the consumer group.
      */
     private SubscriptionType subscriptionType;
@@ -272,9 +283,9 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
     private Map<Uuid, Map<Integer, String>> invertedTargetAssignment = Map.of();
 
     /**
-     * The topics image.
+     * The metadata image.
      */
-    private TopicsImage topicsImage = TopicsImage.EMPTY;
+    private CoordinatorMetadataImage metadataImage = CoordinatorMetadataImage.EMPTY;
 
     /**
      * The members which have been updated or deleted. Deleted members
@@ -286,6 +297,11 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
      * The static members in the group.
      */
     private Map<String, String> staticMembers = new HashMap<>();
+
+    /**
+     * Topic partition assignable map.
+     */
+    private Optional<Map<Uuid, Set<Integer>>> topicAssignablePartitionsMap = Optional.empty();
 
     /**
      * Constructs the object.
@@ -302,6 +318,17 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         this.groupId = Objects.requireNonNull(groupId);
         this.groupEpoch = groupEpoch;
         this.assignor = Objects.requireNonNull(assignor);
+    }
+
+    /**
+     * Sets the time.
+     *
+     * @param time The time.
+     * @return This object.
+     */
+    public U withTime(Time time) {
+        this.time = time;
+        return self();
     }
 
     /**
@@ -327,19 +354,6 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         Map<String, String> staticMembers
     ) {
         this.staticMembers = staticMembers;
-        return self();
-    }
-
-    /**
-     * Adds the subscription metadata to use.
-     *
-     * @param subscriptionMetadata  The subscription metadata.
-     * @return This object.
-     */
-    public U withSubscriptionMetadata(
-        Map<String, TopicMetadata> subscriptionMetadata
-    ) {
-        this.subscriptionMetadata = subscriptionMetadata;
         return self();
     }
 
@@ -383,15 +397,22 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
     }
 
     /**
-     * Adds the topics image.
+     * Adds the metadata image.
      *
-     * @param topicsImage    The topics image.
+     * @param metadataImage    The metadata image.
      * @return This object.
      */
-    public U withTopicsImage(
-        TopicsImage topicsImage
+    public U withMetadataImage(
+        CoordinatorMetadataImage metadataImage
     ) {
-        this.topicsImage = topicsImage;
+        this.metadataImage = metadataImage;
+        return self();
+    }
+
+    public U withTopicAssignablePartitionsMap(
+        Map<Uuid, Set<Integer>> topicAssignablePartitionsMap
+    ) {
+        this.topicAssignablePartitionsMap = Optional.of(topicAssignablePartitionsMap);
         return self();
     }
 
@@ -433,7 +454,7 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
      */
     public TargetAssignmentResult build() throws PartitionAssignorException {
         Map<String, MemberSubscriptionAndAssignmentImpl> memberSpecs = new HashMap<>();
-        TopicIds.TopicResolver topicResolver = new TopicIds.CachedTopicResolver(topicsImage);
+        TopicIds.TopicResolver topicResolver = new TopicIds.CachedTopicResolver(metadataImage);
 
         // Prepare the member spec for all members.
         members.forEach((memberId, member) ->
@@ -467,27 +488,18 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
             }
         });
 
-        // Prepare the topic metadata.
-        Map<Uuid, TopicMetadata> topicMetadataMap = new HashMap<>();
-        subscriptionMetadata.forEach((topicName, topicMetadata) ->
-            topicMetadataMap.put(
-                topicMetadata.id(),
-                topicMetadata
-            )
-        );
-
         // Compute the assignment.
         GroupAssignment newGroupAssignment = assignor.assign(
             new GroupSpecImpl(
                 Collections.unmodifiableMap(memberSpecs),
                 subscriptionType,
-                invertedTargetAssignment
+                invertedTargetAssignment,
+                topicAssignablePartitionsMap
             ),
-            new SubscribedTopicDescriberImpl(topicMetadataMap)
+            new SubscribedTopicDescriberImpl(metadataImage)
         );
 
-        // Compute delta from previous to new target assignment and create the
-        // relevant records.
+        // Compute delta from previous to new target assignment and create the relevant records.
         List<CoordinatorRecord> records = new ArrayList<>();
 
         for (String memberId : memberSpecs.keySet()) {
@@ -506,7 +518,7 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         }
 
         // Bump the target assignment epoch.
-        records.add(newTargetAssignmentEpochRecord(groupId, groupEpoch));
+        records.add(newTargetAssignmentMetadataRecord(groupId, groupEpoch, time.milliseconds()));
 
         return new TargetAssignmentResult(records, newGroupAssignment.members());
     }
@@ -519,9 +531,10 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         Map<Uuid, Set<Integer>> partitions
     );
 
-    protected abstract CoordinatorRecord newTargetAssignmentEpochRecord(
+    protected abstract CoordinatorRecord newTargetAssignmentMetadataRecord(
         String groupId,
-        int assignmentEpoch
+        int assignmentEpoch,
+        long timestampMs
     );
 
     protected abstract MemberSubscriptionAndAssignmentImpl newMemberSubscriptionAndAssignment(

@@ -30,7 +30,6 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -54,7 +53,7 @@ class MetadataQuorumCommandTest {
             MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--replication")
         );
 
-        List<String> outputs = Arrays.stream(describeOutput.split("\n")).collect(Collectors.toList());
+        List<String> outputs = Arrays.stream(describeOutput.split("\n")).toList();
         String header = outputs.get(0);
         List<String> data = outputs.subList(1, outputs.size());
 
@@ -116,7 +115,7 @@ class MetadataQuorumCommandTest {
         assertTrue(outputs[4].matches("MaxFollowerLag:\\s+\\d+"), describeOutput);
         assertTrue(outputs[5].matches("MaxFollowerLagTimeMs:\\s+-?\\d+"), describeOutput);
         assertTrue(
-            outputs[6].matches("CurrentVoters:\\s+\\[\\{\"id\":\\s+\\d+,\\s+\"directoryId\":\\s+\\S+,\\s+" +
+            outputs[6].matches("CurrentVoters:\\s+\\[\\{\"id\":\\s+\\d+,\\s+" +
                 "\"endpoints\":\\s+\\[\"\\S+://\\[?\\S+]?:\\d+\",?.*]"),
             describeOutput
         );

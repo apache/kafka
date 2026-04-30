@@ -32,13 +32,12 @@ import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.test.TestUtils;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState.COPY_SEGMENT_FINISHED;
@@ -70,7 +69,6 @@ public class RemoteLogSegmentLifecycleTest {
     private RemoteLogMetadataManager createTopicBasedRemoteLogMetadataManager() {
         return RemoteLogMetadataManagerTestUtils.builder()
                 .bootstrapServers(clusterInstance.bootstrapServers())
-                .startConsumerThread(true)
                 .remotePartitionMetadataStore(() -> spyRemotePartitionMetadataStore)
                 .build();
     }
@@ -78,7 +76,7 @@ public class RemoteLogSegmentLifecycleTest {
     @ClusterTest
     public void testRemoteLogSegmentLifeCycle() throws Exception {
         try (RemoteLogMetadataManager metadataManager = createTopicBasedRemoteLogMetadataManager()) {
-            metadataManager.onPartitionLeadershipChanges(Collections.singleton(topicIdPartition), Collections.emptySet());
+            metadataManager.onPartitionLeadershipChanges(Set.of(topicIdPartition), Set.of());
 
             // segment 0
             // offsets: [0-100]
@@ -113,7 +111,7 @@ public class RemoteLogSegmentLifecycleTest {
             // offsets: [101 - 200]
             // no changes in leadership with in this segment
             // leader epochs (2, 101)
-            Map<Integer, Long> leaderEpochSegment1 = Collections.singletonMap(2, 101L);
+            Map<Integer, Long> leaderEpochSegment1 = Map.of(2, 101L);
             RemoteLogSegmentMetadata metadataSegment1 = upsertSegmentState(metadataManager, leaderEpochSegment1,
                     101L, 200L, COPY_SEGMENT_FINISHED);
 
@@ -161,7 +159,7 @@ public class RemoteLogSegmentLifecycleTest {
             for (Map.Entry<EpochEntry, RemoteLogSegmentMetadata> entry : expectedEpochEntryToMetadata.entrySet()) {
                 EpochEntry epochEntry = entry.getKey();
                 Optional<RemoteLogSegmentMetadata> actualMetadataOpt = metadataManager
-                        .remoteLogSegmentMetadata(topicIdPartition, epochEntry.epoch, epochEntry.startOffset);
+                        .remoteLogSegmentMetadata(topicIdPartition, epochEntry.epoch(), epochEntry.startOffset());
                 RemoteLogSegmentMetadata expectedSegmentMetadata = entry.getValue();
                 if (expectedSegmentMetadata != null) {
                     assertEquals(Optional.of(expectedSegmentMetadata), actualMetadataOpt);
@@ -248,12 +246,12 @@ public class RemoteLogSegmentLifecycleTest {
     @ClusterTest
     public void testCacheSegmentWithCopySegmentStartedState() throws Exception {
         try (RemoteLogMetadataManager metadataManager = createTopicBasedRemoteLogMetadataManager()) {
-            metadataManager.onPartitionLeadershipChanges(Collections.singleton(topicIdPartition), Collections.emptySet());
+            metadataManager.onPartitionLeadershipChanges(Set.of(topicIdPartition), Set.of());
             // Create a segment with state COPY_SEGMENT_STARTED, and check for searching that segment and listing the
             // segments.
             RemoteLogSegmentId segmentId = new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid());
             RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, 0L, 50L,
-                    -1L, brokerId0, time.milliseconds(), segSize, Collections.singletonMap(0, 0L));
+                    -1L, brokerId0, time.milliseconds(), segSize, Map.of(0, 0L));
             metadataManager.addRemoteLogSegmentMetadata(segmentMetadata).get();
             verify(spyRemotePartitionMetadataStore).handleRemoteLogSegmentMetadata(segmentMetadata);
 
@@ -270,11 +268,11 @@ public class RemoteLogSegmentLifecycleTest {
     @ClusterTest
     public void testCacheSegmentWithCopySegmentFinishedState() throws Exception {
         try (RemoteLogMetadataManager metadataManager = createTopicBasedRemoteLogMetadataManager()) {
-            metadataManager.onPartitionLeadershipChanges(Collections.singleton(topicIdPartition), Collections.emptySet());
+            metadataManager.onPartitionLeadershipChanges(Set.of(topicIdPartition), Set.of());
             // Create a segment and move it to state COPY_SEGMENT_FINISHED. and check for searching that segment and
             // listing the segments.
             RemoteLogSegmentMetadata segmentMetadata = upsertSegmentState(
-                    metadataManager, Collections.singletonMap(0, 101L), 101L, 200L, COPY_SEGMENT_FINISHED);
+                    metadataManager, Map.of(0, 101L), 101L, 200L, COPY_SEGMENT_FINISHED);
 
             // Search should return the above segment.
             Optional<RemoteLogSegmentMetadata> segMetadataForOffset150 =
@@ -289,11 +287,11 @@ public class RemoteLogSegmentLifecycleTest {
     @ClusterTest
     public void testCacheSegmentWithDeleteSegmentStartedState() throws Exception {
         try (RemoteLogMetadataManager metadataManager = createTopicBasedRemoteLogMetadataManager()) {
-            metadataManager.onPartitionLeadershipChanges(Collections.singleton(topicIdPartition), Collections.emptySet());
+            metadataManager.onPartitionLeadershipChanges(Set.of(topicIdPartition), Set.of());
             // Create a segment and move it to state DELETE_SEGMENT_STARTED, and check for searching that segment and
             // listing the segments.
             RemoteLogSegmentMetadata segmentMetadata = upsertSegmentState(
-                    metadataManager, Collections.singletonMap(0, 201L), 201L, 300L, DELETE_SEGMENT_STARTED);
+                    metadataManager, Map.of(0, 201L), 201L, 300L, DELETE_SEGMENT_STARTED);
 
             // Search should not return the above segment as their leader epoch state is cleared.
             Optional<RemoteLogSegmentMetadata> segmentMetadataForOffset250Epoch0 =
@@ -306,11 +304,11 @@ public class RemoteLogSegmentLifecycleTest {
     @ClusterTest
     public void testCacheSegmentsWithDeleteSegmentFinishedState() throws Exception {
         try (RemoteLogMetadataManager metadataManager = createTopicBasedRemoteLogMetadataManager()) {
-            metadataManager.onPartitionLeadershipChanges(Collections.singleton(topicIdPartition), Collections.emptySet());
+            metadataManager.onPartitionLeadershipChanges(Set.of(topicIdPartition), Set.of());
             // Create a segment and move it to state DELETE_SEGMENT_FINISHED, and check for searching that segment and
             // listing the segments.
             RemoteLogSegmentMetadata segmentMetadata = upsertSegmentState(
-                    metadataManager, Collections.singletonMap(0, 301L), 301L, 400L, DELETE_SEGMENT_STARTED);
+                    metadataManager, Map.of(0, 301L), 301L, 400L, DELETE_SEGMENT_STARTED);
 
             // Search should not return the above segment as their leader epoch state is cleared.
             assertFalse(metadataManager.remoteLogSegmentMetadata(topicIdPartition, 0, 350).isPresent());
@@ -330,11 +328,11 @@ public class RemoteLogSegmentLifecycleTest {
     @ClusterTest
     public void testCacheListSegments() throws Exception {
         try (RemoteLogMetadataManager metadataManager = createTopicBasedRemoteLogMetadataManager()) {
-            metadataManager.onPartitionLeadershipChanges(Collections.singleton(topicIdPartition), Collections.emptySet());
+            metadataManager.onPartitionLeadershipChanges(Set.of(topicIdPartition), Set.of());
             // Create a few segments and add them to the cache.
-            RemoteLogSegmentMetadata segment0 = upsertSegmentState(metadataManager, Collections.singletonMap(0, 0L),
+            RemoteLogSegmentMetadata segment0 = upsertSegmentState(metadataManager, Map.of(0, 0L),
                     0, 100, COPY_SEGMENT_FINISHED);
-            RemoteLogSegmentMetadata segment1 = upsertSegmentState(metadataManager, Collections.singletonMap(0, 101L),
+            RemoteLogSegmentMetadata segment1 = upsertSegmentState(metadataManager, Map.of(0, 101L),
                     101, 200, COPY_SEGMENT_FINISHED);
             Map<Integer, Long> leaderEpochSegment2 = new HashMap<>();
             leaderEpochSegment2.put(0, 201L);
@@ -343,14 +341,14 @@ public class RemoteLogSegmentLifecycleTest {
                     201, 400, COPY_SEGMENT_FINISHED);
 
             // listRemoteLogSegments(0) and listAllRemoteLogSegments() should contain all the above segments.
-            List<RemoteLogSegmentMetadata> expectedSegmentsForEpoch0 = Arrays.asList(segment0, segment1, segment2);
+            List<RemoteLogSegmentMetadata> expectedSegmentsForEpoch0 = List.of(segment0, segment1, segment2);
             assertTrue(TestUtils.sameElementsWithOrder(
                     expectedSegmentsForEpoch0.iterator(), metadataManager.listRemoteLogSegments(topicIdPartition, 0)));
             assertTrue(TestUtils.sameElementsWithoutOrder(
                     expectedSegmentsForEpoch0.iterator(), metadataManager.listRemoteLogSegments(topicIdPartition)));
 
             // listRemoteLogSegments(1) should contain only segment2.
-            List<RemoteLogSegmentMetadata> expectedSegmentsForEpoch1 = Collections.singletonList(segment2);
+            List<RemoteLogSegmentMetadata> expectedSegmentsForEpoch1 = List.of(segment2);
             assertTrue(TestUtils.sameElementsWithOrder(
                     expectedSegmentsForEpoch1.iterator(),  metadataManager.listRemoteLogSegments(topicIdPartition, 1)));
         }

@@ -21,8 +21,8 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -93,7 +93,7 @@ public class StreamsBrokerDownResilienceTest {
         final Serde<String> stringSerde = Serdes.String();
 
         builder.stream(Collections.singletonList(SOURCE_TOPIC_1), Consumed.with(stringSerde, stringSerde))
-            .peek(new ForeachAction<String, String>() {
+            .peek(new ForeachAction<>() {
                 int messagesProcessed = 0;
                 @Override
                 public void apply(final String key, final String value) {

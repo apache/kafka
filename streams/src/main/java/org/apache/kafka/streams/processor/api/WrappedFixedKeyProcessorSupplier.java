@@ -24,6 +24,7 @@ package org.apache.kafka.streams.processor.api;
  * To convert a {@link FixedKeyProcessorSupplier} instance into a {@link WrappedFixedKeyProcessorSupplier},
  * use the {@link ProcessorWrapper#asWrappedFixedKey(FixedKeyProcessorSupplier)} method
  */
+@FunctionalInterface
 public interface WrappedFixedKeyProcessorSupplier<KIn, VIn, VOut> extends FixedKeyProcessorSupplier<KIn, VIn, VOut> {
 
 }

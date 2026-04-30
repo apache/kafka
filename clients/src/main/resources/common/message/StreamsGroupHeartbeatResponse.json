@@ -30,7 +30,7 @@
   // - FENCED_MEMBER_EPOCH (version 0+)
   // - UNRELEASED_INSTANCE_ID (version 0+)
   // - GROUP_MAX_SIZE_REACHED (version 0+)
-  // - TOPIC_AUTHORIZATION_FAILED (version 0+) 
+  // - TOPIC_AUTHORIZATION_FAILED (version 0+)
   // - CLUSTER_AUTHORIZATION_FAILED (version 0+)
   // - STREAMS_INVALID_TOPOLOGY (version 0+)
   // - STREAMS_INVALID_TOPOLOGY_EPOCH (version 0+)
@@ -53,8 +53,8 @@
     { "name": "TaskOffsetIntervalMs", "type": "int32", "versions": "0+",
       "about": "The interval in which the task changelog offsets on a client are updated on the broker. The offsets are sent with the next heartbeat after this time has passed." },
 
-    { "name": "Status", "type":  "[]Status", "versions":  "0+",  "nullableVersions": "0+", "default": "null",
-      "about": "Indicate zero or more status for the group.  Null if unchanged since last heartbeat." },
+    { "name": "Status", "type":  "[]Status", "versions":  "0+",  "nullableVersions": "0+",
+      "about": "Indicate zero or more status for the group." },
 
     // The streams app knows which partitions to fetch from given this information
     { "name": "ActiveTasks", "type": "[]TaskIds", "versions": "0+", "nullableVersions": "0+", "default": "null",
@@ -65,13 +65,17 @@
       "about": "Assigned warm-up tasks for this client. Null if unchanged since last heartbeat." },
 
     // IQ-related information
+    { "name": "EndpointInformationEpoch", "type": "int32", "versions": "0+",
+      "about": "The endpoint epoch set in the response"},
     { "name": "PartitionsByUserEndpoint", "type": "[]EndpointToPartitions", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "Global assignment information used for IQ. Null if unchanged since last heartbeat." ,
       "fields": [
         { "name": "UserEndpoint", "type": "Endpoint", "versions": "0+",
           "about": "User-defined endpoint to connect to the node" },
-        { "name": "Partitions", "type": "[]TopicPartition", "versions": "0+",
-          "about": "All partitions available on the node" }
+        { "name": "ActivePartitions", "type": "[]TopicPartition", "versions": "0+",
+          "about": "All topic partitions materialized by active tasks on the node" },
+        { "name": "StandbyPartitions", "type": "[]TopicPartition", "versions": "0+",
+          "about": "All topic partitions materialized by standby tasks on the node" }
       ]
     }
   ],
@@ -90,13 +94,14 @@
       //                                       The group coordinator will attempt to create all missing internal topics, if any errors occur during
       //                                       topic creation, this will be indicated in StatusDetail.
       //  4 - SHUTDOWN_APPLICATION           - A client requested the shutdown of the whole application.
+      //  5 - ASSIGNMENT_DELAYED             - No assignment was provided because assignment computation was delayed.
       { "name": "StatusCode", "type": "int8", "versions": "0+",
         "about": "A code to indicate that a particular status is active for the group membership" },
       { "name": "StatusDetail", "type": "string", "versions": "0+",
         "about": "A string representation of the status." }
     ]},
     { "name": "TopicPartition", "versions": "0+", "fields": [
-      { "name": "Topic", "type": "string", "versions": "0+",
+      { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "topic name" },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
         "about": "partitions" }

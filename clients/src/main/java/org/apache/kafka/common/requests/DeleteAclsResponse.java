@@ -25,8 +25,8 @@ import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsFilterResult;
 import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsMatchingAcl;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
@@ -35,7 +35,6 @@ import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -75,8 +74,8 @@ public class DeleteAclsResponse extends AbstractResponse {
         return errorCounts(filterResults().stream().map(r -> Errors.forCode(r.errorCode())));
     }
 
-    public static DeleteAclsResponse parse(ByteBuffer buffer, short version) {
-        return new DeleteAclsResponse(new DeleteAclsResponseData(new ByteBufferAccessor(buffer), version), version);
+    public static DeleteAclsResponse parse(Readable readable, short version) {
+        return new DeleteAclsResponse(new DeleteAclsResponseData(readable, version), version);
     }
 
     public String toString() {

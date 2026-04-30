@@ -20,10 +20,9 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.Optional;
 
 public final class FetchSnapshotRequest extends AbstractRequest {
@@ -68,8 +67,8 @@ public final class FetchSnapshotRequest extends AbstractRequest {
             .findAny();
     }
 
-    public static FetchSnapshotRequest parse(ByteBuffer buffer, short version) {
-        return new FetchSnapshotRequest(new FetchSnapshotRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static FetchSnapshotRequest parse(Readable readable, short version) {
+        return new FetchSnapshotRequest(new FetchSnapshotRequestData(readable, version), version);
     }
 
     public static class Builder extends AbstractRequest.Builder<FetchSnapshotRequest> {

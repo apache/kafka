@@ -16,45 +16,36 @@
  */
 package org.apache.kafka.tools.consumer;
 
-import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde;
+import org.apache.kafka.coordinator.group.generated.CoordinatorRecordJsonConverters;
 import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
-import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
-import org.apache.kafka.coordinator.group.generated.GroupMetadataKeyJsonConverter;
-import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.GroupMetadataValueJsonConverter;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.NullNode;
-import com.fasterxml.jackson.databind.node.TextNode;
 
-import java.nio.ByteBuffer;
+import java.util.Set;
 
-public class GroupMetadataMessageFormatter extends ApiMessageFormatter {
-    @Override
-    protected JsonNode readToKeyJson(ByteBuffer byteBuffer) {
-        try {
-            switch (CoordinatorRecordType.fromId(byteBuffer.getShort())) {
-                case GROUP_METADATA:
-                    return GroupMetadataKeyJsonConverter.write(
-                        new GroupMetadataKey(new ByteBufferAccessor(byteBuffer), (short) 0),
-                        (short) 0
-                    );
+public class GroupMetadataMessageFormatter extends CoordinatorRecordMessageFormatter {
+    private static final Set<Short> ALLOWED_RECORDS = Set.of(
+        CoordinatorRecordType.GROUP_METADATA.id()
+    );
 
-                default:
-                    return NullNode.getInstance();
-            }
-        } catch (UnsupportedVersionException ex) {
-            return NullNode.getInstance();
-        }
+    public GroupMetadataMessageFormatter() {
+        super(new GroupCoordinatorRecordSerde());
     }
 
     @Override
-    protected JsonNode readToValueJson(ByteBuffer byteBuffer) {
-        short version = byteBuffer.getShort();
-        if (version >= GroupMetadataValue.LOWEST_SUPPORTED_VERSION && version <= GroupMetadataValue.HIGHEST_SUPPORTED_VERSION) {
-            return GroupMetadataValueJsonConverter.write(new GroupMetadataValue(new ByteBufferAccessor(byteBuffer), version), version);
-        }
-        return new TextNode(UNKNOWN);
+    protected boolean isRecordTypeAllowed(short recordType) {
+        return ALLOWED_RECORDS.contains(recordType);
+    }
+
+    @Override
+    protected JsonNode keyAsJson(ApiMessage message) {
+        return CoordinatorRecordJsonConverters.writeRecordKeyAsJson(message);
+    }
+
+    @Override
+    protected JsonNode valueAsJson(ApiMessage message, short version) {
+        return CoordinatorRecordJsonConverters.writeRecordValueAsJson(message, version);
     }
 }

@@ -26,51 +26,18 @@ import java.util.Objects;
 
 /**
  * Represents the ACLs in the metadata image.
- *
+ * <p>
  * This class is thread-safe.
  */
-public final class ScramCredentialData {
-    private final byte[] salt;
-    private final byte[] storedKey;
-    private final byte[] serverKey;
-    private final int iterations;
-
+public record ScramCredentialData(byte[] salt, byte[] storedKey, byte[] serverKey, int iterations) {
     public static ScramCredentialData fromRecord(
         UserScramCredentialRecord record
     ) {
         return new ScramCredentialData(
-                record.salt(),
-                record.storedKey(),
-                record.serverKey(),
-                record.iterations());
-    }
-
-    public ScramCredentialData(
-        byte[] salt,
-        byte[] storedKey,
-        byte[] serverKey,
-        int iterations
-    ) {
-        this.salt = salt;
-        this.storedKey = storedKey;
-        this.serverKey = serverKey;
-        this.iterations = iterations;
-    }
-
-    public byte[] salt() {
-        return salt;
-    }
-
-    public byte[] storedKey() {
-        return storedKey;
-    }
-
-    public byte[] serverKey() {
-        return serverKey;
-    }
-
-    public int iterations() {
-        return iterations;
+            record.salt(),
+            record.storedKey(),
+            record.serverKey(),
+            record.iterations());
     }
 
     public UserScramCredentialRecord toRecord(
@@ -78,15 +45,15 @@ public final class ScramCredentialData {
         ScramMechanism mechanism
     ) {
         return new UserScramCredentialRecord().
-                setName(userName).
-                setMechanism(mechanism.type()).
-                setSalt(salt).
-                setStoredKey(storedKey).
-                setServerKey(serverKey).
-                setIterations(iterations);
+            setName(userName).
+            setMechanism(mechanism.type()).
+            setSalt(salt).
+            setStoredKey(storedKey).
+            setServerKey(serverKey).
+            setIterations(iterations);
     }
 
-    public ScramCredential toCredential(ScramMechanism mechanism) {
+    public ScramCredential toCredential() {
         return new ScramCredential(salt, storedKey, serverKey, iterations);
     }
 
@@ -106,9 +73,9 @@ public final class ScramCredentialData {
         if (!o.getClass().equals(ScramCredentialData.class)) return false;
         ScramCredentialData other = (ScramCredentialData) o;
         return Arrays.equals(salt, other.salt) &&
-                Arrays.equals(storedKey, other.storedKey) &&
-                Arrays.equals(serverKey, other.serverKey) &&
-                iterations == other.iterations;
+            Arrays.equals(storedKey, other.storedKey) &&
+            Arrays.equals(serverKey, other.serverKey) &&
+            iterations == other.iterations;
     }
 
     @Override

@@ -22,26 +22,31 @@ import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
+import org.apache.kafka.coordinator.group.CommitPartitionValidator;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
-import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
-import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
+import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
+import org.apache.kafka.coordinator.group.Utils;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
-import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
-import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.coordinator.group.streams.topics.EndpointToPartitionsManager;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineInteger;
+import org.apache.kafka.timeline.TimelineLong;
 import org.apache.kafka.timeline.TimelineObject;
 
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -54,6 +59,7 @@ import java.util.Set;
 import java.util.TreeMap;
 
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.ASSIGNING;
+import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.NOT_READY;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.RECONCILING;
@@ -113,7 +119,6 @@ public class StreamsGroup implements Group {
         }
     }
 
-    private final LogContext logContext;
     private final Logger log;
 
     /**
@@ -148,15 +153,19 @@ public class StreamsGroup implements Group {
     private final TimelineHashMap<String, String> staticMembers;
 
     /**
-     * The metadata associated with each subscribed topic name.
+     * The topology epoch for which the subscribed topics identified by metadataHash are validated.
      */
-    private final TimelineHashMap<String, TopicMetadata> partitionMetadata;
+    private final TimelineInteger validatedTopologyEpoch;
 
     /**
-     * The target assignment epoch. An assignment epoch smaller than the group epoch means that a new assignment is required. The assignment
-     * epoch is updated when a new assignment is installed.
+     * The metadata hash which is computed based on the all subscribed topics.
      */
-    private final TimelineInteger targetAssignmentEpoch;
+    protected final TimelineLong metadataHash;
+
+    /**
+     * The target assignment metadata.
+     */
+    private final TimelineObject<TargetAssignmentMetadata> targetAssignmentMetadata;
 
     /**
      * The target assignment per member ID.
@@ -174,11 +183,6 @@ public class StreamsGroup implements Group {
     private final TimelineHashMap<String, TimelineHashMap<Integer, Set<String>>> currentWarmupTaskToProcessIds;
 
     /**
-     * The coordinator metrics.
-     */
-    private final GroupCoordinatorMetricsShard metrics;
-
-    /**
      * The Streams topology.
      */
     private final TimelineObject<Optional<StreamsTopology>> topology;
@@ -189,6 +193,12 @@ public class StreamsGroup implements Group {
     private final TimelineObject<Optional<ConfiguredTopology>> configuredTopology;
 
     /**
+     * The last used assignment configurations for this streams group.
+     * This is used to determine when assignment configuration changes should trigger a rebalance.
+     */
+    private final TimelineHashMap<String, String> lastAssignmentConfigs;
+
+    /**
      * The metadata refresh deadline. It consists of a timestamp in milliseconds together with the group epoch at the time of setting it.
      * The metadata refresh time is considered as a soft state (read that it is not stored in a timeline data structure). It is like this
      * because it is not persisted to the log. The group epoch is here to ensure that the metadata refresh deadline is invalidated if the
@@ -197,29 +207,50 @@ public class StreamsGroup implements Group {
      */
     private DeadlineAndEpoch metadataRefreshDeadline = DeadlineAndEpoch.EMPTY;
 
+    /**
+     * Keeps a member ID that requested a shutdown for this group.
+     * This has no direct effect inside the group coordinator, but is propagated to old and new members of the group.
+     * It is cleared once the group is empty.
+     * This is not persisted in the log, as the shutdown request is best-effort.
+     */
+    private Optional<String> shutdownRequestMemberId = Optional.empty();
+
+    /**
+     * The current epoch for endpoint information, this is used to determine when to send
+     * updated endpoint information to members of the group.
+     */
+    private int endpointInformationEpoch = 0;
+
+    /**
+     * Cache for endpoint-to-partitions mappings, keyed by member ID.
+     * Entries are explicitly invalidated when a member's tasks change, the member is removed,
+     * or the topology changes.
+     */
+    private final Map<String, StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsCache = new HashMap<>();
+
     public StreamsGroup(
         LogContext logContext,
         SnapshotRegistry snapshotRegistry,
-        String groupId,
-        GroupCoordinatorMetricsShard metrics
+        String groupId
     ) {
         this.log = logContext.logger(StreamsGroup.class);
-        this.logContext = logContext;
         this.snapshotRegistry = Objects.requireNonNull(snapshotRegistry);
         this.groupId = Objects.requireNonNull(groupId);
         this.state = new TimelineObject<>(snapshotRegistry, EMPTY);
         this.groupEpoch = new TimelineInteger(snapshotRegistry);
+        this.groupEpoch.set(1);
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.partitionMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
+        this.validatedTopologyEpoch = new TimelineInteger(snapshotRegistry);
+        this.metadataHash = new TimelineLong(snapshotRegistry);
+        this.targetAssignmentMetadata = new TimelineObject<>(snapshotRegistry, TargetAssignmentMetadata.INITIAL);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentActiveTaskToProcessId = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentStandbyTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentWarmupTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.metrics = Objects.requireNonNull(metrics);
         this.topology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.configuredTopology = new TimelineObject<>(snapshotRegistry, Optional.empty());
+        this.lastAssignmentConfigs = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
     /**
@@ -266,8 +297,13 @@ public class StreamsGroup implements Group {
 
     public void setTopology(StreamsTopology topology) {
         this.topology.set(Optional.ofNullable(topology));
-        maybeUpdateConfiguredTopology();
         maybeUpdateGroupState();
+    }
+
+    public void setConfiguredTopology(ConfiguredTopology configuredTopology) {
+        this.configuredTopology.set(Optional.ofNullable(configuredTopology));
+        // Clear endpoint cache since subtopology source topics may have changed
+        endpointToPartitionsCache.clear();
     }
 
     /**
@@ -306,16 +342,24 @@ public class StreamsGroup implements Group {
      * @return The target assignment epoch.
      */
     public int assignmentEpoch() {
-        return targetAssignmentEpoch.get();
+        return targetAssignmentMetadata.get().assignmentEpoch();
     }
 
     /**
-     * Sets the assignment epoch.
+     * @return The time at which the target assignment calculation finished.
+     */
+    public long assignmentTimestamp() {
+        return targetAssignmentMetadata.get().assignmentTimestamp();
+    }
+
+    /**
+     * Sets the assignment metadata.
      *
      * @param targetAssignmentEpoch The new assignment epoch.
+     * @param targetAssignmentTimestamp The time at which the assignment calculation finished.
      */
-    public void setTargetAssignmentEpoch(int targetAssignmentEpoch) {
-        this.targetAssignmentEpoch.set(targetAssignmentEpoch);
+    public void setTargetAssignmentMetadata(int targetAssignmentEpoch, long targetAssignmentTimestamp) {
+        this.targetAssignmentMetadata.set(new TargetAssignmentMetadata(targetAssignmentEpoch, targetAssignmentTimestamp));
         maybeUpdateGroupState();
     }
 
@@ -330,29 +374,61 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Gets or creates a new member but without adding it to the group. Adding a member is done via the
-     * {@link StreamsGroup#updateMember(StreamsGroupMember)} method.
+     * Gets a new member or throws an exception, if the member does not exist.
      *
-     * @param memberId          The member ID.
-     * @param createIfNotExists Booleans indicating whether the member must be created if it does not exist.
+     * @param memberId The member ID.
+     * @throws UnknownMemberIdException If the member is not found.
      * @return A StreamsGroupMember.
      */
-    public StreamsGroupMember getOrMaybeCreateMember(
-        String memberId,
-        boolean createIfNotExists
+    public StreamsGroupMember getMemberOrThrow(
+        String memberId
     ) throws UnknownMemberIdException {
         StreamsGroupMember member = members.get(memberId);
         if (member != null) {
             return member;
         }
 
-        if (!createIfNotExists) {
-            throw new UnknownMemberIdException(
-                String.format("Member %s is not a member of group %s.", memberId, groupId)
-            );
+        throw new UnknownMemberIdException(
+            String.format("Member %s is not a member of group %s.", memberId, groupId)
+        );
+    }
+
+    /**
+     * Gets or creates a new member, but keeping its fields uninitialized. This is used on the replay-path.
+     * The member is not added to the group, adding a member is done via the
+     * {@link StreamsGroup#updateMember(StreamsGroupMember)} method.
+     *
+     * @param memberId          The member ID.
+     * @return A StreamsGroupMember.
+     */
+    public StreamsGroupMember getOrCreateUninitializedMember(
+        String memberId
+    ) throws UnknownMemberIdException {
+        StreamsGroupMember member = members.get(memberId);
+        if (member != null) {
+            return member;
         }
 
         return new StreamsGroupMember.Builder(memberId).build();
+    }
+
+    /**
+     * Gets or creates a new member, setting default values on the fields. This is used on the replay-path.
+     * The member is not added to the group, adding a member is done via the
+     * {@link StreamsGroup#updateMember(StreamsGroupMember)} method.
+     *
+     * @param memberId          The member ID.
+     * @return A StreamsGroupMember.
+     */
+    public StreamsGroupMember getOrCreateDefaultMember(
+        String memberId
+    ) throws UnknownMemberIdException {
+        StreamsGroupMember member = members.get(memberId);
+        if (member != null) {
+            return member;
+        }
+
+        return StreamsGroupMember.Builder.withDefaults(memberId).build();
     }
 
     /**
@@ -363,7 +439,7 @@ public class StreamsGroup implements Group {
      */
     public StreamsGroupMember staticMember(String instanceId) {
         String existingMemberId = staticMemberId(instanceId);
-        return existingMemberId == null ? null : getOrMaybeCreateMember(existingMemberId, false);
+        return existingMemberId == null ? null : getMemberOrThrow(existingMemberId);
     }
 
     /**
@@ -379,6 +455,7 @@ public class StreamsGroup implements Group {
         maybeUpdateTaskProcessId(oldMember, newMember);
         updateStaticMember(newMember);
         maybeUpdateGroupState();
+        endpointToPartitionsCache.remove(newMember.memberId());
     }
 
     /**
@@ -402,6 +479,7 @@ public class StreamsGroup implements Group {
         maybeRemoveTaskProcessId(oldMember);
         removeStaticMember(oldMember);
         maybeUpdateGroupState();
+        endpointToPartitionsCache.remove(memberId);
     }
 
     /**
@@ -536,54 +614,62 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * @return An immutable map of partition metadata for each topic that are inputs for this streams group.
+     * @return The metadata hash.
      */
-    public Map<String, TopicMetadata> partitionMetadata() {
-        return Collections.unmodifiableMap(partitionMetadata);
+    public long metadataHash() {
+        return metadataHash.get();
     }
 
     /**
-     * Updates the partition metadata. This replaces the previous one.
+     * Updates the metadata hash.
      *
-     * @param partitionMetadata The new partition metadata.
+     * @param metadataHash The new metadata hash.
      */
-    public void setPartitionMetadata(
-        Map<String, TopicMetadata> partitionMetadata
-    ) {
-        this.partitionMetadata.clear();
-        this.partitionMetadata.putAll(partitionMetadata);
-        maybeUpdateConfiguredTopology();
+    public void setMetadataHash(long metadataHash) {
+        this.metadataHash.set(metadataHash);
+    }
+
+    /**
+     * @return The validated topology epoch.
+     */
+    public int validatedTopologyEpoch() {
+        return validatedTopologyEpoch.get();
+    }
+
+    /**
+     * Updates the validated topology epoch.
+     *
+     * @param validatedTopologyEpoch The validated topology epoch
+     */
+    public void setValidatedTopologyEpoch(int validatedTopologyEpoch) {
+        this.validatedTopologyEpoch.set(validatedTopologyEpoch);
         maybeUpdateGroupState();
     }
 
     /**
-     * Computes the partition metadata based on the current topology and the current topics image.
+     * Computes the metadata hash based on the current topology and the current metadata image.
      *
-     * @param topicsImage The current metadata for all available topics.
-     * @param topology    The current metadata for the Streams topology
-     * @return An immutable map of partition metadata for each topic that the Streams topology is using (besides non-repartition sink topics)
+     * @param metadataImage  The current metadata image.
+     * @param topicHashCache The cache for the topic hashes.
+     * @param topology       The current metadata for the Streams topology
+     * @return The metadata hash.
      */
-    public Map<String, TopicMetadata> computePartitionMetadata(
-        TopicsImage topicsImage,
+    public long computeMetadataHash(
+        CoordinatorMetadataImage metadataImage,
+        Map<String, Long> topicHashCache,
         StreamsTopology topology
     ) {
         Set<String> requiredTopicNames = topology.requiredTopics();
 
-        // Create the topic metadata for each subscribed topic.
-        Map<String, TopicMetadata> newPartitionMetadata = new HashMap<>(requiredTopicNames.size());
-
+        Map<String, Long> topicHash = new HashMap<>(requiredTopicNames.size());
         requiredTopicNames.forEach(topicName -> {
-            TopicImage topicImage = topicsImage.getTopic(topicName);
-            if (topicImage != null) {
-                newPartitionMetadata.put(topicName, new TopicMetadata(
-                    topicImage.id(),
-                    topicImage.name(),
-                    topicImage.partitions().size())
-                );
-            }
+            metadataImage.topicMetadata(topicName).ifPresent(__ ->
+                topicHash.put(
+                    topicName,
+                    topicHashCache.computeIfAbsent(topicName, k -> Utils.computeTopicHash(topicName, metadataImage))
+                ));
         });
-
-        return Collections.unmodifiableMap(newPartitionMetadata);
+        return Utils.computeGroupHash(topicHash);
     }
 
     /**
@@ -634,29 +720,30 @@ public class StreamsGroup implements Group {
      * @param memberEpoch       The member epoch.
      * @param isTransactional   Whether the offset commit is transactional or not.
      * @param apiVersion        The api version.
+     * @return A validator for per-partition validation.
      * @throws UnknownMemberIdException  If the member is not found.
      * @throws StaleMemberEpochException If the provided member epoch doesn't match the actual member epoch.
      */
     @Override
-    public void validateOffsetCommit(
+    public CommitPartitionValidator validateOffsetCommit(
         String memberId,
         String groupInstanceId,
         int memberEpoch,
         boolean isTransactional,
-        short apiVersion
+        int apiVersion
     ) throws UnknownMemberIdException, StaleMemberEpochException {
         // When the member epoch is -1, the request comes from either the admin client
         // or a consumer which does not use the group management facility. In this case,
         // the request can commit offsets if the group is empty.
-        if (memberEpoch < 0 && members().isEmpty()) return;
+        if (memberEpoch < 0 && members().isEmpty()) return CommitPartitionValidator.NO_OP;
 
         // The TxnOffsetCommit API does not require the member ID, the generation ID and the group instance ID fields.
         // Hence, they are only validated if any of them is provided
         if (isTransactional && memberEpoch == JoinGroupRequest.UNKNOWN_GENERATION_ID &&
             memberId.equals(JoinGroupRequest.UNKNOWN_MEMBER_ID) && groupInstanceId == null)
-            return;
+            return CommitPartitionValidator.NO_OP;
 
-        final StreamsGroupMember member = getOrMaybeCreateMember(memberId, false);
+        final StreamsGroupMember member = getMemberOrThrow(memberId);
 
         // If the commit is not transactional and the member uses the new streams protocol (KIP-1071),
         // the member should be using the OffsetCommit API version >= 9.
@@ -665,7 +752,17 @@ public class StreamsGroup implements Group {
                 "by members using the streams group protocol");
         }
 
-        validateMemberEpoch(memberEpoch, member.memberEpoch());
+        if (memberEpoch == member.memberEpoch()) {
+            return CommitPartitionValidator.NO_OP;
+        }
+
+        if (memberEpoch > member.memberEpoch()) {
+            throw new StaleMemberEpochException(String.format("Received member epoch %d is newer than " +
+                "current member epoch %d.", memberEpoch, member.memberEpoch()));
+        }
+
+        // Member epoch is older; validate against per-partition assignment epochs.
+        return createAssignmentEpochValidator(member, memberEpoch);
     }
 
     /**
@@ -715,16 +812,16 @@ public class StreamsGroup implements Group {
 
     @Override
     public boolean isSubscribedToTopic(String topic) {
-        Optional<ConfiguredTopology> maybeConfiguredTopology = configuredTopology.get();
-        if (maybeConfiguredTopology.isEmpty() || !maybeConfiguredTopology.get().isReady()) {
+        if (state.get() == EMPTY || state.get() == DEAD) {
+            // No topic subscriptions if the group is empty.
+            // This allows offsets to expire for empty groups.
             return false;
         }
-        for (ConfiguredSubtopology sub : maybeConfiguredTopology.get().subtopologies().orElse(new TreeMap<>()).values()) {
-            if (sub.sourceTopics().contains(topic) || sub.repartitionSourceTopics().containsKey(topic)) {
-                return true;
-            }
+        Optional<StreamsTopology> maybeTopology = topology.get();
+        if (maybeTopology.isEmpty()) {
+            return false;
         }
-        return false;
+        return maybeTopology.get().sourceTopicMap().containsKey(topic);
     }
 
     /**
@@ -741,15 +838,29 @@ public class StreamsGroup implements Group {
         members().forEach((memberId, member) ->
             records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(groupId(), memberId))
         );
-        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochTombstoneRecord(groupId()));
+        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataTombstoneRecord(groupId()));
 
         members().forEach((memberId, member) ->
             records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(groupId(), memberId))
         );
 
-        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupPartitionMetadataTombstoneRecord(groupId()));
         records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord(groupId()));
         records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone(groupId()));
+    }
+
+    /**
+     * Generate an initial rebalance key for the timer.
+     *
+     * @param groupId The group id.
+     * @return The initial rebalance key.
+     */
+    public static String initialRebalanceTimeoutKey(String groupId) {
+        return "initial-rebalance-timeout-" + groupId;
+    }
+
+    @Override
+    public void cancelTimers(CoordinatorTimer<CoordinatorRecord> timer) {
+        timer.cancel(initialRebalanceTimeoutKey(groupId));
     }
 
     @Override
@@ -792,13 +903,14 @@ public class StreamsGroup implements Group {
         StreamsGroupState newState = STABLE;
         if (members.isEmpty()) {
             newState = EMPTY;
-        } else if (topology().isEmpty() || configuredTopology().isEmpty() || !configuredTopology().get().isReady()) {
+            clearShutdownRequestMemberId();
+        } else if (topology().filter(t -> t.topologyEpoch() == validatedTopologyEpoch.get()).isEmpty()) {
             newState = NOT_READY;
-        } else if (groupEpoch.get() > targetAssignmentEpoch.get()) {
+        } else if (groupEpoch.get() > assignmentEpoch()) {
             newState = ASSIGNING;
         } else {
             for (StreamsGroupMember member : members.values()) {
-                if (!member.isReconciledTo(targetAssignmentEpoch.get())) {
+                if (!member.isReconciledTo(assignmentEpoch())) {
                     newState = RECONCILING;
                     break;
                 }
@@ -806,18 +918,6 @@ public class StreamsGroup implements Group {
         }
 
         state.set(newState);
-    }
-
-    private void maybeUpdateConfiguredTopology() {
-        if (topology.get().isPresent()) {
-            final StreamsTopology streamsTopology = topology.get().get();
-
-            log.info("[GroupId {}] Configuring the topology {}", groupId, streamsTopology);
-            this.configuredTopology.set(Optional.of(InternalTopicManager.configureTopics(logContext, streamsTopology, partitionMetadata)));
-
-        } else {
-            configuredTopology.set(Optional.empty());
-        }
     }
 
     /**
@@ -856,11 +956,11 @@ public class StreamsGroup implements Group {
     }
 
     void removeTaskProcessIds(
-        TasksTuple tasks,
+        TasksTupleWithEpochs tasks,
         String processId
     ) {
         if (tasks != null) {
-            removeTaskProcessIds(tasks.activeTasks(), currentActiveTaskToProcessId, processId);
+            removeTaskProcessIds(tasks.activeTasksWithEpochs(), currentActiveTaskToProcessId, processId);
             removeTaskProcessIdsFromSet(tasks.standbyTasks(), currentStandbyTaskToProcessIds, processId);
             removeTaskProcessIdsFromSet(tasks.warmupTasks(), currentWarmupTaskToProcessIds, processId);
         }
@@ -871,22 +971,23 @@ public class StreamsGroup implements Group {
      *
      * @param assignment    The assignment.
      * @param expectedProcessId The expected process ID.
-     * @throws IllegalStateException if the process ID does not match the expected one. package-private for testing.
+     * package-private for testing.
      */
     private void removeTaskProcessIds(
-        Map<String, Set<Integer>> assignment,
+        Map<String, Map<Integer, Integer>> assignment,
         TimelineHashMap<String, TimelineHashMap<Integer, String>> currentTasksProcessId,
         String expectedProcessId
     ) {
         assignment.forEach((subtopologyId, assignedPartitions) -> {
             currentTasksProcessId.compute(subtopologyId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull != null) {
-                    assignedPartitions.forEach(partitionId -> {
-                        String prevValue = partitionsOrNull.remove(partitionId);
-                        if (!Objects.equals(prevValue, expectedProcessId)) {
-                            throw new IllegalStateException(
-                                String.format("Cannot remove the process ID %s from task %s_%s because the partition is " +
-                                    "still owned at a different process ID %s", expectedProcessId, subtopologyId, partitionId, prevValue));
+                    assignedPartitions.keySet().forEach(partitionId -> {
+                        String prevValue = partitionsOrNull.get(partitionId);
+                        if (Objects.equals(prevValue, expectedProcessId)) {
+                            partitionsOrNull.remove(partitionId);
+                        } else {
+                            log.debug("[GroupId {}] Cannot remove the process ID {} from task {}_{} because the partition is " +
+                                    "still owned at a different process ID {}", groupId, expectedProcessId, subtopologyId, partitionId, prevValue);
                         }
                     });
                     if (partitionsOrNull.isEmpty()) {
@@ -895,9 +996,9 @@ public class StreamsGroup implements Group {
                         return partitionsOrNull;
                     }
                 } else {
-                    throw new IllegalStateException(
-                        String.format("Cannot remove the process ID %s from %s because it does not have any processId",
-                            expectedProcessId, subtopologyId));
+                    log.debug("[GroupId {}] Cannot remove the process ID {} from {} because it does not have any processId",
+                            groupId, expectedProcessId, subtopologyId);
+                    return partitionsOrNull;
                 }
             });
         });
@@ -908,7 +1009,7 @@ public class StreamsGroup implements Group {
      *
      * @param assignment    The assignment.
      * @param processIdToRemove The expected process ID.
-     * @throws IllegalStateException if the process ID does not match the expected one. package-private for testing.
+     * package-private for testing.
      */
     private void removeTaskProcessIdsFromSet(
         Map<String, Set<Integer>> assignment,
@@ -919,10 +1020,9 @@ public class StreamsGroup implements Group {
             currentTasksProcessId.compute(subtopologyId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull != null) {
                     assignedPartitions.forEach(partitionId -> {
-                        if (!partitionsOrNull.get(partitionId).remove(processIdToRemove)) {
-                            throw new IllegalStateException(
-                                String.format("Cannot remove the process ID %s from task %s_%s because the task is " +
-                                    "not owned by this process ID", processIdToRemove, subtopologyId, partitionId));
+                        if (!partitionsOrNull.containsKey(partitionId) || !partitionsOrNull.get(partitionId).remove(processIdToRemove)) {
+                            log.debug("[GroupId {}] Cannot remove the process ID {} from task {}_{} because the task is " +
+                                    "not owned by this process ID", groupId, processIdToRemove, subtopologyId, partitionId);
                         }
                     });
                     if (partitionsOrNull.isEmpty()) {
@@ -931,9 +1031,9 @@ public class StreamsGroup implements Group {
                         return partitionsOrNull;
                     }
                 } else {
-                    throw new IllegalStateException(
-                        String.format("Cannot remove the process ID %s from %s because it does not have any process ID",
-                            processIdToRemove, subtopologyId));
+                    log.debug("[GroupId {}] Cannot remove the process ID {} from {} because it does not have any process ID",
+                            groupId, processIdToRemove, subtopologyId);
+                    return partitionsOrNull;
                 }
             });
         });
@@ -944,35 +1044,34 @@ public class StreamsGroup implements Group {
      *
      * @param tasks     The assigned tasks.
      * @param processId The process ID.
-     * @throws IllegalStateException if the partition already has an epoch assigned. package-private for testing.
+     * package-private for testing.
      */
     void addTaskProcessId(
-        TasksTuple tasks,
+        TasksTupleWithEpochs tasks,
         String processId
     ) {
         if (tasks != null && processId != null) {
-            addTaskProcessId(tasks.activeTasks(), processId, currentActiveTaskToProcessId);
+            addTaskProcessIdFromActiveTasksWithEpochs(tasks.activeTasksWithEpochs(), processId, currentActiveTaskToProcessId);
             addTaskProcessIdToSet(tasks.standbyTasks(), processId, currentStandbyTaskToProcessIds);
             addTaskProcessIdToSet(tasks.warmupTasks(), processId, currentWarmupTaskToProcessIds);
         }
     }
 
-    private void addTaskProcessId(
-        Map<String, Set<Integer>> tasks,
+    private void addTaskProcessIdFromActiveTasksWithEpochs(
+        Map<String, Map<Integer, Integer>> tasksWithEpochs,
         String processId,
         TimelineHashMap<String, TimelineHashMap<Integer, String>> currentTaskProcessId
     ) {
-        tasks.forEach((subtopologyId, assignedTaskPartitions) -> {
+        tasksWithEpochs.forEach((subtopologyId, assignedTaskPartitionsWithEpochs) -> {
             currentTaskProcessId.compute(subtopologyId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull == null) {
-                    partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, assignedTaskPartitions.size());
+                    partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, assignedTaskPartitionsWithEpochs.size());
                 }
-                for (Integer partitionId : assignedTaskPartitions) {
+                for (Integer partitionId : assignedTaskPartitionsWithEpochs.keySet()) {
                     String prevValue = partitionsOrNull.put(partitionId, processId);
                     if (prevValue != null) {
-                        throw new IllegalStateException(
-                            String.format("Cannot set the process ID of %s-%s to %s because the partition is " +
-                                "still owned by process ID %s", subtopologyId, partitionId, processId, prevValue));
+                        log.debug("[GroupId {}] Setting the process ID of {}-{} to {} even though the partition is " +
+                            "still owned by process ID {}", groupId, subtopologyId, partitionId, processId, prevValue);
                     }
                 }
                 return partitionsOrNull;
@@ -1005,8 +1104,17 @@ public class StreamsGroup implements Group {
             .setGroupId(groupId)
             .setGroupEpoch(groupEpoch.get(committedOffset))
             .setGroupState(state.get(committedOffset).toString())
-            .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset))
-            .setTopology(configuredTopology.get(committedOffset).map(ConfiguredTopology::asStreamsGroupDescribeTopology).orElse(null));
+            .setAssignmentEpoch(targetAssignmentMetadata.get(committedOffset).assignmentEpoch())
+            .setTopology(
+                configuredTopology.get(committedOffset)
+                    .filter(ConfiguredTopology::isReady)
+                    .map(ConfiguredTopology::asStreamsGroupDescribeTopology)
+                    .orElse(
+                        topology.get(committedOffset)
+                            .map(StreamsTopology::asStreamsGroupDescribeTopology)
+                            .orElseThrow(() -> new IllegalStateException("There should always be a topology for a streams group."))
+                    )
+            );
         members.entrySet(committedOffset).forEach(
             entry -> describedGroup.members().add(
                 entry.getValue().asStreamsGroupDescribeMember(
@@ -1017,4 +1125,175 @@ public class StreamsGroup implements Group {
         return describedGroup;
     }
 
+    public void setShutdownRequestMemberId(final String memberId) {
+        if (shutdownRequestMemberId.isEmpty()) {
+            log.info("[GroupId {}][MemberId {}] Shutdown requested for the streams application.", groupId, memberId);
+            shutdownRequestMemberId = Optional.of(memberId);
+        }
+    }
+
+    public Optional<String> getShutdownRequestMemberId() {
+        return shutdownRequestMemberId;
+    }
+
+    private void clearShutdownRequestMemberId() {
+        if (shutdownRequestMemberId.isPresent()) {
+            log.info("[GroupId {}] Clearing shutdown requested for the streams application.", groupId);
+            shutdownRequestMemberId = Optional.empty();
+        }
+    }
+
+    public int endpointInformationEpoch() {
+        return endpointInformationEpoch;
+    }
+
+    public void setEndpointInformationEpoch(int endpointInformationEpoch) {
+        this.endpointInformationEpoch = endpointInformationEpoch;
+    }
+
+    // Visible for testing
+    Optional<StreamsGroupHeartbeatResponseData.EndpointToPartitions> cachedEndpointToPartitions(
+        String memberId
+    ) {
+        return Optional.ofNullable(endpointToPartitionsCache.get(memberId));
+    }
+
+    // Visible for testing
+    void cacheEndpointToPartitions(
+        String memberId,
+        StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions
+    ) {
+        endpointToPartitionsCache.put(memberId, endpointToPartitions);
+    }
+
+    /**
+     * Invalidates the cached endpoint-to-partitions entry for the given member.
+     * This should be called when a member's assigned tasks change during reconciliation,
+     * before record replay has had a chance to call updateMember().
+     *
+     * @param memberId The member ID whose cache entry should be invalidated.
+     */
+    public void invalidateCachedEndpointToPartitions(String memberId) {
+        endpointToPartitionsCache.remove(memberId);
+    }
+
+    /**
+     * Builds the endpoint-to-partitions list for all members, using the cache where possible.
+     *
+     * @param updatedMember The member that was just updated (may have a stale entry in the members map).
+     * @param metadataImage The current metadata image for resolving topic partitions.
+     * @return The list of endpoint-to-partitions mappings for all members with endpoints.
+     */
+    public List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> buildEndpointToPartitions(
+        StreamsGroupMember updatedMember,
+        CoordinatorMetadataImage metadataImage
+    ) {
+        List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsList = new ArrayList<>();
+        if (updatedMember == null) {
+            log.error("[GroupId {}] updatedMember is unexpectedly null in buildEndpointToPartitions. " +
+                "This is a bug, please file a JIRA ticket.", groupId);
+            return endpointToPartitionsList;
+        }
+        for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {
+            if (entry.getKey().equals(updatedMember.memberId())) {
+                continue;
+            }
+            getOrComputeEndpointToPartitions(entry.getValue(), metadataImage)
+                .ifPresent(endpointToPartitionsList::add);
+        }
+        getOrComputeEndpointToPartitions(updatedMember, metadataImage)
+            .ifPresent(endpointToPartitionsList::add);
+        return endpointToPartitionsList;
+    }
+
+    private Optional<StreamsGroupHeartbeatResponseData.EndpointToPartitions> getOrComputeEndpointToPartitions(
+        StreamsGroupMember member,
+        CoordinatorMetadataImage metadataImage
+    ) {
+        if (member.userEndpoint().isEmpty()) {
+            return Optional.empty();
+        }
+
+        String memberId = member.memberId();
+
+        StreamsGroupHeartbeatResponseData.EndpointToPartitions cached = endpointToPartitionsCache.get(memberId);
+        if (cached != null) {
+            return Optional.of(cached);
+        }
+
+        Optional<StreamsGroupHeartbeatResponseData.EndpointToPartitions> computed =
+            EndpointToPartitionsManager.maybeEndpointToPartitions(member, this, metadataImage);
+        computed.ifPresent(endpointToPartitions ->
+            endpointToPartitionsCache.put(memberId, endpointToPartitions));
+        return computed;
+    }
+
+    /**
+     * @return The assignment configurations for this streams group.
+     */
+    public Map<String, String> lastAssignmentConfigs() {
+        return Collections.unmodifiableMap(new TreeMap<>(lastAssignmentConfigs));
+    }
+
+    /**
+     * Sets last assignment configurations.
+     *
+     * @param lastAssignmentConfigs The last assignment configurations to set.
+     */
+    public void setLastAssignmentConfigs(Map<String, String> lastAssignmentConfigs) {
+        this.lastAssignmentConfigs.clear();
+        if (lastAssignmentConfigs != null) {
+            this.lastAssignmentConfigs.putAll(lastAssignmentConfigs);
+        }
+    }
+
+    /**
+     * Creates a validator that checks if the received member epoch is valid for each partition's assignment epoch.
+     *
+     * @param member The member whose assignments are being validated.
+     * @param receivedMemberEpoch The received member epoch.
+     * @return A validator for per-partition validation.
+     */
+    private CommitPartitionValidator createAssignmentEpochValidator(
+        final StreamsGroupMember member,
+        int receivedMemberEpoch
+    ) {
+        // Retrieve topology once for all partitions - not per partition!
+        final StreamsTopology streamsTopology = topology.get().orElseThrow(() ->
+            new StaleMemberEpochException("Topology is not available for offset commit validation."));
+        
+        final TasksTupleWithEpochs assignedTasks = member.assignedTasks();
+        final TasksTupleWithEpochs tasksPendingRevocation = member.tasksPendingRevocation();
+
+        return (topicName, topicId, partitionId) -> {
+            final StreamsGroupTopologyValue.Subtopology subtopology = streamsTopology.sourceTopicMap().get(topicName);
+            if (subtopology == null) {
+                throw new StaleMemberEpochException("Topic " + topicName + " is not in the topology.");
+            }
+
+            final String subtopologyId = subtopology.subtopologyId();
+
+            // Search for the partition in assigned tasks, then in tasks pending revocation
+            Integer assignmentEpoch = assignedTasks.activeTasksWithEpochs()
+                .getOrDefault(subtopologyId, Map.of())
+                .get(partitionId);
+            if (assignmentEpoch == null) {
+                assignmentEpoch = tasksPendingRevocation.activeTasksWithEpochs()
+                    .getOrDefault(subtopologyId, Map.of())
+                    .get(partitionId);
+            }
+
+            if (assignmentEpoch == null) {
+                throw new StaleMemberEpochException(String.format(
+                    "Task %s-%d is not assigned or pending revocation for member.",
+                    subtopologyId, partitionId));
+            }
+
+            if (receivedMemberEpoch < assignmentEpoch) {
+                throw new StaleMemberEpochException(String.format(
+                    "Received member epoch %d is older than assignment epoch %d for task %s-%d.",
+                    receivedMemberEpoch, assignmentEpoch, subtopologyId, partitionId));
+            }
+        };
+    }
 }

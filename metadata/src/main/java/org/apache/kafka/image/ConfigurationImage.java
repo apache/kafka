@@ -21,7 +21,6 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.image.node.ConfigurationImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
-import org.apache.kafka.image.writer.ImageWriterOptions;
 
 import java.util.Collections;
 import java.util.Map;
@@ -31,29 +30,10 @@ import java.util.Properties;
 
 /**
  * Represents the configuration of a resource.
- *
+ * <p>
  * This class is thread-safe.
  */
-public final class ConfigurationImage {
-    private final ConfigResource resource;
-
-    private final Map<String, String> data;
-
-    public ConfigurationImage(
-        ConfigResource resource,
-        Map<String, String> data
-    ) {
-        this.resource = resource;
-        this.data = data;
-    }
-
-    public ConfigResource resource() {
-        return resource;
-    }
-
-    public Map<String, String> data() {
-        return data;
-    }
+public record ConfigurationImage(ConfigResource resource, Map<String, String> data) {
 
     public boolean isEmpty() {
         return data.isEmpty();
@@ -71,8 +51,7 @@ public final class ConfigurationImage {
 
     public void write(
         ConfigResource configResource,
-        ImageWriter writer,
-        ImageWriterOptions options
+        ImageWriter writer
     ) {
         for (Map.Entry<String, String> entry : data.entrySet()) {
             writer.write(0, new ConfigRecord().

@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -57,7 +58,7 @@ public class AddPartitionsToTxnResponseTest {
 
     @BeforeEach
     public void setUp() {
-        expectedErrorCounts = new HashMap<>();
+        expectedErrorCounts = new EnumMap<>(Errors.class);
         expectedErrorCounts.put(errorOne, 1);
         expectedErrorCounts.put(errorTwo, 1);
 
@@ -107,7 +108,7 @@ public class AddPartitionsToTxnResponseTest {
                     .setThrottleTimeMs(throttleTimeMs);
             AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(data);
 
-            Map<Errors, Integer> newExpectedErrorCounts = new HashMap<>();
+            Map<Errors, Integer> newExpectedErrorCounts = new EnumMap<>(Errors.class);
             newExpectedErrorCounts.put(Errors.NONE, 1); // top level error
             newExpectedErrorCounts.put(errorOne, 2);
             newExpectedErrorCounts.put(errorTwo, 1);

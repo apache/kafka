@@ -62,6 +62,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
+import java.util.SplittableRandom;
 import java.util.TreeSet;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -78,7 +79,6 @@ import static org.apache.kafka.common.utils.Utils.formatBytes;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.common.utils.Utils.intersection;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.murmur2;
 import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.common.utils.Utils.validHostPattern;
@@ -115,6 +115,36 @@ public class UtilsTest {
         for (Map.Entry<byte[], Integer> c : cases.entrySet()) {
             assertEquals(c.getValue().intValue(), murmur2(c.getKey()));
         }
+    }
+
+    private static String toHexString(byte[] buf) {
+        StringBuilder bld = new StringBuilder();
+        for (byte b : buf) {
+            bld.append(String.format("%02x", b));
+        }
+        return bld.toString();
+    }
+
+    @Test
+    public void testMurmur2Checksum() {
+        // calculates the checksum of hashes of many different random byte arrays of variable length
+        // this test detects any incompatible changes to the Murmur2 implementation with near certainty
+        int numTrials = 100;
+        int maxLen = 1000;
+        long seed = 0;
+        SplittableRandom random = new SplittableRandom(seed);
+        long checksum = 0;
+
+        for (int len = 0; len <= maxLen; ++len) {
+            byte[] data = new byte[len];
+            for (int i = 0; i < numTrials; ++i) {
+                random.nextBytes(data);
+                int hash = Utils.murmur2(data);
+                checksum += Integer.toUnsignedLong(hash);
+            }
+        }
+
+        assertEquals(0xc3b8cf7c99fcL, checksum);
     }
 
     @ParameterizedTest
@@ -202,6 +232,7 @@ public class UtilsTest {
         assertEquals(10, Utils.abs(10));
         assertEquals(0, Utils.abs(0));
         assertEquals(1, Utils.abs(-1));
+        assertEquals(Integer.MAX_VALUE, Utils.abs(Integer.MAX_VALUE));
     }
 
     @Test
@@ -895,10 +926,169 @@ public class UtilsTest {
         assertValue(Collections.emptyMap());
     }
 
+    @Test
+    public void testPropsToMapNonStringKey() {
+        ConfigException ce = assertThrows(ConfigException.class, () -> {
+            Properties props = new Properties();
+            props.put(1, "value");
+            Utils.propsToMap(props);
+        });
+        assertTrue(ce.getMessage().contains("One or more keys is not a string."));
+
+        ce = assertThrows(ConfigException.class, () -> {
+            Properties props = new Properties();
+            props.put(true, "value");
+            props.put('a', "value");
+            Utils.propsToMap(props);
+        });
+        assertEquals("One or more keys is not a string.", ce.getMessage());
+    }
+
+    @Test
+    public void testPropsToMapWithDefaults() {
+        Properties defaultProperties = new Properties();
+        defaultProperties.setProperty("DefaultKey1", "DefaultValue1");
+        defaultProperties.setProperty("DefaultKey2", "DefaultValue2");
+
+        Properties actualProperties = new Properties(defaultProperties);
+        actualProperties.setProperty("ActualKey1", "ActualValue1");
+        actualProperties.setProperty("ActualKey2", "ActualValue2");
+
+        final Map<String, Object> mapProperties = Utils.propsToMap(actualProperties);
+
+        Map<String, Object> expectedMap = new HashMap<>();
+        expectedMap.put("DefaultKey1", "DefaultValue1");
+        expectedMap.put("DefaultKey2", "DefaultValue2");
+        expectedMap.put("ActualKey1", "ActualValue1");
+        expectedMap.put("ActualKey2", "ActualValue2");
+
+        assertEquals(expectedMap, mapProperties);
+    }
+
+    @Test
+    public void testPropsToMapWithDefaultsAndSameKey() {
+        Properties defaultProperties = new Properties();
+        defaultProperties.setProperty("DefaultKey1", "DefaultValue1");
+        defaultProperties.setProperty("DefaultKey2", "DefaultValue2");
+
+        Properties actualProperties = new Properties(defaultProperties);
+        actualProperties.setProperty("DefaultKey1", "ActualValue1");
+        actualProperties.setProperty("ActualKey2", "ActualValue2");
+
+        final Map<String, Object> mapProperties = Utils.propsToMap(actualProperties);
+
+        Map<String, Object> expectedMap = new HashMap<>();
+        expectedMap.put("DefaultKey1", "ActualValue1");
+        expectedMap.put("DefaultKey2", "DefaultValue2");
+        expectedMap.put("ActualKey2", "ActualValue2");
+
+        assertEquals(expectedMap, mapProperties);
+    }
+
     private static void assertValue(Object value) {
         Properties props = new Properties();
         props.put("key", value);
         assertEquals(Utils.propsToMap(props).get("key"), value);
+    }
+
+    @Test
+    public void testCastToStringObjectMap() {
+        Map<Object, Object> map = new HashMap<>();
+        map.put("key1", "value1");
+        map.put("key2", 1);
+
+        Map<String, Object> expectedMap = new HashMap<>();
+        expectedMap.put("key1", "value1");
+        expectedMap.put("key2", 1);
+
+        assertEquals(map, expectedMap);
+    }
+
+    @Test
+    public void testCastToStringObjectMapNonStringKey() {
+        ConfigException ce = assertThrows(ConfigException.class, () -> {
+            Map<Object, Object> map = new HashMap<>();
+            map.put(1, "value");
+            Utils.castToStringObjectMap(map);
+        });
+        assertTrue(ce.getMessage().contains("Key must be a string."));
+
+        ce = assertThrows(ConfigException.class, () -> {
+            Map<Object, Object> map = new HashMap<>();
+            map.put(true, "value");
+            map.put('a', "value");
+            Utils.castToStringObjectMap(map);
+        });
+        assertTrue(ce.getMessage().contains("Key must be a string."));
+    }
+
+    @Test
+    public void testCastToStringObjectMapPropertiesAsInput() {
+        Properties props = new Properties();
+        props.put("key1", "value1");
+        props.put("key2", "value2");
+
+        Map<String, Object> expectedMap = new HashMap<>();
+        expectedMap.put("key1", "value1");
+        expectedMap.put("key2", "value2");
+
+        assertEquals(expectedMap, Utils.castToStringObjectMap(props));
+        assertEquals(Utils.propsToMap(props), Utils.castToStringObjectMap(props));
+    }
+
+    @Test
+    public void testCastToStringObjectMapPropertiesNonStringKey() {
+        ConfigException ce = assertThrows(ConfigException.class, () -> {
+            Properties props = new Properties();
+            props.put(1, "value");
+            Utils.castToStringObjectMap(props);
+        });
+        assertEquals("One or more keys is not a string.", ce.getMessage());
+
+        ce = assertThrows(ConfigException.class, () -> {
+            Properties props = new Properties();
+            props.put(true, "value");
+            props.put('a', "value");
+            Utils.castToStringObjectMap(props);
+        });
+        assertEquals("One or more keys is not a string.", ce.getMessage());
+    }
+
+    @Test
+    public void testCastToStringObjectMapPropertiesWithDefaults() {
+        Properties defaultProperties = new Properties();
+        defaultProperties.setProperty("DefaultKey1", "DefaultValue1");
+        defaultProperties.setProperty("DefaultKey2", "DefaultValue2");
+
+        Properties actualProperties = new Properties(defaultProperties);
+        actualProperties.setProperty("ActualKey1", "ActualValue1");
+        actualProperties.setProperty("ActualKey2", "ActualValue2");
+
+        Map<String, Object> expectedMap = new HashMap<>();
+        expectedMap.put("DefaultKey1", "DefaultValue1");
+        expectedMap.put("DefaultKey2", "DefaultValue2");
+        expectedMap.put("ActualKey1", "ActualValue1");
+        expectedMap.put("ActualKey2", "ActualValue2");
+
+        assertEquals(expectedMap, Utils.castToStringObjectMap(actualProperties));
+    }
+
+    @Test
+    public void testCastToStringObjectMapPropertiesWithDefaultsAndSameKey() {
+        Properties defaultProperties = new Properties();
+        defaultProperties.setProperty("DefaultKey1", "DefaultValue1");
+        defaultProperties.setProperty("DefaultKey2", "DefaultValue2");
+
+        Properties actualProperties = new Properties(defaultProperties);
+        actualProperties.setProperty("DefaultKey1", "ActualValue1");
+        actualProperties.setProperty("ActualKey2", "ActualValue2");
+
+        Map<String, Object> expectedMap = new HashMap<>();
+        expectedMap.put("DefaultKey1", "ActualValue1");
+        expectedMap.put("DefaultKey2", "DefaultValue2");
+        expectedMap.put("ActualKey2", "ActualValue2");
+
+        assertEquals(expectedMap, Utils.castToStringObjectMap(actualProperties));
     }
 
     @Test
@@ -1078,11 +1268,11 @@ public class UtilsTest {
             recordingCallable(recorded, "valid-2", null),
             recordingCallable(recorded, null, new TestException("exception-3"))
         ));
-        Map<String, Object> expected = Utils.mkMap(
-            mkEntry("valid-0", "valid-0"),
-            mkEntry("exception-1", new TestException("exception-1")),
-            mkEntry("valid-2", "valid-2"),
-            mkEntry("exception-3", new TestException("exception-3"))
+        Map<String, Object> expected = Map.of(
+            "valid-0", "valid-0",
+            "exception-1", new TestException("exception-1"),
+            "valid-2", "valid-2",
+            "exception-3", new TestException("exception-3")
         );
         assertEquals(expected, recorded);
 
@@ -1091,9 +1281,9 @@ public class UtilsTest {
             recordingCallable(recorded, "valid-0", null),
             recordingCallable(recorded, "valid-1", null)
         ));
-        expected = Utils.mkMap(
-            mkEntry("valid-0", "valid-0"),
-            mkEntry("valid-1", "valid-1")
+        expected = Map.of(
+            "valid-0", "valid-0",
+            "valid-1", "valid-1"
         );
         assertEquals(expected, recorded);
 
@@ -1102,11 +1292,18 @@ public class UtilsTest {
             recordingCallable(recorded, null, new TestException("exception-0")),
             recordingCallable(recorded, null, new TestException("exception-1")))
         );
-        expected = Utils.mkMap(
-            mkEntry("exception-0", new TestException("exception-0")),
-            mkEntry("exception-1", new TestException("exception-1"))
+        expected = Map.of(
+            "exception-0", new TestException("exception-0"),
+            "exception-1", new TestException("exception-1")
         );
         assertEquals(expected, recorded);
+    }
+
+    @Test
+    public void testMsToNs() {
+        assertEquals(1000000, Utils.msToNs(1));
+        assertEquals(0, Utils.msToNs(0));
+        assertThrows(IllegalArgumentException.class, () -> Utils.msToNs(Long.MAX_VALUE));
     }
 
     private Callable<Void> recordingCallable(Map<String, Object> recordingMap, String success, TestException failure) {

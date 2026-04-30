@@ -55,6 +55,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -78,6 +79,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -110,7 +112,8 @@ public class SslTransportLayerTest {
             this.useInlinePem = useInlinePem;
             sslConfigOverrides = new HashMap<>();
             sslConfigOverrides.put(SslConfigs.SSL_PROTOCOL_CONFIG, tlsProtocol);
-            sslConfigOverrides.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList(tlsProtocol));
+            sslConfigOverrides.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, List.of(tlsProtocol));
+            sslConfigOverrides.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, List.of());
             init();
         }
 
@@ -475,6 +478,8 @@ public class SslTransportLayerTest {
     @ArgumentsSource(SslTransportLayerArgumentsForTLS2Provider.class)
     public void testDsaKeyPair(Args args) throws Exception {
         // DSA algorithms are not supported for TLSv1.3.
+        // Skip test if DSA is not supported by the JVM
+        assumeTrue(isDsaSupported(), "DSA algorithm is not supported by this JVM");
         args.serverCertStores = certBuilder(true, "server", args.useInlinePem).keyAlgorithm("DSA").build();
         args.clientCertStores = certBuilder(false, "client", args.useInlinePem).keyAlgorithm("DSA").build();
         args.sslServerConfigs = args.getTrustingConfig(args.serverCertStores, args.clientCertStores);
@@ -607,7 +612,7 @@ public class SslTransportLayerTest {
     public void testTlsDefaults(Args args) throws Exception {
         args.sslServerConfigs = args.serverCertStores.getTrustingConfig(args.clientCertStores);
         args.sslClientConfigs = args.clientCertStores.getTrustingConfig(args.serverCertStores);
-
+        args.sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, List.of());
         assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, args.sslServerConfigs.get(SslConfigs.SSL_PROTOCOL_CONFIG));
         assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, args.sslClientConfigs.get(SslConfigs.SSL_PROTOCOL_CONFIG));
 
@@ -766,11 +771,10 @@ public class SslTransportLayerTest {
     @ParameterizedTest
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
     public void testNetworkThreadTimeRecorded(Args args) throws Exception {
-        LogContext logContext = new LogContext();
-        ChannelBuilder channelBuilder = new SslChannelBuilder(ConnectionMode.CLIENT, null, false, logContext);
+        ChannelBuilder channelBuilder = new SslChannelBuilder(ConnectionMode.CLIENT, null, false);
         channelBuilder.configure(args.sslClientConfigs);
         try (Selector selector = new Selector(NetworkReceive.UNLIMITED, Selector.NO_IDLE_TIMEOUT_MS, new Metrics(), Time.SYSTEM,
-                "MetricGroup", new HashMap<>(), false, true, channelBuilder, MemoryPool.NONE, logContext)) {
+                "MetricGroup", new HashMap<>(), false, true, channelBuilder, MemoryPool.NONE, new LogContext())) {
 
             String node = "0";
             server = createEchoServer(args, SecurityProtocol.SSL);
@@ -966,7 +970,7 @@ public class SslTransportLayerTest {
     }
 
     private SslChannelBuilder newClientChannelBuilder() {
-        return new SslChannelBuilder(ConnectionMode.CLIENT, null, false, new LogContext());
+        return new SslChannelBuilder(ConnectionMode.CLIENT, null, false);
     }
 
     private void testClose(Args args, SecurityProtocol securityProtocol, ChannelBuilder clientChannelBuilder) throws Exception {
@@ -1096,14 +1100,14 @@ public class SslTransportLayerTest {
 
         CertStores invalidCertStores = certBuilder(true, "server", args.useInlinePem).addHostName("127.0.0.1").build();
         Map<String, Object>  invalidConfigs = args.getTrustingConfig(invalidCertStores, args.clientCertStores);
-        verifyInvalidReconfigure(reconfigurableBuilder, invalidConfigs, "keystore with different SubjectAltName");
+        verifyInvalidReconfigure(reconfigurableBuilder, invalidConfigs);
 
         Map<String, Object>  missingStoreConfigs = new HashMap<>();
         missingStoreConfigs.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, "PKCS12");
         missingStoreConfigs.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, "some.keystore.path");
         missingStoreConfigs.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, new Password("some.keystore.password"));
         missingStoreConfigs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, new Password("some.key.password"));
-        verifyInvalidReconfigure(reconfigurableBuilder, missingStoreConfigs, "keystore not found");
+        verifyInvalidReconfigure(reconfigurableBuilder, missingStoreConfigs);
 
         // Verify that new connections continue to work with the server with previously configured keystore after failed reconfiguration
         newClientSelector.connect("3", addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -1167,7 +1171,7 @@ public class SslTransportLayerTest {
         for (String propName : CertStores.KEYSTORE_PROPS) {
             invalidKeystoreConfigs.put(propName, invalidConfig.get(propName));
         }
-        verifyInvalidReconfigure(reconfigurableBuilder, invalidKeystoreConfigs, "keystore without existing SubjectAltName");
+        verifyInvalidReconfigure(reconfigurableBuilder, invalidKeystoreConfigs);
         String node3 = "3";
         selector.connect(node3, addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(selector, node3, 100, 10);
@@ -1223,13 +1227,13 @@ public class SslTransportLayerTest {
 
         Map<String, Object>  invalidConfigs = new HashMap<>(newTruststoreConfigs);
         invalidConfigs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "INVALID_TYPE");
-        verifyInvalidReconfigure(reconfigurableBuilder, invalidConfigs, "invalid truststore type");
+        verifyInvalidReconfigure(reconfigurableBuilder, invalidConfigs);
 
         Map<String, Object>  missingStoreConfigs = new HashMap<>();
         missingStoreConfigs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "PKCS12");
         missingStoreConfigs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, "some.truststore.path");
         missingStoreConfigs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, new Password("some.truststore.password"));
-        verifyInvalidReconfigure(reconfigurableBuilder, missingStoreConfigs, "truststore not found");
+        verifyInvalidReconfigure(reconfigurableBuilder, missingStoreConfigs);
 
         // Verify that new connections continue to work with the server with previously configured keystore after failed reconfiguration
         newClientSelector.connect("3", addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -1280,7 +1284,7 @@ public class SslTransportLayerTest {
     }
 
     private void verifyInvalidReconfigure(ListenerReconfigurable reconfigurable,
-                                          Map<String, Object>  invalidConfigs, String errorMessage) {
+                                          Map<String, Object>  invalidConfigs) {
         assertThrows(KafkaException.class, () -> reconfigurable.validateReconfiguration(invalidConfigs));
         assertThrows(KafkaException.class, () -> reconfigurable.reconfigure(invalidConfigs));
     }
@@ -1310,10 +1314,9 @@ public class SslTransportLayerTest {
     }
 
     private Selector createSelector(Args args) {
-        LogContext logContext = new LogContext();
-        ChannelBuilder channelBuilder = new SslChannelBuilder(ConnectionMode.CLIENT, null, false, logContext);
+        ChannelBuilder channelBuilder = new SslChannelBuilder(ConnectionMode.CLIENT, null, false);
         channelBuilder.configure(args.sslClientConfigs);
-        selector = new Selector(5000, new Metrics(), TIME, "MetricGroup", channelBuilder, logContext);
+        selector = new Selector(5000, new Metrics(), TIME, "MetricGroup", channelBuilder, new LogContext());
         return selector;
     }
 
@@ -1346,6 +1349,39 @@ public class SslTransportLayerTest {
                 .usePem(useInlinePem);
     }
 
+    /**
+     * Check if DSA algorithm is supported by the JVM and if there are compatible cipher suites
+     * available for TLSv1.2. This is important because even if DSA KeyPairGenerator is available,
+     * the SSL handshake may fail if no DSA-compatible cipher suites are available.
+     * @return true if DSA KeyPairGenerator is available and DSA-compatible cipher suites exist, false otherwise
+     */
+    private static boolean isDsaSupported() {
+        // First check if DSA KeyPairGenerator is available
+        try {
+            java.security.KeyPairGenerator.getInstance("DSA");
+        } catch (java.security.NoSuchAlgorithmException e) {
+            return false;
+        }
+
+        // Check if there are DSA-compatible cipher suites available for TLSv1.2
+        // DSA algorithms are not supported for TLSv1.3, so we only check TLSv1.2
+        try {
+            SSLContext context = SSLContext.getInstance("TLSv1.2");
+            context.init(null, null, null);
+            SSLParameters params = context.getDefaultSSLParameters();
+            String[] cipherSuites = params.getCipherSuites();
+
+            // Check if any cipher suite supports DSA
+            // In TLS standards and JVM implementations, DSA signature cipher suites use "_DSS_" naming
+            // Common patterns: TLS_DHE_DSS_*, TLS_DH_DSS_*, SSL_DHE_DSS_*, SSL_DH_DSS_*
+            return Arrays.stream(cipherSuites)
+                    .anyMatch(suite -> suite.contains("_DSS_"));
+        } catch (Exception e) {
+            // If we can't check cipher suites, assume DSA is not fully supported
+            return false;
+        }
+    }
+
     @FunctionalInterface
     private interface FailureAction {
         FailureAction NO_OP = () -> { };
@@ -1370,7 +1406,7 @@ public class SslTransportLayerTest {
         int flushDelayCount = 0;
 
         public TestSslChannelBuilder(ConnectionMode connectionMode) {
-            super(connectionMode, null, false, new LogContext());
+            super(connectionMode, null, false);
         }
 
         public void configureBufferSizes(Integer netReadBufSize, Integer netWriteBufSize, Integer appBufSize) {

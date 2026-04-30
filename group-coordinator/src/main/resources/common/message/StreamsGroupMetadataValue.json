@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The streams rebalance protocol is in development. This schema is subject to non-backwards-compatible changes.
 {
   "apiKey": 17,
   "type": "coordinator-value",
@@ -22,6 +21,20 @@
   "flexibleVersions": "0+",
   "fields": [
     { "name": "Epoch", "versions": "0+", "type": "int32",
-      "about": "The group epoch." }
+      "about": "The group epoch." },
+    { "name": "MetadataHash", "versions": "0+", "type": "int64",
+      "about": "The hash of all topics in the group." },
+    { "name": "ValidatedTopologyEpoch", "versions": "0+", "taggedVersions": "0+", "tag": 0, "default": -1, "type": "int32",
+      "about": "The topology epoch whose topics are validated to be present in a valid configuration in the metadata." },
+    { "name": "LastAssignmentConfigs","taggedVersions": "0+", "nullableVersions": "0+","tag": 1, "default": null,
+      "type": "[]LastAssignmentConfig", "about": "The last used configuration parameters as key-value pairs." }
+  ],
+  "commonStructs": [
+    { "name": "LastAssignmentConfig", "versions": "0+", "fields": [
+      { "name": "Key", "type": "string", "versions": "0+",
+        "about": "Key of the config." },
+      { "name": "Value", "type": "string", "versions": "0+",
+        "about": "Value of the config." }
+    ]}
   ]
 }

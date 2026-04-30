@@ -33,8 +33,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -75,8 +76,9 @@ public class HandlingSourceTopicDeletionIntegrationTest {
         CLUSTER.deleteTopics(INPUT_TOPIC, OUTPUT_TOPIC);
     }
 
-    @Test
-    public void shouldThrowErrorAfterSourceTopicDeleted(final TestInfo testName) throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(strings = {"classic", "streams"})
+    public void shouldThrowErrorAfterSourceTopicDeleted(final String groupProtocol, final TestInfo testName) throws InterruptedException {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.Integer(), Serdes.String()))
             .to(OUTPUT_TOPIC, Produced.with(Serdes.Integer(), Serdes.String()));
@@ -87,42 +89,47 @@ public class HandlingSourceTopicDeletionIntegrationTest {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
-        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, NUM_THREADS);
         streamsConfiguration.put(StreamsConfig.METADATA_MAX_AGE_CONFIG, 2000);
+        streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
 
         final Topology topology = builder.build();
-        final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, streamsConfiguration);
         final AtomicBoolean calledUncaughtExceptionHandler1 = new AtomicBoolean(false);
-        kafkaStreams1.setUncaughtExceptionHandler(exception -> {
-            calledUncaughtExceptionHandler1.set(true);
-            return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
-        });
-        kafkaStreams1.start();
-        final KafkaStreams kafkaStreams2 = new KafkaStreams(topology, streamsConfiguration);
         final AtomicBoolean calledUncaughtExceptionHandler2 = new AtomicBoolean(false);
-        kafkaStreams2.setUncaughtExceptionHandler(exception -> {
-            calledUncaughtExceptionHandler2.set(true);
-            return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
-        });
-        kafkaStreams2.start();
 
-        TestUtils.waitForCondition(
-            () -> kafkaStreams1.state() == State.RUNNING && kafkaStreams2.state() == State.RUNNING,
-            TIMEOUT,
-            () -> "Kafka Streams clients did not reach state RUNNING"
-        );
+        try (final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, streamsConfiguration);
+             final KafkaStreams kafkaStreams2 = new KafkaStreams(topology, streamsConfiguration)) {
+            
+            kafkaStreams1.setUncaughtExceptionHandler(exception -> {
+                calledUncaughtExceptionHandler1.set(true);
+                return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
+            });
+            kafkaStreams1.start();
 
-        CLUSTER.deleteTopic(INPUT_TOPIC);
+            kafkaStreams2.setUncaughtExceptionHandler(exception -> {
+                calledUncaughtExceptionHandler2.set(true);
+                return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
+            });
+            kafkaStreams2.start();
 
-        TestUtils.waitForCondition(
-            () -> kafkaStreams1.state() == State.ERROR && kafkaStreams2.state() == State.ERROR,
-            TIMEOUT,
-            () -> "Kafka Streams clients did not reach state ERROR"
-        );
+            TestUtils.waitForCondition(
+                () -> kafkaStreams1.state() == State.RUNNING && kafkaStreams2.state() == State.RUNNING,
+                TIMEOUT,
+                () -> "Kafka Streams clients did not reach state RUNNING"
+            );
 
-        assertThat(calledUncaughtExceptionHandler1.get(), is(true));
-        assertThat(calledUncaughtExceptionHandler2.get(), is(true));
+            CLUSTER.deleteTopic(INPUT_TOPIC);
+
+            TestUtils.waitForCondition(
+                () -> kafkaStreams1.state() == State.ERROR && kafkaStreams2.state() == State.ERROR,
+                TIMEOUT,
+                () -> "Kafka Streams clients did not reach state ERROR"
+            );
+
+            assertThat(calledUncaughtExceptionHandler1.get(), is(true));
+            assertThat(calledUncaughtExceptionHandler2.get(), is(true));
+        }
     }
 }

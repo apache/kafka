@@ -19,10 +19,17 @@ package org.apache.kafka.common.header.internals;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -30,7 +37,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class RecordHeadersTest {
 
@@ -49,6 +55,21 @@ public class RecordHeadersTest {
     }
 
     @Test
+    public void testAddHeadersPreserveOrder() {
+        Headers headers = new RecordHeaders();
+        headers.add(new RecordHeader("key", "value".getBytes()));
+        headers.add(new RecordHeader("key2", "value2".getBytes()));
+        headers.add(new RecordHeader("key3", "value3".getBytes()));
+
+        Header[] headersArr = headers.toArray();
+        assertHeader("key", "value", headersArr[0]);
+        assertHeader("key2", "value2", headersArr[1]);
+        assertHeader("key3", "value3", headersArr[2]);
+
+        assertEquals(3, getCount(headers));
+    }
+
+    @Test
     public void testRemove() {
         Headers headers = new RecordHeaders();
         headers.add(new RecordHeader("key", "value".getBytes()));
@@ -58,6 +79,27 @@ public class RecordHeadersTest {
         headers.remove("key");
 
         assertFalse(headers.iterator().hasNext());
+    }
+
+    @Test
+    public void testPreserveOrderAfterRemove() {
+        Headers headers = new RecordHeaders();
+        headers.add(new RecordHeader("key", "value".getBytes()));
+        headers.add(new RecordHeader("key2", "value2".getBytes()));
+        headers.add(new RecordHeader("key3", "value3".getBytes()));
+
+        headers.remove("key");
+        Header[] headersArr = headers.toArray();
+        assertHeader("key2", "value2", headersArr[0]);
+        assertHeader("key3", "value3", headersArr[1]);
+        assertEquals(2, getCount(headers));
+
+        headers.add(new RecordHeader("key4", "value4".getBytes()));
+        headers.remove("key3");
+        headersArr = headers.toArray();
+        assertHeader("key2", "value2", headersArr[0]);
+        assertHeader("key4", "value4", headersArr[1]);
+        assertEquals(2, getCount(headers));
     }
 
     @Test
@@ -73,7 +115,7 @@ public class RecordHeadersTest {
         assertEquals(1, getCount(headers));
 
         headers.add(new RecordHeader("key3", "value3".getBytes()));
-        
+
         assertNull(headers.lastHeader("key"));
 
         assertHeader("key2", "value2", headers.lastHeader("key2"));
@@ -129,41 +171,43 @@ public class RecordHeadersTest {
     }
 
     @Test
+    public void testHeadersIteratorRemove() {
+        Headers headers = new RecordHeaders();
+        headers.add(new RecordHeader("key", "value".getBytes()));
+
+        Iterator<Header> headersIterator = headers.headers("key").iterator();
+        headersIterator.next();
+        assertThrows(UnsupportedOperationException.class,
+            headersIterator::remove);
+    }
+
+    @Test
     public void testReadOnly() {
         RecordHeaders headers = new RecordHeaders();
         headers.add(new RecordHeader("key", "value".getBytes()));
         Iterator<Header> headerIteratorBeforeClose = headers.iterator();
         headers.setReadOnly();
-        try {
-            headers.add(new RecordHeader("key", "value".getBytes()));
-            fail("IllegalStateException expected as headers are closed");
-        } catch (IllegalStateException ise) {
-            //expected  
-        }
 
-        try {
-            headers.remove("key");
-            fail("IllegalStateException expected as headers are closed");
-        } catch (IllegalStateException ise) {
-            //expected  
-        }
+        assertThrows(IllegalStateException.class,
+            () -> headers.add(new RecordHeader("key", "value".getBytes())),
+            "IllegalStateException expected as headers are closed.");
 
-        try {
-            Iterator<Header> headerIterator = headers.iterator();
-            headerIterator.next();
-            headerIterator.remove();
-            fail("IllegalStateException expected as headers are closed");
-        } catch (IllegalStateException ise) {
-            //expected  
-        }
-        
-        try {
-            headerIteratorBeforeClose.next();
-            headerIteratorBeforeClose.remove();
-            fail("IllegalStateException expected as headers are closed");
-        } catch (IllegalStateException ise) {
-            //expected  
-        }
+        assertThrows(IllegalStateException.class,
+            () -> headers.remove("key"),
+            "IllegalStateException expected as headers are closed.");
+
+        Iterator<Header> headerIterator = headers.iterator();
+        headerIterator.next();
+
+        assertThrows(IllegalStateException.class,
+            headerIterator::remove,
+            "IllegalStateException expected as headers are closed.");
+
+        headerIteratorBeforeClose.next();
+
+        assertThrows(IllegalStateException.class,
+            headerIterator::remove,
+            "IllegalStateException expected as headers are closed.");
     }
 
     @Test
@@ -222,10 +266,47 @@ public class RecordHeadersTest {
     private int getCount(Headers headers) {
         return headers.toArray().length;
     }
-    
+
     static void assertHeader(String key, String value, Header actual) {
         assertEquals(key, actual.key());
         assertArrayEquals(value.getBytes(), actual.value());
     }
 
+    private void assertRecordHeaderReadThreadSafe(RecordHeader header) {
+        int threadCount = 16;
+        CountDownLatch startLatch = new CountDownLatch(1);
+
+        var futures = IntStream.range(0, threadCount)
+            .mapToObj(i -> CompletableFuture.runAsync(() -> {
+                try {
+                    startLatch.await();
+                    header.key();
+                    header.value();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(e);
+                }
+            })).collect(Collectors.toUnmodifiableList());
+
+        startLatch.countDown();
+        futures.forEach(CompletableFuture::join);
+    }
+
+    @RepeatedTest(100)
+    public void testRecordHeaderIsReadThreadSafe() throws Exception {
+        RecordHeader header = new RecordHeader(
+            ByteBuffer.wrap("key".getBytes(StandardCharsets.UTF_8)),
+            ByteBuffer.wrap("value".getBytes(StandardCharsets.UTF_8))
+        );
+        assertRecordHeaderReadThreadSafe(header);
+    }
+
+    @RepeatedTest(100)
+    public void testRecordHeaderWithNullValueIsReadThreadSafe() throws Exception {
+        RecordHeader header = new RecordHeader(
+            ByteBuffer.wrap("key".getBytes(StandardCharsets.UTF_8)),
+            null
+        );
+        assertRecordHeaderReadThreadSafe(header);
+    }
 }

@@ -38,18 +38,15 @@ import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
-
-import static java.util.Collections.singleton;
 
 /** Internal utility methods. */
 public final class MirrorUtils {
@@ -84,7 +81,7 @@ public final class MirrorUtils {
     }
 
     public static Map<String, Object> wrapOffset(long offset) {
-        return Collections.singletonMap(OFFSET_KEY, offset);
+        return Map.of(OFFSET_KEY, offset);
     }
 
     public static TopicPartition unwrapPartition(Map<String, ?> wrapped) {
@@ -265,7 +262,7 @@ public final class MirrorUtils {
     }
 
     static Pattern compilePatternList(String fields) {
-        return compilePatternList(Arrays.asList(fields.split("\\W*,\\W*")));
+        return compilePatternList(List.of(fields.split("\\W*,\\W*")));
     }
 
     static void createCompactedTopic(String topicName, short partitions, short replicationFactor, Admin admin) {
@@ -277,7 +274,7 @@ public final class MirrorUtils {
 
         CreateTopicsOptions args = new CreateTopicsOptions().validateOnly(false);
         try {
-            admin.createTopics(singleton(topicDescription), args).values().get(topicName).get();
+            admin.createTopics(Set.of(topicDescription), args).values().get(topicName).get();
             log.info("Created topic '{}'", topicName);
         } catch (InterruptedException e) {
             Thread.interrupted();

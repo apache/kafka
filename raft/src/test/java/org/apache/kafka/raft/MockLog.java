@@ -21,15 +21,16 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.MockRawSnapshotReader;
 import org.apache.kafka.snapshot.MockRawSnapshotWriter;
 import org.apache.kafka.snapshot.RawSnapshotReader;
@@ -39,11 +40,9 @@ import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -55,7 +54,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-public class MockLog implements ReplicatedLog {
+public class MockLog implements RaftLog {
     private static final AtomicLong ID_GENERATOR = new AtomicLong();
 
     private final List<EpochStartOffset> epochStartOffsets = new ArrayList<>();
@@ -399,7 +398,7 @@ public class MockLog implements ReplicatedLog {
 
         long maxOffset = maxOffsetOpt.orElse(endOffset().offset());
         if (startOffset == maxOffset) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         return batches.stream()
@@ -420,7 +419,7 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public LogFetchInfo read(long startOffset, Isolation isolation) {
+    public LogFetchInfo read(long startOffset, Isolation isolation, int maxTotalBatchBytes) {
         verifyOffsetInRange(startOffset);
 
         long maxOffset = isolation == Isolation.COMMITTED ? highWatermark.offset() : endOffset().offset();
@@ -445,7 +444,13 @@ public class MockLog implements ReplicatedLog {
             // complete batches, so batches which end at an offset larger than the max offset are
             // filtered, which is effectively the same as having the consumer drop an incomplete
             // batch returned in a fetch response.
-            if (batch.lastOffset() >= startOffset && batch.lastOffset() < maxOffset && !batch.entries.isEmpty()) {
+            // Since we operate in batches, it is possible for byte size of returned batches to exceed
+            // maxTotalBatchBytes. To keep to that invariant, we exit the loop as soon as the buffer contains
+            // more bytes than maxTotalBatchBytes.
+            if (batch.lastOffset() >= startOffset
+                && batch.lastOffset() < maxOffset
+                && !batch.entries.isEmpty()
+                && buffer.position() < maxTotalBatchBytes) {
                 buffer = batch.writeTo(buffer);
 
                 if (batchStartOffset == null) {
@@ -463,6 +468,9 @@ public class MockLog implements ReplicatedLog {
 
         buffer.flip();
         Records records = MemoryRecords.readableRecords(buffer);
+        if (batchCount > 1) {
+            records = records.slice(0, maxTotalBatchBytes);
+        }
 
         if (batchStartOffset == null) {
             throw new RuntimeException("Expected to find at least one entry starting from offset " +
@@ -514,7 +522,11 @@ public class MockLog implements ReplicatedLog {
             );
         }
 
-        long baseOffset = read(snapshotId.offset(), Isolation.COMMITTED).startOffsetMetadata().offset();
+        long baseOffset = read(
+            snapshotId.offset(),
+            Isolation.COMMITTED,
+            1 // Only needs to read the first batch.
+        ).startOffsetMetadata.offset();
         if (snapshotId.offset() != baseOffset) {
             throw new IllegalArgumentException(
                 String.format(
@@ -627,86 +639,20 @@ public class MockLog implements ReplicatedLog {
         );
     }
 
-    static class MockOffsetMetadata implements OffsetMetadata {
-        final long id;
-
-        MockOffsetMetadata(long id) {
-            this.id = id;
-        }
-
-        @Override
-        public String toString() {
-            return "MockOffsetMetadata(" +
-                "id=" + id +
-                ')';
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            MockOffsetMetadata that = (MockOffsetMetadata) o;
-            return id == that.id;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(id);
-        }
+    record MockOffsetMetadata(long id) implements OffsetMetadata {
     }
 
-    static class LogEntry {
-        final MockOffsetMetadata metadata;
-        final long offset;
-        final SimpleRecord record;
-
-        LogEntry(MockOffsetMetadata metadata, long offset, SimpleRecord record) {
-            this.metadata = metadata;
-            this.offset = offset;
-            this.record = record;
-        }
+    record LogEntry(MockOffsetMetadata metadata, long offset, SimpleRecord record) {
 
         LogOffsetMetadata logOffsetMetadata() {
             return new LogOffsetMetadata(offset, Optional.of(metadata));
         }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            LogEntry logEntry = (LogEntry) o;
-            return offset == logEntry.offset &&
-                Objects.equals(metadata, logEntry.metadata) &&
-                Objects.equals(record, logEntry.record);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(metadata, offset, record);
-        }
-
-        @Override
-        public String toString() {
-            return String.format(
-                "LogEntry(metadata=%s, offset=%s, record=%s)",
-                metadata,
-                offset,
-                record
-            );
-        }
     }
 
-    static class LogBatch {
-        final List<LogEntry> entries;
-        final int epoch;
-        final boolean isControlBatch;
-
-        LogBatch(int epoch, boolean isControlBatch, List<LogEntry> entries) {
+    record LogBatch(int epoch, boolean isControlBatch, List<LogEntry> entries) {
+        LogBatch {
             if (entries.isEmpty())
                 throw new IllegalArgumentException("Empty batches are not supported");
-            this.entries = entries;
-            this.epoch = epoch;
-            this.isControlBatch = isControlBatch;
         }
 
         long firstOffset() {
@@ -746,25 +692,8 @@ public class MockLog implements ReplicatedLog {
             builder.close();
             return builder.buffer();
         }
-
-        @Override
-        public String toString() {
-            return String.format("LogBatch(entries=%s, epoch=%s, isControlBatch=%s)", entries, epoch, isControlBatch);
-        }
     }
 
-    private static class EpochStartOffset {
-        final int epoch;
-        final long startOffset;
-
-        private EpochStartOffset(int epoch, long startOffset) {
-            this.epoch = epoch;
-            this.startOffset = startOffset;
-        }
-
-        @Override
-        public String toString() {
-            return String.format("EpochStartOffset(epoch=%s, startOffset=%s)", epoch, startOffset);
-        }
+    private record EpochStartOffset(int epoch, long startOffset) {
     }
 }

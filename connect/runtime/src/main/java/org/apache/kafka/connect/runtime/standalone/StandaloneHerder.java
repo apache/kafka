@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.connect.runtime.standalone;
 
-import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -489,28 +489,26 @@ public final class StandaloneHerder extends AbstractHerder {
     }
 
     private boolean startTask(ConnectorTaskId taskId, Map<String, String> connProps) {
-        switch (connectorType(connProps)) {
-            case SINK:
-                return worker.startSinkTask(
-                        taskId,
-                        configState,
-                        connProps,
-                        configState.taskConfig(taskId),
-                        this,
-                        configState.targetState(taskId.connector())
-                );
-            case SOURCE:
-                return worker.startSourceTask(
-                        taskId,
-                        configState,
-                        connProps,
-                        configState.taskConfig(taskId),
-                        this,
-                        configState.targetState(taskId.connector())
-                );
-            default:
-                throw new ConnectException("Failed to start task " + taskId + " since it is not a recognizable type (source or sink)");
-        }
+        return switch (connectorType(connProps)) {
+            case SINK -> worker.startSinkTask(
+                    taskId,
+                    configState,
+                    connProps,
+                    configState.taskConfig(taskId),
+                    this,
+                    configState.targetState(taskId.connector())
+            );
+            case SOURCE -> worker.startSourceTask(
+                    taskId,
+                    configState,
+                    connProps,
+                    configState.taskConfig(taskId),
+                    this,
+                    configState.targetState(taskId.connector())
+            );
+            default ->
+                    throw new ConnectException("Failed to start task " + taskId + " since it is not a recognizable type (source or sink)");
+        };
     }
 
     private void removeConnectorTasks(String connName) {

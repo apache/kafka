@@ -96,7 +96,7 @@ public class SharePartitionMetrics implements AutoCloseable {
      *
      * @param messageCountSupplier The supplier for the in-flight message count.
      */
-    public void registerInFlightMessageCount(Supplier<Long> messageCountSupplier) {
+    public void registerInFlightMessageCount(Supplier<Integer> messageCountSupplier) {
         metricsGroup.newGauge(
             IN_FLIGHT_MESSAGE_COUNT,
             messageCountSupplier,

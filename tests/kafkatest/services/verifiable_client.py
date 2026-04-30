@@ -74,7 +74,8 @@ Command line arguments:
  * `--enable-autocommit`
  * `--max-messages <n>`
  * `--assignment-strategy <s>`
- * `--consumer.config <config-file>` - consumer config properties (typically empty)
+ * `--consumer.config <config-file>` - (DEPRECATED) consumer config properties (typically empty). This option will be removed in a future version. Use --command-config instead.
+ * `--command-config <config-file>` - command config properties
 
 Environment variables:
  * `LOG_DIR` - log output directory. Typically not needed if logs are written to stderr.
@@ -97,7 +98,8 @@ Command line arguments:
  * `--broker-list <brokers>`
  * `--max-messages <n>`
  * `--throughput <msgs/s>`
- * `--producer.config <config-file>` - producer config properties (typically empty)
+ * `--producer.config <config-file>` - producer config properties (typically empty). This option will be removed in a future version. Use --command-config instead.
+ * `--command-config <config-file>` - command config properties
 
 Environment variables:
  * `LOG_DIR` - log output directory. Typically not needed if logs are written to stderr.

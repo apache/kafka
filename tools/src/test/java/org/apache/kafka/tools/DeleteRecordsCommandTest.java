@@ -26,8 +26,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
-import org.apache.kafka.server.common.AdminCommandFailedException;
-import org.apache.kafka.server.common.AdminOperationException;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 
@@ -35,12 +33,11 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.file.NoSuchFileException;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -64,7 +61,7 @@ public class DeleteRecordsCommandTest {
                 "Offset json file contains duplicate topic partitions: t-0"
             );
 
-            admin.createTopics(Collections.singleton(new NewTopic("t", 1, (short) 1))).all().get();
+            admin.createTopics(Set.of(new NewTopic("t", 1, (short) 1))).all().get();
 
             Properties props = new Properties();
 
@@ -161,8 +158,8 @@ public class DeleteRecordsCommandTest {
         );
 
         assertEquals(2, res.size());
-        assertEquals(Arrays.asList(0L, 2L, 0L), res.get(new TopicPartition("t", 0)));
-        assertEquals(Collections.singletonList(1L), res.get(new TopicPartition("t", 1)));
+        assertEquals(List.of(0L, 2L, 0L), res.get(new TopicPartition("t", 0)));
+        assertEquals(List.of(1L), res.get(new TopicPartition("t", 1)));
     }
 
     /**

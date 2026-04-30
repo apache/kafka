@@ -17,7 +17,12 @@
   "apiKey": 78,
   "type": "response",
   "name": "ShareFetchResponse",
-  "validVersions": "0",
+  // Version 0 was used for early access of KIP-932 in Apache Kafka 4.0 but removed in Apache Kafka 4.1.
+  //
+  // Version 1 is the initial stable version (KIP-932).
+  //
+  // Version 2 introduces ShareAcquireMode and Renew acknowledgements (KIP-1206 and KIP-1222).
+  "validVersions": "1-2",
   "flexibleVersions": "0+",
   // Supported errors for ErrorCode and AcknowledgeErrorCode:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)
@@ -39,10 +44,12 @@
       "about": "The top-level response error code." },
     { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "The top-level error message, or null if there was no error." },
+    { "name": "AcquisitionLockTimeoutMs", "type": "int32", "versions": "1+",
+      "about": "The time in milliseconds for which the acquired records are locked." },
     { "name": "Responses", "type": "[]ShareFetchableTopicResponse", "versions": "0+",
       "about": "The response topics.", "fields": [
-      { "name": "TopicId", "type": "uuid", "versions": "0+",
-        "about": "The unique topic ID."},
+      { "name": "TopicId", "type": "uuid", "versions": "0+", "mapKey": true,
+        "about": "The unique topic ID." },
       { "name": "Partitions", "type": "[]PartitionData", "versions": "0+",
         "about": "The topic partitions.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
@@ -62,11 +69,11 @@
           { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
             "about": "The latest known leader epoch." }
         ]},
-        { "name": "Records", "type": "records", "versions": "0+", "nullableVersions": "0+", "about": "The record data."},
-        { "name": "AcquiredRecords", "type": "[]AcquiredRecords", "versions": "0+", "about": "The acquired records.", "fields":  [
-          {"name": "FirstOffset", "type":  "int64", "versions": "0+", "about": "The earliest offset in this batch of acquired records."},
-          {"name": "LastOffset", "type": "int64", "versions": "0+", "about": "The last offset of this batch of acquired records."},
-          {"name": "DeliveryCount", "type": "int16", "versions": "0+", "about": "The delivery count of this batch of acquired records."}
+        { "name": "Records", "type": "records", "versions": "0+", "nullableVersions": "0", "about": "The record data." },
+        { "name": "AcquiredRecords", "type": "[]AcquiredRecords", "versions": "0+", "about": "The acquired records.", "fields": [
+          { "name": "FirstOffset", "type": "int64", "versions": "0+", "about": "The earliest offset in this batch of acquired records." },
+          { "name": "LastOffset", "type": "int64", "versions": "0+", "about": "The last offset of this batch of acquired records." },
+          { "name": "DeliveryCount", "type": "int16", "versions": "0+", "about": "The delivery count of this batch of acquired records." }
         ]}
       ]}
     ]},

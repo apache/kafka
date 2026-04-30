@@ -26,7 +26,8 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -36,21 +37,21 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 @Timeout(value = 40)
 public class ClusterImageControllersNodeTest {
     private static final ClusterImage TEST_IMAGE = new ClusterImage(
-            Collections.emptyMap(),
-            Collections.singletonMap(2, new ControllerRegistration.Builder().
+            Map.of(),
+            Map.of(2, new ControllerRegistration.Builder().
                     setId(2).
                     setIncarnationId(Uuid.fromString("adGo6sTPS0uJshjvdTUmqQ")).
                     setZkMigrationReady(false).
-                    setSupportedFeatures(Collections.singletonMap(
+                    setSupportedFeatures(Map.of(
                             MetadataVersion.FEATURE_NAME, VersionRange.of(1, 4))).
-                    setListeners(Collections.emptyMap()).
+                    setListeners(Map.of()).
                         build()));
 
     private static final ClusterImageControllersNode NODE = new ClusterImageControllersNode(TEST_IMAGE);
 
     @Test
     public void testChildNames() {
-        assertEquals(Collections.singletonList("2"), NODE.childNames());
+        assertEquals(List.of("2"), NODE.childNames());
     }
 
     @Test

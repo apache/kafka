@@ -24,7 +24,7 @@ import org.apache.kafka.tiered.storage.TieredStorageTestAction;
 import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 
 import java.io.PrintStream;
-import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -48,14 +48,14 @@ public final class ExpectListOffsetsAction implements TieredStorageTestAction {
     @Override
     public void doExecute(TieredStorageTestContext context) throws InterruptedException, ExecutionException {
         ListOffsetsResult.ListOffsetsResultInfo listOffsetsResult = context.admin()
-                .listOffsets(Collections.singletonMap(partition, spec))
+                .listOffsets(Map.of(partition, spec))
                 .all()
                 .get()
                 .get(partition);
-        assertEquals(expected.startOffset, listOffsetsResult.offset());
-        if (expected.epoch != -1) {
+        assertEquals(expected.startOffset(), listOffsetsResult.offset());
+        if (expected.epoch() != -1) {
             assertTrue(listOffsetsResult.leaderEpoch().isPresent());
-            assertEquals(expected.epoch, listOffsetsResult.leaderEpoch().get());
+            assertEquals(expected.epoch(), listOffsetsResult.leaderEpoch().get());
         } else {
             assertFalse(listOffsetsResult.leaderEpoch().isPresent());
         }

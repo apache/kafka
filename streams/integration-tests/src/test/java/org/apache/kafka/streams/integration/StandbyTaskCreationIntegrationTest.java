@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -31,6 +32,7 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -38,12 +40,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.function.Predicate;
 
@@ -87,19 +91,26 @@ public class StandbyTaskCreationIntegrationTest {
         client2.close(Duration.ofSeconds(60));
     }
 
-    private Properties streamsConfiguration() {
+    private Properties streamsConfiguration(final boolean streamsProtocolEnabled, final boolean withHeaders) {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
-        streamsConfiguration.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
+        if (streamsProtocolEnabled) {
+            streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
+            CLUSTER.setGroupStandbyReplicas("app-" + safeTestName, 1);
+        } else {
+            streamsConfiguration.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
+        }
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(streamsConfiguration, withHeaders);
         return streamsConfiguration;
     }
 
-    @Test
-    public void shouldNotCreateAnyStandByTasksForStateStoreWithLoggingDisabled() throws Exception {
+    @ParameterizedTest
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    public void shouldNotCreateAnyStandByTasksForStateStoreWithLoggingDisabled(final boolean streamsProtocolEnabled, final boolean withHeaders) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         final String stateStoreName = "myTransformState";
         final StoreBuilder<KeyValueStore<Integer, Integer>> keyValueStoreBuilder =
@@ -116,8 +127,9 @@ public class StandbyTaskCreationIntegrationTest {
                 }
             }, stateStoreName);
 
+
         final Topology topology = builder.build();
-        createClients(topology, streamsConfiguration(), topology, streamsConfiguration());
+        createClients(topology, streamsConfiguration(streamsProtocolEnabled, withHeaders), topology, streamsConfiguration(streamsProtocolEnabled, withHeaders));
 
         setStateListenersForVerification(thread -> thread.standbyTasks().isEmpty() && !thread.activeTasks().isEmpty());
 
@@ -128,11 +140,12 @@ public class StandbyTaskCreationIntegrationTest {
         );
     }
 
-    @Test
-    public void shouldCreateStandByTasksForMaterializedAndOptimizedSourceTables() throws Exception {
-        final Properties streamsConfiguration1 = streamsConfiguration();
+    @ParameterizedTest
+    @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+    public void shouldCreateStandByTasksForMaterializedAndOptimizedSourceTables(final boolean streamsProtocolEnabled, final boolean withHeaders) throws Exception {
+        final Properties streamsConfiguration1 = streamsConfiguration(streamsProtocolEnabled, withHeaders);
         streamsConfiguration1.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
-        final Properties streamsConfiguration2 = streamsConfiguration();
+        final Properties streamsConfiguration2 = streamsConfiguration(streamsProtocolEnabled, withHeaders);
         streamsConfiguration2.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
 
         final StreamsBuilder builder = new StreamsBuilder();

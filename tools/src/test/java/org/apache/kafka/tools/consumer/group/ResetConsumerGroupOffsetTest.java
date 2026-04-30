@@ -27,11 +27,15 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.api.ClusterConfig;
-import org.apache.kafka.common.test.api.ClusterTemplate;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.test.TestUtils;
 
 import java.io.BufferedWriter;
@@ -48,19 +52,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import joptsimple.OptionException;
 
 import static java.time.LocalDateTime.now;
-import static java.util.Arrays.asList;
-import static java.util.Collections.singleton;
-import static java.util.Collections.singletonList;
-import static java.util.Collections.singletonMap;
 import static java.util.stream.Collectors.toMap;
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.admin.AdminClientConfig.RETRIES_CONFIG;
@@ -73,8 +73,13 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 import static org.apache.kafka.clients.producer.ProducerConfig.ACKS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -89,14 +94,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * - scope=topics+partitions, scenario=to-earliest
  * - export/import
  */
+@ClusterTestDefaults(
+    types = {Type.CO_KRAFT},
+    serverProperties = {
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000"),
+        @ClusterConfigProperty(key = CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
+        @ClusterConfigProperty(key = CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
+    }
+)
 public class ResetConsumerGroupOffsetTest {
 
     private static final String TOPIC_PREFIX = "foo-";
     private static final String GROUP_PREFIX = "test.group-";
-
-    private static List<ClusterConfig> generator() {
-        return ConsumerGroupCommandTestUtils.generator();
-    }
 
     private String[] basicArgs(ClusterInstance cluster) {
         return new String[]{"--reset-offsets",
@@ -105,27 +116,27 @@ public class ResetConsumerGroupOffsetTest {
     }
 
     private String[] buildArgsForGroups(ClusterInstance cluster, List<String> groups, String... args) {
-        List<String> res = new ArrayList<>(asList(basicArgs(cluster)));
+        List<String> res = new ArrayList<>(List.of(basicArgs(cluster)));
         for (String group : groups) {
             res.add("--group");
             res.add(group);
         }
-        res.addAll(asList(args));
+        res.addAll(List.of(args));
         return res.toArray(new String[0]);
     }
 
     private String[] buildArgsForGroup(ClusterInstance cluster, String group, String... args) {
-        return buildArgsForGroups(cluster, singletonList(group), args);
+        return buildArgsForGroups(cluster, List.of(group), args);
     }
 
     private String[] buildArgsForAllGroups(ClusterInstance cluster, String... args) {
-        List<String> res = new ArrayList<>(asList(basicArgs(cluster)));
+        List<String> res = new ArrayList<>(List.of(basicArgs(cluster)));
         res.add("--all-groups");
-        res.addAll(asList(args));
+        res.addAll(List.of(args));
         return res.toArray(new String[0]);
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testResetOffsetsNotExistingGroup(ClusterInstance cluster) throws Exception {
         String topic = generateRandomTopic();
         String group = "missing.group";
@@ -138,21 +149,43 @@ public class ResetConsumerGroupOffsetTest {
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest(
+        brokers = 2,
+        serverProperties = {
+            @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2"),
+        }
+    )
+    public void testResetOffsetsWithOfflinePartitionNotInResetTarget(ClusterInstance cluster) throws Exception {
+        String topic = generateRandomTopic();
+        String group = "new.group";
+        String[] args = buildArgsForGroup(cluster, group, "--to-earliest", "--execute", "--topic", topic + ":0");
+
+        try (Admin admin = cluster.admin(); ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
+            admin.createTopics(List.of(new NewTopic(topic, Map.of(0, List.of(0), 1, List.of(1)))));
+            cluster.waitTopicCreation(topic, 2);
+
+            cluster.shutdownBroker(1);
+
+            Map<TopicPartition, OffsetAndMetadata> resetOffsets = service.resetOffsets().get(group);
+            assertEquals(Set.of(new TopicPartition(topic, 0)), resetOffsets.keySet());
+        }
+    }
+
+    @ClusterTest
     public void testResetOffsetsExistingTopic(ClusterInstance cluster) {
         String topic = generateRandomTopic();
         String group = "new.group";
         String[] args = buildArgsForGroup(cluster, group, "--topic", topic, "--to-offset", "50");
 
         produceMessages(cluster, topic, 100);
-        resetAndAssertOffsets(cluster, args, 50, true, singletonList(topic));
+        resetAndAssertOffsets(cluster, args, 50, true, List.of(topic));
         resetAndAssertOffsets(cluster, addTo(args, "--dry-run"),
-                50, true, singletonList(topic));
+                50, true, List.of(topic));
         resetAndAssertOffsets(cluster, addTo(args, "--execute"),
-                50, false, singletonList(topic));
+                50, false, List.of(topic));
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testResetOffsetsExistingTopicSelectedGroups(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String topic = generateRandomTopic();
@@ -167,15 +200,15 @@ public class ResetConsumerGroupOffsetTest {
             }
 
             String[] args = buildArgsForGroups(cluster, groups, "--topic", topic, "--to-offset", "50");
-            resetAndAssertOffsets(cluster, args, 50, true, singletonList(topic));
+            resetAndAssertOffsets(cluster, args, 50, true, List.of(topic));
             resetAndAssertOffsets(cluster, addTo(args, "--dry-run"),
-                    50, true, singletonList(topic));
+                    50, true, List.of(topic));
             resetAndAssertOffsets(cluster, addTo(args, "--execute"),
-                    50, false, singletonList(topic));
+                    50, false, List.of(topic));
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testResetOffsetsExistingTopicAllGroups(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String topic = generateRandomTopic();
@@ -189,15 +222,15 @@ public class ResetConsumerGroupOffsetTest {
                     awaitConsumerProgress(cluster, topic, group, 100L);
                 }
             }
-            resetAndAssertOffsets(cluster, args, 50, true, singletonList(topic));
+            resetAndAssertOffsets(cluster, args, 50, true, List.of(topic));
             resetAndAssertOffsets(cluster, addTo(args, "--dry-run"),
-                    50, true, singletonList(topic));
+                    50, true, List.of(topic));
             resetAndAssertOffsets(cluster, addTo(args, "--execute"),
-                    50, false, singletonList(topic));
+                    50, false, List.of(topic));
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testResetOffsetsAllTopicsAllGroups(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String groupId = generateRandomGroupId();
@@ -229,7 +262,7 @@ public class ResetConsumerGroupOffsetTest {
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testResetOffsetsToLocalDateTime(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String group = generateRandomGroupId();
@@ -252,7 +285,7 @@ public class ResetConsumerGroupOffsetTest {
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testResetOffsetsToZonedDateTime(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String group = generateRandomGroupId();
@@ -276,7 +309,7 @@ public class ResetConsumerGroupOffsetTest {
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testResetOffsetsByDuration(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String group = generateRandomGroupId();
@@ -288,7 +321,7 @@ public class ResetConsumerGroupOffsetTest {
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testResetOffsetsByDurationToEarliest(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String group = generateRandomGroupId();
@@ -300,7 +333,7 @@ public class ResetConsumerGroupOffsetTest {
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testResetOffsetsByDurationFallbackToLatestWhenNoRecords(ClusterInstance cluster) throws ExecutionException, InterruptedException {
         String group = generateRandomGroupId();
         String topic = generateRandomTopic();
@@ -308,13 +341,13 @@ public class ResetConsumerGroupOffsetTest {
         String[] args = buildArgsForGroup(cluster, group, "--topic", topic, "--by-duration", "PT1M", "--execute");
 
         try (Admin admin = cluster.admin()) {
-            admin.createTopics(singleton(new NewTopic(topic, 1, (short) 1))).all().get();
-            resetAndAssertOffsets(cluster, args, 0, false, singletonList(topic));
-            admin.deleteTopics(singleton(topic)).all().get();
+            admin.createTopics(Set.of(new NewTopic(topic, 1, (short) 1))).all().get();
+            resetAndAssertOffsets(cluster, args, 0, false, List.of(topic));
+            admin.deleteTopics(Set.of(topic)).all().get();
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testResetOffsetsToEarliest(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String group = generateRandomGroupId();
@@ -326,7 +359,7 @@ public class ResetConsumerGroupOffsetTest {
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testResetOffsetsToLatest(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String group = generateRandomGroupId();
@@ -339,7 +372,7 @@ public class ResetConsumerGroupOffsetTest {
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testResetOffsetsToCurrentOffset(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String group = generateRandomGroupId();
@@ -352,7 +385,7 @@ public class ResetConsumerGroupOffsetTest {
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testResetOffsetsToSpecificOffset(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String group = generateRandomGroupId();
@@ -364,7 +397,7 @@ public class ResetConsumerGroupOffsetTest {
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testResetOffsetsShiftPlus(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String group = generateRandomGroupId();
@@ -377,7 +410,7 @@ public class ResetConsumerGroupOffsetTest {
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testResetOffsetsShiftMinus(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String group = generateRandomGroupId();
@@ -390,7 +423,7 @@ public class ResetConsumerGroupOffsetTest {
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testResetOffsetsShiftByLowerThanEarliest(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String group = generateRandomGroupId();
@@ -403,7 +436,7 @@ public class ResetConsumerGroupOffsetTest {
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testResetOffsetsShiftByHigherThanLatest(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String group = generateRandomGroupId();
@@ -416,7 +449,7 @@ public class ResetConsumerGroupOffsetTest {
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testResetOffsetsToEarliestOnOneTopic(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String group = generateRandomGroupId();
@@ -428,7 +461,7 @@ public class ResetConsumerGroupOffsetTest {
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testResetOffsetsToEarliestOnOneTopicAndPartition(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String group = generateRandomGroupId();
@@ -438,7 +471,7 @@ public class ResetConsumerGroupOffsetTest {
 
             try (Admin admin = cluster.admin();
                  ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
-                admin.createTopics(singleton(new NewTopic(topic, 2, (short) 1))).all().get();
+                admin.createTopics(Set.of(new NewTopic(topic, 2, (short) 1))).all().get();
 
                 produceConsumeAndShutdown(cluster, topic, group, 2, groupProtocol);
                 Map<TopicPartition, Long> priorCommittedOffsets = committedOffsets(cluster, topic, group);
@@ -449,12 +482,12 @@ public class ResetConsumerGroupOffsetTest {
                 expectedOffsets.put(tp1, 0L);
                 resetAndAssertOffsetsCommitted(cluster, service, expectedOffsets, topic);
 
-                admin.deleteTopics(singleton(topic)).all().get();
+                admin.deleteTopics(Set.of(topic)).all().get();
             }
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testResetOffsetsToEarliestOnTopics(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String group = generateRandomGroupId();
@@ -467,7 +500,7 @@ public class ResetConsumerGroupOffsetTest {
 
             try (Admin admin = cluster.admin();
                  ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
-                admin.createTopics(asList(new NewTopic(topic1, 1, (short) 1),
+                admin.createTopics(List.of(new NewTopic(topic1, 1, (short) 1),
                         new NewTopic(topic2, 1, (short) 1))).all().get();
 
                 produceConsumeAndShutdown(cluster, topic1, group, 1, groupProtocol);
@@ -481,15 +514,15 @@ public class ResetConsumerGroupOffsetTest {
                 expMap.put(tp1, 0L);
                 expMap.put(tp2, 0L);
                 assertEquals(expMap, allResetOffsets);
-                assertEquals(singletonMap(tp1, 0L), committedOffsets(cluster, topic1, group));
-                assertEquals(singletonMap(tp2, 0L), committedOffsets(cluster, topic2, group));
+                assertEquals(Map.of(tp1, 0L), committedOffsets(cluster, topic1, group));
+                assertEquals(Map.of(tp2, 0L), committedOffsets(cluster, topic2, group));
 
-                admin.deleteTopics(asList(topic1, topic2)).all().get();
+                admin.deleteTopics(List.of(topic1, topic2)).all().get();
             }
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testResetOffsetsToEarliestOnTopicsAndPartitions(ClusterInstance cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String group = generateRandomGroupId();
@@ -502,7 +535,7 @@ public class ResetConsumerGroupOffsetTest {
 
             try (Admin admin = cluster.admin();
                  ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
-                admin.createTopics(asList(new NewTopic(topic1, 2, (short) 1),
+                admin.createTopics(List.of(new NewTopic(topic1, 2, (short) 1),
                         new NewTopic(topic2, 2, (short) 1))).all().get();
 
                 produceConsumeAndShutdown(cluster, topic1, group, 2, groupProtocol);
@@ -525,12 +558,12 @@ public class ResetConsumerGroupOffsetTest {
                 priorCommittedOffsets2.put(tp2, 0L);
                 assertEquals(priorCommittedOffsets2, committedOffsets(cluster, topic2, group));
 
-                admin.deleteTopics(asList(topic1, topic2)).all().get();
+                admin.deleteTopics(List.of(topic1, topic2)).all().get();
             }
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     // This one deals with old CSV export/import format for a single --group arg:
     // "topic,partition,offset" to support old behavior
     public void testResetOffsetsExportImportPlanSingleGroupArg(ClusterInstance cluster) throws Exception {
@@ -546,7 +579,7 @@ public class ResetConsumerGroupOffsetTest {
             try (Admin admin = cluster.admin();
                  ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)) {
 
-                admin.createTopics(singleton(new NewTopic(topic, 2, (short) 1))).all().get();
+                admin.createTopics(Set.of(new NewTopic(topic, 2, (short) 1))).all().get();
                 produceConsumeAndShutdown(cluster, topic, group, 2, groupProtocol);
 
                 Map<String, Map<TopicPartition, OffsetAndMetadata>> exportedOffsets = service.resetOffsets();
@@ -565,12 +598,12 @@ public class ResetConsumerGroupOffsetTest {
                     assertEquals(exp1, toOffsetMap(importedOffsets.get(group)));
                 }
 
-                admin.deleteTopics(singleton(topic));
+                admin.deleteTopics(Set.of(topic));
             }
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     // This one deals with universal CSV export/import file format "group,topic,partition,offset",
     // supporting multiple --group args or --all-groups arg
     public void testResetOffsetsExportImportPlan(ClusterInstance cluster) throws Exception {
@@ -584,14 +617,14 @@ public class ResetConsumerGroupOffsetTest {
             TopicPartition t1p1 = new TopicPartition(topic1, 1);
             TopicPartition t2p0 = new TopicPartition(topic2, 0);
             TopicPartition t2p1 = new TopicPartition(topic2, 1);
-            String[] cgcArgs = buildArgsForGroups(cluster, asList(group1, group2),
+            String[] cgcArgs = buildArgsForGroups(cluster, List.of(group1, group2),
                 "--all-topics", "--to-offset", "2", "--export");
             File file = TestUtils.tempFile("reset", ".csv");
 
             try (Admin admin = cluster.admin();
                  ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)) {
 
-                admin.createTopics(asList(new NewTopic(topic1, 2, (short) 1),
+                admin.createTopics(List.of(new NewTopic(topic1, 2, (short) 1),
                         new NewTopic(topic2, 2, (short) 1))).all().get();
 
                 produceConsumeAndShutdown(cluster, topic1, group1, 1, groupProtocol);
@@ -615,7 +648,7 @@ public class ResetConsumerGroupOffsetTest {
                 assertEquals(exp2, toOffsetMap(exportedOffsets.get(group2)));
 
                 // Multiple --group's offset import
-                String[] cgcArgsExec = buildArgsForGroups(cluster, asList(group1, group2),
+                String[] cgcArgsExec = buildArgsForGroups(cluster, List.of(group1, group2),
                         "--all-topics",
                         "--from-file", file.getCanonicalPath(), "--dry-run");
                 try (ConsumerGroupCommand.ConsumerGroupService serviceExec = getConsumerGroupService(cgcArgsExec)) {
@@ -632,12 +665,12 @@ public class ResetConsumerGroupOffsetTest {
                     assertEquals(exp1, toOffsetMap(importedOffsets2.get(group1)));
                 }
 
-                admin.deleteTopics(asList(topic1, topic2));
+                admin.deleteTopics(List.of(topic1, topic2));
             }
         }
     }
 
-    @ClusterTemplate("generator")
+    @ClusterTest
     public void testResetWithUnrecognizedNewConsumerOption(ClusterInstance cluster) {
         String group = generateRandomGroupId();
         String[] cgcArgs = new String[]{"--new-consumer",
@@ -645,6 +678,41 @@ public class ResetConsumerGroupOffsetTest {
             "--reset-offsets", "--group", group, "--all-topics",
             "--to-offset", "2", "--export"};
         assertThrows(OptionException.class, () -> getConsumerGroupService(cgcArgs));
+    }
+
+    @ClusterTest(brokers = 3, serverProperties = {@ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")})
+    public void testResetOffsetsWithPartitionNoneLeader(ClusterInstance cluster) throws Exception {
+        String group = generateRandomGroupId();
+        String topic = generateRandomTopic();
+        String[] args = buildArgsForGroup(cluster, group, "--topic", topic + ":0,1,2",
+                "--to-earliest", "--execute");
+
+        try (Admin admin = cluster.admin();
+             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
+
+            admin.createTopics(Set.of(new NewTopic(topic, 3, (short) 1))).all().get();
+            produceConsumeAndShutdown(cluster, topic, group, 2, GroupProtocol.CLASSIC);
+            assertDoesNotThrow(() -> resetOffsets(service));
+            // shutdown a broker to make some partitions missing leader
+            cluster.shutdownBroker(0);
+            assertThrows(LeaderNotAvailableException.class, () -> resetOffsets(service));
+        }
+    }
+
+    @ClusterTest
+    public void testResetOffsetsWithPartitionNotExist(ClusterInstance cluster) throws Exception {
+        String group = generateRandomGroupId();
+        String topic = generateRandomTopic();
+        String[] args = buildArgsForGroup(cluster, group, "--topic", topic + ":2,3",
+                "--to-earliest", "--execute");
+
+        try (Admin admin = cluster.admin();
+             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
+
+            admin.createTopics(Set.of(new NewTopic(topic, 1, (short) 1))).all().get();
+            produceConsumeAndShutdown(cluster, topic, group, 2, GroupProtocol.CLASSIC);
+            assertThrows(UnknownTopicOrPartitionException.class, () -> resetOffsets(service));
+        }
     }
 
     private String generateRandomTopic() {
@@ -658,7 +726,7 @@ public class ResetConsumerGroupOffsetTest {
     private Map<TopicPartition, Long> committedOffsets(ClusterInstance cluster,
                                                        String topic,
                                                        String group) {
-        try (Admin admin = Admin.create(singletonMap(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers()))) {
+        try (Admin admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers()))) {
             return admin.listConsumerGroupOffsets(group)
                     .all().get()
                     .get(group).entrySet()
@@ -673,13 +741,13 @@ public class ResetConsumerGroupOffsetTest {
     private ConsumerGroupCommand.ConsumerGroupService getConsumerGroupService(String[] args) {
         return new ConsumerGroupCommand.ConsumerGroupService(
                 ConsumerGroupCommandOptions.fromArgs(args),
-                singletonMap(RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE)));
+                Map.of(RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE)));
     }
 
     private void produceMessages(ClusterInstance cluster, String topic, int numMessages) {
         List<ProducerRecord<byte[], byte[]>> records = IntStream.range(0, numMessages)
                 .mapToObj(i -> new ProducerRecord<byte[], byte[]>(topic, new byte[100 * 1000]))
-                .collect(Collectors.toList());
+                .toList();
         produceMessages(cluster, records);
     }
 
@@ -702,7 +770,7 @@ public class ResetConsumerGroupOffsetTest {
                                        String topic,
                                        String[] args,
                                        long expectedOffset) {
-        resetAndAssertOffsets(cluster, args, expectedOffset, false, singletonList(topic));
+        resetAndAssertOffsets(cluster, args, expectedOffset, false, List.of(topic));
     }
 
     private void resetAndAssertOffsets(ClusterInstance cluster,
@@ -729,7 +797,7 @@ public class ResetConsumerGroupOffsetTest {
                                                                          long expectedOffset) {
         return topics.stream()
                 .collect(toMap(Function.identity(),
-                        topic -> singletonMap(new TopicPartition(topic, 0),
+                        topic -> Map.of(new TopicPartition(topic, 0),
                                 expectedOffset)));
     }
 
@@ -749,7 +817,7 @@ public class ResetConsumerGroupOffsetTest {
     private static List<String> generateIds(String name) {
         return IntStream.rangeClosed(1, 2)
                 .mapToObj(id -> name + id)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private void produceConsumeAndShutdown(ClusterInstance cluster,
@@ -804,7 +872,7 @@ public class ResetConsumerGroupOffsetTest {
                                        String topic,
                                        String group,
                                        long count) throws Exception {
-        try (Admin admin = Admin.create(singletonMap(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers()))) {
+        try (Admin admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers()))) {
             Supplier<Long> offsets = () -> {
                 try {
                     return admin.listConsumerGroupOffsets(group)
@@ -828,10 +896,10 @@ public class ResetConsumerGroupOffsetTest {
     private void awaitConsumerGroupInactive(ConsumerGroupCommand.ConsumerGroupService service,
                                             String group) throws Exception {
         TestUtils.waitForCondition(() -> {
-            GroupState state = service.collectGroupState(group).groupState;
+            GroupState state = service.collectGroupState(group).groupState();
             return Objects.equals(state, GroupState.EMPTY) || Objects.equals(state, GroupState.DEAD);
         }, "Expected that consumer group is inactive. Actual state: " +
-                service.collectGroupState(group).groupState);
+            service.collectGroupState(group).groupState());
     }
 
     private void resetAndAssertOffsetsCommitted(ClusterInstance cluster,
@@ -841,7 +909,7 @@ public class ResetConsumerGroupOffsetTest {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> allResetOffsets = resetOffsets(service);
 
         allResetOffsets.forEach((group, offsetsInfo) -> offsetsInfo.forEach((tp, offsetMetadata) -> {
-            assertEquals(offsetMetadata.offset(), expectedOffsets.get(tp));
+            assertEquals(expectedOffsets.get(tp), offsetMetadata.offset());
             assertEquals(expectedOffsets, committedOffsets(cluster, topic, group));
         }));
     }
@@ -853,8 +921,8 @@ public class ResetConsumerGroupOffsetTest {
     }
 
     private String[] addTo(String[] args, String... extra) {
-        List<String> res = new ArrayList<>(asList(args));
-        res.addAll(asList(extra));
+        List<String> res = new ArrayList<>(List.of(args));
+        res.addAll(List.of(extra));
         return res.toArray(new String[0]);
     }
 }

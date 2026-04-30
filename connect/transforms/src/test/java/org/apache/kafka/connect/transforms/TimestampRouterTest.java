@@ -23,7 +23,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -32,7 +32,7 @@ public class TimestampRouterTest {
     @BeforeEach
     public void setup() {
         xform = new TimestampRouter<>();
-        xform.configure(Collections.emptyMap()); // defaults
+        xform.configure(Map.of()); // defaults
     }
 
     @AfterEach

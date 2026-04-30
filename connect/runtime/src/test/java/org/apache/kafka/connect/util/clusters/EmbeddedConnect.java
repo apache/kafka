@@ -18,8 +18,8 @@ package org.apache.kafka.connect.util.clusters;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
@@ -47,7 +47,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -282,7 +281,7 @@ abstract class EmbeddedConnect {
             throw new ConnectException("Failed to serialize connector creation request: " + createConnectorRequest);
         }
 
-        Response response = requestPost(url, requestBody, Collections.emptyMap());
+        Response response = requestPost(url, requestBody, Map.of());
         if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
             return responseToString(response);
         } else {
@@ -449,7 +448,7 @@ abstract class EmbeddedConnect {
      */
     public void restartConnector(String connName) {
         String url = endpointForResource(String.format("connectors/%s/restart", connName));
-        Response response = requestPost(url, "", Collections.emptyMap());
+        Response response = requestPost(url, "", Map.of());
         if (response.getStatus() >= Response.Status.BAD_REQUEST.getStatusCode()) {
             throw new ConnectRestException(response.getStatus(),
                     "Could not execute POST request. Error response: " + responseToString(response));
@@ -466,7 +465,7 @@ abstract class EmbeddedConnect {
      */
     public void restartTask(String connName, int taskNum) {
         String url = endpointForResource(String.format("connectors/%s/tasks/%d/restart", connName, taskNum));
-        Response response = requestPost(url, "", Collections.emptyMap());
+        Response response = requestPost(url, "", Map.of());
         if (response.getStatus() >= Response.Status.BAD_REQUEST.getStatusCode()) {
             throw new ConnectRestException(response.getStatus(),
                     "Could not execute POST request. Error response: " + responseToString(response));
@@ -492,7 +491,7 @@ abstract class EmbeddedConnect {
         } else {
             restartEndpoint = endpointForResource(restartPath);
         }
-        Response response = requestPost(restartEndpoint, "", Collections.emptyMap());
+        Response response = requestPost(restartEndpoint, "", Map.of());
         try {
             if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
                 //only the 202 status returns a body
@@ -505,7 +504,7 @@ abstract class EmbeddedConnect {
         } catch (IOException e) {
             log.error("Could not read connector state from response: {}",
                     responseToString(response), e);
-            throw new ConnectException("Could not not parse connector state", e);
+            throw new ConnectException("Could not parse connector state", e);
         }
     }
     /**
@@ -526,7 +525,7 @@ abstract class EmbeddedConnect {
                 log.error("Could not parse connector list from response: {}",
                         responseToString(response), e
                 );
-                throw new ConnectException("Could not not parse connector list", e);
+                throw new ConnectException("Could not parse connector list", e);
             }
         }
         throw new ConnectRestException(response.getStatus(),
@@ -553,7 +552,7 @@ abstract class EmbeddedConnect {
         } catch (IOException e) {
             log.error("Could not read connector state from response: {}",
                     responseToString(response), e);
-            throw new ConnectException("Could not not parse connector state", e);
+            throw new ConnectException("Could not parse connector state", e);
         }
         throw new ConnectRestException(response.getStatus(),
                 "Could not read connector state. Error response: " + responseToString(response));
@@ -577,12 +576,12 @@ abstract class EmbeddedConnect {
                         .readerFor(new TypeReference<Map<String, Map<String, List<String>>>>() { })
                         .readValue(responseToString(response));
                 return new ActiveTopicsInfo(connectorName,
-                        activeTopics.get(connectorName).getOrDefault("topics", Collections.emptyList()));
+                        activeTopics.get(connectorName).getOrDefault("topics", List.of()));
             }
         } catch (IOException e) {
             log.error("Could not read connector state from response: {}",
                     responseToString(response), e);
-            throw new ConnectException("Could not not parse connector state", e);
+            throw new ConnectException("Could not parse connector state", e);
         }
         throw new ConnectRestException(response.getStatus(),
                 "Could not read connector state. Error response: " + responseToString(response));
@@ -605,7 +604,7 @@ abstract class EmbeddedConnect {
         } catch (IOException e) {
             log.error("Could not read connector info from response: {}",
                     responseToString(response), e);
-            throw new ConnectException("Could not not parse connector info", e);
+            throw new ConnectException("Could not parse connector info", e);
         }
         throw new ConnectRestException(response.getStatus(),
                 "Could not read connector info. Error response: " + responseToString(response));
@@ -630,7 +629,7 @@ abstract class EmbeddedConnect {
         } catch (IOException e) {
             log.error("Could not read task configs from response: {}",
                     responseToString(response), e);
-            throw new ConnectException("Could not not parse task configs", e);
+            throw new ConnectException("Could not parse task configs", e);
         }
         throw new ConnectRestException(response.getStatus(),
                 "Could not read task configs. Error response: " + responseToString(response));
@@ -669,7 +668,7 @@ abstract class EmbeddedConnect {
                 return mapper.readerFor(ConnectorOffsets.class).readValue(responseToString(response));
             }
         } catch (IOException e) {
-            throw new ConnectException("Could not not parse connector offsets", e);
+            throw new ConnectException("Could not parse connector offsets", e);
         }
         throw new ConnectRestException(response.getStatus(),
                 "Could not fetch connector offsets. Error response: " + responseToString(response));
@@ -688,7 +687,7 @@ abstract class EmbeddedConnect {
     public String alterSourceConnectorOffset(String connectorName, Map<String, ?> partition, Map<String, ?> offset) {
         return alterConnectorOffsets(
                 connectorName,
-                new ConnectorOffsets(Collections.singletonList(new ConnectorOffset(partition, offset)))
+                new ConnectorOffsets(List.of(new ConnectorOffset(partition, offset)))
         );
     }
 
@@ -705,7 +704,7 @@ abstract class EmbeddedConnect {
     public String alterSinkConnectorOffset(String connectorName, TopicPartition topicPartition, Long offset) {
         return alterConnectorOffsets(
                 connectorName,
-                SinkUtils.consumerGroupOffsetsToConnectorOffsets(Collections.singletonMap(topicPartition, new OffsetAndMetadata(offset)))
+                SinkUtils.consumerGroupOffsetsToConnectorOffsets(Map.of(topicPartition, new OffsetAndMetadata(offset)))
         );
     }
 
@@ -769,7 +768,7 @@ abstract class EmbeddedConnect {
             } catch (IOException e) {
                 log.error("Could not read logger level from response: {}",
                         responseToString(response), e);
-                throw new ConnectException("Could not not parse logger level", e);
+                throw new ConnectException("Could not parse logger level", e);
             }
         } else {
             throw new ConnectRestException(
@@ -797,7 +796,7 @@ abstract class EmbeddedConnect {
             } catch (IOException e) {
                 log.error("Could not read logger levels from response: {}",
                         responseToString(response), e);
-                throw new ConnectException("Could not not parse logger levels", e);
+                throw new ConnectException("Could not parse logger levels", e);
             }
         } else {
             throw new ConnectRestException(
@@ -843,7 +842,7 @@ abstract class EmbeddedConnect {
             } catch (IOException e) {
                 log.error("Could not read loggers from response: {}",
                         responseToString(response), e);
-                throw new ConnectException("Could not not parse loggers", e);
+                throw new ConnectException("Could not parse loggers", e);
             }
         } else {
             throw new ConnectRestException(
@@ -929,7 +928,7 @@ abstract class EmbeddedConnect {
      * @throws ConnectException if execution of the GET request fails
      */
     public Response requestGet(String url) {
-        return requestHttpMethod(url, null, Collections.emptyMap(), "GET");
+        return requestHttpMethod(url, null, Map.of(), "GET");
     }
 
     /**
@@ -941,7 +940,7 @@ abstract class EmbeddedConnect {
      * @throws ConnectException if execution of the PUT request fails
      */
     public Response requestPut(String url, String body) {
-        return requestHttpMethod(url, body, Collections.emptyMap(), "PUT");
+        return requestHttpMethod(url, body, Map.of(), "PUT");
     }
 
     /**
@@ -966,7 +965,7 @@ abstract class EmbeddedConnect {
      * @throws ConnectException if execution of the PATCH request fails
      */
     public Response requestPatch(String url, String body) {
-        return requestHttpMethod(url, body, Collections.emptyMap(), "PATCH");
+        return requestHttpMethod(url, body, Map.of(), "PATCH");
     }
 
     /**
@@ -977,7 +976,7 @@ abstract class EmbeddedConnect {
      * @throws ConnectException if execution of the DELETE request fails
      */
     public Response requestDelete(String url) {
-        return requestHttpMethod(url, null, Collections.emptyMap(), "DELETE");
+        return requestHttpMethod(url, null, Map.of(), "DELETE");
     }
 
     /**
@@ -1010,7 +1009,7 @@ abstract class EmbeddedConnect {
                     .entity(res.getContentAsString())
                     .build();
         } catch (Exception e) {
-            log.error("Could not execute " + httpMethod + " request to " + url, e);
+            log.error("Could not execute {} request to {}", httpMethod, url, e);
             throw new ConnectException(e);
         }
     }

@@ -17,11 +17,12 @@
 package kafka.server
 
 import java.io.File
+import java.util
 import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import kafka.api.IntegrationTestHarness
 import kafka.utils.TestUtils.{Checkpoint, LogDirFailureType, Roll, waitUntilTrue}
-import kafka.utils.{CoreUtils, TestInfoUtils, TestUtils}
+import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
@@ -61,15 +62,15 @@ class LogDirFailureTest extends IntegrationTestHarness {
     ensureConsistentKRaftMetadata()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testProduceErrorFromFailureOnLogRoll(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testProduceErrorFromFailureOnLogRoll(groupProtocol: String): Unit = {
     testProduceErrorsFromLogDirFailureOnLeader(Roll)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testLogDirNotificationTimeout(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testLogDirNotificationTimeout(groupProtocol: String): Unit = {
     // Disable retries to allow exception to bubble up for validation
     this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
     this.producerConfig.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
@@ -92,27 +93,27 @@ class LogDirFailureTest extends IntegrationTestHarness {
     leaderServer.awaitShutdown()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testIOExceptionDuringLogRoll(quorum: String, groupProtocol: String): Unit = {
-    testProduceAfterLogDirFailureOnLeader(Roll, quorum)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testIOExceptionDuringLogRoll(groupProtocol: String): Unit = {
+    testProduceAfterLogDirFailureOnLeader(Roll)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testProduceErrorFromFailureOnCheckpoint(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testProduceErrorFromFailureOnCheckpoint(groupProtocol: String): Unit = {
     testProduceErrorsFromLogDirFailureOnLeader(Checkpoint)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testIOExceptionDuringCheckpoint(quorum: String, groupProtocol: String): Unit = {
-    testProduceAfterLogDirFailureOnLeader(Checkpoint, quorum)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testIOExceptionDuringCheckpoint(groupProtocol: String): Unit = {
+    testProduceAfterLogDirFailureOnLeader(Checkpoint)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testReplicaFetcherThreadAfterLogDirFailureOnFollower(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testReplicaFetcherThreadAfterLogDirFailureOnFollower(groupProtocol: String): Unit = {
     this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
     this.producerConfig.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
     val producer = createProducer()
@@ -164,7 +165,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
       e.getCause.isInstanceOf[NotLeaderOrFollowerException])
   }
 
-  def testProduceAfterLogDirFailureOnLeader(failureType: LogDirFailureType, quorum: String): Unit = {
+  def testProduceAfterLogDirFailureOnLeader(failureType: LogDirFailureType): Unit = {
     val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
 
@@ -202,8 +203,10 @@ class LogDirFailureTest extends IntegrationTestHarness {
       // check if the broker has the offline replica
       hasOfflineDir && brokerWithDirFail.exists(broker =>
         broker.replicaManager.metadataCache
-          .getClusterMetadata(broker.clusterId, broker.config.interBrokerListenerName)
-          .partition(new TopicPartition(topic, 0)).offlineReplicas().map(_.id()).contains(originalLeaderServerId))
+          .getTopicMetadata(util.Set.of(topic), broker.config.interBrokerListenerName, false, false)
+          .stream()
+          .flatMap(t => t.partitions().stream())
+          .anyMatch(p => p.partitionIndex() == 0 && p.offlineReplicas().contains(originalLeaderServerId)))
     }, "Expected to find an offline log dir")
   }
 
@@ -217,7 +220,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
     val localLog = leaderBroker.replicaManager.localLogOrException(partition)
     val logDir = localLog.dir.getParentFile
-    CoreUtils.swallow(Utils.delete(logDir), this)
+    Utils.swallow(this.logger.underlying, () => Utils.delete(logDir))
     Files.createFile(logDir.toPath)
     assertTrue(logDir.isFile)
 

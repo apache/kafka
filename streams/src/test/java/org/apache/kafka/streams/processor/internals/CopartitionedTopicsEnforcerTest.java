@@ -124,8 +124,8 @@ public class CopartitionedTopicsEnforcerTest {
         );
 
         final TreeMap<String, Integer> sorted = new TreeMap<>(
-            Utils.mkMap(Utils.mkEntry(topic1.name(), topic1.numberOfPartitions().get()),
-                        Utils.mkEntry(topic2.name(), topic2.numberOfPartitions().get()))
+            Utils.mkMap(Utils.mkEntry(topic1.name(), topic1.numberOfPartitions().orElseThrow()),
+                        Utils.mkEntry(topic2.name(), topic2.numberOfPartitions().orElseThrow()))
         );
 
         assertEquals(String.format("Invalid topology: thread " +
@@ -161,7 +161,7 @@ public class CopartitionedTopicsEnforcerTest {
         assertEquals(String.format("Invalid topology: thread Number of partitions [%s] " +
                                    "of repartition topic [%s] " +
                                    "doesn't match number of partitions [%s] of the source topic.",
-                                   topic1.numberOfPartitions().get(), topic1.name(), 2), ex.getMessage());
+                                   topic1.numberOfPartitions().orElseThrow(), topic1.name(), 2), ex.getMessage());
     }
 
     @Test

@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -29,6 +30,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
+import org.apache.kafka.clients.consumer.internals.metrics.MetricsLedger;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -48,6 +50,7 @@ import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -55,12 +58,13 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
+import org.apache.kafka.common.requests.RequestUtils;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -105,6 +109,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final List<ConsumerPartitionAssignor> assignors;
     private final ConsumerMetadata metadata;
     private final ConsumerCoordinatorMetrics coordinatorMetrics;
+    private final RebalanceCallbackMetricsManager rebalanceCallbackMetricsManager;
     private final SubscriptionState subscriptions;
     private final OffsetCommitCallback defaultOffsetCommitCallback;
     private final boolean autoCommitEnabled;
@@ -175,7 +180,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                int autoCommitIntervalMs,
                                ConsumerInterceptors<?, ?> interceptors,
                                boolean throwOnFetchStableOffsetsUnsupported,
-                               String rackId,
                                Optional<ClientTelemetryReporter> clientTelemetryReporter) {
         this(rebalanceConfig,
             logContext,
@@ -190,7 +194,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             autoCommitIntervalMs,
             interceptors,
             throwOnFetchStableOffsetsUnsupported,
-            rackId,
             clientTelemetryReporter,
             Optional.empty());
     }
@@ -198,6 +201,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     /**
      * Initialize the coordination manager.
      */
+    @SuppressWarnings("removal")
     public ConsumerCoordinator(GroupRebalanceConfig rebalanceConfig,
                                LogContext logContext,
                                ConsumerNetworkClient client,
@@ -211,7 +215,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                int autoCommitIntervalMs,
                                ConsumerInterceptors<?, ?> interceptors,
                                boolean throwOnFetchStableOffsetsUnsupported,
-                               String rackId,
                                Optional<ClientTelemetryReporter> clientTelemetryReporter,
                                Optional<Supplier<BaseHeartbeatThread>> heartbeatThreadSupplier) {
         super(rebalanceConfig,
@@ -225,7 +228,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.rebalanceConfig = rebalanceConfig;
         this.log = logContext.logger(ConsumerCoordinator.class);
         this.metadata = metadata;
-        this.rackId = rackId == null || rackId.isEmpty() ? Optional.empty() : Optional.of(rackId);
+        this.rackId = rebalanceConfig.rackId;
         this.metadataSnapshot = new MetadataSnapshot(this.rackId, subscriptions, metadata.fetch(), metadata.updateVersion());
         this.subscriptions = subscriptions;
         this.defaultOffsetCommitCallback = new DefaultOffsetCommitCallback();
@@ -271,11 +274,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             protocol = null;
         }
 
+        this.rebalanceCallbackMetricsManager = new RebalanceCallbackMetricsManager(metrics, metricGrpPrefix);
         this.rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
             logContext,
             subscriptions,
             time,
-            new RebalanceCallbackMetricsManager(metrics, metricGrpPrefix)
+            rebalanceCallbackMetricsManager
         );
         this.metadata.requestUpdate(true);
     }
@@ -371,6 +375,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return null;
     }
 
+    @SuppressWarnings("removal")
     @Override
     protected void onJoinComplete(int generation,
                                   String memberId,
@@ -1012,7 +1017,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     /**
      * @throws KafkaException if the rebalance callback throws exception
      */
-    public void close(final Timer timer) {
+    public void close(final Timer timer, CloseOptions.GroupMembershipOperation membershipOperation) {
         // we do not need to re-enable wakeups since we are closing already
         client.disableWakeups();
         try {
@@ -1023,7 +1028,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 invokeCompletedOffsetCommitCallbacks();
             }
         } finally {
-            super.close(timer);
+            super.close(timer, membershipOperation);
+            Utils.closeQuietly(coordinatorMetrics, "consumer coordinator metrics");
+            Utils.closeQuietly(rebalanceCallbackMetricsManager, "consumer rebalance callback metrics");
         }
     }
 
@@ -1302,23 +1309,25 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         final Generation generation;
         final String groupInstanceId;
         if (subscriptions.hasAutoAssignedPartitions()) {
-            generation = generationIfStable();
-            groupInstanceId = rebalanceConfig.groupInstanceId.orElse(null);
-            // if the generation is null, we are not part of an active group (and we expect to be).
-            // the only thing we can do is fail the commit and let the user rejoin the group in poll().
-            if (generation == null) {
-                log.info("Failing OffsetCommit request since the consumer is not part of an active group");
+            synchronized (ConsumerCoordinator.this) {
+                generation = generationIfStable();
+                groupInstanceId = rebalanceConfig.groupInstanceId.orElse(null);
+                // if the generation is null, we are not part of an active group (and we expect to be).
+                // the only thing we can do is fail the commit and let the user rejoin the group in poll().
+                if (generation == null) {
+                    log.info("Failing OffsetCommit request since the consumer is not part of an active group");
 
-                if (rebalanceInProgress()) {
-                    // if the client knows it is already rebalancing, we can use RebalanceInProgressException instead of
-                    // CommitFailedException to indicate this is not a fatal error
-                    return RequestFuture.failure(new RebalanceInProgressException("Offset commit cannot be completed since the " +
-                        "consumer is undergoing a rebalance for auto partition assignment. You can try completing the rebalance " +
-                        "by calling poll() and then retry the operation."));
-                } else {
-                    return RequestFuture.failure(new CommitFailedException("Offset commit cannot be completed since the " +
-                        "consumer is not part of an active group for auto partition assignment; it is likely that the consumer " +
-                        "was kicked out of the group."));
+                    if (rebalanceInProgress()) {
+                        // if the client knows it is already rebalancing, we can use RebalanceInProgressException instead of
+                        // CommitFailedException to indicate this is not a fatal error
+                        return RequestFuture.failure(new RebalanceInProgressException("Offset commit cannot be completed since the " +
+                            "consumer is undergoing a rebalance for auto partition assignment. You can try completing the rebalance " +
+                            "by calling poll() and then retry the operation."));
+                    } else {
+                        return RequestFuture.failure(new CommitFailedException("Offset commit cannot be completed since the " +
+                            "consumer is not part of an active group for auto partition assignment; it is likely that the consumer " +
+                            "was kicked out of the group."));
+                    }
                 }
             }
         } else {
@@ -1326,7 +1335,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             groupInstanceId = null;
         }
 
-        OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(
+        OffsetCommitRequest.Builder builder = OffsetCommitRequest.Builder.forTopicNames(
                 new OffsetCommitRequestData()
                         .setGroupId(this.rebalanceConfig.groupId)
                         .setGenerationIdOrMemberEpoch(generation.generationId)
@@ -1476,9 +1485,27 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             return RequestFuture.coordinatorNotAvailable();
 
         log.debug("Fetching committed offsets for partitions: {}", partitions);
+
         // construct the request
-        OffsetFetchRequest.Builder requestBuilder =
-            new OffsetFetchRequest.Builder(this.rebalanceConfig.groupId, true, new ArrayList<>(partitions), throwOnFetchStableOffsetsUnsupported);
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = partitions.stream()
+            .collect(Collectors.groupingBy(TopicPartition::topic))
+            .entrySet()
+            .stream()
+            .map(entry -> new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName(entry.getKey())
+                .setPartitionIndexes(entry.getValue().stream()
+                    .map(TopicPartition::partition)
+                    .collect(Collectors.toList())))
+            .collect(Collectors.toList());
+
+        OffsetFetchRequest.Builder requestBuilder = OffsetFetchRequest.Builder.forTopicNames(
+            new OffsetFetchRequestData()
+                .setRequireStable(true)
+                .setGroups(List.of(
+                    new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                        .setGroupId(this.rebalanceConfig.groupId)
+                        .setTopics(topics))),
+            throwOnFetchStableOffsetsUnsupported);
 
         // send the request with a callback
         return client.send(coordinator, requestBuilder)
@@ -1492,64 +1519,71 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         @Override
         public void handle(OffsetFetchResponse response, RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
-            Errors responseError = response.groupLevelError(rebalanceConfig.groupId);
-            if (responseError != Errors.NONE) {
-                log.debug("Offset fetch failed: {}", responseError.message());
+            var group = response.group(rebalanceConfig.groupId);
+            var groupError = Errors.forCode(group.errorCode());
 
-                if (responseError == Errors.COORDINATOR_NOT_AVAILABLE ||
-                    responseError == Errors.NOT_COORDINATOR) {
+            if (groupError != Errors.NONE) {
+                log.debug("Offset fetch failed: {}", groupError.message());
+
+                if (groupError == Errors.COORDINATOR_NOT_AVAILABLE ||
+                    groupError == Errors.NOT_COORDINATOR) {
                     // re-discover the coordinator and retry
-                    markCoordinatorUnknown(responseError);
-                    future.raise(responseError);
-                } else if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {
+                    markCoordinatorUnknown(groupError);
+                    future.raise(groupError);
+                } else if (groupError == Errors.GROUP_AUTHORIZATION_FAILED) {
                     future.raise(GroupAuthorizationException.forGroupId(rebalanceConfig.groupId));
-                } else if (responseError.exception() instanceof RetriableException) {
+                } else if (groupError.exception() instanceof RetriableException) {
                     // retry
-                    future.raise(responseError);
+                    future.raise(groupError);
                 } else {
-                    future.raise(new KafkaException("Unexpected error in fetch offset response: " + responseError.message()));
+                    future.raise(new KafkaException("Unexpected error in fetch offset response: " + groupError.message()));
                 }
                 return;
             }
 
-            Set<String> unauthorizedTopics = null;
-            Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData =
-                response.partitionDataMap(rebalanceConfig.groupId);
-            Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(responseData.size());
-            Set<TopicPartition> unstableTxnOffsetTopicPartitions = new HashSet<>();
-            for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : responseData.entrySet()) {
-                TopicPartition tp = entry.getKey();
-                OffsetFetchResponse.PartitionData partitionData = entry.getValue();
-                if (partitionData.hasError()) {
-                    Errors error = partitionData.error;
-                    log.debug("Failed to fetch offset for partition {}: {}", tp, error.message());
+            var offsets = new HashMap<TopicPartition, OffsetAndMetadata>();
+            var unstableTxnOffsetTopicPartitions = new HashSet<TopicPartition>();
+            var unauthorizedTopics = new HashSet<String>();
 
-                    if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
-                        future.raise(new KafkaException("Topic or Partition " + tp + " does not exist"));
-                        return;
-                    } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
-                        if (unauthorizedTopics == null) {
-                            unauthorizedTopics = new HashSet<>();
+            for (var topic : group.topics()) {
+                for (var partition : topic.partitions()) {
+                    var tp = new TopicPartition(
+                        topic.name(),
+                        partition.partitionIndex()
+                    );
+                    var error = Errors.forCode(partition.errorCode());
+
+                    if (error != Errors.NONE) {
+                        log.debug("Failed to fetch offset for partition {}: {}", tp, error.message());
+
+                        if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                            future.raise(new KafkaException("Topic or Partition " + tp + " does not exist"));
+                            return;
+                        } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
+                            unauthorizedTopics.add(tp.topic());
+                        } else if (error == Errors.UNSTABLE_OFFSET_COMMIT) {
+                            unstableTxnOffsetTopicPartitions.add(tp);
+                        } else {
+                            future.raise(new KafkaException("Unexpected error in fetch offset response for partition " +
+                                tp + ": " + error.message()));
+                            return;
                         }
-                        unauthorizedTopics.add(tp.topic());
-                    } else if (error == Errors.UNSTABLE_OFFSET_COMMIT) {
-                        unstableTxnOffsetTopicPartitions.add(tp);
+                    } else if (partition.committedOffset() >= 0) {
+                        // record the position with the offset (-1 indicates no committed offset to fetch);
+                        // if there's no committed offset, record as null
+                        offsets.put(tp, new OffsetAndMetadata(
+                            partition.committedOffset(),
+                            RequestUtils.getLeaderEpoch(partition.committedLeaderEpoch()),
+                            partition.metadata()
+                        ));
                     } else {
-                        future.raise(new KafkaException("Unexpected error in fetch offset response for partition " +
-                            tp + ": " + error.message()));
-                        return;
+                        log.info("Found no committed offset for partition {}", tp);
+                        offsets.put(tp, null);
                     }
-                } else if (partitionData.offset >= 0) {
-                    // record the position with the offset (-1 indicates no committed offset to fetch);
-                    // if there's no committed offset, record as null
-                    offsets.put(tp, new OffsetAndMetadata(partitionData.offset, partitionData.leaderEpoch, partitionData.metadata));
-                } else {
-                    log.info("Found no committed offset for partition {}", tp);
-                    offsets.put(tp, null);
                 }
             }
 
-            if (unauthorizedTopics != null) {
+            if (!unauthorizedTopics.isEmpty()) {
                 future.raise(new TopicAuthorizationException(unauthorizedTopics));
             } else if (!unstableTxnOffsetTopicPartitions.isEmpty()) {
                 // just retry
@@ -1594,10 +1628,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    private class ConsumerCoordinatorMetrics {
+    private class ConsumerCoordinatorMetrics extends AbstractCoordinatorMetrics {
         private final Sensor commitSensor;
 
         private ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
+            this(new MetricsLedger(metrics), metricGrpPrefix);
+        }
+
+        private ConsumerCoordinatorMetrics(MetricsLedger metrics, String metricGrpPrefix) {
+            super(metrics);
             String metricGrpName = metricGrpPrefix + COORDINATOR_METRICS_SUFFIX;
 
             this.commitSensor = metrics.sensor("commit-latency");
@@ -1607,7 +1646,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             this.commitSensor.add(metrics.metricName("commit-latency-max",
                 metricGrpName,
                 "The max time taken for a commit request"), new Max());
-            this.commitSensor.add(createMeter(metrics, metricGrpName, "commit", "commit calls"));
+            this.commitSensor.add(createMeter(metricGrpName, "commit", "commit calls"));
 
             Measurable numParts = (config, now) -> subscriptions.numAssignedPartitions();
             metrics.addMetric(metrics.metricName("assigned-partitions",

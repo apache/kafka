@@ -63,9 +63,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -112,7 +110,7 @@ public class EmbeddedKafkaCluster {
     private KafkaProducer<byte[], byte[]> producer;
 
     public EmbeddedKafkaCluster(final int numBrokers, final Properties brokerConfig) {
-        this(numBrokers, brokerConfig, Collections.emptyMap());
+        this(numBrokers, brokerConfig, Map.of());
     }
 
     public EmbeddedKafkaCluster(final int numBrokers,
@@ -181,7 +179,7 @@ public class EmbeddedKafkaCluster {
      */
     public void verifyClusterReadiness() {
         String consumerGroupId = UUID.randomUUID().toString();
-        Map<String, Object> consumerConfig = Collections.singletonMap(GROUP_ID_CONFIG, consumerGroupId);
+        Map<String, Object> consumerConfig = Map.of(GROUP_ID_CONFIG, consumerGroupId);
         String topic = "consumer-warmup-" + consumerGroupId;
 
         try {
@@ -205,8 +203,8 @@ public class EmbeddedKafkaCluster {
         }
 
         try (Admin admin = createAdminClient()) {
-            admin.deleteConsumerGroups(Collections.singleton(consumerGroupId)).all().get(30, TimeUnit.SECONDS);
-            admin.deleteTopics(Collections.singleton(topic)).all().get(30, TimeUnit.SECONDS);
+            admin.deleteConsumerGroups(Set.of(consumerGroupId)).all().get(30, TimeUnit.SECONDS);
+            admin.deleteTopics(Set.of(topic)).all().get(30, TimeUnit.SECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             throw new AssertionError("Failed to clean up cluster health check resource(s)", e);
         }
@@ -282,7 +280,7 @@ public class EmbeddedKafkaCluster {
      * @return the map of optional {@link TopicDescription} keyed by the topic name
      */
     public Map<String, Optional<TopicDescription>> describeTopics(String... topicNames) {
-        return describeTopics(new HashSet<>(Arrays.asList(topicNames)));
+        return describeTopics(Set.of(topicNames));
     }
 
     /**
@@ -355,7 +353,7 @@ public class EmbeddedKafkaCluster {
      * @param topic The name of the topic.
      */
     public void createTopic(String topic, int partitions) {
-        createTopic(topic, partitions, 1, Collections.emptyMap());
+        createTopic(topic, partitions, 1, Map.of());
     }
 
     /**
@@ -364,7 +362,7 @@ public class EmbeddedKafkaCluster {
      * @param topic The name of the topic.
      */
     public void createTopic(String topic, int partitions, int replication, Map<String, String> topicConfig) {
-        createTopic(topic, partitions, replication, topicConfig, Collections.emptyMap());
+        createTopic(topic, partitions, replication, topicConfig, Map.of());
     }
 
     /**
@@ -388,7 +386,7 @@ public class EmbeddedKafkaCluster {
         newTopic.configs(topicConfig);
 
         try (final Admin adminClient = createAdminClient(adminClientConfig)) {
-            adminClient.createTopics(Collections.singletonList(newTopic)).all().get();
+            adminClient.createTopics(List.of(newTopic)).all().get();
         } catch (final InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
         }
@@ -401,7 +399,7 @@ public class EmbeddedKafkaCluster {
      */
     public void deleteTopic(String topic) {
         try (final Admin adminClient = createAdminClient()) {
-            adminClient.deleteTopics(Collections.singleton(topic)).all().get();
+            adminClient.deleteTopics(Set.of(topic)).all().get();
         } catch (final InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
         }
@@ -437,7 +435,7 @@ public class EmbeddedKafkaCluster {
     }
 
     public Admin createAdminClient() {
-        return createAdminClient(Collections.emptyMap());
+        return createAdminClient(Map.of());
     }
 
     /**
@@ -449,7 +447,7 @@ public class EmbeddedKafkaCluster {
      * @return a {@link ConsumerRecords} collection containing at least n records.
      */
     public ConsumerRecords<byte[], byte[]> consume(int n, long maxDuration, String... topics) {
-        return consume(n, maxDuration, Collections.emptyMap(), topics);
+        return consume(n, maxDuration, Map.of(), topics);
     }
 
     /**
@@ -525,10 +523,10 @@ public class EmbeddedKafkaCluster {
         long remainingTimeMs;
         Set<TopicPartition> topicPartitions;
         Map<TopicPartition, Long> endOffsets;
-        try (Admin admin = createAdminClient(adminProps != null ? adminProps : Collections.emptyMap())) {
+        try (Admin admin = createAdminClient(adminProps != null ? adminProps : Map.of())) {
 
             remainingTimeMs = endTimeMs - System.currentTimeMillis();
-            topicPartitions = listPartitions(remainingTimeMs, admin, Arrays.asList(topics));
+            topicPartitions = listPartitions(remainingTimeMs, admin, List.of(topics));
 
             remainingTimeMs = endTimeMs - System.currentTimeMillis();
             endOffsets = readEndOffsets(remainingTimeMs, admin, topicPartitions);
@@ -540,7 +538,7 @@ public class EmbeddedKafkaCluster {
                         tp -> new ArrayList<>()
                 ));
         Map<TopicPartition, OffsetAndMetadata> nextOffsets = new HashMap<>();
-        try (Consumer<byte[], byte[]> consumer = createConsumer(consumerProps != null ? consumerProps : Collections.emptyMap())) {
+        try (Consumer<byte[], byte[]> consumer = createConsumer(consumerProps != null ? consumerProps : Map.of())) {
             consumer.assign(topicPartitions);
 
             while (!endOffsets.isEmpty()) {
@@ -556,7 +554,7 @@ public class EmbeddedKafkaCluster {
                     } else {
                         remainingTimeMs = endTimeMs - System.currentTimeMillis();
                         if (remainingTimeMs <= 0) {
-                            throw new AssertionError("failed to read to end of topic(s) " + Arrays.asList(topics) + " within " + maxDurationMs + "ms");
+                            throw new AssertionError("failed to read to end of topic(s) " + List.of(topics) + " within " + maxDurationMs + "ms");
                         }
                         // We haven't reached the end offset yet; need to keep polling
                         ConsumerRecords<byte[], byte[]> recordBatch = consumer.poll(Duration.ofMillis(remainingTimeMs));
@@ -574,7 +572,7 @@ public class EmbeddedKafkaCluster {
 
     public long endOffset(TopicPartition topicPartition) throws TimeoutException, InterruptedException, ExecutionException {
         try (Admin admin = createAdminClient()) {
-            Map<TopicPartition, OffsetSpec> offsets = Collections.singletonMap(
+            Map<TopicPartition, OffsetSpec> offsets = Map.of(
                     topicPartition, OffsetSpec.latest()
             );
             return admin.listOffsets(offsets)
@@ -663,9 +661,9 @@ public class EmbeddedKafkaCluster {
     public KafkaConsumer<byte[], byte[]> createConsumerAndSubscribeTo(Map<String, Object> consumerProps, ConsumerRebalanceListener rebalanceListener, String... topics) {
         KafkaConsumer<byte[], byte[]> consumer = createConsumer(consumerProps);
         if (rebalanceListener != null) {
-            consumer.subscribe(Arrays.asList(topics), rebalanceListener);
+            consumer.subscribe(List.of(topics), rebalanceListener);
         } else {
-            consumer.subscribe(Arrays.asList(topics));
+            consumer.subscribe(List.of(topics));
         }
         return consumer;
     }

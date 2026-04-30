@@ -19,11 +19,10 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Map;
 
 /**
@@ -49,7 +48,7 @@ public class BeginQuorumEpochResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errors = new HashMap<>();
+        Map<Errors, Integer> errors = new EnumMap<>(Errors.class);
 
         errors.put(Errors.forCode(data.errorCode()), 1);
 
@@ -77,8 +76,8 @@ public class BeginQuorumEpochResponse extends AbstractResponse {
         // Not supported by the response schema
     }
 
-    public static BeginQuorumEpochResponse parse(ByteBuffer buffer, short version) {
-        return new BeginQuorumEpochResponse(new BeginQuorumEpochResponseData(new ByteBufferAccessor(buffer), version));
+    public static BeginQuorumEpochResponse parse(Readable readable, short version) {
+        return new BeginQuorumEpochResponse(new BeginQuorumEpochResponseData(readable, version));
     }
 
 }

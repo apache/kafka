@@ -20,7 +20,6 @@
   "name": "AlterShareGroupOffsetsRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
-  "latestVersionUnstable": true,
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The group identifier." },

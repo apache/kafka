@@ -111,11 +111,6 @@ public class StandbyTask extends AbstractTask implements Task {
         if (state() == State.CREATED) {
             StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
 
-            // with and without EOS we would check for checkpointing at each commit during running,
-            // and the file may be deleted in which case we should checkpoint immediately,
-            // therefore we initialize the snapshot as empty
-            offsetSnapshotSinceLastFlush = Collections.emptyMap();
-
             // no topology needs initialized, we can transit to RUNNING
             // right after registered the stores
             transitionTo(State.RESTORING);
@@ -179,7 +174,7 @@ public class StandbyTask extends AbstractTask implements Task {
      *                          or flushing state store get IO errors; such error should cause the thread to die
      */
     @Override
-    public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
+    public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
         switch (state()) {
             case CREATED:
                 log.debug("Skipped preparing created task for commit");
@@ -189,7 +184,11 @@ public class StandbyTask extends AbstractTask implements Task {
             case RUNNING:
             case SUSPENDED:
                 // do not need to flush state store caches in pre-commit since nothing would be sent for standby tasks
-                log.debug("Prepared {} task for committing", state());
+                if (!clean) {
+                    log.debug("Skipped preparing {} standby task with id {} for commit since the task is getting closed dirty.", state(), id);
+                } else {
+                    log.debug("Prepared {} task for committing", state());
+                }
 
                 break;
 
@@ -197,7 +196,7 @@ public class StandbyTask extends AbstractTask implements Task {
                 throw new IllegalStateException("Illegal state " + state() + " while preparing standby task " + id + " for committing ");
         }
 
-        return Collections.emptyMap();
+        return clean ? Collections.emptyMap() : null;
     }
 
     @Override
@@ -212,7 +211,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
             case RUNNING:
             case SUSPENDED:
-                maybeCheckpoint(enforceCheckpoint);
+                maybeCheckpoint();
 
                 log.debug("Finalized commit for {} task", state());
 
@@ -301,9 +300,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
     @Override
     public boolean commitNeeded() {
-        // for standby tasks committing is the same as checkpointing,
-        // so we only need to commit if we want to checkpoint
-        return StateManagerUtil.checkpointNeeded(false, offsetSnapshotSinceLastFlush, stateMgr.changelogOffsets());
+        return true;
     }
 
     @Override

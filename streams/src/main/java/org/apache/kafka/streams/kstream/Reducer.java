@@ -36,6 +36,7 @@ import org.apache.kafka.streams.KeyValue;
  * @see SessionWindowedKStream#reduce(Reducer, Materialized)
  * @see Aggregator
  */
+@FunctionalInterface
 public interface Reducer<V> {
 
     /**

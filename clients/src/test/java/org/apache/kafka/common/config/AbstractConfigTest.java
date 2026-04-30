@@ -115,6 +115,13 @@ public class AbstractConfigTest {
     }
 
     @Test
+    public void testPreprocessConfig() {
+        Properties props = new Properties();
+        TestConfig config = new TestConfig(props);
+        assertEquals("success", config.get("preprocess"));
+    }
+
+    @Test
     public void testValuesWithPrefixOverride() {
         String prefix = "prefix.";
         Properties props = new Properties();
@@ -372,8 +379,8 @@ public class AbstractConfigTest {
         Properties props = new Properties();
         props.put("config.providers", "file");
         TestIndirectConfigResolution config = new TestIndirectConfigResolution(props);
-        assertEquals(config.originals().get("config.providers"), "file");
-        assertEquals(config.originals(Collections.singletonMap("config.providers", "file2")).get("config.providers"), "file2");
+        assertEquals("file", config.originals().get("config.providers"));
+        assertEquals("file2", config.originals(Collections.singletonMap("config.providers", "file2")).get("config.providers"));
     }
 
     @Test
@@ -702,16 +709,31 @@ public class AbstractConfigTest {
 
         public static final String METRIC_REPORTER_CLASSES_CONFIG = "metric.reporters";
         private static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters.";
+        public static final String PREPROCESSOR_CONFIG = "preprocess";
+        private static final String PREPROCESSOR_CONFIG_DOC = "Override from preprocess step.";
+
         static {
             CONFIG = new ConfigDef().define(METRIC_REPORTER_CLASSES_CONFIG,
                                             Type.LIST,
                                             "",
                                             Importance.LOW,
-                                            METRIC_REPORTER_CLASSES_DOC);
+                                            METRIC_REPORTER_CLASSES_DOC)
+                                    .define(PREPROCESSOR_CONFIG,
+                                            Type.STRING,
+                                            "",
+                                            Importance.LOW,
+                                            PREPROCESSOR_CONFIG_DOC);
         }
 
         public TestConfig(Map<?, ?> props) {
             super(CONFIG, props);
+        }
+
+        @Override
+        protected Map<String, Object> preProcessParsedConfig(Map<String, Object> parsedValues) {
+            Map<String, Object> ret = new HashMap<>(parsedValues);
+            ret.put("preprocess", "success");
+            return ret;
         }
     }
 

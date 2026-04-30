@@ -45,7 +45,7 @@ public class PluginMetricsImpl implements PluginMetrics, Closeable {
     }
 
     @Override
-    public MetricName metricName(String name, String description, Map<String, String> tags) {
+    public MetricName metricName(String name, String description, LinkedHashMap<String, String> tags) {
         if (closing) throw new IllegalStateException("This PluginMetrics instance is closed");
         for (String tagName : tags.keySet()) {
             if (this.tags.containsKey(tagName)) {

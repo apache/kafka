@@ -18,34 +18,38 @@
   "type": "request",
   "listeners": ["broker"],
   "name": "WriteShareGroupStateRequest",
-  "validVersions": "0",
+  // Version 0 is the initial version (KIP-932).
+  //
+  // Version 1 introduces DeliveryCompleteCount (KIP-1226).
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
-  "latestVersionUnstable": true,
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+",
-      "about":"The group identifier." },
+      "about": "The group identifier." },
     { "name": "Topics", "type": "[]WriteStateData", "versions": "0+",
       "about": "The data for the topics.", "fields": [
       { "name": "TopicId", "type": "uuid", "versions": "0+",
         "about": "The topic identifier." },
       { "name": "Partitions", "type": "[]PartitionData", "versions": "0+",
-        "about":  "The data for the partitions.", "fields": [
+        "about": "The data for the partitions.", "fields": [
         { "name": "Partition", "type": "int32", "versions": "0+",
           "about": "The partition index." },
         { "name": "StateEpoch", "type": "int32", "versions": "0+",
-          "about": "The state epoch for this share-partition." },
+          "about": "The state epoch of the share-partition." },
         { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
           "about": "The leader epoch of the share-partition." },
         { "name": "StartOffset", "type": "int64", "versions": "0+",
           "about": "The share-partition start offset, or -1 if the start offset is not being written." },
+        { "name": "DeliveryCompleteCount", "type": "int32", "versions": "1+", "ignorable": true, "default": "-1",
+          "about": "The number of offsets greater than or equal to share-partition start offset for which delivery has been completed." },
         { "name": "StateBatches", "type": "[]StateBatch", "versions": "0+",
           "about": "The state batches for the share-partition.", "fields": [
           { "name": "FirstOffset", "type": "int64", "versions": "0+",
-            "about": "The base offset of this state batch." },
+            "about": "The first offset of this state batch." },
           { "name": "LastOffset", "type": "int64", "versions": "0+",
             "about": "The last offset of this state batch." },
           { "name": "DeliveryState", "type": "int8", "versions": "0+",
-            "about": "The state - 0:Available,2:Acked,4:Archived." },
+            "about": "The delivery state - 0:Available,2:Acked,4:Archived." },
           { "name": "DeliveryCount", "type": "int16", "versions": "0+",
             "about": "The delivery count." }
         ]}

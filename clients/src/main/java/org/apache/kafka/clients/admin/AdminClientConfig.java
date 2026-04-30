@@ -30,6 +30,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -145,6 +146,9 @@ public class AdminClientConfig extends AbstractConfig {
     public static final String METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC = CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC;
     public static final long DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS = CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS;
 
+    public static final String METADATA_CLUSTER_CHECK_ENABLE_CONFIG = CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_CONFIG;
+    public static final String METADATA_CLUSTER_CHECK_ENABLE_DOC = CommonClientConfigs.METADATA_CLUSTER_CHECK_ENABLE_DOC;
+
     /**
      * <code>security.providers</code>
      */
@@ -154,12 +158,14 @@ public class AdminClientConfig extends AbstractConfig {
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
-                                        "",
+                                        List.of(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         Importance.HIGH,
                                         BOOTSTRAP_SERVERS_DOC).
                                  define(BOOTSTRAP_CONTROLLERS_CONFIG,
                                          Type.LIST,
-                                         "",
+                                         List.of(),
+                                         ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                          Importance.HIGH,
                                          BOOTSTRAP_CONTROLLERS_DOC)
                                 .define(CLIENT_ID_CONFIG, Type.STRING, "", Importance.MEDIUM, CLIENT_ID_DOC)
@@ -238,6 +244,7 @@ public class AdminClientConfig extends AbstractConfig {
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,
                                         Type.LIST,
                                         JmxReporter.class.getName(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                                         Importance.LOW,
                                         METRIC_REPORTER_CLASSES_DOC)
                                 .define(METRICS_RECORDING_LEVEL_CONFIG,
@@ -280,7 +287,18 @@ public class AdminClientConfig extends AbstractConfig {
                                         DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
                                         atLeast(0),
                                         Importance.LOW,
-                                        METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC);
+                                        METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
+                                .define(METADATA_CLUSTER_CHECK_ENABLE_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.LOW,
+                                        METADATA_CLUSTER_CHECK_ENABLE_DOC)
+                                .define(CONFIG_PROVIDERS_CONFIG, 
+                                        ConfigDef.Type.LIST,
+                                        List.of(),
+                                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                                        ConfigDef.Importance.LOW, 
+                                        CONFIG_PROVIDERS_DOC);
     }
 
     @Override

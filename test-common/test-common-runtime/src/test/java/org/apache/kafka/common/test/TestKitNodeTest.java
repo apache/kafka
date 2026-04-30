@@ -34,8 +34,8 @@ public class TestKitNodeTest {
     public void testSecurityProtocol(SecurityProtocol securityProtocol) {
         if (securityProtocol != SecurityProtocol.PLAINTEXT && securityProtocol != SecurityProtocol.SASL_PLAINTEXT) {
             assertEquals("Currently only support PLAINTEXT / SASL_PLAINTEXT security protocol",
-                    assertThrows(IllegalArgumentException.class,
-                            () -> new TestKitNodes.Builder().setBrokerSecurityProtocol(securityProtocol).build()).getMessage());
+                assertThrows(IllegalArgumentException.class,
+                    () -> new TestKitNodes.Builder().setBrokerSecurityProtocol(securityProtocol).build()).getMessage());
             assertEquals("Currently only support PLAINTEXT / SASL_PLAINTEXT security protocol",
                 assertThrows(IllegalArgumentException.class,
                     () -> new TestKitNodes.Builder().setControllerSecurityProtocol(securityProtocol).build()).getMessage());
@@ -47,13 +47,13 @@ public class TestKitNodeTest {
         ListenerName brokerListenerName = ListenerName.normalised("FOOBAR");
         ListenerName controllerListenerName = ListenerName.normalised("BAZQUX");
         TestKitNodes testKitNodes = new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .setBrokerListenerName(brokerListenerName)
-                .setBrokerSecurityProtocol(SecurityProtocol.PLAINTEXT)
-                .setControllerListenerName(controllerListenerName)
-                .setControllerSecurityProtocol(SecurityProtocol.PLAINTEXT)
-                .build();
+            .setNumBrokerNodes(1)
+            .setNumControllerNodes(1)
+            .setBrokerListenerName(brokerListenerName)
+            .setBrokerSecurityProtocol(SecurityProtocol.PLAINTEXT)
+            .setControllerListenerName(controllerListenerName)
+            .setControllerSecurityProtocol(SecurityProtocol.PLAINTEXT)
+            .build();
         assertEquals(brokerListenerName, testKitNodes.brokerListenerName());
         assertEquals(controllerListenerName, testKitNodes.controllerListenerName());
     }

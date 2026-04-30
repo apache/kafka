@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -29,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
@@ -103,7 +105,7 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
         }
         final Iterator<List<KeyValue<Windowed<K>, V>>> keysIterator = subSessionsMap.values().iterator();
         return new KeyValueIteratorStub<>(
-            new Iterator<KeyValue<Windowed<K>, V>>() {
+            new Iterator<>() {
 
                 Iterator<KeyValue<Windowed<K>, V>> it;
 
@@ -155,7 +157,7 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
 
         final Iterator<List<KeyValue<Windowed<K>, V>>> keysIterator = subSessionsMap.descendingMap().values().iterator();
         return new KeyValueIteratorStub<>(
-            new Iterator<KeyValue<Windowed<K>, V>>() {
+            new Iterator<>() {
 
                 Iterator<KeyValue<Windowed<K>, V>> it;
 
@@ -187,7 +189,7 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
     public void init(StateStoreContext stateStoreContext, StateStore root) {}
 
     @Override
-    public void flush() {
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
 
     }
 

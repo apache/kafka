@@ -32,12 +32,35 @@ fetch_jdk_tgz() {
 
   if [ ! -e $path ]; then
     mkdir -p $(dirname $path)
-    curl --retry 5 -s -L "https://s3-us-west-2.amazonaws.com/kafka-packages/jdk-${jdk_version}.tar.gz" -o $path
+    curl --retry 5 -s -L "https://s3-us-west-2.amazonaws.com/kafka-packages/jdk/jdk-${jdk_version}.tar.gz" -o $path
   fi
 }
 
-JDK_MAJOR="${JDK_MAJOR:-17}"
-JDK_FULL="${JDK_FULL:-17-linux-x64}"
+# Validate JDK_MAJOR - must be a version number (e.g., 17, 25.0.1), default to 17 if empty or invalid
+if [[ -z "$JDK_MAJOR" ]]; then
+    JDK_MAJOR="17"
+elif [[ ! "$JDK_MAJOR" =~ ^[0-9]+(u[0-9]+|(\.[0-9]+)+)?$ ]]; then
+    echo "WARNING: Invalid JDK_MAJOR format '$JDK_MAJOR'. Expected format: 17, 21.0.1, 25.0.2. Defaulting to 17."
+    JDK_MAJOR="17"
+fi
+
+# Validate JDK_ARCH - default to x64 if empty or invalid
+if [[ -z "$JDK_ARCH" ]]; then
+    JDK_ARCH="x64"
+elif [[ ! "$JDK_ARCH" =~ ^(x64|aarch64)$ ]]; then
+    echo "WARNING: Invalid JDK_ARCH format '$JDK_ARCH'. Expected: x64 or aarch64. Defaulting to x64."
+    JDK_ARCH="x64"
+fi
+
+# Use JDK_FULL if provided and valid, otherwise construct from JDK_MAJOR and JDK_ARCH
+if [[ -z "$JDK_FULL" ]]; then
+    JDK_FULL="${JDK_MAJOR}-linux-${JDK_ARCH}"
+elif [[ ! "$JDK_FULL" =~ ^[0-9]+(u[0-9]+|(\.[0-9]+)+)?-linux-(x64|aarch64)$ ]]; then
+    echo "WARNING: Invalid JDK_FULL format '$JDK_FULL'. Constructing from JDK_MAJOR and JDK_ARCH."
+    JDK_FULL="${JDK_MAJOR}-linux-${JDK_ARCH}"
+fi
+
+echo "JDK_MAJOR=$JDK_MAJOR JDK_ARCH=$JDK_ARCH JDK_FULL=$JDK_FULL"
 
 if [ -z `which javac` ]; then
     apt-get -y update
@@ -94,7 +117,8 @@ get_kafka() {
 }
 
 # Install Kibosh
-apt-get update -y && apt-get install -y git cmake pkg-config libfuse-dev
+apt-get update -y && apt-get install -y git cmake pkg-config libfuse-dev ca-certificates
+update-ca-certificates --fresh
 pushd /opt
 rm -rf /opt/kibosh
 git clone -q  https://github.com/confluentinc/kibosh.git
@@ -114,16 +138,6 @@ apt-get install -y iperf traceroute
 # We want to use the latest Scala version per Kafka version
 # Previously we could not pull in Scala 2.12 builds, because Scala 2.12 requires Java 8 and we were running the system
 # tests with Java 7. We have since switched to Java 8, so 2.0.0 and later use Scala 2.12.
-# The versions between 0.11.0.3 and 2.0.1 are used to run client code, because zookeeper in these versions is not compatible with JDK 17.
-# See KAFKA-17888 for more details.
-get_kafka 0.11.0.3 2.11
-chmod a+rw /opt/kafka-0.11.0.3
-get_kafka 1.0.2 2.11
-chmod a+rw /opt/kafka-1.0.2
-get_kafka 1.1.1 2.11
-chmod a+rw /opt/kafka-1.1.1
-get_kafka 2.0.1 2.12
-chmod a+rw /opt/kafka-2.0.1
 get_kafka 2.1.1 2.12
 chmod a+rw /opt/kafka-2.1.1
 get_kafka 2.2.2 2.12
@@ -158,8 +172,14 @@ get_kafka 3.7.2 2.12
 chmod a+rw /opt/kafka-3.7.2
 get_kafka 3.8.1 2.12
 chmod a+rw /opt/kafka-3.8.1
-get_kafka 3.9.0 2.12
-chmod a+rw /opt/kafka-3.9.0
+get_kafka 3.9.2 2.13
+chmod a+rw /opt/kafka-3.9.2
+get_kafka 4.0.1 2.13
+chmod a+rw /opt/kafka-4.0.1
+get_kafka 4.1.2 2.13
+chmod a+rw /opt/kafka-4.1.2
+get_kafka 4.2.0 2.13
+chmod a+rw /opt/kafka-4.2.0
 
 # To ensure the Kafka cluster starts successfully under JDK 17, we need to update the Zookeeper
 # client from version 3.4.x to 3.5.7 in Kafka versions 2.1.1, 2.2.2, and 2.3.1, as the older Zookeeper

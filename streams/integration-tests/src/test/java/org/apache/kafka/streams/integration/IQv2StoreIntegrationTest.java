@@ -67,6 +67,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -108,6 +109,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
@@ -360,7 +362,16 @@ public class IQv2StoreIntegrationTest {
             for (final boolean logEnabled : Arrays.asList(true, false)) {
                 for (final StoresToTest toTest : StoresToTest.values()) {
                     for (final String kind : Arrays.asList("DSL", "PAPI")) {
-                        values.add(Arguments.of(cacheEnabled, logEnabled, toTest.name(), kind));
+                        for (final String groupProtocol : Arrays.asList("classic", "streams")) {
+                            for (final boolean withHeaders : Arrays.asList(true, false)) {
+                                // DSL_STORE_FORMAT_CONFIG only affects DSL stores built without an
+                                // explicit supplier; for PAPI and global stores it is a no-op, so
+                                // skip the redundant withHeaders=true duplicates.
+                                if (withHeaders && (!"DSL".equals(kind) || toTest.global()))
+                                    continue;
+                                values.add(Arguments.of(cacheEnabled, logEnabled, toTest.name(), kind, groupProtocol, withHeaders));
+                            }
+                        }
                     }
                 }
             }
@@ -426,13 +437,15 @@ public class IQv2StoreIntegrationTest {
         ));
     }
 
-    public void setup(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind) {
+    public void setup(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind, final String groupProtocol, final boolean withHeaders) {
         final StoreSupplier<?> supplier = storeToTest.supplier();
         final Properties streamsConfig = streamsConfiguration(
             cache,
             log,
             storeToTest.name(),
-            kind
+            kind,
+            groupProtocol,
+            withHeaders
         );
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -765,8 +778,8 @@ public class IQv2StoreIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void verifyStore(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind) {
-        setup(cache, log, storeToTest, kind);
+    public void verifyStore(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind, final String groupProtocol, final boolean withHeaders) {
+        setup(cache, log, storeToTest, kind, groupProtocol, withHeaders);
         try {
             if (storeToTest.global()) {
                 // See KAFKA-13523
@@ -1311,7 +1324,7 @@ public class IQv2StoreIntegrationTest {
                 assertThat(partitionResult.getFailureReason(), is(FailureReason.UNKNOWN_QUERY_TYPE));
                 assertThat(partitionResult.getFailureMessage(), matchesPattern(
                     "This store"
-                        + " \\(class org.apache.kafka.streams.state.internals.Metered.*WindowStore\\)"
+                        + " \\(class org.apache.kafka.streams.state.internals.Metered.*WindowStore.*\\)"
                         + " doesn't know how to execute the given query"
                         + " \\(WindowRangeQuery\\{key=Optional\\[2], timeFrom=Optional.empty, timeTo=Optional.empty}\\)"
                         + " because WindowStores only supports WindowRangeQuery.withWindowStartRange\\."
@@ -1495,14 +1508,10 @@ public class IQv2StoreIntegrationTest {
                     throw new AssertionError(queryResult.toString());
                 }
                 assertThat(partitionResult.getFailureReason(), is(FailureReason.UNKNOWN_QUERY_TYPE));
-                assertThat(partitionResult.getFailureMessage(), is(
-                    "This store"
-                        + " (class org.apache.kafka.streams.state.internals.MeteredSessionStore)"
-                        + " doesn't know how to execute the given query"
-                        + " (WindowRangeQuery{key=Optional.empty, timeFrom=Optional[1970-01-01T00:00:00Z], timeTo=Optional[1970-01-01T00:00:00Z]})"
-                        + " because SessionStores only support WindowRangeQuery.withKey."
-                        + " Contact the store maintainer if you need support for a new query type."
-                ));
+                assertThat(partitionResult.getFailureMessage(),
+                    containsString("doesn't know how to execute the given query"));
+                assertThat(partitionResult.getFailureMessage(),
+                    containsString("because SessionStores only support WindowRangeQuery.withKey."));
             }
         }
     }
@@ -1568,14 +1577,10 @@ public class IQv2StoreIntegrationTest {
                     throw new AssertionError(queryResult.toString());
                 }
                 assertThat(partitionResult.getFailureReason(), is(FailureReason.UNKNOWN_QUERY_TYPE));
-                assertThat(partitionResult.getFailureMessage(), is(
-                    "This store"
-                        + " (class org.apache.kafka.streams.state.internals.MeteredSessionStore)"
-                        + " doesn't know how to execute the given query"
-                        + " (WindowRangeQuery{key=Optional.empty, timeFrom=Optional[1970-01-01T00:00:00Z], timeTo=Optional[1970-01-01T00:00:00Z]})"
-                        + " because SessionStores only support WindowRangeQuery.withKey."
-                        + " Contact the store maintainer if you need support for a new query type."
-                ));
+                assertThat(partitionResult.getFailureMessage(),
+                    containsString("doesn't know how to execute the given query"));
+                assertThat(partitionResult.getFailureMessage(),
+                    containsString("because SessionStores only support WindowRangeQuery.withKey."));
             }
         }
     }
@@ -2030,10 +2035,10 @@ public class IQv2StoreIntegrationTest {
     }
 
     private static Properties streamsConfiguration(final boolean cache, final boolean log,
-                                                   final String supplier, final String kind) {
+                                                   final String supplier, final String kind, final String groupProtocol, final boolean withHeaders) {
         final String safeTestName =
             IQv2StoreIntegrationTest.class.getName() + "-" + cache + "-" + log + "-" + supplier
-                + "-" + kind + "-" + RANDOM.nextInt();
+                + "-" + kind + "-" + groupProtocol + "-" + withHeaders + "-" + RANDOM.nextInt();
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
@@ -2048,6 +2053,8 @@ public class IQv2StoreIntegrationTest {
         config.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         config.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
+        config.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(config, withHeaders);
         return config;
     }
 }

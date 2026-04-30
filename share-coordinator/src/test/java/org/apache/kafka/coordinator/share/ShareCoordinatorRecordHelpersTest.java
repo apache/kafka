@@ -36,6 +36,7 @@ public class ShareCoordinatorRecordHelpersTest {
     public void testNewShareSnapshotRecord() {
         String groupId = "test-group";
         Uuid topicId = Uuid.randomUuid();
+        long timestamp = System.currentTimeMillis();
         int partitionId = 1;
         PersisterStateBatch batch = new PersisterStateBatch(1L, 10L, (byte) 0, (short) 1);
         CoordinatorRecord record = ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
@@ -47,6 +48,9 @@ public class ShareCoordinatorRecordHelpersTest {
                 .setStateEpoch(1)
                 .setLeaderEpoch(5)
                 .setStartOffset(0)
+                .setDeliveryCompleteCount(10)
+                .setCreateTimestamp(timestamp)
+                .setWriteTimestamp(timestamp)
                 .setStateBatches(List.of(batch))
                 .build()
         );
@@ -62,6 +66,9 @@ public class ShareCoordinatorRecordHelpersTest {
                     .setStateEpoch(1)
                     .setLeaderEpoch(5)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(10)
+                    .setCreateTimestamp(timestamp)
+                    .setWriteTimestamp(timestamp)
                     .setStateBatches(List.of(
                         new ShareSnapshotValue.StateBatch()
                             .setFirstOffset(1L)
@@ -79,7 +86,7 @@ public class ShareCoordinatorRecordHelpersTest {
         Uuid topicId = Uuid.randomUuid();
         int partitionId = 1;
         PersisterStateBatch batch = new PersisterStateBatch(1L, 10L, (byte) 0, (short) 1);
-        CoordinatorRecord record = ShareCoordinatorRecordHelpers.newShareSnapshotUpdateRecord(
+        CoordinatorRecord record = ShareCoordinatorRecordHelpers.newShareUpdateRecord(
             groupId,
             topicId,
             partitionId,
@@ -88,6 +95,7 @@ public class ShareCoordinatorRecordHelpersTest {
                 .setStateEpoch(-1)  // ignored for share update
                 .setLeaderEpoch(5)
                 .setStartOffset(0)
+                .setDeliveryCompleteCount(10)
                 .setStateBatches(List.of(batch))
                 .build()
         );
@@ -102,6 +110,7 @@ public class ShareCoordinatorRecordHelpersTest {
                     .setSnapshotEpoch(0)
                     .setLeaderEpoch(5)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(10)
                     .setStateBatches(List.of(
                         new ShareUpdateValue.StateBatch()
                             .setFirstOffset(1L)

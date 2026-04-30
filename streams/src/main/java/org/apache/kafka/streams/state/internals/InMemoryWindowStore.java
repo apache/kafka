@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -196,7 +197,6 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         }
     }
 
-    @Deprecated
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo) {
         return fetch(key, timeFrom, timeTo, true);
@@ -236,7 +236,6 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         }
     }
 
-    @Deprecated
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
                                                            final Bytes keyTo,
@@ -294,7 +293,6 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         }
     }
 
-    @Deprecated
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
         return fetchAll(timeFrom, timeTo, true);
@@ -388,7 +386,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     }
 
     @Override
-    public void flush() {
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
         // do-nothing since it is in-memory
     }
 
@@ -403,6 +401,12 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
         segmentMap.clear();
         open = false;
+    }
+
+    long numEntries() {
+        return segmentMap.values().stream()
+            .mapToLong(Map::size)
+            .sum();
     }
 
     private void removeExpiredSegments() {

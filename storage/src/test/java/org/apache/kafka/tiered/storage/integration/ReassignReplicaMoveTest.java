@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tiered.storage.integration;
 
-import java.util.Collections;
 import java.util.List;
 
 public final class ReassignReplicaMoveTest extends BaseReassignReplicaTest {
@@ -27,6 +26,6 @@ public final class ReassignReplicaMoveTest extends BaseReassignReplicaTest {
      */
     @Override
     protected List<Integer> replicaIds() {
-        return Collections.singletonList(broker1);
+        return List.of(broker1);
     }
 }

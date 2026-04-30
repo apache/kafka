@@ -63,23 +63,52 @@ def hard_bounce(test, topic, broker_type):
         prev_broker_node = broker_node(test, topic, broker_type)
         test.kafka.signal_node(prev_broker_node, sig=signal.SIGKILL)
 
-        # Since this is a hard kill, we need to make sure the process is down and that
-        # zookeeper has registered the loss by expiring the broker's session timeout.
-
-        wait_until(lambda: not test.kafka.pids(prev_broker_node) and
-                           not (quorum.for_test(test.test_context) == quorum.zk and test.kafka.is_registered(prev_broker_node)),
+        wait_until(lambda: not test.kafka.pids(prev_broker_node),
                    timeout_sec=test.kafka.zk_session_timeout + 5,
                    err_msg="Failed to see timely deregistration of hard-killed broker %s" % str(prev_broker_node.account))
 
         test.kafka.start_node(prev_broker_node)
-    
 
-    
+
+def bulk_clean_shutdown(test, num_failures):
+    for num in range(0, num_failures - 1):
+        signal_node(test, test.kafka.nodes[num], signal.SIGTERM)
+
+def bulk_hard_shutdown(test, num_failures):
+    for num in range(0, num_failures - 1):
+        signal_node(test, test.kafka.nodes[num], signal.SIGKILL)
+
+def bulk_clean_bounce(test, num_failures):
+    for i in range(5):
+        for num in range(0, num_failures - 1):
+            prev_broker_node = test.kafka.nodes[num]
+            test.kafka.restart_node(prev_broker_node, clean_shutdown=True)
+
+def bulk_hard_bounce(test, num_failures):
+    for i in range(5):
+        for num in range(0, num_failures - 1):
+            prev_broker_node = test.kafka.nodes[num]
+            test.kafka.signal_node(prev_broker_node, sig=signal.SIGKILL)
+
+            wait_until(lambda: not test.kafka.pids(prev_broker_node),
+                       timeout_sec=test.kafka.zk_session_timeout + 5,
+                       err_msg="Failed to see timely deregistration of hard-killed broker %s" % str(prev_broker_node.account))
+
+            test.kafka.start_node(prev_broker_node)
+
+
 failures = {
     "clean_shutdown": clean_shutdown,
     "hard_shutdown": hard_shutdown,
     "clean_bounce": clean_bounce,
     "hard_bounce": hard_bounce
+}
+
+many_failures = {
+    "clean_shutdown": bulk_clean_shutdown,
+    "hard_shutdown": bulk_hard_shutdown,
+    "clean_bounce": bulk_clean_bounce,
+    "hard_bounce": bulk_hard_bounce
 }
         
 class StreamsBrokerBounceTest(Test):
@@ -112,8 +141,8 @@ class StreamsBrokerBounceTest(Test):
                        'configs': {"min.insync.replicas": 2} },
             'tagg' : { 'partitions': self.partitions, 'replication-factor': self.replication,
                        'configs': {"min.insync.replicas": 2} },
-            '__consumer_offsets' : { 'partitions': 50, 'replication-factor': self.replication,
-                       'configs': {"min.insync.replicas": 2} }
+            '__consumer_offsets' : { 'partitions': self.partitions, 'replication-factor': self.replication,
+                                     'configs': {"min.insync.replicas": 2} }
         }
 
     def fail_broker_type(self, failure_mode, broker_type):
@@ -123,14 +152,7 @@ class StreamsBrokerBounceTest(Test):
         failures[failure_mode](self, topic, broker_type)
 
     def fail_many_brokers(self, failure_mode, num_failures):
-        sig = signal.SIGTERM
-        if (failure_mode == "clean_shutdown"):
-            sig = signal.SIGTERM
-        else:
-            sig = signal.SIGKILL
-            
-        for num in range(0, num_failures - 1):
-            signal_node(self, self.kafka.nodes[num], sig)
+        many_failures[failure_mode](self, num_failures)
 
     def confirm_topics_on_all_brokers(self, expected_topic_set):
         for node in self.kafka.nodes:
@@ -149,10 +171,13 @@ class StreamsBrokerBounceTest(Test):
         return True
 
         
-    def setup_system(self, start_processor=True, num_threads=3):
+    def setup_system(self, start_processor=True, num_threads=3, group_protocol='classic'):
         # Setup phase
-
-        self.kafka = KafkaService(self.test_context, num_nodes=self.replication, zk=None, topics=self.topics)
+        use_streams_groups = True if group_protocol == 'streams' else False
+        self.kafka = KafkaService(self.test_context, num_nodes=self.replication, zk=None, topics=self.topics, server_prop_overrides=[
+            ["offsets.topic.num.partitions", self.partitions],
+            ["offsets.topic.replication.factor", self.replication]
+        ], use_streams_groups=use_streams_groups)
         self.kafka.start()
 
         # allow some time for topics to be created
@@ -162,7 +187,7 @@ class StreamsBrokerBounceTest(Test):
 
         # Start test harness
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
-        self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, "at_least_once", num_threads)
+        self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, "at_least_once", group_protocol=group_protocol, num_threads = num_threads)
 
         self.driver.start()
 
@@ -207,15 +232,16 @@ class StreamsBrokerBounceTest(Test):
             broker_type=["leader"],
             num_threads=[1, 3],
             sleep_time_secs=[120],
-            metadata_quorum=[quorum.combined_kraft])
-    def test_broker_type_bounce(self, failure_mode, broker_type, sleep_time_secs, num_threads, metadata_quorum):
+            metadata_quorum=[quorum.combined_kraft],
+            group_protocol=["classic", "streams"])
+    def test_broker_type_bounce(self, failure_mode, broker_type, sleep_time_secs, num_threads, metadata_quorum, group_protocol):
         """
         Start a smoke test client, then kill one particular broker and ensure data is still received
         Record if records are delivered.
         We also add a single thread stream client to make sure we could get all partitions reassigned in
         next generation so to verify the partition lost is correctly triggered.
         """
-        self.setup_system(num_threads=num_threads)
+        self.setup_system(num_threads=num_threads, group_protocol=group_protocol)
 
         # Sleep to allow test to run for a bit
         time.sleep(sleep_time_secs)
@@ -230,14 +256,15 @@ class StreamsBrokerBounceTest(Test):
     @matrix(failure_mode=["clean_shutdown"],
             broker_type=["controller"],
             sleep_time_secs=[0],
-            metadata_quorum=[quorum.combined_kraft])
-    def test_broker_type_bounce_at_start(self, failure_mode, broker_type, sleep_time_secs, metadata_quorum):
+            metadata_quorum=[quorum.combined_kraft],
+            group_protocol=["classic", "streams"])
+    def test_broker_type_bounce_at_start(self, failure_mode, broker_type, sleep_time_secs, metadata_quorum, group_protocol):
         """
         Start a smoke test client, then kill one particular broker immediately before streams stats
         Streams should throw an exception since it cannot create topics with the desired
         replication factor of 3
         """
-        self.setup_system(start_processor=False)
+        self.setup_system(start_processor=False, group_protocol=group_protocol)
 
         # Sleep to allow test to run for a bit
         time.sleep(sleep_time_secs)
@@ -252,13 +279,14 @@ class StreamsBrokerBounceTest(Test):
     @cluster(num_nodes=10)
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
             num_failures=[2],
-            metadata_quorum=[quorum.isolated_kraft])
-    def test_many_brokers_bounce(self, failure_mode, num_failures, metadata_quorum):
+            metadata_quorum=[quorum.isolated_kraft],
+            group_protocol=["classic", "streams"])
+    def test_many_brokers_bounce(self, failure_mode, num_failures, metadata_quorum, group_protocol):
         """
         Start a smoke test client, then kill a few brokers and ensure data is still received
         Record if records are delivered
         """
-        self.setup_system() 
+        self.setup_system(group_protocol=group_protocol)
 
         # Sleep to allow test to run for a bit
         time.sleep(120)
@@ -271,8 +299,9 @@ class StreamsBrokerBounceTest(Test):
     @cluster(num_nodes=10)
     @matrix(failure_mode=["clean_bounce", "hard_bounce"],
             num_failures=[3],
-            metadata_quorum=[quorum.isolated_kraft])
-    def test_all_brokers_bounce(self, failure_mode, num_failures, metadata_quorum):
+            metadata_quorum=[quorum.isolated_kraft],
+            group_protocol=["classic", "streams"])
+    def test_all_brokers_bounce(self, failure_mode, num_failures, metadata_quorum, group_protocol):
         """
         Start a smoke test client, then kill a few brokers and ensure data is still received
         Record if records are delivered
@@ -281,10 +310,10 @@ class StreamsBrokerBounceTest(Test):
         # Set min.insync.replicas to 1 because in the last stage of the test there is only one broker left.
         # Otherwise the last offset commit will never succeed and time out and potentially take longer as
         # duration passed to the close method of the Kafka Streams client.
-        self.topics['__consumer_offsets'] = { 'partitions': 50, 'replication-factor': self.replication,
+        self.topics['__consumer_offsets'] = { 'partitions': self.partitions, 'replication-factor': self.replication,
                                               'configs': {"min.insync.replicas": 1} }
 
-        self.setup_system()
+        self.setup_system(group_protocol=group_protocol)
 
         # Sleep to allow test to run for a bit
         time.sleep(120)

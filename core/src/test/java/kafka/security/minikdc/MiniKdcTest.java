@@ -21,7 +21,7 @@ import kafka.utils.TestUtils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
 
 public class MiniKdcTest {
@@ -38,7 +38,7 @@ public class MiniKdcTest {
         config.setProperty(MiniKdc.MAX_RENEWABLE_LIFETIME, "604800000");
         config.setProperty(MiniKdc.INSTANCE, "DefaultKrbServer");
 
-        MiniKdc minikdc = MiniKdc.start(TestUtils.tempDir(), config, TestUtils.tempFile(), Collections.singletonList("foo"));
+        MiniKdc minikdc = MiniKdc.start(TestUtils.tempDir(), config, TestUtils.tempFile(), List.of("foo"));
         boolean running = System.getProperty(MiniKdc.JAVA_SECURITY_KRB5_CONF) != null;
         try {
             Assertions.assertTrue(running, "MiniKdc stopped immediately; it should not have");

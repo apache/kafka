@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.server.common.OffsetAndEpoch;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

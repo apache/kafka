@@ -16,17 +16,16 @@
   */
 package kafka.server
 
-import kafka.server.metadata.KRaftMetadataCache
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponsePartition
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.{BrokerEndpoint, BrokerEndpointCollection}
 import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiMessage, Errors}
-import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.common.record.internal.RecordBatch
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{DirectoryId, TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
-import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.metadata.{KRaftMetadataCache, LeaderRecoveryState, MetadataCache}
 import org.apache.kafka.server.common.KRaftVersion
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -43,7 +42,7 @@ import scala.jdk.CollectionConverters._
 object MetadataCacheTest {
   def cacheProvider(): util.stream.Stream[MetadataCache] =
     util.stream.Stream.of[MetadataCache](
-      MetadataCache.kRaftMetadataCache(1, () => KRaftVersion.KRAFT_VERSION_0)
+      new KRaftMetadataCache(1, () => KRaftVersion.KRAFT_VERSION_0)
     )
 
   def updateCache(cache: MetadataCache, records: Seq[ApiMessage]): Unit = {
@@ -77,7 +76,7 @@ class MetadataCacheTest {
   @MethodSource(Array("cacheProvider"))
   def getTopicMetadataNonExistingTopics(cache: MetadataCache): Unit = {
     val topic = "topic"
-    val topicMetadata = cache.getTopicMetadata(Set(topic), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
+    val topicMetadata = cache.getTopicMetadata(util.Set.of(topic), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), false, false)
     assertTrue(topicMetadata.isEmpty)
   }
 
@@ -145,7 +144,7 @@ class MetadataCacheTest {
       val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
 
       def checkTopicMetadata(topic: String): Unit = {
-        val topicMetadatas = cache.getTopicMetadata(Set(topic), listenerName)
+        val topicMetadatas = cache.getTopicMetadata(util.Set.of(topic), listenerName, false, false).asScala
         assertEquals(1, topicMetadatas.size)
 
         val topicMetadata = topicMetadatas.head
@@ -265,7 +264,7 @@ class MetadataCacheTest {
         .setReplicas(asList(0)))
     MetadataCacheTest.updateCache(cache, brokers ++ topicRecords ++ partitionStates)
 
-    val topicMetadatas = cache.getTopicMetadata(Set(topic), listenerName, errorUnavailableListeners = errorUnavailableListeners)
+    val topicMetadatas = cache.getTopicMetadata(util.Set.of(topic), listenerName, false, errorUnavailableListeners).asScala
     assertEquals(1, topicMetadatas.size)
 
     val topicMetadata = topicMetadatas.head
@@ -278,7 +277,7 @@ class MetadataCacheTest {
     assertEquals(0, partitionMetadata.partitionIndex)
     assertEquals(expectedError.code, partitionMetadata.errorCode)
     assertFalse(partitionMetadata.isrNodes.isEmpty)
-    assertEquals(List(0), partitionMetadata.replicaNodes.asScala)
+    assertEquals(util.List.of(0), partitionMetadata.replicaNodes)
   }
 
   @ParameterizedTest
@@ -323,7 +322,7 @@ class MetadataCacheTest {
     MetadataCacheTest.updateCache(cache, brokers ++ topicRecords ++ partitionStates)
 
     // Validate errorUnavailableEndpoints = false
-    val topicMetadatas = cache.getTopicMetadata(Set(topic), listenerName, errorUnavailableEndpoints = false)
+    val topicMetadatas = cache.getTopicMetadata(util.Set.of(topic), listenerName, false, false).asScala
     assertEquals(1, topicMetadatas.size)
 
     val topicMetadata = topicMetadatas.head
@@ -339,7 +338,7 @@ class MetadataCacheTest {
     assertEquals(Set(0), partitionMetadata.isrNodes.asScala.toSet)
 
     // Validate errorUnavailableEndpoints = true
-    val topicMetadatasWithError = cache.getTopicMetadata(Set(topic), listenerName, errorUnavailableEndpoints = true)
+    val topicMetadatasWithError = cache.getTopicMetadata(util.Set.of(topic), listenerName, true, false).asScala
     assertEquals(1, topicMetadatasWithError.size)
 
     val topicMetadataWithError = topicMetadatasWithError.head
@@ -397,7 +396,7 @@ class MetadataCacheTest {
     MetadataCacheTest.updateCache(cache, brokers ++ topicRecords ++ partitionStates)
 
     // Validate errorUnavailableEndpoints = false
-    val topicMetadatas = cache.getTopicMetadata(Set(topic), listenerName, errorUnavailableEndpoints = false)
+    val topicMetadatas = cache.getTopicMetadata(util.Set.of(topic), listenerName, false, false).asScala
     assertEquals(1, topicMetadatas.size)
 
     val topicMetadata = topicMetadatas.head
@@ -413,7 +412,7 @@ class MetadataCacheTest {
     assertEquals(Set(0, 1), partitionMetadata.isrNodes.asScala.toSet)
 
     // Validate errorUnavailableEndpoints = true
-    val topicMetadatasWithError = cache.getTopicMetadata(Set(topic), listenerName, errorUnavailableEndpoints = true)
+    val topicMetadatasWithError = cache.getTopicMetadata(util.Set.of(topic), listenerName, true, false).asScala
     assertEquals(1, topicMetadatasWithError.size)
 
     val topicMetadataWithError = topicMetadatasWithError.head
@@ -461,7 +460,7 @@ class MetadataCacheTest {
       .setReplicas(replicas))
     MetadataCacheTest.updateCache(cache, Seq(brokers, topicRecord) ++ partitionStates)
 
-    val topicMetadata = cache.getTopicMetadata(Set(topic), ListenerName.forSecurityProtocol(SecurityProtocol.SSL))
+    val topicMetadata = cache.getTopicMetadata(util.Set.of(topic), ListenerName.forSecurityProtocol(SecurityProtocol.SSL), false, false).asScala
     assertEquals(1, topicMetadata.size)
     assertEquals(1, topicMetadata.head.partitions.size)
     assertEquals(RecordBatch.NO_PARTITION_LEADER_EPOCH, topicMetadata.head.partitions.get(0).leaderId)
@@ -506,10 +505,11 @@ class MetadataCacheTest {
 
     val initialBrokerIds = (0 to 2)
     updateCache(initialBrokerIds)
-    val aliveBrokersFromCache = cache.getAliveBrokers()
     // This should not change `aliveBrokersFromCache`
     updateCache((0 to 3))
-    assertEquals(initialBrokerIds.toSet, aliveBrokersFromCache.map(_.id).toSet)
+    initialBrokerIds.foreach { brokerId =>
+      assertTrue(cache.hasAliveBroker(brokerId))
+    }
   }
 
   @ParameterizedTest
@@ -562,7 +562,7 @@ class MetadataCacheTest {
 
     (0 until numPartitions).foreach { partitionId =>
       val tp = new TopicPartition(topic, partitionId)
-      val brokerIdToNodeMap = cache.getPartitionReplicaEndpoints(tp, listenerName)
+      val brokerIdToNodeMap = cache.getPartitionReplicaEndpoints(tp, listenerName).asScala
       val replicaSet = brokerIdToNodeMap.keySet
       val expectedReplicaSet = partitionRecords(partitionId).replicas().asScala.toSet
       // Verify that we have endpoints for exactly the non-fenced brokers of the replica set
@@ -609,7 +609,7 @@ class MetadataCacheTest {
 
   @Test
   def testIsBrokerFenced(): Unit = {
-    val metadataCache = MetadataCache.kRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
+    val metadataCache = new KRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
 
     val delta = new MetadataDelta.Builder().build()
     delta.replay(new RegisterBrokerRecord()
@@ -630,44 +630,8 @@ class MetadataCacheTest {
   }
 
   @Test
-  def testGetAliveBrokersWithBrokerFenced(): Unit = {
-    val metadataCache = MetadataCache.kRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
-    val listenerName = "listener"
-    val endpoints = new BrokerEndpointCollection()
-    endpoints.add(new BrokerEndpoint().
-      setName(listenerName).
-      setHost("foo").
-      setPort(123).
-      setSecurityProtocol(0))
-    val delta = new MetadataDelta.Builder().build()
-    delta.replay(new RegisterBrokerRecord()
-      .setBrokerId(0)
-      .setFenced(false)
-      .setEndPoints(endpoints))
-    delta.replay(new RegisterBrokerRecord()
-      .setBrokerId(1)
-      .setFenced(false)
-      .setEndPoints(endpoints))
-    delta.replay(new BrokerRegistrationChangeRecord()
-      .setBrokerId(1)
-      .setFenced(1.toByte))
-
-    val metadataImage = delta.apply(MetadataProvenance.EMPTY)
-
-    metadataCache.setImage(metadataImage)
-    assertFalse(metadataCache.isBrokerFenced(0))
-    assertTrue(metadataCache.isBrokerFenced(1))
-
-    val aliveBrokers = metadataCache.getAliveBrokers().map(_.id).toSet
-    metadataImage.cluster().brokers().forEach { (brokerId, registration) =>
-      assertEquals(!registration.fenced(), aliveBrokers.contains(brokerId))
-      assertEquals(aliveBrokers.contains(brokerId), metadataCache.getAliveBrokerNode(brokerId, new ListenerName(listenerName)).isDefined)
-    }
-  }
-
-  @Test
   def testIsBrokerInControlledShutdown(): Unit = {
-    val metadataCache = MetadataCache.kRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
+    val metadataCache = new KRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
 
     val delta = new MetadataDelta.Builder().build()
     delta.replay(new RegisterBrokerRecord()
@@ -689,7 +653,7 @@ class MetadataCacheTest {
 
   @Test
   def testGetLiveBrokerEpoch(): Unit = {
-    val metadataCache = MetadataCache.kRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
+    val metadataCache = new KRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
 
     val delta = new MetadataDelta.Builder().build()
     delta.replay(new RegisterBrokerRecord()
@@ -704,13 +668,13 @@ class MetadataCacheTest {
 
     metadataCache.setImage(delta.apply(MetadataProvenance.EMPTY))
 
-    assertEquals(100L, metadataCache.getAliveBrokerEpoch(0).getOrElse(-1L))
-    assertEquals(-1L, metadataCache.getAliveBrokerEpoch(1).getOrElse(-1L))
+    assertEquals(100L, metadataCache.getAliveBrokerEpoch(0).orElse(-1L))
+    assertEquals(-1L, metadataCache.getAliveBrokerEpoch(1).orElse(-1L))
   }
 
   @Test
   def testDescribeTopicResponse(): Unit = {
-    val metadataCache = MetadataCache.kRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
+    val metadataCache = new KRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
 
     val securityProtocol = SecurityProtocol.PLAINTEXT
     val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
@@ -810,7 +774,7 @@ class MetadataCacheTest {
     }
 
     // Basic test
-    var result = metadataCache.describeTopicResponse(Seq(topic0, topic1).iterator, listenerName, _ => 0, 10, false).topics().asScala.toList
+    var result = metadataCache.describeTopicResponse(util.List.of(topic0, topic1).iterator, listenerName, _ => 0, 10, false).topics().asScala.toList
     assertEquals(2, result.size)
     var resultTopic = result(0)
     assertEquals(topic0, resultTopic.name())
@@ -827,7 +791,7 @@ class MetadataCacheTest {
     checkTopicMetadata(topic1, Set(0), resultTopic.partitions().asScala)
 
     // Quota reached
-    var response = metadataCache.describeTopicResponse(Seq(topic0, topic1).iterator, listenerName, _ => 0, 2, false)
+    var response = metadataCache.describeTopicResponse(util.List.of(topic0, topic1).iterator, listenerName, _ => 0, 2, false)
     result = response.topics().asScala.toList
     assertEquals(1, result.size)
     resultTopic = result(0)
@@ -840,7 +804,7 @@ class MetadataCacheTest {
     assertEquals(2, response.nextCursor().partitionIndex())
 
     // With start index
-    result = metadataCache.describeTopicResponse(Seq(topic0).iterator, listenerName, t => if (t.equals(topic0)) 1 else 0, 10, false).topics().asScala.toList
+    result = metadataCache.describeTopicResponse(util.List.of(topic0).iterator, listenerName, t => if (t.equals(topic0)) 1 else 0, 10, false).topics().asScala.toList
     assertEquals(1, result.size)
     resultTopic = result(0)
     assertEquals(topic0, resultTopic.name())
@@ -850,7 +814,7 @@ class MetadataCacheTest {
     checkTopicMetadata(topic0, Set(1, 2), resultTopic.partitions().asScala)
 
     // With start index and quota reached
-    response = metadataCache.describeTopicResponse(Seq(topic0, topic1).iterator, listenerName, t => if (t.equals(topic0)) 2 else 0, 1, false)
+    response = metadataCache.describeTopicResponse(util.List.of(topic0, topic1).iterator, listenerName, t => if (t.equals(topic0)) 2 else 0, 1, false)
     result = response.topics().asScala.toList
     assertEquals(1, result.size)
 
@@ -864,7 +828,7 @@ class MetadataCacheTest {
     assertEquals(0, response.nextCursor().partitionIndex())
 
     // When the first topic does not exist
-    result = metadataCache.describeTopicResponse(Seq("Non-exist", topic0).iterator, listenerName, t => if (t.equals("Non-exist")) 1 else 0, 1, false).topics().asScala.toList
+    result = metadataCache.describeTopicResponse(util.List.of("Non-exist", topic0).iterator, listenerName, t => if (t.equals("Non-exist")) 1 else 0, 1, false).topics().asScala.toList
     assertEquals(2, result.size)
     resultTopic = result(0)
     assertEquals("Non-exist", resultTopic.name())
@@ -916,11 +880,11 @@ class MetadataCacheTest {
     MetadataCacheTest.updateCache(cache, brokers ++ topicRecords ++ partitionStates)
 
     val leaderAndIsr = cache.getLeaderAndIsr(topic, partitionIndex)
-    assertEquals(Some(leader), leaderAndIsr.map(_.leader()))
-    assertEquals(Some(leaderEpoch), leaderAndIsr.map(_.leaderEpoch()))
-    assertEquals(Some(isr), leaderAndIsr.map(_.isr()))
-    assertEquals(Some(-1), leaderAndIsr.map(_.partitionEpoch()))
-    assertEquals(Some(LeaderRecoveryState.RECOVERED), leaderAndIsr.map(_.leaderRecoveryState()))
+    assertEquals(util.Optional.of(leader), leaderAndIsr.map(_.leader()))
+    assertEquals(util.Optional.of(leaderEpoch), leaderAndIsr.map(_.leaderEpoch()))
+    assertEquals(util.Optional.of(util.Set.copyOf(isr)), leaderAndIsr.map(_.isr()))
+    assertEquals(util.Optional.of(-1), leaderAndIsr.map(_.partitionEpoch()))
+    assertEquals(util.Optional.of(LeaderRecoveryState.RECOVERED), leaderAndIsr.map(_.leaderRecoveryState()))
   }
 
   @Test
@@ -935,16 +899,16 @@ class MetadataCacheTest {
           setBrokerId(broker.id).setLogDirs(broker.dirs).
           setEndPoints(new BrokerEndpointCollection(Collections.singleton(
             new RegisterBrokerRecord.BrokerEndpoint().setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
-              setPort(9093.toShort).setName("PLAINTEXT").setHost(s"broker-${broker.id}")).iterator()))))
+              setPort(9093.toShort).setName("PLAINTEXT").setHost(s"broker-${broker.id}"))))))
       val topicId = Uuid.fromString("95OVr1IPRYGrcNCLlpImCA")
       delta.replay(new TopicRecord().setTopicId(topicId).setName("foo"))
       partitions.foreach(partition => delta.replay(
         new PartitionRecord().setTopicId(topicId).setPartitionId(partition.id).
           setReplicas(partition.replicas).setDirectories(partition.dirs).
           setLeader(partition.replicas.get(0)).setIsr(partition.replicas)))
-      val cache = MetadataCache.kRaftMetadataCache(1, () => KRaftVersion.KRAFT_VERSION_0)
+      val cache = new KRaftMetadataCache(1, () => KRaftVersion.KRAFT_VERSION_0)
       cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      val topicMetadata = cache.getTopicMetadata(Set("foo"), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)).head
+      val topicMetadata = cache.getTopicMetadata(util.Set.of("foo"), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), false, false).asScala.head
       topicMetadata.partitions().asScala.map(p => (p.partitionIndex(), p.offlineReplicas())).toMap
     }
 

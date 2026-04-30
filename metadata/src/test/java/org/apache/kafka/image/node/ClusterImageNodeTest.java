@@ -22,7 +22,7 @@ import org.apache.kafka.image.ClusterImage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Arrays;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -35,7 +35,7 @@ public class ClusterImageNodeTest {
 
     @Test
     public void testChildNames() {
-        assertEquals(Arrays.asList("brokers", "controllers"), NODE.childNames());
+        assertEquals(List.of("brokers", "controllers"), NODE.childNames());
     }
 
     @Test

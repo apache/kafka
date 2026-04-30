@@ -30,10 +30,10 @@ import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 
 import java.io.PrintStream;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -67,7 +67,7 @@ public final class ExpectLeaderAction implements TieredStorageTestAction {
 
         reassignPartition(context);
         if (electLeader) {
-            context.admin().electLeaders(ElectionType.PREFERRED, Collections.singleton(topicPartition));
+            context.admin().electLeaders(ElectionType.PREFERRED, Set.of(topicPartition));
         }
         AtomicInteger actualLeader = new AtomicInteger(-1);
         TestUtils.waitForCondition(() -> {
@@ -82,7 +82,7 @@ public final class ExpectLeaderAction implements TieredStorageTestAction {
                 }
                 throw new RuntimeException(ex);
             }
-        }, "Leader of " + topicPartition + " was not " + replicaId + ". Actual leader: " + actualLeader);
+        }, () -> "Leader of " + topicPartition + " was not " + replicaId + ". Actual leader: " + actualLeader);
     }
 
     @Override
@@ -106,7 +106,7 @@ public final class ExpectLeaderAction implements TieredStorageTestAction {
         });
 
         Map<TopicPartition, Optional<NewPartitionReassignment>> proposed =
-                Collections.singletonMap(topicPartition, Optional.of(new NewPartitionReassignment(targetReplicas)));
+                Map.of(topicPartition, Optional.of(new NewPartitionReassignment(targetReplicas)));
         AlterPartitionReassignmentsResult result = context.admin().alterPartitionReassignments(proposed);
         result.all().get(30, TimeUnit.MINUTES);
     }

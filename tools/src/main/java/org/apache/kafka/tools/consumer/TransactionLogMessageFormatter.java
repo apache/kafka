@@ -16,45 +16,29 @@
  */
 package org.apache.kafka.tools.consumer;
 
-import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.coordinator.transaction.generated.CoordinatorRecordType;
-import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey;
-import org.apache.kafka.coordinator.transaction.generated.TransactionLogKeyJsonConverter;
-import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
-import org.apache.kafka.coordinator.transaction.generated.TransactionLogValueJsonConverter;
+import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.coordinator.transaction.TransactionCoordinatorRecordSerde;
+import org.apache.kafka.coordinator.transaction.generated.CoordinatorRecordJsonConverters;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.NullNode;
-import com.fasterxml.jackson.databind.node.TextNode;
 
-import java.nio.ByteBuffer;
-
-public class TransactionLogMessageFormatter extends ApiMessageFormatter {
-    @Override
-    protected JsonNode readToKeyJson(ByteBuffer byteBuffer) {
-        try {
-            switch (CoordinatorRecordType.fromId(byteBuffer.getShort())) {
-                case TRANSACTION_LOG:
-                    return TransactionLogKeyJsonConverter.write(
-                        new TransactionLogKey(new ByteBufferAccessor(byteBuffer), (short) 0),
-                        (short) 0
-                    );
-
-                default:
-                    return NullNode.getInstance();
-            }
-        } catch (UnsupportedVersionException ex) {
-            return NullNode.getInstance();
-        }
+public class TransactionLogMessageFormatter extends CoordinatorRecordMessageFormatter {
+    public TransactionLogMessageFormatter() {
+        super(new TransactionCoordinatorRecordSerde());
     }
 
     @Override
-    protected JsonNode readToValueJson(ByteBuffer byteBuffer) {
-        short version = byteBuffer.getShort();
-        if (version >= TransactionLogValue.LOWEST_SUPPORTED_VERSION && version <= TransactionLogValue.HIGHEST_SUPPORTED_VERSION) {
-            return TransactionLogValueJsonConverter.write(new TransactionLogValue(new ByteBufferAccessor(byteBuffer), version), version);
-        }
-        return new TextNode(UNKNOWN);
+    protected boolean isRecordTypeAllowed(short recordType) {
+        return true;
+    }
+
+    @Override
+    protected JsonNode keyAsJson(ApiMessage message) {
+        return CoordinatorRecordJsonConverters.writeRecordKeyAsJson(message);
+    }
+
+    @Override
+    protected JsonNode valueAsJson(ApiMessage message, short version) {
+        return CoordinatorRecordJsonConverters.writeRecordValueAsJson(message, version);
     }
 }

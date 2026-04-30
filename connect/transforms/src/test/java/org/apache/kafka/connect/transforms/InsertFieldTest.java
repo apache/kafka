@@ -30,7 +30,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -59,7 +58,7 @@ public class InsertFieldTest {
 
     @Test
     public void topLevelStructRequired() {
-        xformValue.configure(Collections.singletonMap("topic.field", "topic_field"));
+        xformValue.configure(Map.of("topic.field", "topic_field"));
         assertThrows(DataException.class,
             () -> xformValue.apply(new SourceRecord(null, null, "", 0, Schema.INT32_SCHEMA, 42)));
     }
@@ -118,7 +117,7 @@ public class InsertFieldTest {
         xformValue.configure(props);
 
         final SourceRecord record = new SourceRecord(null, null, "test", 0,
-                null, null, null, Collections.singletonMap("magic", 42L), 123L);
+                null, null, null, Map.of("magic", 42L), 123L);
 
         final SourceRecord transformedRecord = xformValue.apply(record);
 
@@ -183,7 +182,7 @@ public class InsertFieldTest {
         xformKey.configure(props);
 
         final SourceRecord record = new SourceRecord(null, null, "test", 0,
-            null, Collections.singletonMap("magic", 42L), null, null);
+            null, Map.of("magic", 42L), null, null);
 
         final SourceRecord transformedRecord = xformKey.apply(record);
 
@@ -207,7 +206,7 @@ public class InsertFieldTest {
         xformKey.configure(props);
 
         final SourceRecord record = new SourceRecord(null, null, "test", 0,
-            null, null, null, Collections.singletonMap("magic", 42L));
+            null, null, null, Map.of("magic", 42L));
 
         final SourceRecord transformedRecord = xformKey.apply(record);
 

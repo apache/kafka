@@ -156,15 +156,15 @@ public class SwallowUnknownTopicErrorIntegrationTest {
         public void configure(final Map<String, ?> configs) { }
 
         @Override
-        public ProductionExceptionHandlerResponse handle(final ErrorHandlerContext context,
-                                                         final ProducerRecord<byte[], byte[]> record,
-                                                         final Exception exception) {
+        public Response handleError(final ErrorHandlerContext context,
+                                    final ProducerRecord<byte[], byte[]> record,
+                                    final Exception exception) {
             if (exception instanceof TimeoutException &&
                 exception.getCause() != null &&
                 exception.getCause() instanceof UnknownTopicOrPartitionException) {
-                return ProductionExceptionHandlerResponse.CONTINUE;
+                return Response.resume();
             }
-            return ProductionExceptionHandler.super.handle(context, record, exception);
+            return ProductionExceptionHandler.super.handleError(context, record, exception);
         }
     }
 

@@ -17,12 +17,13 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -30,30 +31,25 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SubscribedTopicMetadataTest {
 
-    private Map<Uuid, TopicMetadata> topicMetadataMap;
     private SubscribedTopicDescriberImpl subscribedTopicMetadata;
+    private CoordinatorMetadataImage metadataImage;
+    private final int numPartitions = 5;
 
     @BeforeEach
     public void setUp() {
-        topicMetadataMap = new HashMap<>();
+        MetadataImageBuilder metadataImageBuilder = new MetadataImageBuilder();
         for (int i = 0; i < 5; i++) {
             Uuid topicId = Uuid.randomUuid();
             String topicName = "topic" + i;
-            topicMetadataMap.put(
-                topicId,
-                new TopicMetadata(topicId, topicName, 5)
-            );
+            metadataImageBuilder.addTopic(topicId, topicName, numPartitions);
         }
-        subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadataMap);
+        metadataImage = metadataImageBuilder.addRacks().buildCoordinatorMetadataImage();
+
+        subscribedTopicMetadata = new SubscribedTopicDescriberImpl(metadataImage);
     }
 
     @Test
-    public void testAttribute() {
-        assertEquals(topicMetadataMap, subscribedTopicMetadata.topicMetadata());
-    }
-
-    @Test
-    public void testTopicMetadataCannotBeNull() {
+    public void testMetadataImageCannotBeNull() {
         assertThrows(NullPointerException.class, () -> new SubscribedTopicDescriberImpl(null));
     }
 
@@ -61,22 +57,40 @@ public class SubscribedTopicMetadataTest {
     public void testNumberOfPartitions() {
         Uuid topicId = Uuid.randomUuid();
 
-        // Test -1 is returned when the topic Id doesn't exist.
+        // Test -1 is returned when the topic ID doesn't exist.
         assertEquals(-1, subscribedTopicMetadata.numPartitions(topicId));
 
-        topicMetadataMap.put(topicId, new TopicMetadata(topicId, "topic6", 3));
+        // Test that the correct number of partitions are returned for a given topic ID.
+        metadataImage.topicIds().forEach(id ->
+            // Test that the correct number of partitions are returned for a given topic ID.
+            assertEquals(numPartitions, subscribedTopicMetadata.numPartitions(id))
+        );
+    }
 
-        // Test that the correct number of partitions are returned for a given topic Id.
-        assertEquals(3, subscribedTopicMetadata.numPartitions(topicId));
+    @Test
+    public void testRacksForPartition() {
+        Uuid topicId = Uuid.randomUuid();
+
+        // Test empty set is returned when the topic ID doesn't exist.
+        assertEquals(Set.of(), subscribedTopicMetadata.racksForPartition(topicId, 0));
+        metadataImage.topicIds().forEach(id -> {
+            // Test empty set is returned when the partition ID doesn't exist.
+            assertEquals(Set.of(), subscribedTopicMetadata.racksForPartition(id, 10));
+
+            // Test that the correct racks of partition are returned for a given topic ID.
+            assertEquals(Set.of("rack0", "rack1"), subscribedTopicMetadata.racksForPartition(id, 0));
+        });
     }
 
     @Test
     public void testEquals() {
-        assertEquals(new SubscribedTopicDescriberImpl(topicMetadataMap), subscribedTopicMetadata);
+        assertEquals(new SubscribedTopicDescriberImpl(metadataImage), subscribedTopicMetadata);
 
-        Map<Uuid, TopicMetadata> topicMetadataMap2 = new HashMap<>();
         Uuid topicId = Uuid.randomUuid();
-        topicMetadataMap2.put(topicId, new TopicMetadata(topicId, "newTopic", 5));
-        assertNotEquals(new SubscribedTopicDescriberImpl(topicMetadataMap2), subscribedTopicMetadata);
+        CoordinatorMetadataImage metadataImage2 = new MetadataImageBuilder()
+            .addTopic(topicId, "newTopic", 5)
+            .addRacks()
+            .buildCoordinatorMetadataImage();
+        assertNotEquals(new SubscribedTopicDescriberImpl(metadataImage2), subscribedTopicMetadata);
     }
 }

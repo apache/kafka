@@ -19,18 +19,21 @@ package org.apache.kafka.tools.consumer.group;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.admin.ConsumerGroupListing;
+import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.RangeAssignor;
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.api.ClusterConfig;
-import org.apache.kafka.common.test.api.ClusterTemplate;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 
@@ -40,7 +43,6 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -50,19 +52,31 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 import joptsimple.OptionException;
 
-import static java.util.Collections.emptyMap;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 
-
+@ClusterTestDefaults(
+    types = {Type.CO_KRAFT},
+    serverProperties = {
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000"),
+        @ClusterConfigProperty(key = CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
+        @ClusterConfigProperty(key = CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
+    }
+)
 public class ListConsumerGroupTest {
     private static final String TOPIC_PREFIX = "test.topic.";
     private static final String TOPIC_PARTITIONS_GROUP_PREFIX = "test.topic.partitions.group.";
@@ -74,15 +88,11 @@ public class ListConsumerGroupTest {
         this.clusterInstance = clusterInstance;
     }
 
-    private static List<ClusterConfig> defaultGenerator() {
-        return ConsumerGroupCommandTestUtils.generator();
-    }
-
     private List<GroupProtocol> supportedGroupProtocols() {
         return new ArrayList<>(clusterInstance.supportedGroupProtocols());
     }
 
-    @ClusterTemplate("defaultGenerator")
+    @ClusterTest
     public void testListConsumerGroupsWithoutFilters() throws Exception {
         for (int i = 0; i < supportedGroupProtocols().size(); i++) {
             GroupProtocol groupProtocol = supportedGroupProtocols().get(i);
@@ -92,32 +102,32 @@ public class ListConsumerGroupTest {
             String topicPartitionsGroup = TOPIC_PARTITIONS_GROUP_PREFIX + i;
             createTopic(topic);
 
-            try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Collections.singleton(new TopicPartition(topic, 0)));
+            try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Set.of(new TopicPartition(topic, 0)));
                  AutoCloseable topicConsumerGroupExecutor = consumerGroupClosable(GroupProtocol.CLASSIC, topicGroup, topic);
                  AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic);
                  ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list"})
             ) {
-                Set<String> expectedGroups = set(Arrays.asList(topicPartitionsGroup, topicGroup, protocolGroup));
+                Set<String> expectedGroups = set(List.of(topicPartitionsGroup, topicGroup, protocolGroup));
                 final AtomicReference<Set> foundGroups = new AtomicReference<>();
 
                 TestUtils.waitForCondition(() -> {
                     foundGroups.set(set(service.listConsumerGroups()));
                     return Objects.equals(expectedGroups, foundGroups.get());
-                }, "Expected --list to show groups " + expectedGroups + ", but found " + foundGroups.get() + ".");
+                }, () -> "Expected --list to show groups " + expectedGroups + ", but found " + foundGroups.get() + ".");
             }
 
-            removeConsumer(set(Arrays.asList(topicPartitionsGroup, topicGroup, protocolGroup)));
+            removeConsumer(set(List.of(topicPartitionsGroup, topicGroup, protocolGroup)));
             deleteTopic(topic);
         }
     }
 
-    @ClusterTemplate("defaultGenerator")
+    @ClusterTest
     public void testListWithUnrecognizedNewConsumerOption() {
         String[] cgcArgs = new String[]{"--new-consumer", "--bootstrap-server", clusterInstance.bootstrapServers(), "--list"};
         Assertions.assertThrows(OptionException.class, () -> getConsumerGroupService(cgcArgs));
     }
 
-    @ClusterTemplate("defaultGenerator")
+    @ClusterTest
     public void testListConsumerGroupsWithStates() throws Exception {
         for (int i = 0; i < supportedGroupProtocols().size(); i++) {
             GroupProtocol groupProtocol = supportedGroupProtocols().get(i);
@@ -126,62 +136,62 @@ public class ListConsumerGroupTest {
             String topicPartitionsGroup = TOPIC_PARTITIONS_GROUP_PREFIX + i;
             createTopic(topic);
 
-            try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Collections.singleton(new TopicPartition(topic, 0)));
+            try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Set.of(new TopicPartition(topic, 0)));
                  AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic);
                  ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"})
             ) {
-                Set<ConsumerGroupListing> expectedListing = Set.of(
-                        new ConsumerGroupListing(
+                Set<GroupListing> expectedListing = Set.of(
+                        new GroupListing(
                                 topicPartitionsGroup,
-                                Optional.of(GroupState.EMPTY),
                                 Optional.of(GroupType.CLASSIC),
-                                true
+                                "",
+                                Optional.of(GroupState.EMPTY)
                         ),
-                        new ConsumerGroupListing(
+                        new GroupListing(
                                 protocolGroup,
-                                Optional.of(GroupState.STABLE),
                                 Optional.of(GroupType.parse(groupProtocol.name())),
-                                false
+                                ConsumerProtocol.PROTOCOL_TYPE,
+                                Optional.of(GroupState.STABLE)
                         )
                 );
 
                 assertGroupListing(
                         service,
-                        Collections.emptySet(),
+                        Set.of(),
                         EnumSet.allOf(GroupState.class),
                         expectedListing
                 );
 
                 expectedListing = Set.of(
-                        new ConsumerGroupListing(
+                        new GroupListing(
                                 protocolGroup,
-                                Optional.of(GroupState.STABLE),
                                 Optional.of(GroupType.parse(groupProtocol.name())),
-                                false
+                                ConsumerProtocol.PROTOCOL_TYPE,
+                                Optional.of(GroupState.STABLE)
                         )
                 );
 
                 assertGroupListing(
                         service,
-                        Collections.emptySet(),
+                        Set.of(),
                         Set.of(GroupState.STABLE),
                         expectedListing
                 );
 
                 assertGroupListing(
                         service,
-                        Collections.emptySet(),
+                        Set.of(),
                         Set.of(GroupState.PREPARING_REBALANCE),
-                        Collections.emptySet()
+                        Set.of()
                 );
             }
 
-            removeConsumer(set(Arrays.asList(topicPartitionsGroup, protocolGroup)));
+            removeConsumer(set(List.of(topicPartitionsGroup, protocolGroup)));
             deleteTopic(topic);
         }
     }
 
-    @ClusterTemplate("defaultGenerator")
+    @ClusterTest
     public void testListConsumerGroupsWithTypesClassicProtocol() throws Exception {
         GroupProtocol groupProtocol = GroupProtocol.CLASSIC;
         String topic = TOPIC_PREFIX + groupProtocol.name;
@@ -189,30 +199,30 @@ public class ListConsumerGroupTest {
         String topicPartitionsGroup = TOPIC_PARTITIONS_GROUP_PREFIX + "0";
         createTopic(topic);
 
-        try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Collections.singleton(new TopicPartition(topic, 0)));
+        try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Set.of(new TopicPartition(topic, 0)));
              AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic);
              ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"})
         ) {
-            Set<ConsumerGroupListing> expectedListing = Set.of(
-                    new ConsumerGroupListing(
+            Set<GroupListing> expectedListing = Set.of(
+                    new GroupListing(
                             topicPartitionsGroup,
-                            Optional.of(GroupState.EMPTY),
                             Optional.of(GroupType.CLASSIC),
-                            true
+                            "",
+                            Optional.of(GroupState.EMPTY)
                     ),
-                    new ConsumerGroupListing(
+                    new GroupListing(
                             protocolGroup,
-                            Optional.of(GroupState.STABLE),
                             Optional.of(GroupType.CLASSIC),
-                            false
+                            ConsumerProtocol.PROTOCOL_TYPE,
+                            Optional.of(GroupState.STABLE)
                     )
             );
 
             // No filters explicitly mentioned. Expectation is that all groups are returned.
             assertGroupListing(
                     service,
-                    Collections.emptySet(),
-                    Collections.emptySet(),
+                    Set.of(),
+                    Set.of(),
                     expectedListing
             );
 
@@ -222,20 +232,20 @@ public class ListConsumerGroupTest {
             assertGroupListing(
                     service,
                     Set.of(GroupType.CONSUMER),
-                    Collections.emptySet(),
-                    Collections.emptySet()
+                    Set.of(),
+                    Set.of()
             );
 
             assertGroupListing(
                     service,
                     Set.of(GroupType.CLASSIC),
-                    Collections.emptySet(),
+                    Set.of(),
                     expectedListing
             );
         }
     }
 
-    @ClusterTemplate("defaultGenerator")
+    @ClusterTest
     public void testListConsumerGroupsWithTypesConsumerProtocol() throws Exception {
         GroupProtocol groupProtocol = GroupProtocol.CONSUMER;
         String topic = TOPIC_PREFIX + groupProtocol.name;
@@ -244,7 +254,7 @@ public class ListConsumerGroupTest {
         String topicPartitionsGroup = TOPIC_PARTITIONS_GROUP_PREFIX + "0";
         createTopic(topic);
 
-        try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Collections.singleton(new TopicPartition(topic, 0)));
+        try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Set.of(new TopicPartition(topic, 0)));
              AutoCloseable topicConsumerGroupExecutor = consumerGroupClosable(GroupProtocol.CLASSIC, topicGroup, topic);
              AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic);
              ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list"})
@@ -252,77 +262,77 @@ public class ListConsumerGroupTest {
 
 
             // No filters explicitly mentioned. Expectation is that all groups are returned.
-            Set<ConsumerGroupListing> expectedListing = Set.of(
-                    new ConsumerGroupListing(
+            Set<GroupListing> expectedListing = Set.of(
+                    new GroupListing(
                             topicPartitionsGroup,
-                            Optional.of(GroupState.EMPTY),
                             Optional.of(GroupType.CLASSIC),
-                            true
+                            "",
+                            Optional.of(GroupState.EMPTY)
                     ),
-                    new ConsumerGroupListing(
+                    new GroupListing(
                             topicGroup,
-                            Optional.of(GroupState.STABLE),
                             Optional.of(GroupType.CLASSIC),
-                            false
+                            ConsumerProtocol.PROTOCOL_TYPE,
+                            Optional.of(GroupState.STABLE)
                     ),
-                    new ConsumerGroupListing(
+                    new GroupListing(
                             protocolGroup,
-                            Optional.of(GroupState.STABLE),
                             Optional.of(GroupType.CONSUMER),
-                            false
+                            ConsumerProtocol.PROTOCOL_TYPE,
+                            Optional.of(GroupState.STABLE)
                     )
             );
 
             assertGroupListing(
                     service,
-                    Collections.emptySet(),
-                    Collections.emptySet(),
+                    Set.of(),
+                    Set.of(),
                     expectedListing
             );
 
             // When group type is mentioned:
             // New Group Coordinator returns groups according to the filter.
             expectedListing = Set.of(
-                    new ConsumerGroupListing(
+                    new GroupListing(
                             protocolGroup,
-                            Optional.of(GroupState.STABLE),
                             Optional.of(GroupType.CONSUMER),
-                            false
+                            ConsumerProtocol.PROTOCOL_TYPE,
+                            Optional.of(GroupState.STABLE)
                     )
             );
 
             assertGroupListing(
                     service,
                     Set.of(GroupType.CONSUMER),
-                    Collections.emptySet(),
+                    Set.of(),
                     expectedListing
             );
 
             expectedListing = Set.of(
-                    new ConsumerGroupListing(
+                    new GroupListing(
                             topicPartitionsGroup,
-                            Optional.of(GroupState.EMPTY),
                             Optional.of(GroupType.CLASSIC),
-                            true
+                            "",
+                            Optional.of(GroupState.EMPTY)
                     ),
-                    new ConsumerGroupListing(
+                    new GroupListing(
                             topicGroup,
-                            Optional.of(GroupState.STABLE),
                             Optional.of(GroupType.CLASSIC),
-                            false
+                            ConsumerProtocol.PROTOCOL_TYPE,
+                            Optional.of(GroupState.STABLE)
                     )
             );
 
             assertGroupListing(
                     service,
                     Set.of(GroupType.CLASSIC),
-                    Collections.emptySet(),
+                    Set.of(),
                     expectedListing
             );
         }
     }
 
-    @ClusterTemplate("defaultGenerator")
+    @ClusterTest
     public void testListGroupCommandClassicProtocol() throws Exception {
         GroupProtocol groupProtocol = GroupProtocol.CLASSIC;
         String topic = TOPIC_PREFIX + groupProtocol.name;
@@ -330,84 +340,84 @@ public class ListConsumerGroupTest {
         String topicPartitionsGroup = TOPIC_PARTITIONS_GROUP_PREFIX + "0";
         createTopic(topic);
 
-        try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Collections.singleton(new TopicPartition(topic, 0)));
+        try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Set.of(new TopicPartition(topic, 0)));
              AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic)
         ) {
             validateListOutput(
-                    Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list"),
-                    Collections.emptyList(),
+                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list"),
+                    List.of(),
                     Set.of(
-                            Collections.singletonList(protocolGroup),
-                            Collections.singletonList(topicPartitionsGroup)
+                            List.of(protocolGroup),
+                            List.of(topicPartitionsGroup)
                     )
             );
 
             validateListOutput(
-                    Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"),
-                    Arrays.asList("GROUP", "STATE"),
+                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"),
+                    List.of("GROUP", "STATE"),
                     Set.of(
-                            Arrays.asList(protocolGroup, "Stable"),
-                            Arrays.asList(topicPartitionsGroup, "Empty")
+                            List.of(protocolGroup, "Stable"),
+                            List.of(topicPartitionsGroup, "Empty")
                     )
             );
 
             validateListOutput(
-                    Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type"),
-                    Arrays.asList("GROUP", "TYPE"),
+                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type"),
+                    List.of("GROUP", "TYPE"),
                     Set.of(
-                            Arrays.asList(protocolGroup, "Classic"),
-                            Arrays.asList(topicPartitionsGroup, "Classic")
+                            List.of(protocolGroup, "Classic"),
+                            List.of(topicPartitionsGroup, "Classic")
                     )
             );
 
             validateListOutput(
-                    Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "--state"),
-                    Arrays.asList("GROUP", "TYPE", "STATE"),
+                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "--state"),
+                    List.of("GROUP", "TYPE", "STATE"),
                     Set.of(
-                            Arrays.asList(protocolGroup, "Classic", "Stable"),
-                            Arrays.asList(topicPartitionsGroup, "Classic", "Empty")
+                            List.of(protocolGroup, "Classic", "Stable"),
+                            List.of(topicPartitionsGroup, "Classic", "Empty")
                     )
             );
 
             validateListOutput(
-                    Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state", "Stable"),
-                    Arrays.asList("GROUP", "STATE"),
+                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state", "Stable"),
+                    List.of("GROUP", "STATE"),
                     Set.of(
-                            Arrays.asList(protocolGroup, "Stable")
+                            List.of(protocolGroup, "Stable")
                     )
             );
 
             // Check case-insensitivity in state filter.
             validateListOutput(
-                    Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state", "stable"),
-                    Arrays.asList("GROUP", "STATE"),
+                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state", "stable"),
+                    List.of("GROUP", "STATE"),
                     Set.of(
-                            Arrays.asList(protocolGroup, "Stable")
+                            List.of(protocolGroup, "Stable")
                     )
             );
 
             validateListOutput(
-                    Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "Classic"),
-                    Arrays.asList("GROUP", "TYPE"),
+                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "Classic"),
+                    List.of("GROUP", "TYPE"),
                     Set.of(
-                            Arrays.asList(protocolGroup, "Classic"),
-                            Arrays.asList(topicPartitionsGroup, "Classic")
+                            List.of(protocolGroup, "Classic"),
+                            List.of(topicPartitionsGroup, "Classic")
                     )
             );
 
             // Check case-insensitivity in type filter.
             validateListOutput(
-                    Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "classic"),
-                    Arrays.asList("GROUP", "TYPE"),
+                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "classic"),
+                    List.of("GROUP", "TYPE"),
                     Set.of(
-                            Arrays.asList(protocolGroup, "Classic"),
-                            Arrays.asList(topicPartitionsGroup, "Classic")
+                            List.of(protocolGroup, "Classic"),
+                            List.of(topicPartitionsGroup, "Classic")
                     )
             );
         }
     }
 
-    @ClusterTemplate("defaultGenerator")
+    @ClusterTest
     public void testListGroupCommandConsumerProtocol() throws Exception {
         GroupProtocol groupProtocol = GroupProtocol.CONSUMER;
         String topic = TOPIC_PREFIX + groupProtocol.name;
@@ -415,58 +425,58 @@ public class ListConsumerGroupTest {
         String topicPartitionsGroup = TOPIC_PARTITIONS_GROUP_PREFIX + "0";
         createTopic(topic);
 
-        try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Collections.singleton(new TopicPartition(topic, 0)));
+        try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Set.of(new TopicPartition(topic, 0)));
              AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic)
         ) {
             validateListOutput(
-                    Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list"),
-                    Collections.emptyList(),
+                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list"),
+                    List.of(),
                     Set.of(
-                            Collections.singletonList(protocolGroup),
-                            Collections.singletonList(topicPartitionsGroup)
+                            List.of(protocolGroup),
+                            List.of(topicPartitionsGroup)
                     )
             );
 
             validateListOutput(
-                    Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"),
-                    Arrays.asList("GROUP", "STATE"),
+                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"),
+                    List.of("GROUP", "STATE"),
                     Set.of(
-                            Arrays.asList(protocolGroup, "Stable"),
-                            Arrays.asList(topicPartitionsGroup, "Empty")
+                            List.of(protocolGroup, "Stable"),
+                            List.of(topicPartitionsGroup, "Empty")
                     )
             );
 
             validateListOutput(
-                    Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type"),
-                    Arrays.asList("GROUP", "TYPE"),
+                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type"),
+                    List.of("GROUP", "TYPE"),
                     Set.of(
-                            Arrays.asList(protocolGroup, "Consumer"),
-                            Arrays.asList(topicPartitionsGroup, "Classic")
+                            List.of(protocolGroup, "Consumer"),
+                            List.of(topicPartitionsGroup, "Classic")
                     )
             );
 
             validateListOutput(
-                    Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "--state"),
-                    Arrays.asList("GROUP", "TYPE", "STATE"),
+                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "--state"),
+                    List.of("GROUP", "TYPE", "STATE"),
                     Set.of(
-                            Arrays.asList(protocolGroup, "Consumer", "Stable"),
-                            Arrays.asList(topicPartitionsGroup, "Classic", "Empty")
+                            List.of(protocolGroup, "Consumer", "Stable"),
+                            List.of(topicPartitionsGroup, "Classic", "Empty")
                     )
             );
 
             validateListOutput(
-                    Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "consumer"),
-                    Arrays.asList("GROUP", "TYPE"),
+                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "consumer"),
+                    List.of("GROUP", "TYPE"),
                     Set.of(
-                            Arrays.asList(protocolGroup, "Consumer")
+                            List.of(protocolGroup, "Consumer")
                     )
             );
 
             validateListOutput(
-                    Arrays.asList("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "consumer", "--state", "Stable"),
-                    Arrays.asList("GROUP", "TYPE", "STATE"),
+                    List.of("--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--type", "consumer", "--state", "Stable"),
+                    List.of("GROUP", "TYPE", "STATE"),
                     Set.of(
-                            Arrays.asList(protocolGroup, "Consumer", "Stable")
+                            List.of(protocolGroup, "Consumer", "Stable")
                     )
             );
         }
@@ -476,7 +486,7 @@ public class ListConsumerGroupTest {
         Map<String, Object> configs = composeConfigs(
                 groupId,
                 protocol.name,
-                emptyMap()
+                Map.of()
         );
 
         return ConsumerGroupCommandTestUtils.buildConsumers(
@@ -491,7 +501,7 @@ public class ListConsumerGroupTest {
         Map<String, Object> configs = composeConfigs(
                 groupId,
                 GroupProtocol.CLASSIC.name,
-                emptyMap()
+                Map.of()
         );
 
         return ConsumerGroupCommandTestUtils.buildConsumers(
@@ -520,26 +530,26 @@ public class ListConsumerGroupTest {
         ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(args);
         ConsumerGroupCommand.ConsumerGroupService service = new ConsumerGroupCommand.ConsumerGroupService(
                 opts,
-                Collections.singletonMap(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
+                Map.of(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
         );
 
         return service;
     }
 
     private void createTopic(String topic) {
-        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            Assertions.assertDoesNotThrow(() -> admin.createTopics(Collections.singletonList(new NewTopic(topic, 1, (short) 1))).topicId(topic).get());
+        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+            Assertions.assertDoesNotThrow(() -> admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).topicId(topic).get());
         }
     }
 
     private void deleteTopic(String topic) {
-        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            Assertions.assertDoesNotThrow(() -> admin.deleteTopics(Collections.singleton(topic)).all().get());
+        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+            Assertions.assertDoesNotThrow(() -> admin.deleteTopics(Set.of(topic)).all().get());
         }
     }
 
     private void removeConsumer(Set<String> groupIds) {
-        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             Assertions.assertDoesNotThrow(() -> admin.deleteConsumerGroups(groupIds).all().get());
         }
     }
@@ -556,9 +566,9 @@ public class ListConsumerGroupTest {
         ConsumerGroupCommand.ConsumerGroupService service,
         Set<GroupType> typeFilterSet,
         Set<GroupState> groupStateFilterSet,
-        Set<ConsumerGroupListing> expectedListing
+        Set<GroupListing> expectedListing
     ) throws Exception {
-        final AtomicReference<Set<ConsumerGroupListing>> foundListing = new AtomicReference<>();
+        final AtomicReference<Set<GroupListing>> foundListing = new AtomicReference<>();
         TestUtils.waitForCondition(() -> {
             foundListing.set(set(service.listConsumerGroupsWithFilters(set(typeFilterSet), set(groupStateFilterSet))));
             return Objects.equals(set(expectedListing), foundListing.get());
@@ -590,7 +600,7 @@ public class ListConsumerGroupTest {
             // Parse the header if one is expected.
             if (!expectedHeader.isEmpty()) {
                 if (lines.length == 0) return false;
-                List<String> header = Arrays.stream(lines[index++].split("\\s+")).collect(Collectors.toList());
+                List<String> header = Arrays.stream(lines[index++].split("\\s+")).toList();
                 if (!expectedHeader.equals(header)) {
                     return false;
                 }
@@ -599,7 +609,7 @@ public class ListConsumerGroupTest {
             // Parse the groups.
             Set<List<String>> groups = new HashSet<>();
             for (; index < lines.length; index++) {
-                groups.add(Arrays.stream(lines[index].split("\\s+")).collect(Collectors.toList()));
+                groups.add(Arrays.stream(lines[index].split("\\s+")).toList());
             }
             return expectedRows.equals(groups);
         }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
@@ -614,22 +624,22 @@ class ListConsumerGroupUnitTest {
     @Test
     public void testConsumerGroupStatesFromString() {
         Set<GroupState> result = ConsumerGroupCommand.groupStatesFromString("Stable");
-        Assertions.assertEquals(ListConsumerGroupTest.set(Collections.singleton(GroupState.STABLE)), result);
+        Assertions.assertEquals(ListConsumerGroupTest.set(Set.of(GroupState.STABLE)), result);
 
         result = ConsumerGroupCommand.groupStatesFromString("Stable, PreparingRebalance");
-        Assertions.assertEquals(ListConsumerGroupTest.set(Arrays.asList(GroupState.STABLE, GroupState.PREPARING_REBALANCE)), result);
+        Assertions.assertEquals(ListConsumerGroupTest.set(List.of(GroupState.STABLE, GroupState.PREPARING_REBALANCE)), result);
 
         result = ConsumerGroupCommand.groupStatesFromString("Dead,CompletingRebalance,");
-        Assertions.assertEquals(ListConsumerGroupTest.set(Arrays.asList(GroupState.DEAD, GroupState.COMPLETING_REBALANCE)), result);
+        Assertions.assertEquals(ListConsumerGroupTest.set(List.of(GroupState.DEAD, GroupState.COMPLETING_REBALANCE)), result);
 
         result = ConsumerGroupCommand.groupStatesFromString("stable");
-        Assertions.assertEquals(ListConsumerGroupTest.set(Collections.singletonList(GroupState.STABLE)), result);
+        Assertions.assertEquals(ListConsumerGroupTest.set(List.of(GroupState.STABLE)), result);
 
         result = ConsumerGroupCommand.groupStatesFromString("stable, assigning");
-        Assertions.assertEquals(ListConsumerGroupTest.set(Arrays.asList(GroupState.STABLE, GroupState.ASSIGNING)), result);
+        Assertions.assertEquals(ListConsumerGroupTest.set(List.of(GroupState.STABLE, GroupState.ASSIGNING)), result);
 
         result = ConsumerGroupCommand.groupStatesFromString("dead,reconciling,");
-        Assertions.assertEquals(ListConsumerGroupTest.set(Arrays.asList(GroupState.DEAD, GroupState.RECONCILING)), result);
+        Assertions.assertEquals(ListConsumerGroupTest.set(List.of(GroupState.DEAD, GroupState.RECONCILING)), result);
 
         Assertions.assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.groupStatesFromString("bad, wrong"));
 
@@ -641,13 +651,17 @@ class ListConsumerGroupUnitTest {
     @Test
     public void testConsumerGroupTypesFromString() {
         Set<GroupType> result = ConsumerGroupCommand.consumerGroupTypesFromString("consumer");
-        Assertions.assertEquals(ListConsumerGroupTest.set(Collections.singleton(GroupType.CONSUMER)), result);
+        Assertions.assertEquals(ListConsumerGroupTest.set(Set.of(GroupType.CONSUMER)), result);
 
         result = ConsumerGroupCommand.consumerGroupTypesFromString("consumer, classic");
-        Assertions.assertEquals(ListConsumerGroupTest.set(Arrays.asList(GroupType.CONSUMER, GroupType.CLASSIC)), result);
+        Assertions.assertEquals(ListConsumerGroupTest.set(List.of(GroupType.CONSUMER, GroupType.CLASSIC)), result);
 
         result = ConsumerGroupCommand.consumerGroupTypesFromString("Consumer, Classic");
-        Assertions.assertEquals(ListConsumerGroupTest.set(Arrays.asList(GroupType.CONSUMER, GroupType.CLASSIC)), result);
+        Assertions.assertEquals(ListConsumerGroupTest.set(List.of(GroupType.CONSUMER, GroupType.CLASSIC)), result);
+
+        Assertions.assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.consumerGroupTypesFromString("Share"));
+
+        Assertions.assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.consumerGroupTypesFromString("streams"));
 
         Assertions.assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.consumerGroupTypesFromString("bad, wrong"));
 

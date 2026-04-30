@@ -38,7 +38,6 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -182,7 +181,7 @@ public class ClientQuotaControlManager {
 
         List<ApiMessageAndVersion> newRecords = new ArrayList<>(newQuotaConfigs.size());
         Map<String, Double> currentQuotas = clientQuotaData.containsKey(entity) ?
-                clientQuotaData.get(entity) : Collections.emptyMap();
+                clientQuotaData.get(entity) : Map.of();
         for (Map.Entry<String, Double> entry : newQuotaConfigs.entrySet()) {
             String key = entry.getKey();
             Double newValue = entry.getValue();
@@ -262,32 +261,32 @@ public class ClientQuotaControlManager {
         }
 
         // Ensure the quota value is valid
-        switch (configKey.type()) {
-            case DOUBLE:
-                return ApiError.NONE;
-            case SHORT:
+        return switch (configKey.type()) {
+            case DOUBLE -> ApiError.NONE;
+            case SHORT -> {
                 if (value > Short.MAX_VALUE) {
-                    return new ApiError(Errors.INVALID_REQUEST,
+                    yield new ApiError(Errors.INVALID_REQUEST,
                         "Proposed value for " + key + " is too large for a SHORT.");
                 }
-                return getErrorForIntegralQuotaValue(value, key);
-            case INT:
+                yield getErrorForIntegralQuotaValue(value, key);
+            }
+            case INT -> {
                 if (value > Integer.MAX_VALUE) {
-                    return new ApiError(Errors.INVALID_REQUEST,
+                    yield new ApiError(Errors.INVALID_REQUEST,
                         "Proposed value for " + key + " is too large for an INT.");
                 }
-                return getErrorForIntegralQuotaValue(value, key);
-            case LONG: {
+                yield getErrorForIntegralQuotaValue(value, key);
+            }
+            case LONG -> {
                 if (value > Long.MAX_VALUE) {
-                    return new ApiError(Errors.INVALID_REQUEST,
+                    yield new ApiError(Errors.INVALID_REQUEST,
                         "Proposed value for " + key + " is too large for a LONG.");
                 }
-                return getErrorForIntegralQuotaValue(value, key);
+                yield getErrorForIntegralQuotaValue(value, key);
             }
-            default:
-                return new ApiError(Errors.UNKNOWN_SERVER_ERROR,
-                        "Unexpected config type " + configKey.type() + " should be Long or Double");
-        }
+            default -> new ApiError(Errors.UNKNOWN_SERVER_ERROR,
+                    "Unexpected config type " + configKey.type() + " should be Long or Double");
+        };
     }
 
     static ApiError getErrorForIntegralQuotaValue(double value, String key) {

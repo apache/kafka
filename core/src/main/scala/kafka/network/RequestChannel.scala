@@ -22,7 +22,6 @@ import java.util.concurrent._
 import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.scalalogging.Logger
 import kafka.network
-import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.memory.MemoryPool
@@ -31,11 +30,12 @@ import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.network.Session
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.server.common.RequestLocal
+import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
-import org.apache.kafka.network.RequestConvertToJson
+import org.apache.kafka.network.{RequestConvertToJson, Session}
+import org.apache.kafka.server.config.AbstractKafkaConfig
 
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOption
@@ -171,7 +171,7 @@ object RequestChannel extends Logging {
           newData.resources().forEach(resource => {
             val resourceType = ConfigResource.Type.forId(resource.resourceType())
             resource.configs().forEach(config => {
-              config.setValue(KafkaConfig.loggableValue(resourceType, config.name(), config.value()))
+              config.setValue(AbstractKafkaConfig.loggableValue(resourceType, config.name(), config.value()))
             })
           })
           new AlterConfigsRequest(newData, alterConfigs.version())
@@ -181,7 +181,7 @@ object RequestChannel extends Logging {
           newData.resources().forEach(resource => {
             val resourceType = ConfigResource.Type.forId(resource.resourceType())
             resource.configs().forEach(config => {
-              config.setValue(KafkaConfig.loggableValue(resourceType, config.name(), config.value()))
+              config.setValue(AbstractKafkaConfig.loggableValue(resourceType, config.name(), config.value()))
             })
           })
           new IncrementalAlterConfigsRequest.Builder(newData).build(alterConfigs.version())
@@ -227,6 +227,8 @@ object RequestChannel extends Logging {
           Seq(specifiedMetricName, header.apiKey.name)
         } else if (header.apiKey == ApiKeys.ADD_PARTITIONS_TO_TXN && body[AddPartitionsToTxnRequest].allVerifyOnlyRequest) {
             Seq(RequestMetrics.VERIFY_PARTITIONS_IN_TXN_METRIC_NAME)
+        } else if (header.apiKey == ApiKeys.LIST_CONFIG_RESOURCES && header.apiVersion == 0) {
+          Seq(RequestMetrics.LIST_CLIENT_METRICS_RESOURCES_METRIC_NAME, header.apiKey.name)
         } else {
           Seq(header.apiKey.name)
         }
@@ -340,22 +342,22 @@ object RequestChannel extends Logging {
 }
 
 class RequestChannel(val queueSize: Int,
-                     val metricNamePrefix: String,
                      time: Time,
                      val metrics: RequestChannelMetrics) {
   import RequestChannel._
 
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
+  private val metricsPackage = "kafka.network"
+  private val metricsClassName = "RequestChannel"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
   private val processors = new ConcurrentHashMap[Int, Processor]()
-  private val requestQueueSizeMetricName = metricNamePrefix.concat(RequestQueueSizeMetric)
-  private val responseQueueSizeMetricName = metricNamePrefix.concat(ResponseQueueSizeMetric)
   private val callbackQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
 
-  metricsGroup.newGauge(requestQueueSizeMetricName, () => requestQueue.size)
+  metricsGroup.newGauge(RequestQueueSizeMetric, () => requestQueue.size)
 
-  metricsGroup.newGauge(responseQueueSizeMetricName, () => {
+  metricsGroup.newGauge(ResponseQueueSizeMetric, () => {
     processors.values.asScala.foldLeft(0) {(total, processor) =>
       total + processor.responseQueueSize
     }
@@ -365,13 +367,14 @@ class RequestChannel(val queueSize: Int,
     if (processors.putIfAbsent(processor.id, processor) != null)
       warn(s"Unexpected processor with processorId ${processor.id}")
 
-    metricsGroup.newGauge(responseQueueSizeMetricName, () => processor.responseQueueSize,
-      Map(ProcessorMetricTag -> processor.id.toString).asJava)
+    metricsGroup.newGauge(ResponseQueueSizeMetric, () => processor.responseQueueSize,
+      MetricsUtils.getTags(ProcessorMetricTag, processor.id.toString))
   }
 
   def removeProcessor(processorId: Int): Unit = {
     processors.remove(processorId)
-    metricsGroup.removeMetric(responseQueueSizeMetricName, Map(ProcessorMetricTag -> processorId.toString).asJava)
+    metricsGroup.removeMetric(ResponseQueueSizeMetric,
+      MetricsUtils.getTags(ProcessorMetricTag, processorId.toString))
   }
 
   /** Send a request to be handled, potentially blocking until there is room in the queue for the request */

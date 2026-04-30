@@ -31,15 +31,13 @@ import java.util.Map.Entry;
 
 /**
  * Represents the DelegationToken credentials in the metadata image.
- *
+ * <p>
  * This class is thread-safe.
+ *
+ * @param tokens Map TokenID to TokenInformation. The TokenID is also contained in the TokenInformation inside the DelegationTokenData
  */
-public final class DelegationTokenImage {
-    public static final DelegationTokenImage EMPTY = new DelegationTokenImage(Collections.emptyMap());
-
-    // Map TokenID to TokenInformation.
-    // The TokenID is also contained in the TokenInformation inside the DelegationTokenData
-    private final Map<String, DelegationTokenData> tokens;
+public record DelegationTokenImage(Map<String, DelegationTokenData> tokens) {
+    public static final DelegationTokenImage EMPTY = new DelegationTokenImage(Map.of());
 
     public DelegationTokenImage(Map<String, DelegationTokenData> tokens) {
         this.tokens = Collections.unmodifiableMap(tokens);
@@ -55,29 +53,12 @@ public final class DelegationTokenImage {
                 List<String> tokenIds = new ArrayList<>(tokens.keySet());
                 String delegationTokenImageString = "DelegationTokenImage(" + String.join(", ", tokenIds) + ")";
                 options.handleLoss(delegationTokenImageString);
-            } 
+            }
         }
-    }
-
-    public Map<String, DelegationTokenData> tokens() {
-        return tokens;
     }
 
     public boolean isEmpty() {
         return tokens.isEmpty();
-    }
-
-    @Override
-    public int hashCode() {
-        return tokens.hashCode();
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o == null) return false;
-        if (!o.getClass().equals(DelegationTokenImage.class)) return false;
-        DelegationTokenImage other = (DelegationTokenImage) o;
-        return tokens.equals(other.tokens);
     }
 
     @Override

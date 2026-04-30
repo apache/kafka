@@ -35,7 +35,6 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,6 +46,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.METRIC_NAMES_LEGACY;
+import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.METRIC_NAMES_NEW;
 import static org.apache.kafka.connect.mirror.MirrorUtils.adminCall;
 
 /** Emits checkpoints for upstream consumer groups. */
@@ -66,6 +67,7 @@ public class MirrorCheckpointTask extends SourceTask {
     private ReplicationPolicy replicationPolicy;
     private OffsetSyncStore offsetSyncStore;
     private boolean stopping;
+    private MirrorCheckpointLegacyMetrics legacyMetrics;
     private MirrorCheckpointMetrics metrics;
     private Scheduler scheduler;
     private Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset;
@@ -105,7 +107,9 @@ public class MirrorCheckpointTask extends SourceTask {
         offsetSyncStore = new OffsetSyncStore(config);
         sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig("checkpoint-source-admin"));
         targetAdminClient = config.forwardingAdmin(config.targetAdminConfig("checkpoint-target-admin"));
-        metrics = config.metrics();
+        List<String> metricNamesFormats = config.metricNamesFormats();
+        legacyMetrics = metricNamesFormats.contains(METRIC_NAMES_LEGACY) ? config.legacyMetrics() : null;
+        metrics = metricNamesFormats.contains(METRIC_NAMES_NEW) ? config.metrics(context.pluginMetrics()) : null;
         idleConsumerGroupsOffset = new HashMap<>();
         checkpointStore = new CheckpointStore(config, consumerGroups);
         scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
@@ -137,7 +141,7 @@ public class MirrorCheckpointTask extends SourceTask {
         Utils.closeQuietly(offsetSyncStore, "offset sync store");
         Utils.closeQuietly(sourceAdminClient, "source admin client");
         Utils.closeQuietly(targetAdminClient, "target admin client");
-        Utils.closeQuietly(metrics, "metrics");
+        Utils.closeQuietly(legacyMetrics, "metrics");
         Utils.closeQuietly(scheduler, "scheduler");
         log.info("Stopping {} took {} ms.", Thread.currentThread().getName(), System.currentTimeMillis() - start);
     }
@@ -186,7 +190,7 @@ public class MirrorCheckpointTask extends SourceTask {
                 .collect(Collectors.toList());
         } catch (ExecutionException e) {
             log.error("Error querying offsets for consumer group {} on cluster {}.",  group, sourceClusterAlias, e);
-            return Collections.emptyList();
+            return List.of();
         }
     }
 
@@ -195,7 +199,7 @@ public class MirrorCheckpointTask extends SourceTask {
         return upstreamGroupOffsets.entrySet().stream()
             .filter(x -> shouldCheckpointTopic(x.getKey().topic())) // Only perform relevant checkpoints filtered by "topic filter"
             .map(x -> checkpoint(group, x.getKey(), x.getValue()))
-            .flatMap(o -> o.stream()) // do not emit checkpoints for partitions that don't have offset-syncs
+            .flatMap(Optional::stream) // do not emit checkpoints for partitions that don't have offset-syncs
             .filter(x -> x.downstreamOffset() >= 0)  // ignore offsets we cannot translate accurately
             .filter(this::checkpointIsMoreRecent) // do not emit checkpoints for partitions that have a later checkpoint
             .collect(Collectors.toMap(Checkpoint::topicPartition, Function.identity()));
@@ -234,7 +238,7 @@ public class MirrorCheckpointTask extends SourceTask {
             throws InterruptedException, ExecutionException {
         if (stopping) {
             // short circuit if stopping
-            return Collections.emptyMap();
+            return Map.of();
         }
         return adminCall(
                 () -> sourceAdminClient.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get(),
@@ -283,9 +287,16 @@ public class MirrorCheckpointTask extends SourceTask {
 
     @Override
     public void commitRecord(SourceRecord record, RecordMetadata metadata) {
-        metrics.checkpointLatency(MirrorUtils.unwrapPartition(record.sourcePartition()),
-            Checkpoint.unwrapGroup(record.sourcePartition()),
-            System.currentTimeMillis() - record.timestamp());
+        TopicPartition topicPartition = MirrorUtils.unwrapPartition(record.sourcePartition());
+        String group = Checkpoint.unwrapGroup(record.sourcePartition());
+        long millis = System.currentTimeMillis() - record.timestamp();
+        if (legacyMetrics != null) {
+            legacyMetrics.checkpointLatency(topicPartition, group, millis);
+        }
+        if (metrics != null) {
+            metrics.checkpointLatency(topicPartition, group, millis);
+        }
+
     }
 
     private void refreshIdleConsumerGroupOffset() throws ExecutionException, InterruptedException {
@@ -372,7 +383,7 @@ public class MirrorCheckpointTask extends SourceTask {
                 offsetToSync.put(topicPartition, convertedOffset);
             }
 
-            if (offsetToSync.size() == 0) {
+            if (offsetToSync.isEmpty()) {
                 log.trace("skip syncing the offset for consumer group: {}", consumerGroupId);
                 continue;
             }

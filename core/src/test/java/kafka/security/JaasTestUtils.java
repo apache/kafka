@@ -23,7 +23,7 @@ import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.Java;
+import org.apache.kafka.common.utils.internals.Java;
 import org.apache.kafka.test.TestSslUtils;
 
 import java.io.BufferedWriter;
@@ -31,7 +31,6 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -246,7 +245,7 @@ public class JaasTestUtils {
                         KAFKA_SCRAM_PASSWORD_2,
                         KAFKA_OAUTH_BEARER_USER_2,
                         SERVICE_NAME)
-                ).map(Collections::singletonList).orElse(Collections.emptyList()));
+                ).map(List::of).orElse(List.of()));
     }
 
     private static void writeToFile(File file, List<JaasSection> jaasSections) throws IOException {
@@ -256,23 +255,17 @@ public class JaasTestUtils {
     }
 
     public static boolean usesSslTransportLayer(SecurityProtocol securityProtocol) {
-        switch (securityProtocol) {
-            case SSL:
-            case SASL_SSL:
-                return true;
-            default:
-                return false;
-        }
+        return switch (securityProtocol) {
+            case SSL, SASL_SSL -> true;
+            default -> false;
+        };
     }
 
     public static boolean usesSaslAuthentication(SecurityProtocol securityProtocol) {
-        switch (securityProtocol) {
-            case SASL_PLAINTEXT:
-            case SASL_SSL:
-                return true;
-            default:
-                return false;
-        }
+        return switch (securityProtocol) {
+            case SASL_PLAINTEXT, SASL_SSL -> true;
+            default -> false;
+        };
     }
 
     public static Properties sslConfigs(ConnectionMode mode,

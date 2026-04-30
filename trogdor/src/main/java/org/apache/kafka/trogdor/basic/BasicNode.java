@@ -21,7 +21,6 @@ import org.apache.kafka.trogdor.common.Node;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -46,11 +45,9 @@ public class BasicNode implements Node {
     public BasicNode(String name, JsonNode root) {
         this.name = name;
         String hostname = "localhost";
-        Set<String> tags = Collections.emptySet();
+        Set<String> tags = new HashSet<>();
         Map<String, String> config = new HashMap<>();
-        for (Iterator<Map.Entry<String, JsonNode>> iter = root.fields();
-             iter.hasNext(); ) {
-            Map.Entry<String, JsonNode> entry = iter.next();
+        for (Map.Entry<String, JsonNode> entry : root.properties()) {
             String key = entry.getKey();
             JsonNode node = entry.getValue();
             if (key.equals("hostname")) {
@@ -58,7 +55,7 @@ public class BasicNode implements Node {
             } else if (key.equals("tags")) {
                 if (!node.isArray()) {
                     throw new RuntimeException("Expected the 'tags' field to be an " +
-                        "array of strings.");
+                            "array of strings.");
                 }
                 tags = new HashSet<>();
                 for (Iterator<JsonNode> tagIter = node.elements(); tagIter.hasNext(); ) {

@@ -30,7 +30,9 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.metrics.StreamsThreadMetricsDelegatingReporter;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -43,6 +45,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicLong;
@@ -237,7 +240,7 @@ public class GlobalStreamThread extends Thread {
         }
 
         /**
-         * @throws IllegalStateException If store gets registered after initialized is already finished
+         * @throws IllegalStateException If a store gets registered after initialized is already finished
          * @throws StreamsException      if the store's change log does not contain the partition
          */
         void initialize() {
@@ -390,7 +393,10 @@ public class GlobalStreamThread extends Thread {
                 time
             );
             stateMgr.setGlobalProcessorContext(globalProcessorContext);
-
+            final StreamsThreadMetricsDelegatingReporter globalMetricsReporter = new StreamsThreadMetricsDelegatingReporter(globalConsumer, getName(), Optional.empty());
+            streamsMetrics.metricsRegistry().addReporter(globalMetricsReporter);
+            @SuppressWarnings("deprecation")
+            final ProcessingExceptionHandler processingExceptionHandler = config.getBoolean(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG) ? config.processingExceptionHandler() : null;
             stateConsumer = new StateConsumer(
                 logContext,
                 globalConsumer,
@@ -400,6 +406,7 @@ public class GlobalStreamThread extends Thread {
                     globalProcessorContext,
                     stateMgr,
                     config.deserializationExceptionHandler(),
+                    processingExceptionHandler,
                     time,
                     config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG)
                 ),
@@ -427,7 +434,7 @@ public class GlobalStreamThread extends Thread {
         } catch (final StreamsException fatalException) {
             closeStateConsumer(stateConsumer, false);
             startupException = fatalException;
-        } catch (final Exception fatalException) {
+        } catch (final Throwable fatalException) {
             closeStateConsumer(stateConsumer, false);
             startupException = new StreamsException("Exception caught during initialization of GlobalStreamThread", fatalException);
         } finally {

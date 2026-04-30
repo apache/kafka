@@ -30,8 +30,8 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
-import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.ExponentialBackoff;
 
 import org.slf4j.Logger;
 
@@ -50,7 +50,7 @@ import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
+import static org.apache.kafka.common.record.internal.RecordBatch.NO_PARTITION_LEADER_EPOCH;
 
 /**
  * A class encapsulating some of the logic around metadata.
@@ -220,13 +220,13 @@ public class Metadata implements Closeable {
     }
 
     /**
-     * Request an update for the partition metadata iff we have seen a newer leader epoch. This is called by the client
+     * Request an update for the partition metadata if and only if we have seen a newer leader epoch. This is called by the client
      * any time it handles a response from the broker that includes leader epoch, except for update via Metadata RPC which
      * follows a different code path ({@link #update}).
      *
-     * @param topicPartition
-     * @param leaderEpoch
-     * @return true if we updated the last seen epoch, false otherwise
+     * @param topicPartition The partition for which to update the last seen leader epoch.
+     * @param leaderEpoch    The leader epoch received from the broker.
+     * @return {@code true} if we updated the last seen epoch, {@code false} otherwise.
      */
     public synchronized boolean updateLastSeenEpochIfNewer(TopicPartition topicPartition, int leaderEpoch) {
         Objects.requireNonNull(topicPartition, "TopicPartition cannot be null");
@@ -381,7 +381,7 @@ public class Metadata implements Closeable {
     public synchronized Set<TopicPartition> updatePartitionLeadership(Map<TopicPartition, LeaderIdAndEpoch> partitionLeaders, List<Node> leaderNodes) {
         Map<Integer, Node> newNodes = leaderNodes.stream().collect(Collectors.toMap(Node::id, node -> node));
         // Insert non-overlapping nodes from existing-nodes into new-nodes.
-        this.metadataSnapshot.cluster().nodes().stream().forEach(node -> newNodes.putIfAbsent(node.id(), node));
+        this.metadataSnapshot.cluster().nodes().forEach(node -> newNodes.putIfAbsent(node.id(), node));
 
         // Create partition-metadata for all updated partitions. Exclude updates for partitions -
         // 1. for which the corresponding partition has newer leader in existing metadata.
@@ -508,7 +508,7 @@ public class Metadata implements Closeable {
                 topicId = null;
             }
 
-            if (!retainTopic(topicName, metadata.isInternal(), nowMs))
+            if (!retainTopic(topicName, topicId, metadata.isInternal(), nowMs))
                 continue;
 
             if (metadata.isInternal())
@@ -758,8 +758,18 @@ public class Metadata implements Closeable {
         return metadataSnapshot.topicNames();
     }
 
+    /**
+     * Based on the topic name, check if the topic metadata should be kept when received in a metadata response.
+     */
     protected boolean retainTopic(String topic, boolean isInternal, long nowMs) {
         return true;
+    }
+
+    /**
+     * Based on the topic name and topic ID, check if the topic metadata should be kept when received in a metadata response.
+     */
+    protected boolean retainTopic(String topicName, Uuid topicId, boolean isInternal, long nowMs) {
+        return retainTopic(topicName, isInternal, nowMs);
     }
 
     public static class MetadataRequestAndVersion {

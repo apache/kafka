@@ -23,7 +23,6 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.image.loader.LogDeltaManifest;
-import org.apache.kafka.image.loader.SnapshotManifest;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.server.fault.FaultHandler;
@@ -217,28 +216,20 @@ public class SnapshotGenerator implements MetadataPublisher {
     ) {
         switch (manifest.type()) {
             case LOG_DELTA:
-                publishLogDelta(delta, newImage, (LogDeltaManifest) manifest);
+                publishLogDelta(newImage, (LogDeltaManifest) manifest);
                 break;
             case SNAPSHOT:
-                publishSnapshot(delta, newImage, (SnapshotManifest) manifest);
+                publishSnapshot(newImage);
                 break;
         }
     }
 
-    void publishSnapshot(
-        MetadataDelta delta,
-        MetadataImage newImage,
-        SnapshotManifest manifest
-    ) {
+    void publishSnapshot(MetadataImage newImage) {
         log.debug("Resetting the snapshot counters because we just read {}.", newImage.provenance().snapshotName());
         resetSnapshotCounters();
     }
 
-    void publishLogDelta(
-        MetadataDelta delta,
-        MetadataImage newImage,
-        LogDeltaManifest manifest
-    ) {
+    void publishLogDelta(MetadataImage newImage, LogDeltaManifest manifest) {
         bytesSinceLastSnapshot += manifest.numBytes();
         if (bytesSinceLastSnapshot >= maxBytesSinceLastSnapshot) {
             if (eventQueue.isEmpty()) {

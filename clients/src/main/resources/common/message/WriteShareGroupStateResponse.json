@@ -17,13 +17,17 @@
   "apiKey": 85,
   "type": "response",
   "name": "WriteShareGroupStateResponse",
-  "validVersions": "0",
+  // Version 0 is the initial version (KIP-932).
+  //
+  // Version 1 introduces DeliveryCompleteCount in the request (KIP-1226).
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   // - NOT_COORDINATOR (version 0+)
   // - COORDINATOR_NOT_AVAILABLE (version 0+)
   // - COORDINATOR_LOAD_IN_PROGRESS (version 0+)
   // - GROUP_ID_NOT_FOUND (version 0+)
   // - UNKNOWN_TOPIC_OR_PARTITION (version 0+)
+  // - FENCED_LEADER_EPOCH (version 0+)
   // - FENCED_STATE_EPOCH (version 0+)
   // - INVALID_REQUEST (version 0+)
   "fields": [

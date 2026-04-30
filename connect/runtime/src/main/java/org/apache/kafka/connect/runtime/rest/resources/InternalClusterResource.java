@@ -51,7 +51,7 @@ import jakarta.ws.rs.core.UriInfo;
 public abstract class InternalClusterResource {
 
     private static final TypeReference<List<Map<String, String>>> TASK_CONFIGS_TYPE =
-            new TypeReference<List<Map<String, String>>>() { };
+            new TypeReference<>() { };
 
     private final HerderRequestHandler requestHandler;
 

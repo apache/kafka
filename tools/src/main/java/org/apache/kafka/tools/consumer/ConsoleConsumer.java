@@ -17,7 +17,9 @@
 package org.apache.kafka.tools.consumer;
 
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.TopicPartition;
@@ -26,8 +28,8 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.Exit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +39,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
@@ -69,6 +72,7 @@ public class ConsoleConsumer {
     public static void run(ConsoleConsumerOptions opts) {
         messageCount = 0;
         Consumer<byte[], byte[]> consumer = new KafkaConsumer<>(opts.consumerProps(), new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        maybePrintConsumerProtocolMessage(opts);
         ConsumerWrapper consumerWrapper = new ConsumerWrapper(opts, consumer);
 
         addShutdownHook(consumerWrapper, opts);
@@ -144,6 +148,20 @@ public class ConsoleConsumer {
         return gotError;
     }
 
+    static void maybePrintConsumerProtocolMessage(ConsoleConsumerOptions opts) {
+        // Skip if using manual partition assignment used (--partition)
+        if (opts.partitionArg().isPresent()) {
+            return;
+        }
+        String protocol = (String) opts.consumerProps().get(ConsumerConfig.GROUP_PROTOCOL_CONFIG);
+        if (protocol == null || GroupProtocol.CLASSIC.name().equalsIgnoreCase(protocol)) {
+            // Only print if INFO logging is not enabled (otherwise ClassicKafkaConsumer already logs it)
+            if (!LoggerFactory.getLogger("org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer").isInfoEnabled()) {
+                System.err.println("The consumer rebalance protocol (KIP-848) is production-ready! Set group.protocol=consumer to try it out. See https://kafka.apache.org/documentation/#consumer_rebalance_protocol");
+            }
+        }
+    }
+
     public static class ConsumerWrapper {
         final Time time = Time.SYSTEM;
         final long timeoutMs;
@@ -160,7 +178,7 @@ public class ConsoleConsumer {
                 if (opts.partitionArg().isPresent()) {
                     seek(topic.get(), opts.partitionArg().getAsInt(), opts.offsetArg());
                 } else {
-                    consumer.subscribe(Collections.singletonList(topic.get()));
+                    consumer.subscribe(List.of(topic.get()));
                 }
             } else {
                 opts.includedTopicsArg().ifPresent(topics -> consumer.subscribe(Pattern.compile(topics)));
@@ -169,11 +187,11 @@ public class ConsoleConsumer {
 
         private void seek(String topic, int partitionId, long offset) {
             TopicPartition topicPartition = new TopicPartition(topic, partitionId);
-            consumer.assign(Collections.singletonList(topicPartition));
+            consumer.assign(List.of(topicPartition));
             if (offset == ListOffsetsRequest.EARLIEST_TIMESTAMP) {
-                consumer.seekToBeginning(Collections.singletonList(topicPartition));
+                consumer.seekToBeginning(List.of(topicPartition));
             } else if (offset == ListOffsetsRequest.LATEST_TIMESTAMP) {
-                consumer.seekToEnd(Collections.singletonList(topicPartition));
+                consumer.seekToEnd(List.of(topicPartition));
             } else {
                 consumer.seek(topicPartition, offset);
             }

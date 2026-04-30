@@ -138,7 +138,7 @@ public class Fetcher<K, V> extends AbstractFetch {
             // here.
             log.debug("All requests couldn't be sent in the specific timeout period {}ms. " +
                     "This may result in unnecessary fetch sessions at the broker. Consider increasing the timeout passed for " +
-                    "KafkaConsumer.close(Duration timeout)", timer.timeoutMs());
+                    "KafkaConsumer.close(...)", timer.timeoutMs());
         }
     }
 
@@ -147,12 +147,11 @@ public class Fetcher<K, V> extends AbstractFetch {
     }
 
     /**
-     * This method is called by {@link #close(Timer)} which is guarded by the {@link IdempotentCloser}) such as to only
+     * This method is called by {@link #close(Timer)} which is guarded by the {@link IdempotentCloser} such as to only
      * be executed once the first time that any of the {@link #close()} methods are called. Subclasses can override
      * this method without the need for extra synchronization at the instance level.
      *
-     * <p/>
-     *
+     * <p>
      * <em>Note</em>: this method is <code>synchronized</code> to reinstitute the 3.5 behavior:
      *
      * <blockquote>
@@ -172,7 +171,7 @@ public class Fetcher<K, V> extends AbstractFetch {
 
     /**
      * Creates the {@link FetchRequest.Builder fetch request},
-     * {@link NetworkClient#send(ClientRequest, long) enqueues/sends it, and adds the {@link RequestFuture callback}
+     * {@link NetworkClient#send(ClientRequest, long)} enqueues/sends it, and adds the {@link RequestFuture callback}
      * for the response.
      *
      * @param fetchRequests  {@link Map} of {@link Node nodes} to their

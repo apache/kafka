@@ -51,7 +51,7 @@ class Unifier {
         this.structRegistry1.register(topLevelMessage1);
         this.topLevelMessage2 = topLevelMessage2;
         this.structRegistry2 = new StructRegistry();
-        this.structRegistry1.register(topLevelMessage2);
+        this.structRegistry2.register(topLevelMessage2);
     }
 
     static FieldSpec structSpecToFieldSpec(StructSpec structSpec) {
@@ -85,7 +85,7 @@ class Unifier {
                     field1.type());
         }
 
-        // The maximum supported version in field2 must be not be lower than the maximum supported
+        // The maximum supported version in field2 must not be lower than the maximum supported
         // version in field1.
         short f1Highest = min(field1.versions().highest(), topLevelMessage1.validVersions().highest());
         short f2Highest = min(field2.versions().highest(), topLevelMessage2.validVersions().highest());
@@ -129,14 +129,14 @@ class Unifier {
         // used in RequestHeader.json In every other case, FieldSpec.flexibleVersions() will be
         // Optional.empty.
         Versions field2EffectiveFlexibleVersions = field2.flexibleVersions().
-                orElseGet(() -> topLevelMessage2.flexibleVersions());
+                orElseGet(topLevelMessage2::flexibleVersions);
         Versions field1EffectiveFlexibleVersions = field1.flexibleVersions().
-                orElseGet(() -> topLevelMessage1.flexibleVersions());
+                orElseGet(topLevelMessage1::flexibleVersions);
         if (!field2EffectiveFlexibleVersions.contains(field1EffectiveFlexibleVersions)) {
             throw new UnificationException("Flexible versions for field2 " + field2.name() +
-                " is " + field2.flexibleVersions().orElseGet(() -> Versions.NONE) +
+                " is " + field2.flexibleVersions().orElse(Versions.NONE) +
                 ", but flexible versions for field1 is " +
-                field1.flexibleVersions().orElseGet(() -> Versions.NONE));
+                field1.flexibleVersions().orElse(Versions.NONE));
         }
         // Check that defaults match exactly.
         if (!field2.defaultString().equals(field1.defaultString())) {

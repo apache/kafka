@@ -24,7 +24,11 @@ package org.apache.kafka.server.share.persister;
 public interface PartitionStateSummaryData extends PartitionInfoData, PartitionIdData {
     int stateEpoch();
 
+    int leaderEpoch();
+
     long startOffset();
+
+    int deliveryCompleteCount();
 
     short errorCode();
 

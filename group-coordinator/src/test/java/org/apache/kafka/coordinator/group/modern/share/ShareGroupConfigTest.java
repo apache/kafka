@@ -16,45 +16,43 @@
  */
 package org.apache.kafka.coordinator.group.modern.share;
 
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ShareGroupConfigTest {
 
     @Test
     public void testConfigs() {
         Map<String, Object> configs = new HashMap<>();
-        configs.put(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG, true);
         configs.put(ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, 200);
+        configs.put(ShareGroupConfig.SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG, 100);
+        configs.put(ShareGroupConfig.SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG, 10000);
         configs.put(ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG, 5);
-        configs.put(ShareGroupConfig.SHARE_GROUP_MAX_GROUPS_CONFIG, (short) 10);
+        configs.put(ShareGroupConfig.SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_CONFIG, 2);
+        configs.put(ShareGroupConfig.SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_CONFIG, 9);
         configs.put(ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, 30000);
         configs.put(ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG, 15000);
         configs.put(ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, 60000);
         configs.put(ShareGroupConfig.SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG, 1000);
+        configs.put(ShareGroupConfig.SHARE_GROUP_MAX_SHARE_SESSIONS_CONFIG, 1000);
 
         ShareGroupConfig config = createConfig(configs);
 
-        assertTrue(config.isShareGroupEnabled());
         assertEquals(200, config.shareGroupPartitionMaxRecordLocks());
         assertEquals(5, config.shareGroupDeliveryCountLimit());
-        assertEquals(10, config.shareGroupMaxGroups());
         assertEquals(30000, config.shareGroupRecordLockDurationMs());
         assertEquals(15000, config.shareGroupMinRecordLockDurationMs());
         assertEquals(60000, config.shareGroupMaxRecordLockDurationMs());
         assertEquals(1000, config.shareFetchPurgatoryPurgeIntervalRequests());
+        assertEquals(1000, config.shareGroupMaxShareSessions());
     }
 
     @Test
@@ -76,6 +74,20 @@ public class ShareGroupConfigTest {
             assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
 
         configs.clear();
+        // test for when SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG is less than SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_CONFIG
+        configs.put(ShareGroupConfig.SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_CONFIG, 3);
+        configs.put(ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG, 2);
+        assertEquals("group.share.delivery.count.limit must be greater than or equal to group.share.min.delivery.count.limit",
+                assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        // test for when SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG is greater than SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_CONFIG
+        configs.put(ShareGroupConfig.SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_CONFIG, 9);
+        configs.put(ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG, 10);
+        assertEquals("group.share.max.delivery.count.limit must be greater than or equal to group.share.delivery.count.limit",
+                assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
         // test for when SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG is out of bounds
         configs.put(ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG, 1);
         assertEquals("Invalid value 1 for configuration group.share.delivery.count.limit: Value must be at least 2",
@@ -88,22 +100,18 @@ public class ShareGroupConfigTest {
             assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
 
         configs.clear();
-        // test for when SHARE_GROUP_MAX_GROUPS_CONFIG is of incorrect data type
-        configs.put(ShareGroupConfig.SHARE_GROUP_MAX_GROUPS_CONFIG, 10);
-        assertEquals("Invalid value 10 for configuration group.share.max.groups: Expected value to be a 16-bit integer (short), but it was a java.lang.Integer",
-            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+        // test for when SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG is less than SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG
+        configs.put(ShareGroupConfig.SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG, 200);
+        configs.put(ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, 150);
+        assertEquals("group.share.partition.max.record.locks must be greater than or equal to group.share.min.partition.max.record.locks",
+                assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
 
         configs.clear();
-        // test for when SHARE_GROUP_MAX_GROUPS_CONFIG is out of bounds
-        configs.put(ShareGroupConfig.SHARE_GROUP_MAX_GROUPS_CONFIG, (short) 0);
-        assertEquals("Invalid value 0 for configuration group.share.max.groups: Value must be at least 1",
-            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
-
-        configs.clear();
-        // test for when SHARE_GROUP_MAX_GROUPS_CONFIG is out of bounds
-        configs.put(ShareGroupConfig.SHARE_GROUP_MAX_GROUPS_CONFIG, (short) 110);
-        assertEquals("Invalid value 110 for configuration group.share.max.groups: Value must be no more than 100",
-            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+        // test for when SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG is greater than SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG
+        configs.put(ShareGroupConfig.SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG, 3000);
+        configs.put(ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, 4000);
+        assertEquals("group.share.max.partition.max.record.locks must be greater than or equal to group.share.partition.max.record.locks",
+                assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
 
         configs.clear();
         // test for when SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG is out of bounds
@@ -116,27 +124,36 @@ public class ShareGroupConfigTest {
         configs.put(ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, 20000);
         assertEquals("Invalid value 20000 for configuration group.share.partition.max.record.locks: Value must be no more than 10000",
             assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        // test for when SHARE_GROUP_MAX_SHARE_SESSIONS_CONFIG is less than SHARE_GROUP_MAX_SIZE_CONFIG
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG, 2000);
+        configs.put(ShareGroupConfig.SHARE_GROUP_MAX_SHARE_SESSIONS_CONFIG, 1000);
+        assertEquals("Invalid value 2000 for configuration group.share.max.size: Value must be no more than 1000",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
     }
 
     public static ShareGroupConfig createShareGroupConfig(
-        boolean shareGroupEnable,
         int shareGroupPartitionMaxRecordLocks,
+        int shareGroupMinPartitionMaxRecordLocks,
+        int shareGroupMaxPartitionMaxRecordLocks,
         int shareGroupDeliveryCountLimit,
-        short shareGroupsMaxGroups,
+        int shareGroupMinDeliveryCountLimit,
+        int shareGroupMaxDeliveryCountLimit,
         int shareGroupRecordLockDurationsMs,
         int shareGroupMinRecordLockDurationMs,
         int shareGroupMaxRecordLockDurationMs
     ) {
         Map<String, Object> configs = new HashMap<>();
-        configs.put(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG, shareGroupEnable);
         configs.put(ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, shareGroupPartitionMaxRecordLocks);
+        configs.put(ShareGroupConfig.SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG, shareGroupMinPartitionMaxRecordLocks);
+        configs.put(ShareGroupConfig.SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG, shareGroupMaxPartitionMaxRecordLocks);
         configs.put(ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG, shareGroupDeliveryCountLimit);
-        configs.put(ShareGroupConfig.SHARE_GROUP_MAX_GROUPS_CONFIG, shareGroupsMaxGroups);
+        configs.put(ShareGroupConfig.SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_CONFIG, shareGroupMinDeliveryCountLimit);
+        configs.put(ShareGroupConfig.SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_CONFIG, shareGroupMaxDeliveryCountLimit);
         configs.put(ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupRecordLockDurationsMs);
         configs.put(ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupMinRecordLockDurationMs);
         configs.put(ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupMaxRecordLockDurationMs);
-        configs.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,share");
-        configs.put(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, true);
         configs.put(GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_THREADS_CONFIG, 1);
         configs.put(GroupCoordinatorConfig.GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG, 10);
 
@@ -144,7 +161,6 @@ public class ShareGroupConfigTest {
     }
 
     private static ShareGroupConfig createConfig(Map<String, Object> configs) {
-        return new ShareGroupConfig(
-            new AbstractConfig(Utils.mergeConfigs(Arrays.asList(ShareGroupConfig.CONFIG_DEF, GroupCoordinatorConfig.CONFIG_DEF)), configs, false));
+        return ShareGroupConfig.fromProps(configs);
     }
 }

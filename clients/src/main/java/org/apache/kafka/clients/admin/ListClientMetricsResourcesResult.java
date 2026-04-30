@@ -25,7 +25,9 @@ import java.util.Collection;
 /**
  * The result of the {@link Admin#listClientMetricsResources()} call.
  * <p>
+ * @deprecated Since 4.1. Use {@link ListConfigResourcesResult} instead.
  */
+@Deprecated(since = "4.1")
 public class ListClientMetricsResourcesResult {
     private final KafkaFuture<Collection<ClientMetricsResourceListing>> future;
 

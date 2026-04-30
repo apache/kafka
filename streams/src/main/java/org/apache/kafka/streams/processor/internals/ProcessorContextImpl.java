@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -39,6 +38,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -123,20 +123,14 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
                           final Bytes key,
                           final byte[] value,
                           final long timestamp,
+                          final Headers headers,
                           final Position position) {
         throwUnsupportedOperationExceptionIfStandby("logChange");
 
         final TopicPartition changelogPartition = stateManager().registeredChangelogPartitionFor(storeName);
 
-        final Headers headers;
-        if (!consistencyEnabled) {
-            headers = null;
-        } else {
-            // Add the vector clock to the header part of every record
-            headers = new RecordHeaders();
-            headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
-            headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
-                    PositionSerde.serialize(position).array()));
+        if (consistencyEnabled) {
+            addVectorClockToHeaders(headers, position);
         }
 
         collector.send(
@@ -150,6 +144,12 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
             BYTEARRAY_VALUE_SERIALIZER,
             null,
             null);
+    }
+
+    private void addVectorClockToHeaders(final Headers headers, final Position position) {
+        headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
+        headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+            PositionSerde.serialize(position).array()));
     }
 
     /**
@@ -260,7 +260,10 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
                     recordContext.offset(),
                     recordContext.partition(),
                     recordContext.topic(),
-                    record.headers());
+                    record.headers(),
+                    recordContext.sourceRawKey(),
+                    recordContext.sourceRawValue()
+                );
             }
 
             if (childName == null) {
@@ -310,7 +313,24 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
         if (intervalMs < 1) {
             throw new IllegalArgumentException("The minimum supported scheduling interval is 1 millisecond.");
         }
-        return streamTask.schedule(intervalMs, type, callback);
+        return streamTask.schedule(intervalMs, type, callback);    }
+
+    @Override
+    public Cancellable schedule(
+            final Instant startTime,
+            final Duration interval,
+            final PunctuationType type,
+            final Punctuator callback) throws IllegalArgumentException {
+        throwUnsupportedOperationExceptionIfStandby("schedule");
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(interval, "interval");
+        final long intervalMs = validateMillisecondDuration(interval, msgPrefix);
+        if (intervalMs < 1) {
+            throw new IllegalArgumentException("The minimum supported scheduling interval is 1 millisecond.");
+        }
+        if (startTime.isBefore(Instant.EPOCH)) {
+            throw new IllegalArgumentException("The minimum supported start time is Instant.EPOCH.");
+        }
+        return streamTask.schedule(startTime, intervalMs, type, callback);
     }
 
     @Override

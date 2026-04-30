@@ -24,9 +24,10 @@ import org.apache.kafka.server.share.fetch.PartitionRotateStrategy.StrategyType;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.List;
 
-import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.validateRotatedMapEquals;
+import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.validateRotatedListEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -35,64 +36,64 @@ public class PartitionRotateStrategyTest {
     @Test
     public void testRoundRobinStrategy() {
         PartitionRotateStrategy strategy = PartitionRotateStrategy.type(StrategyType.ROUND_ROBIN);
-        LinkedHashMap<TopicIdPartition, Integer> partitions = createPartitions(3);
+        List<TopicIdPartition> partitions = createPartitions(3);
 
-        LinkedHashMap<TopicIdPartition, Integer> result = strategy.rotate(partitions, new PartitionRotateMetadata(1));
+        List<TopicIdPartition> result = strategy.rotate(partitions, new PartitionRotateMetadata(1));
         assertEquals(3, result.size());
-        validateRotatedMapEquals(partitions, result, 1);
+        validateRotatedListEquals(partitions, result, 1);
 
         // Session epoch is greater than the number of partitions.
         result = strategy.rotate(partitions, new PartitionRotateMetadata(5));
         assertEquals(3, result.size());
-        validateRotatedMapEquals(partitions, result, 2);
+        validateRotatedListEquals(partitions, result, 2);
 
         // Session epoch is at Integer.MAX_VALUE.
         result = strategy.rotate(partitions, new PartitionRotateMetadata(Integer.MAX_VALUE));
         assertEquals(3, result.size());
-        validateRotatedMapEquals(partitions, result, 1);
+        validateRotatedListEquals(partitions, result, 1);
 
         // No rotation at same size as epoch.
         result = strategy.rotate(partitions, new PartitionRotateMetadata(3));
         assertEquals(3, result.size());
-        validateRotatedMapEquals(partitions, result, 0);
+        validateRotatedListEquals(partitions, result, 0);
     }
 
     @Test
     public void testRoundRobinStrategyWithSpecialSessionEpochs() {
         PartitionRotateStrategy strategy = PartitionRotateStrategy.type(StrategyType.ROUND_ROBIN);
 
-        LinkedHashMap<TopicIdPartition, Integer> partitions = createPartitions(3);
-        LinkedHashMap<TopicIdPartition, Integer> result = strategy.rotate(
+        List<TopicIdPartition> partitions = createPartitions(3);
+        List<TopicIdPartition> result = strategy.rotate(
             partitions,
             new PartitionRotateMetadata(ShareRequestMetadata.INITIAL_EPOCH));
         assertEquals(3, result.size());
-        validateRotatedMapEquals(partitions, result, 0);
+        validateRotatedListEquals(partitions, result, 0);
 
         result = strategy.rotate(
             partitions,
             new PartitionRotateMetadata(ShareRequestMetadata.FINAL_EPOCH));
         assertEquals(3, result.size());
-        validateRotatedMapEquals(partitions, result, 0);
+        validateRotatedListEquals(partitions, result, 0);
     }
 
     @Test
     public void testRoundRobinStrategyWithEmptyPartitions() {
         PartitionRotateStrategy strategy = PartitionRotateStrategy.type(StrategyType.ROUND_ROBIN);
         // Empty partitions.
-        LinkedHashMap<TopicIdPartition, Integer> result = strategy.rotate(new LinkedHashMap<>(), new PartitionRotateMetadata(5));
+        List<TopicIdPartition> result = strategy.rotate(new ArrayList<>(), new PartitionRotateMetadata(5));
         // The result should be empty.
         assertTrue(result.isEmpty());
     }
 
     /**
-     * Create an ordered map of TopicIdPartition to partition max bytes.
+     * Create a list of topic partitions.
      * @param size The number of topic-partitions to create.
-     * @return The ordered map of TopicIdPartition to partition max bytes.
+     * @return The list of topic partitions.
      */
-    private LinkedHashMap<TopicIdPartition, Integer> createPartitions(int size) {
-        LinkedHashMap<TopicIdPartition, Integer> partitions = new LinkedHashMap<>();
+    private List<TopicIdPartition> createPartitions(int size) {
+        List<TopicIdPartition> partitions = new ArrayList<>();
         for (int i = 0; i < size; i++) {
-            partitions.put(new TopicIdPartition(Uuid.randomUuid(), i, "foo" + i), 1 /* partition max bytes*/);
+            partitions.add(new TopicIdPartition(Uuid.randomUuid(), i, "foo" + i));
         }
         return partitions;
     }

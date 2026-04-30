@@ -71,7 +71,7 @@ public interface LogHistory<T> {
     void truncateOldEntries(long startOffset);
 
     /**
-     * Removes all of the values from this object.
+     * Removes all the values from this object.
      */
     void clear();
 

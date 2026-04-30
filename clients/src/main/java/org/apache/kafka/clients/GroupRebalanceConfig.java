@@ -43,9 +43,9 @@ public class GroupRebalanceConfig {
     public final int heartbeatIntervalMs;
     public final String groupId;
     public final Optional<String> groupInstanceId;
+    public final Optional<String> rackId;
     public final long retryBackoffMs;
     public final long retryBackoffMaxMs;
-    public final boolean leaveGroupOnClose;
 
     public GroupRebalanceConfig(AbstractConfig config, ProtocolType protocolType) {
         this.sessionTimeoutMs = config.getInt(CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG);
@@ -53,8 +53,12 @@ public class GroupRebalanceConfig {
         // Consumer and Connect use different config names for defining rebalance timeout
         if ((protocolType == ProtocolType.CONSUMER) || (protocolType == ProtocolType.SHARE)) {
             this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
+
+            String rackId = config.getString(CommonClientConfigs.CLIENT_RACK_CONFIG);
+            this.rackId = rackId == null || rackId.isEmpty() ? Optional.empty() : Optional.of(rackId);
         } else {
             this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.REBALANCE_TIMEOUT_MS_CONFIG);
+            this.rackId = Optional.empty();
         }
 
         this.heartbeatIntervalMs = config.getInt(CommonClientConfigs.HEARTBEAT_INTERVAL_MS_CONFIG);
@@ -75,13 +79,6 @@ public class GroupRebalanceConfig {
 
         this.retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
         this.retryBackoffMaxMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG);
-
-        // Internal leave group config is only defined in Consumer.
-        if (protocolType == ProtocolType.CONSUMER) {
-            this.leaveGroupOnClose = config.getBoolean("internal.leave.group.on.close");
-        } else {
-            this.leaveGroupOnClose = true;
-        }
     }
 
     // For testing purpose.
@@ -90,16 +87,16 @@ public class GroupRebalanceConfig {
                                 final int heartbeatIntervalMs,
                                 String groupId,
                                 Optional<String> groupInstanceId,
+                                String rackId,
                                 long retryBackoffMs,
-                                long retryBackoffMaxMs,
-                                boolean leaveGroupOnClose) {
+                                long retryBackoffMaxMs) {
         this.sessionTimeoutMs = sessionTimeoutMs;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.heartbeatIntervalMs = heartbeatIntervalMs;
         this.groupId = groupId;
         this.groupInstanceId = groupInstanceId;
+        this.rackId = rackId == null || rackId.isEmpty() ? Optional.empty() : Optional.of(rackId);
         this.retryBackoffMs = retryBackoffMs;
         this.retryBackoffMaxMs = retryBackoffMaxMs;
-        this.leaveGroupOnClose = leaveGroupOnClose;
     }
 }

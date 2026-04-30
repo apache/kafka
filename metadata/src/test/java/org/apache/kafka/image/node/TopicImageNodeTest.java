@@ -27,8 +27,8 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -52,7 +52,7 @@ public class TopicImageNodeTest {
     }
     @Test
     public void testChildNames() {
-        assertEquals(Arrays.asList("name", "id", "0"), NODE.childNames());
+        assertEquals(List.of("name", "id", "0"), NODE.childNames());
     }
 
     @Test

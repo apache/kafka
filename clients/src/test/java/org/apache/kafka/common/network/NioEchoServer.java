@@ -183,11 +183,6 @@ public final class NioEchoServer extends Thread {
         }
     }
 
-    public void verifyAuthenticationNoReauthMetric(int successfulAuthenticationNoReauths) throws InterruptedException {
-        waitForMetrics("successful-authentication-no-reauth", successfulAuthenticationNoReauths,
-                EnumSet.of(MetricType.TOTAL));
-    }
-
     public void waitForMetric(String name, final double expectedValue) throws InterruptedException {
         waitForMetrics(name, expectedValue, EnumSet.of(MetricType.TOTAL, MetricType.RATE));
     }

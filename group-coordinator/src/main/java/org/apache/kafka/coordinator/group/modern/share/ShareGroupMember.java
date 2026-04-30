@@ -18,13 +18,12 @@ package org.apache.kafka.coordinator.group.modern.share;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
-import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -75,6 +74,7 @@ public class ShareGroupMember extends ModernGroupMember {
             this.memberId = Objects.requireNonNull(newMemberId);
             this.memberEpoch = member.memberEpoch;
             this.previousMemberEpoch = member.previousMemberEpoch;
+            this.state = member.state;
             this.rackId = member.rackId;
             this.clientId = member.clientId;
             this.clientHost = member.clientHost;
@@ -170,6 +170,11 @@ public class ShareGroupMember extends ModernGroupMember {
         }
     }
 
+    /**
+     * The partitions assigned to this member.
+     */
+    private final Map<Uuid, Set<Integer>> assignedPartitions;
+
     private ShareGroupMember(
           String memberId,
           int memberEpoch,
@@ -190,26 +195,42 @@ public class ShareGroupMember extends ModernGroupMember {
             clientId,
             clientHost,
             subscribedTopicNames,
-            state,
-            assignedPartitions
+            state
         );
+        this.assignedPartitions = assignedPartitions;
+    }
+
+    /**
+     * @return The partitions assigned to this member.
+     */
+    public Map<Uuid, Set<Integer>> assignedPartitions() {
+        return assignedPartitions;
+    }
+
+    /**
+     * @return True if the two provided members have different assigned partitions.
+     */
+    public static boolean hasAssignedPartitionsChanged(
+        ShareGroupMember member1,
+        ShareGroupMember member2
+    ) {
+        return !member1.assignedPartitions().equals(member2.assignedPartitions());
     }
 
     /**
      * Converts this ShareGroupMember to a ShareGroupDescribeResponseData.Member.
      *
-     * @param topicsImage: Topics image object to search for a specific topic id
-     *
+     * @param image : Topics image object to search for a specific topic id
      * @return The ShareGroupMember mapped as ShareGroupDescribeResponseData.Member.
      */
     public ShareGroupDescribeResponseData.Member asShareGroupDescribeMember(
-        TopicsImage topicsImage
+        CoordinatorMetadataImage image
     ) {
         return new ShareGroupDescribeResponseData.Member()
             .setMemberEpoch(memberEpoch)
             .setMemberId(memberId)
             .setAssignment(new ShareGroupDescribeResponseData.Assignment()
-                .setTopicPartitions(topicPartitionsFromMap(assignedPartitions, topicsImage)))
+                .setTopicPartitions(topicPartitionsFromMap(assignedPartitions, image)))
             .setClientHost(clientHost)
             .setClientId(clientId)
             .setRackId(rackId)
@@ -218,17 +239,14 @@ public class ShareGroupMember extends ModernGroupMember {
 
     private static List<ShareGroupDescribeResponseData.TopicPartitions> topicPartitionsFromMap(
         Map<Uuid, Set<Integer>> partitions,
-        TopicsImage topicsImage
+        CoordinatorMetadataImage image
     ) {
         List<ShareGroupDescribeResponseData.TopicPartitions> topicPartitions = new ArrayList<>();
         partitions.forEach((topicId, partitionSet) -> {
-            TopicImage topicImage = topicsImage.getTopic(topicId);
-            if (topicImage != null) {
-                topicPartitions.add(new ShareGroupDescribeResponseData.TopicPartitions()
-                    .setTopicId(topicId)
-                    .setTopicName(topicImage.name())
-                    .setPartitions(new ArrayList<>(partitionSet)));
-            }
+            image.topicMetadata(topicId).ifPresent(topicMetadata -> topicPartitions.add(new ShareGroupDescribeResponseData.TopicPartitions()
+                .setTopicId(topicId)
+                .setTopicName(topicMetadata.name())
+                .setPartitions(new ArrayList<>(partitionSet))));
         });
         return topicPartitions;
     }

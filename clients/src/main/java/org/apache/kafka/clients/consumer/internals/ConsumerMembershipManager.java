@@ -16,13 +16,16 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.events.ApplyAssignmentEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
-import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionsAssignedEvent;
+import org.apache.kafka.clients.consumer.internals.events.PartitionsRemovedEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.ConsumerRebalanceMetricsManager;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
 import org.apache.kafka.common.KafkaException;
@@ -43,9 +46,10 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
-import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED;
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.DEFAULT;
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED;
 
@@ -108,6 +112,8 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      */
     protected final Optional<String> groupInstanceId;
 
+    private final Optional<String> rackId;
+
     /**
      * Rebalance timeout. To be used as time limit for the commit request issued
      * when a new assignment is received, that is retried until it succeeds, fails with a
@@ -129,13 +135,14 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
 
     /**
      * Serves as the conduit by which we can report events to the application thread. This is needed as we send
-     * {@link ConsumerRebalanceListenerCallbackNeededEvent callbacks} and, if needed,
+     * {@link PartitionsAssignedEvent}, {@link PartitionsRemovedEvent} and, if needed,
      * {@link ErrorEvent errors} to the application thread.
      */
     private final BackgroundEventHandler backgroundEventHandler;
 
     public ConsumerMembershipManager(String groupId,
                                      Optional<String> groupInstanceId,
+                                     Optional<String> rackId,
                                      int rebalanceTimeoutMs,
                                      Optional<String> serverAssignor,
                                      SubscriptionState subscriptions,
@@ -148,6 +155,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                                      boolean autoCommitEnabled) {
         this(groupId,
             groupInstanceId,
+            rackId,
             rebalanceTimeoutMs,
             serverAssignor,
             subscriptions,
@@ -156,13 +164,14 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
             logContext,
             backgroundEventHandler,
             time,
-            new ConsumerRebalanceMetricsManager(metrics),
+            new ConsumerRebalanceMetricsManager(metrics, subscriptions),
             autoCommitEnabled);
     }
 
     // Visible for testing
     ConsumerMembershipManager(String groupId,
                               Optional<String> groupInstanceId,
+                              Optional<String> rackId,
                               int rebalanceTimeoutMs,
                               Optional<String> serverAssignor,
                               SubscriptionState subscriptions,
@@ -181,6 +190,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
             metricsManager,
             autoCommitEnabled);
         this.groupInstanceId = groupInstanceId;
+        this.rackId = rackId;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.serverAssignor = serverAssignor;
         this.commitRequestManager = commitRequestManager;
@@ -193,6 +203,10 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      */
     public Optional<String> groupInstanceId() {
         return groupInstanceId;
+    }
+
+    public Optional<String> rackId() {
+        return rackId;
     }
 
     /**
@@ -214,7 +228,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                     "already leaving the group.", memberId, memberEpoch);
             return;
         }
-        if (state == MemberState.UNSUBSCRIBED && maybeCompleteLeaveInProgress()) {
+        if (state == MemberState.UNSUBSCRIBED && responseData.memberEpoch() < 0 && maybeCompleteLeaveInProgress()) {
             log.debug("Member {} with epoch {} received a successful response to the heartbeat " +
                     "to leave the group and completed the leave operation. ", memberId, memberEpoch);
             return;
@@ -222,6 +236,13 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         if (isNotInGroup()) {
             log.debug("Ignoring heartbeat response received from broker. Member {} is in {} state" +
                     " so it's not a member of the group. ", memberId, state);
+            return;
+        }
+        if (responseData.memberEpoch() < 0) {
+            log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} " +
+                    "is in {} state and the member epoch is invalid: {}. ", memberId, memberEpoch, state,
+                    responseData.memberEpoch());
+            maybeCompleteLeaveInProgress();
             return;
         }
 
@@ -280,6 +301,9 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      */
     @Override
     protected CompletableFuture<Void> signalPartitionsLost(Set<TopicPartition> partitionsLost) {
+        // Mark partitions as pending revocation to stop fetching from the partitions (no new
+        // fetches sent out, and no in-flight fetches responses processed).
+        markPendingRevocationToPauseFetching(partitionsLost);
         return invokeOnPartitionsLostCallback(partitionsLost);
     }
 
@@ -340,17 +364,6 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         }
     }
 
-    private CompletableFuture<Void> invokeOnPartitionsAssignedCallback(Set<TopicPartition> partitionsAssigned) {
-        // This should always trigger the callback, even if partitionsAssigned is empty, to keep
-        // the current behaviour.
-        Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
-        if (listener.isPresent()) {
-            return enqueueConsumerRebalanceListenerCallback(ON_PARTITIONS_ASSIGNED, partitionsAssigned);
-        } else {
-            return CompletableFuture.completedFuture(null);
-        }
-    }
-
     private CompletableFuture<Void> invokeOnPartitionsLostCallback(Set<TopicPartition> partitionsLost) {
         // This should not trigger the callback if partitionsLost is empty, to keep the current
         // behaviour.
@@ -366,8 +379,12 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<Void> signalPartitionsAssigned(Set<TopicPartition> partitionsAssigned) {
-        return invokeOnPartitionsAssignedCallback(partitionsAssigned);
+    protected CompletableFuture<Void> signalPartitionsAssigned(TopicIdPartitionSet assignedPartitions,
+                                                               SortedSet<TopicPartition> addedPartitions) {
+        // Send an event to notify the app thread that the assignment changed with new partitions.
+        // The app thread is expected to trigger the assignment update (within a call to poll),
+        // and to run the onPartitionsAssigned callback if needed.
+        return enqueuePartitionsAssignedEvent(assignedPartitions.topicPartitions(), addedPartitions);
     }
 
     /**
@@ -394,21 +411,42 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         Set<TopicPartition> revokePausedPartitions = subscriptions.pausedPartitions();
         revokePausedPartitions.retainAll(partitionsToRevoke);
         if (!revokePausedPartitions.isEmpty()) {
-            log.info("The pause flag in partitions [{}] will be removed due to revocation.", revokePausedPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
+            log.info("The pause flag in partitions {} will be removed due to revocation.", revokePausedPartitions);
         }
     }
 
+    @Override
+    public boolean isLeavingGroup() {
+        CloseOptions.GroupMembershipOperation leaveGroupOperation = leaveGroupOperation();
+        if (REMAIN_IN_GROUP == leaveGroupOperation && groupInstanceId.isEmpty()) {
+            return false;
+        }
+
+        MemberState state = state();
+        boolean isLeavingState = state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING;
+
+        // Default operation: both static and dynamic consumers will send a leave heartbeat
+        boolean hasLeaveOperation = DEFAULT == leaveGroupOperation ||
+            // Leave operation: both static and dynamic consumers will send a leave heartbeat
+            LEAVE_GROUP == leaveGroupOperation ||
+            // Remain in group: static consumers will send a leave heartbeat with -2 epoch to reflect that a member using the given
+            // instance id decided to leave the group and would be back within the session timeout.
+            groupInstanceId().isPresent();
+
+        return isLeavingState && hasLeaveOperation;
+    }
+
     /**
-     * Enqueue a {@link ConsumerRebalanceListenerCallbackNeededEvent} to trigger the execution of the
-     * appropriate {@link ConsumerRebalanceListener} {@link ConsumerRebalanceListenerMethodName method} on the
-     * application thread.
+     * Enqueue a {@link PartitionsRemovedEvent} to trigger the execution of either
+     * {@link ConsumerRebalanceListener#onPartitionsRevoked} or {@link ConsumerRebalanceListener#onPartitionsLost}
+     * on the application thread.
      *
      * <p/>
      *
      * Because the reconciliation process (run in the background thread) will be blocked by the application thread
      * until it completes this, we need to provide a {@link CompletableFuture} by which to remember where we left off.
      *
-     * @param methodName Callback method that needs to be executed on the application thread
+     * @param methodName Callback method that needs to be executed (ON_PARTITIONS_REVOKED or ON_PARTITIONS_LOST)
      * @param partitions Partitions to supply to the callback method
      * @return Future that will be chained within the rest of the reconciliation logic
      */
@@ -417,9 +455,26 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         SortedSet<TopicPartition> sortedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         sortedPartitions.addAll(partitions);
 
-        CompletableBackgroundEvent<Void> event = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, sortedPartitions);
+        CompletableBackgroundEvent<Void> event = new PartitionsRemovedEvent(methodName, sortedPartitions);
         backgroundEventHandler.add(event);
         log.debug("The event to trigger the {} method execution was enqueued successfully", methodName.fullyQualifiedMethodName());
+        return event.future();
+    }
+
+    /**
+     * Enqueue a {@link PartitionsAssignedEvent} to the application thread.
+     * This event handles the assignment update and optional onPartitionsAssigned callback.
+     *
+     * @param fullAssignment The full assignment to apply
+     * @param addedPartitions The newly added partitions (passed to the callback)
+     * @return Future that will be chained within the rest of the reconciliation logic
+     */
+    private CompletableFuture<Void> enqueuePartitionsAssignedEvent(Set<TopicPartition> fullAssignment,
+                                                                   SortedSet<TopicPartition> addedPartitions) {
+        CompletableBackgroundEvent<Void> event = new PartitionsAssignedEvent(fullAssignment, addedPartitions);
+        backgroundEventHandler.add(event);
+        log.debug("The event to update the new assignment and trigger onPartitionsAssigned callback if needed " +
+                "has been enqueued successfully to be sent to the app thread.");
         return event.future();
     }
 
@@ -457,6 +512,21 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     }
 
     /**
+     * Apply the assignment update to the subscription state. This is called from the background
+     * thread when processing an {@link ApplyAssignmentEvent} that was triggered by the application
+     * thread during poll. This ensures that the assignment update happens on the background thread
+     * but is coordinated by the application thread, so consumer.assignment() only changes within
+     * a call to consumer.poll().
+     *
+     * @param assignedPartitions The full assignment to apply
+     * @param addedPartitions The newly added partitions
+     */
+    public void applyAssignment(Set<TopicPartition> assignedPartitions, SortedSet<TopicPartition> addedPartitions) {
+        subscriptions.assignFromSubscribedAwaitingCallback(assignedPartitions, addedPartitions);
+        notifyAssignmentChange(assignedPartitions);
+    }
+
+    /**
      * {@inheritDoc}
      */
     @Override
@@ -469,8 +539,16 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      */
     @Override
     public int leaveGroupEpoch() {
-        return groupInstanceId.isPresent() ?
-                ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH :
-                ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+        boolean isStaticMember = groupInstanceId.isPresent();
+        // The mechanism to make static members permanently leave the group is to
+        // send an HB to leave with the -1 epoch (used by dynamic members).
+        // This will make the group coordinator fence this member, effectively removing it from the group.
+        if (LEAVE_GROUP == leaveGroupOperation) {
+            return ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+        }
+
+        return isStaticMember ?
+            ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH :
+            ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
     }
 }

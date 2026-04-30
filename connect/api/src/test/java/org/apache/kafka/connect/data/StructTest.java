@@ -21,8 +21,6 @@ import org.apache.kafka.connect.errors.DataException;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -93,8 +91,8 @@ public class StructTest {
 
     @Test
     public void testComplexStruct() {
-        List<Byte> array = Arrays.asList((byte) 1, (byte) 2);
-        Map<Integer, String> map = Collections.singletonMap(1, "string");
+        List<Byte> array = List.of((byte) 1, (byte) 2);
+        Map<Integer, String> map = Map.of(1, "string");
         Struct struct = new Struct(NESTED_SCHEMA)
                 .put("array", array)
                 .put("map", map)
@@ -124,13 +122,13 @@ public class StructTest {
     @Test
     public void testInvalidArrayFieldElements() {
         assertThrows(DataException.class,
-            () -> new Struct(NESTED_SCHEMA).put("array", Collections.singletonList("should fail since elements should be int8s")));
+            () -> new Struct(NESTED_SCHEMA).put("array", List.of("should fail since elements should be int8s")));
     }
 
     @Test
     public void testInvalidMapKeyElements() {
         assertThrows(DataException.class,
-            () -> new Struct(NESTED_SCHEMA).put("map", Collections.singletonMap("should fail because keys should be int8s", (byte) 12)));
+            () -> new Struct(NESTED_SCHEMA).put("map", Map.of("should fail because keys should be int8s", (byte) 12)));
     }
 
     @Test
@@ -219,20 +217,20 @@ public class StructTest {
         assertEquals(struct1, struct2);
         assertNotEquals(struct1, struct3);
 
-        List<Byte> array = Arrays.asList((byte) 1, (byte) 2);
-        Map<Integer, String> map = Collections.singletonMap(1, "string");
+        List<Byte> array = List.of((byte) 1, (byte) 2);
+        Map<Integer, String> map = Map.of(1, "string");
         struct1 = new Struct(NESTED_SCHEMA)
                 .put("array", array)
                 .put("map", map)
                 .put("nested", new Struct(NESTED_CHILD_SCHEMA).put("int8", (byte) 12));
-        List<Byte> array2 = Arrays.asList((byte) 1, (byte) 2);
-        Map<Integer, String> map2 = Collections.singletonMap(1, "string");
+        List<Byte> array2 = List.of((byte) 1, (byte) 2);
+        Map<Integer, String> map2 = Map.of(1, "string");
         struct2 = new Struct(NESTED_SCHEMA)
                 .put("array", array2)
                 .put("map", map2)
                 .put("nested", new Struct(NESTED_CHILD_SCHEMA).put("int8", (byte) 12));
-        List<Byte> array3 = Arrays.asList((byte) 1, (byte) 2, (byte) 3);
-        Map<Integer, String> map3 = Collections.singletonMap(2, "string");
+        List<Byte> array3 = List.of((byte) 1, (byte) 2, (byte) 3);
+        Map<Integer, String> map3 = Map.of(2, "string");
         struct3 = new Struct(NESTED_SCHEMA)
                 .put("array", array3)
                 .put("map", map3)

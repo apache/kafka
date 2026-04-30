@@ -19,10 +19,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.EndTxnRequestData;
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.protocol.Readable;
 
 public class EndTxnRequest extends AbstractRequest {
     public static final short LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2 = 4;
@@ -81,7 +79,7 @@ public class EndTxnRequest extends AbstractRequest {
         );
     }
 
-    public static EndTxnRequest parse(ByteBuffer buffer, short version) {
-        return new EndTxnRequest(new EndTxnRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static EndTxnRequest parse(Readable readable, short version) {
+        return new EndTxnRequest(new EndTxnRequestData(readable, version), version);
     }
 }

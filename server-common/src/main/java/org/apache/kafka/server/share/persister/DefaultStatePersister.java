@@ -29,7 +29,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -140,6 +139,9 @@ public class DefaultStatePersister implements Persister {
                     .computeIfAbsent(topicData.topicId(), k -> new HashMap<>())
                     .computeIfAbsent(partitionData.partition(), k -> new CompletableFuture<>());
 
+                log.debug("{}-{}-{}: stateEpoch - {}, leaderEpoch - {}.",
+                    groupId, topicData.topicId(), partitionData.partition(), partitionData.stateEpoch(), partitionData.leaderEpoch());
+
                 handlers.add(
                     stateManager.new WriteStateHandler(
                         groupId,
@@ -148,6 +150,7 @@ public class DefaultStatePersister implements Persister {
                         partitionData.stateEpoch(),
                         partitionData.leaderEpoch(),
                         partitionData.startOffset(),
+                        partitionData.deliveryCompleteCount(),
                         partitionData.stateBatches(),
                         future, null)
                 );
@@ -345,7 +348,7 @@ public class DefaultStatePersister implements Persister {
                                 -1,
                                 Errors.UNKNOWN_SERVER_ERROR.code(),   // No specific public error code exists for InterruptedException / ExecutionException
                                 "Error reading state from share coordinator: " + e.getMessage(),
-                                Collections.emptyList())
+                                List.of())
                             );
                         }
                     })
@@ -487,6 +490,8 @@ public class DefaultStatePersister implements Persister {
                                     partitionResult.partition(),
                                     partitionResult.stateEpoch(),
                                     partitionResult.startOffset(),
+                                    partitionResult.deliveryCompleteCount(),
+                                    partitionResult.leaderEpoch(),
                                     partitionResult.errorCode(),
                                     partitionResult.errorMessage()))
                                 .toList();
@@ -494,6 +499,8 @@ public class DefaultStatePersister implements Persister {
                             log.error("Unexpected exception while getting data from share coordinator", e);
                             return List.of(PartitionFactory.newPartitionStateSummaryData(
                                 partition,
+                                -1,
+                                -1,
                                 -1,
                                 -1,
                                 Errors.UNKNOWN_SERVER_ERROR.code(),   // No specific public error code exists for InterruptedException / ExecutionException
@@ -570,7 +577,7 @@ public class DefaultStatePersister implements Persister {
 
         validateGroupTopicPartitionData(prefix, params.groupTopicPartitionData());
     }
-    
+
     private static void validate(WriteShareGroupStateParameters params) {
         String prefix = "Write share group parameters";
         if (params == null) {

@@ -32,7 +32,9 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -40,8 +42,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -54,6 +57,7 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
+
 
 @Tag("integration")
 public class SelfJoinUpgradeIntegrationTest {
@@ -111,8 +115,9 @@ public class SelfJoinUpgradeIntegrationTest {
     }
 
 
-    @Test
-    public void shouldUpgradeWithTopologyOptimizationOff() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldUpgradeWithTopologyOptimizationOff(final boolean withHeaders) throws Exception {
 
         final StreamsBuilder streamsBuilderOld = new StreamsBuilder();
         final KStream<String, String> leftOld = streamsBuilderOld.stream(
@@ -127,6 +132,7 @@ public class SelfJoinUpgradeIntegrationTest {
 
         final Properties props = props();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         kafkaStreams = new KafkaStreams(streamsBuilderOld.build(), props);
         kafkaStreams.start();
 
@@ -154,6 +160,7 @@ public class SelfJoinUpgradeIntegrationTest {
         kafkaStreams = null;
 
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         kafkaStreams = new KafkaStreams(streamsBuilderOld.build(), props);
         kafkaStreams.start();
 
@@ -175,8 +182,9 @@ public class SelfJoinUpgradeIntegrationTest {
         kafkaStreams.close();
     }
 
-    @Test
-    public void shouldRestartWithTopologyOptimizationOn() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void shouldRestartWithTopologyOptimizationOn(final boolean withHeaders) throws Exception {
 
         final StreamsBuilder streamsBuilderOld = new StreamsBuilder();
         final KStream<String, String> leftOld = streamsBuilderOld.stream(
@@ -192,6 +200,7 @@ public class SelfJoinUpgradeIntegrationTest {
 
         final Properties props = props();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         kafkaStreams = new KafkaStreams(streamsBuilderOld.build(), props);
         kafkaStreams.start();
 
@@ -218,6 +227,7 @@ public class SelfJoinUpgradeIntegrationTest {
         kafkaStreams = null;
 
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+        StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         kafkaStreams = new KafkaStreams(streamsBuilderOld.build(), props);
         kafkaStreams.start();
 
@@ -262,7 +272,7 @@ public class SelfJoinUpgradeIntegrationTest {
         consumerProperties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerProperties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProperties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        consumerProperties.put(StreamsConfig.WINDOW_SIZE_MS_CONFIG, 500L);
+        consumerProperties.put(TimeWindowedDeserializer.WINDOW_SIZE_MS_CONFIG, 500L);
 
 
         final List<KeyValueTimestamp<K, V>> actual =

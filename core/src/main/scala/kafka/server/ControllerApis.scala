@@ -24,25 +24,22 @@ import java.util.Map.Entry
 import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
 import kafka.network.RequestChannel
-import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.logger.RuntimeLoggerManager
-import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils.Logging
 import org.apache.kafka.clients.admin.{AlterConfigOp, EndpointType}
 import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, CREATE_TOKENS, DELETE, DESCRIBE, DESCRIBE_CONFIGS}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, InvalidRequestException, TopicDeletionDisabledException, UnsupportedVersionException}
-import org.apache.kafka.common.internals.FatalExitError
-import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.internals.{FatalExitError, Plugin, Topic}
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => OldAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse
-import org.apache.kafka.common.message.{CreateTopicsRequestData, _}
+import org.apache.kafka.common.message._
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
@@ -53,11 +50,15 @@ import org.apache.kafka.common.Uuid
 import org.apache.kafka.controller.ControllerRequestContext.requestTimeoutMsToDeadlineNs
 import org.apache.kafka.controller.{Controller, ControllerRequestContext}
 import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
-import org.apache.kafka.metadata.{BrokerHeartbeatReply, BrokerRegistrationReply}
+import org.apache.kafka.metadata.{BrokerHeartbeatReply, BrokerRegistrationReply, KRaftMetadataCache}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.raft.RaftManager
+import org.apache.kafka.security.DelegationTokenManager
+import org.apache.kafka.server.{ApiVersionManager, ProcessRole}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, RequestLocal}
+import org.apache.kafka.server.quota.ControllerMutationQuota
 
 import scala.jdk.CollectionConverters._
 
@@ -67,7 +68,7 @@ import scala.jdk.CollectionConverters._
  */
 class ControllerApis(
   val requestChannel: RequestChannel,
-  val authorizer: Option[Authorizer],
+  val authorizerPlugin: Option[Plugin[Authorizer]],
   val quotas: QuotaManagers,
   val time: Time,
   val controller: Controller,
@@ -80,11 +81,11 @@ class ControllerApis(
 ) extends ApiRequestHandler with Logging {
 
   this.logIdent = s"[ControllerApis nodeId=${config.nodeId}] "
-  val authHelper = new AuthHelper(authorizer)
+  val authHelper = new AuthHelper(authorizerPlugin)
   val configHelper = new ConfigHelper(metadataCache, config, metadataCache)
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
   val runtimeLoggerManager = new RuntimeLoggerManager(config.nodeId, logger.underlying)
-  private val aclApis = new AclApis(authHelper, authorizer, requestHelper, "controller", config)
+  private val aclApis = new AclApis(authHelper, authorizerPlugin, requestHelper, ProcessRole.ControllerRole, config)
 
   def isClosed: Boolean = aclApis.isClosed
 
@@ -186,7 +187,7 @@ class ControllerApis(
 
   def handleFetch(request: RequestChannel.Request): CompletableFuture[Unit] = {
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
-    handleRaftRequest(request, response => new FetchResponse(response.asInstanceOf[FetchResponseData]))
+    handleRaftRequest(request, response => FetchResponse.of(response.asInstanceOf[FetchResponseData]))
   }
 
   def handleFetchSnapshot(request: RequestChannel.Request): CompletableFuture[Unit] = {
@@ -196,7 +197,7 @@ class ControllerApis(
 
   private def handleDeleteTopics(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val deleteTopicsRequest = request.body[DeleteTopicsRequest]
-    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 5)
+    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request.session, request.header, 5)
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
       requestTimeoutMsToDeadlineNs(time, deleteTopicsRequest.data.timeoutMs),
       controllerMutationQuotaRecorderFor(controllerMutationQuota))
@@ -229,9 +230,9 @@ class ControllerApis(
     // Check if topic deletion is enabled at all.
     if (!config.deleteTopicEnable) {
       if (apiVersion < 3) {
-        throw new InvalidRequestException("Topic deletion is disabled.")
+        return CompletableFuture.failedFuture(new InvalidRequestException("This version does not support topic deletion."))
       } else {
-        throw new TopicDeletionDisabledException()
+        return CompletableFuture.failedFuture(new TopicDeletionDisabledException())
       }
     }
     // The first step is to load up the names and IDs that have been provided by the
@@ -360,7 +361,7 @@ class ControllerApis(
 
   private def handleCreateTopics(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val createTopicsRequest = request.body[CreateTopicsRequest]
-    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 6)
+    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request.session, request.header, 6)
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
       requestTimeoutMsToDeadlineNs(time, createTopicsRequest.data.timeoutMs),
       controllerMutationQuotaRecorderFor(controllerMutationQuota))
@@ -642,9 +643,7 @@ class ControllerApis(
       def createResponseCallback(requestThrottleMs: Int,
                                  e: Throwable): UnregisterBrokerResponse = {
         if (e != null) {
-          new UnregisterBrokerResponse(new UnregisterBrokerResponseData().
-            setThrottleTimeMs(requestThrottleMs).
-            setErrorCode(Errors.forException(e).code))
+          decommissionRequest.getErrorResponse(requestThrottleMs, e)
         } else {
           new UnregisterBrokerResponse(new UnregisterBrokerResponseData().
             setThrottleTimeMs(requestThrottleMs))
@@ -797,7 +796,7 @@ class ControllerApis(
       authHelper.filterByAuthorized(request.context, ALTER, TOPIC, topics)(n => n)
     }
     val createPartitionsRequest = request.body[CreatePartitionsRequest]
-    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 3)
+    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request.session, request.header, 3)
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
       requestTimeoutMsToDeadlineNs(time, createPartitionsRequest.data.timeoutMs),
       controllerMutationQuotaRecorderFor(controllerMutationQuota))
@@ -971,7 +970,7 @@ class ControllerApis(
           new RenewDelegationTokenResponseData()
               .setThrottleTimeMs(requestThrottleMs)
               .setErrorCode(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED.code)
-              .setExpiryTimestampMs(DelegationTokenManager.ErrorTimestamp)))
+              .setExpiryTimestampMs(DelegationTokenManager.ERROR_TIMESTAMP)))
         CompletableFuture.completedFuture[Unit](())
     } else {
       val context = new ControllerRequestContext(
@@ -995,7 +994,7 @@ class ControllerApis(
           new ExpireDelegationTokenResponseData()
               .setThrottleTimeMs(requestThrottleMs)
               .setErrorCode(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED.code)
-              .setExpiryTimestampMs(DelegationTokenManager.ErrorTimestamp)))
+              .setExpiryTimestampMs(DelegationTokenManager.ERROR_TIMESTAMP)))
       CompletableFuture.completedFuture[Unit](())
     } else {
       val context = new ControllerRequestContext(
@@ -1071,7 +1070,7 @@ class ControllerApis(
       EndpointType.CONTROLLER,
       clusterId,
       () => registrationsPublisher.describeClusterControllers(request.context.listenerName()),
-      () => raftManager.leaderAndEpoch.leaderId().orElse(-1)
+      () => raftManager.client.leaderAndEpoch.leaderId().orElse(-1)
     )
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
       new DescribeClusterResponse(response.setThrottleTimeMs(requestThrottleMs)))

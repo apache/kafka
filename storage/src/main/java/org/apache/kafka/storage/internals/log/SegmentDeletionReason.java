@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import java.io.IOException;
 import java.util.List;
 
 public interface SegmentDeletionReason {
-    void logReason(List<LogSegment> toDelete);
+    void logReason(List<LogSegment> toDelete) throws IOException;
 }

@@ -26,7 +26,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -50,7 +49,7 @@ public class PluginScannerTest {
     @ParameterizedTest
     @MethodSource("parameters")
     public void testScanningEmptyPluginPath(PluginScanner scanner) {
-        PluginScanResult result = scan(scanner, Collections.emptySet());
+        PluginScanResult result = scan(scanner, Set.of());
         assertTrue(result.isEmpty());
     }
 
@@ -69,7 +68,7 @@ public class PluginScannerTest {
     public void testScanningInvalidUberJar(PluginScanner scanner) throws Exception {
         File newFile = new File(pluginDir, "invalid.jar");
         newFile.createNewFile();
-        PluginScanResult result = scan(scanner, Collections.singleton(pluginDir.toPath()));
+        PluginScanResult result = scan(scanner, Set.of(pluginDir.toPath()));
         assertTrue(result.isEmpty());
     }
 
@@ -81,14 +80,14 @@ public class PluginScannerTest {
         newFile = new File(newFile, "invalid.jar");
         newFile.createNewFile();
 
-        PluginScanResult result = scan(scanner, Collections.singleton(pluginDir.toPath()));
+        PluginScanResult result = scan(scanner, Set.of(pluginDir.toPath()));
         assertTrue(result.isEmpty());
     }
 
     @ParameterizedTest
     @MethodSource("parameters")
     public void testScanningNoPlugins(PluginScanner scanner) {
-        PluginScanResult result = scan(scanner, Collections.singleton(pluginDir.toPath()));
+        PluginScanResult result = scan(scanner, Set.of(pluginDir.toPath()));
         assertTrue(result.isEmpty());
     }
 
@@ -98,7 +97,7 @@ public class PluginScannerTest {
         File newFile = new File(pluginDir, "my-plugin");
         newFile.mkdir();
 
-        PluginScanResult result = scan(scanner, Collections.singleton(pluginDir.toPath()));
+        PluginScanResult result = scan(scanner, Set.of(pluginDir.toPath()));
         assertTrue(result.isEmpty());
     }
 
@@ -116,7 +115,7 @@ public class PluginScannerTest {
             Files.copy(source, pluginPath.resolve(source.getFileName()));
         }
 
-        PluginScanResult result = scan(scanner, Collections.singleton(pluginDir.toPath()));
+        PluginScanResult result = scan(scanner, Set.of(pluginDir.toPath()));
         Set<String> classes = new HashSet<>();
         result.forEach(pluginDesc -> classes.add(pluginDesc.className()));
         Set<String> expectedClasses = new HashSet<>(TestPlugins.pluginClasses());

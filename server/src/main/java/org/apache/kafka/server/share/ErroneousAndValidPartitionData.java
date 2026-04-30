@@ -20,10 +20,11 @@ package org.apache.kafka.server.share;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -31,36 +32,36 @@ import java.util.Map;
  */
 public class ErroneousAndValidPartitionData {
     private final Map<TopicIdPartition, ShareFetchResponseData.PartitionData> erroneous;
-    private final Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> validTopicIdPartitions;
+    private final List<TopicIdPartition> validTopicIdPartitions;
 
     public ErroneousAndValidPartitionData(Map<TopicIdPartition, ShareFetchResponseData.PartitionData> erroneous,
-                                          Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> validTopicIdPartitions) {
+                                          List<TopicIdPartition> validTopicIdPartitions) {
         this.erroneous = erroneous;
         this.validTopicIdPartitions = validTopicIdPartitions;
     }
 
-    public ErroneousAndValidPartitionData(Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData) {
+    public ErroneousAndValidPartitionData(List<TopicIdPartition> shareFetchData) {
         erroneous = new HashMap<>();
-        validTopicIdPartitions = new HashMap<>();
-        shareFetchData.forEach((topicIdPartition, sharePartitionData) -> {
+        validTopicIdPartitions = new ArrayList<>();
+        shareFetchData.forEach(topicIdPartition -> {
             if (topicIdPartition.topic() == null) {
                 erroneous.put(topicIdPartition, ShareFetchResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_ID));
             } else {
-                validTopicIdPartitions.put(topicIdPartition, sharePartitionData);
+                validTopicIdPartitions.add(topicIdPartition);
             }
         });
     }
 
     public ErroneousAndValidPartitionData() {
-        this.erroneous = new HashMap<>();
-        this.validTopicIdPartitions = new HashMap<>();
+        this.erroneous = Map.of();
+        this.validTopicIdPartitions = List.of();
     }
 
     public Map<TopicIdPartition, ShareFetchResponseData.PartitionData> erroneous() {
         return erroneous;
     }
 
-    public Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> validTopicIdPartitions() {
+    public List<TopicIdPartition> validTopicIdPartitions() {
         return validTopicIdPartitions;
     }
 }

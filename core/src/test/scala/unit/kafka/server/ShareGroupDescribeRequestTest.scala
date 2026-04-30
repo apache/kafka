@@ -29,29 +29,28 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.config.ServerConfigs
+import org.apache.kafka.server.common.Feature
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{Tag, Timeout}
+import org.junit.jupiter.api.Timeout
 
 import java.lang.{Byte => JByte}
 import scala.jdk.CollectionConverters._
 
 @Timeout(120)
 @ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1, serverProperties = Array(
+  new ClusterConfigProperty(key = GroupCoordinatorConfig.SHARE_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0"),
   new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "")
 ))
-@Tag("integration")
 class ShareGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
   @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, value = "true")
+    features = Array(
+      new ClusterFeature(feature = Feature.SHARE_VERSION, version = 0)
     )
   )
   def testShareGroupDescribeIsInAccessibleWhenConfigsDisabled(): Unit = {
     val shareGroupDescribeRequest = new ShareGroupDescribeRequest.Builder(
-      new ShareGroupDescribeRequestData().setGroupIds(List("grp-1", "grp-2").asJava),
-      true
+      new ShareGroupDescribeRequestData().setGroupIds(List("grp-1", "grp-2").asJava)
     ).build(ApiKeys.SHARE_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled))
 
     val shareGroupDescribeResponse = connectAndReceive[ShareGroupDescribeResponse](shareGroupDescribeRequest)
@@ -72,10 +71,8 @@ class ShareGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoord
 
   @ClusterTest(
     serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer,share"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG, value = "true"),
     )
   )
   def testShareGroupDescribe(): Unit = {
@@ -112,8 +109,8 @@ class ShareGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoord
           new DescribedGroup()
             .setGroupId("grp-1")
             .setGroupState(GroupState.STABLE.toString)
-            .setGroupEpoch(1)
-            .setAssignmentEpoch(1)
+            .setGroupEpoch(2)
+            .setAssignmentEpoch(2)
             .setAssignorName("simple")
             .setAuthorizedOperations(authorizedOperationsInt)
             .setMembers(List(

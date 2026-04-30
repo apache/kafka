@@ -40,8 +40,16 @@ public class ReplicationConfigs {
 
     public static final String DEFAULT_REPLICATION_FACTOR_CONFIG = "default.replication.factor";
     public static final int REPLICATION_FACTOR_DEFAULT = 1;
-    public static final String DEFAULT_REPLICATION_FACTOR_DOC = "The replication factor for automatically created topics," +
-            " and for topics created with -1 as the replication factor";
+    public static final String DEFAULT_REPLICATION_FACTOR_DOC =
+        "The default replication factor per topic. This configuration affects the following paths:"
+        + "<ul>"
+        + "  <li>1. Auto topic creation</li>"
+        + "  <li>2. Internal streams topic creation</li>"
+        + "  <li>3. Topic creation via <code>AdminClient#createTopics</code> when the replication factor is set to -1</li>"
+        + "</ul>"
+        + "<p>For (1), the value from the broker configuration is used only when it is explicitly set. "
+        + "If it is not explicitly configured on the broker, the value from the controller configuration is used.<br/>"
+        + "For (2) and (3), the value from the controller configuration is always used.</p>";
 
     public static final String REPLICA_LAG_TIME_MAX_MS_CONFIG = "replica.lag.time.max.ms";
     public static final long REPLICA_LAG_TIME_MAX_MS_DEFAULT = 30000L;
@@ -70,7 +78,7 @@ public class ReplicationConfigs {
 
     public static final String REPLICA_FETCH_MIN_BYTES_CONFIG = "replica.fetch.min.bytes";
     public static final int REPLICA_FETCH_MIN_BYTES_DEFAULT = 1;
-    public static final String REPLICA_FETCH_MIN_BYTES_DOC = "Minimum bytes expected for each fetch response. If not enough bytes, wait up to <code>replica.fetch.wait.max.ms</code> (broker config).";
+    public static final String REPLICA_FETCH_MIN_BYTES_DOC = "Minimum bytes expected for each fetch response. If not enough bytes, wait up to <code>replica.fetch.wait.max.ms</code> (broker config). Even if the total data available in the broker exceeds replica.fetch.min.bytes, the actual returned size may still be less than this value due to per-partition limits replica.fetch.max.bytes and max returned limits replica.fetch.response.max.bytes";
 
     public static final String REPLICA_FETCH_BACKOFF_MS_CONFIG = "replica.fetch.backoff.ms";
     public static final int REPLICA_FETCH_BACKOFF_MS_DEFAULT = 1000;
@@ -118,7 +126,7 @@ public class ReplicationConfigs {
     public static final String UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG);
     public static final String UNCLEAN_LEADER_ELECTION_ENABLE_DOC = "Indicates whether to enable replicas not in the ISR set to be elected as leader as a last resort, even though doing so may result in data loss" +
             "<p>Note: In KRaft mode, when enabling this config dynamically, it needs to wait for the unclean leader election " +
-            "thread to trigger election periodically (default is 5 minutes). Please run `kafka-leader-election.sh` with `unclean` option " +
+            "thread to trigger election periodically (default is 5 minutes). Please run <code>kafka-leader-election.sh</code> with <code>unclean</code> option " +
             "to trigger the unclean leader election immediately if needed.</p>";
 
     public static final String INTER_BROKER_SECURITY_PROTOCOL_CONFIG = "security.inter.broker.protocol";
@@ -131,6 +139,10 @@ public class ReplicationConfigs {
 
     public static final String REPLICA_SELECTOR_CLASS_CONFIG = "replica.selector.class";
     public static final String REPLICA_SELECTOR_CLASS_DOC = "The fully qualified class name that implements ReplicaSelector. This is used by the broker to find the preferred read replica. By default, we use an implementation that returns the leader.";
+
+    public static final String FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG = "follower.fetch.last.tiered.offset.enable";
+    public static final String FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_DOC = "When enabled, an empty follower skips offsets up to the last tiered offset and begins replication from the next offset.";
+    public static final boolean FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_DEFAULT = false;
 
     public static final String AUTO_LEADER_REBALANCE_ENABLE_CONFIG = "auto.leader.rebalance.enable";
     public static final boolean AUTO_LEADER_REBALANCE_ENABLE_DEFAULT = true;
@@ -147,7 +159,7 @@ public class ReplicationConfigs {
             .define(REPLICA_FETCH_BACKOFF_MS_CONFIG, INT, REPLICA_FETCH_BACKOFF_MS_DEFAULT, atLeast(0), MEDIUM, REPLICA_FETCH_BACKOFF_MS_DOC)
             .define(REPLICA_FETCH_MIN_BYTES_CONFIG, INT, REPLICA_FETCH_MIN_BYTES_DEFAULT, HIGH, REPLICA_FETCH_MIN_BYTES_DOC)
             .define(REPLICA_FETCH_RESPONSE_MAX_BYTES_CONFIG, INT, REPLICA_FETCH_RESPONSE_MAX_BYTES_DEFAULT, atLeast(0), MEDIUM, REPLICA_FETCH_RESPONSE_MAX_BYTES_DOC)
-            .define(NUM_REPLICA_FETCHERS_CONFIG, INT, NUM_REPLICA_FETCHERS_DEFAULT, HIGH, NUM_REPLICA_FETCHERS_DOC)
+            .define(NUM_REPLICA_FETCHERS_CONFIG, INT, NUM_REPLICA_FETCHERS_DEFAULT, atLeast(1), HIGH, NUM_REPLICA_FETCHERS_DOC)
             .define(REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS_CONFIG, LONG, REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS_DEFAULT, HIGH, REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS_DOC)
             .define(FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG, INT, FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DEFAULT, MEDIUM, FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_DOC)
             .define(PRODUCER_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG, INT, PRODUCER_PURGATORY_PURGE_INTERVAL_REQUESTS_DEFAULT, MEDIUM, PRODUCER_PURGATORY_PURGE_INTERVAL_REQUESTS_DOC)
@@ -158,6 +170,7 @@ public class ReplicationConfigs {
             .define(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, BOOLEAN, LogConfig.DEFAULT_UNCLEAN_LEADER_ELECTION_ENABLE, HIGH, UNCLEAN_LEADER_ELECTION_ENABLE_DOC)
             .define(INTER_BROKER_SECURITY_PROTOCOL_CONFIG, STRING, INTER_BROKER_SECURITY_PROTOCOL_DEFAULT, ConfigDef.ValidString.in(Utils.enumOptions(SecurityProtocol.class)), MEDIUM, INTER_BROKER_SECURITY_PROTOCOL_DOC)
             .define(INTER_BROKER_LISTENER_NAME_CONFIG, STRING, null, MEDIUM, INTER_BROKER_LISTENER_NAME_DOC)
-            .define(REPLICA_SELECTOR_CLASS_CONFIG, STRING, null, MEDIUM, REPLICA_SELECTOR_CLASS_DOC);
+            .define(REPLICA_SELECTOR_CLASS_CONFIG, STRING, null, MEDIUM, REPLICA_SELECTOR_CLASS_DOC)
+            .define(FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG, BOOLEAN, FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_DEFAULT, MEDIUM, FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_DOC);
 
 }

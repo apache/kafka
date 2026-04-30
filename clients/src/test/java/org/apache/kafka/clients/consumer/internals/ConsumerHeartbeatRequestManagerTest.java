@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.AbstractMembershipManager.LocalAssignment;
@@ -64,7 +65,11 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.SortedSet;
+import java.util.stream.Stream;
 
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.DEFAULT;
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
 import static org.apache.kafka.clients.consumer.internals.AbstractHeartbeatRequestManager.CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.REGEX_RESOLUTION_NOT_SUPPORTED_MSG;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
@@ -309,6 +314,33 @@ public class ConsumerHeartbeatRequestManagerTest {
         }
     }
 
+    /**
+     * When the consumer uses manual partition assignment (assign()) instead of subscribe(), the
+     * member stays in UNSUBSCRIBED state indefinitely. Because heartbeats are skipped in that
+     * state and heartbeatIntervalMs initialises to 0, maximumTimeToWait used to return 0, causing
+     * a busy-loop in pollForFetches. Verify that maximumTimeToWait returns Long.MAX_VALUE whenever
+     * the member is in UNSUBSCRIBED state so the application thread can block for the full poll
+     * timeout.
+     */
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testMaximumTimeToWaitWhenHeartbeatShouldBeSkipped(final boolean isUnsubscribed) {
+        // Start with zero heartbeat interval (simulates the initial state before any HB response)
+        createHeartbeatRequestStateWithZeroHeartbeatInterval();
+        when(membershipManager.state()).thenReturn(isUnsubscribed ? MemberState.UNSUBSCRIBED : MemberState.JOINING);
+
+        long result = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+
+        if (isUnsubscribed) {
+            assertEquals(Long.MAX_VALUE, result,
+                "maximumTimeToWait should return Long.MAX_VALUE when in UNSUBSCRIBED state " +
+                    "(e.g., manual assignment) to prevent a busy loop");
+        } else {
+            assertEquals(0, result,
+                "maximumTimeToWait should return 0 when heartbeat interval timer has already expired");
+        }
+    }
+
     @Test
     public void testTimerNotDue() {
         time.sleep(100); // time elapsed < heartbeatInterval, no heartbeat should be sent
@@ -420,6 +452,57 @@ public class ConsumerHeartbeatRequestManagerTest {
         assertEquals(1, result.unsentRequests.size());
         result.unsentRequests.get(0).handler().onFailure(time.milliseconds(), new KafkaException("fatal"));
         verify(membershipManager).onHeartbeatFailure(false);
+        verify(membershipManager).transitionToFatal();
+        verify(backgroundEventHandler).add(any());
+    }
+
+    /**
+     * Test that GROUP_ID_NOT_FOUND error while unsubscribed is not a fatal error.
+     * This can happen when the consumer never successfully joined the group
+     * (e.g., due to an InvalidTopicException during poll() and close() sends
+     * a leave heartbeat for a group that was never created.
+     */
+    @Test
+    public void testGroupIdNotFoundExceptionWhileUnsubscribed() {
+        // Setup: member is in UNSUBSCRIBED state with epoch -1
+        when(membershipManager.state()).thenReturn(MemberState.UNSUBSCRIBED);
+        when(membershipManager.memberEpoch()).thenReturn(-1);
+
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+
+        // Complete the heartbeat with GROUP_ID_NOT_FOUND error
+        ClientResponse response = createHeartbeatResponse(result.unsentRequests.get(0), Errors.GROUP_ID_NOT_FOUND);
+        result.unsentRequests.get(0).handler().onComplete(response);
+
+        // Verify: no fatal error, heartbeat skipped (benign)
+        verify(membershipManager, never()).transitionToFatal();
+        verify(membershipManager).onHeartbeatRequestSkipped();
+        verify(backgroundEventHandler, never()).add(any());
+    }
+
+    /**
+     * Test that GROUP_ID_NOT_FOUND error while stable is treated as fatal.
+     * This would indicate the group was unexpectedly deleted while the member
+     * was actively participating.
+     */
+    @Test
+    public void testGroupIdNotFoundWhileStableIsFatal() {
+        // Setup: member is in STABLE state with positive epoch
+        when(membershipManager.state()).thenReturn(MemberState.STABLE);
+        when(membershipManager.memberEpoch()).thenReturn(DEFAULT_MEMBER_EPOCH);
+
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+
+        // Complete the heartbeat with GROUP_ID_NOT_FOUND error
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
+        ClientResponse response = createHeartbeatResponse(result.unsentRequests.get(0), Errors.GROUP_ID_NOT_FOUND);
+        result.unsentRequests.get(0).handler().onComplete(response);
+
+        // Verify: fatal error
         verify(membershipManager).transitionToFatal();
         verify(backgroundEventHandler).add(any());
     }
@@ -642,17 +725,6 @@ public class ConsumerHeartbeatRequestManagerTest {
         clearInvocations(backgroundEventHandler);
     }
 
-    private void mockErrorResponse(Errors error, String exceptionCustomMsg) {
-        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
-        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(1, result.unsentRequests.size());
-
-        when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
-        ClientResponse response = createHeartbeatResponse(
-            result.unsentRequests.get(0), error, exceptionCustomMsg);
-        result.unsentRequests.get(0).handler().onComplete(response);
-    }
-
     private void mockResponseWithException(UnsupportedVersionException exception, boolean isFromBroker) {
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
@@ -777,6 +849,29 @@ public class ConsumerHeartbeatRequestManagerTest {
         assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS);
     }
 
+    @ParameterizedTest
+    @MethodSource("pollOnLeavingMatrix")
+    public void testPollOnLeaving(Optional<String> groupInstanceId, CloseOptions.GroupMembershipOperation operation) {
+        heartbeatRequestManager = createHeartbeatRequestManager(
+            coordinatorRequestManager,
+            membershipManager,
+            heartbeatState,
+            heartbeatRequestState,
+            backgroundEventHandler);
+        when(membershipManager.state()).thenReturn(MemberState.LEAVING);
+        when(membershipManager.groupInstanceId()).thenReturn(groupInstanceId);
+        when(membershipManager.leaveGroupOperation()).thenReturn(operation);
+
+        if (groupInstanceId.isEmpty() && REMAIN_IN_GROUP == operation) {
+            assertNoHeartbeat(heartbeatRequestManager);
+            verify(membershipManager, never()).onHeartbeatRequestGenerated();
+        } else {
+            assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS);
+            verify(membershipManager).onHeartbeatRequestGenerated();
+        }
+
+    }
+
     /**
      * This is expected to be the case where a member is already leaving the group and the poll
      * timer expires. The poll timer expiration should not transition the member to STALE, and
@@ -859,6 +954,7 @@ public class ConsumerHeartbeatRequestManagerTest {
         assertEquals(0, result.unsentRequests.size(), "No heartbeat should be sent while a previous one is in-flight");
 
         when(membershipManager.state()).thenReturn(MemberState.LEAVING);
+        when(membershipManager.groupInstanceId()).thenReturn(Optional.empty());
         when(heartbeatState.buildRequestData()).thenReturn(new ConsumerGroupHeartbeatRequestData().setMemberEpoch(-1));
         ConsumerGroupHeartbeatRequest heartbeatToLeave = getHeartbeatRequest(heartbeatRequestManager, version);
         assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH, heartbeatToLeave.data().memberEpoch());
@@ -914,17 +1010,26 @@ public class ConsumerHeartbeatRequestManagerTest {
         assertEquals(Collections.singletonList(partition), topicPartitions.partitions());
     }
 
-    @Test
-    public void testPollOnCloseGeneratesRequestIfNeeded() {
-        when(membershipManager.isLeavingGroup()).thenReturn(true);
+    @ParameterizedTest
+    @MethodSource("pollOnLeavingMatrix")
+    public void testPollOnCloseGeneratesRequestIfNeeded(Optional<String> groupInstanceId, CloseOptions.GroupMembershipOperation operation) {
+        if (groupInstanceId.isEmpty() && REMAIN_IN_GROUP == operation)
+            when(membershipManager.isLeavingGroup()).thenReturn(false);
+        else
+            when(membershipManager.isLeavingGroup()).thenReturn(true);
+        when(membershipManager.groupInstanceId()).thenReturn(groupInstanceId);
+        when(membershipManager.leaveGroupOperation()).thenReturn(operation);
+        String membership = groupInstanceId.isEmpty() ? "dynamic" : "static";
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.pollOnClose(time.milliseconds());
-        assertEquals(1, pollResult.unsentRequests.size(),
-            "A request to leave the group should be generated if the member is still leaving when closing the manager");
-
-        when(membershipManager.isLeavingGroup()).thenReturn(false);
-        pollResult = heartbeatRequestManager.pollOnClose(time.milliseconds());
-        assertTrue(pollResult.unsentRequests.isEmpty(),
-            "No requests should be generated on close if the member is not leaving when closing the manager");
+        if (groupInstanceId.isEmpty() && REMAIN_IN_GROUP == operation) {
+            assertTrue(pollResult.unsentRequests.isEmpty(),
+                "A request to leave the group should not be generated if the " + membership + " is still leaving when closing the manager " +
+                    "and GroupMembershipOperation is " + operation.name());
+        } else {
+            assertEquals(1, pollResult.unsentRequests.size(),
+                "A request to leave the group should be generated if the " + membership + " is still leaving when closing the manager " +
+                    "and GroupMembershipOperation is " + operation.name());
+        }
     }
 
     @Test
@@ -980,6 +1085,34 @@ public class ConsumerHeartbeatRequestManagerTest {
         when(subscriptions.subscriptionPattern()).thenReturn(null);
         data = heartbeatState.buildRequestData();
         assertNull(data.subscribedTopicRegex());
+    }
+
+    @Test
+    public void testRackIdInHeartbeatLifecycle() {
+        heartbeatState = new HeartbeatState(subscriptions, membershipManager, DEFAULT_MAX_POLL_INTERVAL_MS);
+        createHeartbeatRequestStateWithZeroHeartbeatInterval();
+
+        // Initial heartbeat with rackId
+        mockJoiningMemberData(null);
+        when(membershipManager.rackId()).thenReturn(Optional.of("rack1"));
+        ConsumerGroupHeartbeatRequestData data = heartbeatState.buildRequestData();
+        assertEquals("rack1", data.rackId());
+
+        // RackId not included in HB if member state is not JOINING
+        when(membershipManager.state()).thenReturn(MemberState.STABLE);
+        data = heartbeatState.buildRequestData();
+        assertNull(data.rackId());
+
+        // RackId included in HB if member state changes to JOINING again
+        when(membershipManager.state()).thenReturn(MemberState.JOINING);
+        data = heartbeatState.buildRequestData();
+        assertEquals("rack1", data.rackId());
+
+        // Empty rackId not included in HB
+        when(membershipManager.rackId()).thenReturn(Optional.empty());
+        heartbeatState = new HeartbeatState(subscriptions, membershipManager, DEFAULT_MAX_POLL_INTERVAL_MS);
+        data = heartbeatState.buildRequestData();
+        assertNull(data.rackId());
     }
 
     private void assertHeartbeat(ConsumerHeartbeatRequestManager hrm, int nextPollMs) {
@@ -1148,5 +1281,16 @@ public class ConsumerHeartbeatRequestManagerTest {
         when(membershipManager.memberEpoch()).thenReturn(DEFAULT_MEMBER_EPOCH);
         when(membershipManager.groupId()).thenReturn(DEFAULT_GROUP_ID);
         when(membershipManager.serverAssignor()).thenReturn(Optional.of(DEFAULT_REMOTE_ASSIGNOR));
+    }
+
+    private static Stream<Arguments> pollOnLeavingMatrix() {
+        return Stream.of(
+            Arguments.of(Optional.empty(), DEFAULT),
+            Arguments.of(Optional.empty(), LEAVE_GROUP),
+            Arguments.of(Optional.empty(), REMAIN_IN_GROUP),
+            Arguments.of(Optional.of("groupInstanceId"), DEFAULT),
+            Arguments.of(Optional.of("groupInstanceId"), LEAVE_GROUP),
+            Arguments.of(Optional.of("groupInstanceId"), REMAIN_IN_GROUP)
+        );
     }
 }

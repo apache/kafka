@@ -18,7 +18,7 @@ package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.KafkaThread;
+import org.apache.kafka.common.utils.internals.KafkaThread;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -44,6 +44,7 @@ import java.time.Instant;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.streams.kstream.Suppressed.untilWindowCloses;
 
@@ -54,6 +55,8 @@ public class SmokeTestClient extends SmokeTestUtil {
     private KafkaStreams streams;
     private boolean uncaughtException = false;
     private volatile boolean closed;
+    private volatile boolean error;
+    private final AtomicInteger totalDataRecordsProcessed = new AtomicInteger(0);
 
     private static void addShutdownHook(final String name, final Runnable runnable) {
         if (name != null) {
@@ -71,6 +74,14 @@ public class SmokeTestClient extends SmokeTestUtil {
         return closed;
     }
 
+    public boolean error() {
+        return error;
+    }
+
+    public int totalDataRecordsProcessed() {
+        return totalDataRecordsProcessed.get();
+    }
+
     public void start(final Properties streamsProperties) {
         final Topology build = getTopology();
         streams = new KafkaStreams(build, getStreamsConfig(streamsProperties));
@@ -84,6 +95,10 @@ public class SmokeTestClient extends SmokeTestUtil {
 
             if (newState == KafkaStreams.State.NOT_RUNNING) {
                 closed = true;
+            }
+
+            if (newState == KafkaStreams.State.ERROR) {
+                error = true;
             }
         });
 
@@ -129,7 +144,9 @@ public class SmokeTestClient extends SmokeTestUtil {
 
     private Properties getStreamsConfig(final Properties props) {
         final Properties fullProps = new Properties(props);
-        fullProps.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
+        if (!props.containsKey(StreamsConfig.APPLICATION_ID_CONFIG)) {
+            fullProps.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
+        }
         fullProps.put(StreamsConfig.CLIENT_ID_CONFIG, "SmokeTest-" + name);
         fullProps.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
         fullProps.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
@@ -145,7 +162,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         source.filterNot((k, v) -> k.equals("flush"))
               .to("echo", Produced.with(stringSerde, intSerde));
         final KStream<String, Integer> data = source.filter((key, value) -> value == null || value != END);
-        data.process(SmokeTestUtil.printProcessorSupplier("data", name));
+        data.process(SmokeTestUtil.printProcessorSupplier("data", name, totalDataRecordsProcessed));
 
         // min
         final KGroupedStream<String, Integer> groupedData = data.groupByKey(Grouped.with(stringSerde, intSerde));
@@ -172,7 +189,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         final KTable<Windowed<String>, Integer> smallWindowSum = groupedData
             .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofSeconds(2), Duration.ofSeconds(30)).advanceBy(Duration.ofSeconds(1)))
-            .reduce((l, r) -> l + r);
+            .reduce(Integer::sum);
 
         streamify(smallWindowSum, "sws-raw");
         streamify(smallWindowSum.suppress(untilWindowCloses(BufferConfig.unbounded())), "sws-suppressed");

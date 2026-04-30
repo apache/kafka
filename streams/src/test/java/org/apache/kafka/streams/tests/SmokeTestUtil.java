@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 
 import java.time.Instant;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class SmokeTestUtil {
 
@@ -39,7 +40,11 @@ public class SmokeTestUtil {
     }
 
     static ProcessorSupplier<Object, Object, Void, Void> printProcessorSupplier(final String topic, final String name) {
-        return () -> new ContextualProcessor<Object, Object, Void, Void>() {
+        return printProcessorSupplier(topic, name, new AtomicInteger());
+    }
+
+    static ProcessorSupplier<Object, Object, Void, Void> printProcessorSupplier(final String topic, final String name, final AtomicInteger totalRecordsProcessed) {
+        return () -> new ContextualProcessor<>() {
             private int numRecordsProcessed = 0;
             private long smallestOffset = Long.MAX_VALUE;
             private long largestOffset = Long.MIN_VALUE;
@@ -84,6 +89,7 @@ public class SmokeTestUtil {
                 }
                 System.out.println("offset " + smallestOffset + " to " + largestOffset + " -> processed " + processed);
                 System.out.flush();
+                totalRecordsProcessed.addAndGet(numRecordsProcessed);
             }
         };
     }
@@ -126,6 +132,24 @@ public class SmokeTestUtil {
         try {
             Thread.sleep(duration);
         } catch (final Exception ignore) { }
+    }
+
+    public static class VerificationResult {
+        private final boolean passed;
+        private final String result;
+
+        public VerificationResult(final boolean passed, final String result) {
+            this.passed = passed;
+            this.result = result;
+        }
+
+        public boolean passed() {
+            return passed;
+        }
+
+        public String result() {
+            return result;
+        }
     }
 
 }

@@ -26,23 +26,22 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.EndTransactionMarker;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.EndTransactionMarker;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.UUIDDeserializer;
 import org.apache.kafka.common.serialization.UUIDSerializer;
-import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
 
 import org.junit.jupiter.api.Test;
 
@@ -227,8 +226,7 @@ public class CompletedFetchTest {
                 TP,
                 partitionData,
                 metricAggregator,
-                fetchOffset,
-                ApiKeys.FETCH.latestVersion());
+                fetchOffset);
     }
 
     private static Deserializers<UUID, UUID> newUuidDeserializers() {

@@ -203,6 +203,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask<SourceRecord, 
     private final boolean topicTrackingEnabled;
     private final TopicCreation topicCreation;
     private final Executor closeExecutor;
+    private final String version;
 
     // Visible for testing
     List<SourceRecord> toSend;
@@ -236,11 +237,12 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask<SourceRecord, 
                                        StatusBackingStore statusBackingStore,
                                        Executor closeExecutor,
                                        Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier,
+                                       TaskPluginsMetadata pluginsMetadata,
                                        Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
 
         super(id, statusListener, initialState, loader, connectMetrics, errorMetrics,
                 retryWithToleranceOperator, transformationChain, errorReportersSupplier,
-                time, statusBackingStore, pluginLoaderSwapper);
+                time, statusBackingStore, pluginsMetadata, pluginLoaderSwapper);
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -258,6 +260,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask<SourceRecord, 
         this.sourceTaskMetricsGroup = new SourceTaskMetricsGroup(id, connectMetrics);
         this.topicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
         this.topicCreation = TopicCreation.newTopicCreation(workerConfig, topicGroups);
+        this.version = task.version();
     }
 
     @Override
@@ -389,6 +392,11 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask<SourceRecord, 
             throw e;
         }
         finalOffsetCommit(false);
+    }
+
+    @Override
+    public String taskVersion() {
+        return version;
     }
 
     /**

@@ -17,36 +17,13 @@
 
 package org.apache.kafka.tools.reassign;
 
-import java.util.Objects;
-
 /**
  * A replica log directory move state where the source replica is missing.
+ * @param targetLogDir The log directory that we wanted the replica to move to.
  */
-final class MissingLogDirMoveState implements LogDirMoveState {
-    public final String targetLogDir;
-
-    /**
-     * @param targetLogDir        The log directory that we wanted the replica to move to.
-     */
-    public MissingLogDirMoveState(String targetLogDir) {
-        this.targetLogDir = targetLogDir;
-    }
-
+record MissingLogDirMoveState(String targetLogDir) implements LogDirMoveState {
     @Override
     public boolean done() {
         return false;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        MissingLogDirMoveState that = (MissingLogDirMoveState) o;
-        return Objects.equals(targetLogDir, that.targetLogDir);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(targetLogDir);
     }
 }

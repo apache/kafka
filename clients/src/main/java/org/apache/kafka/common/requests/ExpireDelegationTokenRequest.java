@@ -19,8 +19,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
 import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
 import java.nio.ByteBuffer;
 
@@ -33,9 +33,9 @@ public class ExpireDelegationTokenRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public static ExpireDelegationTokenRequest parse(ByteBuffer buffer, short version) {
+    public static ExpireDelegationTokenRequest parse(Readable readable, short version) {
         return new ExpireDelegationTokenRequest(
-            new ExpireDelegationTokenRequestData(new ByteBufferAccessor(buffer), version), version);
+            new ExpireDelegationTokenRequestData(readable, version), version);
     }
 
     @Override
@@ -74,7 +74,19 @@ public class ExpireDelegationTokenRequest extends AbstractRequest {
 
         @Override
         public String toString() {
-            return data.toString();
+            return maskData(data);
         }
+    }
+
+    private static String maskData(ExpireDelegationTokenRequestData data) {
+        ExpireDelegationTokenRequestData tempData = data.duplicate();
+        tempData.setHmac(new byte[0]);
+        return tempData.toString();
+    }
+
+    // Do not print Hmac, overwrite a temp copy of the data with empty content
+    @Override
+    public String toString() {
+        return maskData(data);
     }
 }

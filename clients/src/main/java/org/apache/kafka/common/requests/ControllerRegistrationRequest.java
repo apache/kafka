@@ -19,10 +19,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.ControllerRegistrationRequestData;
 import org.apache.kafka.common.message.ControllerRegistrationResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.protocol.Readable;
 
 public class ControllerRegistrationRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<ControllerRegistrationRequest> {
@@ -65,9 +63,9 @@ public class ControllerRegistrationRequest extends AbstractRequest {
                 .setErrorMessage(error.message()));
     }
 
-    public static ControllerRegistrationRequest parse(ByteBuffer buffer, short version) {
+    public static ControllerRegistrationRequest parse(Readable readable, short version) {
         return new ControllerRegistrationRequest(
-            new ControllerRegistrationRequestData(new ByteBufferAccessor(buffer), version),
+            new ControllerRegistrationRequestData(readable, version),
             version);
     }
 }

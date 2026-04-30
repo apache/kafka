@@ -42,8 +42,8 @@ import org.slf4j.Logger;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -98,13 +98,13 @@ public class DelegationTokenControlManager {
 
         DelegationTokenControlManager build() {
             if (logContext == null) logContext = new LogContext();
-            if (tokenCache == null) tokenCache = new DelegationTokenCache(Collections.emptySet());
+            if (tokenCache == null) tokenCache = new DelegationTokenCache(Set.of());
             return new DelegationTokenControlManager(
-              logContext,
-              tokenCache,
-              tokenSecretKeyString,
-              tokenDefaultMaxLifetimeMs,
-              tokenDefaultRenewLifetimeMs);
+                logContext,
+                tokenCache,
+                tokenSecretKeyString,
+                tokenDefaultMaxLifetimeMs,
+                tokenDefaultRenewLifetimeMs);
         }
     }
 

@@ -17,12 +17,11 @@
 
 package org.apache.kafka.image;
 
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 
@@ -33,11 +32,7 @@ public class FakeSnapshotWriter implements SnapshotWriter<ApiMessageAndVersion> 
     private boolean closed = false;
 
     public List<List<ApiMessageAndVersion>> batches() {
-        List<List<ApiMessageAndVersion>> result = new ArrayList<>();
-        for (List<ApiMessageAndVersion> batch : batches) {
-            result.add(Collections.unmodifiableList(batch));
-        }
-        return Collections.unmodifiableList(result);
+        return batches.stream().map(List::copyOf).toList();
     }
 
     public FakeSnapshotWriter() {

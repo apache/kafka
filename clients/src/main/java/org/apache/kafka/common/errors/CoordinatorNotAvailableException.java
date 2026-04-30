@@ -23,7 +23,7 @@ package org.apache.kafka.common.errors;
  * In the context of the transactional coordinator, this error will be returned if the underlying transactional log
  * is under replicated or if an append to the log times out.
  */
-public class CoordinatorNotAvailableException extends RetriableException {
+public class CoordinatorNotAvailableException extends RefreshRetriableException {
     public static final CoordinatorNotAvailableException INSTANCE = new CoordinatorNotAvailableException();
 
     private static final long serialVersionUID = 1L;

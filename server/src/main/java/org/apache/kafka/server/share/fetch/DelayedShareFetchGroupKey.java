@@ -16,43 +16,16 @@
  */
 package org.apache.kafka.server.share.fetch;
 
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
-
-import java.util.Objects;
 
 /**
  * A key for delayed share fetch purgatory that refers to the share partition.
  */
-public class DelayedShareFetchGroupKey implements DelayedShareFetchKey {
-    private final String groupId;
-    private final Uuid topicId;
-    private final int partition;
+public record DelayedShareFetchGroupKey(String groupId, Uuid topicId, int partition) implements DelayedShareFetchKey {
 
-    public DelayedShareFetchGroupKey(String groupId, Uuid topicId, int partition) {
-        this.groupId = groupId;
-        this.topicId = topicId;
-        this.partition = partition;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        DelayedShareFetchGroupKey that = (DelayedShareFetchGroupKey) o;
-        return topicId.equals(that.topicId) && partition == that.partition && groupId.equals(that.groupId);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(topicId, partition, groupId);
-    }
-
-    @Override
-    public String toString() {
-        return "DelayedShareFetchGroupKey(groupId=" + groupId +
-            ", topicId=" + topicId +
-            ", partition=" + partition +
-            ")";
+    public DelayedShareFetchGroupKey(String groupId, TopicIdPartition topicIdPartition) {
+        this(groupId, topicIdPartition.topicId(), topicIdPartition.partition());
     }
 
     @Override

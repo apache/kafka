@@ -20,6 +20,7 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.components.ConnectPlugin;
 import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
@@ -42,10 +43,7 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -81,7 +79,7 @@ public class Plugins {
     }
 
     public PluginScanResult initLoaders(Set<PluginSource> pluginSources, PluginDiscoveryMode discoveryMode) {
-        PluginScanResult empty = new PluginScanResult(Collections.emptyList());
+        PluginScanResult empty = new PluginScanResult(List.of());
         PluginScanResult serviceLoadingScanResult;
         try {
             serviceLoadingScanResult = discoveryMode.serviceLoad() ?
@@ -94,7 +92,7 @@ public class Plugins {
         }
         PluginScanResult reflectiveScanResult = discoveryMode.reflectivelyScan() ?
                 new ReflectionScanner().discoverPlugins(pluginSources) : empty;
-        PluginScanResult scanResult = new PluginScanResult(Arrays.asList(reflectiveScanResult, serviceLoadingScanResult));
+        PluginScanResult scanResult = new PluginScanResult(List.of(reflectiveScanResult, serviceLoadingScanResult));
         maybeReportHybridDiscoveryIssue(discoveryMode, serviceLoadingScanResult, scanResult);
         delegatingLoader.installDiscoveredPlugins(scanResult);
         return scanResult;
@@ -166,7 +164,6 @@ public class Plugins {
         );
     }
 
-    @SuppressWarnings("unchecked")
     protected static <U> Class<? extends U> pluginClass(
             DelegatingClassLoader loader,
             String classOrAlias,
@@ -272,7 +269,7 @@ public class Plugins {
 
     public String pluginVersion(String classOrAlias, ClassLoader sourceLoader, PluginType... allowedTypes) {
         String location = (sourceLoader instanceof PluginClassLoader) ? ((PluginClassLoader) sourceLoader).location() : null;
-        PluginDesc<?> desc = delegatingLoader.pluginDesc(classOrAlias, location, new HashSet<>(Arrays.asList(allowedTypes)));
+        PluginDesc<?> desc = delegatingLoader.pluginDesc(classOrAlias, location, Set.of(allowedTypes));
         if (desc != null) {
             return desc.version();
         }
@@ -283,19 +280,13 @@ public class Plugins {
         return delegatingLoader;
     }
 
-    // kept for compatibility
-    public ClassLoader connectorLoader(String connectorClassOrAlias) {
-        return delegatingLoader.loader(connectorClassOrAlias);
+    public ClassLoader connectorLoader(String connectorClassOrAlias, VersionRange range) {
+        return delegatingLoader.connectorLoader(connectorClassOrAlias, range);
     }
 
-    public ClassLoader pluginLoader(String classOrAlias, VersionRange range) {
-        return delegatingLoader.loader(classOrAlias, range);
+    public ClassLoader pluginLoader(String classOrAlias, VersionRange range, ClassLoader connectorLoader) {
+        return delegatingLoader.pluginLoader(classOrAlias, range, connectorLoader);
     }
-
-    public ClassLoader pluginLoader(String classOrAlias) {
-        return delegatingLoader.loader(classOrAlias);
-    }
-
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     public Set<PluginDesc<Connector>> connectors() {
@@ -367,19 +358,14 @@ public class Plugins {
         return plugins;
     }
 
-    public Object newPlugin(String classOrAlias) throws ClassNotFoundException {
-        Class<?> klass = pluginClass(delegatingLoader, classOrAlias, Object.class);
-        return newPlugin(klass);
-    }
-
     public Object newPlugin(String classOrAlias, VersionRange range) throws VersionedPluginLoadingException, ClassNotFoundException {
         Class<?> klass = pluginClass(delegatingLoader, classOrAlias, Object.class, range);
         return newPlugin(klass);
     }
 
     public Object newPlugin(String classOrAlias, VersionRange range, ClassLoader sourceLoader) throws ClassNotFoundException {
-        if (range == null && sourceLoader instanceof PluginClassLoader) {
-            return newPlugin(sourceLoader.loadClass(classOrAlias));
+        if (sourceLoader instanceof PluginClassLoader) {
+            return newPlugin(pluginLoader(classOrAlias, range, sourceLoader).loadClass(classOrAlias));
         }
         return newPlugin(classOrAlias, range);
     }
@@ -680,6 +666,11 @@ public class Plugins {
             plugin = newPlugin(klass);
             if (plugin instanceof Versioned versionedPlugin) {
                 if (Utils.isBlank(versionedPlugin.version())) {
+                    throw new ConnectException("Version not defined for '" + klassName + "'");
+                }
+            }
+            if (plugin instanceof ConnectPlugin connectPlugin) {
+                if (Utils.isBlank(connectPlugin.version())) {
                     throw new ConnectException("Version not defined for '" + klassName + "'");
                 }
             }

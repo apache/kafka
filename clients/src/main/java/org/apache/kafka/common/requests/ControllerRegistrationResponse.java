@@ -19,11 +19,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.ControllerRegistrationResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.Map;
 
 public class ControllerRegistrationResponse extends AbstractResponse {
@@ -51,11 +49,11 @@ public class ControllerRegistrationResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return Collections.singletonMap(Errors.forCode(data.errorCode()), 1);
+        return Map.of(Errors.forCode(data.errorCode()), 1);
     }
 
-    public static ControllerRegistrationResponse parse(ByteBuffer buffer, short version) {
+    public static ControllerRegistrationResponse parse(Readable readable, short version) {
         return new ControllerRegistrationResponse(
-                new ControllerRegistrationResponseData(new ByteBufferAccessor(buffer), version));
+                new ControllerRegistrationResponseData(readable, version));
     }
 }

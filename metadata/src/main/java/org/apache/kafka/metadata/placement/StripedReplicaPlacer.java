@@ -28,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
-import java.util.stream.Collectors;
 
 
 /**
@@ -405,7 +404,7 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
 
     private static void throwInvalidReplicationFactorIfZero(int numUnfenced) {
         if (numUnfenced == 0) {
-            throw new InvalidReplicationFactorException("All brokers are currently fenced.");
+            throw new InvalidReplicationFactorException("All brokers are currently fenced, or have all their log directories cordoned.");
         }
     }
 
@@ -413,7 +412,7 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
         if (replicationFactor > numTotalBrokers) {
             throw new InvalidReplicationFactorException("The target replication factor " +
                     "of " + replicationFactor + " cannot be reached because only " +
-                    numTotalBrokers + " broker(s) are registered.");
+                    numTotalBrokers + " broker(s) are registered or some brokers have all their log directories cordoned.");
         }
     }
 
@@ -438,7 +437,7 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
             placements.add(rackList.place(placement.numReplicas()));
         }
         return new TopicAssignment(
-            placements.stream().map(replicas -> new PartitionAssignment(replicas, cluster)).collect(Collectors.toList())
+            placements.stream().map(replicas -> new PartitionAssignment(replicas, cluster)).toList()
         );
     }
 }

@@ -16,32 +16,52 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ConsumerGroupDescription;
+import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
+import org.apache.kafka.clients.admin.MemberDescription;
+import org.apache.kafka.clients.admin.MemberToRemove;
 import org.apache.kafka.clients.admin.MockAdminClient;
+import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupResult;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.message.LeaveGroupRequestData;
+import org.apache.kafka.common.protocol.Errors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.lang.reflect.Constructor;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @Timeout(value = 600)
 public class StreamsResetterTest {
@@ -49,11 +69,11 @@ public class StreamsResetterTest {
     private final StreamsResetter streamsResetter = new StreamsResetter();
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
     private final TopicPartition topicPartition = new TopicPartition(TOPIC, 0);
-    private final Set<TopicPartition> inputTopicPartitions = new HashSet<>(Collections.singletonList(topicPartition));
+    private final Set<TopicPartition> inputTopicPartitions = Set.of(topicPartition);
 
     @BeforeEach
     public void beforeEach() {
-        consumer.assign(Collections.singletonList(topicPartition));
+        consumer.assign(List.of(topicPartition));
         consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0L, new byte[] {}, new byte[] {}));
         consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 1L, new byte[] {}, new byte[] {}));
         consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 2L, new byte[] {}, new byte[] {}));
@@ -82,7 +102,7 @@ public class StreamsResetterTest {
         final long beginningOffset = 5L;
         final long endOffset = 10L;
         final MockConsumer<byte[], byte[]> emptyConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
-        emptyConsumer.assign(Collections.singletonList(topicPartition));
+        emptyConsumer.assign(List.of(topicPartition));
 
         final Map<TopicPartition, Long> beginningOffsetsMap = new HashMap<>();
         beginningOffsetsMap.put(topicPartition, beginningOffset);
@@ -255,10 +275,10 @@ public class StreamsResetterTest {
     public void shouldDeleteTopic() throws InterruptedException, ExecutionException {
         final Cluster cluster = createCluster(1);
         try (final MockAdminClient adminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(0))) {
-            final TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), Collections.emptyList());
-            adminClient.addTopic(false, TOPIC, Collections.singletonList(topicPartitionInfo), null);
-            streamsResetter.doDelete(Collections.singletonList(TOPIC), adminClient);
-            assertEquals(Collections.emptySet(), adminClient.listTopics().names().get());
+            final TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, cluster.nodeById(0), cluster.nodes(), List.of());
+            adminClient.addTopic(false, TOPIC, List.of(topicPartitionInfo), null);
+            streamsResetter.doDelete(List.of(TOPIC), adminClient);
+            assertEquals(Set.of(), adminClient.listTopics().names().get());
         }
     }
 
@@ -274,7 +294,7 @@ public class StreamsResetterTest {
     public void testResetToDatetimeWhenPartitionIsEmptyResetsToLatestOffset() {
         final long beginningAndEndOffset = 5L; // Empty partition implies beginning offset == end offset
         final MockConsumer<byte[], byte[]> emptyConsumer = new EmptyPartitionConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
-        emptyConsumer.assign(Collections.singletonList(topicPartition));
+        emptyConsumer.assign(List.of(topicPartition));
 
         final Map<TopicPartition, Long> beginningOffsetsMap = new HashMap<>();
         beginningOffsetsMap.put(topicPartition, beginningAndEndOffset);
@@ -293,14 +313,110 @@ public class StreamsResetterTest {
         assertEquals(beginningAndEndOffset, position);
     }
 
+    @Test
+    public void shouldRetryToRemoveMembersOnUnknownMemberIdExceptionAndForce() throws Exception {
+        final String groupId = "groupId";
+
+        final Admin adminClient = mock(Admin.class);
+        final ConsumerGroupDescription consumerGroupDescription = mock(ConsumerGroupDescription.class);
+
+        when(adminClient.describeConsumerGroups(eq(Set.of(groupId)), any()))
+                .thenReturn(new DescribeConsumerGroupsResult(Map.of(groupId, KafkaFutureImpl.completedFuture(consumerGroupDescription))));
+        when(adminClient.removeMembersFromConsumerGroup(eq(groupId), any()))
+                .thenReturn(createRemoveMembersFromConsumerGroupResult(KafkaFutureImpl.completedFuture(Map.of(new LeaveGroupRequestData.MemberIdentity(), Errors.UNKNOWN_MEMBER_ID)), Set.of()))
+                .thenReturn(createRemoveMembersFromConsumerGroupResult(KafkaFutureImpl.completedFuture(Map.of()), Set.of()));
+        when(consumerGroupDescription.members()).thenReturn(List.of(mock(MemberDescription.class)));
+
+        streamsResetter.maybeDeleteActiveConsumers(groupId, adminClient, true);
+
+        verify(adminClient, times(2)).removeMembersFromConsumerGroup(eq(groupId), any());
+    }
+
+    @Test
+    public void shouldFailAfterTooManyRetries() throws Exception {
+        final String groupId = "groupId";
+
+        final Admin adminClient = mock(Admin.class);
+        final ConsumerGroupDescription consumerGroupDescription = mock(ConsumerGroupDescription.class);
+
+        when(adminClient.describeConsumerGroups(eq(Set.of(groupId)), any()))
+                .thenReturn(new DescribeConsumerGroupsResult(Map.of(groupId, KafkaFutureImpl.completedFuture(consumerGroupDescription))));
+        when(adminClient.removeMembersFromConsumerGroup(eq(groupId), any()))
+                .thenReturn(createRemoveMembersFromConsumerGroupResult(KafkaFutureImpl.completedFuture(Map.of(new LeaveGroupRequestData.MemberIdentity(), Errors.UNKNOWN_MEMBER_ID)), Set.of()));
+        when(consumerGroupDescription.members()).thenReturn(List.of(mock(MemberDescription.class)));
+
+        assertThrows(ExecutionException.class, () -> streamsResetter.maybeDeleteActiveConsumers(groupId, adminClient, true));
+
+        verify(adminClient, times(4)).removeMembersFromConsumerGroup(eq(groupId), any());
+    }
+
+    @Test
+    public void shouldFailIfThereAreMembersAndNotForce() throws Exception {
+        final String groupId = "groupId";
+
+        final Admin adminClient = mock(Admin.class);
+        final ConsumerGroupDescription consumerGroupDescription = mock(ConsumerGroupDescription.class);
+
+        when(adminClient.describeConsumerGroups(eq(Set.of(groupId)), any()))
+                .thenReturn(new DescribeConsumerGroupsResult(Map.of(groupId, KafkaFutureImpl.completedFuture(consumerGroupDescription))));
+        when(consumerGroupDescription.members()).thenReturn(List.of(mock(MemberDescription.class)));
+
+        assertThrows(IllegalStateException.class, () -> streamsResetter.maybeDeleteActiveConsumers(groupId, adminClient, false));
+
+        verify(adminClient, never()).removeMembersFromConsumerGroup(eq(groupId), any());
+    }
+
+    @Test
+    public void shouldRemoveIfThereAreMembersAndForce() throws Exception {
+        final String groupId = "groupId";
+
+        final Admin adminClient = mock(Admin.class);
+        final ConsumerGroupDescription consumerGroupDescription = mock(ConsumerGroupDescription.class);
+
+        when(adminClient.describeConsumerGroups(eq(Set.of(groupId)), any()))
+                .thenReturn(new DescribeConsumerGroupsResult(Map.of(groupId, KafkaFutureImpl.completedFuture(consumerGroupDescription))));
+        when(adminClient.removeMembersFromConsumerGroup(eq(groupId), any()))
+                .thenReturn(createRemoveMembersFromConsumerGroupResult(KafkaFutureImpl.completedFuture(Map.of()), Set.of()));
+        when(consumerGroupDescription.members()).thenReturn(List.of(mock(MemberDescription.class)));
+
+        streamsResetter.maybeDeleteActiveConsumers(groupId, adminClient, true);
+
+        verify(adminClient).removeMembersFromConsumerGroup(eq(groupId), any());
+    }
+
+    @Test
+    public void shouldIgnoreGroupIdNotFoundException() throws Exception {
+        final String groupId = "groupId";
+
+        final Admin adminClient = mock(Admin.class);
+        final ConsumerGroupDescription consumerGroupDescription = mock(ConsumerGroupDescription.class);
+
+        final KafkaFutureImpl<ConsumerGroupDescription> future = new KafkaFutureImpl<>();
+        future.completeExceptionally(new GroupIdNotFoundException(groupId));
+        when(adminClient.describeConsumerGroups(eq(Set.of(groupId)), any()))
+                .thenReturn(new DescribeConsumerGroupsResult(Map.of(groupId, future)));
+        when(consumerGroupDescription.members()).thenReturn(List.of(mock(MemberDescription.class)));
+
+        streamsResetter.maybeDeleteActiveConsumers(groupId, adminClient, true);
+
+        verify(adminClient, never()).removeMembersFromConsumerGroup(eq(groupId), any());
+    }
+
+    private RemoveMembersFromConsumerGroupResult createRemoveMembersFromConsumerGroupResult(final KafkaFuture<Map<LeaveGroupRequestData.MemberIdentity, Errors>> future,
+                                                                                            final Set<MemberToRemove> memberInfos) throws Exception {
+        final Constructor<RemoveMembersFromConsumerGroupResult> constructor = RemoveMembersFromConsumerGroupResult.class.getDeclaredConstructor(KafkaFuture.class, Set.class);
+        constructor.setAccessible(true);
+        return constructor.newInstance(future, memberInfos);
+    }
+
     private Cluster createCluster(final int numNodes) {
         final HashMap<Integer, Node> nodes = new HashMap<>();
         for (int i = 0; i < numNodes; ++i) {
             nodes.put(i, new Node(i, "localhost", 8121 + i));
         }
         return new Cluster("mockClusterId", nodes.values(),
-            Collections.emptySet(), Collections.emptySet(),
-            Collections.emptySet(), nodes.get(0));
+            Set.of(), Set.of(),
+            Set.of(), nodes.get(0));
     }
 
     private static class EmptyPartitionConsumer<K, V> extends MockConsumer<K, V> {

@@ -20,15 +20,14 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.internals.MetricsUtils;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME;
 import static org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME;
@@ -42,12 +41,12 @@ public class ShareCoordinatorMetricsTest {
     public void testMetricNames() {
         Metrics metrics = new Metrics();
 
-        HashSet<MetricName> expectedMetrics = new HashSet<>(Arrays.asList(
+        Set<MetricName> expectedMetrics = Set.of(
             metrics.metricName("write-rate", ShareCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName("write-total", ShareCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName("write-latency-avg", ShareCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName("write-latency-max", ShareCoordinatorMetrics.METRICS_GROUP)
-        ));
+        );
 
         ShareCoordinatorMetrics coordMetrics = new ShareCoordinatorMetrics(metrics);
         for (MetricName metricName : expectedMetrics) {
@@ -114,10 +113,30 @@ public class ShareCoordinatorMetricsTest {
             "last-pruned-offset",
             ShareCoordinatorMetrics.METRICS_GROUP,
             "The offset at which the share-group state topic was last pruned.",
-            Map.of(
+            MetricsUtils.getTags(
                 "topic", topic,
                 "partition", Integer.toString(partition)
             )
         );
+    }
+
+    @Test
+    public void testDeactivateMetricsShardCleansUpPruneMetrics() {
+        Metrics metrics = new Metrics();
+        ShareCoordinatorMetrics coordinatorMetrics = new ShareCoordinatorMetrics(metrics);
+        TopicPartition tp = new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0);
+        ShareCoordinatorMetricsShard shard = coordinatorMetrics.newMetricsShard(
+            new SnapshotRegistry(new LogContext()), tp
+        );
+
+        coordinatorMetrics.activateMetricsShard(shard);
+
+        // Record prune to create the per-partition sensor and metric.
+        coordinatorMetrics.recordPrune(10.0, tp);
+        assertTrue(metrics.metrics().containsKey(pruneMetricName(metrics, tp.topic(), tp.partition())));
+
+        // Deactivate the shard, should clean up the prune metric.
+        coordinatorMetrics.deactivateMetricsShard(shard);
+        assertFalse(metrics.metrics().containsKey(pruneMetricName(metrics, tp.topic(), tp.partition())));
     }
 }

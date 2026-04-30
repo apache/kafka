@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tools.other;
 
-import kafka.log.UnifiedLog;
 import kafka.server.BrokerServer;
 import kafka.server.KafkaBroker;
 import kafka.utils.TestUtils;
@@ -33,12 +32,13 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
 import org.apache.kafka.common.test.TestKitNodes;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.quota.QuotaType;
+import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.tools.reassign.ReassignPartitionsCommand;
 
 import org.apache.logging.log4j.core.config.Configurator;
@@ -59,11 +59,11 @@ import java.nio.file.Files;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
@@ -106,7 +106,7 @@ public class ReplicationQuotasTestRig {
         boolean displayChartsOnScreen = args.length > 0 && Objects.equals(args[0], "show-gui");
         Journal journal = new Journal();
 
-        List<ExperimentDef> experiments = Arrays.asList(
+        List<ExperimentDef> experiments = List.of(
             //1GB total data written, will take 210s
             new ExperimentDef("Experiment1", 5, 20, 1 * K, 500, 100 * 1000),
             //5GB total data written, will take 110s
@@ -182,7 +182,7 @@ public class ReplicationQuotasTestRig {
                 throw new RuntimeException("Failed to start test Kafka cluster", e);
             }
 
-            adminClient = Admin.create(cluster.clientProperties());
+            adminClient = cluster.admin();
         }
 
         public void tearDown() {
@@ -209,11 +209,11 @@ public class ReplicationQuotasTestRig {
 
             Map<Integer, List<Integer>> replicas = IntStream.rangeClosed(0, config.partitions - 1).boxed().collect(Collectors.toMap(
                 Function.identity(),
-                partition -> Collections.singletonList(nextReplicaRoundRobin.getAsInt())
+                partition -> List.of(nextReplicaRoundRobin.getAsInt())
             ));
 
             startBrokers(config.brokers);
-            adminClient.createTopics(Collections.singleton(new NewTopic(TOPIC_NAME, replicas))).all().get();
+            adminClient.createTopics(Set.of(new NewTopic(TOPIC_NAME, replicas))).all().get();
 
             TestUtils.waitUntilTrue(
                     () -> cluster.brokers().values().stream().allMatch(server -> {
@@ -248,7 +248,7 @@ public class ReplicationQuotasTestRig {
             long start = System.currentTimeMillis();
 
             ReassignPartitionsCommand.executeAssignment(adminClient, false,
-                ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Collections.emptyMap()),
+                ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.of()),
                 config.throttle, -1L, 10000L, Time.SYSTEM, false);
 
             //Await completion
@@ -270,7 +270,7 @@ public class ReplicationQuotasTestRig {
             for (KafkaBroker broker : cluster.brokers().values()) {
                 for (int partitionId = 0; partitionId < config.partitions; partitionId++) {
                     long offset = broker.logManager().getLog(new TopicPartition(TOPIC_NAME, partitionId), false)
-                            .map(UnifiedLog::logEndOffset).getOrElse(() -> -1L);
+                            .map(UnifiedLog::logEndOffset).orElse(-1L);
                     if (offset >= 0 && offset != config.msgsPerPartition) {
                         throw new RuntimeException(
                             "Run failed as offsets did not match for partition " + partitionId + " on broker " + broker.config().nodeId() + ". " +
@@ -282,12 +282,12 @@ public class ReplicationQuotasTestRig {
         }
 
         void logOutput(ExperimentDef config, Map<Integer, List<Integer>> replicas, Map<TopicPartition, List<Integer>> newAssignment) throws Exception {
-            List<TopicPartitionInfo> actual = adminClient.describeTopics(Collections.singleton(TOPIC_NAME))
+            List<TopicPartitionInfo> actual = adminClient.describeTopics(Set.of(TOPIC_NAME))
                 .allTopicNames().get().get(TOPIC_NAME).partitions();
 
             Map<Integer, List<Integer>> curAssignment = actual.stream().collect(Collectors.toMap(
                 TopicPartitionInfo::partition,
-                p -> p.replicas().stream().map(Node::id).collect(Collectors.toList())
+                p -> p.replicas().stream().map(Node::id).toList()
             ));
 
             //Long stats

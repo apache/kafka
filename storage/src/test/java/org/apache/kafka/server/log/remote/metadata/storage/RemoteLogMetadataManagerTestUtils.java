@@ -19,7 +19,6 @@ package org.apache.kafka.server.log.remote.metadata.storage;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.test.TestUtils;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -35,7 +34,7 @@ import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemo
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public class RemoteLogMetadataManagerTestUtils {
-    private static final int METADATA_TOPIC_PARTITIONS_COUNT = 3;
+    static final int METADATA_TOPIC_PARTITIONS_COUNT = 3;
     private static final short METADATA_TOPIC_REPLICATION_FACTOR = 2;
     private static final long METADATA_TOPIC_RETENTION_MS = 24 * 60 * 60 * 1000L;
 
@@ -45,8 +44,7 @@ public class RemoteLogMetadataManagerTestUtils {
 
     public static class Builder {
         private String bootstrapServers;
-        private boolean startConsumerThread;
-        private Map<String, Object> overrideRemoteLogMetadataManagerProps = Collections.emptyMap();
+        private Map<String, Object> overrideRemoteLogMetadataManagerProps = Map.of();
         private Supplier<RemotePartitionMetadataStore> remotePartitionMetadataStore = RemotePartitionMetadataStore::new;
         private Function<Integer, RemoteLogMetadataTopicPartitioner> remoteLogMetadataTopicPartitioner = RemoteLogMetadataTopicPartitioner::new;
 
@@ -55,11 +53,6 @@ public class RemoteLogMetadataManagerTestUtils {
 
         public Builder bootstrapServers(String bootstrapServers) {
             this.bootstrapServers = Objects.requireNonNull(bootstrapServers);
-            return this;
-        }
-
-        public Builder startConsumerThread(boolean startConsumerThread) {
-            this.startConsumerThread = startConsumerThread;
             return this;
         }
 
@@ -82,8 +75,7 @@ public class RemoteLogMetadataManagerTestUtils {
             Objects.requireNonNull(bootstrapServers);
             String logDir = TestUtils.tempDirectory("rlmm_segs_").getAbsolutePath();
             TopicBasedRemoteLogMetadataManager topicBasedRemoteLogMetadataManager =
-                new TopicBasedRemoteLogMetadataManager(startConsumerThread,
-                    remoteLogMetadataTopicPartitioner, remotePartitionMetadataStore);
+                new TopicBasedRemoteLogMetadataManager(remoteLogMetadataTopicPartitioner, remotePartitionMetadataStore);
 
             // Initialize TopicBasedRemoteLogMetadataManager.
             Map<String, Object> configs = new HashMap<>();
@@ -97,6 +89,7 @@ public class RemoteLogMetadataManagerTestUtils {
             configs.putAll(overrideRemoteLogMetadataManagerProps);
 
             topicBasedRemoteLogMetadataManager.configure(configs);
+            topicBasedRemoteLogMetadataManager.onBrokerReady();
             assertDoesNotThrow(() -> TestUtils.waitForCondition(topicBasedRemoteLogMetadataManager::isInitialized, 60_000L,
                     "Time out reached before it is initialized successfully"));
             return topicBasedRemoteLogMetadataManager;

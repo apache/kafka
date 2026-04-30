@@ -18,7 +18,6 @@
 package org.apache.kafka.server.share.context;
 
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareFetchResponse;
@@ -51,11 +50,10 @@ public class FinalContext extends ShareFetchContext {
     }
 
     @Override
-    public ShareFetchResponse updateAndGenerateResponseData(String groupId, Uuid memberId,
+    public ShareFetchResponse updateAndGenerateResponseData(String groupId, String memberId,
                                                      LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates) {
         log.debug("Final context returning {}", partitionsToLogString(updates.keySet()));
-        return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, 0,
-                updates.entrySet().iterator(), List.of()));
+        return ShareFetchResponse.of(Errors.NONE, 0, updates, List.of(), 0);
     }
 
     @Override

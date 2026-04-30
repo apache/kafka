@@ -342,6 +342,7 @@ public class StreamsProducerTest {
         assertThat(thrown.getMessage(), is("KABOOM!"));
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void shouldFailOnCommitIfEosDisabled() {
         final IllegalStateException thrown = assertThrows(
@@ -395,6 +396,7 @@ public class StreamsProducerTest {
         assertThat(eosMockProducer.uncommittedRecords().get(0), is(record));
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void shouldBeginTxOnEosCommit() {
         eosStreamsProducerWithMock.initTransaction();
@@ -406,12 +408,14 @@ public class StreamsProducerTest {
         verify(mockedProducer).commitTransaction();
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void shouldSendOffsetToTxOnEosCommit() {
         eosStreamsProducer.commitTransaction(offsetsAndMetadata, new ConsumerGroupMetadata("appId"));
         assertThat(eosMockProducer.sentOffsets(), is(true));
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void shouldCommitTxOnEosCommit() {
         eosStreamsProducer.send(record, null);
@@ -428,6 +432,7 @@ public class StreamsProducerTest {
         assertThat(eosMockProducer.consumerGroupOffsetsHistory().get(0).get("appId"), is(offsetsAndMetadata));
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void shouldCommitTxWithConsumerGroupMetadataOnEosCommit() {
         when(mockedProducer.send(record, null)).thenReturn(null);
@@ -449,6 +454,7 @@ public class StreamsProducerTest {
         verify(mockedProducer).commitTransaction();
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void shouldAbortTxOnEosAbort() {
         // call `send()` to start a transaction
@@ -670,6 +676,7 @@ public class StreamsProducerTest {
         testThrowTaskMigrateExceptionOnEosSendOffset(new InvalidProducerEpochException("KABOOM!"));
     }
 
+    @SuppressWarnings("removal")
     private void testThrowTaskMigrateExceptionOnEosSendOffset(final RuntimeException exception) {
         // cannot use `eosMockProducer.fenceProducer()` because this would already trigger in `beginTransaction()`
         eosMockProducer.sendOffsetsToTransactionException = exception;
@@ -684,11 +691,12 @@ public class StreamsProducerTest {
         assertThat(thrown.getCause(), is(eosMockProducer.sendOffsetsToTransactionException));
         assertThat(
             thrown.getMessage(),
-            is("Producer got fenced trying to commit a transaction [test];" +
+            is("Producer got fenced trying to add offsets to a transaction [test];" +
                    " it means all tasks belonging to this thread should be migrated.")
         );
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void shouldThrowStreamsExceptionOnEosSendOffsetError() {
         eosMockProducer.sendOffsetsToTransactionException = new KafkaException("KABOOM!");
@@ -703,10 +711,11 @@ public class StreamsProducerTest {
         assertThat(thrown.getCause(), is(eosMockProducer.sendOffsetsToTransactionException));
         assertThat(
             thrown.getMessage(),
-            is("Error encountered trying to commit a transaction [test]")
+            is("Error encountered trying to add offsets to a transaction [test]")
         );
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void shouldFailOnEosSendOffsetFatal() {
         eosMockProducer.sendOffsetsToTransactionException = new RuntimeException("KABOOM!");
@@ -736,6 +745,7 @@ public class StreamsProducerTest {
         testThrowTaskMigratedExceptionOnEos(new InvalidProducerEpochException("KABOOM!"));
     }
 
+    @SuppressWarnings("removal")
     private void testThrowTaskMigratedExceptionOnEos(final RuntimeException exception) {
         // cannot use `eosMockProducer.fenceProducer()` because this would already trigger in `beginTransaction()`
         eosMockProducer.commitTransactionException = exception;
@@ -754,6 +764,7 @@ public class StreamsProducerTest {
         );
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void shouldThrowStreamsExceptionOnEosCommitTxError() {
         eosMockProducer.commitTransactionException = new KafkaException("KABOOM!");
@@ -771,6 +782,7 @@ public class StreamsProducerTest {
         );
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void shouldFailOnEosCommitTxFatal() {
         eosMockProducer.commitTransactionException = new RuntimeException("KABOOM!");
@@ -920,8 +932,8 @@ public class StreamsProducerTest {
             METADATA_WAIT_TIME;
         assertThat(eosStreamsProducer.totalBlockedTime(), equalTo(expectedTotalBlocked));
         final long closeStart = 1L;
-        final long clodeDelay = 1L;
-        when(mockTime.nanoseconds()).thenReturn(closeStart).thenReturn(closeStart + clodeDelay);
+        final long closeDelay = 1L;
+        when(mockTime.nanoseconds()).thenReturn(closeStart).thenReturn(closeStart + closeDelay);
         eosStreamsProducer.resetProducer(eosMockProducer);
         setProducerMetrics(
             eosMockProducer,
@@ -937,7 +949,7 @@ public class StreamsProducerTest {
 
         assertThat(
             eosStreamsProducer.totalBlockedTime(),
-            closeTo(2 * expectedTotalBlocked + clodeDelay, 0.01)
+            closeTo(2 * expectedTotalBlocked + closeDelay, 0.01)
         );
     }
 

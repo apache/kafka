@@ -19,9 +19,10 @@ package kafka.server
 
 import org.apache.kafka.common.message.ApiVersionsRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.ApiVersionsRequest
+import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse}
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, Type}
+import org.apache.kafka.server.IntegrationTestUtils
 import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions._
 
@@ -33,7 +34,7 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
   ))
   def testApiVersionsRequest(): Unit = {
     val request = new ApiVersionsRequest.Builder().build()
-    val apiVersionsResponse = sendApiVersionsRequest(request, cluster.clientListener())
+    val apiVersionsResponse = IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](request, cluster.brokerBoundPorts().get(0))
     validateApiVersionsResponse(apiVersionsResponse)
   }
 
@@ -43,15 +44,15 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
   ))
   def testApiVersionsRequestIncludesUnreleasedApis(): Unit = {
     val request = new ApiVersionsRequest.Builder().build()
-    val apiVersionsResponse = sendApiVersionsRequest(request, cluster.clientListener())
+    val apiVersionsResponse = IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](request, cluster.brokerBoundPorts().get(0))
     validateApiVersionsResponse(apiVersionsResponse, enableUnstableLastVersion = true)
   }
 
   @ClusterTest(types = Array(Type.KRAFT))
   def testApiVersionsRequestThroughControllerListener(): Unit = {
     val request = new ApiVersionsRequest.Builder().build()
-    val apiVersionsResponse = sendApiVersionsRequest(request, cluster.controllerListenerName.get())
-    validateApiVersionsResponse(apiVersionsResponse, cluster.controllerListenerName.get(), enableUnstableLastVersion = true)
+    val apiVersionsResponse = IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](request, cluster.controllerBoundPorts().get(0))
+    validateApiVersionsResponse(apiVersionsResponse, cluster.controllerListenerName(), enableUnstableLastVersion = true)
   }
 
   @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT))
@@ -73,7 +74,7 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
   ))
   def testApiVersionsRequestValidationV0(): Unit = {
     val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0.asInstanceOf[Short])
-    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, cluster.clientListener())
+    val apiVersionsResponse = IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](apiVersionsRequest, cluster.brokerBoundPorts().get(0))
     validateApiVersionsResponse(apiVersionsResponse, apiVersion = 0,
       enableUnstableLastVersion = !"false".equals(
         cluster.config().serverProperties().get("unstable.api.versions.enable")))
@@ -82,15 +83,15 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
   @ClusterTest(types = Array(Type.KRAFT))
   def testApiVersionsRequestValidationV0ThroughControllerListener(): Unit = {
     val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0.asInstanceOf[Short])
-    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, cluster.controllerListenerName.get())
-    validateApiVersionsResponse(apiVersionsResponse, cluster.controllerListenerName.get(), apiVersion = 0, enableUnstableLastVersion = true)
+    val apiVersionsResponse = IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](apiVersionsRequest, cluster.controllerBoundPorts().get(0))
+    validateApiVersionsResponse(apiVersionsResponse, cluster.controllerListenerName(), apiVersion = 0, enableUnstableLastVersion = true)
   }
 
   @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT))
   def testApiVersionsRequestValidationV3(): Unit = {
     // Invalid request because Name and Version are empty by default
     val apiVersionsRequest = new ApiVersionsRequest(new ApiVersionsRequestData(), 3.asInstanceOf[Short])
-    val apiVersionsResponse = sendApiVersionsRequest(apiVersionsRequest, cluster.clientListener())
+    val apiVersionsResponse = IntegrationTestUtils.connectAndReceive[ApiVersionsResponse](apiVersionsRequest, cluster.brokerBoundPorts().get(0))
     assertEquals(Errors.INVALID_REQUEST.code(), apiVersionsResponse.data.errorCode())
   }
 }

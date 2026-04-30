@@ -144,7 +144,9 @@ public class ControllerMetadataMetricsPublisherTest {
     @Test
     public void testLoadSnapshot() {
         try (TestEnv env = new TestEnv()) {
-            MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
+            MetadataDelta delta = new MetadataDelta.Builder()
+                .setImage(MetadataImage.EMPTY)
+                .build();
             ImageReWriter writer = new ImageReWriter(delta);
             IMAGE1.write(writer, new ImageWriterOptions.Builder(MetadataVersion.MINIMUM_VERSION).build());
             env.publisher.onMetadataUpdate(delta, IMAGE1, fakeManifest(true));

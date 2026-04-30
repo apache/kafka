@@ -46,8 +46,6 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.singletonMap;
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_CONNECTOR_NAME;
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_EXCEPTION;
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_EXCEPTION_MESSAGE;
@@ -105,13 +103,13 @@ public class ErrorReporterTest {
 
     @Test
     public void initializeDLQWithNullMetrics() {
-        assertThrows(NullPointerException.class, () -> new DeadLetterQueueReporter(producer, config(emptyMap()), TASK_ID, null));
+        assertThrows(NullPointerException.class, () -> new DeadLetterQueueReporter(producer, config(Map.of()), TASK_ID, null));
     }
 
     @Test
     public void testDLQConfigWithEmptyTopicName() {
         DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(
-                producer, config(emptyMap()), TASK_ID, errorHandlingMetrics);
+                producer, config(Map.of()), TASK_ID, errorHandlingMetrics);
 
         ProcessingContext<ConsumerRecord<byte[], byte[]>> context = processingContext();
 
@@ -124,7 +122,7 @@ public class ErrorReporterTest {
     @Test
     public void testDLQConfigWithValidTopicName() {
         DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(
-                producer, config(singletonMap(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC)), TASK_ID, errorHandlingMetrics);
+                producer, config(Map.of(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC)), TASK_ID, errorHandlingMetrics);
 
         ProcessingContext<ConsumerRecord<byte[], byte[]>> context = processingContext();
 
@@ -138,7 +136,7 @@ public class ErrorReporterTest {
     @Test
     public void testReportDLQTwice() {
         DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(
-                producer, config(singletonMap(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC)), TASK_ID, errorHandlingMetrics);
+                producer, config(Map.of(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC)), TASK_ID, errorHandlingMetrics);
 
         ProcessingContext<ConsumerRecord<byte[], byte[]>> context = processingContext();
 
@@ -153,7 +151,7 @@ public class ErrorReporterTest {
     @Test
     public void testCloseDLQ() {
         DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(
-            producer, config(singletonMap(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC)), TASK_ID, errorHandlingMetrics);
+            producer, config(Map.of(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC)), TASK_ID, errorHandlingMetrics);
 
         deadLetterQueueReporter.close();
         verify(producer).close();
@@ -161,7 +159,7 @@ public class ErrorReporterTest {
 
     @Test
     public void testLogOnDisabledLogReporter() {
-        LogReporter<ConsumerRecord<byte[], byte[]>> logReporter = new LogReporter.Sink(TASK_ID, config(emptyMap()), errorHandlingMetrics);
+        LogReporter<ConsumerRecord<byte[], byte[]>> logReporter = new LogReporter.Sink(TASK_ID, config(Map.of()), errorHandlingMetrics);
 
         ProcessingContext<ConsumerRecord<byte[], byte[]>> context = processingContext();
         context.error(new RuntimeException());
@@ -173,7 +171,7 @@ public class ErrorReporterTest {
 
     @Test
     public void testLogOnEnabledLogReporter() {
-        LogReporter<ConsumerRecord<byte[], byte[]>> logReporter = new LogReporter.Sink(TASK_ID, config(singletonMap(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true")), errorHandlingMetrics);
+        LogReporter<ConsumerRecord<byte[], byte[]>> logReporter = new LogReporter.Sink(TASK_ID, config(Map.of(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true")), errorHandlingMetrics);
 
         ProcessingContext<ConsumerRecord<byte[], byte[]>> context = processingContext();
         context.error(new RuntimeException());
@@ -185,7 +183,7 @@ public class ErrorReporterTest {
 
     @Test
     public void testLogMessageWithNoRecords() {
-        LogReporter<ConsumerRecord<byte[], byte[]>> logReporter = new LogReporter.Sink(TASK_ID, config(singletonMap(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true")), errorHandlingMetrics);
+        LogReporter<ConsumerRecord<byte[], byte[]>> logReporter = new LogReporter.Sink(TASK_ID, config(Map.of(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true")), errorHandlingMetrics);
 
         ProcessingContext<ConsumerRecord<byte[], byte[]>> context = processingContext();
 
@@ -231,11 +229,11 @@ public class ErrorReporterTest {
 
     @Test
     public void testSetDLQConfigs() {
-        SinkConnectorConfig configuration = config(singletonMap(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC));
-        assertEquals(configuration.dlqTopicName(), DLQ_TOPIC);
+        SinkConnectorConfig configuration = config(Map.of(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, DLQ_TOPIC));
+        assertEquals(DLQ_TOPIC, configuration.dlqTopicName());
 
-        configuration = config(singletonMap(SinkConnectorConfig.DLQ_TOPIC_REPLICATION_FACTOR_CONFIG, "7"));
-        assertEquals(configuration.dlqTopicReplicationFactor(), 7);
+        configuration = config(Map.of(SinkConnectorConfig.DLQ_TOPIC_REPLICATION_FACTOR_CONFIG, "7"));
+        assertEquals(7, configuration.dlqTopicReplicationFactor());
     }
 
     @Test

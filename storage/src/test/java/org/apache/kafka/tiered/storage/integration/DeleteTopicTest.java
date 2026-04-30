@@ -20,8 +20,6 @@ import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
 import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -38,18 +36,18 @@ public final class DeleteTopicTest extends TieredStorageTestHarness {
 
     @Override
     protected void writeTestSpecifications(TieredStorageTestBuilder builder) {
-        final Integer broker0 = 0;
-        final Integer broker1 = 1;
+        final int broker0 = 0;
+        final int broker1 = 1;
         final String topicA = "topicA";
-        final Integer p0 = 0;
-        final Integer p1 = 1;
-        final Integer partitionCount = 2;
-        final Integer replicationFactor = 2;
-        final Integer maxBatchCountPerSegment = 1;
+        final int p0 = 0;
+        final int p1 = 1;
+        final int partitionCount = 2;
+        final int replicationFactor = 2;
+        final int maxBatchCountPerSegment = 1;
         final boolean enableRemoteLogStorage = true;
         final Map<Integer, List<Integer>> assignment = mkMap(
-                mkEntry(p0, Arrays.asList(broker0, broker1)),
-                mkEntry(p1, Arrays.asList(broker1, broker0))
+                mkEntry(p0, List.of(broker0, broker1)),
+                mkEntry(p1, List.of(broker1, broker0))
         );
 
         builder
@@ -70,7 +68,7 @@ public final class DeleteTopicTest extends TieredStorageTestHarness {
                 // delete the topic
                 .expectDeletionInRemoteStorage(broker0, topicA, p0, DELETE_SEGMENT, 2)
                 .expectDeletionInRemoteStorage(broker1, topicA, p1, DELETE_SEGMENT, 2)
-                .deleteTopic(Collections.singletonList(topicA))
+                .deleteTopic(List.of(topicA))
                 .expectEmptyRemoteStorage(topicA, p0)
                 .expectEmptyRemoteStorage(topicA, p1);
     }

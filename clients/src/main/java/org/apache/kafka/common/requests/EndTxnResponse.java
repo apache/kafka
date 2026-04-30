@@ -18,10 +18,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.Map;
 
 /**
@@ -69,8 +68,8 @@ public class EndTxnResponse extends AbstractResponse {
         return data;
     }
 
-    public static EndTxnResponse parse(ByteBuffer buffer, short version) {
-        return new EndTxnResponse(new EndTxnResponseData(new ByteBufferAccessor(buffer), version));
+    public static EndTxnResponse parse(Readable readable, short version) {
+        return new EndTxnResponse(new EndTxnResponseData(readable, version));
     }
 
     @Override

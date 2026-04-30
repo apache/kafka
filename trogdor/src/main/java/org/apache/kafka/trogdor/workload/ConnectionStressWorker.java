@@ -33,9 +33,9 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.ThreadUtils;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.WorkerUtils;
@@ -129,13 +129,10 @@ public class ConnectionStressWorker implements TaskWorker {
 
     interface Stressor extends AutoCloseable {
         static Stressor fromSpec(ConnectionStressSpec spec) {
-            switch (spec.action()) {
-                case CONNECT:
-                    return new ConnectStressor(spec);
-                case FETCH_METADATA:
-                    return new FetchMetadataStressor(spec);
-            }
-            throw new RuntimeException("invalid spec.action " + spec.action());
+            return switch (spec.action()) {
+                case CONNECT -> new ConnectStressor(spec);
+                case FETCH_METADATA -> new FetchMetadataStressor(spec);
+            };
         }
 
         boolean tryConnect();

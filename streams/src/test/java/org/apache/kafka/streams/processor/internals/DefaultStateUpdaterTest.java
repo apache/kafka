@@ -23,11 +23,14 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
+import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateUpdater.ExceptionAndTask;
 import org.apache.kafka.streams.processor.internals.Task.State;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 import org.hamcrest.Matcher;
 import org.junit.jupiter.api.AfterEach;
@@ -69,9 +72,9 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -105,7 +108,7 @@ class DefaultStateUpdaterTest {
 
     // need an auto-tick timer to work for draining with timeout
     private final Time time = new MockTime(1L);
-    private final Metrics metrics = new Metrics(time);
+    private final StreamsMetricsImpl metrics = new StreamsMetricsImpl(new Metrics(time), "", time);
     private final StreamsConfig config = new StreamsConfig(configProps(COMMIT_INTERVAL));
     private final ChangelogReader changelogReader = mock(ChangelogReader.class);
     private final TopologyMetadata topologyMetadata = unnamedTopology().build();
@@ -203,7 +206,7 @@ class DefaultStateUpdaterTest {
         verifyRestoredActiveTasks(restoredTask);
         stateUpdater.shutdown(Duration.ofMinutes(1));
 
-        final IllegalStateException exception = assertThrows(IllegalStateException.class, () -> stateUpdater.start());
+        final IllegalStateException exception = assertThrows(IllegalStateException.class, stateUpdater::start);
 
         assertEquals("State updater started with non-empty output queues."
             + " This indicates a bug. Please report at https://issues.apache.org/jira/projects/KAFKA/issues or to the"
@@ -220,7 +223,7 @@ class DefaultStateUpdaterTest {
         verifyExceptionsAndFailedTasks(new ExceptionAndTask(taskCorruptedException, failedTask));
         stateUpdater.shutdown(Duration.ofMinutes(1));
 
-        final IllegalStateException exception = assertThrows(IllegalStateException.class, () -> stateUpdater.start());
+        final IllegalStateException exception = assertThrows(IllegalStateException.class, stateUpdater::start);
 
         assertEquals("State updater started with non-empty output queues."
             + " This indicates a bug. Please report at https://issues.apache.org/jira/projects/KAFKA/issues or to the"
@@ -342,7 +345,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task);
 
         verifyRestoredActiveTasks(task);
-        verifyCheckpointTasks(true, task);
+        verifyCheckpointTasks(task);
         verifyUpdatingTasks();
         verifyExceptionsAndFailedTasks();
         verifyPausedTasks();
@@ -375,7 +378,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task3);
 
         verifyRestoredActiveTasks(task3, task1, task2);
-        verifyCheckpointTasks(true, task3, task1, task2);
+        verifyCheckpointTasks(task3, task1, task2);
         verifyUpdatingTasks();
         verifyExceptionsAndFailedTasks();
         verifyPausedTasks();
@@ -445,7 +448,7 @@ class DefaultStateUpdaterTest {
             .thenReturn(false);
         stateUpdater.start();
         stateUpdater.add(task);
-        stateUpdater.remove(task.id()).get();
+        stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.MIGRATED).get();
         verifyRestoredActiveTasks();
         verifyUpdatingTasks();
         verifyExceptionsAndFailedTasks();
@@ -606,7 +609,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task4);
 
         verifyRestoredActiveTasks(task2, task1);
-        verifyCheckpointTasks(true, task2, task1);
+        verifyCheckpointTasks(task2, task1);
         verifyUpdatingStandbyTasks(task4, task3);
         verifyExceptionsAndFailedTasks();
         verifyPausedTasks();
@@ -636,7 +639,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task2);
 
         verifyRestoredActiveTasks(task1);
-        verifyCheckpointTasks(true, task1);
+        verifyCheckpointTasks(task1);
         verifyUpdatingStandbyTasks(task2);
         final InOrder orderVerifier = inOrder(changelogReader);
         orderVerifier.verify(changelogReader, times(1)).enforceRestoreActive();
@@ -645,7 +648,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task3);
 
         verifyRestoredActiveTasks(task1, task3);
-        verifyCheckpointTasks(true, task3);
+        verifyCheckpointTasks(task3);
         orderVerifier.verify(changelogReader, times(1)).enforceRestoreActive();
         orderVerifier.verify(changelogReader, times(1)).transitToUpdateStandby();
     }
@@ -712,8 +715,8 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(standbyTask);
         verifyUpdatingTasks(activeTask1, activeTask2, standbyTask);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future1 = stateUpdater.remove(activeTask1.id());
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future2 = stateUpdater.remove(activeTask2.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future1 = stateUpdater.remove(activeTask1.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future2 = stateUpdater.remove(activeTask2.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
         CompletableFuture.allOf(future1, future2).get();
 
         final InOrder orderVerifier = inOrder(changelogReader);
@@ -732,7 +735,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(standbyTask2);
         verifyUpdatingTasks(standbyTask1, standbyTask2);
 
-        stateUpdater.remove(standbyTask2.id()).get();
+        stateUpdater.remove(standbyTask2.id(), StandbyUpdateListener.SuspendReason.MIGRATED).get();
 
         verify(changelogReader).transitToUpdateStandby();
     }
@@ -749,6 +752,22 @@ class DefaultStateUpdaterTest {
         shouldRemoveUpdatingStatefulTask(task);
     }
 
+    @Test
+    public void shouldPassSuspendReasonToChangelogReaderOnRemove() throws Exception {
+        final StandbyTask task = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
+        when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        stateUpdater.start();
+        stateUpdater.add(task);
+        verifyUpdatingTasks(task);
+
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future =
+            stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.PROMOTED);
+
+        assertEquals(new StateUpdater.RemovedTaskResult(task), future.get());
+        verify(changelogReader).unregister(task.changelogPartitions(), StandbyUpdateListener.SuspendReason.PROMOTED);
+    }
+
     private void shouldRemoveUpdatingStatefulTask(final Task task) throws Exception {
         when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
@@ -756,15 +775,15 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task);
         verifyUpdatingTasks(task);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
 
         assertEquals(new StateUpdater.RemovedTaskResult(task), future.get());
-        verifyCheckpointTasks(true, task);
+        verifyCheckpointTasks(task);
         verifyRestoredActiveTasks();
         verifyUpdatingTasks();
         verifyPausedTasks();
         verifyExceptionsAndFailedTasks();
-        verify(changelogReader).unregister(task.changelogPartitions());
+        verify(changelogReader).unregister(task.changelogPartitions(), StandbyUpdateListener.SuspendReason.MIGRATED);
     }
 
     @Test
@@ -773,7 +792,7 @@ class DefaultStateUpdaterTest {
         final StreamsException streamsException = new StreamsException("Something happened", task.id());
         setupShouldThrowIfRemovingUpdatingStatefulTaskFailsWithException(task, streamsException);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
 
         verifyRemovingUpdatingStatefulTaskFails(future, task, streamsException, true);
 
@@ -785,7 +804,7 @@ class DefaultStateUpdaterTest {
         final RuntimeException runtimeException = new RuntimeException("Something happened");
         setupShouldThrowIfRemovingUpdatingStatefulTaskFailsWithException(task, runtimeException);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
 
         verifyRemovingUpdatingStatefulTaskFails(future, task, runtimeException, false);
     }
@@ -796,7 +815,7 @@ class DefaultStateUpdaterTest {
         final StreamsException streamsException = new StreamsException("Something happened", task.id());
         setupShouldThrowIfRemovingUpdatingStatefulTaskFailsWithException(task, streamsException);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
 
         verifyRemovingUpdatingStatefulTaskFails(future, task, streamsException, true);
     }
@@ -807,7 +826,7 @@ class DefaultStateUpdaterTest {
         final RuntimeException runtimeException = new RuntimeException("Something happened");
         setupShouldThrowIfRemovingUpdatingStatefulTaskFailsWithException(task, runtimeException);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
 
         verifyRemovingUpdatingStatefulTaskFails(future, task, runtimeException, false);
     }
@@ -817,7 +836,7 @@ class DefaultStateUpdaterTest {
         when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
         final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
-        doThrow(exception).when(changelogReader).unregister(changelogPartitions);
+        doThrow(exception).when(changelogReader).unregister(changelogPartitions, StandbyUpdateListener.SuspendReason.MIGRATED);
         stateUpdater.start();
         stateUpdater.add(task);
         verifyUpdatingTasks(task);
@@ -848,17 +867,17 @@ class DefaultStateUpdaterTest {
         verifyPausedTasks(statefulTask, standbyTask);
         verifyUpdatingTasks();
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> futureOfStatefulTask = stateUpdater.remove(statefulTask.id());
-        final CompletableFuture<StateUpdater.RemovedTaskResult> futureOfStandbyTask = stateUpdater.remove(standbyTask.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> futureOfStatefulTask = stateUpdater.remove(statefulTask.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
+        final CompletableFuture<StateUpdater.RemovedTaskResult> futureOfStandbyTask = stateUpdater.remove(standbyTask.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
 
         assertEquals(new StateUpdater.RemovedTaskResult(statefulTask), futureOfStatefulTask.get());
         assertEquals(new StateUpdater.RemovedTaskResult(standbyTask), futureOfStandbyTask.get());
         verifyPausedTasks();
-        verifyCheckpointTasks(true, statefulTask, standbyTask);
+        verifyCheckpointTasks(statefulTask, standbyTask);
         verifyUpdatingTasks();
         verifyExceptionsAndFailedTasks();
-        verify(changelogReader).unregister(statefulTask.changelogPartitions());
-        verify(changelogReader).unregister(standbyTask.changelogPartitions());
+        verify(changelogReader).unregister(statefulTask.changelogPartitions(), StandbyUpdateListener.SuspendReason.MIGRATED);
+        verify(changelogReader).unregister(standbyTask.changelogPartitions(), StandbyUpdateListener.SuspendReason.MIGRATED);
     }
 
     @Test
@@ -866,7 +885,7 @@ class DefaultStateUpdaterTest {
         final StreamTask statefulTask = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StreamsException streamsException = new StreamsException("Something happened", statefulTask.id());
         final Collection<TopicPartition> changelogPartitions = statefulTask.changelogPartitions();
-        doThrow(streamsException).when(changelogReader).unregister(changelogPartitions);
+        doThrow(streamsException).when(changelogReader).unregister(changelogPartitions, StandbyUpdateListener.SuspendReason.MIGRATED);
         stateUpdater.start();
         stateUpdater.add(statefulTask);
         verifyUpdatingTasks(statefulTask);
@@ -874,7 +893,7 @@ class DefaultStateUpdaterTest {
         verifyPausedTasks(statefulTask);
         verifyUpdatingTasks();
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(statefulTask.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(statefulTask.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
 
         final ExecutionException executionException = assertThrows(ExecutionException.class, future::get);
         assertInstanceOf(StreamsException.class, executionException.getCause());
@@ -904,7 +923,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task);
         verifyRestoredActiveTasks(task);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
         future.get();
 
         assertEquals(new StateUpdater.RemovedTaskResult(task), future.get());
@@ -940,7 +959,7 @@ class DefaultStateUpdaterTest {
         final ExceptionAndTask expectedExceptionAndTasks = new ExceptionAndTask(streamsException, task);
         verifyExceptionsAndFailedTasks(expectedExceptionAndTasks);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
 
         assertEquals(new StateUpdater.RemovedTaskResult(task, streamsException), future.get());
         verifyPausedTasks();
@@ -970,7 +989,7 @@ class DefaultStateUpdaterTest {
         verifyUpdatingTasks(updatingTask);
         verifyPausedTasks();
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(TASK_1_0);
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(TASK_1_0, StandbyUpdateListener.SuspendReason.MIGRATED);
 
         assertNull(future.get());
         verifyRestoredActiveTasks(restoredTask);
@@ -983,7 +1002,7 @@ class DefaultStateUpdaterTest {
     public void shouldCompleteWithNullIfNoTasks() throws Exception {
         stateUpdater.start();
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(TASK_0_1);
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(TASK_0_1, StandbyUpdateListener.SuspendReason.MIGRATED);
 
         assertNull(future.get());
         assertTrue(stateUpdater.isRunning());
@@ -1015,7 +1034,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task2);
 
         verifyPausedTasks(task1);
-        verifyCheckpointTasks(true, task1);
+        verifyCheckpointTasks(task1);
         verifyRestoredActiveTasks();
         verifyUpdatingTasks(task2);
         verifyExceptionsAndFailedTasks();
@@ -1038,7 +1057,7 @@ class DefaultStateUpdaterTest {
 
         verifyPausedTasks(task1);
         verifyUpdatingTasks(task2);
-        verifyCheckpointTasks(true, task1);
+        verifyCheckpointTasks(task1);
         verify(changelogReader, never()).enforceRestoreActive();
     }
 
@@ -1050,7 +1069,7 @@ class DefaultStateUpdaterTest {
         when(topologyMetadata.isPaused(null)).thenReturn(true);
 
         verifyPausedTasks(task);
-        verifyCheckpointTasks(true, task);
+        verifyCheckpointTasks(task);
         verifyRestoredActiveTasks();
         verifyUpdatingTasks();
         verifyExceptionsAndFailedTasks();
@@ -1431,7 +1450,7 @@ class DefaultStateUpdaterTest {
         time.sleep(COMMIT_INTERVAL + 1);
 
         verifyExceptionsAndFailedTasks();
-        verifyCheckpointTasks(false, task1, task2, task3, task4);
+        verifyCheckpointTasks(task1, task2, task3, task4);
     }
 
     @Test
@@ -1460,15 +1479,15 @@ class DefaultStateUpdaterTest {
         }
     }
 
-    private void verifyCheckpointTasks(final boolean enforceCheckpoint, final Task... tasks) {
+    private void verifyCheckpointTasks(final Task... tasks) {
         for (final Task task : tasks) {
-            verify(task, timeout(VERIFICATION_TIMEOUT).atLeast(1)).maybeCheckpoint(enforceCheckpoint);
+            verify(task, timeout(VERIFICATION_TIMEOUT).atLeast(1)).maybeCheckpoint();
         }
     }
 
     private void verifyNeverCheckpointTasks(final Task... tasks) {
         for (final Task task : tasks) {
-            verify(task, never()).maybeCheckpoint(anyBoolean());
+            verify(task, never()).maybeCheckpoint();
         }
     }
 
@@ -1484,7 +1503,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(activeTask1);
         stateUpdater.add(standbyTask1);
         stateUpdater.add(standbyTask2);
-        stateUpdater.remove(TASK_0_0);
+        stateUpdater.remove(TASK_0_0, StandbyUpdateListener.SuspendReason.MIGRATED);
         stateUpdater.add(activeTask2);
         stateUpdater.add(standbyTask3);
 
@@ -1642,25 +1661,25 @@ class DefaultStateUpdaterTest {
 
         metricName = new MetricName("idle-ratio",
             "stream-state-updater-metrics",
-            "The fraction of time the thread spent on being idle",
+            "The ratio, over a rolling measurement window, of the time this thread spent being idle",
             tagMap);
         verifyMetric(metrics, metricName, greaterThanOrEqualTo(0.0d));
 
         metricName = new MetricName("active-restore-ratio",
             "stream-state-updater-metrics",
-            "The fraction of time the thread spent on restoring active tasks",
+            "The ratio, over a rolling measurement window, of the time this thread spent restoring active tasks",
             tagMap);
         verifyMetric(metrics, metricName, greaterThanOrEqualTo(0.0d));
 
         metricName = new MetricName("standby-update-ratio",
             "stream-state-updater-metrics",
-            "The fraction of time the thread spent on updating standby tasks",
+            "The ratio, over a rolling measurement window, of the time this thread spent updating standby tasks",
             tagMap);
         verifyMetric(metrics, metricName, is(0.0d));
 
         metricName = new MetricName("checkpoint-ratio",
             "stream-state-updater-metrics",
-            "The fraction of time the thread spent on checkpointing tasks restored progress",
+            "The ratio, over a rolling measurement window, of the time this thread spent checkpointing tasks restored progress",
             tagMap);
         verifyMetric(metrics, metricName, greaterThanOrEqualTo(0.0d));
 
@@ -1680,8 +1699,167 @@ class DefaultStateUpdaterTest {
         assertThat(metrics.metrics().size(), is(1));
     }
 
+    @Test
+    public void shouldRemoveMetricsWithoutInterference() {
+        final DefaultStateUpdater stateUpdater2 =
+            new DefaultStateUpdater("test-state-updater2", metrics, config, null, changelogReader, topologyMetadata, time);
+        final List<MetricName> threadMetrics = getMetricNames("test-state-updater");
+        final List<MetricName> threadMetrics2 = getMetricNames("test-state-updater2");
+
+        stateUpdater.start();
+        stateUpdater2.start();
+
+        for (final MetricName metricName : threadMetrics) {
+            assertTrue(metrics.metrics().containsKey(metricName));
+        }
+        for (final MetricName metricName : threadMetrics2) {
+            assertTrue(metrics.metrics().containsKey(metricName));
+        }
+
+        stateUpdater2.shutdown(Duration.ofMinutes(1));
+
+        for (final MetricName metricName : threadMetrics) {
+            assertTrue(metrics.metrics().containsKey(metricName));
+        }
+        for (final MetricName metricName : threadMetrics2) {
+            assertFalse(metrics.metrics().containsKey(metricName));
+        }
+
+        stateUpdater.shutdown(Duration.ofMinutes(1));
+
+        for (final MetricName metricName : threadMetrics) {
+            assertFalse(metrics.metrics().containsKey(metricName));
+        }
+        for (final MetricName metricName : threadMetrics2) {
+            assertFalse(metrics.metrics().containsKey(metricName));
+        }
+    }
+
+    @Test
+    public void shouldNotFailTheThreadIfMaybeCheckpointFails() throws Exception {
+        final StreamTask activeTask1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask activeTask2 = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask failedStatefulTask = statefulTask(TASK_0_2, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final ProcessorStateException processorStateException = new ProcessorStateException("flush");
+        doThrow(processorStateException).when(failedStatefulTask).maybeCheckpoint();
+
+        stateUpdater.add(failedStatefulTask);
+        stateUpdater.add(activeTask1);
+        stateUpdater.start();
+        verifyExceptionsAndFailedTasks(new ExceptionAndTask(processorStateException, failedStatefulTask));
+        verifyUpdatingTasks(activeTask1);
+
+        stateUpdater.add(activeTask2);
+        verifyUpdatingTasks(activeTask1, activeTask2);
+    }
+
+    @Test
+    public void shouldNotFailTheThreadIfMaybeCheckpointFailsForCorruptedTask() throws Exception {
+        final StreamTask activeTask1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask activeTask2 = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask failedStatefulTask = statefulTask(TASK_0_2, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final ProcessorStateException processorStateException = new ProcessorStateException("flush");
+        doThrow(processorStateException).when(failedStatefulTask).maybeCheckpoint();
+
+        final TaskCorruptedException taskCorruptedException = new TaskCorruptedException(Set.of(TASK_0_2));
+        when(changelogReader.restore(Map.of(
+                TASK_0_0, activeTask1,
+                TASK_0_2, failedStatefulTask))
+        ).thenThrow(taskCorruptedException);
+
+        stateUpdater.add(failedStatefulTask);
+        stateUpdater.add(activeTask1);
+        stateUpdater.start();
+        verifyExceptionsAndFailedTasks(new ExceptionAndTask(taskCorruptedException, failedStatefulTask));
+        verifyUpdatingTasks(activeTask1);
+
+        stateUpdater.add(activeTask2);
+        verifyUpdatingTasks(activeTask1, activeTask2);
+    }
+
+    @Test
+    public void shouldNotFailTheThreadIfMaybeCheckpointFailsDuringTaskRemoval() throws Exception {
+        final StreamTask activeTask1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask activeTask2 = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask failedStatefulTask = statefulTask(TASK_0_2, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final ProcessorStateException processorStateException = new ProcessorStateException("flush");
+        final AtomicBoolean throwException = new AtomicBoolean(false);
+        doAnswer(invocation -> {
+            if (throwException.get()) {
+                throw processorStateException;
+            }
+            return null;
+        }).when(failedStatefulTask).maybeCheckpoint();
+        when(changelogReader.allChangelogsCompleted()).thenReturn(true);
+
+        stateUpdater.add(failedStatefulTask);
+        stateUpdater.add(activeTask1);
+        stateUpdater.start();
+        verifyUpdatingTasks(failedStatefulTask, activeTask1);
+
+        throwException.set(true);
+        final ExecutionException exception = assertThrows(ExecutionException.class, () -> stateUpdater.remove(TASK_0_2, StandbyUpdateListener.SuspendReason.MIGRATED).get());
+        assertEquals(processorStateException, exception.getCause());
+
+        stateUpdater.add(activeTask2);
+        verifyUpdatingTasks(activeTask1, activeTask2);
+    }
+
+    @Test
+    public void shouldNotFailTheThreadIfMaybeCheckpointFailsDuringTaskPause() throws Exception {
+        final StreamTask activeTask1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask activeTask2 = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask failedStatefulTask = statefulTask(TASK_0_2, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final ProcessorStateException processorStateException = new ProcessorStateException("flush");
+        doThrow(processorStateException).when(failedStatefulTask).maybeCheckpoint();
+        when(topologyMetadata.isPaused(null)).thenReturn(false).thenReturn(false).thenReturn(true);
+
+        stateUpdater.add(failedStatefulTask);
+        stateUpdater.add(activeTask1);
+        stateUpdater.start();
+        verifyExceptionsAndFailedTasks(new ExceptionAndTask(processorStateException, failedStatefulTask));
+        verifyPausedTasks(activeTask1);
+
+        stateUpdater.add(activeTask2);
+        verifyPausedTasks(activeTask1, activeTask2);
+    }
+
+    @Test
+    public void shouldNotFailTheThreadIfMaybeCheckpointFailsDuringTaskRestore() throws Exception {
+        final StreamTask activeTask1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask activeTask2 = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask failedStatefulTask = statefulTask(TASK_0_2, Set.of(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
+        final ProcessorStateException processorStateException = new ProcessorStateException("flush");
+        doThrow(processorStateException).when(failedStatefulTask).maybeCheckpoint();
+        when(changelogReader.completedChangelogs()).thenReturn(Set.of(TOPIC_PARTITION_B_0));
+
+        stateUpdater.add(failedStatefulTask);
+        stateUpdater.add(activeTask1);
+        stateUpdater.start();
+        verifyExceptionsAndFailedTasks(new ExceptionAndTask(processorStateException, failedStatefulTask));
+        verifyUpdatingTasks(activeTask1);
+
+        stateUpdater.add(activeTask2);
+        verifyUpdatingTasks(activeTask1, activeTask2);
+    }
+
+    private static List<MetricName> getMetricNames(final String threadId) {
+        final Map<String, String> tagMap = Map.of("thread-id", threadId);
+        return List.of(
+            new MetricName("active-restoring-tasks", "stream-state-updater-metrics", "", tagMap),
+            new MetricName("standby-updating-tasks", "stream-state-updater-metrics", "", tagMap),
+            new MetricName("active-paused-tasks", "stream-state-updater-metrics", "", tagMap),
+            new MetricName("standby-paused-tasks", "stream-state-updater-metrics", "", tagMap),
+            new MetricName("idle-ratio", "stream-state-updater-metrics", "", tagMap),
+            new MetricName("standby-update-ratio", "stream-state-updater-metrics", "", tagMap),
+            new MetricName("checkpoint-ratio", "stream-state-updater-metrics", "", tagMap),
+            new MetricName("restore-records-rate", "stream-state-updater-metrics", "", tagMap),
+            new MetricName("restore-call-rate", "stream-state-updater-metrics", "", tagMap)
+        );
+    }
+
     @SuppressWarnings("unchecked")
-    private static <T> void verifyMetric(final Metrics metrics,
+    private static <T> void verifyMetric(final StreamsMetricsImpl metrics,
                                          final MetricName metricName,
                                          final Matcher<T> matcher) {
         assertThat(metrics.metrics().get(metricName).metricName().description(), is(metricName.description()));
@@ -1727,7 +1905,8 @@ class DefaultStateUpdaterTest {
                         && restoredTasks.size() == expectedRestoredTasks.size();
                 },
                 VERIFICATION_TIMEOUT,
-                "Did not get all restored active task within the given timeout!"
+                () -> "Did not get all restored active task within the given timeout! Expected: "
+                        + expectedRestoredTasks + ", actual: " + restoredTasks
             );
         }
     }
@@ -1742,7 +1921,8 @@ class DefaultStateUpdaterTest {
                     && restoredTasks.size() == expectedRestoredTasks.size();
             },
             VERIFICATION_TIMEOUT,
-            "Did not get all restored active task within the given timeout!"
+            () -> "Did not get all restored active task within the given timeout! Expected: "
+                    + expectedRestoredTasks + ", actual: " + restoredTasks
         );
         assertTrue(stateUpdater.drainRestoredActiveTasks(Duration.ZERO).isEmpty());
     }
@@ -1764,7 +1944,8 @@ class DefaultStateUpdaterTest {
                         && updatingTasks.size() == expectedUpdatingTasks.size();
                 },
                 VERIFICATION_TIMEOUT,
-                "Did not get all updating task within the given timeout!"
+                () -> "Did not get all updating task within the given timeout! Expected: "
+                        + expectedUpdatingTasks + ", actual: " + updatingTasks
             );
         }
     }
@@ -1779,13 +1960,14 @@ class DefaultStateUpdaterTest {
                     && standbyTasks.size() == expectedStandbyTasks.size();
             },
             VERIFICATION_TIMEOUT,
-            "Did not see all standby task within the given timeout!"
+            () -> "Did not see all standby task within the given timeout! Expected: "
+                    + expectedStandbyTasks + ", actual: " + standbyTasks
         );
     }
 
     private void verifyIdle() throws Exception {
         waitForCondition(
-            () -> stateUpdater.isIdle(),
+            stateUpdater::isIdle,
             VERIFICATION_TIMEOUT,
             "State updater did not enter an idling state!"
         );
@@ -1808,7 +1990,8 @@ class DefaultStateUpdaterTest {
                         && pausedTasks.size() == expectedPausedTasks.size();
                 },
                 VERIFICATION_TIMEOUT,
-                "Did not get all paused task within the given timeout!"
+                () -> "Did not get all paused task within the given timeout! Expected: "
+                        + expectedPausedTasks + ", actual: " + pausedTasks
             );
         }
     }
@@ -1823,7 +2006,8 @@ class DefaultStateUpdaterTest {
                     && failedTasks.size() == expectedExceptionAndTasks.size();
             },
             VERIFICATION_TIMEOUT,
-            "Did not get all exceptions and failed tasks within the given timeout!"
+            () -> "Did not get all exceptions and failed tasks within the given timeout! Expected: "
+                    + expectedExceptionAndTasks + ", actual: " + failedTasks
         );
     }
 
@@ -1841,7 +2025,8 @@ class DefaultStateUpdaterTest {
                     && failedTasks.size() == expectedFailedTasks.size();
             },
             VERIFICATION_TIMEOUT,
-            "Did not get all exceptions and failed tasks within the given timeout!"
+            () -> "Did not get all exceptions and failed tasks within the given timeout! Expected: "
+                        + expectedFailedTasks + ", actual: " + failedTasks
         );
     }
 
@@ -1859,31 +2044,10 @@ class DefaultStateUpdaterTest {
                     && failedTasks.size() == expectedExceptionAndTasks.size();
             },
             VERIFICATION_TIMEOUT,
-            "Did not get all exceptions and failed tasks within the given timeout!"
+            () -> "Did not get all exceptions and failed tasks within the given timeout! Expected: "
+                    + expectedExceptionAndTasks + ", actual: " + failedTasks
         );
         assertFalse(stateUpdater.hasExceptionsAndFailedTasks());
         assertTrue(stateUpdater.drainExceptionsAndFailedTasks().isEmpty());
-    }
-    
-    private void verifyRemovedTasks(final Task... tasks) throws Exception {
-        if (tasks.length == 0) {
-            waitForCondition(
-                () -> stateUpdater.removedTasks().isEmpty(),
-                VERIFICATION_TIMEOUT,
-                "Did not get empty removed task within the given timeout!"
-            );
-        } else {
-            final Set<Task> expectedRemovedTasks = Set.of(tasks);
-            final Set<Task> removedTasks = new HashSet<>();
-            waitForCondition(
-                () -> {
-                    removedTasks.addAll(stateUpdater.removedTasks());
-                    return removedTasks.containsAll(expectedRemovedTasks)
-                        && removedTasks.size() == expectedRemovedTasks.size();
-                },
-                VERIFICATION_TIMEOUT,
-                "Did not get all removed task within the given timeout!"
-            );
-        }
     }
 }

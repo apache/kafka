@@ -20,7 +20,6 @@ package org.apache.kafka.server.mutable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -91,7 +90,7 @@ public class BoundedListTest {
     @Test
     public void testHashCodeAndEqualsForNonEmptyList() {
         BoundedList<Integer> boundedList = BoundedList.newArrayBacked(7);
-        List<Integer> otherList = Arrays.asList(1, 2, 3, 4, 5, 6, 7);
+        List<Integer> otherList = List.of(1, 2, 3, 4, 5, 6, 7);
         boundedList.addAll(otherList);
 
         assertEquals(otherList, boundedList);
@@ -104,11 +103,11 @@ public class BoundedListTest {
         list.add(1);
         list.add(200);
         list.add(3);
-        assertEquals(Arrays.asList(1, 200, 3), list);
+        assertEquals(List.of(1, 200, 3), list);
         list.set(0, 100);
         list.set(1, 200);
         list.set(2, 300);
-        assertEquals(Arrays.asList(100, 200, 300), list);
+        assertEquals(List.of(100, 200, 300), list);
     }
 
     @Test
@@ -120,9 +119,9 @@ public class BoundedListTest {
         assertEquals(0, list.indexOf("a"));
         assertEquals(1, list.lastIndexOf("a"));
         list.remove("a");
-        assertEquals(Arrays.asList("a", "c"), list);
+        assertEquals(List.of("a", "c"), list);
         list.remove(0);
-        assertEquals(Arrays.asList("c"), list);
+        assertEquals(List.of("c"), list);
     }
 
     @Test
@@ -132,7 +131,7 @@ public class BoundedListTest {
         list.add("a");
         list.add("c");
         list.clear();
-        assertEquals(Arrays.asList(), list);
+        assertEquals(List.of(), list);
         assertTrue(list.isEmpty());
     }
 
@@ -166,13 +165,13 @@ public class BoundedListTest {
         assertEquals("Cannot add another 3 element(s) to the list because it would exceed the " +
             "maximum length of 5",
                 assertThrows(BoundedListTooLongException.class,
-                        () -> list.addAll(Arrays.asList("d", "e", "f"))).getMessage());
+                        () -> list.addAll(List.of("d", "e", "f"))).getMessage());
         assertEquals("Cannot add another 3 element(s) to the list because it would exceed the " +
             "maximum length of 5",
                 assertThrows(BoundedListTooLongException.class,
-                        () -> list.addAll(0, Arrays.asList("d", "e", "f"))).getMessage());
-        list.addAll(Arrays.asList("d", "e"));
-        assertEquals(Arrays.asList("a", "b", "c", "d", "e"), list);
+                        () -> list.addAll(0, List.of("d", "e", "f"))).getMessage());
+        list.addAll(List.of("d", "e"));
+        assertEquals(List.of("a", "b", "c", "d", "e"), list);
     }
 
     @Test
@@ -205,7 +204,7 @@ public class BoundedListTest {
         list.add(1);
         list.add(2);
         list.add(3);
-        assertEquals(Arrays.asList(2), list.subList(1, 2));
+        assertEquals(List.of(2), list.subList(1, 2));
         assertThrows(UnsupportedOperationException.class,
             () -> list.subList(1, 2).remove(2));
     }

@@ -36,7 +36,9 @@
   //
   // Version 9 is the first version that can be used with the new consumer group protocol (KIP-848). The
   // request is the same as version 8.
-  "validVersions": "2-9",
+  //
+  // Version 10 adds support for topic ids and removes support for topic names (KIP-848).
+  "validVersions": "2-10",
   "flexibleVersions": "8+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
@@ -52,8 +54,10 @@
       "about": "The time period in ms to retain the offset." },
     { "name": "Topics", "type": "[]OffsetCommitRequestTopic", "versions": "0+",
       "about": "The topics to commit offsets for.",  "fields": [
-      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
+      { "name": "Name", "type": "string", "versions": "0-9", "entityType": "topicName", "ignorable": true,
         "about": "The topic name." },
+      { "name":  "TopicId", "type": "uuid", "versions": "10+", "ignorable": true,
+        "about": "The topic ID." },
       { "name": "Partitions", "type": "[]OffsetCommitRequestPartition", "versions": "0+",
         "about": "Each partition to commit offsets for.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",

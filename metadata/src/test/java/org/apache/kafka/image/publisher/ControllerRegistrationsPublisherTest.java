@@ -32,10 +32,9 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
+import java.util.Map;
 import java.util.OptionalInt;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -47,7 +46,7 @@ public class ControllerRegistrationsPublisherTest {
     @Test
     public void testInitialControllers() {
         ControllerRegistrationsPublisher publisher = new ControllerRegistrationsPublisher();
-        assertEquals(Collections.emptyMap(), publisher.controllers());
+        assertEquals(Map.of(), publisher.controllers());
     }
 
     @Test
@@ -91,7 +90,7 @@ public class ControllerRegistrationsPublisherTest {
                     build());
         }
         System.out.println("TEST_IMAGE.cluster = " + TEST_IMAGE.cluster());
-        assertEquals(new HashSet<>(Arrays.asList(0, 1, 2)), publisher.controllers().keySet());
+        assertEquals(Set.of(0, 1, 2), publisher.controllers().keySet());
         assertTrue(publisher.controllers().get(0).zkMigrationReady());
         assertFalse(publisher.controllers().get(1).zkMigrationReady());
         assertFalse(publisher.controllers().get(2).zkMigrationReady());

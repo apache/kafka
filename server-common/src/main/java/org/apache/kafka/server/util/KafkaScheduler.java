@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.server.util;
 
-import org.apache.kafka.common.utils.KafkaThread;
+import org.apache.kafka.common.utils.internals.KafkaThread;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -186,5 +186,9 @@ public class KafkaScheduler implements Scheduler {
     public boolean taskRunning(ScheduledFuture<?> task) {
         ScheduledThreadPoolExecutor e = executor;
         return e != null && e.getQueue().contains(task);
+    }
+
+    public int pendingTaskSize() {
+        return isStarted() ? executor.getQueue().size() : 0;
     }
 }

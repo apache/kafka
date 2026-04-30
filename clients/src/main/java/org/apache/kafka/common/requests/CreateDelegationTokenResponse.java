@@ -18,8 +18,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.nio.ByteBuffer;
@@ -34,9 +34,9 @@ public class CreateDelegationTokenResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public static CreateDelegationTokenResponse parse(ByteBuffer buffer, short version) {
+    public static CreateDelegationTokenResponse parse(Readable readable, short version) {
         return new CreateDelegationTokenResponse(
-            new CreateDelegationTokenResponseData(new ByteBufferAccessor(buffer), version));
+            new CreateDelegationTokenResponseData(readable, version));
     }
 
     public static CreateDelegationTokenResponse prepareResponse(int version,
@@ -102,5 +102,14 @@ public class CreateDelegationTokenResponse extends AbstractResponse {
     @Override
     public boolean shouldClientThrottle(short version) {
         return version >= 1;
+    }
+
+    // Do not print tokenId and Hmac, overwrite a temp copy of the data with empty content
+    @Override
+    public String toString() {
+        CreateDelegationTokenResponseData tempData = data.duplicate();
+        tempData.setTokenId("REDACTED");
+        tempData.setHmac(new byte[0]);
+        return tempData.toString();
     }
 }

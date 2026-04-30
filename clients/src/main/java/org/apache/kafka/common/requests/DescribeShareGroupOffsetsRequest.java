@@ -21,10 +21,9 @@ import org.apache.kafka.common.message.DescribeShareGroupOffsetsRequestData;
 import org.apache.kafka.common.message.DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup;
 import org.apache.kafka.common.message.DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -34,11 +33,7 @@ public class DescribeShareGroupOffsetsRequest extends AbstractRequest {
         private final DescribeShareGroupOffsetsRequestData data;
 
         public Builder(DescribeShareGroupOffsetsRequestData data) {
-            this(data, false);
-        }
-
-        public Builder(DescribeShareGroupOffsetsRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS, enableUnstableLastVersion);
+            super(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS);
             this.data = data;
         }
 
@@ -82,9 +77,9 @@ public class DescribeShareGroupOffsetsRequest extends AbstractRequest {
         return data;
     }
 
-    public static DescribeShareGroupOffsetsRequest parse(ByteBuffer buffer, short version) {
+    public static DescribeShareGroupOffsetsRequest parse(Readable readable, short version) {
         return new DescribeShareGroupOffsetsRequest(
-                new DescribeShareGroupOffsetsRequestData(new ByteBufferAccessor(buffer), version),
+                new DescribeShareGroupOffsetsRequestData(readable, version),
                 version
         );
     }

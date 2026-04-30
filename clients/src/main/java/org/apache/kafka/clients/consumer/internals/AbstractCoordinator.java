@@ -19,6 +19,9 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.consumer.CloseOptions;
+import org.apache.kafka.clients.consumer.internals.metrics.AbstractConsumerMetricsManager;
+import org.apache.kafka.clients.consumer.internals.metrics.MetricsLedger;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -66,11 +69,11 @@ import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
-import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.ExponentialBackoff;
 
 import org.slf4j.Logger;
 
@@ -84,6 +87,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.DEFAULT;
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
 
 /**
  * AbstractCoordinator implements group management for a single group member by interacting with
@@ -1116,23 +1122,21 @@ public abstract class AbstractCoordinator implements Closeable {
      */
     @Override
     public final void close() {
-        close(time.timer(0));
+        close(time.timer(0), DEFAULT);
     }
 
     /**
      * @throws KafkaException if the rebalance callback throws exception
      */
-    protected void close(Timer timer) {
+    protected void close(Timer timer, CloseOptions.GroupMembershipOperation membershipOperation) {
         try {
             closeHeartbeatThread();
         } finally {
             // Synchronize after closing the heartbeat thread since heartbeat thread
             // needs this lock to complete and terminate after close flag is set.
             synchronized (this) {
-                if (rebalanceConfig.leaveGroupOnClose) {
-                    onLeavePrepare();
-                    maybeLeaveGroup("the consumer is being closed");
-                }
+                onLeavePrepare();
+                maybeLeaveGroup(membershipOperation, "the consumer is being closed");
 
                 // At this point, there may be pending commits (async commits or sync commits that were
                 // interrupted using wakeup) and the leave group request which have been queued, but not
@@ -1153,26 +1157,22 @@ public abstract class AbstractCoordinator implements Closeable {
             "either by increasing max.poll.interval.ms or by reducing the maximum size of batches " +
             "returned in poll() with max.poll.records.");
 
-        maybeLeaveGroup("consumer poll timeout has expired.");
+        maybeLeaveGroup(DEFAULT, "consumer poll timeout has expired.");
     }
 
     /**
-     * Sends LeaveGroupRequest and logs the {@code leaveReason}, unless this member is using static membership or is already
-     * not part of the group (ie does not have a valid member id, is in the UNJOINED state, or the coordinator is unknown).
+     * Sends LeaveGroupRequest and logs the {@code leaveReason}, unless this member is using static membership
+     * with the default consumer group membership operation, or is already not part of the group (i.e., does not have a
+     * valid member ID, is in the UNJOINED state, or the coordinator is unknown).
      *
+     * @param membershipOperation the operation on consumer group membership that the consumer will perform when closing
      * @param leaveReason the reason to leave the group for logging
      * @throws KafkaException if the rebalance callback throws exception
      */
-    public synchronized RequestFuture<Void> maybeLeaveGroup(String leaveReason) {
+    public synchronized RequestFuture<Void> maybeLeaveGroup(CloseOptions.GroupMembershipOperation membershipOperation, String leaveReason) {
         RequestFuture<Void> future = null;
 
-        // Starting from 2.3, only dynamic members will send LeaveGroupRequest to the broker,
-        // consumer with valid group.instance.id is viewed as static member that never sends LeaveGroup,
-        // and the membership expiration is only controlled by session timeout.
-        if (isDynamicMember() && !coordinatorUnknown() &&
-            state != MemberState.UNJOINED && generation.hasMemberId()) {
-            // this is a minimal effort attempt to leave the group. we do not
-            // attempt any resending if the request fails or times out.
+        if (shouldSendLeaveGroupRequest(membershipOperation)) {
             log.info("Member {} sending LeaveGroup request to coordinator {} due to {}",
                 generation.memberId, coordinator, leaveReason);
             LeaveGroupRequest.Builder request = new LeaveGroupRequest.Builder(
@@ -1187,6 +1187,14 @@ public abstract class AbstractCoordinator implements Closeable {
         resetGenerationOnLeaveGroup();
 
         return future;
+    }
+
+    private boolean shouldSendLeaveGroupRequest(CloseOptions.GroupMembershipOperation membershipOperation) {
+        if (!coordinatorUnknown() && state != MemberState.UNJOINED && generation.hasMemberId()) {
+            return membershipOperation == LEAVE_GROUP || (isDynamicMember() && membershipOperation == DEFAULT);
+        } else {
+            return false;
+        }
     }
 
     protected boolean isDynamicMember() {
@@ -1324,14 +1332,6 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-    protected final Meter createMeter(Metrics metrics, String groupName, String baseName, String descriptiveName) {
-        return new Meter(new WindowedCount(),
-                metrics.metricName(baseName + "-rate", groupName,
-                        String.format("The number of %s per second", descriptiveName)),
-                metrics.metricName(baseName + "-total", groupName,
-                        String.format("The total number of %s", descriptiveName)));
-    }
-
     /**
      * Visible for testing.
      */
@@ -1339,7 +1339,22 @@ public abstract class AbstractCoordinator implements Closeable {
         return heartbeatThread;
     }
 
-    private class GroupCoordinatorMetrics {
+    protected class AbstractCoordinatorMetrics extends AbstractConsumerMetricsManager {
+
+        protected AbstractCoordinatorMetrics(MetricsLedger metrics) {
+            super(metrics);
+        }
+
+        protected final Meter createMeter(String groupName, String baseName, String descriptiveName) {
+            return new Meter(new WindowedCount(),
+                metrics.metricName(baseName + "-rate", groupName,
+                    String.format("The number of %s per second", descriptiveName)),
+                metrics.metricName(baseName + "-total", groupName,
+                    String.format("The total number of %s", descriptiveName)));
+        }
+    }
+
+    private class GroupCoordinatorMetrics extends AbstractCoordinatorMetrics {
         public final String metricGrpName;
 
         public final Sensor heartbeatSensor;
@@ -1349,13 +1364,18 @@ public abstract class AbstractCoordinator implements Closeable {
         public final Sensor failedRebalanceSensor;
 
         public GroupCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
+            this(new MetricsLedger(metrics), metricGrpPrefix);
+        }
+
+        private GroupCoordinatorMetrics(MetricsLedger metrics, String metricGrpPrefix) {
+            super(metrics);
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
             this.heartbeatSensor = metrics.sensor("heartbeat-latency");
             this.heartbeatSensor.add(metrics.metricName("heartbeat-response-time-max",
                 this.metricGrpName,
                 "The max time taken to receive a response to a heartbeat request"), new Max());
-            this.heartbeatSensor.add(createMeter(metrics, metricGrpName, "heartbeat", "heartbeats"));
+            this.heartbeatSensor.add(createMeter(metricGrpName, "heartbeat", "heartbeats"));
 
             this.joinSensor = metrics.sensor("join-latency");
             this.joinSensor.add(metrics.metricName("join-time-avg",
@@ -1364,7 +1384,7 @@ public abstract class AbstractCoordinator implements Closeable {
             this.joinSensor.add(metrics.metricName("join-time-max",
                 this.metricGrpName,
                 "The max time taken for a group rejoin"), new Max());
-            this.joinSensor.add(createMeter(metrics, metricGrpName, "join", "group joins"));
+            this.joinSensor.add(createMeter(metricGrpName, "join", "group joins"));
 
             this.syncSensor = metrics.sensor("sync-latency");
             this.syncSensor.add(metrics.metricName("sync-time-avg",
@@ -1373,7 +1393,7 @@ public abstract class AbstractCoordinator implements Closeable {
             this.syncSensor.add(metrics.metricName("sync-time-max",
                 this.metricGrpName,
                 "The max time taken for a group sync"), new Max());
-            this.syncSensor.add(createMeter(metrics, metricGrpName, "sync", "group syncs"));
+            this.syncSensor.add(createMeter(metricGrpName, "sync", "group syncs"));
 
             this.successfulRebalanceSensor = metrics.sensor("rebalance-latency");
             this.successfulRebalanceSensor.add(metrics.metricName("rebalance-latency-avg",
@@ -1401,7 +1421,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     this.metricGrpName,
                     "The number of successful rebalance events per hour, each event is composed of " +
                         "several failed re-trials until it succeeded"),
-                new Rate(TimeUnit.HOURS, new WindowedCount())
+                new Rate(TimeUnit.HOURS, new WindowedCount(), 1)
             );
 
             this.failedRebalanceSensor = metrics.sensor("failed-rebalance");
@@ -1416,7 +1436,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     "failed-rebalance-rate-per-hour",
                     this.metricGrpName,
                     "The number of failed rebalance events per hour"),
-                new Rate(TimeUnit.HOURS, new WindowedCount())
+                new Rate(TimeUnit.HOURS, new WindowedCount(), 1)
             );
 
             Measurable lastRebalance = (config, now) -> {

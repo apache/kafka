@@ -20,12 +20,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -56,16 +54,16 @@ public class DescribeQuorumRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public static DescribeQuorumRequest parse(ByteBuffer buffer, short version) {
-        return new DescribeQuorumRequest(new DescribeQuorumRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static DescribeQuorumRequest parse(Readable readable, short version) {
+        return new DescribeQuorumRequest(new DescribeQuorumRequestData(readable, version), version);
     }
 
     public static DescribeQuorumRequestData singletonRequest(TopicPartition topicPartition) {
         return new DescribeQuorumRequestData()
-            .setTopics(Collections.singletonList(
+            .setTopics(List.of(
                 new DescribeQuorumRequestData.TopicData()
                     .setTopicName(topicPartition.topic())
-                    .setPartitions(Collections.singletonList(
+                    .setPartitions(List.of(
                         new DescribeQuorumRequestData.PartitionData()
                             .setPartitionIndex(topicPartition.partition()))
             )));

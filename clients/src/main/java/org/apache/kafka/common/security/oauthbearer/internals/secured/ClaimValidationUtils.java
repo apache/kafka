@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.security.oauthbearer.JwtValidatorException;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -47,14 +49,14 @@ public class ClaimValidationUtils {
      * @return Unmodifiable {@link Set} that includes the values of the original set, but with
      *         each value trimmed
      *
-     * @throws ValidateException Thrown if the value is <code>null</code>, contains duplicates, or
+     * @throws JwtValidatorException Thrown if the value is <code>null</code>, contains duplicates, or
      *                           if any of the values in the set are <code>null</code>, empty,
      *                           or whitespace only
      */
 
-    public static Set<String> validateScopes(String scopeClaimName, Collection<String> scopes) throws ValidateException {
+    public static Set<String> validateScopes(String scopeClaimName, Collection<String> scopes) throws JwtValidatorException {
         if (scopes == null)
-            throw new ValidateException(String.format("%s value must be non-null", scopeClaimName));
+            throw new JwtValidatorException(String.format("%s value must be non-null", scopeClaimName));
 
         Set<String> copy = new HashSet<>();
 
@@ -62,7 +64,7 @@ public class ClaimValidationUtils {
             scope = validateString(scopeClaimName, scope);
 
             if (copy.contains(scope))
-                throw new ValidateException(String.format("%s value must not contain duplicates - %s already present", scopeClaimName, scope));
+                throw new JwtValidatorException(String.format("%s value must not contain duplicates - %s already present", scopeClaimName, scope));
 
             copy.add(scope);
         }
@@ -84,15 +86,15 @@ public class ClaimValidationUtils {
      *
      * @return Input parameter, as provided
      *
-     * @throws ValidateException Thrown if the value is <code>null</code> or negative
+     * @throws JwtValidatorException Thrown if the value is <code>null</code> or negative
      */
 
-    public static long validateExpiration(String claimName, Long claimValue) throws ValidateException {
+    public static long validateExpiration(String claimName, Long claimValue) throws JwtValidatorException {
         if (claimValue == null)
-            throw new ValidateException(String.format("%s value must be non-null", claimName));
+            throw new JwtValidatorException(String.format("%s value must be non-null", claimName));
 
         if (claimValue < 0)
-            throw new ValidateException(String.format("%s value must be non-negative; value given was \"%s\"", claimName, claimValue));
+            throw new JwtValidatorException(String.format("%s value must be non-negative; value given was \"%s\"", claimName, claimValue));
 
         return claimValue;
     }
@@ -112,10 +114,10 @@ public class ClaimValidationUtils {
      *
      * @return Trimmed version of the <code>claimValue</code> parameter
      *
-     * @throws ValidateException Thrown if the value is <code>null</code>, empty, or whitespace only
+     * @throws JwtValidatorException Thrown if the value is <code>null</code>, empty, or whitespace only
      */
 
-    public static String validateSubject(String claimName, String claimValue) throws ValidateException {
+    public static String validateSubject(String claimName, String claimValue) throws JwtValidatorException {
         return validateString(claimName, claimValue);
     }
 
@@ -132,12 +134,12 @@ public class ClaimValidationUtils {
      *
      * @return Input parameter, as provided
      *
-     * @throws ValidateException Thrown if the value is negative
+     * @throws JwtValidatorException Thrown if the value is negative
      */
 
-    public static Long validateIssuedAt(String claimName, Long claimValue) throws ValidateException {
+    public static Long validateIssuedAt(String claimName, Long claimValue) throws JwtValidatorException {
         if (claimValue != null && claimValue < 0)
-            throw new ValidateException(String.format("%s value must be null or non-negative; value given was \"%s\"", claimName, claimValue));
+            throw new JwtValidatorException(String.format("%s value must be null or non-negative; value given was \"%s\"", claimName, claimValue));
 
         return claimValue;
     }
@@ -157,24 +159,24 @@ public class ClaimValidationUtils {
      *
      * @return Trimmed version of the <code>value</code> parameter
      *
-     * @throws ValidateException Thrown if the value is <code>null</code>, empty, or whitespace only
+     * @throws JwtValidatorException Thrown if the value is <code>null</code>, empty, or whitespace only
      */
 
-    public static String validateClaimNameOverride(String name, String value) throws ValidateException {
+    public static String validateClaimNameOverride(String name, String value) throws JwtValidatorException {
         return validateString(name, value);
     }
 
-    private static String validateString(String name, String value) throws ValidateException {
+    private static String validateString(String name, String value) throws JwtValidatorException {
         if (value == null)
-            throw new ValidateException(String.format("%s value must be non-null", name));
+            throw new JwtValidatorException(String.format("%s value must be non-null", name));
 
         if (value.isEmpty())
-            throw new ValidateException(String.format("%s value must be non-empty", name));
+            throw new JwtValidatorException(String.format("%s value must be non-empty", name));
 
         value = value.trim();
 
         if (value.isEmpty())
-            throw new ValidateException(String.format("%s value must not contain only whitespace", name));
+            throw new JwtValidatorException(String.format("%s value must not contain only whitespace", name));
 
         return value;
     }

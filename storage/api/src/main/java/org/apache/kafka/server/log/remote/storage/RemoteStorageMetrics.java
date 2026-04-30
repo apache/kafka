@@ -49,6 +49,8 @@ public class RemoteStorageMetrics {
     private static final String REMOTE_COPY_LAG_SEGMENTS = "RemoteCopyLagSegments";
     private static final String REMOTE_DELETE_LAG_BYTES = "RemoteDeleteLagBytes";
     private static final String REMOTE_DELETE_LAG_SEGMENTS = "RemoteDeleteLagSegments";
+    private static final String RETENTION_SIZE_IN_PERCENT = "RetentionSizeInPercent";
+    private static final String LOCAL_RETENTION_SIZE_IN_PERCENT = "LocalRetentionSizeInPercent";
     private static final String REMOTE_LOG_READER_TASK_QUEUE_SIZE = REMOTE_LOG_READER_METRICS_NAME_PREFIX + TASK_QUEUE_SIZE;
     private static final String REMOTE_LOG_READER_AVG_IDLE_PERCENT = REMOTE_LOG_READER_METRICS_NAME_PREFIX + AVG_IDLE_PERCENT;
     private static final String REMOTE_LOG_READER_FETCH_RATE_AND_TIME_MS = REMOTE_LOG_READER_METRICS_NAME_PREFIX + "FetchRateAndTimeMs";
@@ -90,12 +92,23 @@ public class RemoteStorageMetrics {
             "kafka.server", "BrokerTopicMetrics", REMOTE_DELETE_LAG_SEGMENTS);
     public static final MetricName REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC = getMetricName(
             "kafka.log.remote", "RemoteLogManager", REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT);
-    public static final MetricName REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC = getMetricName(
+    @Deprecated(since = "4.2")
+    public static final MetricName DEPRECATE_REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC = getMetricName(
             "org.apache.kafka.storage.internals.log", "RemoteStorageThreadPool", REMOTE_LOG_READER_TASK_QUEUE_SIZE);
-    public static final MetricName REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC = getMetricName(
+    @Deprecated(since = "4.2")
+    public static final MetricName DEPRECATE_REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC = getMetricName(
             "org.apache.kafka.storage.internals.log", "RemoteStorageThreadPool", REMOTE_LOG_READER_AVG_IDLE_PERCENT);
+    public static final MetricName REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC = getMetricName(
+            "kafka.log.remote", "RemoteStorageThreadPool", REMOTE_LOG_READER_TASK_QUEUE_SIZE);
+    public static final MetricName REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC = getMetricName(
+            "kafka.log.remote", "RemoteStorageThreadPool", REMOTE_LOG_READER_AVG_IDLE_PERCENT);
     public static final MetricName REMOTE_LOG_READER_FETCH_RATE_AND_TIME_METRIC = getMetricName(
             "kafka.log.remote", "RemoteLogManager", REMOTE_LOG_READER_FETCH_RATE_AND_TIME_MS);
+
+    public static final MetricName RETENTION_SIZE_IN_PERCENT_METRIC = getMetricName(
+            "kafka.log.remote", "RemoteLogManager", RETENTION_SIZE_IN_PERCENT);
+    public static final MetricName LOCAL_RETENTION_SIZE_IN_PERCENT_METRIC = getMetricName(
+            "kafka.log.remote", "RemoteLogManager", LOCAL_RETENTION_SIZE_IN_PERCENT);
 
     public static Set<MetricName> allMetrics() {
         Set<MetricName> metrics = new HashSet<>();
@@ -115,6 +128,8 @@ public class RemoteStorageMetrics {
         metrics.add(REMOTE_DELETE_LAG_BYTES_METRIC);
         metrics.add(REMOTE_DELETE_LAG_SEGMENTS_METRIC);
         metrics.add(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC);
+        metrics.add(DEPRECATE_REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC);
+        metrics.add(DEPRECATE_REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC);
         metrics.add(REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC);
         metrics.add(REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC);
         metrics.add(REMOTE_LOG_METADATA_COUNT_METRIC);

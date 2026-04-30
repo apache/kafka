@@ -20,45 +20,44 @@ package kafka.server
 import java.util
 import java.util.concurrent.TimeUnit
 import java.util.Properties
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.Logging
 import kafka.utils.Implicits._
-import org.apache.kafka.common.Reconfigurable
-import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource, TopicConfig}
+import org.apache.kafka.common.{Endpoint, Reconfigurable}
+import org.apache.kafka.common.config.{ConfigDef, ConfigException, TopicConfig}
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
-import org.apache.kafka.common.config.types.Password
+import org.apache.kafka.common.internals.Plugin
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.network.EndPoint
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
-import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
-import org.apache.kafka.coordinator.transaction.{AddPartitionsToTxnConfig, TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.security.authorizer.AuthorizerUtils
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.config.{AbstractKafkaConfig, DelegationTokenManagerConfigs, KRaftConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{AbstractKafkaConfig, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, DynamicBrokerConfig => JDynamicBrokerConfig}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
-import org.apache.kafka.server.util.Csv
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
-import scala.jdk.OptionConverters.RichOptional
+import scala.jdk.OptionConverters.{RichOption, RichOptional}
 
 object KafkaConfig {
 
   def main(args: Array[String]): Unit = {
-    System.out.println(configDef.toHtml(4, (config: String) => "brokerconfigs_" + config,
-      DynamicBrokerConfig.dynamicConfigUpdateModes))
+    val combined = new ConfigDef(configDef)
+    // Broker quota configs are dynamic-only and not defined in AbstractKafkaConfig.CONFIG_DEF,
+    // so we need to add them explicitly here for the generated HTML documentation.
+    QuotaConfig.brokerQuotaConfigs().configKeys().forEach((_, v) => combined.define(v))
+    System.out.println(combined.toHtml(4, (config: String) => "brokerconfigs_" + config,
+      JDynamicBrokerConfig.dynamicConfigUpdateModes))
   }
 
   val configDef = AbstractKafkaConfig.CONFIG_DEF
@@ -66,6 +65,10 @@ object KafkaConfig {
   def configNames: Seq[String] = configDef.names.asScala.toBuffer.sorted
   private[server] def defaultValues: Map[String, _] = configDef.defaultValues.asScala
   private[server] def configKeys: Map[String, ConfigKey] = configDef.configKeys.asScala
+
+  def clampDynamicConfigs(props: java.util.Map[String, String]): Unit = {
+    GroupCoordinatorConfig.clampDynamicConfigs(props)
+  }
 
   def fromProps(props: Properties): KafkaConfig =
     fromProps(props, true)
@@ -85,64 +88,11 @@ object KafkaConfig {
 
   def apply(props: java.util.Map[_, _], doLog: Boolean = true): KafkaConfig = new KafkaConfig(props, doLog)
 
-  private def typeOf(name: String): Option[ConfigDef.Type] = Option(configDef.configKeys.get(name)).map(_.`type`)
-
-  def configType(configName: String): Option[ConfigDef.Type] = {
-    val configType = configTypeExact(configName)
-    if (configType.isDefined) {
-      return configType
-    }
-    typeOf(configName) match {
-      case Some(t) => Some(t)
-      case None =>
-        DynamicBrokerConfig.brokerConfigSynonyms(configName, matchListenerOverride = true).flatMap(typeOf).headOption
-    }
-  }
-
-  private def configTypeExact(exactName: String): Option[ConfigDef.Type] = {
-    val configType = typeOf(exactName).orNull
-    if (configType != null) {
-      Some(configType)
-    } else {
-      val configKey = DynamicConfig.Broker.configKeys.get(exactName)
-      if (configKey != null) {
-        Some(configKey.`type`)
-      } else {
-        None
-      }
-    }
-  }
+  def configType(configName: String): Option[ConfigDef.Type] =
+    AbstractKafkaConfig.configType(configName).toScala
 
   def maybeSensitive(configType: Option[ConfigDef.Type]): Boolean = {
-    // If we can't determine the config entry type, treat it as a sensitive config to be safe
-    configType.isEmpty || configType.contains(ConfigDef.Type.PASSWORD)
-  }
-
-  def loggableValue(resourceType: ConfigResource.Type, name: String, value: String): String = {
-    val maybeSensitive = resourceType match {
-      case ConfigResource.Type.BROKER => KafkaConfig.maybeSensitive(KafkaConfig.configType(name))
-      case ConfigResource.Type.TOPIC => KafkaConfig.maybeSensitive(LogConfig.configType(name).toScala)
-      case ConfigResource.Type.GROUP => KafkaConfig.maybeSensitive(GroupConfig.configType(name).toScala)
-      case ConfigResource.Type.BROKER_LOGGER => false
-      case ConfigResource.Type.CLIENT_METRICS => false
-      case _ => true
-    }
-    if (maybeSensitive) Password.HIDDEN else value
-  }
-
-  /**
-   * Copy a configuration map, populating some keys that we want to treat as synonyms.
-   */
-  def populateSynonyms(input: util.Map[_, _]): util.Map[Any, Any] = {
-    val output = new util.HashMap[Any, Any](input)
-    val brokerId = output.get(ServerConfigs.BROKER_ID_CONFIG)
-    val nodeId = output.get(KRaftConfigs.NODE_ID_CONFIG)
-    if (brokerId == null && nodeId != null) {
-      output.put(ServerConfigs.BROKER_ID_CONFIG, nodeId)
-    } else if (brokerId != null && nodeId == null) {
-      output.put(KRaftConfigs.NODE_ID_CONFIG, brokerId)
-    }
-    output
+    AbstractKafkaConfig.maybeSensitive(configType.toJava)
   }
 }
 
@@ -155,8 +105,8 @@ object KafkaConfig {
 class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   extends AbstractKafkaConfig(KafkaConfig.configDef, props, Utils.castToStringObjectMap(props), doLog) with Logging {
 
-  def this(props: java.util.Map[_, _]) = this(true, KafkaConfig.populateSynonyms(props))
-  def this(props: java.util.Map[_, _], doLog: Boolean) = this(doLog, KafkaConfig.populateSynonyms(props))
+  def this(props: java.util.Map[_, _]) = this(true, AbstractKafkaConfig.populateSynonyms(props))
+  def this(props: java.util.Map[_, _], doLog: Boolean) = this(doLog, AbstractKafkaConfig.populateSynonyms(props))
 
   // Cache the current config to avoid acquiring read lock to access from dynamicConfig
   @volatile private var currentConfig = this
@@ -165,6 +115,11 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
   private[server] def updateCurrentConfig(newConfig: KafkaConfig): Unit = {
     this.currentConfig = newConfig
+  }
+
+  // for testing
+  private[server] def updateCurrentConfig(props: util.Map[_, _]): Unit = {
+    this.currentConfig = new KafkaConfig(props)
   }
 
   override def originals: util.Map[String, AnyRef] =
@@ -204,21 +159,10 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   private val _shareCoordinatorConfig = new ShareCoordinatorConfig(this)
   def shareCoordinatorConfig: ShareCoordinatorConfig = _shareCoordinatorConfig
 
-  private val _transactionLogConfig = new TransactionLogConfig(this)
-  private val _transactionStateManagerConfig = new TransactionStateManagerConfig(this)
-  private val _addPartitionsToTxnConfig = new AddPartitionsToTxnConfig(this)
-  def transactionLogConfig: TransactionLogConfig = _transactionLogConfig
-  def transactionStateManagerConfig: TransactionStateManagerConfig = _transactionStateManagerConfig
-  def addPartitionsToTxnConfig: AddPartitionsToTxnConfig = _addPartitionsToTxnConfig
-
   private val _quotaConfig = new QuotaConfig(this)
   def quotaConfig: QuotaConfig = _quotaConfig
 
   /** ********* General Configuration ***********/
-  var brokerId: Int = getInt(ServerConfigs.BROKER_ID_CONFIG)
-  val nodeId: Int = getInt(KRaftConfigs.NODE_ID_CONFIG)
-  val initialRegistrationTimeoutMs: Int = getInt(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG)
-  val brokerHeartbeatIntervalMs: Int = getInt(KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG)
   val brokerSessionTimeoutMs: Int = getInt(KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG)
   val controllerPerformanceSamplePeriodMs: Long = getLong(KRaftConfigs.CONTROLLER_PERFORMANCE_SAMPLE_PERIOD_MS)
   val controllerPerformanceAlwaysLogThresholdMs: Long = getLong(KRaftConfigs.CONTROLLER_PERFORMANCE_ALWAYS_LOG_THRESHOLD_MS)
@@ -230,14 +174,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       case role => throw new ConfigException(s"Unknown process role '$role'" +
         " (only 'broker' and 'controller' are allowed roles)")
     }
-
-    val distinctRoles: Set[ProcessRole] = roles.toSet
-
-    if (distinctRoles.size != roles.size) {
-      throw new ConfigException(s"Duplicate role names found in `${KRaftConfigs.PROCESS_ROLES_CONFIG}`: $roles")
-    }
-
-    distinctRoles
+    roles.toSet
   }
 
   def isKRaftCombinedMode: Boolean = {
@@ -245,24 +182,15 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   }
 
   def metadataLogDir: String = {
-    Option(getString(KRaftConfigs.METADATA_LOG_DIR_CONFIG)) match {
+    Option(getString(MetadataLogConfig.METADATA_LOG_DIR_CONFIG)) match {
       case Some(dir) => dir
-      case None => logDirs.head
+      case None => logDirs.get(0)
     }
   }
 
-  def metadataLogSegmentBytes = getInt(KRaftConfigs.METADATA_LOG_SEGMENT_BYTES_CONFIG)
-  def metadataLogSegmentMillis = getLong(KRaftConfigs.METADATA_LOG_SEGMENT_MILLIS_CONFIG)
-  def metadataRetentionBytes = getLong(KRaftConfigs.METADATA_MAX_RETENTION_BYTES_CONFIG)
-  def metadataRetentionMillis = getLong(KRaftConfigs.METADATA_MAX_RETENTION_MILLIS_CONFIG)
-  def metadataNodeIDConfig = getInt(KRaftConfigs.NODE_ID_CONFIG)
-  def metadataLogSegmentMinBytes = getInt(KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG)
   val serverMaxStartupTimeMs = getLong(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG)
 
   def messageMaxBytes = getInt(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG)
-  val requestTimeoutMs = getInt(ServerConfigs.REQUEST_TIMEOUT_MS_CONFIG)
-  val connectionSetupTimeoutMs = getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG)
-  val connectionSetupTimeoutMaxMs = getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG)
 
   def getNumReplicaAlterLogDirsThreads: Int = {
     val numThreads: Integer = Option(getInt(ServerConfigs.NUM_REPLICA_ALTER_LOG_DIRS_THREADS_CONFIG)).getOrElse(logDirs.size)
@@ -270,30 +198,30 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   }
 
   /************* Metadata Configuration ***********/
-  val metadataSnapshotMaxNewRecordBytes = getLong(KRaftConfigs.METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES_CONFIG)
-  val metadataSnapshotMaxIntervalMs = getLong(KRaftConfigs.METADATA_SNAPSHOT_MAX_INTERVAL_MS_CONFIG)
+  val metadataSnapshotMaxNewRecordBytes = getLong(MetadataLogConfig.METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES_CONFIG)
+  val metadataSnapshotMaxIntervalMs = getLong(MetadataLogConfig.METADATA_SNAPSHOT_MAX_INTERVAL_MS_CONFIG)
   val metadataMaxIdleIntervalNs: Option[Long] = {
-    val value = TimeUnit.NANOSECONDS.convert(getInt(KRaftConfigs.METADATA_MAX_IDLE_INTERVAL_MS_CONFIG).toLong, TimeUnit.MILLISECONDS)
+    val value = TimeUnit.NANOSECONDS.convert(getInt(MetadataLogConfig.METADATA_MAX_IDLE_INTERVAL_MS_CONFIG).toLong, TimeUnit.MILLISECONDS)
     if (value > 0) Some(value) else None
   }
 
   /************* Authorizer Configuration ***********/
-  def createNewAuthorizer(): Option[Authorizer] = {
+  def createNewAuthorizer(metrics: Metrics, role: String): Option[Plugin[Authorizer]] = {
     val className = getString(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG)
     if (className == null || className.isEmpty)
       None
     else {
-      Some(AuthorizerUtils.createAuthorizer(className))
+      Some(AuthorizerUtils.createAuthorizer(className, originals, metrics, ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, role))
     }
   }
 
   val earlyStartListeners: Set[ListenerName] = {
-    val listenersSet = listeners.map(_.listenerName).toSet
-    val controllerListenersSet = controllerListeners.map(_.listenerName).toSet
-    Option(getString(ServerConfigs.EARLY_START_LISTENERS_CONFIG)) match {
+    val listenersSet = listeners.map(l => ListenerName.normalised(l.listener)).toSet
+    val controllerListenersSet = controllerListeners.map(l => ListenerName.normalised(l.listener)).toSet
+    Option(getList(ServerConfigs.EARLY_START_LISTENERS_CONFIG)) match {
       case None => controllerListenersSet
-      case Some(str) =>
-        str.split(",").map(_.trim()).filterNot(_.isEmpty).map { str =>
+      case Some(list) =>
+        list.asScala.map(_.trim()).filterNot(_.isEmpty).map { str =>
           val listenerName = new ListenerName(str)
           if (!listenersSet.contains(listenerName) && !controllerListenersSet.contains(listenerName))
             throw new ConfigException(s"${ServerConfigs.EARLY_START_LISTENERS_CONFIG} contains " +
@@ -304,67 +232,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     }
   }
 
-  /** ********* Socket Server Configuration ***********/
-  val socketSendBufferBytes = getInt(SocketServerConfigs.SOCKET_SEND_BUFFER_BYTES_CONFIG)
-  val socketReceiveBufferBytes = getInt(SocketServerConfigs.SOCKET_RECEIVE_BUFFER_BYTES_CONFIG)
-  val socketRequestMaxBytes = getInt(SocketServerConfigs.SOCKET_REQUEST_MAX_BYTES_CONFIG)
-  val socketListenBacklogSize = getInt(SocketServerConfigs.SOCKET_LISTEN_BACKLOG_SIZE_CONFIG)
-  def maxConnectionsPerIp = getInt(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG)
-  def maxConnectionsPerIpOverrides: Map[String, Int] =
-    getMap(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, getString(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG)).map { case (k, v) => (k, v.toInt)}
-  def maxConnections = getInt(SocketServerConfigs.MAX_CONNECTIONS_CONFIG)
-  def maxConnectionCreationRate = getInt(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG)
-  val connectionsMaxIdleMs = getLong(SocketServerConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG)
-  val failedAuthenticationDelayMs = getInt(SocketServerConfigs.FAILED_AUTHENTICATION_DELAY_MS_CONFIG)
-  val queuedMaxRequests = getInt(SocketServerConfigs.QUEUED_MAX_REQUESTS_CONFIG)
-  val queuedMaxBytes = getLong(SocketServerConfigs.QUEUED_MAX_BYTES_CONFIG)
-  def numNetworkThreads = getInt(SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG)
-
   /***************** rack configuration **************/
-  val rack = Option(getString(ServerConfigs.BROKER_RACK_CONFIG))
   val replicaSelectorClassName = Option(getString(ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG))
-
-  /** ********* Log Configuration ***********/
-  val autoCreateTopicsEnable = getBoolean(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG)
-  val numPartitions = getInt(ServerLogConfigs.NUM_PARTITIONS_CONFIG)
-  val logDirs: Seq[String] = Csv.parseCsvList(Option(getString(ServerLogConfigs.LOG_DIRS_CONFIG)).getOrElse(getString(ServerLogConfigs.LOG_DIR_CONFIG))).asScala
-  def logSegmentBytes = getInt(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG)
-  def logFlushIntervalMessages = getLong(ServerLogConfigs.LOG_FLUSH_INTERVAL_MESSAGES_CONFIG)
-  def logCleanerThreads = getInt(CleanerConfig.LOG_CLEANER_THREADS_PROP)
-  val logFlushSchedulerIntervalMs = getLong(ServerLogConfigs.LOG_FLUSH_SCHEDULER_INTERVAL_MS_CONFIG)
-  val logFlushOffsetCheckpointIntervalMs = getInt(ServerLogConfigs.LOG_FLUSH_OFFSET_CHECKPOINT_INTERVAL_MS_CONFIG).toLong
-  val logFlushStartOffsetCheckpointIntervalMs = getInt(ServerLogConfigs.LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS_CONFIG).toLong
-  val logCleanupIntervalMs = getLong(ServerLogConfigs.LOG_CLEANUP_INTERVAL_MS_CONFIG)
-  def logCleanupPolicy = getList(ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG)
-
-  def logRetentionBytes = getLong(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG)
-  def logCleanerDedupeBufferSize = getLong(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP)
-  def logCleanerDedupeBufferLoadFactor = getDouble(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP)
-  def logCleanerIoBufferSize = getInt(CleanerConfig.LOG_CLEANER_IO_BUFFER_SIZE_PROP)
-  def logCleanerIoMaxBytesPerSecond = getDouble(CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP)
-  def logCleanerDeleteRetentionMs = getLong(CleanerConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP)
-  def logCleanerMinCompactionLagMs = getLong(CleanerConfig.LOG_CLEANER_MIN_COMPACTION_LAG_MS_PROP)
-  def logCleanerMaxCompactionLagMs = getLong(CleanerConfig.LOG_CLEANER_MAX_COMPACTION_LAG_MS_PROP)
-  def logCleanerBackoffMs = getLong(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP)
-  def logCleanerMinCleanRatio = getDouble(CleanerConfig.LOG_CLEANER_MIN_CLEAN_RATIO_PROP)
-  val logCleanerEnable = getBoolean(CleanerConfig.LOG_CLEANER_ENABLE_PROP)
-  def logIndexSizeMaxBytes = getInt(ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG)
-  def logIndexIntervalBytes = getInt(ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_CONFIG)
-  def logDeleteDelayMs = getLong(ServerLogConfigs.LOG_DELETE_DELAY_MS_CONFIG)
-  def logRollTimeMillis: java.lang.Long = Option(getLong(ServerLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG)).getOrElse(60 * 60 * 1000L * getInt(ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG))
-  def logRollTimeJitterMillis: java.lang.Long = Option(getLong(ServerLogConfigs.LOG_ROLL_TIME_JITTER_MILLIS_CONFIG)).getOrElse(60 * 60 * 1000L * getInt(ServerLogConfigs.LOG_ROLL_TIME_JITTER_HOURS_CONFIG))
-  def logFlushIntervalMs: java.lang.Long = Option(getLong(ServerLogConfigs.LOG_FLUSH_INTERVAL_MS_CONFIG)).getOrElse(getLong(ServerLogConfigs.LOG_FLUSH_SCHEDULER_INTERVAL_MS_CONFIG))
-  def minInSyncReplicas = getInt(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG)
-  def logPreAllocateEnable: java.lang.Boolean = getBoolean(ServerLogConfigs.LOG_PRE_ALLOCATE_CONFIG)
-  def logInitialTaskDelayMs: java.lang.Long = Option(getLong(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG)).getOrElse(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT)
-
-  def logMessageTimestampType = TimestampType.forName(getString(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG))
-
-  def logMessageTimestampBeforeMaxMs: Long = getLong(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG)
-
-  def logMessageTimestampAfterMaxMs: Long = getLong(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG)
-
-  def logDirFailureTimeoutMs: Long = getLong(ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_CONFIG)
 
   /** ********* Replication configuration ***********/
   val controllerSocketTimeoutMs: Int = getInt(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG)
@@ -385,34 +254,37 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   val leaderImbalanceCheckIntervalSeconds: Long = getLong(ReplicationConfigs.LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG)
   val uncleanLeaderElectionCheckIntervalMs: Long = getLong(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_INTERVAL_MS_CONFIG)
   def uncleanLeaderElectionEnable: java.lang.Boolean = getBoolean(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG)
+  def followerFetchLastTieredOffsetEnable: java.lang.Boolean = getBoolean(ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG);
 
   /** ********* Controlled shutdown configuration ***********/
   val controlledShutdownEnable = getBoolean(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG)
 
-  /** New group coordinator configs */
-  val isNewGroupCoordinatorEnabled = getBoolean(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG)
+  /** Group coordinator configs */
   val groupCoordinatorRebalanceProtocols = {
     val protocols = getList(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG)
       .asScala.map(_.toUpperCase).map(GroupType.valueOf).toSet
     if (!protocols.contains(GroupType.CLASSIC)) {
       throw new ConfigException(s"Disabling the '${GroupType.CLASSIC}' protocol is not supported.")
     }
-    if (protocols.contains(GroupType.CONSUMER) && !isNewGroupCoordinatorEnabled) {
-      warn(s"The new '${GroupType.CONSUMER}' rebalance protocol is only supported with the new group coordinator.")
+    if (doLog && protocols.contains(GroupType.SHARE)) {
+      warn(s"'${GroupType.SHARE}' in `${GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG}` is deprecated. " +
+        s"Share groups are controlled by the 'share.version' feature. " +
+        s"This config will be removed in Kafka 5.0.")
     }
-    if (protocols.contains(GroupType.SHARE)) {
-      if (!isNewGroupCoordinatorEnabled) {
-        warn(s"The new '${GroupType.SHARE}' rebalance protocol is only supported with the new group coordinator.")
+    if (doLog && originals().containsKey(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG)) {
+      val defaultProtocols = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT
+        .asScala.map(_.toUpperCase).map(GroupType.valueOf).toSet
+      val missingProtocols = defaultProtocols -- protocols
+      if (missingProtocols.nonEmpty) {
+        warn(s"The config `${GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG}` is deprecated and will be removed in Kafka 5.0. " +
+          s"The following protocol(s) are currently disabled: ${missingProtocols.mkString(", ")}. " +
+          s"In Kafka 5.0, all protocols will always be enabled and controlled solely by feature versions " +
+          s"(group.version, streams.version, share.version) via kafka-features.sh. " +
+          s"Please remove the configuration, which will restore all protocols to the default enabled state, to prepare for the upgrade.")
+      } else {
+        warn(s"The config `${GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG}` is deprecated and will be removed in Kafka 5.0. " +
+          s"Please remove the configuration to prepare for the upgrade.")
       }
-      warn(s"Share groups and the new '${GroupType.SHARE}' rebalance protocol are enabled. " +
-        "This is part of the early access of KIP-932 and MUST NOT be used in production.")
-    }
-    if (protocols.contains(GroupType.STREAMS)) {
-      if (processRoles.isEmpty || !isNewGroupCoordinatorEnabled) {
-        throw new ConfigException(s"The new '${GroupType.STREAMS}' rebalance protocol is only supported in KRaft cluster with the new group coordinator.")
-      }
-      warn(s"The new '${GroupType.STREAMS}' rebalance protocol is enabled along with the new group coordinator. " +
-        "This is part of the preview of KIP-1071 and MUST NOT be used in production.")
     }
     protocols
   }
@@ -437,16 +309,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       Set.empty[String]
   }
 
-  def interBrokerListenerName = getInterBrokerListenerNameAndSecurityProtocol._1
-  def interBrokerSecurityProtocol = getInterBrokerListenerNameAndSecurityProtocol._2
   def saslMechanismInterBrokerProtocol = getString(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG)
-
-  /** ********* DelegationToken Configuration **************/
-  val delegationTokenSecretKey = getPassword(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG)
-  val tokenAuthEnabled = delegationTokenSecretKey != null && delegationTokenSecretKey.value.nonEmpty
-  val delegationTokenMaxLifeMs = getLong(DelegationTokenManagerConfigs.DELEGATION_TOKEN_MAX_LIFETIME_CONFIG)
-  val delegationTokenExpiryTimeMs = getLong(DelegationTokenManagerConfigs.DELEGATION_TOKEN_EXPIRY_TIME_MS_CONFIG)
-  val delegationTokenExpiryCheckIntervalMs = getLong(DelegationTokenManagerConfigs.DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_MS_CONFIG)
 
   /** ********* Fetch Configuration **************/
   val maxIncrementalFetchSessionCacheSlots = getInt(ServerConfigs.MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_CONFIG)
@@ -466,83 +329,51 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   val unstableApiVersionsEnabled = getBoolean(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG)
   val unstableFeatureVersionsEnabled = getBoolean(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG)
 
-  def addReconfigurable(reconfigurable: Reconfigurable): Unit = {
+  override def addReconfigurable(reconfigurable: Reconfigurable): Unit = {
     dynamicConfig.addReconfigurable(reconfigurable)
   }
 
-  def removeReconfigurable(reconfigurable: Reconfigurable): Unit = {
+  override def removeReconfigurable(reconfigurable: Reconfigurable): Unit = {
     dynamicConfig.removeReconfigurable(reconfigurable)
   }
 
-  def logRetentionTimeMillis: Long = {
-    val millisInMinute = 60L * 1000L
-    val millisInHour = 60L * millisInMinute
+  def listeners: Seq[Endpoint] =
+    AbstractKafkaConfig.listenerListToEndPoints(getList(SocketServerConfigs.LISTENERS_CONFIG), effectiveListenerSecurityProtocolMap).asScala
 
-    val millis: java.lang.Long =
-      Option(getLong(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG)).getOrElse(
-        Option(getInt(ServerLogConfigs.LOG_RETENTION_TIME_MINUTES_CONFIG)) match {
-          case Some(mins) => millisInMinute * mins
-          case None => getInt(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG) * millisInHour
-        })
-
-    if (millis < 0) return -1
-    millis
-  }
-
-  private def getMap(propName: String, propValue: String): Map[String, String] = {
-    try {
-      Csv.parseCsvMap(propValue).asScala
-    } catch {
-      case e: Exception => throw new IllegalArgumentException("Error parsing configuration property '%s': %s".format(propName, e.getMessage))
-    }
-  }
-
-  def listeners: Seq[EndPoint] =
-    CoreUtils.listenerListToEndPoints(getString(SocketServerConfigs.LISTENERS_CONFIG), effectiveListenerSecurityProtocolMap)
-
-  def controllerListenerNames: Seq[String] = {
-    val value = Option(getString(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG)).getOrElse("")
-    if (value.isEmpty) {
-      Seq.empty
-    } else {
-      value.split(",")
-    }
-  }
-
-  def controllerListeners: Seq[EndPoint] =
-    listeners.filter(l => controllerListenerNames.contains(l.listenerName.value()))
+  def controllerListeners: Seq[Endpoint] =
+    listeners.filter(l => controllerListenerNames.contains(l.listener))
 
   def saslMechanismControllerProtocol: String = getString(KRaftConfigs.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG)
 
-  def dataPlaneListeners: Seq[EndPoint] = {
+  def dataPlaneListeners: Seq[Endpoint] = {
     listeners.filterNot { listener =>
-      val name = listener.listenerName.value()
+      val name = listener.listener
         controllerListenerNames.contains(name)
     }
   }
 
-  def effectiveAdvertisedControllerListeners: Seq[EndPoint] = {
-    val advertisedListenersProp = getString(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
+  def effectiveAdvertisedControllerListeners: Seq[Endpoint] = {
+    val advertisedListenersProp = getList(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
     val controllerAdvertisedListeners = if (advertisedListenersProp != null) {
-      CoreUtils.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
-        .filter(l => controllerListenerNames.contains(l.listenerName.value()))
+      AbstractKafkaConfig.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, false).asScala
+        .filter(l => controllerListenerNames.contains(l.listener))
     } else {
       Seq.empty
     }
     val controllerListenersValue = controllerListeners
 
-    controllerListenerNames.flatMap { name =>
+    controllerListenerNames.asScala.flatMap { name =>
       controllerAdvertisedListeners
-        .find(endpoint => endpoint.listenerName.equals(ListenerName.normalised(name)))
+        .find(endpoint => ListenerName.normalised(endpoint.listener).equals(ListenerName.normalised(name)))
         .orElse(
           // If users don't define advertised.listeners, the advertised controller listeners inherit from listeners configuration
           // which match listener names in controller.listener.names.
           // Removing "0.0.0.0" host to avoid validation errors. This is to be compatible with the old behavior before 3.9.
           // The null or "" host does a reverse lookup in ListenerInfo#withWildcardHostnamesResolved.
           controllerListenersValue
-            .find(endpoint => endpoint.listenerName.equals(ListenerName.normalised(name)))
+            .find(endpoint => ListenerName.normalised(endpoint.listener).equals(ListenerName.normalised(name)))
             .map(endpoint => if (endpoint.host == "0.0.0.0") {
-              new EndPoint(null, endpoint.port, endpoint.listenerName, endpoint.securityProtocol)
+              new Endpoint(endpoint.listener, endpoint.securityProtocol, null, endpoint.port)
             } else {
               endpoint
             })
@@ -550,66 +381,25 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     }
   }
 
-  def effectiveAdvertisedBrokerListeners: Seq[EndPoint] = {
+  def effectiveAdvertisedBrokerListeners: Seq[Endpoint] = {
     // Use advertised listeners if defined, fallback to listeners otherwise
-    val advertisedListenersProp = getString(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
+    val advertisedListenersProp = getList(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
     val advertisedListeners = if (advertisedListenersProp != null) {
-      CoreUtils.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
+      AbstractKafkaConfig.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, false).asScala
     } else {
       listeners
     }
     // Only expose broker listeners
-    advertisedListeners.filterNot(l => controllerListenerNames.contains(l.listenerName.value()))
+    advertisedListeners.filterNot(l => controllerListenerNames.contains(l.listener))
   }
 
-  private def getInterBrokerListenerNameAndSecurityProtocol: (ListenerName, SecurityProtocol) = {
-    Option(getString(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG)) match {
-      case Some(_) if originals.containsKey(ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG) =>
-        throw new ConfigException(s"Only one of ${ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG} and " +
-          s"${ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG} should be set.")
-      case Some(name) =>
-        val listenerName = ListenerName.normalised(name)
-        val securityProtocol = effectiveListenerSecurityProtocolMap.getOrElse(listenerName,
-          throw new ConfigException(s"Listener with name ${listenerName.value} defined in " +
-            s"${ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG} not found in ${SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG}."))
-        (listenerName, securityProtocol)
-      case None =>
-        val securityProtocol = getSecurityProtocol(getString(ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG),
-          ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG)
-        (ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
-    }
-  }
-
-  private def getSecurityProtocol(protocolName: String, configName: String): SecurityProtocol = {
-    try SecurityProtocol.forName(protocolName)
-    catch {
-      case _: IllegalArgumentException =>
-        throw new ConfigException(s"Invalid security protocol `$protocolName` defined in $configName")
-    }
-  }
-
-  def effectiveListenerSecurityProtocolMap: Map[ListenerName, SecurityProtocol] = {
-    val mapValue = getMap(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, getString(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG))
-      .map { case (listenerName, protocolName) =>
-        ListenerName.normalised(listenerName) -> getSecurityProtocol(protocolName, SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG)
-      }
-    if (!originals.containsKey(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG)) {
-      // Nothing was specified explicitly for listener.security.protocol.map, so we are using the default value,
-      // and we are using KRaft.
-      // Add PLAINTEXT mappings for controller listeners as long as there is no SSL or SASL_{PLAINTEXT,SSL} in use
-      def isSslOrSasl(name: String): Boolean = name.equals(SecurityProtocol.SSL.name) || name.equals(SecurityProtocol.SASL_SSL.name) || name.equals(SecurityProtocol.SASL_PLAINTEXT.name)
-      // check controller listener names (they won't appear in listeners when process.roles=broker)
-      // as well as listeners for occurrences of SSL or SASL_*
-      if (controllerListenerNames.exists(isSslOrSasl) ||
-        Csv.parseCsvList(getString(SocketServerConfigs.LISTENERS_CONFIG)).asScala.exists(listenerValue => isSslOrSasl(EndPoint.parseListenerName(listenerValue)))) {
-        mapValue // don't add default mappings since we found something that is SSL or SASL_*
-      } else {
-        // add the PLAINTEXT mappings for all controller listener names that are not explicitly PLAINTEXT
-        mapValue ++ controllerListenerNames.filterNot(SecurityProtocol.PLAINTEXT.name.equals(_)).map(
-          new ListenerName(_) -> SecurityProtocol.PLAINTEXT)
-      }
+  def validateCordonedLogDirs(): Unit = {
+    val cordonedLogDirs = getList(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG)
+    if (cordonedLogDirs.contains(ServerLogConfigs.CORDONED_LOG_DIRS_ALL)) {
+      require(cordonedLogDirs.size == 1, s"When ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} is set to ${ServerLogConfigs.CORDONED_LOG_DIRS_ALL}, it must not contain other values")
     } else {
-      mapValue
+      val unknownLogDirs = cordonedLogDirs.asScala.filter(!logDirs().contains(_))
+      require(unknownLogDirs.isEmpty, s"All entries in ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} must be present in ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} or ${ServerLogConfigs.LOG_DIR_CONFIG}. Missing entries : ${unknownLogDirs.mkString(", ")}")
     }
   }
 
@@ -622,14 +412,21 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     require(logRollTimeMillis >= 1, "log.roll.ms must be greater than or equal to 1")
     require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be greater than or equal to 0")
     require(logRetentionTimeMillis >= 1 || logRetentionTimeMillis == -1, "log.retention.ms must be unlimited (-1) or, greater than or equal to 1")
-    require(logDirs.nonEmpty, "At least one log directory must be defined via log.dirs or log.dir.")
+    require(logDirs.size > 0, "At least one log directory must be defined via log.dirs or log.dir.")
     require(logCleanerDedupeBufferSize / logCleanerThreads > 1024 * 1024, "log.cleaner.dedupe.buffer.size must be at least 1MB per cleaner thread.")
     require(replicaFetchWaitMaxMs <= replicaSocketTimeoutMs, "replica.socket.timeout.ms should always be at least replica.fetch.wait.max.ms" +
       " to prevent unnecessary socket timeouts")
     require(replicaFetchWaitMaxMs <= replicaLagTimeMaxMs, "replica.fetch.wait.max.ms should always be less than or equal to replica.lag.time.max.ms" +
       " to prevent frequent changes in ISR")
 
-    val advertisedBrokerListenerNames = effectiveAdvertisedBrokerListeners.map(_.listenerName).toSet
+    if (brokerHeartbeatIntervalMs * 2 > brokerSessionTimeoutMs) {
+      error(s"${KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG} ($brokerHeartbeatIntervalMs ms) must be less than or equal to half of the ${KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG} ($brokerSessionTimeoutMs ms). " +
+        s"The ${KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG} is configured on controller. The ${KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG} is configured on broker. " +
+        s"If a broker doesn't send heartbeat request within ${KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG}, it loses broker lease. " +
+        s"Please increase ${KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG} or decrease ${KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG}.")
+    }
+
+    val advertisedBrokerListenerNames = effectiveAdvertisedBrokerListeners.map(l => ListenerName.normalised(l.listener)).toSet
 
     // validate KRaft-related configs
     val voterIds = QuorumConfig.parseVoterIds(quorumConfig.voters)
@@ -652,8 +449,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
         s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must contain at least one value appearing in the '${SocketServerConfigs.LISTENERS_CONFIG}' configuration when running the KRaft controller role")
     }
     def validateControllerListenerNamesMustAppearInListenersForKRaftController(): Unit = {
-      val listenerNameValues = listeners.map(_.listenerName.value).toSet
-      require(controllerListenerNames.forall(cln => listenerNameValues.contains(cln)),
+      val listenerNameValues = listeners.map(_.listener).toSet
+      require(controllerListenerNames.stream().allMatch(cln => listenerNameValues.contains(cln)),
         s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must only contain values appearing in the '${SocketServerConfigs.LISTENERS_CONFIG}' configuration when running the KRaft controller role")
     }
     def validateAdvertisedBrokerListenersNonEmptyForBroker(): Unit = {
@@ -661,9 +458,9 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
         "There must be at least one broker advertised listener." + (
           if (processRoles.contains(ProcessRole.BrokerRole)) s" Perhaps all listeners appear in ${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG}?" else ""))
     }
-    def warnIfConfigDefinedInWrongRole(expectedRole: ProcessRole, configName: String): Unit = {
+    def warnIfConfigDefinedInWrongRole(expectedRole: ProcessRole, configName: String, extraMessage: String = ""): Unit = {
       if (originals.containsKey(configName)) {
-        warn(s"$configName is defined in ${processRoles.mkString(", ")}. It should be defined in the $expectedRole role.")
+        warn(s"$configName is defined in ${processRoles.mkString(", ")}. It should be defined in the $expectedRole role. $extraMessage")
       }
     }
     if (processRoles == Set(ProcessRole.BrokerRole)) {
@@ -673,26 +470,33 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       require(!voterIds.contains(nodeId),
         s"If ${KRaftConfigs.PROCESS_ROLES_CONFIG} contains just the 'broker' role, the node id $nodeId must not be included in the set of voters ${QuorumConfig.QUORUM_VOTERS_CONFIG}=${voterIds.asScala.toSet}")
       // controller.listener.names must be non-empty...
-      require(controllerListenerNames.nonEmpty,
+      require(controllerListenerNames.size() > 0,
         s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must contain at least one value when running KRaft with just the broker role")
       // controller.listener.names are forbidden in listeners...
       require(controllerListeners.isEmpty,
         s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must not contain a value appearing in the '${SocketServerConfigs.LISTENERS_CONFIG}' configuration when running KRaft with just the broker role")
       // controller.listener.names must all appear in listener.security.protocol.map
-      controllerListenerNames.foreach { name =>
+      controllerListenerNames.forEach { name =>
         val listenerName = ListenerName.normalised(name)
-        if (!effectiveListenerSecurityProtocolMap.contains(listenerName)) {
+        if (!effectiveListenerSecurityProtocolMap.containsKey(listenerName)) {
           throw new ConfigException(s"Controller listener with name ${listenerName.value} defined in " +
             s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} not found in ${SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG}  (an explicit security mapping for each controller listener is required if ${SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG} is non-empty, or if there are security protocols other than PLAINTEXT in use)")
         }
       }
+      // controller.quorum.auto.join.enable must be false for KRaft broker-only
+      require(!quorumConfig.autoJoin,
+        s"${QuorumConfig.QUORUM_AUTO_JOIN_ENABLE_CONFIG} is only supported when ${KRaftConfigs.PROCESS_ROLES_CONFIG} contains the 'controller' role.")
       // warn that only the first controller listener is used if there is more than one
       if (controllerListenerNames.size > 1) {
-        warn(s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} has multiple entries; only the first will be used since ${KRaftConfigs.PROCESS_ROLES_CONFIG}=broker: ${controllerListenerNames.asJava}")
+        warn(s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} has multiple entries; only the first will be used since ${KRaftConfigs.PROCESS_ROLES_CONFIG}=broker: ${controllerListenerNames}")
       }
       // warn if create.topic.policy.class.name or alter.config.policy.class.name is defined in the broker role
       warnIfConfigDefinedInWrongRole(ProcessRole.ControllerRole, ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG)
       warnIfConfigDefinedInWrongRole(ProcessRole.ControllerRole, ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG)
+      // warn if num.partitions or default.replication.factor is defined in the broker role
+      val ignoredIn5 = "This configuration will be ignored in the broker role in 5.0."
+      warnIfConfigDefinedInWrongRole(ProcessRole.ControllerRole, ServerLogConfigs.NUM_PARTITIONS_CONFIG, ignoredIn5)
+      warnIfConfigDefinedInWrongRole(ProcessRole.ControllerRole, ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, ignoredIn5)
     } else if (processRoles == Set(ProcessRole.ControllerRole)) {
       // KRaft controller-only
       validateQuorumVotersAndQuorumBootstrapServerForKRaft()
@@ -719,7 +523,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       validateControllerListenerNamesMustAppearInListenersForKRaftController()
     }
 
-    val listenerNames = listeners.map(_.listenerName).toSet
+    val listenerNames = listeners.map(l => ListenerName.normalised(l.listener)).toSet
     if (processRoles.contains(ProcessRole.BrokerRole)) {
       validateAdvertisedBrokerListenersNonEmptyForBroker()
       require(advertisedBrokerListenerNames.contains(interBrokerListenerName),
@@ -730,6 +534,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
           s"Found ${advertisedBrokerListenerNames.map(_.value).mkString(",")}. The valid options based on the current configuration " +
           s"are ${listenerNames.map(_.value).mkString(",")}"
       )
+      validateCordonedLogDirs()
     }
 
     require(!effectiveAdvertisedBrokerListeners.exists(endpoint => endpoint.host=="0.0.0.0"),
@@ -747,10 +552,10 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       s"${SocketServerConfigs.QUEUED_MAX_BYTES_CONFIG} must be larger or equal to ${SocketServerConfigs.SOCKET_REQUEST_MAX_BYTES_CONFIG}")
 
     if (maxConnectionsPerIp == 0)
-      require(maxConnectionsPerIpOverrides.nonEmpty, s"${SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG} can be set to zero only if" +
+      require(!maxConnectionsPerIpOverrides.isEmpty, s"${SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG} can be set to zero only if" +
         s" ${SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG} property is set.")
 
-    val invalidAddresses = maxConnectionsPerIpOverrides.keys.filterNot(address => Utils.validHostPattern(address))
+    val invalidAddresses = maxConnectionsPerIpOverrides.asScala.keys.filterNot(address => Utils.validHostPattern(address))
     if (invalidAddresses.nonEmpty)
       throw new IllegalArgumentException(s"${SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG} contains invalid addresses : ${invalidAddresses.mkString(",")}")
 
@@ -764,18 +569,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     require(principalBuilderClass != null, s"${BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG} must be non-null")
     require(classOf[KafkaPrincipalSerde].isAssignableFrom(principalBuilderClass),
       s"${BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG} must implement KafkaPrincipalSerde")
-  }
-
-  /**
-   * Validate some configurations for new MetadataVersion. A new MetadataVersion can take place when
-   * a FeatureLevelRecord for "metadata.version" is read from the cluster metadata.
-   */
-  def validateWithMetadataVersion(metadataVersion: MetadataVersion): Unit = {
-    if (processRoles.contains(ProcessRole.BrokerRole) && logDirs.size > 1) {
-      require(metadataVersion.isDirectoryAssignmentSupported,
-        s"Multiple log directories (aka JBOD) are not supported in the current MetadataVersion ${metadataVersion}. " +
-          s"Need ${MetadataVersion.IBP_3_7_IV2} or higher")
-    }
   }
 
   /**

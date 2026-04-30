@@ -28,11 +28,10 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -41,7 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class MetadataQuorumCommandUnitTest {
     @Test
     public void testRemoveControllerDryRun() {
-        List<String> outputs = Arrays.asList(
+        List<String> outputs = List.of(
             ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(0, MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092",
                     "remove-controller",
@@ -226,9 +225,9 @@ public class MetadataQuorumCommandUnitTest {
         Properties props = new Properties();
         props.setProperty("controller.listener.names", "CONTROLLER,CONTROLLER2");
         props.setProperty("listeners", "CONTROLLER://example.com:9092,CONTROLLER2://:9093");
-        assertEquals(new HashSet<>(Arrays.asList(
+        assertEquals(Set.of(
             new RaftVoterEndpoint("CONTROLLER", "example.com", 9092),
-            new RaftVoterEndpoint("CONTROLLER2", "localhost", 9093))),
+            new RaftVoterEndpoint("CONTROLLER2", "localhost", 9093)),
                 MetadataQuorumCommand.getControllerAdvertisedListeners(props));
     }
 
@@ -238,9 +237,9 @@ public class MetadataQuorumCommandUnitTest {
         props.setProperty("controller.listener.names", "CONTROLLER,CONTROLLER2");
         props.setProperty("listeners", "CONTROLLER://:9092,CONTROLLER2://:9093");
         props.setProperty("advertised.listeners", "CONTROLLER://example.com:9092,CONTROLLER2://example.com:9093");
-        assertEquals(new HashSet<>(Arrays.asList(
+        assertEquals(Set.of(
             new RaftVoterEndpoint("CONTROLLER", "example.com", 9092),
-            new RaftVoterEndpoint("CONTROLLER2", "example.com", 9093))),
+            new RaftVoterEndpoint("CONTROLLER2", "example.com", 9093)),
                 MetadataQuorumCommand.getControllerAdvertisedListeners(props));
     }
 
@@ -250,7 +249,7 @@ public class MetadataQuorumCommandUnitTest {
                  new MetadataQuorumCommandUnitTestEnv(Optional.
                      of(Uuid.fromString("wZoXPqWoSu6F6c8MkmdyAg")))) {
             File propsFile = testEnv.writePropertiesFile();
-            List<String> outputs = Arrays.asList(
+            List<String> outputs = List.of(
                 ToolsTestUtils.captureStandardOut(() ->
                     assertEquals(0, MetadataQuorumCommand.mainNoExit("--bootstrap-server", "localhost:9092",
                         "--command-config", propsFile.getAbsolutePath(),

@@ -18,9 +18,9 @@
 package org.apache.kafka.queue;
 
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.KafkaThread;
 
 import org.slf4j.Logger;
 
@@ -33,7 +33,9 @@ import java.util.TreeMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 
 public final class KafkaEventQueue implements EventQueue {
@@ -277,22 +279,23 @@ public final class KafkaEventQueue implements EventQueue {
                         remove(toRun);
                         continue;
                     }
-                    if (awaitNs == Long.MAX_VALUE) {
-                        try {
+
+                    long startIdleMs = time.milliseconds();
+                    try {
+                        if (awaitNs == Long.MAX_VALUE) {
                             cond.await();
-                        } catch (InterruptedException e) {
-                            log.warn("Interrupted while waiting for a new event. " +
-                                "Shutting down event queue");
-                            interrupted = true;
-                        }
-                    } else {
-                        try {
+                        } else {
                             cond.awaitNanos(awaitNs);
-                        } catch (InterruptedException e) {
-                            log.warn("Interrupted while waiting for a deferred event. " +
-                                "Shutting down event queue");
-                            interrupted = true;
                         }
+                    } catch (InterruptedException e) {
+                        log.warn(
+                                "Interrupted while waiting for a {} event. Shutting down event queue",
+                                (awaitNs == Long.MAX_VALUE) ? "new" : "deferred"
+                        );
+                        interrupted = true;
+                    } finally {
+                        long currentTimeMs = time.milliseconds();
+                        idleTimeCallback.accept(Math.max(currentTimeMs - startIdleMs, 0), currentTimeMs);
                     }
                 } finally {
                     lock.unlock();
@@ -439,12 +442,21 @@ public final class KafkaEventQueue implements EventQueue {
      */
     private boolean interrupted;
 
+    /**
+     * Optional callback for tracking queue idle time. The BiConsumer accepts two parameters:
+     * the first Long is the idle duration in milliseconds, and the second Long is the current
+     * time in milliseconds when the idle period ended. Both values are captured at the same
+     * moment to ensure timing consistency for metric calculations.
+     */
+    private final BiConsumer<Long, Long> idleTimeCallback;
+
+
     public KafkaEventQueue(
         Time time,
         LogContext logContext,
         String threadNamePrefix
     ) {
-        this(time, logContext, threadNamePrefix, VoidEvent::new);
+        this(time, logContext, threadNamePrefix, VoidEvent.INSTANCE, (__, ___) -> { });
     }
 
     public KafkaEventQueue(
@@ -452,6 +464,16 @@ public final class KafkaEventQueue implements EventQueue {
         LogContext logContext,
         String threadNamePrefix,
         Event cleanupEvent
+    ) {
+        this(time, logContext, threadNamePrefix, cleanupEvent, (__, ___) -> { });
+    }
+
+    public KafkaEventQueue(
+        Time time,
+        LogContext logContext,
+        String threadNamePrefix,
+        Event cleanupEvent,
+        BiConsumer<Long, Long> idleTimeCallback
     ) {
         this.time = time;
         this.cleanupEvent = Objects.requireNonNull(cleanupEvent);
@@ -462,6 +484,7 @@ public final class KafkaEventQueue implements EventQueue {
             this.eventHandler, false);
         this.shuttingDown = false;
         this.interrupted = false;
+        this.idleTimeCallback = Objects.requireNonNull(idleTimeCallback);
         this.eventHandlerThread.start();
     }
 
@@ -472,7 +495,7 @@ public final class KafkaEventQueue implements EventQueue {
     @Override
     public void enqueue(EventInsertionType insertionType,
                         String tag,
-                        Function<OptionalLong, OptionalLong> deadlineNsCalculator,
+                        UnaryOperator<OptionalLong> deadlineNsCalculator,
                         Event event) {
         EventContext eventContext = new EventContext(event, insertionType, tag);
         Exception e = eventHandler.enqueue(eventContext, deadlineNsCalculator);

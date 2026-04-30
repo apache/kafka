@@ -25,13 +25,11 @@ import org.apache.kafka.common.message.FetchRequestData.ForgottenTopic;
 import org.apache.kafka.common.message.FetchRequestData.ReplicaState;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.protocol.Readable;
+import org.apache.kafka.common.record.internal.RecordBatch;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -160,8 +158,8 @@ public class FetchRequest extends AbstractRequest {
         private IsolationLevel isolationLevel = IsolationLevel.READ_UNCOMMITTED;
         private int maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
         private FetchMetadata metadata = FetchMetadata.LEGACY;
-        private List<TopicIdPartition> removed = Collections.emptyList();
-        private List<TopicIdPartition> replaced = Collections.emptyList();
+        private List<TopicIdPartition> removed = List.of();
+        private List<TopicIdPartition> replaced = List.of();
         private String rackId = "";
 
         public static Builder forConsumer(short maxVersion, int maxWait, int minBytes, Map<TopicPartition, PartitionData> fetchData) {
@@ -361,7 +359,7 @@ public class FetchRequest extends AbstractRequest {
                         .setPartitions(partitionResponses));
             });
         }
-        return new FetchResponse(new FetchResponseData()
+        return FetchResponse.of(new FetchResponseData()
                 .setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(error.code())
                 .setSessionId(data.sessionId())
@@ -453,8 +451,8 @@ public class FetchRequest extends AbstractRequest {
         return data.rackId();
     }
 
-    public static FetchRequest parse(ByteBuffer buffer, short version) {
-        return new FetchRequest(new FetchRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static FetchRequest parse(Readable readable, short version) {
+        return new FetchRequest(new FetchRequestData(readable, version), version);
     }
 
     // Broker ids are non-negative int.

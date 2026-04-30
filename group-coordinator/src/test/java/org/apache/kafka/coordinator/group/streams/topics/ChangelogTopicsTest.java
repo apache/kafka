@@ -17,24 +17,26 @@
 package org.apache.kafka.coordinator.group.streams.topics;
 
 import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicConfig;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
 
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ChangelogTopicsTest {
 
-    private static final LogContext LOG_CONTEXT = new LogContext();
+    private static final Logger LOG = LoggerFactory.getLogger(ChangelogTopicsTest.class);
     private static final String SOURCE_TOPIC_NAME = "source";
     private static final String SINK_TOPIC_NAME = "sink";
     private static final String REPARTITION_TOPIC_NAME = "repartition";
@@ -48,6 +50,18 @@ public class ChangelogTopicsTest {
         .setSourceTopics(List.of())
         .setRepartitionSinkTopics(List.of(SINK_TOPIC_NAME))
         .setRepartitionSourceTopics(List.of(REPARTITION_TOPIC_INFO))
+        .setStateChangelogTopics(List.of());
+    private static final Subtopology SUBTOPOLOGY_NO_REPARTITION_SOURCE = new Subtopology()
+        .setSubtopologyId("SUBTOPOLOGY_NO_SOURCE")
+        .setSourceTopics(List.of(SOURCE_TOPIC_NAME))
+        .setRepartitionSinkTopics(List.of(SINK_TOPIC_NAME))
+        .setRepartitionSourceTopics(List.of())
+        .setStateChangelogTopics(List.of());
+    private static final Subtopology SUBTOPOLOGY_NO_SOURCE_NO_REPARTITION_SOURCE = new Subtopology()
+        .setSubtopologyId("SUBTOPOLOGY_NO_SOURCE")
+        .setSourceTopics(List.of())
+        .setRepartitionSinkTopics(List.of(SINK_TOPIC_NAME))
+        .setRepartitionSourceTopics(List.of())
         .setStateChangelogTopics(List.of());
     private static final Subtopology SUBTOPOLOGY_STATELESS = new Subtopology()
         .setSubtopologyId("SUBTOPOLOGY_STATELESS")
@@ -85,14 +99,32 @@ public class ChangelogTopicsTest {
     }
 
     @Test
-    public void shouldFailIfNoSourceTopics() {
-        final List<Subtopology> subtopologies = List.of(SUBTOPOLOGY_NO_SOURCE);
+    public void shouldFailIfNoSourceTopicsAndNoRepartitionSourceTopics() {
+        final List<Subtopology> subtopologies = List.of(SUBTOPOLOGY_NO_SOURCE_NO_REPARTITION_SOURCE);
 
         final ChangelogTopics changelogTopics =
-            new ChangelogTopics(LOG_CONTEXT, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
+            new ChangelogTopics(LOG, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
         StreamsInvalidTopologyException e = assertThrows(StreamsInvalidTopologyException.class, changelogTopics::setup);
 
         assertTrue(e.getMessage().contains("No source topics found for subtopology"));
+    }
+
+    @Test
+    public void shouldNotFailIfOnlySourceTopicsEmpty() {
+        final List<Subtopology> subtopologies = List.of(SUBTOPOLOGY_NO_SOURCE);
+
+        final ChangelogTopics changelogTopics =
+            new ChangelogTopics(LOG, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
+        assertDoesNotThrow(changelogTopics::setup);
+    }
+
+    @Test
+    public void shouldNotFailIfOnlyRepartitionSourceTopicsEmpty() {
+        final List<Subtopology> subtopologies = List.of(SUBTOPOLOGY_NO_REPARTITION_SOURCE);
+
+        final ChangelogTopics changelogTopics =
+            new ChangelogTopics(LOG, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
+        assertDoesNotThrow(changelogTopics::setup);
     }
 
     @Test
@@ -100,7 +132,7 @@ public class ChangelogTopicsTest {
         final List<Subtopology> subtopologies = List.of(SUBTOPOLOGY_STATELESS);
 
         final ChangelogTopics changelogTopics =
-            new ChangelogTopics(LOG_CONTEXT, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
+            new ChangelogTopics(LOG, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
         Map<String, Integer> setup = changelogTopics.setup();
 
         assertEquals(Map.of(), setup);
@@ -111,21 +143,21 @@ public class ChangelogTopicsTest {
         final List<Subtopology> subtopologies = List.of(SUBTOPOLOGY_STATEFUL);
 
         final ChangelogTopics changelogTopics =
-            new ChangelogTopics(LOG_CONTEXT, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
+            new ChangelogTopics(LOG, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
         Map<String, Integer> setup = changelogTopics.setup();
 
         assertEquals(Map.of(CHANGELOG_TOPIC_CONFIG.name(), 3), setup);
     }
 
     @Test
-    public void shouldNotContainSourceBasedChangelogs() {
+    public void shouldContainSourceBasedChangelogs() {
         final List<Subtopology> subtopologies = List.of(SUBTOPOLOGY_SOURCE_CHANGELOG);
 
         final ChangelogTopics changelogTopics =
-            new ChangelogTopics(LOG_CONTEXT, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
+            new ChangelogTopics(LOG, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
         Map<String, Integer> setup = changelogTopics.setup();
 
-        assertEquals(Map.of(), setup);
+        assertEquals(Map.of(SOURCE_TOPIC_NAME, 3), setup);
     }
 
     @Test
@@ -133,9 +165,9 @@ public class ChangelogTopicsTest {
         final List<Subtopology> subtopologies = List.of(SUBTOPOLOGY_BOTH);
 
         final ChangelogTopics changelogTopics =
-            new ChangelogTopics(LOG_CONTEXT, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
+            new ChangelogTopics(LOG, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
         Map<String, Integer> setup = changelogTopics.setup();
 
-        assertEquals(Map.of(CHANGELOG_TOPIC_CONFIG.name(), 3), setup);
+        assertEquals(Map.of(CHANGELOG_TOPIC_CONFIG.name(), 3, SOURCE_TOPIC_NAME, 3), setup);
     }
 }

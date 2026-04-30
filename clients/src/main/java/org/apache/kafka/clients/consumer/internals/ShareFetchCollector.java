@@ -21,19 +21,19 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
 
-import java.util.Collections;
+import java.util.Set;
 
 import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMetadataUpdate;
 
 /**
  * {@code ShareFetchCollector} operates at the {@link RecordBatch} level, as that is what is stored in the
- * {@link ShareFetchBuffer}. Each {@link org.apache.kafka.common.record.Record} in the {@link RecordBatch} is converted
+ * {@link ShareFetchBuffer}. Each {@link org.apache.kafka.common.record.internal.Record} in the {@link RecordBatch} is converted
  * to a {@link ConsumerRecord} and added to the returned {@link Fetch}.
  *
  * @param <K> Record key type
@@ -42,20 +42,20 @@ import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMeta
 public class ShareFetchCollector<K, V> {
 
     private final Logger log;
-    private final ConsumerMetadata metadata;
+    private final ShareConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
-    private final FetchConfig fetchConfig;
+    private final ShareFetchConfig shareFetchConfig;
     private final Deserializers<K, V> deserializers;
 
     public ShareFetchCollector(final LogContext logContext,
-                               final ConsumerMetadata metadata,
+                               final ShareConsumerMetadata metadata,
                                final SubscriptionState subscriptions,
-                               final FetchConfig fetchConfig,
+                               final ShareFetchConfig shareFetchConfig,
                                final Deserializers<K, V> deserializers) {
         this.log = logContext.logger(ShareFetchCollector.class);
         this.metadata = metadata;
         this.subscriptions = subscriptions;
-        this.fetchConfig = fetchConfig;
+        this.shareFetchConfig = shareFetchConfig;
         this.deserializers = deserializers;
     }
 
@@ -69,7 +69,7 @@ public class ShareFetchCollector<K, V> {
      */
     public ShareFetch<K, V> collect(final ShareFetchBuffer fetchBuffer) {
         ShareFetch<K, V> fetch = ShareFetch.empty();
-        int recordsRemaining = fetchConfig.maxPollRecords;
+        int recordsRemaining = shareFetchConfig.maxPollRecords;
 
         try {
             while (recordsRemaining > 0) {
@@ -102,7 +102,7 @@ public class ShareFetchCollector<K, V> {
                     ShareInFlightBatch<K, V> batch = nextInLineFetch.fetchRecords(
                             deserializers,
                             recordsRemaining,
-                            fetchConfig.checkCrcs);
+                            shareFetchConfig.checkCrcs);
 
                     if (batch.isEmpty()) {
                         nextInLineFetch.drain();
@@ -112,7 +112,7 @@ public class ShareFetchCollector<K, V> {
                     fetch.add(tp, batch);
 
                     if (batch.getException() != null) {
-                        throw batch.getException();
+                        throw new ShareFetchException(fetch, batch.getException().cause());
                     } else if (batch.hasCachedException()) {
                         break;
                     }
@@ -172,7 +172,7 @@ public class ShareFetchCollector<K, V> {
         } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
             // Log the actual partition and not just the topic to help with ACL propagation issues in large clusters
             log.warn("Not authorized to read from partition {}.", tp.topicPartition());
-            throw new TopicAuthorizationException(Collections.singleton(tp.topic()));
+            throw new TopicAuthorizationException(Set.of(tp.topic()));
         } else if (error == Errors.UNKNOWN_LEADER_EPOCH) {
             log.debug("Received unknown leader epoch error in fetch for partition {}.", tp);
         } else if (error == Errors.UNKNOWN_SERVER_ERROR) {

@@ -38,7 +38,9 @@
   //
   // Version 9 is the first version that can be used with the new consumer group protocol (KIP-848). It adds
   // the MemberId and MemberEpoch fields. Those are filled in and validated when the new consumer protocol is used.
-  "validVersions": "1-9",
+  //
+  // Version 10 adds support for topic ids and removes support for topic names (KIP-848).
+  "validVersions": "1-10",
   "flexibleVersions": "6+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0-7", "entityType": "groupId",
@@ -60,8 +62,10 @@
         "about": "The member epoch if using the new consumer protocol (KIP-848)." },
       { "name": "Topics", "type": "[]OffsetFetchRequestTopics", "versions": "8+", "nullableVersions": "8+",
         "about": "Each topic we would like to fetch offsets for, or null to fetch offsets for all topics.", "fields": [
-        { "name": "Name", "type": "string", "versions": "8+", "entityType": "topicName",
+        { "name": "Name", "type": "string", "versions": "8-9", "entityType": "topicName", "ignorable": true,
           "about": "The topic name."},
+        { "name":  "TopicId", "type": "uuid", "versions": "10+", "ignorable": true,
+          "about": "The topic ID." },
         { "name": "PartitionIndexes", "type": "[]int32", "versions": "8+",
           "about": "The partition indexes we would like to fetch offsets for." }
       ]}

@@ -17,21 +17,5 @@
 
 package org.apache.kafka.connect.integration;
 
-public class StartsAndStops {
-    private final int starts;
-    private final int stops;
-
-    public StartsAndStops(int starts, int stops) {
-        this.starts = starts;
-        this.stops = stops;
-    }
-
-    public int starts() {
-        return starts;
-    }
-
-    public int stops() {
-        return stops;
-    }
-
+public record StartsAndStops(int starts, int stops) {
 }

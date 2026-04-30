@@ -32,7 +32,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
-import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
@@ -80,17 +79,15 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
 
     @Override
     ListOffsetsRequest.Builder buildBatchedRequest(int brokerId, Set<TopicPartition> keys) {
-        Map<String, ListOffsetsTopic> topicsByName = CollectionUtils.groupPartitionsByTopic(
-            keys,
-            topicName -> new ListOffsetsTopic().setName(topicName),
-            (listOffsetsTopic, partitionId) -> {
-                TopicPartition topicPartition = new TopicPartition(listOffsetsTopic.name(), partitionId);
-                long offsetTimestamp = offsetTimestampsByPartition.get(topicPartition);
-                listOffsetsTopic.partitions().add(
-                    new ListOffsetsPartition()
-                        .setPartitionIndex(partitionId)
-                        .setTimestamp(offsetTimestamp));
-            });
+        Map<String, ListOffsetsTopic> topicsByName = new HashMap<>();
+        for (TopicPartition topicPartition : keys) {
+            ListOffsetsTopic topic = topicsByName.computeIfAbsent(
+                topicPartition.topic(), t -> new ListOffsetsTopic().setName(t));
+            long offsetTimestamp = offsetTimestampsByPartition.get(topicPartition);
+            topic.partitions().add(new ListOffsetsPartition()
+                .setPartitionIndex(topicPartition.partition())
+                .setTimestamp(offsetTimestamp));
+        }
         boolean supportsMaxTimestamp = keys
             .stream()
             .anyMatch(key -> offsetTimestampsByPartition.get(key) == ListOffsetsRequest.MAX_TIMESTAMP);
@@ -103,12 +100,17 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
             .stream()
             .anyMatch(key -> offsetTimestampsByPartition.get(key) == ListOffsetsRequest.LATEST_TIERED_TIMESTAMP);
 
+        boolean requireEarliestPendingUploadTimestamp = keys
+            .stream()
+            .anyMatch(key -> offsetTimestampsByPartition.get(key) == ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP);
+
         int timeoutMs = options.timeoutMs() != null ? options.timeoutMs() : defaultApiTimeoutMs;
         return ListOffsetsRequest.Builder.forConsumer(true,
                         options.isolationLevel(),
                         supportsMaxTimestamp,
                         requireEarliestLocalTimestamp,
-                        requireTieredStorageTimestamp)
+                        requireTieredStorageTimestamp,
+                        requireEarliestPendingUploadTimestamp)
                 .setTargetTimes(new ArrayList<>(topicsByName.values()))
                 .setTimeoutMs(timeoutMs);
     }
@@ -197,7 +199,7 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
     public Map<TopicPartition, Throwable> handleUnsupportedVersionException(
         int brokerId, UnsupportedVersionException exception, Set<TopicPartition> keys
     ) {
-        log.warn("Broker " + brokerId + " does not support MAX_TIMESTAMP offset specs");
+        log.warn("Broker {} does not support MAX_TIMESTAMP offset specs", brokerId);
         Map<TopicPartition, Throwable> maxTimestampPartitions = new HashMap<>();
         for (TopicPartition topicPartition : keys) {
             Long offsetTimestamp = offsetTimestampsByPartition.get(topicPartition);
@@ -218,7 +220,7 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
 
     public static PartitionLeaderStrategy.PartitionLeaderFuture<ListOffsetsResultInfo> newFuture(
         Collection<TopicPartition> topicPartitions,
-        Map<TopicPartition, Integer> partitionLeaderCache
+        PartitionLeaderCache partitionLeaderCache
     ) {
         return new PartitionLeaderStrategy.PartitionLeaderFuture<>(new HashSet<>(topicPartitions), partitionLeaderCache);
     }

@@ -18,8 +18,8 @@
 package org.apache.kafka.server.util;
 
 import org.apache.kafka.common.internals.FatalExitError;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.Exit;
 
 import org.slf4j.Logger;
 
@@ -137,7 +137,7 @@ public abstract class ShutdownableThread extends Thread {
         } catch (FatalExitError e) {
             shutdownInitiated.countDown();
             shutdownComplete.countDown();
-            log.info("Stopped");
+            log.error("Stopped due to fatal error with exit code {}", e.statusCode(), e);
             Exit.exit(e.statusCode());
         } catch (Throwable e) {
             if (isRunning())

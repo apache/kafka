@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupAssignment;
@@ -44,6 +46,11 @@ import java.util.stream.Collectors;
  * words, this class does not yield a tombstone for removed members.
  */
 public class TargetAssignmentBuilder {
+
+    /**
+     * The time.
+     */
+    private Time time;
 
     /**
      * The group ID.
@@ -75,9 +82,9 @@ public class TargetAssignmentBuilder {
     private Map<String, StreamsGroupMember> members = Map.of();
 
     /**
-     * The partition metadata.
+     * The metadata image.
      */
-    private Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> partitionMetadata = Map.of();
+    private CoordinatorMetadataImage metadataImage = CoordinatorMetadataImage.EMPTY;
 
     /**
      * The existing target assignment.
@@ -131,6 +138,17 @@ public class TargetAssignmentBuilder {
     }
 
     /**
+     * Sets the time.
+     *
+     * @param time The time.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder withTime(Time time) {
+        this.time = time;
+        return this;
+    }
+
+    /**
      * Adds all the existing members.
      *
      * @param members The existing members in the streams group.
@@ -157,15 +175,15 @@ public class TargetAssignmentBuilder {
     }
 
     /**
-     * Adds the partition metadata to use.
+     * Adds the metadata image to use.
      *
-     * @param partitionMetadata The partition metadata.
+     * @param metadataImage The metadata image.
      * @return This object.
      */
-    public TargetAssignmentBuilder withPartitionMetadata(
-        Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> partitionMetadata
+    public TargetAssignmentBuilder withMetadataImage(
+        CoordinatorMetadataImage metadataImage
     ) {
-        this.partitionMetadata = partitionMetadata;
+        this.metadataImage = metadataImage;
         return this;
     }
 
@@ -194,7 +212,6 @@ public class TargetAssignmentBuilder {
         this.topology = topology;
         return this;
     }
-
 
     /**
      * Adds or updates a member. This is useful when the updated member is not yet materialized in memory.
@@ -273,7 +290,7 @@ public class TargetAssignmentBuilder {
                     Collections.unmodifiableMap(memberSpecs),
                     assignmentConfigs
                 ),
-                new TopologyMetadata(partitionMetadata, topology.subtopologies().get())
+                new TopologyMetadata(metadataImage, topology.subtopologies().get())
             );
         } else {
             newGroupAssignment = new GroupAssignment(
@@ -312,7 +329,11 @@ public class TargetAssignmentBuilder {
         });
 
         // Bump the target assignment epoch.
-        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, groupEpoch));
+        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(
+            groupId,
+            groupEpoch,
+            time.milliseconds()
+        ));
 
         return new TargetAssignmentResult(records, newTargetAssignment);
     }

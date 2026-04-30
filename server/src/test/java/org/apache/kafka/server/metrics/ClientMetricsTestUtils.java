@@ -24,6 +24,10 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
+import org.apache.kafka.server.telemetry.ClientTelemetry;
+import org.apache.kafka.server.telemetry.ClientTelemetryContext;
+import org.apache.kafka.server.telemetry.ClientTelemetryExporter;
+import org.apache.kafka.server.telemetry.ClientTelemetryExporterProvider;
 import org.apache.kafka.server.telemetry.ClientTelemetryPayload;
 import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
 import org.apache.kafka.test.TestUtils;
@@ -38,20 +42,20 @@ import java.util.Properties;
 
 public class ClientMetricsTestUtils {
 
-    public static final String DEFAULT_METRICS =
+    public static final String METRICS_TEST_DEFAULT =
         "org.apache.kafka.client.producer.partition.queue.,org.apache.kafka.client.producer.partition.latency";
-    public static final int DEFAULT_PUSH_INTERVAL_MS = 30 * 1000; // 30 seconds
-    public static final List<String> DEFAULT_CLIENT_MATCH_PATTERNS = List.of(
+    public static final int INTERVAL_MS_TEST_DEFAULT = 30 * 1000; // 30 seconds
+    public static final List<String> MATCH_TEST_DEFAULT = List.of(
         ClientMetricsConfigs.CLIENT_SOFTWARE_NAME + "=apache-kafka-java",
         ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION + "=3.5.*"
     );
     public static final int CLIENT_PORT = 56078;
 
-    public static Properties defaultProperties() {
+    public static Properties defaultTestProperties() {
         Properties props = new Properties();
-        props.put(ClientMetricsConfigs.SUBSCRIPTION_METRICS, DEFAULT_METRICS);
-        props.put(ClientMetricsConfigs.PUSH_INTERVAL_MS, Integer.toString(DEFAULT_PUSH_INTERVAL_MS));
-        props.put(ClientMetricsConfigs.CLIENT_MATCH_PATTERN, String.join(",", DEFAULT_CLIENT_MATCH_PATTERNS));
+        props.put(ClientMetricsConfigs.METRICS_CONFIG, METRICS_TEST_DEFAULT);
+        props.put(ClientMetricsConfigs.INTERVAL_MS_CONFIG, Integer.toString(INTERVAL_MS_TEST_DEFAULT));
+        props.put(ClientMetricsConfigs.MATCH_CONFIG, String.join(",", MATCH_TEST_DEFAULT));
         return props;
     }
 
@@ -94,6 +98,7 @@ public class ClientMetricsTestUtils {
             false);
     }
 
+    @SuppressWarnings("removal")
     public static class TestClientMetricsReceiver implements ClientTelemetryReceiver {
         public int exportMetricsInvokedCount = 0;
         public List<ByteBuffer> metricsData = new ArrayList<>();
@@ -101,6 +106,52 @@ public class ClientMetricsTestUtils {
         public void exportMetrics(AuthorizableRequestContext context, ClientTelemetryPayload payload) {
             exportMetricsInvokedCount += 1;
             metricsData.add(payload.data());
+        }
+    }
+
+    public static class TestClientTelemetryExporter implements ClientTelemetryExporter {
+        public int exportMetricsInvokedCount = 0;
+        public List<ByteBuffer> metricsData = new ArrayList<>();
+        public List<Integer> pushIntervals = new ArrayList<>();
+
+        @Override
+        public void exportMetrics(ClientTelemetryContext context, ClientTelemetryPayload payload) {
+            exportMetricsInvokedCount += 1;
+            metricsData.add(payload.data());
+            pushIntervals.add(context.pushIntervalMs());
+        }
+    }
+
+    /**
+     * Test implementation that supports both deprecated and new interfaces.
+     * When both are implemented, only the new interface should be used.
+     */
+    @SuppressWarnings("removal")
+    public static class TestDualImplementation implements ClientTelemetry, ClientTelemetryExporterProvider {
+        private final TestClientMetricsReceiver receiver;
+        private final TestClientTelemetryExporter exporter;
+
+        public TestDualImplementation() {
+            this.receiver = new TestClientMetricsReceiver();
+            this.exporter = new TestClientTelemetryExporter();
+        }
+
+        @Override
+        public ClientTelemetryReceiver clientReceiver() {
+            return receiver;
+        }
+
+        @Override
+        public ClientTelemetryExporter clientTelemetryExporter() {
+            return exporter;
+        }
+
+        public TestClientMetricsReceiver getReceiver() {
+            return receiver;
+        }
+
+        public TestClientTelemetryExporter getExporter() {
+            return exporter;
         }
     }
 }

@@ -19,15 +19,15 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.raft.errors.NotLeaderException;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
 import org.slf4j.Logger;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
-
-import static java.util.Collections.singletonList;
 
 public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     private static final int SNAPSHOT_DELAY_IN_RECORDS = 10;
@@ -65,7 +65,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
         int epoch = claimedEpoch.getAsInt();
         uncommitted += 1;
         try {
-            long offset = client.prepareAppend(epoch, singletonList(uncommitted));
+            long offset = client.prepareAppend(epoch, List.of(uncommitted));
             client.schedulePreparedAppend();
             log.debug("Scheduled append of record {} with epoch {} at offset {}",
                 uncommitted, epoch, offset);
@@ -77,7 +77,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
 
     @Override
     public synchronized void handleCommit(BatchReader<Integer> reader) {
-        try {
+        try (reader) {
             int initialCommitted = committed;
             long lastCommittedOffset = -1;
             int lastCommittedEpoch = 0;
@@ -90,7 +90,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                     batch.records(),
                     batch.baseOffset()
                 );
-                for (Integer nextCommitted: batch.records()) {
+                for (Integer nextCommitted : batch.records()) {
                     if (nextCommitted != committed + 1) {
                         throw new AssertionError(
                             String.format(
@@ -122,7 +122,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                     lastCommittedTimestamp);
                 if (snapshot.isPresent()) {
                     try {
-                        snapshot.get().append(singletonList(committed));
+                        snapshot.get().append(List.of(committed));
                         snapshot.get().freeze();
                         lastOffsetSnapshotted = lastCommittedOffset;
                     } finally {
@@ -132,14 +132,12 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                     lastOffsetSnapshotted = lastCommittedOffset;
                 }
             }
-        } finally {
-            reader.close();
         }
     }
 
     @Override
     public synchronized void handleLoadSnapshot(SnapshotReader<Integer> reader) {
-        try {
+        try (reader) {
             log.debug("Loading snapshot {}", reader.snapshotId());
             // Since the state machine is only one value, expect only one data record
             boolean foundDataRecord = false;
@@ -176,9 +174,13 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
             lastOffsetSnapshotted = reader.lastContainedLogOffset();
             handleLoadSnapshotCalls += 1;
             log.debug("Finished loading snapshot. Set value: {}", committed);
-        } finally {
-            reader.close();
         }
+    }
+
+    @Override
+    public synchronized void handleLoadBootstrap(SnapshotReader<Integer> reader) {
+        // ReplicatedCounter does not process bootstrap snapshots.
+        reader.close();
     }
 
     @Override

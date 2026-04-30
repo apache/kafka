@@ -19,9 +19,10 @@ package kafka.server
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.test.{KafkaClusterTestKit, TestKitNodes}
-import org.apache.kafka.common.utils.BufferSupplier
+import org.apache.kafka.common.utils.LogContext
+import org.apache.kafka.common.utils.internals.BufferSupplier
 import org.apache.kafka.metadata.MetadataRecordSerde
-import org.apache.kafka.server.config.KRaftConfigs
+import org.apache.kafka.raft.MetadataLogConfig
 import org.apache.kafka.snapshot.RecordsSnapshotReader
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
@@ -48,8 +49,8 @@ class RaftClusterSnapshotTest {
             .setNumControllerNodes(numberOfControllers)
             .build()
         )
-        .setConfigProp(KRaftConfigs.METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES_CONFIG, "10")
-        .setConfigProp(KRaftConfigs.METADATA_MAX_IDLE_INTERVAL_MS_CONFIG, "0")
+        .setConfigProp(MetadataLogConfig.METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES_CONFIG, "10")
+        .setConfigProp(MetadataLogConfig.METADATA_MAX_IDLE_INTERVAL_MS_CONFIG, "0")
         .build()
     ) { cluster =>
       cluster.format()
@@ -59,12 +60,12 @@ class RaftClusterSnapshotTest {
       TestUtils.waitUntilTrue(
         () => {
           cluster.raftManagers().asScala.forall { case (_, raftManager) =>
-            raftManager.replicatedLog.latestSnapshotId.isPresent
+            raftManager.raftLog.latestSnapshotId.isPresent
           }
         },
         s"Expected for every controller and broker to generate a snapshot: ${
           cluster.raftManagers().asScala.map { case (id, raftManager) =>
-            (id, raftManager.replicatedLog.latestSnapshotId)
+            (id, raftManager.raftLog.latestSnapshotId)
           }
         }"
       )
@@ -75,11 +76,12 @@ class RaftClusterSnapshotTest {
       for ((_, raftManager) <- cluster.raftManagers().asScala) {
         Using.resource(
           RecordsSnapshotReader.of(
-            raftManager.replicatedLog.latestSnapshot.get(),
+            raftManager.raftLog.latestSnapshot.get(),
             new MetadataRecordSerde(),
             BufferSupplier.create(),
             1,
-            true
+            true,
+            new LogContext()
           )
         ) { snapshot =>
           // Check that the snapshot is non-empty

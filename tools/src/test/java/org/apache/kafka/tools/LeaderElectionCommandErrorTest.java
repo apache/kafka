@@ -17,7 +17,6 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.server.common.AdminCommandFailedException;
 
 import org.junit.jupiter.api.Test;
 
@@ -89,9 +88,11 @@ public class LeaderElectionCommandErrorTest {
 
     @Test
     public void testInvalidBroker() {
+        // Use RFC 5737 TEST-NET-1 (192.0.2.0/24) - a non-routable address reserved for
+        // documentation and testing. This address guarantees a connection timeout.
         Throwable e = assertThrows(AdminCommandFailedException.class, () -> LeaderElectionCommand.run(
             Duration.ofSeconds(1),
-            "--bootstrap-server", "example.com:1234",
+            "--bootstrap-server", "192.0.2.1:9092",
             "--election-type", "unclean",
             "--all-topic-partitions"
         ));

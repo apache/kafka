@@ -19,6 +19,7 @@ package org.apache.kafka.connect.storage;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
+import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.util.Callback;
 
@@ -34,8 +35,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -79,13 +78,14 @@ public class FileOffsetBackingStoreTest {
         converter = mock(Converter.class);
         // This is only needed for storing deserialized connector partitions, which we don't test in most of the cases here
         when(converter.toConnectData(anyString(), any(byte[].class))).thenReturn(new SchemaAndValue(null,
-                Arrays.asList("connector", Collections.singletonMap("partitionKey", "dummy"))));
+                List.of("connector", Map.of("partitionKey", "dummy"))));
         store = new FileOffsetBackingStore(converter);
         tempFile = assertDoesNotThrow(() -> File.createTempFile("fileoffsetbackingstore", null));
         Map<String, String> props = new HashMap<>();
         props.put(StandaloneConfig.OFFSET_STORAGE_FILE_FILENAME_CONFIG, tempFile.getAbsolutePath());
         props.put(StandaloneConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         props.put(StandaloneConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        props.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         config = new StandaloneConfig(props);
         store.configure(config);
         store.start();
@@ -105,7 +105,7 @@ public class FileOffsetBackingStoreTest {
 
         store.set(FIRST_SET, setCallback).get();
 
-        Map<ByteBuffer, ByteBuffer> values = store.get(Arrays.asList(buffer("key"), buffer("bad"))).get();
+        Map<ByteBuffer, ByteBuffer> values = store.get(List.of(buffer("key"), buffer("bad"))).get();
         assertEquals(buffer("value"), values.get(buffer("key")));
         assertNull(values.get(buffer("bad")));
         verify(setCallback).onCompletion(isNull(), isNull());
@@ -123,7 +123,7 @@ public class FileOffsetBackingStoreTest {
         FileOffsetBackingStore restore = new FileOffsetBackingStore(converter);
         restore.configure(config);
         restore.start();
-        Map<ByteBuffer, ByteBuffer> values = restore.get(Collections.singletonList(buffer("key"))).get();
+        Map<ByteBuffer, ByteBuffer> values = restore.get(List.of(buffer("key"))).get();
         assertEquals(buffer("value"), values.get(buffer("key")));
         verify(setCallback).onCompletion(isNull(), isNull());
     }
@@ -135,26 +135,26 @@ public class FileOffsetBackingStoreTest {
 
         // This test actually requires the offset store to track deserialized source partitions, so we can't use the member variable mock converter
         JsonConverter jsonConverter = new JsonConverter();
-        jsonConverter.configure(Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false"), true);
+        jsonConverter.configure(Map.of(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false"), true);
 
         Map<ByteBuffer, ByteBuffer> serializedPartitionOffsets = new HashMap<>();
         serializedPartitionOffsets.put(
-                serializeKey(jsonConverter, "connector1", Collections.singletonMap("partitionKey", "partitionValue1")),
-                serialize(jsonConverter, Collections.singletonMap("offsetKey", "offsetValue"))
+                serializeKey(jsonConverter, "connector1", Map.of("partitionKey", "partitionValue1")),
+                serialize(jsonConverter, Map.of("offsetKey", "offsetValue"))
         );
         store.set(serializedPartitionOffsets, setCallback).get();
 
         serializedPartitionOffsets.put(
-                serializeKey(jsonConverter, "connector1", Collections.singletonMap("partitionKey", "partitionValue1")),
-                serialize(jsonConverter, Collections.singletonMap("offsetKey", "offsetValue2"))
+                serializeKey(jsonConverter, "connector1", Map.of("partitionKey", "partitionValue1")),
+                serialize(jsonConverter, Map.of("offsetKey", "offsetValue2"))
         );
         serializedPartitionOffsets.put(
-                serializeKey(jsonConverter, "connector1", Collections.singletonMap("partitionKey", "partitionValue2")),
-                serialize(jsonConverter, Collections.singletonMap("offsetKey", "offsetValue"))
+                serializeKey(jsonConverter, "connector1", Map.of("partitionKey", "partitionValue2")),
+                serialize(jsonConverter, Map.of("offsetKey", "offsetValue"))
         );
         serializedPartitionOffsets.put(
-                serializeKey(jsonConverter, "connector2", Collections.singletonMap("partitionKey", "partitionValue")),
-                serialize(jsonConverter, Collections.singletonMap("offsetKey", "offsetValue"))
+                serializeKey(jsonConverter, "connector2", Map.of("partitionKey", "partitionValue")),
+                serialize(jsonConverter, Map.of("offsetKey", "offsetValue"))
         );
 
         store.set(serializedPartitionOffsets, setCallback).get();
@@ -167,23 +167,23 @@ public class FileOffsetBackingStoreTest {
 
         Set<Map<String, Object>> connectorPartitions1 = restore.connectorPartitions("connector1");
         Set<Map<String, Object>> expectedConnectorPartition1 = new HashSet<>();
-        expectedConnectorPartition1.add(Collections.singletonMap("partitionKey", "partitionValue1"));
-        expectedConnectorPartition1.add(Collections.singletonMap("partitionKey", "partitionValue2"));
+        expectedConnectorPartition1.add(Map.of("partitionKey", "partitionValue1"));
+        expectedConnectorPartition1.add(Map.of("partitionKey", "partitionValue2"));
         assertEquals(expectedConnectorPartition1, connectorPartitions1);
 
         Set<Map<String, Object>> connectorPartitions2 = restore.connectorPartitions("connector2");
-        Set<Map<String, Object>> expectedConnectorPartition2 = Collections.singleton(Collections.singletonMap("partitionKey", "partitionValue"));
+        Set<Map<String, Object>> expectedConnectorPartition2 = Set.of(Map.of("partitionKey", "partitionValue"));
         assertEquals(expectedConnectorPartition2, connectorPartitions2);
 
         serializedPartitionOffsets.clear();
         // Null valued offset for a partition key should remove that partition for the connector
         serializedPartitionOffsets.put(
-                serializeKey(jsonConverter, "connector1", Collections.singletonMap("partitionKey", "partitionValue1")),
+                serializeKey(jsonConverter, "connector1", Map.of("partitionKey", "partitionValue1")),
                 null
         );
         restore.set(serializedPartitionOffsets, setCallback).get();
         connectorPartitions1 = restore.connectorPartitions("connector1");
-        assertEquals(Collections.singleton(Collections.singletonMap("partitionKey", "partitionValue2")), connectorPartitions1);
+        assertEquals(Set.of(Map.of("partitionKey", "partitionValue2")), connectorPartitions1);
 
         verify(setCallback, times(3)).onCompletion(isNull(), isNull());
     }
@@ -193,7 +193,7 @@ public class FileOffsetBackingStoreTest {
     }
 
     private static ByteBuffer serializeKey(Converter converter, String connectorName, Map<String, Object> sourcePartition) {
-        List<Object> nameAndPartition = Arrays.asList(connectorName, sourcePartition);
+        List<Object> nameAndPartition = List.of(connectorName, sourcePartition);
         return serialize(converter, nameAndPartition);
     }
 

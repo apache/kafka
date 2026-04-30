@@ -33,12 +33,12 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
-import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class PrintedTest {
@@ -75,34 +75,34 @@ public class PrintedTest {
     }
 
     @Test
-    public void shouldCreateProcessorThatPrintsToStdOut() throws UnsupportedEncodingException {
+    public void shouldCreateProcessorThatPrintsToStdOut() {
         final ProcessorSupplier<String, Integer, Void, Void> supplier = new PrintedInternal<>(sysOutPrinter).build("processor");
         final Processor<String, Integer, Void, Void> processor = supplier.get();
 
         processor.process(new Record<>("good", 2, 0L));
         processor.close();
-        assertThat(sysOut.toString(StandardCharsets.UTF_8.name()), equalTo("[processor]: good, 2\n"));
+        assertEquals("[processor]: good, 2\n", sysOut.toString(StandardCharsets.UTF_8));
     }
 
     @Test
-    public void shouldPrintWithLabel() throws UnsupportedEncodingException {
+    public void shouldPrintWithLabel() {
         final Processor<String, Integer, Void, Void> processor = new PrintedInternal<>(sysOutPrinter.withLabel("label"))
                 .build("processor")
                 .get();
 
         processor.process(new Record<>("hello", 3, 0L));
         processor.close();
-        assertThat(sysOut.toString(StandardCharsets.UTF_8.name()), equalTo("[label]: hello, 3\n"));
+        assertEquals("[label]: hello, 3\n", sysOut.toString(StandardCharsets.UTF_8));
     }
 
     @Test
-    public void shouldPrintWithKeyValueMapper() throws UnsupportedEncodingException {
+    public void shouldPrintWithKeyValueMapper() {
         final Processor<String, Integer, Void, Void> processor = new PrintedInternal<>(
             sysOutPrinter.withKeyValueMapper((key, value) -> String.format("%s -> %d", key, value))
         ).build("processor").get();
         processor.process(new Record<>("hello", 1, 0L));
         processor.close();
-        assertThat(sysOut.toString(StandardCharsets.UTF_8.name()), equalTo("[processor]: hello -> 1\n"));
+        assertEquals("[processor]: hello -> 1\n", sysOut.toString(StandardCharsets.UTF_8));
     }
 
     @Test

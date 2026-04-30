@@ -63,7 +63,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -199,7 +198,7 @@ public class RestForwardingIntegrationTest {
                 .putConnectorConfig(any(), any(), isNull(), anyBoolean(), followerCallbackCaptor.capture());
 
         // Leader will reply
-        ConnectorInfo connectorInfo = new ConnectorInfo("blah", Collections.emptyMap(), Collections.emptyList(), ConnectorType.SOURCE);
+        ConnectorInfo connectorInfo = new ConnectorInfo("blah", Map.of(), List.of(), ConnectorType.SOURCE);
         Herder.Created<ConnectorInfo> leaderAnswer = new Herder.Created<>(true, connectorInfo);
         ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> leaderCallbackCaptor = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
@@ -215,7 +214,7 @@ public class RestForwardingIntegrationTest {
                 "\"name\": \"blah\"," +
                 "\"config\": {}" +
                 "}";
-        StringEntity entity = new StringEntity(jsonBody, StandardCharsets.UTF_8.name());
+        StringEntity entity = new StringEntity(jsonBody, StandardCharsets.UTF_8);
         entity.setContentType("application/json");
         request.setEntity(entity);
         HttpResponse httpResponse = executeRequest(followerUrl, request);

@@ -17,9 +17,12 @@
 package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.TargetAssignmentMetadata;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,15 +32,19 @@ public class StreamsGroupBuilder {
     private final String groupId;
     private final int groupEpoch;
     private int targetAssignmentEpoch;
+    private long targetAssignmentTimestamp;
     private StreamsTopology topology;
     private final Map<String, StreamsGroupMember> members = new HashMap<>();
     private final Map<String, TasksTuple> targetAssignments = new HashMap<>();
-    private Map<String, TopicMetadata> partitionMetadata = new HashMap<>();
+    private long metadataHash = 0L;
+    private int validatedTopologyEpoch = -1;
+    private final Map<String, String> lastAssignmentConfigs = new HashMap<>();
 
     public StreamsGroupBuilder(String groupId, int groupEpoch) {
         this.groupId = groupId;
         this.groupEpoch = groupEpoch;
-        this.targetAssignmentEpoch = 0;
+        this.targetAssignmentEpoch = TargetAssignmentMetadata.INITIAL.assignmentEpoch();
+        this.targetAssignmentTimestamp = TargetAssignmentMetadata.INITIAL.assignmentTimestamp();
         this.topology = null;
     }
 
@@ -46,8 +53,13 @@ public class StreamsGroupBuilder {
         return this;
     }
 
-    public StreamsGroupBuilder withPartitionMetadata(Map<String, TopicMetadata> partitionMetadata) {
-        this.partitionMetadata = partitionMetadata;
+    public StreamsGroupBuilder withMetadataHash(long metadataHash) {
+        this.metadataHash = metadataHash;
+        return this;
+    }
+
+    public StreamsGroupBuilder withValidatedTopologyEpoch(int validatedTopologyEpoch) {
+        this.validatedTopologyEpoch = validatedTopologyEpoch;
         return this;
     }
 
@@ -66,6 +78,16 @@ public class StreamsGroupBuilder {
         return this;
     }
 
+    public StreamsGroupBuilder withTargetAssignmentTimestamp(long targetAssignmentTimestamp) {
+        this.targetAssignmentTimestamp = targetAssignmentTimestamp;
+        return this;
+    }
+
+    public StreamsGroupBuilder withLastAssignmentConfigs(Map<String, String> lastAssignmentConfigs) {
+        this.lastAssignmentConfigs.putAll(lastAssignmentConfigs);
+        return this;
+    }
+
     public List<CoordinatorRecord> build() {
         List<CoordinatorRecord> records = new ArrayList<>();
 
@@ -75,15 +97,9 @@ public class StreamsGroupBuilder {
                 StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, member))
         );
 
-        if (!partitionMetadata.isEmpty()) {
-            records.add(
-                StreamsCoordinatorRecordHelpers.newStreamsGroupPartitionMetadataRecord(groupId,
-                    partitionMetadata));
-        }
-
         // Add group epoch record.
         records.add(
-            StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(groupId, groupEpoch));
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, groupEpoch, metadataHash, validatedTopologyEpoch, lastAssignmentConfigs));
 
         // Add target assignment records.
         targetAssignments.forEach((memberId, assignment) ->
@@ -97,13 +113,13 @@ public class StreamsGroupBuilder {
                 groupId,
                     new StreamsGroupTopologyValue()
                         .setEpoch(topology.topologyEpoch())
-                        .setSubtopologies(topology.subtopologies().values().stream().sorted().toList()))
+                        .setSubtopologies(topology.subtopologies().values().stream().sorted(Comparator.comparing(Subtopology::subtopologyId)).toList()))
             );
         }
 
         // Add target assignment epoch.
-        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId,
-            targetAssignmentEpoch));
+        records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId,
+            targetAssignmentEpoch, targetAssignmentTimestamp));
 
         // Add current assignment records for members.
         members.forEach((memberId, member) ->
@@ -112,5 +128,9 @@ public class StreamsGroupBuilder {
         );
 
         return records;
+    }
+
+    public String groupId() {
+        return groupId;
     }
 }

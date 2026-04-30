@@ -23,6 +23,7 @@ import java.time.Duration;
  *
  * @see Punctuator
  */
+@FunctionalInterface
 public interface Cancellable {
 
     /**

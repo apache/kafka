@@ -19,7 +19,6 @@ package org.apache.kafka.server.share.persister;
 
 import org.apache.kafka.common.message.InitializeShareGroupStateRequestData;
 
-import java.util.stream.Collectors;
 
 /**
  * This class contains the parameters for {@link Persister#initializeState(InitializeShareGroupStateParameters)}.
@@ -36,14 +35,12 @@ public class InitializeShareGroupStateParameters implements PersisterParameters 
     }
 
     public static InitializeShareGroupStateParameters from(InitializeShareGroupStateRequestData data) {
-        return new Builder()
-                .setGroupTopicPartitionData(new GroupTopicPartitionData<>(data.groupId(), data.topics().stream()
-                        .map(readStateData -> new TopicData<>(readStateData.topicId(),
-                                readStateData.partitions().stream()
-                                        .map(partitionData -> PartitionFactory.newPartitionStateData(partitionData.partition(), partitionData.stateEpoch(), partitionData.startOffset()))
-                                        .collect(Collectors.toList())))
-                        .collect(Collectors.toList())))
-                .build();
+        return new Builder().setGroupTopicPartitionData(new GroupTopicPartitionData<>(data.groupId(), data.topics().stream()
+            .map(readStateData -> new TopicData<>(readStateData.topicId(),
+                readStateData.partitions().stream()
+                    .map(partitionData -> PartitionFactory.newPartitionStateData(partitionData.partition(), partitionData.stateEpoch(), partitionData.startOffset())).toList()
+            )).toList()
+        )).build();
     }
 
     public static class Builder {
@@ -57,5 +54,12 @@ public class InitializeShareGroupStateParameters implements PersisterParameters 
         public InitializeShareGroupStateParameters build() {
             return new InitializeShareGroupStateParameters(this.groupTopicPartitionData);
         }
+    }
+
+    @Override
+    public String toString() {
+        return "InitializeShareGroupStateParameters{" +
+            "groupTopicPartitionData=" + groupTopicPartitionData +
+            '}';
     }
 }

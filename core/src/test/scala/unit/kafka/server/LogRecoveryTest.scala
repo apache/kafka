@@ -27,9 +27,7 @@ import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerialize
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import java.io.File
 import java.util.Properties
@@ -62,9 +60,19 @@ class LogRecoveryTest extends QuorumTestHarness {
 
   var admin: Admin = _
   var producer: KafkaProducer[Integer, String] = _
-  def hwFile1 = new OffsetCheckpointFile(new File(configProps1.logDirs.head, ReplicaManager.HighWatermarkFilename), null)
-  def hwFile2 = new OffsetCheckpointFile(new File(configProps2.logDirs.head, ReplicaManager.HighWatermarkFilename), null)
+  def hwFile1 = new OffsetCheckpointFile(new File(configProps1.logDirs.get(0), ReplicaManager.HighWatermarkFilename), null)
+  def hwFile2 = new OffsetCheckpointFile(new File(configProps2.logDirs.get(0), ReplicaManager.HighWatermarkFilename), null)
   var servers = Seq.empty[KafkaBroker]
+
+  // testHWCheckpointWithFailuresMultipleLogSegments simulates broker failures that can leave the only available replica out of the
+  // ISR. By enabling unclean leader election, we ensure that the test can proceed and elect
+  // the out-of-sync replica as the new leader, which is necessary to validate the log
+  // recovery and high-watermark checkpointing logic under these specific failure conditions.
+  override def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {
+    val properties = new Properties()
+    properties.put(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
+    Seq(properties)
+  }
 
   // Some tests restart the brokers then produce more data. But since test brokers use random ports, we need
   // to use a new producer that knows the new ports
@@ -104,9 +112,8 @@ class LogRecoveryTest extends QuorumTestHarness {
     super.tearDown()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testHWCheckpointNoFailuresSingleLogSegment(quorum: String): Unit = {
+  @Test
+  def testHWCheckpointNoFailuresSingleLogSegment(): Unit = {
     val numMessages = 2L
     sendMessages(numMessages.toInt)
 
@@ -122,9 +129,8 @@ class LogRecoveryTest extends QuorumTestHarness {
     assertEquals(numMessages, followerHW)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testHWCheckpointWithFailuresSingleLogSegment(quorum: String): Unit = {
+  @Test
+  def testHWCheckpointWithFailuresSingleLogSegment(): Unit = {
     var leader = getLeaderIdForPartition(servers, topicPartition)
 
     assertEquals(0L, hwFile1.read().getOrDefault(topicPartition, 0L))
@@ -183,9 +189,8 @@ class LogRecoveryTest extends QuorumTestHarness {
     assertEquals(hw, hwFile2.read().getOrDefault(topicPartition, 0L))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testHWCheckpointNoFailuresMultipleLogSegments(quorum: String): Unit = {
+  @Test
+  def testHWCheckpointNoFailuresMultipleLogSegments(): Unit = {
     sendMessages(20)
     val hw = 20L
     // give some time for follower 1 to record leader HW of 600
@@ -200,9 +205,8 @@ class LogRecoveryTest extends QuorumTestHarness {
     assertEquals(hw, followerHW)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testHWCheckpointWithFailuresMultipleLogSegments(quorum: String): Unit = {
+  @Test
+  def testHWCheckpointWithFailuresMultipleLogSegments(): Unit = {
     var leader = getLeaderIdForPartition(servers, topicPartition)
 
     sendMessages(2)
@@ -221,7 +225,7 @@ class LogRecoveryTest extends QuorumTestHarness {
     server2.startup()
     updateProducer()
     // check if leader moves to the other server
-    leader = awaitLeaderChange(servers, topicPartition, oldLeaderOpt = Some(leader))
+    leader = awaitLeaderChange(servers, topicPartition, oldLeaderOpt = Some(leader), timeout = 30000L)
     assertEquals(1, leader, "Leader must move to broker 1")
 
     assertEquals(hw, hwFile1.read().getOrDefault(topicPartition, 0L))

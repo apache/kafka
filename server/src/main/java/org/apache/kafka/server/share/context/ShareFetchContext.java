@@ -17,7 +17,6 @@
 package org.apache.kafka.server.share.context;
 
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareFetchResponse;
@@ -25,7 +24,6 @@ import org.apache.kafka.server.share.ErroneousAndValidPartitionData;
 import org.apache.kafka.server.share.session.ShareSession;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 
@@ -50,8 +48,8 @@ public abstract class ShareFetchContext {
      * @return - An empty throttled response.
      */
     public ShareFetchResponse throttleResponse(int throttleTimeMs) {
-        return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, throttleTimeMs,
-                Collections.emptyIterator(), List.of()));
+        return ShareFetchResponse.of(Errors.NONE, throttleTimeMs,
+                new LinkedHashMap<>(), List.of(), 0);
     }
 
     /**
@@ -77,7 +75,7 @@ public abstract class ShareFetchContext {
      * @param updates - The updates to be sent in the response.
      * @return - The share fetch response.
      */
-    public abstract ShareFetchResponse updateAndGenerateResponseData(String groupId, Uuid memberId, LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates);
+    public abstract ShareFetchResponse updateAndGenerateResponseData(String groupId, String memberId, LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates);
 
     /**
      * @return - The error-prone and valid topic id partitions in the share fetch request.

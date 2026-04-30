@@ -17,7 +17,9 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.state.DslKeyValueParams;
+import org.apache.kafka.streams.state.HeadersBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -37,15 +39,15 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
     private static final Logger LOG = LoggerFactory.getLogger(KeyValueStoreMaterializer.class);
 
     public KeyValueStoreMaterializer(
-            final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized
     ) {
-        super(materialized);
+        super(materialized, DslStoreFormat.TIMESTAMPED);
     }
 
     @Override
     public StoreBuilder<?> builder() {
         final KeyValueBytesStoreSupplier supplier = materialized.storeSupplier() == null
-                ? dslStoreSuppliers().keyValueStore(new DslKeyValueParams(materialized.storeName(), true))
+                ? dslStoreSuppliers().keyValueStore(new DslKeyValueParams(materialized.storeName(), dslStoreFormat()))
                 : (KeyValueBytesStoreSupplier) materialized.storeSupplier();
 
         final StoreBuilder<?> builder;
@@ -54,11 +56,16 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
                     (VersionedBytesStoreSupplier) supplier,
                     materialized.keySerde(),
                     materialized.valueSerde());
+        } else if (supplier instanceof HeadersBytesStoreSupplier) {
+            builder = Stores.timestampedKeyValueStoreWithHeadersBuilder(
+                supplier,
+                materialized.keySerde(),
+                materialized.valueSerde());
         } else {
             builder = Stores.timestampedKeyValueStoreBuilder(
-                    supplier,
-                    materialized.keySerde(),
-                    materialized.valueSerde());
+                supplier,
+                materialized.keySerde(),
+                materialized.valueSerde());
         }
 
         if (materialized.loggingEnabled()) {
@@ -68,10 +75,10 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
         }
 
         if (materialized.cachingEnabled()) {
-            if (!(builder instanceof VersionedKeyValueStoreBuilder)) {
-                builder.withCachingEnabled();
-            } else {
+            if (builder instanceof VersionedKeyValueStoreBuilder) {
                 LOG.info("Not enabling caching for store '{}' as versioned stores do not support caching.", supplier.name());
+            } else {
+                builder.withCachingEnabled();
             }
         }
 

@@ -30,7 +30,6 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.immutable.ImmutableMap;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -72,7 +71,7 @@ public final class TopicsDelta {
 
     public void replay(TopicRecord record) {
         TopicDelta delta = new TopicDelta(
-            new TopicImage(record.name(), record.topicId(), Collections.emptyMap()));
+            new TopicImage(record.name(), record.topicId(), Map.of()));
         changedTopics.put(record.topicId(), delta);
         createdTopics.put(record.name(), record.topicId());
     }
@@ -96,26 +95,39 @@ public final class TopicsDelta {
         topicDelta.replay(record);
     }
 
+    private void maybeReplayClearElrRecord(Uuid topicId) {
+        // Only apply the record if the topic is not deleted.
+        if (!deletedTopicIds.contains(topicId)) {
+            TopicDelta topicDelta = getOrCreateTopicDelta(topicId);
+            topicDelta.replay();
+        }
+    }
+
+    // When replaying the ClearElrRecord, we need to first find the latest topic ID associated with the topic(s) because
+    // multiple topic IDs for the same topic in a TopicsDelta is possible in the event of topic deletion and recreation.
+    // Second, we should not add the topicDelta if the given topic ID has been deleted. So that we don't leak the
+    // deleted topic ID.
     public void replay(ClearElrRecord record) {
         if (!record.topicName().isEmpty()) {
-            Uuid topicId;
-            if (image.getTopic(record.topicName()) != null) {
-                topicId = image.getTopic(record.topicName()).id();
-            } else {
+            Uuid topicId = null;
+            // CreatedTopics contains the latest topic IDs. It should be checked first in case the topic is deleted and
+            // created in the same batch.
+            if (createdTopics.containsKey(record.topicName())) {
                 topicId = createdTopics.get(record.topicName());
+            } else if (image.getTopic(record.topicName()) != null) {
+                topicId = image.getTopic(record.topicName()).id();
             }
+
             if (topicId == null) {
                 throw new RuntimeException("Unable to clear elr for topic with name " +
                     record.topicName() + ": no such topic found.");
             }
-            TopicDelta topicDelta = getOrCreateTopicDelta(topicId);
-            topicDelta.replay(record);
+
+            maybeReplayClearElrRecord(topicId);
         } else {
             // Update all the existing topics
-            image.topicsById().forEach((topicId, image) -> {
-                TopicDelta topicDelta = getOrCreateTopicDelta(topicId);
-                topicDelta.replay(record);
-            });
+            image.topicsById().forEach((topicId, image) -> maybeReplayClearElrRecord(topicId));
+            createdTopicIds().forEach((this::maybeReplayClearElrRecord));
         }
     }
 
@@ -124,6 +136,7 @@ public final class TopicsDelta {
         String topicName;
         if (topicDelta != null) {
             topicName = topicDelta.image().name();
+            createdTopics.remove(topicName);
             if (image.topicsById().containsKey(record.topicId())) {
                 deletedTopicIds.add(record.topicId());
             }

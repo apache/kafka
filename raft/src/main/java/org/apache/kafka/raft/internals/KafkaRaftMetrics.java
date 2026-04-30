@@ -26,11 +26,12 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.raft.LogOffsetMetadata;
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.QuorumState;
 import org.apache.kafka.raft.ReplicaKey;
+import org.apache.kafka.server.common.OffsetAndEpoch;
+import org.apache.kafka.server.metrics.TimeRatio;
 
-import java.util.Arrays;
+import java.util.List;
 import java.util.OptionalLong;
 import java.util.concurrent.TimeUnit;
 
@@ -90,14 +91,14 @@ public class KafkaRaftMetrics implements AutoCloseable {
         this.highWatermarkMetricName = metrics.metricName("high-watermark", metricGroupName, "The high watermark maintained on this member; -1 if it is unknown");
 
         this.logEndOffsetMetricName = metrics.metricName("log-end-offset", metricGroupName, "The current raft log end offset.");
-        metrics.addMetric(this.logEndOffsetMetricName, (mConfig, currentTimeMs) -> logEndOffset.offset());
+        metrics.addMetric(this.logEndOffsetMetricName, (Gauge<Long>) (mConfig, currentTimeMs) -> logEndOffset.offset());
 
         this.logEndEpochMetricName = metrics.metricName("log-end-epoch", metricGroupName, "The current raft log end epoch.");
-        metrics.addMetric(this.logEndEpochMetricName, (mConfig, currentTimeMs) -> logEndOffset.epoch());
+        metrics.addMetric(this.logEndEpochMetricName, (Gauge<Integer>) (mConfig, currentTimeMs) -> logEndOffset.epoch());
 
         this.numUnknownVoterConnectionsMetricName = metrics.metricName("number-unknown-voter-connections", metricGroupName,
                 "Number of unknown voters whose connection information is not cached; would never be larger than quorum-size.");
-        metrics.addMetric(this.numUnknownVoterConnectionsMetricName, (mConfig, currentTimeMs) -> numUnknownVoterConnections);
+        metrics.addMetric(this.numUnknownVoterConnectionsMetricName, (Gauge<Integer>) (mConfig, currentTimeMs) -> numUnknownVoterConnections);
 
         this.numVotersMetricName = metrics.metricName("number-of-voters", metricGroupName, "Number of voters for a KRaft topic partition.");
         metrics.addMetric(this.numVotersMetricName, (Gauge<Integer>) (mConfig, currentTimestamp) -> numVoters);
@@ -166,9 +167,9 @@ public class KafkaRaftMetrics implements AutoCloseable {
         };
         metrics.addMetric(this.currentStateMetricName, null, stateProvider);
 
-        metrics.addMetric(this.currentLeaderIdMetricName, (mConfig, currentTimeMs) -> state.leaderId().orElse(-1));
+        metrics.addMetric(this.currentLeaderIdMetricName, (Gauge<Integer>) (mConfig, currentTimeMs) -> state.leaderId().orElse(-1));
 
-        metrics.addMetric(this.currentVotedIdMetricName, (mConfig, currentTimeMs) -> {
+        metrics.addMetric(this.currentVotedIdMetricName, (Gauge<Integer>) (mConfig, currentTimeMs) -> {
             if (state.isLeader() || state.isCandidate()) {
                 return state.localIdOrThrow();
             } else {
@@ -185,11 +186,11 @@ public class KafkaRaftMetrics implements AutoCloseable {
         };
         metrics.addMetric(this.currentVotedDirectoryIdMetricName, null, votedDirectoryIdProvider);
 
-        metrics.addMetric(this.currentEpochMetricName, (mConfig, currentTimeMs) -> state.epoch());
+        metrics.addMetric(this.currentEpochMetricName, (Gauge<Integer>) (mConfig, currentTimeMs) -> state.epoch());
 
         metrics.addMetric(
             this.highWatermarkMetricName,
-            (mConfig, currentTimeMs) -> state.highWatermark().map(LogOffsetMetadata::offset).orElse(-1L)
+                (Gauge<Long>) (mConfig, currentTimeMs) -> state.highWatermark().map(LogOffsetMetadata::offset).orElse(-1L)
         );
     }
 
@@ -262,7 +263,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
 
     @Override
     public void close() {
-        Arrays.asList(
+        List.of(
             currentLeaderIdMetricName,
             currentVotedIdMetricName,
             currentVotedDirectoryIdMetricName,
@@ -277,7 +278,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
             uncommittedVoterChangeMetricName
         ).forEach(metrics::removeMetric);
 
-        Arrays.asList(
+        List.of(
             commitTimeSensor.name(),
             electionTimeSensor.name(),
             fetchRecordsSensor.name(),

@@ -31,20 +31,28 @@ import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.OffsetsRequestManager;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
+import org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManager;
+import org.apache.kafka.clients.consumer.internals.ShareHeartbeatRequestManager;
+import org.apache.kafka.clients.consumer.internals.ShareMembershipManager;
+import org.apache.kafka.clients.consumer.internals.StreamsGroupHeartbeatRequestManager;
+import org.apache.kafka.clients.consumer.internals.StreamsMembershipManager;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.clients.consumer.internals.TopicMetadataRequestManager;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.verification.VerificationMode;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -61,6 +69,7 @@ import static org.apache.kafka.clients.consumer.internals.events.CompletableEven
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -77,15 +86,20 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@SuppressWarnings("ClassDataAbstractionCoupling")
+@SuppressWarnings({"ClassDataAbstractionCoupling", "ClassFanOutComplexity"})
 public class ApplicationEventProcessorTest {
     private final Time time = new MockTime();
     private final CommitRequestManager commitRequestManager = mock(CommitRequestManager.class);
     private final ConsumerHeartbeatRequestManager heartbeatRequestManager = mock(ConsumerHeartbeatRequestManager.class);
     private final ConsumerMembershipManager membershipManager = mock(ConsumerMembershipManager.class);
     private final OffsetsRequestManager offsetsRequestManager = mock(OffsetsRequestManager.class);
+    private final FetchRequestManager fetchRequestManager = mock(FetchRequestManager.class);
     private SubscriptionState subscriptionState = mock(SubscriptionState.class);
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
+    private final StreamsGroupHeartbeatRequestManager streamsGroupHeartbeatRequestManager = mock(StreamsGroupHeartbeatRequestManager.class);
+    private final StreamsMembershipManager streamsMembershipManager = mock(StreamsMembershipManager.class);
+    private final ShareHeartbeatRequestManager shareHeartbeatRequestManager = mock(ShareHeartbeatRequestManager.class);
+    private final ShareMembershipManager shareMembershipManager = mock(ShareMembershipManager.class);
     private ApplicationEventProcessor processor;
 
     private void setupProcessor(boolean withGroupId) {
@@ -93,16 +107,56 @@ public class ApplicationEventProcessorTest {
                 new LogContext(),
                 offsetsRequestManager,
                 mock(TopicMetadataRequestManager.class),
-                mock(FetchRequestManager.class),
+                fetchRequestManager,
                 withGroupId ? Optional.of(mock(CoordinatorRequestManager.class)) : Optional.empty(),
                 withGroupId ? Optional.of(commitRequestManager) : Optional.empty(),
                 withGroupId ? Optional.of(heartbeatRequestManager) : Optional.empty(),
-                withGroupId ? Optional.of(membershipManager) : Optional.empty());
+                withGroupId ? Optional.of(membershipManager) : Optional.empty(),
+                Optional.empty(),
+                Optional.empty()
+        );
         processor = new ApplicationEventProcessor(
                 new LogContext(),
                 requestManagers,
                 metadata,
                 subscriptionState
+        );
+    }
+
+    private void setupStreamProcessor(boolean withGroupId) {
+        RequestManagers requestManagers = new RequestManagers(
+            new LogContext(),
+            offsetsRequestManager,
+            mock(TopicMetadataRequestManager.class),
+            mock(FetchRequestManager.class),
+            withGroupId ? Optional.of(mock(CoordinatorRequestManager.class)) : Optional.empty(),
+            withGroupId ? Optional.of(commitRequestManager) : Optional.empty(),
+            withGroupId ? Optional.of(heartbeatRequestManager) : Optional.empty(),
+            Optional.empty(),
+            withGroupId ? Optional.of(streamsGroupHeartbeatRequestManager) : Optional.empty(),
+            withGroupId ? Optional.of(streamsMembershipManager) : Optional.empty()
+        );
+        processor = new ApplicationEventProcessor(
+            new LogContext(),
+            requestManagers,
+            metadata,
+            subscriptionState
+        );
+    }
+
+    private void setupShareProcessor() {
+        RequestManagers requestManagers = new RequestManagers(
+            new LogContext(),
+            mock(ShareConsumeRequestManager.class),
+            Optional.of(mock(CoordinatorRequestManager.class)),
+            Optional.of(shareHeartbeatRequestManager),
+            Optional.of(shareMembershipManager)
+        );
+        processor = new ApplicationEventProcessor(
+            new LogContext(),
+            requestManagers,
+            metadata,
+            subscriptionState
         );
     }
 
@@ -141,7 +195,7 @@ public class ApplicationEventProcessorTest {
 
     private static Stream<Arguments> applicationEvents() {
         return Stream.of(
-                Arguments.of(new PollEvent(100)),
+                Arguments.of(new AsyncPollEvent(calculateDeadlineMs(12345, 100), 100)),
                 Arguments.of(new CreateFetchRequestsEvent(calculateDeadlineMs(12345, 100))),
                 Arguments.of(new CheckAndUpdatePositionsEvent(500)),
                 Arguments.of(new TopicMetadataEvent("topic", Long.MAX_VALUE)),
@@ -234,16 +288,33 @@ public class ApplicationEventProcessorTest {
     }
 
     @Test
-    public void testPollEvent() {
-        PollEvent event = new PollEvent(12345);
+    public void testAsyncPollEvent() {
+        AsyncPollEvent event = new AsyncPollEvent(12346, 12345);
 
         setupProcessor(true);
         when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
+        when(offsetsRequestManager.updateFetchPositions(event.deadlineMs())).thenReturn(CompletableFuture.completedFuture(null));
+        when(fetchRequestManager.createFetchRequests()).thenReturn(CompletableFuture.completedFuture(null));
         processor.process(event);
-        assertTrue(event.reconcileAndAutoCommit().isDone());
-        verify(commitRequestManager).updateTimerAndMaybeCommit(12345);
+        assertTrue(event.isComplete());
+        verify(commitRequestManager).updateTimerAndMaybeCommit(event.pollTimeMs());
         verify(membershipManager).onConsumerPoll();
-        verify(heartbeatRequestManager).resetPollTimer(12345);
+        verify(heartbeatRequestManager).resetPollTimer(event.pollTimeMs());
+        verify(offsetsRequestManager).updateFetchPositions(event.deadlineMs());
+        verify(fetchRequestManager).createFetchRequests();
+    }
+
+    @Test
+    public void testSharePollEventCallsShareManagers() {
+        SharePollEvent event = new SharePollEvent(12346, 12345);
+
+        setupShareProcessor();
+        when(shareHeartbeatRequestManager.membershipManager()).thenReturn(shareMembershipManager);
+        processor.process(event);
+        assertTrue(event.isComplete());
+        verify(shareMembershipManager).maybeReconcile(true);
+        verify(shareMembershipManager).onConsumerPoll();
+        verify(shareHeartbeatRequestManager).resetPollTimer(event.pollTimeMs());
     }
 
     @Test
@@ -281,7 +352,9 @@ public class ApplicationEventProcessorTest {
         FetchCommittedOffsetsEvent event = new FetchCommittedOffsetsEvent(partitions, 12345);
 
         setupProcessor(true);
-        when(commitRequestManager.fetchOffsets(partitions, 12345)).thenReturn(CompletableFuture.completedFuture(topicPartitionOffsets));
+        CommitRequestManager.OffsetFetchResult fetchResult = new CommitRequestManager.OffsetFetchResult(
+            topicPartitionOffsets, Collections.emptyMap());
+        when(commitRequestManager.fetchOffsets(partitions, 12345)).thenReturn(CompletableFuture.completedFuture(fetchResult));
         processor.process(event);
 
         verify(commitRequestManager).fetchOffsets(partitions, 12345);
@@ -551,6 +624,144 @@ public class ApplicationEventProcessorTest {
         verify(commitRequestManager).commitAsync(Collections.emptyMap());
         assertTrue(event.offsetsReady.isDone());
         assertFutureThrows(IllegalStateException.class, event.future());
+    }
+
+    @Test
+    public void testStreamsOnTasksRevokedCallbackCompletedEvent() {
+        setupStreamProcessor(true);
+        StreamsOnTasksRevokedCallbackCompletedEvent event =
+            new StreamsOnTasksRevokedCallbackCompletedEvent(new CompletableFuture<>(), Optional.empty());
+        processor.process(event);
+        verify(streamsMembershipManager).onTasksRevokedCallbackCompleted(event);
+    }
+
+    @Test
+    public void testStreamsOnTasksRevokedCallbackCompletedEventWithoutStreamsMembershipManager() {
+        setupStreamProcessor(false);
+        StreamsOnTasksRevokedCallbackCompletedEvent event =
+            new StreamsOnTasksRevokedCallbackCompletedEvent(new CompletableFuture<>(), Optional.empty());
+        try (final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister()) {
+            logAppender.setClassLogger(ApplicationEventProcessor.class, Level.WARN);
+            processor.process(event);
+            assertTrue(logAppender.getMessages().stream().anyMatch(e ->
+                e.contains("An internal error occurred; the Streams membership manager was not present, so the notification " +
+                    "of the onTasksRevoked callback execution could not be sent")));
+            verify(streamsMembershipManager, never()).onTasksRevokedCallbackCompleted(event);
+        }
+    }
+
+    @Test
+    public void testStreamsOnTasksAssignedCallbackCompletedEvent() {
+        setupStreamProcessor(true);
+        StreamsOnTasksAssignedCallbackCompletedEvent event =
+            new StreamsOnTasksAssignedCallbackCompletedEvent(new CompletableFuture<>(), Optional.empty());
+        processor.process(event);
+        verify(streamsMembershipManager).onTasksAssignedCallbackCompleted(event);
+    }
+
+    @Test
+    public void testStreamsOnTasksAssignedCallbackCompletedEventWithoutStreamsMembershipManager() {
+        setupStreamProcessor(false);
+        StreamsOnTasksAssignedCallbackCompletedEvent event =
+            new StreamsOnTasksAssignedCallbackCompletedEvent(new CompletableFuture<>(), Optional.empty());
+        try (final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister()) {
+            logAppender.setClassLogger(ApplicationEventProcessor.class, Level.WARN);
+            processor.process(event);
+            assertTrue(logAppender.getMessages().stream().anyMatch(e ->
+                e.contains("An internal error occurred; the Streams membership manager was not present, so the notification " +
+                    "of the onTasksAssigned callback execution could not be sent")));
+            verify(streamsMembershipManager, never()).onTasksAssignedCallbackCompleted(event);
+        }
+    }
+
+    @Test
+    public void testStreamsOnAllTasksLostCallbackCompletedEvent() {
+        setupStreamProcessor(true);
+        StreamsOnAllTasksLostCallbackCompletedEvent event =
+            new StreamsOnAllTasksLostCallbackCompletedEvent(new CompletableFuture<>(), Optional.empty());
+        processor.process(event);
+        verify(streamsMembershipManager).onAllTasksLostCallbackCompleted(event);
+    }
+
+    @Test
+    public void testStreamsOnAllTasksLostCallbackCompletedEventWithoutStreamsMembershipManager() {
+        setupStreamProcessor(false);
+        StreamsOnAllTasksLostCallbackCompletedEvent event =
+            new StreamsOnAllTasksLostCallbackCompletedEvent(new CompletableFuture<>(), Optional.empty());
+        try (final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister()) {
+            logAppender.setClassLogger(ApplicationEventProcessor.class, Level.WARN);
+            processor.process(event);
+            assertTrue(logAppender.getMessages().stream().anyMatch(e ->
+                e.contains("An internal error occurred; the Streams membership manager was not present, so the notification " +
+                    "of the onAllTasksLost callback execution could not be sent")));
+            verify(streamsMembershipManager, never()).onAllTasksLostCallbackCompleted(event);
+        }
+    }
+
+    @Test
+    public void testUpdatePatternSubscriptionInvokedWhenMetadataUpdated() {
+        when(subscriptionState.hasPatternSubscription()).thenReturn(true);
+        when(subscriptionState.matchesSubscribedPattern(any(String.class))).thenReturn(true);
+        when(metadata.updateVersion()).thenReturn(1, 2);
+        testUpdatePatternSubscription(times(1));
+    }
+
+    @Test
+    public void testUpdatePatternSubscriptionNotInvokedWhenNotUsingPatternSubscription() {
+        when(subscriptionState.hasPatternSubscription()).thenReturn(false);
+        when(metadata.updateVersion()).thenReturn(1, 2);
+        testUpdatePatternSubscription(never());
+    }
+
+    @Test
+    public void testUpdatePatternSubscriptionNotInvokedWhenMetadataNotUpdated() {
+        when(subscriptionState.hasPatternSubscription()).thenReturn(true);
+        when(subscriptionState.matchesSubscribedPattern(any(String.class))).thenReturn(true);
+        when(metadata.updateVersion()).thenReturn(1, 1);
+        testUpdatePatternSubscription(never());
+    }
+
+    private void testUpdatePatternSubscription(VerificationMode verificationMode) {
+        String topic = "test-topic";
+        Cluster cluster = mock(Cluster.class);
+
+        when(metadata.fetch()).thenReturn(cluster);
+        when(cluster.topics()).thenReturn(Set.of(topic));
+
+        when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
+        when(offsetsRequestManager.updateFetchPositions(anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+
+        setupProcessor(true);
+        processor.process(new AsyncPollEvent(110, 100));
+        verify(subscriptionState, verificationMode).matchesSubscribedPattern(topic);
+        verify(membershipManager, verificationMode).onSubscriptionUpdated();
+    }
+
+    @Test
+    public void testRefreshCommittedOffsetsShouldNotResetIfFailedWithTimeout() {
+        setupProcessor(true);
+        testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout();
+    }
+
+    @Test
+    public void testRefreshCommittedOffsetsNotCalledIfNoGroupId() {
+        // Create consumer without group id so committed offsets are not used for updating positions
+        setupProcessor(false);
+        testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout();
+    }
+
+    private void testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout() {
+        when(offsetsRequestManager.updateFetchPositions(anyLong())).thenReturn(
+            CompletableFuture.failedFuture(new Throwable("Intentional failure"))
+        );
+        when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
+
+        // Verify that the poll completes even when the update fetch positions throws an error.
+        AsyncPollEvent event = new AsyncPollEvent(110, 100);
+        processor.process(event);
+        verify(offsetsRequestManager).updateFetchPositions(anyLong());
+        assertTrue(event.isComplete());
+        assertFalse(event.error().isEmpty());
     }
 
     private List<NetworkClientDelegate.UnsentRequest> mockCommitResults() {
