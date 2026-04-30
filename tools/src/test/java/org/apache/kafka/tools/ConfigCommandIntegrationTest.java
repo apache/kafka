@@ -316,7 +316,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "group",
             "--alter", "--add-config", "streams.session.timeout.ms=1"));
         message = captureStandardErr(run(command));
-        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.session.timeout.ms must be in the range [45000, 60000]"));
+        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.session.timeout.ms must be in the range 45000 to 60000 inclusive."));
 
         // Should fail to set above max
         command = Stream.concat(quorumArgs(), Stream.of(
@@ -324,7 +324,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "group",
             "--alter", "--add-config", "streams.session.timeout.ms=100000"));
         message = captureStandardErr(run(command));
-        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.session.timeout.ms must be in the range [45000, 60000]"));
+        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.session.timeout.ms must be in the range 45000 to 60000 inclusive."));
     }
 
     @ClusterTest(serverProperties = {
@@ -347,7 +347,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "group",
             "--alter", "--add-config", "streams.heartbeat.interval.ms=1"));
         message = captureStandardErr(run(command));
-        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.heartbeat.interval.ms must be in the range [5000, 55000]"));
+        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.heartbeat.interval.ms must be in the range 5000 to 55000 inclusive."));
 
         // Should fail to set above max
         command = Stream.concat(quorumArgs(), Stream.of(
@@ -355,7 +355,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-name", "group",
             "--alter", "--add-config", "streams.heartbeat.interval.ms=100000"));
         message = captureStandardErr(run(command));
-        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.heartbeat.interval.ms must be in the range [5000, 55000]"));
+        assertTrue(message.contains("org.apache.kafka.common.errors.InvalidConfigurationException: streams.heartbeat.interval.ms must be in the range 5000 to 55000 inclusive."));
 
         // Should fail to set above session timeout
         command = Stream.concat(quorumArgs(), Stream.of(
