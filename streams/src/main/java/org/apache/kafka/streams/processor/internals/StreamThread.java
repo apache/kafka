@@ -1128,6 +1128,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         subscribeConsumer();
     }
 
+    @SuppressWarnings("removal")
     private void subscribeConsumer() {
         if (topologyMetadata.usesPatternSubscription()) {
             if (streamsRebalanceData.isPresent()) {

@@ -191,6 +191,7 @@ import static org.mockito.Mockito.when;
  * Note to future authors in this class. If you close the consumer, close with DURATION.ZERO to reduce the duration of
  * the test.
  */
+@SuppressWarnings("removal")
 @Timeout(value = 120)
 public class KafkaConsumerTest {
 

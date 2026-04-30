@@ -230,4 +230,37 @@ public class MockConsumerTest {
         assertTrue(records.isEmpty());
     }
 
+    @Test
+    public void testRebalanceWithConsumerAwareListener() {
+        TopicPartition tp0 = new TopicPartition("test", 0);
+        TopicPartition tp1 = new TopicPartition("test", 1);
+        List<RebalanceConsumer> capturedOnAssign = new ArrayList<>();
+        List<RebalanceConsumer> capturedOnRevoke = new ArrayList<>();
+
+        consumer.subscribe(Collections.singleton("test"));
+        consumer.setConsumerRebalanceListener(new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
+                capturedOnAssign.add(rc);
+            }
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions, RebalanceConsumer rc) {
+                capturedOnRevoke.add(rc);
+            }
+        });
+
+        consumer.rebalance(List.of(tp0, tp1));
+        assertEquals(1, capturedOnAssign.size());
+        assertThrows(IllegalStateException.class, () -> capturedOnAssign.get(0).assignment());
+
+        consumer.rebalance(List.of(tp0));
+        assertEquals(1, capturedOnRevoke.size());
+        assertEquals(2, capturedOnAssign.size());
+        assertThrows(IllegalStateException.class, () -> capturedOnRevoke.get(0).assignment());
+    }
+
 }

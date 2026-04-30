@@ -2159,7 +2159,7 @@ public class AsyncKafkaConsumerTest {
     private void completeTopicSubscriptionChangeEventSuccessfully() {
         doAnswer(invocation -> {
             TopicSubscriptionChangeEvent event = invocation.getArgument(0);
-            consumer.subscriptions().subscribe(event.topics(), event.listener());
+            consumer.subscriptions().subscribe(event.topics());
             event.future().complete(null);
             return null;
         }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(TopicSubscriptionChangeEvent.class));
@@ -2168,7 +2168,7 @@ public class AsyncKafkaConsumerTest {
     private void completeTopicPatternSubscriptionChangeEventSuccessfully() {
         doAnswer(invocation -> {
             TopicPatternSubscriptionChangeEvent event = invocation.getArgument(0);
-            consumer.subscriptions().subscribe(event.pattern(), event.listener());
+            consumer.subscriptions().subscribe(event.pattern());
             event.future().complete(null);
             return null;
         }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(TopicPatternSubscriptionChangeEvent.class));
@@ -2177,7 +2177,7 @@ public class AsyncKafkaConsumerTest {
     private void completeTopicRe2JPatternSubscriptionChangeEventSuccessfully() {
         doAnswer(invocation -> {
             TopicRe2JPatternSubscriptionChangeEvent event = invocation.getArgument(0);
-            consumer.subscriptions().subscribe(event.pattern(), event.listener());
+            consumer.subscriptions().subscribe(event.pattern());
             event.future().complete(null);
             return null;
         }).when(applicationEventHandler).addAndGet(ArgumentMatchers.isA(TopicRe2JPatternSubscriptionChangeEvent.class));

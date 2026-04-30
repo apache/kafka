@@ -21,7 +21,6 @@ import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetr
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
@@ -32,9 +31,10 @@ import java.util.Set;
 import java.util.SortedSet;
 
 /**
- * This class encapsulates the invocation of the callback methods defined in the {@link ConsumerRebalanceListener}
- * interface. When consumer group partition assignment changes, these methods are invoked. This class wraps those
- * callback calls with some logging, optional {@link Sensor} updates, etc.
+ * This class encapsulates the invocation of the callback methods defined in the
+ * {@link org.apache.kafka.clients.consumer.ConsumerRebalanceListener} interface. When consumer
+ * group partition assignment changes, these methods are invoked. This class wraps those callback
+ * calls with logging, metrics recording, and exception handling.
  */
 public class ConsumerRebalanceListenerInvoker {
 
@@ -67,8 +67,7 @@ public class ConsumerRebalanceListenerInvoker {
                 throw e;
             } catch (Exception e) {
                 log.error(
-                    "User provided listener {} failed on invocation of onPartitionsAssigned for partitions {}",
-                    listener.get().getClass().getName(),
+                    "User provided listener failed on invocation of onPartitionsAssigned for partitions {}",
                     assignedPartitions,
                     e
                 );
@@ -97,8 +96,7 @@ public class ConsumerRebalanceListenerInvoker {
                 throw e;
             } catch (Exception e) {
                 log.error(
-                    "User provided listener {} failed on invocation of onPartitionsRevoked for partitions {}",
-                    listener.get().getClass().getName(),
+                    "User provided listener failed on invocation of onPartitionsRevoked for partitions {}",
                     revokedPartitions,
                     e
                 );
@@ -127,8 +125,7 @@ public class ConsumerRebalanceListenerInvoker {
                 throw e;
             } catch (Exception e) {
                 log.error(
-                    "User provided listener {} failed on invocation of onPartitionsLost for partitions {}",
-                    listener.get().getClass().getName(),
+                    "User provided listener failed on invocation of onPartitionsLost for partitions {}",
                     lostPartitions,
                     e
                 );
