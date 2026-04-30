@@ -578,10 +578,8 @@ public final class GroupConfig extends AbstractConfig {
     ) {
         if (!parsed.containsKey(key)) return;
         int value = (Integer) parsed.get(key);
-        if (value < min)
-            throw new InvalidConfigurationException(key + " must be greater than or equal to " + min);
-        if (value > max)
-            throw new InvalidConfigurationException(key + " must be less than or equal to " + max);
+        if (value < min || value > max)
+            throw new InvalidConfigurationException(key + " must be in the range [" + min + ", " + max + "]");
     }
 
     /**
