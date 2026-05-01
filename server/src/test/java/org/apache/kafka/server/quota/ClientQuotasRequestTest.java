@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.quota;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterClientQuotasOptions;
 import org.apache.kafka.clients.admin.AlterUserScramCredentialsResult;
@@ -32,7 +33,6 @@ import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.server.config.QuotaConfig;
-import org.apache.kafka.test.TestUtils;
 
 import java.net.InetAddress;
 import java.util.Collections;

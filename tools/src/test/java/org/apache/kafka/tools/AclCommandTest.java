@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
@@ -36,7 +37,6 @@ import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
-import org.apache.kafka.test.TestUtils;
 
 import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;

@@ -23,7 +23,7 @@ import org.apache.kafka.common.metrics.{KafkaMetric, MetricsContext, MetricsRepo
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.metrics.MetricConfigs
-import org.apache.kafka.test.{TestUtils => JTestUtils}
+import org.apache.kafka.base.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
 

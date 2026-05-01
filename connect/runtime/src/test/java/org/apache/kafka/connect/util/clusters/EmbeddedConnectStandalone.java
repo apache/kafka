@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.connect.util.clusters;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.connect.cli.ConnectStandalone;
 import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.ConnectMetrics;
 import org.apache.kafka.connect.runtime.standalone.StandaloneHerder;
-import org.apache.kafka.test.TestUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

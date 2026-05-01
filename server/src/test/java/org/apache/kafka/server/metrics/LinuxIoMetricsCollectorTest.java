@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.server.metrics;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;

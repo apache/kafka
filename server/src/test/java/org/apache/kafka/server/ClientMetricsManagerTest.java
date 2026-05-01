@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidRequestException;
@@ -36,7 +37,6 @@ import org.apache.kafka.server.metrics.ClientMetricsInstance;
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils;
 import org.apache.kafka.server.metrics.ClientTelemetryExporterPlugin;
 import org.apache.kafka.server.util.timer.SystemTimer;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;

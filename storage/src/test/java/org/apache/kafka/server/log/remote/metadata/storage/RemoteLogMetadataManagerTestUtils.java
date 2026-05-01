@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.server.log.remote.metadata.storage;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.test.TestUtils;
 
 import java.util.HashMap;
 import java.util.Map;

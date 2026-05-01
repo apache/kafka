@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
+import org.apache.kafka.base.test.TestCondition;
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
@@ -50,8 +52,6 @@ import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
-import org.apache.kafka.test.TestCondition;
-import org.apache.kafka.test.TestUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

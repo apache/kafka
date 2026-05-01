@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
@@ -39,7 +40,6 @@ import org.apache.kafka.common.utils.internals.PrimitiveRef;
 import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.LogValidator.ValidationResult;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;

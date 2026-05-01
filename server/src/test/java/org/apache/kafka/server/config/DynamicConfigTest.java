@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.config;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -23,7 +24,6 @@ import org.apache.kafka.clients.admin.ListConfigResourcesOptions;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
-import org.apache.kafka.test.TestUtils;
 
 import java.util.List;
 import java.util.Map;

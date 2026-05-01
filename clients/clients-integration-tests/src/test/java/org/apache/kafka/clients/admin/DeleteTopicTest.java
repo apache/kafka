@@ -18,6 +18,7 @@ package org.apache.kafka.clients.admin;
 
 import kafka.server.KafkaBroker;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.TopicDeletionDisabledException;
@@ -36,7 +37,6 @@ import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.storage.internals.log.AppendOrigin;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
-import org.apache.kafka.test.TestUtils;
 
 import java.util.ArrayList;
 import java.util.Collection;

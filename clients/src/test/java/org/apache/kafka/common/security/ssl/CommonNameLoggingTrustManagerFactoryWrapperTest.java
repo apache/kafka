@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.common.security.ssl;
 
+import org.apache.kafka.base.test.TestSslUtils;
 import org.apache.kafka.common.security.ssl.CommonNameLoggingTrustManagerFactoryWrapper.CommonNameLoggingTrustManager;
 import org.apache.kafka.common.security.ssl.CommonNameLoggingTrustManagerFactoryWrapper.NeverExpiringX509Certificate;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.test.TestSslUtils;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;

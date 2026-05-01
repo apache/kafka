@@ -31,7 +31,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 
-import static org.apache.kafka.test.TestUtils.requiredConsumerConfig;
+import static org.apache.kafka.base.test.TestUtils.requiredConsumerConfig;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;

@@ -66,6 +66,7 @@
             <allow pkg="org.apache.kafka.server.log" />
             <allow pkg="org.apache.kafka.server.record" />
             <allow pkg="org.apache.kafka.test" />
+            <allow pkg="org.apache.kafka.base.test" />
             <allow pkg="org.apache.kafka.storage"/>
             <subpackage name="remote">
                 <allow pkg="scala.collection" />
@@ -102,6 +103,7 @@
         <allow pkg="org.apache.kafka.storage.internals"/>
         <allow pkg="org.apache.kafka.storage.log.metrics"/>
         <allow pkg="org.apache.kafka.test" />
+        <allow pkg="org.apache.kafka.base.test" />
         <allow pkg="com.github.benmanes.caffeine.cache" />
         <allow pkg="org.apache.kafka.coordinator.transaction"/>
     </subpackage>
@@ -136,6 +138,7 @@
         <allow pkg="org.apache.kafka.server" />
 
         <allow pkg="org.apache.kafka.test" />
+        <allow pkg="org.apache.kafka.base.test" />
     </subpackage>
 
     <subpackage name="admin">

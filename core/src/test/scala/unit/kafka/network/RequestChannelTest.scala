@@ -36,7 +36,6 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerd
 import org.apache.kafka.common.utils.{SecurityUtils, Utils}
 import org.apache.kafka.network.RequestConvertToJson
 import org.apache.kafka.network.metrics.RequestChannelMetrics
-import org.apache.kafka.test
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
 import org.junit.jupiter.params.ParameterizedTest
@@ -327,7 +326,7 @@ class RequestChannelTest {
     val envelope = unwrapped.envelope.get
 
     val send = unwrapped.buildResponseSend(response)
-    val sendBytes = test.TestUtils.toBuffer(send)
+    val sendBytes = ByteBufferChannel.toBuffer(send)
 
     // We need to read the size field before `parseResponse` below
     val size = sendBytes.getInt

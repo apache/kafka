@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.base.test.NoRetryException;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -55,7 +56,6 @@ import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
-import org.apache.kafka.test.NoRetryException;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -79,6 +79,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 
+import static org.apache.kafka.base.test.TestUtils.waitForCondition;
 import static org.apache.kafka.clients.producer.ProducerConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.CLIENT_ID_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG;
@@ -104,7 +105,6 @@ import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXA
 import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.CONNECTOR;
 import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.INTERVAL;
 import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.POLL;
-import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;

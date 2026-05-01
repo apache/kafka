@@ -17,6 +17,7 @@
 
 package org.apache.kafka.storage.internals.log;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.record.internal.CompressionType;
@@ -29,7 +30,6 @@ import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;

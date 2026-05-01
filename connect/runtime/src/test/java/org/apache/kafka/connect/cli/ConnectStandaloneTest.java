@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.connect.cli;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
-import org.apache.kafka.test.TestUtils;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 

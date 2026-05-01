@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.common.record.internal;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,7 +46,7 @@ import java.util.concurrent.Future;
 import java.util.stream.IntStream;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.test.TestUtils.tempFile;
+import static org.apache.kafka.base.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;

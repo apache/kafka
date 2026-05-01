@@ -260,7 +260,7 @@ class LogRecoveryTest extends QuorumTestHarness {
   private def getLeaderIdForPartition[B <: KafkaBroker](
                                                  brokers: Seq[B],
                                                  tp: TopicPartition,
-                                                 timeout: Long = org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS): Int = {
+                                                 timeout: Long = org.apache.kafka.base.test.TestUtils.DEFAULT_MAX_WAIT_MS): Int = {
     def leaderExists: Option[Int] = {
       brokers.find { broker =>
         broker.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)

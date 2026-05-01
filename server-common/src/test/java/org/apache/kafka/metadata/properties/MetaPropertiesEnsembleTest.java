@@ -17,8 +17,8 @@
 
 package org.apache.kafka.metadata.properties;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.base.test.ReflectionUtils;
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
@@ -26,7 +28,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,7 +59,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.test.TestUtils.waitForCondition;
+import static org.apache.kafka.base.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -964,7 +965,7 @@ public class SelectorTest {
     @Test
     public void testChannelCloseWhileProcessingReceives() throws Exception {
         int numChannels = 4;
-        Map<String, KafkaChannel> channels = TestUtils.fieldValue(selector, Selector.class, "channels");
+        Map<String, KafkaChannel> channels = ReflectionUtils.fieldValue(selector, Selector.class, "channels");
         Set<SelectionKey> selectionKeys = new HashSet<>();
         for (int i = 0; i < numChannels; i++) {
             String id = String.valueOf(i);
@@ -1160,9 +1161,9 @@ public class SelectorTest {
      */
     private void injectNetworkReceive(KafkaChannel channel, int size) throws Exception {
         NetworkReceive receive = new NetworkReceive();
-        TestUtils.setFieldValue(channel, "receive", receive);
-        ByteBuffer sizeBuffer = TestUtils.fieldValue(receive, NetworkReceive.class, "size");
+        ReflectionUtils.setFieldValue(channel, "receive", receive);
+        ByteBuffer sizeBuffer = ReflectionUtils.fieldValue(receive, NetworkReceive.class, "size");
         sizeBuffer.putInt(size);
-        TestUtils.setFieldValue(receive, "buffer", ByteBuffer.allocate(size));
+        ReflectionUtils.setFieldValue(receive, "buffer", ByteBuffer.allocate(size));
     }
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.test.wordcount;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.StateStore;
@@ -28,7 +29,6 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 

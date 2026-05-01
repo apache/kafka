@@ -17,8 +17,8 @@
 
 package org.apache.kafka.trogdor.coordinator;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.trogdor.agent.AgentClient;
 import org.apache.kafka.trogdor.common.CapturingCommandRunner;
 import org.apache.kafka.trogdor.common.ExpectedTasks;

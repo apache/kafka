@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
+import org.apache.kafka.base.test.TestCondition;
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -55,8 +57,6 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.StateQueryRequest;
 import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.state.QueryableStoreType;
-import org.apache.kafka.test.TestCondition;
-import org.apache.kafka.test.TestUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -91,8 +91,8 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.base.test.TestUtils.retryOnExceptionWithTimeout;
 import static org.apache.kafka.common.utils.Utils.sleep;
-import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;

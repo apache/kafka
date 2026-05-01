@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.security;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -52,7 +53,6 @@ import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.config.ServerConfigs;
-import org.apache.kafka.test.TestUtils;
 
 import java.net.InetAddress;
 import java.time.Duration;

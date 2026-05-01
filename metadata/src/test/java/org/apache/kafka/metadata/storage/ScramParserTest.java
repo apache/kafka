@@ -17,11 +17,11 @@
 
 package org.apache.kafka.metadata.storage;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.security.scram.internals.ScramFormatter;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.metadata.storage.ScramParser.PerMechanismData;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;

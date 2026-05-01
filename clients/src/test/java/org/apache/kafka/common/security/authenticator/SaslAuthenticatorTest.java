@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
+import org.apache.kafka.base.test.ReflectionUtils;
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
@@ -98,7 +100,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -1935,7 +1936,7 @@ public class SaslAuthenticatorTest {
             // Set the client's channel `send` to null to allow setting a new send on the server's selector.
             // Without this, NioEchoServer will throw an error while processing the client request,
             // since we're manually setting a server side send to simulate the issue.
-            TestUtils.setFieldValue(selector.channel(node), "send", null);
+            ReflectionUtils.setFieldValue(selector.channel(node), "send", null);
 
             // extract the channel id from the server's selector and directly set a send on it.
             String channelId = server.selector().channels().get(0).id();

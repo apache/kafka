@@ -26,7 +26,7 @@ import org.apache.kafka.common.network.ConnectionMode
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.security.plain.PlainAuthenticateCallback
-import org.apache.kafka.test.TestSslUtils
+import org.apache.kafka.base.test.TestSslUtils
 import org.junit.jupiter.api.Assertions.assertTrue
 
 import java.util

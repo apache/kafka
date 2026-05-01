@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.metrics;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -30,7 +31,6 @@ import org.apache.kafka.server.telemetry.ClientTelemetryExporter;
 import org.apache.kafka.server.telemetry.ClientTelemetryExporterProvider;
 import org.apache.kafka.server.telemetry.ClientTelemetryPayload;
 import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
-import org.apache.kafka.test.TestUtils;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;

@@ -28,7 +28,7 @@ import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.storage.internals.log.UnifiedLog
-import org.apache.kafka.test.TestUtils
+import org.apache.kafka.base.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 

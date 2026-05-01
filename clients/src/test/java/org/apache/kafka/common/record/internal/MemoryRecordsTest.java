@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record.internal;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -27,7 +28,6 @@ import org.apache.kafka.common.record.internal.MemoryRecords.RecordFilter.BatchR
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.CloseableIterator;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtensionContext;

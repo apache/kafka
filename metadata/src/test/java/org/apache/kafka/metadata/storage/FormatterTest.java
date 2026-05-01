@@ -17,6 +17,7 @@
 
 package org.apache.kafka.metadata.storage;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
@@ -38,7 +39,6 @@ import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.common.StreamsVersion;
 import org.apache.kafka.server.common.TestFeatureVersion;
 import org.apache.kafka.server.common.TransactionVersion;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;

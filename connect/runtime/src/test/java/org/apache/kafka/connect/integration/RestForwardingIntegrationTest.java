@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.base.test.TestSslUtils;
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ConnectionMode;
@@ -34,8 +36,6 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.util.SSLUtils;
 import org.apache.kafka.connect.util.Callback;
-import org.apache.kafka.test.TestSslUtils;
-import org.apache.kafka.test.TestUtils;
 
 import org.apache.http.HttpHost;
 import org.apache.http.HttpRequest;

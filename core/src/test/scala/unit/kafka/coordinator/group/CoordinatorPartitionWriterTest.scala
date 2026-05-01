@@ -28,7 +28,7 @@ import org.apache.kafka.server.LogAppendResult
 import org.apache.kafka.server.LogAppendResult.LogAppendSummary
 import org.apache.kafka.server.common.TransactionVersion
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogAppendInfo, LogConfig, RecordValidationStats, VerificationGuard}
-import org.apache.kafka.test.TestUtils.assertFutureThrows
+import org.apache.kafka.base.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest

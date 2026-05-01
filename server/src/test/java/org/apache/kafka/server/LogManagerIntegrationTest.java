@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -36,7 +37,6 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler;
 import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile;
-import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
 import java.io.IOException;

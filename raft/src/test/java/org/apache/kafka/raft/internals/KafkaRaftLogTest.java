@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -53,7 +54,6 @@ import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogStartOffsetIncrementReason;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
-import org.apache.kafka.test.TestUtils;
 
 import net.jqwik.api.AfterFailureMode;
 import net.jqwik.api.ForAll;
@@ -79,7 +79,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 
-import static org.apache.kafka.test.TestUtils.assertOptional;
+import static org.apache.kafka.base.test.TestUtils.assertOptional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;

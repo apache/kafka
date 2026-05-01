@@ -59,6 +59,7 @@
     <allow pkg="org.apache.kafka.common.config" exact-match="true" />
     <allow pkg="org.apache.kafka.common.internals" exact-match="true" />
     <allow pkg="org.apache.kafka.test" />
+    <allow pkg="org.apache.kafka.base.test" />
 
     <subpackage name="acl">
       <allow pkg="org.apache.kafka.common.acl" />
@@ -229,6 +230,7 @@
     <allow pkg="org.apache.kafka.clients" exact-match="true"/>
     <allow pkg="org.apache.kafka.clients.consumer" exact-match="true"/>
     <allow pkg="org.apache.kafka.test" />
+    <allow pkg="org.apache.kafka.base.test" />
     <allow class="org.apache.logging.log4j.Level" />
 
     <subpackage name="consumer">
@@ -306,6 +308,7 @@
     <allow pkg="org.apache.kafka.streams" />
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.test" />
+    <allow pkg="org.apache.kafka.base.test" />
     <allow pkg="org.apache.kafka.connect.runtime" />
     <allow pkg="org.apache.kafka.connect.runtime.isolation" />
     <allow pkg="com.fasterxml.jackson" />
@@ -367,6 +370,7 @@
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.test"/>
+    <allow pkg="org.apache.kafka.base.test" />
     <allow pkg="org.apache.kafka.trogdor" />
     <allow pkg="org.apache.kafka.coordinator" />
     <allow pkg="org.eclipse.jetty" />
@@ -384,6 +388,7 @@
   <subpackage name="streams">
     <allow pkg="org.apache.kafka.common"/>
     <allow pkg="org.apache.kafka.test"/>
+    <allow pkg="org.apache.kafka.base.test" />
     <allow pkg="org.apache.kafka.clients"/>
     <allow pkg="org.apache.kafka.server.util"/>
     <allow pkg="org.apache.logging.log4j"/>
@@ -473,6 +478,7 @@
     <allow pkg="org.apache.kafka.storage.internals.log" />
     <allow pkg="org.apache.kafka.storage.log.metrics" />
     <allow pkg="org.apache.kafka.test"/>
+    <allow pkg="org.apache.kafka.base.test" />
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="net.jqwik"/>
   </subpackage>
@@ -481,9 +487,11 @@
     <allow class="org.apache.kafka.common.compress.Compression" exact-match="true" />
     <allow pkg="org.apache.kafka.common.message" />
     <allow pkg="org.apache.kafka.common.record" />
+    <allow pkg="org.apache.kafka.common.requests" />
     <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.test"/>
+    <allow pkg="org.apache.kafka.base.test" />
   </subpackage>
 
   <subpackage name="connect">
@@ -494,6 +502,7 @@
     <allow pkg="org.apache.kafka.connect.components"/>
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.test"/>
+    <allow pkg="org.apache.kafka.base.test" />
     <!-- for testing -->
     <allow pkg="org.apache.kafka.coordinator.group" />
     <allow pkg="org.apache.kafka.network" />

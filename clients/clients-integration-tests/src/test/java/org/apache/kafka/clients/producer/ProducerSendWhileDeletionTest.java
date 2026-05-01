@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer;
 
 import kafka.server.KafkaBroker;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewPartitionReassignment;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -36,7 +37,6 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
-import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;

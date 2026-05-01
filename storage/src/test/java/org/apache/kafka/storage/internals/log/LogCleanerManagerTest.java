@@ -17,6 +17,7 @@
 
 package org.apache.kafka.storage.internals.log;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
@@ -33,7 +34,6 @@ import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 import org.apache.kafka.storage.internals.log.LogCleanerManager.OffsetsToClean;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

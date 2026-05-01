@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.tests;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.internals.KafkaThread;
@@ -37,7 +38,6 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.test.TestUtils;
 
 import java.time.Duration;
 import java.time.Instant;

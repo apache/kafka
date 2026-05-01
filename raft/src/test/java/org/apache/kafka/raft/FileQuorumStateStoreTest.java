@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.types.TaggedFields;
 import org.apache.kafka.raft.generated.QuorumStateData;
 import org.apache.kafka.server.common.KRaftVersion;
-import org.apache.kafka.test.TestUtils;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -21,7 +21,7 @@ import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.{MockTime, Utils}
 import org.apache.kafka.streams._
-import org.apache.kafka.test.TestUtils
+import org.apache.kafka.base.test.TestUtils
 import org.junit.jupiter.api._
 
 import java.io.File

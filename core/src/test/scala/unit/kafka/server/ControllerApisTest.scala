@@ -61,7 +61,7 @@ import org.apache.kafka.server.common.{ApiMessageAndVersion, FinalizedFeatures, 
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.quota.{ClientQuotaManager, ControllerMutationQuota, ControllerMutationQuotaManager, ReplicationQuotaManager}
 import org.apache.kafka.storage.internals.log.CleanerConfig
-import org.apache.kafka.test.TestUtils
+import org.apache.kafka.base.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest

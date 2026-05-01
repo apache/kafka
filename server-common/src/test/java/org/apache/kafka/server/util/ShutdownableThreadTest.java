@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.server.util;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.internals.FatalExitError;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.Exit;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;

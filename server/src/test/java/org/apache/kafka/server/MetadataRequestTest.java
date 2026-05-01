@@ -19,6 +19,7 @@ package org.apache.kafka.server;
 import kafka.network.SocketServer;
 import kafka.server.KafkaBroker;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -39,7 +40,6 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.metadata.BrokerState;
 import org.apache.kafka.metadata.LeaderAndIsr;
 import org.apache.kafka.server.config.ReplicationConfigs;
-import org.apache.kafka.test.TestUtils;
 
 import java.io.IOException;
 import java.util.Collection;

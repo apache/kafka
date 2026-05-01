@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TransactionState;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -42,7 +43,6 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.server.IntegrationTestUtils;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.test.TestUtils;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;

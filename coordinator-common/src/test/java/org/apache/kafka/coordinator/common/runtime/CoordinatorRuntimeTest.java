@@ -67,6 +67,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.base.test.TestUtils.assertFutureThrows;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.CoordinatorState.ACTIVE;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.CoordinatorState.CLOSED;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.CoordinatorState.FAILED;
@@ -77,7 +78,6 @@ import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.INI
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.endTransactionMarker;
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.records;
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.transactionalRecords;
-import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;

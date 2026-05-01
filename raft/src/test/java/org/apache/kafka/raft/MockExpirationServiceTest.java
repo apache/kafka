@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 

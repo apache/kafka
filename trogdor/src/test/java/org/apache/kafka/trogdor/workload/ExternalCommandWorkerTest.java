@@ -17,9 +17,9 @@
 
 package org.apache.kafka.trogdor.workload;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.internals.OperatingSystem;
-import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.trogdor.task.AgentWorkerStatusTracker;
 import org.apache.kafka.trogdor.task.WorkerStatusTracker;
 

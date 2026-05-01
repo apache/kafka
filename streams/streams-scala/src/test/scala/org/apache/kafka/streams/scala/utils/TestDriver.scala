@@ -22,7 +22,7 @@ import java.util.Properties
 import org.apache.kafka.common.serialization.Serde
 import org.apache.kafka.streams.scala.StreamsBuilder
 import org.apache.kafka.streams.{StreamsConfig, TestInputTopic, TestOutputTopic, TopologyTestDriver}
-import org.apache.kafka.test.TestUtils
+import org.apache.kafka.base.test.TestUtils
 
 trait TestDriver {
   def createTestDriver(builder: StreamsBuilder, initialWallClockTime: Instant = Instant.now()): TopologyTestDriver = {

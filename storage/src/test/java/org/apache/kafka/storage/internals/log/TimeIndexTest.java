@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.errors.InvalidOffsetException;
 import org.apache.kafka.common.record.internal.RecordBatch;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;

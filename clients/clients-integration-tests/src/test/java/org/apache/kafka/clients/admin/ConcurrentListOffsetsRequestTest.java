@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.base.test.ReflectionUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.DefaultHostResolver;
 import org.apache.kafka.clients.NetworkClient;
@@ -28,7 +29,6 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -79,7 +79,7 @@ public class ConcurrentListOffsetsRequestTest {
         adminClient = KafkaAdminClient.createInternal(new AdminClientConfig(clusterInstance.setClientSaslConfig(props), true),
                 null, new TestHostResolver());
 
-        networkClient = TestUtils.fieldValue(adminClient, KafkaAdminClient.class, "client");
+        networkClient = ReflectionUtils.fieldValue(adminClient, KafkaAdminClient.class, "client");
     }
 
     @AfterEach
@@ -119,10 +119,10 @@ public class ConcurrentListOffsetsRequestTest {
     }
 
     private TestPartitionLeaderCache replacePartitionLeaderCache(CountDownLatch invalidationLatch) throws Exception {
-        PartitionLeaderCache oldPartitionLeaderCache = TestUtils.fieldValue(adminClient, KafkaAdminClient.class, "partitionLeaderCache");
+        PartitionLeaderCache oldPartitionLeaderCache = ReflectionUtils.fieldValue(adminClient, KafkaAdminClient.class, "partitionLeaderCache");
 
         TestPartitionLeaderCache partitionLeaderCache = new TestPartitionLeaderCache(oldPartitionLeaderCache.get(getTopicPartitions()), invalidationLatch);
-        TestUtils.setFieldValue(adminClient, "partitionLeaderCache", partitionLeaderCache);
+        ReflectionUtils.setFieldValue(adminClient, "partitionLeaderCache", partitionLeaderCache);
         return partitionLeaderCache;
     }
 

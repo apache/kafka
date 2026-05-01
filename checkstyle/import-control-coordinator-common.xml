@@ -65,6 +65,7 @@
                 <allow pkg="org.apache.kafka.server.storage" />
                 <allow pkg="org.apache.kafka.server.util" />
                 <allow pkg="org.apache.kafka.storage.internals.log" />
+                <allow pkg="org.apache.kafka.base.test" />
                 <allow pkg="org.apache.kafka.test" />
                 <allow pkg="org.apache.kafka.timeline" />
                 <allow pkg="org.HdrHistogram" />

@@ -19,6 +19,7 @@ package org.apache.kafka.tiered.storage;
 import kafka.api.IntegrationTestHarness;
 import kafka.server.KafkaBroker;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.replica.ReplicaSelector;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.config.ReplicationConfigs;
@@ -27,7 +28,6 @@ import org.apache.kafka.server.log.remote.storage.ClassLoaderAwareRemoteStorageM
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
-import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
 
 import org.junit.jupiter.api.AfterEach;

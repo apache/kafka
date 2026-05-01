@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals.metrics;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.utils.Utils;
@@ -27,7 +28,6 @@ import org.apache.kafka.streams.state.internals.BlockBasedTableConfigWithAccessi
 import org.apache.kafka.streams.state.internals.RocksDBStore;
 import org.apache.kafka.streams.state.internals.RocksDBTimestampedStore;
 import org.apache.kafka.test.MockInternalProcessorContext;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;

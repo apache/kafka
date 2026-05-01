@@ -17,6 +17,7 @@
 
 package org.apache.kafka.tools;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.Config;
@@ -58,7 +59,6 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.metadata.LeaderAndIsr;
 import org.apache.kafka.storage.internals.log.LogConfig;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;

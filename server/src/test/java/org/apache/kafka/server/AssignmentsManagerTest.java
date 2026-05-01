@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.Uuid;
@@ -42,7 +43,6 @@ import org.apache.kafka.server.common.ControllerRequestCompletionHandler;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.NodeToControllerChannelManager;
 import org.apache.kafka.server.common.TopicIdPartition;
-import org.apache.kafka.test.TestUtils;
 
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Metric;

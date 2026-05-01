@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.base.test.ReflectionUtils;
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -54,7 +56,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -261,7 +262,7 @@ public class NetworkClientTest {
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext(),
                 rebootstrapTriggerMs,
                 MetadataRecoveryStrategy.REBOOTSTRAP);
-        MetadataUpdater metadataUpdater = TestUtils.fieldValue(client, NetworkClient.class, "metadataUpdater");
+        MetadataUpdater metadataUpdater = ReflectionUtils.fieldValue(client, NetworkClient.class, "metadataUpdater");
         metadata.bootstrap(Collections.singletonList(new InetSocketAddress("localhost", 9999)));
 
         metadata.requestUpdate(true);

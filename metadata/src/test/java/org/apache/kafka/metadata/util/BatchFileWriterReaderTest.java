@@ -17,6 +17,7 @@
 
 package org.apache.kafka.metadata.util;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
@@ -24,7 +25,6 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.metadata.util.BatchFileReader.BatchAndType;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 

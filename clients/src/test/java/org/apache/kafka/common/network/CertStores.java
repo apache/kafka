@@ -16,10 +16,9 @@
  */
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.base.test.TestSslUtils;
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.config.SslConfigs;
-import org.apache.kafka.test.TestSslUtils;
-import org.apache.kafka.test.TestSslUtils.SslConfigsBuilder;
-import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
 import java.net.InetAddress;
@@ -63,7 +62,7 @@ public class CertStores {
         String name = server ? "server" : "client";
         ConnectionMode connectionMode = server ? ConnectionMode.SERVER : ConnectionMode.CLIENT;
         File truststoreFile = usePem ? null : TestUtils.tempFile(name + "TS", ".jks");
-        sslConfig = new SslConfigsBuilder(connectionMode)
+        sslConfig = new TestSslUtils.SslConfigsBuilder(connectionMode)
                 .useClientCert(!server)
                 .certAlias(name)
                 .cn(commonName)

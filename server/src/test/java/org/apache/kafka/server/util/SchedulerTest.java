@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.util;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
@@ -30,7 +31,6 @@ import org.apache.kafka.storage.internals.log.ProducerStateManager;
 import org.apache.kafka.storage.internals.log.ProducerStateManagerConfig;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

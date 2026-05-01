@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.clients.admin.RaftVoterEndpoint;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.metadata.properties.PropertiesUtils;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 

@@ -17,13 +17,13 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.metadata.FakeKafkaConfigSchema;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.MockFaultHandler;
-import org.apache.kafka.test.TestUtils;
 
 import java.util.ArrayList;
 import java.util.HashMap;

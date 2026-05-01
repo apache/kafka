@@ -166,7 +166,7 @@ public class ToolsTestUtils {
         for (Entry<String, String> entry : properties.entrySet()) {
             sb.append(entry.getKey() + "=" + entry.getValue() + System.lineSeparator());
         }
-        return org.apache.kafka.test.TestUtils.tempFile(sb.toString());
+        return org.apache.kafka.base.test.TestUtils.tempFile(sb.toString());
     }
 
     /**

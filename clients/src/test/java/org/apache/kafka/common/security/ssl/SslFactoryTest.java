@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.security.ssl;
 
+import org.apache.kafka.base.test.TestSslUtils;
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SecurityConfig;
@@ -30,8 +32,6 @@ import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory.SecurityStor
 import org.apache.kafka.common.security.ssl.mock.TestKeyManagerFactory;
 import org.apache.kafka.common.security.ssl.mock.TestProviderCreator;
 import org.apache.kafka.common.security.ssl.mock.TestTrustManagerFactory;
-import org.apache.kafka.test.TestSslUtils;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
@@ -183,7 +183,7 @@ public abstract class SslFactoryTest {
         sslFactory.configure(clientSslConfig);
         TestSslUtils.TestSslEngineFactory sslEngineFactory = (TestSslUtils.TestSslEngineFactory) sslFactory.sslEngineFactory();
         assertNotNull(sslEngineFactory);
-        assertFalse(sslEngineFactory.closed);
+        assertFalse(sslEngineFactory.isClosed());
 
         trustStoreFile = TestUtils.tempFile("truststore", ".jks");
         clientSslConfig = sslConfigsBuilder(ConnectionMode.SERVER)
@@ -194,7 +194,7 @@ public abstract class SslFactoryTest {
         TestSslUtils.TestSslEngineFactory newSslEngineFactory = (TestSslUtils.TestSslEngineFactory) sslFactory.sslEngineFactory();
         assertNotEquals(sslEngineFactory, newSslEngineFactory);
         // the older one should be closed
-        assertTrue(sslEngineFactory.closed);
+        assertTrue(sslEngineFactory.isClosed());
     }
 
     @Test
@@ -495,9 +495,9 @@ public abstract class SslFactoryTest {
         SslFactory sslFactory = new SslFactory(ConnectionMode.CLIENT);
         sslFactory.configure(clientSslConfig);
         TestSslUtils.TestSslEngineFactory engine = (TestSslUtils.TestSslEngineFactory) sslFactory.sslEngineFactory();
-        assertFalse(engine.closed);
+        assertFalse(engine.isClosed());
         sslFactory.close();
-        assertTrue(engine.closed);
+        assertTrue(engine.isClosed());
     }
 
     /**

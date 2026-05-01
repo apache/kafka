@@ -31,7 +31,7 @@ import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.streams.{KafkaStreams, StreamsBuilder, StreamsConfig}
 import org.apache.kafka.streams.{GroupProtocol => StreamsGroupProtocol}
 import org.apache.kafka.storage.internals.log.UnifiedLog
-import org.apache.kafka.test.{TestUtils => JTestUtils}
+import org.apache.kafka.base.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Timeout
 
 import java.time.Duration

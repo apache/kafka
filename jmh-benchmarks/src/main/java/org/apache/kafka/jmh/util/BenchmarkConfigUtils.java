@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.jmh.util;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.raft.KRaftConfigs;
@@ -24,7 +25,6 @@ import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
-import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
 import java.util.Properties;

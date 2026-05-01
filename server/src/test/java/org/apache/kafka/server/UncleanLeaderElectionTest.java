@@ -65,11 +65,11 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
+import static org.apache.kafka.base.test.TestUtils.DEFAULT_MAX_WAIT_MS;
+import static org.apache.kafka.base.test.TestUtils.waitForCondition;
 import static org.apache.kafka.server.TestUtils.awaitLeaderChange;
 import static org.apache.kafka.server.TestUtils.produceMessage;
 import static org.apache.kafka.server.TestUtils.waitForPartitionMetadata;
-import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
-import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;

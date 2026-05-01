@@ -40,8 +40,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 
-import static org.apache.kafka.test.TestUtils.assertFutureThrows;
-import static org.apache.kafka.test.TestUtils.retryOnExceptionWithTimeout;
+import static org.apache.kafka.base.test.TestUtils.assertFutureThrows;
+import static org.apache.kafka.base.test.TestUtils.retryOnExceptionWithTimeout;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;

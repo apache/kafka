@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.base.test.NoRetryException;
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.utils.internals.Exit;
-import org.apache.kafka.test.NoRetryException;
-import org.apache.kafka.test.TestUtils;
 
 import java.util.ArrayList;
 import java.util.List;

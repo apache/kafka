@@ -31,7 +31,7 @@ import org.apache.kafka.raft.{KRaftConfigs, LeaderAndEpoch, QuorumConfig}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.controller.ControllerRegistrationManager
-import org.apache.kafka.test.TestUtils
+import org.apache.kafka.base.test.TestUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest

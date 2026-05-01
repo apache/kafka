@@ -17,10 +17,10 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;

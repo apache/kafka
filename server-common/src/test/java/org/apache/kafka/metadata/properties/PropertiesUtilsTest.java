@@ -17,7 +17,7 @@
 
 package org.apache.kafka.metadata.properties;
 
-import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.base.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;

@@ -89,6 +89,7 @@
         <allow pkg="org.apache.kafka.server.policy"/>
         <allow pkg="org.apache.kafka.server.util"/>
         <allow pkg="org.apache.kafka.snapshot" />
+        <allow pkg="org.apache.kafka.base.test" />
         <allow pkg="org.apache.kafka.test" />
         <allow pkg="org.apache.kafka.timeline" />
         <subpackage name="metrics">
@@ -119,6 +120,7 @@
         <allow pkg="org.apache.kafka.server.util" />
         <allow pkg="org.apache.kafka.snapshot" />
         <allow pkg="org.apache.kafka.test" />
+        <allow pkg="org.apache.kafka.base.test" />
         <subpackage name="loader">
             <subpackage name="metrics">
                 <allow pkg="com.yammer.metrics"/>
@@ -164,6 +166,7 @@
         <allow pkg="org.apache.kafka.server.quota" />
         <allow pkg="org.apache.kafka.server.util"/>
         <allow pkg="org.apache.kafka.test" />
+        <allow pkg="org.apache.kafka.base.test" />
         <subpackage name="authorizer">
             <allow pkg="org.apache.kafka.controller" />
             <allow pkg="org.apache.kafka.common.metrics" />

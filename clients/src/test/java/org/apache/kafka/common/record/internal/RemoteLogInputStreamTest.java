@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.common.record.internal;
 
+import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
-import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -36,13 +36,13 @@ import java.util.List;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.base.test.TestUtils.tempFile;
 import static org.apache.kafka.common.record.TimestampType.CREATE_TIME;
 import static org.apache.kafka.common.record.TimestampType.NO_TIMESTAMP_TYPE;
 import static org.apache.kafka.common.record.internal.RecordBatch.MAGIC_VALUE_V0;
 import static org.apache.kafka.common.record.internal.RecordBatch.MAGIC_VALUE_V1;
 import static org.apache.kafka.common.record.internal.RecordBatch.MAGIC_VALUE_V2;
 import static org.apache.kafka.common.record.internal.RecordBatch.NO_TIMESTAMP;
-import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
