@@ -45,11 +45,9 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -74,7 +72,7 @@ public class LeaderElectionCommandTest {
     }
 
     @ClusterTest
-    public void testAllTopicPartition() throws InterruptedException, ExecutionException {
+    public void testAllTopicPartition() throws Exception {
         String topic = "unclean-topic";
         int partition = 0;
         List<Integer> assignment = List.of(broker2, broker3);
@@ -181,7 +179,7 @@ public class LeaderElectionCommandTest {
     }
 
     @ClusterTest
-    public void testTopicPartition() throws InterruptedException, ExecutionException {
+    public void testTopicPartition() throws Exception {
         String topic = "unclean-topic";
         int partition = 0;
         List<Integer> assignment = List.of(broker2, broker3);
@@ -255,7 +253,7 @@ public class LeaderElectionCommandTest {
     }
 
     @ClusterTest
-    public void testPreferredReplicaElection() throws InterruptedException, ExecutionException {
+    public void testPreferredReplicaElection() throws Exception {
         String topic = "preferred-topic";
         int partition = 0;
         List<Integer> assignment = List.of(broker2, broker3);
@@ -407,9 +405,10 @@ public class LeaderElectionCommandTest {
 
                     Map<String, TopicDescription> description = client.describeTopics(topics).allTopicNames().get();
 
-                    Set<Integer> isr = description.values().stream()
-                            .flatMap(desc -> desc.partitions().stream())
-                            .flatMap(info -> info.isr().stream())
+                    Set<Integer> isr = description.entrySet().stream()
+                            .flatMap(e -> e.getValue().partitions().stream()
+                                    .filter(info -> partitions.contains(new TopicPartition(e.getKey(), info.partition())))
+                                    .flatMap(info -> info.isr().stream()))
                             .map(Node::id)
                             .collect(Collectors.toSet());
 
@@ -425,8 +424,9 @@ public class LeaderElectionCommandTest {
                     Set<Integer> isr = client.describeTopics(Set.of(partition.topic()))
                             .allTopicNames()
                             .get()
-                            .values().stream()
-                            .flatMap(desc -> desc.partitions().stream())
+                            .get(partition.topic())
+                            .partitions().stream()
+                            .filter(info -> info.partition() == partition.partition())
                             .flatMap(info -> info.isr().stream())
                             .map(Node::id)
                             .collect(Collectors.toSet());
@@ -445,43 +445,23 @@ public class LeaderElectionCommandTest {
         );
     }
 
-    private void assertLeader(Admin client, TopicPartition topicPartition, int expectedLeader) throws InterruptedException {
-        waitForLeaderToBecome(client, topicPartition, Optional.of(expectedLeader));
+    private void assertLeader(Admin client, TopicPartition topicPartition, int expectedLeader) throws Exception {
+        int leader = cluster.waitUntilLeaderIsElectedOrChangedWithAdmin(client, topicPartition.topic(), topicPartition.partition(), 30000);
+        assertEquals(expectedLeader, leader);
     }
 
     private void assertNoLeader(Admin client, TopicPartition topicPartition) throws InterruptedException {
-        waitForLeaderToBecome(client, topicPartition, Optional.empty());
-    }
-
-    private void waitForLeaderToBecome(
-            Admin client,
-            TopicPartition topicPartition,
-            Optional<Integer> expectedLeaderOpt
-    ) throws InterruptedException {
-        String topic = topicPartition.topic();
-        int partitionId = topicPartition.partition();
-        AtomicReference<String> lastLeaderRef = new AtomicReference<>("unknown");
-
         TestUtils.waitForCondition(
                 () -> {
-                    Set<String> existingTopics = client.listTopics().names().get();
-                    if (!existingTopics.contains(topic)) {
-                        return false;
-                    }
-
-                    TopicDescription topicDescription = client.describeTopics(List.of(topic))
-                            .allTopicNames().get().get(topic);
-                    Optional<Integer> currentLeader = topicDescription.partitions().stream()
-                            .filter(p -> p.partition() == partitionId)
+                    TopicDescription desc = client.describeTopics(List.of(topicPartition.topic()))
+                            .allTopicNames().get().get(topicPartition.topic());
+                    return desc.partitions().stream()
+                            .filter(p -> p.partition() == topicPartition.partition())
                             .findFirst()
-                            .flatMap(p -> Optional.ofNullable(p.leader()))
-                            .map(Node::id);
-
-                    lastLeaderRef.set(currentLeader.map(String::valueOf).orElse("none"));
-                    return currentLeader.equals(expectedLeaderOpt);
+                            .map(p -> p.leader() == null || p.leader().id() == Node.noNode().id())
+                            .orElse(false);
                 },
-                "Timed out waiting for leader to become " + expectedLeaderOpt.map(String::valueOf).orElse("none") +
-                        ". Last metadata lookup returned leader = " + lastLeaderRef.get()
+                "Timed out waiting for no leader for " + topicPartition
         );
     }
 }
