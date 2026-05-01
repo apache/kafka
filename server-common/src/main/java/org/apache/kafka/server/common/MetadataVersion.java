@@ -136,7 +136,7 @@ public enum MetadataVersion {
     IBP_4_4_IV0(31, "4.4", "IV0", false),
 
     // Add support for controller unregistration (KIP-1312).
-    IBP_4_4_IV1(32, "4.4", "IV1", false);
+    IBP_4_4_IV1(32, "4.4", "IV1", true);
 
 
     // NOTES when adding a new version:

@@ -174,6 +174,7 @@ import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
+import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AddRaftVoterRequest;
 import org.apache.kafka.common.requests.AddRaftVoterResponse;
 import org.apache.kafka.common.requests.AlterClientQuotasResponse;
@@ -301,6 +302,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -9935,191 +9937,147 @@ public class KafkaAdminClientTest {
         }
     }
 
-    @Test
-    public void testUnregisterBrokerSuccess() throws InterruptedException, ExecutionException {
-        int nodeId = 1;
-        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(
-                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.NONE, 0));
-            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId);
-            // Validate response
-            assertNotNull(result.all());
-            result.all().get();
+    private static final int UNREGISTER_NODE_ID = 1;
+
+    private static final Function<Errors, AbstractResponse> BROKER_RESPONSE_FACTORY =
+        error -> new UnregisterBrokerResponse(new UnregisterBrokerResponseData()
+            .setErrorCode(error.code())
+            .setErrorMessage(error.message()));
+
+    private static final Function<Errors, AbstractResponse> CONTROLLER_RESPONSE_FACTORY =
+        error -> new UnregisterControllerResponse(new UnregisterControllerResponseData()
+            .setErrorCode(error.code())
+            .setErrorMessage(error.message()));
+
+    private static final Function<Admin, KafkaFuture<Void>> UNREGISTER_BROKER_CALL =
+        admin -> admin.unregisterBroker(UNREGISTER_NODE_ID).all();
+
+    private static final Function<Admin, KafkaFuture<Void>> UNREGISTER_CONTROLLER_CALL =
+        admin -> admin.unregisterController(UNREGISTER_NODE_ID).all();
+
+    private void runUnregisterScenario(
+        AdminClientUnitTestEnv env,
+        ApiKeys apiKey,
+        Function<Errors, AbstractResponse> responseFactory,
+        Function<Admin, KafkaFuture<Void>> adminCall,
+        List<Errors> responsesToPrepare,
+        Class<? extends Throwable> expectedException
+    ) throws ExecutionException, InterruptedException {
+        env.kafkaClient().setNodeApiVersions(
+            NodeApiVersions.create(apiKey.id, (short) 0, (short) 0));
+        for (Errors error : responsesToPrepare) {
+            env.kafkaClient().prepareResponse(responseFactory.apply(error));
+        }
+        KafkaFuture<Void> future = adminCall.apply(env.adminClient());
+        assertNotNull(future);
+        if (expectedException == null) {
+            future.get();
+        } else {
+            TestUtils.assertFutureThrows(expectedException, future);
         }
     }
 
     @Test
-    public void testUnregisterBrokerFailure() {
-        int nodeId = 1;
-        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(
-                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.UNKNOWN_SERVER_ERROR, 0));
-            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId);
-            // Validate response
-            assertNotNull(result.all());
-            TestUtils.assertFutureThrows(UnknownServerException.class, result.all());
+    public void testUnregisterBrokerSuccess() throws InterruptedException, ExecutionException {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_BROKER, BROKER_RESPONSE_FACTORY,
+                UNREGISTER_BROKER_CALL, List.of(Errors.NONE), null);
+        }
+    }
+
+    @Test
+    public void testUnregisterBrokerFailure() throws ExecutionException, InterruptedException {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_BROKER, BROKER_RESPONSE_FACTORY,
+                UNREGISTER_BROKER_CALL, List.of(Errors.UNKNOWN_SERVER_ERROR), UnknownServerException.class);
         }
     }
 
     @Test
     public void testUnregisterBrokerTimeoutAndSuccessRetry() throws ExecutionException, InterruptedException {
-        int nodeId = 1;
-        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(
-                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.NONE, 0));
-
-            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId);
-
-            // Validate response
-            assertNotNull(result.all());
-            result.all().get();
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_BROKER, BROKER_RESPONSE_FACTORY,
+                UNREGISTER_BROKER_CALL, List.of(Errors.REQUEST_TIMED_OUT, Errors.NONE), null);
         }
     }
 
     @Test
-    public void testUnregisterBrokerTimeoutAndFailureRetry() {
-        int nodeId = 1;
-        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(
-                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.UNKNOWN_SERVER_ERROR, 0));
-
-            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId);
-
-            // Validate response
-            assertNotNull(result.all());
-            TestUtils.assertFutureThrows(UnknownServerException.class, result.all());
+    public void testUnregisterBrokerTimeoutAndFailureRetry() throws ExecutionException, InterruptedException {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_BROKER, BROKER_RESPONSE_FACTORY,
+                UNREGISTER_BROKER_CALL, List.of(Errors.REQUEST_TIMED_OUT, Errors.UNKNOWN_SERVER_ERROR),
+                UnknownServerException.class);
         }
     }
 
     @Test
-    public void testUnregisterBrokerTimeoutMaxRetry() {
-        int nodeId = 1;
-        try (final AdminClientUnitTestEnv env = mockClientEnv(Time.SYSTEM, AdminClientConfig.RETRIES_CONFIG, "1")) {
-            env.kafkaClient().setNodeApiVersions(
-                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));
-
-            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId);
-
-            // Validate response
-            assertNotNull(result.all());
-            TestUtils.assertFutureThrows(TimeoutException.class, result.all());
+    public void testUnregisterBrokerTimeoutMaxRetry() throws ExecutionException, InterruptedException {
+        try (AdminClientUnitTestEnv env = mockClientEnv(Time.SYSTEM, AdminClientConfig.RETRIES_CONFIG, "1")) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_BROKER, BROKER_RESPONSE_FACTORY,
+                UNREGISTER_BROKER_CALL, List.of(Errors.REQUEST_TIMED_OUT, Errors.REQUEST_TIMED_OUT),
+                TimeoutException.class);
         }
     }
 
     @Test
-    public void testUnregisterBrokerTimeoutMaxWait() {
-        int nodeId = 1;
-        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(
-                    NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
-
-            UnregisterBrokerResult result = env.adminClient().unregisterBroker(nodeId, new UnregisterBrokerOptions().timeoutMs(10));
-
-            // Validate response
-            assertNotNull(result.all());
-            TestUtils.assertFutureThrows(TimeoutException.class, result.all());
+    public void testUnregisterBrokerTimeoutMaxWait() throws ExecutionException, InterruptedException {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_BROKER, BROKER_RESPONSE_FACTORY,
+                admin -> admin.unregisterBroker(UNREGISTER_NODE_ID,
+                    new UnregisterBrokerOptions().timeoutMs(10)).all(),
+                List.of(), TimeoutException.class);
         }
     }
 
     @Test
     public void testUnregisterControllerSuccess() throws InterruptedException, ExecutionException {
-        int nodeId = 1;
-        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(
-                NodeApiVersions.create(ApiKeys.UNREGISTER_CONTROLLER.id, (short) 0, (short) 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterControllerResponse(Errors.NONE, 0));
-            UnregisterControllerResult result = env.adminClient().unregisterController(nodeId);
-            // Validate response
-            assertNotNull(result.all());
-            result.all().get();
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_CONTROLLER, CONTROLLER_RESPONSE_FACTORY,
+                UNREGISTER_CONTROLLER_CALL, List.of(Errors.NONE), null);
         }
     }
 
     @Test
-    public void testUnregisterControllerFailure() {
-        int nodeId = 1;
-        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(
-                NodeApiVersions.create(ApiKeys.UNREGISTER_CONTROLLER.id, (short) 0, (short) 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterControllerResponse(Errors.UNKNOWN_SERVER_ERROR, 0));
-            UnregisterControllerResult result = env.adminClient().unregisterController(nodeId);
-            // Validate response
-            assertNotNull(result.all());
-            TestUtils.assertFutureThrows(UnknownServerException.class, result.all());
+    public void testUnregisterControllerFailure() throws ExecutionException, InterruptedException {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_CONTROLLER, CONTROLLER_RESPONSE_FACTORY,
+                UNREGISTER_CONTROLLER_CALL, List.of(Errors.UNKNOWN_SERVER_ERROR), UnknownServerException.class);
         }
     }
 
     @Test
     public void testUnregisterControllerTimeoutAndSuccessRetry() throws ExecutionException, InterruptedException {
-        int nodeId = 1;
-        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(
-                NodeApiVersions.create(ApiKeys.UNREGISTER_CONTROLLER.id, (short) 0, (short) 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterControllerResponse(Errors.REQUEST_TIMED_OUT, 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterControllerResponse(Errors.NONE, 0));
-
-            UnregisterControllerResult result = env.adminClient().unregisterController(nodeId);
-
-            // Validate response
-            assertNotNull(result.all());
-            result.all().get();
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_CONTROLLER, CONTROLLER_RESPONSE_FACTORY,
+                UNREGISTER_CONTROLLER_CALL, List.of(Errors.REQUEST_TIMED_OUT, Errors.NONE), null);
         }
     }
 
     @Test
-    public void testUnregisterControllerTimeoutAndFailureRetry() {
-        int nodeId = 1;
-        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(
-                NodeApiVersions.create(ApiKeys.UNREGISTER_CONTROLLER.id, (short) 0, (short) 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterControllerResponse(Errors.REQUEST_TIMED_OUT, 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterControllerResponse(Errors.UNKNOWN_SERVER_ERROR, 0));
-
-            UnregisterControllerResult result = env.adminClient().unregisterController(nodeId);
-
-            // Validate response
-            assertNotNull(result.all());
-            TestUtils.assertFutureThrows(UnknownServerException.class, result.all());
+    public void testUnregisterControllerTimeoutAndFailureRetry() throws ExecutionException, InterruptedException {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_CONTROLLER, CONTROLLER_RESPONSE_FACTORY,
+                UNREGISTER_CONTROLLER_CALL, List.of(Errors.REQUEST_TIMED_OUT, Errors.UNKNOWN_SERVER_ERROR),
+                UnknownServerException.class);
         }
     }
 
     @Test
-    public void testUnregisterControllerTimeoutMaxRetry() {
-        int nodeId = 1;
-        try (final AdminClientUnitTestEnv env = mockClientEnv(Time.SYSTEM, AdminClientConfig.RETRIES_CONFIG, "1")) {
-            env.kafkaClient().setNodeApiVersions(
-                NodeApiVersions.create(ApiKeys.UNREGISTER_CONTROLLER.id, (short) 0, (short) 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterControllerResponse(Errors.REQUEST_TIMED_OUT, 0));
-            env.kafkaClient().prepareResponse(prepareUnregisterControllerResponse(Errors.REQUEST_TIMED_OUT, 0));
-
-            UnregisterControllerResult result = env.adminClient().unregisterController(nodeId);
-
-            // Validate response
-            assertNotNull(result.all());
-            TestUtils.assertFutureThrows(TimeoutException.class, result.all());
+    public void testUnregisterControllerTimeoutMaxRetry() throws ExecutionException, InterruptedException {
+        try (AdminClientUnitTestEnv env = mockClientEnv(Time.SYSTEM, AdminClientConfig.RETRIES_CONFIG, "1")) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_CONTROLLER, CONTROLLER_RESPONSE_FACTORY,
+                UNREGISTER_CONTROLLER_CALL, List.of(Errors.REQUEST_TIMED_OUT, Errors.REQUEST_TIMED_OUT),
+                TimeoutException.class);
         }
     }
 
     @Test
-    public void testUnregisterControllerTimeoutMaxWait() {
-        int nodeId = 1;
-        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(
-                NodeApiVersions.create(ApiKeys.UNREGISTER_CONTROLLER.id, (short) 0, (short) 0));
-
-            UnregisterControllerResult result = env.adminClient().unregisterController(nodeId, new UnregisterControllerOptions().timeoutMs(10));
-
-            // Validate response
-            assertNotNull(result.all());
-            TestUtils.assertFutureThrows(TimeoutException.class, result.all());
+    public void testUnregisterControllerTimeoutMaxWait() throws ExecutionException, InterruptedException {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            runUnregisterScenario(env, ApiKeys.UNREGISTER_CONTROLLER, CONTROLLER_RESPONSE_FACTORY,
+                admin -> admin.unregisterController(UNREGISTER_NODE_ID,
+                    new UnregisterControllerOptions().timeoutMs(10)).all(),
+                List.of(), TimeoutException.class);
         }
     }
 
@@ -10803,20 +10761,6 @@ public class KafkaAdminClientTest {
         assertEquals("Telemetry is not enabled. Set config `enable.metrics.push` to `true`.", exception.getMessage());
 
         admin.close();
-    }
-
-    private UnregisterBrokerResponse prepareUnregisterBrokerResponse(Errors error, int throttleTimeMs) {
-        return new UnregisterBrokerResponse(new UnregisterBrokerResponseData()
-                .setErrorCode(error.code())
-                .setErrorMessage(error.message())
-                .setThrottleTimeMs(throttleTimeMs));
-    }
-
-    private UnregisterControllerResponse prepareUnregisterControllerResponse(Errors error, int throttleTimeMs) {
-        return new UnregisterControllerResponse(new UnregisterControllerResponseData()
-                .setErrorCode(error.code())
-                .setErrorMessage(error.message())
-                .setThrottleTimeMs(throttleTimeMs));
     }
 
     private DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir) {

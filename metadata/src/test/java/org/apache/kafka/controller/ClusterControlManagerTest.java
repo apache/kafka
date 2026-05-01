@@ -1118,7 +1118,7 @@ public class ClusterControlManagerTest {
             build();
         featureControl.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
-            setFeatureLevel(MetadataVersion.IBP_4_4_IV0.featureLevel()));
+            setFeatureLevel(MetadataVersion.IBP_4_4_IV1.featureLevel()));
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setTime(new MockTime(0, 0, 0)).
             setSnapshotRegistry(snapshotRegistry).
@@ -1152,7 +1152,7 @@ public class ClusterControlManagerTest {
             build();
         featureControl.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
-            setFeatureLevel(MetadataVersion.IBP_4_4_IV0.featureLevel()));
+            setFeatureLevel(MetadataVersion.IBP_4_4_IV1.featureLevel()));
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setTime(new MockTime(0, 0, 0)).
             setSnapshotRegistry(snapshotRegistry).
@@ -1168,7 +1168,7 @@ public class ClusterControlManagerTest {
 
         // Replaying unregister record for unknown controller should throw RuntimeException
         assertThrows(RuntimeException.class,
-            () -> clusterControl.replay(new UnregisterControllerRecord().setControllerId(99)));
+            () -> clusterControl.replay(new UnregisterControllerRecord().setControllerId(1)));
     }
 
     @Test

@@ -31,6 +31,7 @@ import org.apache.kafka.common.metadata.RegisterControllerRecord.ControllerEndpo
 import org.apache.kafka.common.metadata.RegisterControllerRecord.ControllerEndpointCollection;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.common.metadata.UnregisterControllerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.RecordListWriter;
@@ -178,6 +179,9 @@ public class ClusterImageTest {
             setSupportedFeatures(Map.of()).build());
         IMAGE2 = new ClusterImage(map2, cmap2);
 
+        // cmap3 reflects IMAGE2 with controller 1001 unregistered via DELTA2.
+        Map<Integer, ControllerRegistration> cmap3 = new HashMap<>(cmap1);
+
         DELTA2_RECORDS = new ArrayList<>(DELTA1_RECORDS);
         // fence b0
         DELTA2_RECORDS.add(new ApiMessageAndVersion(new FenceBrokerRecord().
@@ -203,6 +207,10 @@ public class ClusterImageTest {
                     setMaxSupportedVersion(MetadataVersion.IBP_3_6_IV0.featureLevel())))).
             setRack("rack3"),
             REGISTER_BROKER_RECORD.highestSupportedVersion()));
+        // unregister c1001
+        DELTA2_RECORDS.add(new ApiMessageAndVersion(new UnregisterControllerRecord().
+            setControllerId(1001),
+            (short) 0));
 
         DELTA2 = new ClusterDelta(IMAGE2);
         RecordTestUtils.replayAll(DELTA2, DELTA2_RECORDS);
@@ -237,7 +245,7 @@ public class ClusterImageTest {
             setFenced(true).
             setIsMigratingZkBroker(true).build());
 
-        IMAGE3 = new ClusterImage(map3, cmap2);
+        IMAGE3 = new ClusterImage(map3, cmap3);
     }
 
     @Test

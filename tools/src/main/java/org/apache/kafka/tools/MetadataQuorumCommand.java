@@ -22,6 +22,8 @@ import org.apache.kafka.clients.admin.RaftVoterEndpoint;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.VoterNotFoundException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
@@ -480,7 +482,7 @@ public class MetadataQuorumCommand {
 
         removeControllerParser
             .addArgument("--unregister")
-            .help("If set, also unregister the controller after removing it from the voter set.")
+            .help("If set, also unregister the controller after successfully removing it from the voter set.")
             .action(Arguments.storeTrue());
     }
 
@@ -501,8 +503,7 @@ public class MetadataQuorumCommand {
             throw new TerseException("Failed to parse --controller-directory-id: " + e.getMessage());
         }
         if (!dryRun) {
-            admin.removeRaftVoter(controllerId, directoryId).
-                all().get();
+            removeRaftVoter(admin, controllerId, directoryId);
         }
         System.out.printf("%s KRaft controller %d with directory id %s%n",
             dryRun ? "DRY RUN of removing " : "Removed ",
@@ -510,11 +511,44 @@ public class MetadataQuorumCommand {
             directoryId);
         if (unregister) {
             if (!dryRun) {
-                admin.unregisterController(controllerId).all().get();
+                unregisterController(admin, controllerId);
             }
             System.out.printf("%s KRaft controller %d%n",
                 dryRun ? "DRY RUN of unregistering " : "Unregistered ",
                 controllerId);
+        }
+    }
+
+    private static void removeRaftVoter(Admin admin, int controllerId, Uuid directoryId)
+            throws TerseException, ExecutionException, InterruptedException {
+        try {
+            admin.removeRaftVoter(controllerId, directoryId).all().get();
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof UnsupportedVersionException ||
+                cause instanceof VoterNotFoundException) {
+                throw new TerseException("Failed to remove KRaft voter " + controllerId
+                    + ": " + cause.getMessage()
+                    + ". To unregister the controller from the cluster, run "
+                    + "`kafka-cluster.sh unregister-controller --controller-id "
+                    + controllerId + "`.");
+            }
+            throw e;
+        }
+    }
+
+    private static void unregisterController(Admin admin, int controllerId)
+            throws TerseException, InterruptedException {
+        try {
+            admin.unregisterController(controllerId).all().get();
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            throw new TerseException("Removed KRaft voter " + controllerId
+                + " but failed to unregister it: "
+                + (cause != null ? cause.getMessage() : e.getMessage())
+                + ". To unregister the controller from the cluster, run "
+                + "`kafka-cluster.sh unregister-controller --controller-id "
+                + controllerId + "`.");
         }
     }
 }

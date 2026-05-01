@@ -402,13 +402,10 @@ class ControllerRegistrationManagerTest {
       assertTrue(registeredInLog(manager))
 
       // Now a different incarnation registers with the same controller ID.
-      val differentIncarnationId = new Uuid(999999L, 1)
       doMetadataUpdate(image2,
         manager,
         MetadataVersion.IBP_3_7_IV0,
-        r => Some(r.setIncarnationId(
-          if (r.controllerId() == 1) differentIncarnationId
-          else new Uuid(3465346L, r.controllerId()))),
+        r => if (r.controllerId() == 1) Some(r.setIncarnationId(new Uuid(999999L, 1))) else Some(r),
         _ => None
       )
 
