@@ -21,6 +21,7 @@ import kafka.server.KafkaBroker;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
@@ -75,9 +76,9 @@ public class ProduceRequestTest {
     @ClusterTest
     public void testSimpleProduceRequest() throws Exception {
         cluster.createTopic(TOPIC, 3, (short) 2);
-        List<Integer> partitionAndLeader = findPartitionWithLeader();
-        int partition = partitionAndLeader.get(0);
-        int leaderId = partitionAndLeader.get(1);
+        TopicPartitionInfo partitionAndLeader = findPartitionWithLeader();
+        int partition = partitionAndLeader.partition();
+        int leaderId = partitionAndLeader.leader().id();
         sendAndCheckProduceResponse(leaderId, partition,
             MemoryRecords.withRecords(Compression.NONE,
                 new SimpleRecord(System.currentTimeMillis(), "key".getBytes(), "value".getBytes())),
@@ -143,9 +144,9 @@ public class ProduceRequestTest {
     @ClusterTest
     public void testCorruptLz4ProduceRequest() throws Exception {
         cluster.createTopic(TOPIC, 3, (short) 2);
-        List<Integer> partitionAndLeader = findPartitionWithLeader();
-        int partition = partitionAndLeader.get(0);
-        int leaderId = partitionAndLeader.get(1);
+        TopicPartitionInfo partitionAndLeader = findPartitionWithLeader();
+        int partition = partitionAndLeader.partition();
+        int leaderId = partitionAndLeader.leader().id();
         Uuid topicId = getTopicId();
 
         MemoryRecords memoryRecords = MemoryRecords.withRecords(Compression.lz4().build(),
@@ -308,13 +309,12 @@ public class ProduceRequestTest {
         }
     }
 
-    private List<Integer> findPartitionWithLeader() throws ExecutionException, InterruptedException {
+    private TopicPartitionInfo findPartitionWithLeader() throws ExecutionException, InterruptedException {
         try (Admin admin = cluster.admin()) {
             TopicDescription desc = admin.describeTopics(List.of(TOPIC))
                 .topicNameValues().get(TOPIC).get();
             return desc.partitions().stream()
                 .filter(p -> p.leader() != null && p.leader().id() != -1)
-                .map(p -> List.of(p.partition(), p.leader().id()))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("No partition with leader found for topic " + TOPIC));
         }
