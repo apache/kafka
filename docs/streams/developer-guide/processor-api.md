@@ -303,7 +303,7 @@ You can query timestamped state stores both with and without a timestamp.
   * For DSL operators, store data is upgraded lazily in the background.
   * No upgrade happens if you provide a custom XxxBytesStoreSupplier, but you can opt-in by implementing the [TimestampedBytesStore](/{version}/javadoc/org/apache/kafka/streams/state/TimestampedBytesStore.html) interface. In this case, the old format is retained, and Streams uses a proxy store that removes/adds timestamps on read/write.
 
-## Headers in State Stores (Kafka 4.3+) {#headers-in-state-stores}
+## Headers in State Stores {#headers-in-state-stores}
 
 Since Kafka 4.3, you can materialize state that includes Kafka [record headers](https://kafka.apache.org/documentation/#recordheaders) in addition to keys, values, and timestamps ([KIP-1271](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1271%3A+Allow+to+Store+Record+Headers+in+State+Stores)). Use this when downstream processing needs access to record headers from prior input — for example, when an aggregation or join implemented with the Processor API must propagate headers to its output. Headerless `Stores` still persist keys, values, and timestamps as before, but they do not materialize header metadata in state; the `WithHeaders` variants do.
 
