@@ -989,7 +989,7 @@ public class StoreChangelogReader implements ChangelogReader {
                     partition, currentOffset, recordEndOffset(endOffset));
             } else {
                 final long retentionPeriod = storeMetadata.retentionPeriod();
-                if (retentionPeriod > 0 && retentionPeriod != Long.MAX_VALUE) {
+                if (retentionPeriod > 0 && retentionPeriod != Long.MAX_VALUE && endOffset != null && endOffset > 0) {
                     newPartitionsWithRetentionPeriod.put(partition, retentionPeriod);
                 } else {
                     log.debug("Start restoring changelog partition {} from the beginning offset to end offset {} " +
