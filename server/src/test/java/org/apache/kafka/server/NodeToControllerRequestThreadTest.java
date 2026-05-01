@@ -22,7 +22,6 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.message.EnvelopeResponseData;
 import org.apache.kafka.common.message.MetadataRequestData;
 import org.apache.kafka.common.network.ListenerName;
@@ -60,10 +59,6 @@ import static org.mockito.Mockito.mock;
 
 class NodeToControllerRequestThreadTest {
 
-    private static AbstractConfig createConfig() {
-        return new AbstractConfig(ReplicationConfigs.CONFIG_DEF, Map.of());
-    }
-
     private static ControllerInformation controllerInfo(Optional<Node> node) {
         return new ControllerInformation(node, new ListenerName(""), SecurityProtocol.PLAINTEXT, "");
     }
@@ -89,7 +84,6 @@ class NodeToControllerRequestThreadTest {
     @Test
     void testRetryTimeoutWhileControllerNotAvailable() {
         MockTime time = new MockTime();
-        AbstractConfig config = createConfig();
         Metadata metadata = mock(Metadata.class);
         MockClient mockClient = new MockClient(time, metadata);
 
@@ -98,7 +92,7 @@ class NodeToControllerRequestThreadTest {
         long retryTimeoutMs = 30000;
         NodeToControllerRequestThread testRequestThread = new NodeToControllerRequestThread(
             mockClient, new ManualMetadataUpdater(),
-            controllerNodeProvider, config, time, "", retryTimeoutMs);
+            controllerNodeProvider, ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_DEFAULT, time, "", retryTimeoutMs);
         testRequestThread.setStarted(true);
 
         TestControllerRequestCompletionHandler completionHandler =
@@ -123,7 +117,6 @@ class NodeToControllerRequestThreadTest {
     void testRequestsSent() {
         // just a simple test that tests whether the request from 1 -> 2 is sent and the response callback is called
         MockTime time = new MockTime();
-        AbstractConfig config = createConfig();
         int controllerId = 2;
 
         Metadata metadata = mock(Metadata.class);
@@ -136,7 +129,7 @@ class NodeToControllerRequestThreadTest {
         MetadataResponse expectedResponse = RequestTestUtils.metadataUpdateWith(2, Map.of("a", 2));
         NodeToControllerRequestThread testRequestThread = new NodeToControllerRequestThread(
             mockClient, new ManualMetadataUpdater(),
-            controllerNodeProvider, config, time, "", Long.MAX_VALUE);
+            controllerNodeProvider, ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_DEFAULT, time, "", Long.MAX_VALUE);
         testRequestThread.setStarted(true);
         mockClient.prepareResponse(expectedResponse);
 
@@ -164,7 +157,6 @@ class NodeToControllerRequestThreadTest {
     void testControllerChanged() {
         // in this test the controller changes from node 1 -> node 2
         MockTime time = new MockTime();
-        AbstractConfig config = createConfig();
         int oldControllerId = 1;
         int newControllerId = 2;
 
@@ -180,7 +172,7 @@ class NodeToControllerRequestThreadTest {
         MetadataResponse expectedResponse = RequestTestUtils.metadataUpdateWith(3, Map.of("a", 2));
         NodeToControllerRequestThread testRequestThread = new NodeToControllerRequestThread(
             mockClient, new ManualMetadataUpdater(),
-            controllerNodeProvider, config, time, "", Long.MAX_VALUE);
+            controllerNodeProvider, ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_DEFAULT, time, "", Long.MAX_VALUE);
         testRequestThread.setStarted(true);
 
         TestControllerRequestCompletionHandler completionHandler =
@@ -212,7 +204,6 @@ class NodeToControllerRequestThreadTest {
     @Test
     void testNotController() {
         MockTime time = new MockTime();
-        AbstractConfig config = createConfig();
         int oldControllerId = 1;
         int newControllerId = 2;
 
@@ -232,7 +223,7 @@ class NodeToControllerRequestThreadTest {
         MetadataResponse expectedResponse = RequestTestUtils.metadataUpdateWith(3, Map.of("a", 2));
         NodeToControllerRequestThread testRequestThread = new NodeToControllerRequestThread(
             mockClient, new ManualMetadataUpdater(),
-            controllerNodeProvider, config, time, "", Long.MAX_VALUE);
+            controllerNodeProvider, ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_DEFAULT, time, "", Long.MAX_VALUE);
         testRequestThread.setStarted(true);
 
         TestControllerRequestCompletionHandler completionHandler =
@@ -271,7 +262,6 @@ class NodeToControllerRequestThreadTest {
     @Test
     void testEnvelopeResponseWithNotControllerError() {
         MockTime time = new MockTime();
-        AbstractConfig config = createConfig();
         int oldControllerId = 1;
         int newControllerId = 2;
 
@@ -296,7 +286,7 @@ class NodeToControllerRequestThreadTest {
 
         NodeToControllerRequestThread testRequestThread = new NodeToControllerRequestThread(
             mockClient, new ManualMetadataUpdater(),
-            controllerNodeProvider, config, time, "", Long.MAX_VALUE);
+            controllerNodeProvider, ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_DEFAULT, time, "", Long.MAX_VALUE);
         testRequestThread.setStarted(true);
 
         TestControllerRequestCompletionHandler completionHandler =
@@ -343,7 +333,6 @@ class NodeToControllerRequestThreadTest {
     @Test
     void testRetryTimeout() {
         MockTime time = new MockTime();
-        AbstractConfig config = createConfig();
         int controllerId = 1;
 
         Metadata metadata = mock(Metadata.class);
@@ -359,7 +348,7 @@ class NodeToControllerRequestThreadTest {
             Map.of("a", 2));
         NodeToControllerRequestThread testRequestThread = new NodeToControllerRequestThread(
             mockClient, new ManualMetadataUpdater(),
-            controllerNodeProvider, config, time, "", retryTimeoutMs);
+            controllerNodeProvider, ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_DEFAULT, time, "", retryTimeoutMs);
         testRequestThread.setStarted(true);
 
         TestControllerRequestCompletionHandler completionHandler =
@@ -391,7 +380,6 @@ class NodeToControllerRequestThreadTest {
     @Test
     void testUnsupportedVersionHandling() {
         MockTime time = new MockTime();
-        AbstractConfig config = createConfig();
         int controllerId = 2;
 
         Metadata metadata = mock(Metadata.class);
@@ -424,7 +412,7 @@ class NodeToControllerRequestThreadTest {
 
         NodeToControllerRequestThread testRequestThread = new NodeToControllerRequestThread(
             mockClient, new ManualMetadataUpdater(),
-            controllerNodeProvider, config, time, "", Long.MAX_VALUE);
+            controllerNodeProvider, ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_DEFAULT, time, "", Long.MAX_VALUE);
         testRequestThread.setStarted(true);
 
         testRequestThread.enqueue(queueItem);
@@ -435,7 +423,6 @@ class NodeToControllerRequestThreadTest {
     @Test
     void testAuthenticationExceptionHandling() {
         MockTime time = new MockTime();
-        AbstractConfig config = createConfig();
         int controllerId = 2;
 
         Metadata metadata = mock(Metadata.class);
@@ -468,7 +455,7 @@ class NodeToControllerRequestThreadTest {
 
         NodeToControllerRequestThread testRequestThread = new NodeToControllerRequestThread(
             mockClient, new ManualMetadataUpdater(),
-            controllerNodeProvider, config, time, "", Long.MAX_VALUE);
+            controllerNodeProvider, ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_DEFAULT, time, "", Long.MAX_VALUE);
         testRequestThread.setStarted(true);
 
         testRequestThread.enqueue(queueItem);
@@ -481,7 +468,6 @@ class NodeToControllerRequestThreadTest {
     void testThreadNotStarted() {
         // Make sure we throw if we enqueue anything while the thread is not running
         MockTime time = new MockTime();
-        AbstractConfig config = createConfig();
 
         Metadata metadata = mock(Metadata.class);
         MockClient mockClient = new MockClient(time, metadata);
@@ -490,7 +476,7 @@ class NodeToControllerRequestThreadTest {
 
         NodeToControllerRequestThread testRequestThread = new NodeToControllerRequestThread(
             mockClient, new ManualMetadataUpdater(),
-            controllerNodeProvider, config, time, "", Long.MAX_VALUE);
+            controllerNodeProvider, ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_DEFAULT, time, "", Long.MAX_VALUE);
 
         TestControllerRequestCompletionHandler completionHandler =
             new TestControllerRequestCompletionHandler(null);

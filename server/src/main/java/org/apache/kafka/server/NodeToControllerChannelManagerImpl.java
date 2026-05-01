@@ -81,7 +81,7 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
                 buildNetworkClient(controllerInformation),
                 manualMetadataUpdater,
                 controllerNodeProvider,
-                config,
+                config.controllerSocketTimeoutMs(),
                 time,
                 threadName,
                 retryTimeoutMs
