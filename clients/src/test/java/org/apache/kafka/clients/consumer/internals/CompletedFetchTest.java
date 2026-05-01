@@ -114,7 +114,7 @@ public class CompletedFetchTest {
     @Test
     public void testCommittedTransactionRecordsIncluded() {
         int numRecords = 10;
-        Records rawRecords = newTranscactionalRecords(ControlRecordType.COMMIT, numRecords);
+        Records rawRecords = newTransactionalRecords(ControlRecordType.COMMIT, numRecords);
         FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
                 .setRecords(rawRecords);
         CompletedFetch completedFetch = newCompletedFetch(0, partitionData);
@@ -258,7 +258,7 @@ public class CompletedFetchTest {
         }
     }
 
-    private Records newTranscactionalRecords(ControlRecordType controlRecordType, int numRecords) {
+    private Records newTransactionalRecords(ControlRecordType controlRecordType, int numRecords) {
         Time time = new MockTime();
         ByteBuffer buffer = ByteBuffer.allocate(1024);
 
