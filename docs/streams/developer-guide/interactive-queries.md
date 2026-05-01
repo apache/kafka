@@ -143,7 +143,7 @@ The _type_ of a state store is defined by `QueryableStoreType`. Pass a built-in 
   * **`QueryableStoreTypes#timestampedWindowStore()`** — see [Querying local window stores](#querying-local-window-stores).
   * **`QueryableStoreTypes#sessionStore()`** — see [Querying local window stores](#querying-local-window-stores).
 
-### Header-aware stores and interactive queries (Kafka 4.3+) {#header-aware-stores-interactive-queries}
+### Header-aware stores and interactive queries {#header-aware-stores-interactive-queries}
 
 Since Kafka 4.3, you can use [header-aware state stores](processor-api.html#headers-in-state-stores) ([KIP-1271](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1271%3A+Allow+to+Store+Record+Headers+in+State+Stores)). For interactive queries, they reuse the same [`QueryableStoreTypes`](/{version}/javadoc/org/apache/kafka/streams/state/QueryableStoreTypes.html) helpers as matching **headerless** stores. `timestampedKeyValueStore()` and `timestampedWindowStore()` also match `TimestampedKeyValueStoreWithHeaders` and `TimestampedWindowStoreWithHeaders`. `sessionStore()` matches `SessionStoreWithHeaders`.
 
