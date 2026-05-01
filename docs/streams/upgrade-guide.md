@@ -71,7 +71,7 @@ The streams thread metrics `commit-ratio`, `process-ratio`, `punctuate-ratio`, a
 
 Kafka Streams now allows to purge local state directories and checkpoint files during application startup if they have not been modified for a certain period of time. This can be configured via the new `state.cleanup.dir.max.age.ms` config. More details can be found in [KIP-1259](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1259%3A+Add+configuration+to+wipe+Kafka+Streams+local+state+on+startup)
 
-### Header-aware state stores for the Processor API (KIP-1271) {#kip-1271-headers-aware-stores}
+### Header-aware state stores for the Processor API {#headers-aware-stores}
 
 Kafka Streams 4.3 adds **header-aware** state stores ([KIP-1271](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1271%3A+Allow+to+Store+Record+Headers+in+State+Stores)). Opt in with the new `Stores` suppliers whose names end with `WithHeaders` and the matching `StoreBuilder` factories—for example `persistentTimestampedKeyValueStoreWithHeaders` with `timestampedKeyValueStoreBuilderWithHeaders`, `persistentTimestampedWindowStoreWithHeaders` with `timestampedWindowStoreWithHeadersBuilder`, and `persistentSessionStoreWithHeaders` with `sessionStoreBuilderWithHeaders`. See the [Processor API state store documentation](developer-guide/processor-api.html#headers-in-state-stores).
 
