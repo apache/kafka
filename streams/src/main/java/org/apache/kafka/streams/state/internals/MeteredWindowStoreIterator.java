@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.util.Set;
@@ -31,7 +30,6 @@ class MeteredWindowStoreIterator<V> implements WindowStoreIterator<V>, MeteredIt
     private final WindowStoreIterator<byte[]> iter;
     private final Sensor operationSensor;
     private final Sensor iteratorSensor;
-    private final StreamsMetrics metrics;
     private final Function<byte[], V> valueFrom;
     private final long startNs;
     private final long startTimestampMs;
@@ -42,7 +40,6 @@ class MeteredWindowStoreIterator<V> implements WindowStoreIterator<V>, MeteredIt
     MeteredWindowStoreIterator(final WindowStoreIterator<byte[]> iter,
                                final Sensor operationSensor,
                                final Sensor iteratorSensor,
-                               final StreamsMetrics metrics,
                                final Function<byte[], V> valueFrom,
                                final Time time,
                                final LongAdder numOpenIterators,
@@ -50,7 +47,6 @@ class MeteredWindowStoreIterator<V> implements WindowStoreIterator<V>, MeteredIt
         this.iter = iter;
         this.operationSensor = operationSensor;
         this.iteratorSensor = iteratorSensor;
-        this.metrics = metrics;
         this.valueFrom = valueFrom;
         this.startNs = time.nanoseconds();
         this.startTimestampMs = time.milliseconds();

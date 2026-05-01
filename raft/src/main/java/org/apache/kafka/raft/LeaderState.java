@@ -26,9 +26,9 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.ControlRecordUtils;
 import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.internal.RecordBatch;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.internals.AddVoterHandlerState;
 import org.apache.kafka.raft.internals.BatchAccumulator;
@@ -563,7 +563,7 @@ public class LeaderState<T> implements EpochState {
             );
         }
 
-        // Upgrade to kraft.verion 1 is only supported; this needs to change when kraft.version 2 is added
+        // Upgrade to kraft.version 1 is only supported; this needs to change when kraft.version 2 is added
         var inMemoryVoters = kraftVersionUpgradeState.get().toVoters().orElseThrow(() ->
             new InvalidUpdateVersionException(
                 String.format(

@@ -27,8 +27,8 @@ import org.apache.kafka.common.requests.BrokerHeartbeatRequest;
 import org.apache.kafka.common.requests.BrokerHeartbeatResponse;
 import org.apache.kafka.common.requests.BrokerRegistrationRequest;
 import org.apache.kafka.common.requests.BrokerRegistrationResponse;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.metadata.BrokerState;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.queue.EventQueue;
@@ -570,10 +570,10 @@ public class BrokerLifecycleManager {
                 return;
             }
             if (response.authenticationException() != null) {
-                logger.error("Unable to register broker $nodeId because of an authentication exception.", response.authenticationException());
+                logger.error("Unable to register broker {} because of an authentication exception.", nodeId, response.authenticationException());
                 scheduleNextCommunicationAfterFailure();
             } else if (response.versionMismatch() != null) {
-                logger.error("Unable to register broker $nodeId because of an API version problem.", response.versionMismatch());
+                logger.error("Unable to register broker {} because of an API version problem.", nodeId, response.versionMismatch());
                 scheduleNextCommunicationAfterFailure();
             } else if (response.responseBody() == null) {
                 logger.warn("Unable to register broker {}.", nodeId);

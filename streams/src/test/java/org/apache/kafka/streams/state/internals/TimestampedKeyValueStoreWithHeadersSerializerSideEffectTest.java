@@ -132,7 +132,7 @@ public class TimestampedKeyValueStoreWithHeadersSerializerSideEffectTest {
 
         // Create a timestamped key-value store with headers using our custom serializer
         builder.addStateStore(
-            Stores.timestampedKeyValueStoreBuilderWithHeaders(
+            Stores.timestampedKeyValueStoreWithHeadersBuilder(
                 Stores.inMemoryKeyValueStore(STORE_NAME),
                 new HeaderAddingSerde(),  // Custom key serializer that adds headers
                 Serdes.String()

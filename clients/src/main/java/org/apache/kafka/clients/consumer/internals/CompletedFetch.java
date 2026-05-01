@@ -34,8 +34,8 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.CloseableIterator;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.CloseableIterator;
 
 import org.slf4j.Logger;
 
@@ -78,7 +78,8 @@ public class CompletedFetch {
     private boolean corruptLastRecord = false;
     private long nextFetchOffset;
     private Optional<Integer> lastEpoch;
-    private boolean isConsumed = false;
+    private volatile boolean isConsumed = false;
+    private boolean exhausted = false;
     private boolean initialized = false;
 
     CompletedFetch(Logger log,
@@ -119,6 +120,10 @@ public class CompletedFetch {
 
     public boolean isConsumed() {
         return isConsumed;
+    }
+
+    boolean isExhausted() {
+        return exhausted;
     }
 
 
@@ -192,7 +197,7 @@ public class CompletedFetch {
                     // fetching the same batch repeatedly).
                     if (currentBatch != null)
                         nextFetchOffset = currentBatch.nextOffset();
-                    drain();
+                    exhausted = true;
                     return null;
                 }
 

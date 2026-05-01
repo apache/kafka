@@ -18,6 +18,7 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.message.ConsumerProtocolAssignment;
 import org.apache.kafka.common.message.ConsumerProtocolAssignmentJsonConverter;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
@@ -60,7 +61,6 @@ import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.snapshot.SnapshotPath;
 import org.apache.kafka.snapshot.Snapshots;
-import org.apache.kafka.storage.internals.log.AbortedTxn;
 import org.apache.kafka.storage.internals.log.BatchMetadata;
 import org.apache.kafka.storage.internals.log.CorruptSnapshotException;
 import org.apache.kafka.storage.internals.log.LogFileUtils;
@@ -156,7 +156,7 @@ public class DumpLogSegments {
     private static void dumpTxnIndex(File file) throws IOException {
         try (TransactionIndex index = new TransactionIndex(UnifiedLog.offsetFromFile(file), file)) {
             for (AbortedTxn abortedTxn : index.allAbortedTxns()) {
-                System.out.println("version: " + abortedTxn.version() +
+                System.out.println("version: " + AbortedTxn.HIGHEST_SUPPORTED_VERSION +
                     " producerId: " + abortedTxn.producerId() +
                     " firstOffset: " + abortedTxn.firstOffset() +
                     " lastOffset: " + abortedTxn.lastOffset() +

@@ -19,8 +19,8 @@ package org.apache.kafka.jmh.coordinator;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.metadata.TopicRecord;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
@@ -83,7 +83,9 @@ public class TransactionalOffsetFetchBenchmark {
     @Setup(Level.Trial)
     public void setup() {
         LogContext logContext = new LogContext();
-        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
         delta.replay(new TopicRecord()
             .setTopicId(Uuid.randomUuid())
             .setName(TOPIC_NAME));

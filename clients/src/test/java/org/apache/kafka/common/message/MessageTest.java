@@ -106,7 +106,7 @@ public final class MessageTest {
                 setV3AndBelowTopics(new AddPartitionsToTxnTopicCollection(singletonList(
                         new AddPartitionsToTxnTopic().
                                 setName("Topic").
-                                setPartitions(singletonList(1))).iterator()));
+                                setPartitions(singletonList(1)))));
         testDuplication(v3AndBelowData);
         testAllMessageRoundTripsUntilVersion((short) 3, v3AndBelowData);
 
@@ -116,7 +116,7 @@ public final class MessageTest {
                               setTransactionalId("blah").
                               setProducerId(0xbadcafebadcafeL).
                               setProducerEpoch((short) 30000).
-                              setTopics(v3AndBelowData.v3AndBelowTopics())).iterator()));
+                              setTopics(v3AndBelowData.v3AndBelowTopics()))));
         testDuplication(data);
         testAllMessageRoundTripsFromVersion((short) 4, data);
     }
@@ -324,7 +324,7 @@ public final class MessageTest {
                     .setBrokerId(1)
                     .setHost("localhost")
                     .setPort(9092)
-                    .setRack("rack1")).iterator()))
+                    .setRack("rack1"))))
             .setClusterId("clusterId")
             .setControllerId(1)
             .setClusterAuthorizedOperations(10);
@@ -646,7 +646,7 @@ public final class MessageTest {
                         new ProduceResponseData.PartitionProduceResponse()
                             .setIndex(partitionIndex)
                             .setErrorCode(errorCode)
-                            .setBaseOffset(baseOffset)))).iterator())));
+                            .setBaseOffset(baseOffset)))))));
 
         Supplier<ProduceResponseData> response = () -> new ProduceResponseData()
                 .setResponses(new ProduceResponseData.TopicProduceResponseCollection(singletonList(
@@ -662,7 +662,7 @@ public final class MessageTest {
                                      new ProduceResponseData.BatchIndexAndErrorMessage()
                                          .setBatchIndex(batchIndex)
                                          .setBatchIndexErrorMessage(batchIndexErrorMessage)))
-                                 .setErrorMessage(errorMessage)))).iterator()))
+                                 .setErrorMessage(errorMessage))))))
                 .setThrottleTimeMs(throttleTimeMs);
 
         for (short version : ApiKeys.PRODUCE.allVersions()) {

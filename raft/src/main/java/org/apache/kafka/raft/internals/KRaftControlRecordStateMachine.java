@@ -18,8 +18,8 @@ package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.VotersRecord;
-import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.BufferSupplier;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.ExternalKRaftMetrics;
@@ -233,7 +233,11 @@ public final class KRaftControlRecordStateMachine {
 
     private void maybeLoadLog() {
         while (log.endOffset().offset() > nextOffset) {
-            LogFetchInfo info = log.read(nextOffset, Isolation.UNCOMMITTED);
+            LogFetchInfo info = log.read(
+                nextOffset,
+                Isolation.UNCOMMITTED,
+                Integer.MAX_VALUE
+            );
             try (RecordsIterator<?> iterator = new RecordsIterator<>(
                     info.records,
                     serde,

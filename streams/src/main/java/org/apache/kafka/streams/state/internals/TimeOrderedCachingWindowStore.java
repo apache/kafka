@@ -113,6 +113,7 @@ public class TimeOrderedCachingWindowStore
         return null;
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         final String prefix = StreamsConfig.InternalConfig.getString(

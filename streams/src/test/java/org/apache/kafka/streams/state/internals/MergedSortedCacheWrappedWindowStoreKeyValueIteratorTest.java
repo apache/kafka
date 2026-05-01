@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -45,7 +47,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
 
     @FunctionalInterface
     private interface StoreKeySerializer<K> {
-        Bytes serialize(final Windowed<K> key, final int seq, final StateSerdes<K, ?> serdes);
+        Bytes serialize(final Windowed<K> key, final int seq, final Headers headers, final StateSerdes<K, ?> serdes);
     }
 
     private static final SegmentedCacheFunction SINGLE_SEGMENT_CACHE_FUNCTION = new SegmentedCacheFunction(null, -1) {
@@ -100,7 +102,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
         cacheKvs = Collections.singleton(
             KeyValue.pair(
                 SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(storeKeySerializer.serialize(
-                    new Windowed<>(cacheKey, cacheWindow), 0, new StateSerdes<>("dummy", Serdes.String(), Serdes.ByteArray()))
+                    new Windowed<>(cacheKey, cacheWindow), 0, new RecordHeaders(), new StateSerdes<>("dummy", Serdes.String(), Serdes.ByteArray()))
                 ),
                 new LRUCacheEntry(cacheKey.getBytes())
             )

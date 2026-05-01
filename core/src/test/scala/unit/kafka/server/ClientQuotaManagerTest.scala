@@ -16,7 +16,6 @@
  */
 package kafka.server
 
-import org.apache.kafka.common.Cluster
 import java.net.InetAddress
 import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.metrics.Quota
@@ -571,7 +570,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): Map[String, String] = Collections.emptyMap()
 
       override def quotaLimit(quotaType: ClientQuotaType, metricTags: Map[String, String]): java.lang.Double = 1
-      override def updateClusterMetadata(cluster: Cluster): Boolean = false
 
       override def updateQuota(quotaType: ClientQuotaType, entity: ClientQuotaEntity, newValue: Double): Unit = {
         quotas.put(entity.asInstanceOf[ClientQuotaManager.KafkaQuotaEntity], new Quota(newValue.toLong, true))
