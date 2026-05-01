@@ -1154,7 +1154,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     assertFutureThrows(classOf[InvalidConfigurationException],
       alterResult.values.get(groupResource),
-      "consumer.session.timeout.ms must be greater than or equal to group.consumer.min.session.timeout.ms")
+      "consumer.session.timeout.ms must be in the range 45000 to 60000 inclusive.")
   }
 
   @Test

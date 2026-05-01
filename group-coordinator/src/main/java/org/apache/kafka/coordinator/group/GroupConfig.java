@@ -105,6 +105,8 @@ public final class GroupConfig extends AbstractConfig {
 
     public static final String STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG = "streams.task.offset.interval.ms";
 
+    public static final String STREAMS_NUM_WARMUP_REPLICAS_CONFIG = "streams.num.warmup.replicas";
+
     public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG = "errors.deadletterqueue.topic.name";
     public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DEFAULT = "";
     public static final String ERRORS_DEADLETTERQUEUE_TOPIC_NAME_DOC = "The name of the topic to be used as the dead-letter queue (DLQ) topic for this share group. If blank (the default), the group does not have a DLQ topic.";
@@ -150,6 +152,8 @@ public final class GroupConfig extends AbstractConfig {
     private final Optional<Boolean> streamsAssignorOffloadEnable;
 
     private final Optional<Integer> streamsTaskOffsetIntervalMs;
+
+    private final Optional<Integer> streamsNumWarmupReplicas;
 
     private final Optional<IsolationLevel> shareIsolationLevel;
 
@@ -282,6 +286,12 @@ public final class GroupConfig extends AbstractConfig {
             atLeast(1),
             MEDIUM,
             GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DOC)
+        .define(STREAMS_NUM_WARMUP_REPLICAS_CONFIG,
+            INT,
+            GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_DEFAULT,
+            atLeast(0),
+            MEDIUM,
+            GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_DOC)
 
         // DLQ configurations (KIP-1191)
         .define(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG,
@@ -326,6 +336,7 @@ public final class GroupConfig extends AbstractConfig {
         Map.entry(STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG)),
         Map.entry(STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG)),
         Map.entry(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG)),
+        Map.entry(STREAMS_NUM_WARMUP_REPLICAS_CONFIG, Optional.of(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG)),
 
         // DLQ configs
         Map.entry(ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, Optional.empty()),
@@ -362,6 +373,7 @@ public final class GroupConfig extends AbstractConfig {
         this.streamsAssignmentIntervalMs = optionalInt(STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG);
         this.streamsAssignorOffloadEnable = optionalBoolean(STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG);
         this.streamsTaskOffsetIntervalMs = optionalInt(STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG);
+        this.streamsNumWarmupReplicas = optionalInt(STREAMS_NUM_WARMUP_REPLICAS_CONFIG);
         this.shareIsolationLevel = optionalString(SHARE_ISOLATION_LEVEL_CONFIG)
             .map(s -> IsolationLevel.valueOf(s.toUpperCase(Locale.ROOT)));
         this.shareRenewAcknowledgeEnable = optionalBoolean(SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG);
@@ -434,25 +446,19 @@ public final class GroupConfig extends AbstractConfig {
             parsed,
             CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.consumerGroupMinHeartbeatIntervalMs(),
-            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.consumerGroupMaxHeartbeatIntervalMs(),
-            GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG
+            groupCoordinatorConfig.consumerGroupMaxHeartbeatIntervalMs()
         );
         validateIntRange(
             parsed,
             CONSUMER_SESSION_TIMEOUT_MS_CONFIG,
             groupCoordinatorConfig.consumerGroupMinSessionTimeoutMs(),
-            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG,
-            groupCoordinatorConfig.consumerGroupMaxSessionTimeoutMs(),
-            GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG
+            groupCoordinatorConfig.consumerGroupMaxSessionTimeoutMs()
         );
         validateIntRange(
             parsed,
             CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.consumerGroupMinAssignmentIntervalMs(),
-            GroupCoordinatorConfig.CONSUMER_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.consumerGroupMaxAssignmentIntervalMs(),
-            GroupCoordinatorConfig.CONSUMER_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG
+            groupCoordinatorConfig.consumerGroupMaxAssignmentIntervalMs()
         );
 
         // Share group configs.
@@ -460,49 +466,37 @@ public final class GroupConfig extends AbstractConfig {
             parsed,
             SHARE_HEARTBEAT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.shareGroupMinHeartbeatIntervalMs(),
-            GroupCoordinatorConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.shareGroupMaxHeartbeatIntervalMs(),
-            GroupCoordinatorConfig.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG
+            groupCoordinatorConfig.shareGroupMaxHeartbeatIntervalMs()
         );
         validateIntRange(
             parsed,
             SHARE_SESSION_TIMEOUT_MS_CONFIG,
             groupCoordinatorConfig.shareGroupMinSessionTimeoutMs(),
-            GroupCoordinatorConfig.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG,
-            groupCoordinatorConfig.shareGroupMaxSessionTimeoutMs(),
-            GroupCoordinatorConfig.SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG
+            groupCoordinatorConfig.shareGroupMaxSessionTimeoutMs()
         );
         validateIntRange(
             parsed,
             SHARE_RECORD_LOCK_DURATION_MS_CONFIG,
             shareGroupConfig.shareGroupMinRecordLockDurationMs(),
-            ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG,
-            shareGroupConfig.shareGroupMaxRecordLockDurationMs(),
-            ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG
+            shareGroupConfig.shareGroupMaxRecordLockDurationMs()
         );
         validateIntRange(
             parsed,
             SHARE_DELIVERY_COUNT_LIMIT_CONFIG,
             shareGroupConfig.shareGroupMinDeliveryCountLimit(),
-            ShareGroupConfig.SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_CONFIG,
-            shareGroupConfig.shareGroupMaxDeliveryCountLimit(),
-            ShareGroupConfig.SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_CONFIG
+            shareGroupConfig.shareGroupMaxDeliveryCountLimit()
         );
         validateIntRange(
             parsed,
             SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG,
             shareGroupConfig.shareGroupMinPartitionMaxRecordLocks(),
-            ShareGroupConfig.SHARE_GROUP_MIN_PARTITION_MAX_RECORD_LOCKS_CONFIG,
-            shareGroupConfig.shareGroupMaxPartitionMaxRecordLocks(),
-            ShareGroupConfig.SHARE_GROUP_MAX_PARTITION_MAX_RECORD_LOCKS_CONFIG
+            shareGroupConfig.shareGroupMaxPartitionMaxRecordLocks()
         );
         validateIntRange(
             parsed,
             SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.shareGroupMinAssignmentIntervalMs(),
-            GroupCoordinatorConfig.SHARE_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.shareGroupMaxAssignmentIntervalMs(),
-            GroupCoordinatorConfig.SHARE_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG
+            groupCoordinatorConfig.shareGroupMaxAssignmentIntervalMs()
         );
 
         // Streams group configs.
@@ -510,37 +504,34 @@ public final class GroupConfig extends AbstractConfig {
             parsed,
             STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.streamsGroupMinHeartbeatIntervalMs(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.streamsGroupMaxHeartbeatIntervalMs(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG
+            groupCoordinatorConfig.streamsGroupMaxHeartbeatIntervalMs()
         );
         validateIntRange(
             parsed,
             STREAMS_SESSION_TIMEOUT_MS_CONFIG,
             groupCoordinatorConfig.streamsGroupMinSessionTimeoutMs(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG,
-            groupCoordinatorConfig.streamsGroupMaxSessionTimeoutMs(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG
+            groupCoordinatorConfig.streamsGroupMaxSessionTimeoutMs()
         );
         validateIntMax(
             parsed,
             STREAMS_NUM_STANDBY_REPLICAS_CONFIG,
-            groupCoordinatorConfig.streamsGroupMaxNumStandbyReplicas(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_CONFIG
+            groupCoordinatorConfig.streamsGroupMaxNumStandbyReplicas()
         );
         validateIntRange(
             parsed,
             STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.streamsGroupMinAssignmentIntervalMs(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.streamsGroupMaxAssignmentIntervalMs(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG
+            groupCoordinatorConfig.streamsGroupMaxAssignmentIntervalMs()
         );
         validateIntMin(
             parsed,
             STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG,
-            groupCoordinatorConfig.streamsGroupMinTaskOffsetIntervalMs(),
-            GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG
+            groupCoordinatorConfig.streamsGroupMinTaskOffsetIntervalMs()
+        );
+        validateIntMax(
+            parsed,
+            STREAMS_NUM_WARMUP_REPLICAS_CONFIG,
+            groupCoordinatorConfig.streamsGroupMaxWarmupReplicas()
         );
 
         // Cross-field validations: session timeout must be greater than heartbeat interval.
@@ -583,16 +574,12 @@ public final class GroupConfig extends AbstractConfig {
         Map<String, Object> parsed,
         String key,
         int min,
-        String minConfigName,
-        int max,
-        String maxConfigName
+        int max
     ) {
         if (!parsed.containsKey(key)) return;
         int value = (Integer) parsed.get(key);
-        if (value < min)
-            throw new InvalidConfigurationException(key + " must be greater than or equal to " + minConfigName);
-        if (value > max)
-            throw new InvalidConfigurationException(key + " must be less than or equal to " + maxConfigName);
+        if (value < min || value > max)
+            throw new InvalidConfigurationException(key + " must be in the range " + min + " to " + max + " inclusive.");
     }
 
     /**
@@ -602,13 +589,12 @@ public final class GroupConfig extends AbstractConfig {
     private static void validateIntMax(
         Map<String, Object> parsed,
         String key,
-        int max,
-        String maxConfigName
+        int max
     ) {
         if (!parsed.containsKey(key)) return;
         int value = (Integer) parsed.get(key);
         if (value > max)
-            throw new InvalidConfigurationException(key + " must be less than or equal to " + maxConfigName);
+            throw new InvalidConfigurationException(key + " must be less than or equal to " + max);
     }
 
     /**
@@ -618,13 +604,12 @@ public final class GroupConfig extends AbstractConfig {
     private static void validateIntMin(
         Map<String, Object> parsed,
         String key,
-        int min,
-        String minConfigName
+        int min
     ) {
         if (!parsed.containsKey(key)) return;
         int value = (Integer) parsed.get(key);
         if (value < min)
-            throw new InvalidConfigurationException(key + " must be greater than or equal to " + minConfigName);
+            throw new InvalidConfigurationException(key + " must be greater than or equal to " + min);
     }
 
     /**
@@ -781,6 +766,12 @@ public final class GroupConfig extends AbstractConfig {
             groupId,
             STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG,
             groupCoordinatorConfig.streamsGroupMinTaskOffsetIntervalMs()
+        );
+        clampToMax(
+            props,
+            groupId,
+            STREAMS_NUM_WARMUP_REPLICAS_CONFIG,
+            groupCoordinatorConfig.streamsGroupMaxWarmupReplicas()
         );
 
         // Verify that clamping did not break the session > heartbeat invariant.
@@ -1082,6 +1073,13 @@ public final class GroupConfig extends AbstractConfig {
      */
     public Optional<Integer> streamsTaskOffsetIntervalMs() {
         return streamsTaskOffsetIntervalMs;
+    }
+
+    /**
+     * The number of warmup replicas for each task.
+     */
+    public Optional<Integer> streamsNumWarmupReplicas() {
+        return streamsNumWarmupReplicas;
     }
 
     /**
