@@ -5068,9 +5068,10 @@ object PlaintextAdminIntegrationTest {
         val isr = client.describeTopics(util.Set.of(partition.topic))
           .allTopicNames
           .get
-          .asScala
-          .values
-          .flatMap(_.partitions.asScala.flatMap(_.isr.asScala))
+          .get(partition.topic)
+          .partitions.asScala
+          .filter(_.partition == partition.partition)
+          .flatMap(_.isr.asScala)
           .map(_.id)
           .toSet
         brokerIds.subsetOf(isr)
@@ -5084,8 +5085,11 @@ object PlaintextAdminIntegrationTest {
       () => {
         val description = client.describeTopics(partition.map(_.topic).asJava).allTopicNames.get.asScala
         val isr = description
-          .values
-          .flatMap(_.partitions.asScala.flatMap(_.isr.asScala))
+          .flatMap { case (topic, desc) =>
+            desc.partitions.asScala
+              .filter(info => partition.contains(new TopicPartition(topic, info.partition)))
+              .flatMap(_.isr.asScala)
+          }
           .map(_.id)
           .toSet
 
