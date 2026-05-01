@@ -46,7 +46,7 @@ plugins {
 ext {
   minClientJavaVersion = 11
   minNonClientJavaVersion = 17
-  modulesNeedingJava11 = [":clients", ":generator", ":streams", ":streams:test-utils", ":streams:examples", ":streams:streams-scala", ":test-common:test-common-util"]
+  modulesNeedingJava11 = [":clients", ":generator", ":streams", ":streams:test-utils", ":streams:examples", ":streams:streams-scala", ":test-common:test-common-util", ":test-common:test-common-base"]
 
   buildVersionFileName = "kafka-version.properties"
 
@@ -1131,6 +1131,7 @@ project(':core') {
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-util')
+    testImplementation project(':test-common:test-common-base')
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
     testImplementation(libs.apacheda) {
@@ -1574,6 +1575,32 @@ project(':group-coordinator') {
   srcJar.dependsOn 'processMessages'
 }
 
+project(':test-common:test-common-base') {
+  // Generic utilities for testing. Depends on `clients` only to minimize classpath leakage.
+  // e.g. SSL utilities, wait functions, file-related operations
+  // Java 11 is the minimum Java version required.
+
+  base {
+    archivesName = "kafka-test-common-base"
+  }
+
+  dependencies {
+    implementation project(':clients')
+    implementation libs.bcpkix
+    implementation libs.junitJupiter
+    implementation testLog4j2Libs
+
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-test-common-base.xml")
+  }
+
+  javadoc {
+    enabled = false
+  }
+}
 
 project(':test-common:test-common-internal-api') {
   // Interfaces, config classes, and other test APIs. Java 17 is the minimum Java version.
@@ -1903,6 +1930,7 @@ project(':clients') {
     compileOnly libs.jose4j          // for SASL/OAUTHBEARER JWT validation; only used by broker
 
 
+    testImplementation project(':test-common:test-common-base')
     testImplementation project(':test-common:test-common-util')
     testImplementation libs.bcpkix
     testImplementation libs.jacksonJakartarsJsonProvider
@@ -2354,6 +2382,7 @@ project(':storage') {
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-util')
+    testImplementation project(':test-common:test-common-base')
     testImplementation project(':server')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
@@ -2547,6 +2576,7 @@ project(':tools') {
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
+    testImplementation project(':test-common:test-common-base')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':connect:api')
@@ -3665,6 +3695,7 @@ project(':connect:runtime') {
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-util')
     testImplementation project(':test-common:test-common-runtime')
+    testImplementation project(':test-common:test-common-base')
     testImplementation project(':raft')
     testImplementation project(':server-common')
     testImplementation project(':server')
@@ -3894,6 +3925,7 @@ project(':connect:mirror') {
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':test-common:test-common-runtime')
+    testImplementation project(':test-common:test-common-base')
     testImplementation project(':raft')
     testImplementation project(':server')
     testImplementation project(':server-common')
