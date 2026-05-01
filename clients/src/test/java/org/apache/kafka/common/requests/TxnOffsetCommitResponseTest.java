@@ -17,15 +17,17 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
+import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition;
+import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.MessageUtil;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TxnOffsetCommitResponseTest extends OffsetCommitResponseTest {
 
@@ -44,16 +46,15 @@ public class TxnOffsetCommitResponseTest extends OffsetCommitResponseTest {
     public void testParse() {
         TxnOffsetCommitResponseData data = new TxnOffsetCommitResponseData()
             .setThrottleTimeMs(throttleTimeMs)
-            .setTopics(Arrays.asList(
-                new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic().setPartitions(
-                    Collections.singletonList(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+            .setTopics(List.of(
+                new TxnOffsetCommitResponseTopic().setPartitions(List.of(
+                    new TxnOffsetCommitResponsePartition()
                         .setPartitionIndex(partitionOne)
                         .setErrorCode(errorOne.code()))),
-                    new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic().setPartitions(
-                        Collections.singletonList(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
-                            .setPartitionIndex(partitionTwo)
-                            .setErrorCode(errorTwo.code())))
-                ));
+                new TxnOffsetCommitResponseTopic().setPartitions(List.of(
+                    new TxnOffsetCommitResponsePartition()
+                        .setPartitionIndex(partitionTwo)
+                        .setErrorCode(errorTwo.code())))));
 
         for (short version : ApiKeys.TXN_OFFSET_COMMIT.allVersions()) {
             TxnOffsetCommitResponse response = TxnOffsetCommitResponse.parse(
@@ -62,6 +63,140 @@ public class TxnOffsetCommitResponseTest extends OffsetCommitResponseTest {
             assertEquals(throttleTimeMs, response.throttleTimeMs());
             assertEquals(version >= 1, response.shouldClientThrottle(version));
         }
+    }
+
+    @Test
+    public void testBuilderAddPartition() {
+        TxnOffsetCommitResponse.Builder builder = TxnOffsetCommitResponse.newBuilder();
+        builder.addPartition(topicOne, partitionOne, errorOne);
+        builder.addPartition(topicOne, partitionTwo, errorTwo);
+        builder.addPartition(topicTwo, partitionOne, errorOne);
+
+        TxnOffsetCommitResponseData expected = new TxnOffsetCommitResponseData()
+            .setTopics(List.of(
+                new TxnOffsetCommitResponseTopic()
+                    .setName(topicOne)
+                    .setPartitions(List.of(
+                        new TxnOffsetCommitResponsePartition()
+                            .setPartitionIndex(partitionOne)
+                            .setErrorCode(errorOne.code()),
+                        new TxnOffsetCommitResponsePartition()
+                            .setPartitionIndex(partitionTwo)
+                            .setErrorCode(errorTwo.code()))),
+                new TxnOffsetCommitResponseTopic()
+                    .setName(topicTwo)
+                    .setPartitions(List.of(
+                        new TxnOffsetCommitResponsePartition()
+                            .setPartitionIndex(partitionOne)
+                            .setErrorCode(errorOne.code())))));
+
+        assertEquals(expected, builder.build().data());
+    }
+
+    @Test
+    public void testBuilderAddPartitions() {
+        TxnOffsetCommitResponse.Builder builder = TxnOffsetCommitResponse.newBuilder();
+        builder.addPartitions(topicOne, List.of(partitionOne, partitionTwo), p -> p, errorOne);
+
+        TxnOffsetCommitResponseData expected = new TxnOffsetCommitResponseData()
+            .setTopics(List.of(
+                new TxnOffsetCommitResponseTopic()
+                    .setName(topicOne)
+                    .setPartitions(List.of(
+                        new TxnOffsetCommitResponsePartition()
+                            .setPartitionIndex(partitionOne)
+                            .setErrorCode(errorOne.code()),
+                        new TxnOffsetCommitResponsePartition()
+                            .setPartitionIndex(partitionTwo)
+                            .setErrorCode(errorOne.code())))));
+
+        assertEquals(expected, builder.build().data());
+    }
+
+    @Test
+    public void testBuilderMergeIntoEmpty() {
+        TxnOffsetCommitResponseData newData = new TxnOffsetCommitResponseData()
+            .setTopics(List.of(
+                new TxnOffsetCommitResponseTopic()
+                    .setName(topicOne)
+                    .setPartitions(List.of(
+                        new TxnOffsetCommitResponsePartition()
+                            .setPartitionIndex(partitionOne)
+                            .setErrorCode(errorOne.code())))));
+
+        TxnOffsetCommitResponse response = TxnOffsetCommitResponse.newBuilder()
+            .merge(newData)
+            .build();
+
+        assertEquals(newData, response.data());
+    }
+
+    @Test
+    public void testBuilderMergeAddsNewTopic() {
+        TxnOffsetCommitResponse.Builder builder = TxnOffsetCommitResponse.newBuilder();
+        builder.addPartition(topicOne, partitionOne, errorOne);
+
+        TxnOffsetCommitResponseData newData = new TxnOffsetCommitResponseData()
+            .setTopics(List.of(
+                new TxnOffsetCommitResponseTopic()
+                    .setName(topicTwo)
+                    .setPartitions(List.of(
+                        new TxnOffsetCommitResponsePartition()
+                            .setPartitionIndex(partitionTwo)
+                            .setErrorCode(errorTwo.code())))));
+
+        TxnOffsetCommitResponseData expected = new TxnOffsetCommitResponseData()
+            .setTopics(List.of(
+                new TxnOffsetCommitResponseTopic()
+                    .setName(topicOne)
+                    .setPartitions(List.of(
+                        new TxnOffsetCommitResponsePartition()
+                            .setPartitionIndex(partitionOne)
+                            .setErrorCode(errorOne.code()))),
+                new TxnOffsetCommitResponseTopic()
+                    .setName(topicTwo)
+                    .setPartitions(List.of(
+                        new TxnOffsetCommitResponsePartition()
+                            .setPartitionIndex(partitionTwo)
+                            .setErrorCode(errorTwo.code())))));
+
+        assertEquals(expected, builder.merge(newData).build().data());
+    }
+
+    @Test
+    public void testBuilderMergeAppendsToExistingTopic() {
+        TxnOffsetCommitResponse.Builder builder = TxnOffsetCommitResponse.newBuilder();
+        builder.addPartition(topicOne, partitionOne, errorOne);
+
+        TxnOffsetCommitResponseData newData = new TxnOffsetCommitResponseData()
+            .setTopics(List.of(
+                new TxnOffsetCommitResponseTopic()
+                    .setName(topicOne)
+                    .setPartitions(List.of(
+                        new TxnOffsetCommitResponsePartition()
+                            .setPartitionIndex(partitionTwo)
+                            .setErrorCode(errorTwo.code())))));
+
+        TxnOffsetCommitResponseData expected = new TxnOffsetCommitResponseData()
+            .setTopics(List.of(
+                new TxnOffsetCommitResponseTopic()
+                    .setName(topicOne)
+                    .setPartitions(List.of(
+                        new TxnOffsetCommitResponsePartition()
+                            .setPartitionIndex(partitionOne)
+                            .setErrorCode(errorOne.code()),
+                        new TxnOffsetCommitResponsePartition()
+                            .setPartitionIndex(partitionTwo)
+                            .setErrorCode(errorTwo.code())))));
+
+        assertEquals(expected, builder.merge(newData).build().data());
+    }
+
+    @Test
+    public void testTopicNameBuilderRejectsNullTopicName() {
+        TxnOffsetCommitResponse.Builder builder = TxnOffsetCommitResponse.newBuilder();
+        assertThrows(IllegalArgumentException.class,
+            () -> builder.addPartition(null, partitionOne, errorOne));
     }
 
 }

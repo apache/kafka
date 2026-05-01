@@ -392,6 +392,14 @@ public class GroupCoordinatorConfig {
     public static final int STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT = 15000;
     public static final String STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DOC = "The minimum allowed value for the group-level configuration of " + GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG;
 
+    public static final String STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG = "group.streams.num.warmup.replicas";
+    public static final int STREAMS_GROUP_NUM_WARMUP_REPLICAS_DEFAULT = 2;
+    public static final String STREAMS_GROUP_NUM_WARMUP_REPLICAS_DOC = "The maximum number of warmup task replicas.";
+
+    public static final String STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG = "group.streams.max.warmup.replicas";
+    public static final int STREAMS_GROUP_MAX_WARMUP_REPLICAS_DEFAULT = 20;
+    public static final String STREAMS_GROUP_MAX_WARMUP_REPLICAS_DOC = "The maximum allowed value for the group-level configuration of " + GroupConfig.STREAMS_NUM_WARMUP_REPLICAS_CONFIG;
+
     public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
         CACHED_BUFFER_MAX_BYTES_CONFIG,
         CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG,
@@ -482,7 +490,9 @@ public class GroupCoordinatorConfig {
         .define(STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DOC)
         .define(STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, BOOLEAN, STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT, MEDIUM, STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC)
         .define(STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DOC)
-        .define(STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DOC);
+        .define(STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DOC)
+        .define(STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG, INT, STREAMS_GROUP_NUM_WARMUP_REPLICAS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_NUM_WARMUP_REPLICAS_DOC)
+        .define(STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG, INT, STREAMS_GROUP_MAX_WARMUP_REPLICAS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MAX_WARMUP_REPLICAS_DOC);
 
 
     /**
@@ -548,6 +558,8 @@ public class GroupCoordinatorConfig {
     private final int streamsGroupMaxAssignmentIntervalMs;
     private final int streamsGroupTaskOffsetIntervalMs;
     private final int streamsGroupMinTaskOffsetIntervalMs;
+    private final int streamsGroupNumWarmupReplicas;
+    private final int streamsGroupMaxWarmupReplicas;
 
     private final AbstractConfig config;
 
@@ -615,6 +627,8 @@ public class GroupCoordinatorConfig {
         this.streamsGroupMaxAssignmentIntervalMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG);
         this.streamsGroupTaskOffsetIntervalMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG);
         this.streamsGroupMinTaskOffsetIntervalMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG);
+        this.streamsGroupNumWarmupReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG);
+        this.streamsGroupMaxWarmupReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG);
         this.config = config;
 
         // New group coordinator configs validation.
@@ -714,9 +728,10 @@ public class GroupCoordinatorConfig {
 
         require(streamsGroupNumStandbyReplicas <= streamsGroupMaxStandbyReplicas,
             String.format("%s must be less than or equal to %s", STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG, STREAMS_GROUP_MAX_STANDBY_REPLICAS_CONFIG));
-
         require(streamsGroupTaskOffsetIntervalMs >= streamsGroupMinTaskOffsetIntervalMs,
             String.format("%s must be greater than or equal to %s", STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG));
+        require(streamsGroupNumWarmupReplicas <= streamsGroupMaxWarmupReplicas,
+            String.format("%s must be less than or equal to %s", STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG, STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG));
 
     }
 
@@ -1333,5 +1348,19 @@ public class GroupCoordinatorConfig {
      */
     public int streamsGroupMinTaskOffsetIntervalMs() {
         return streamsGroupMinTaskOffsetIntervalMs;
+    }
+
+    /**
+     * The maximum number of warmup replicas for streams groups.
+     */
+    public int streamsGroupNumWarmupReplicas() {
+        return streamsGroupNumWarmupReplicas;
+    }
+
+    /**
+     * The maximum allowed number of warmup replicas to be configured for streams groups
+     */
+    public int streamsGroupMaxWarmupReplicas() {
+        return streamsGroupMaxWarmupReplicas;
     }
 }

@@ -737,6 +737,7 @@ public class OffsetMetadataManager {
                         .setErrorCode(Errors.NONE.code()));
 
                     final OffsetAndMetadata offsetAndMetadata = OffsetAndMetadata.fromRequest(
+                        Uuid.ZERO_UUID,
                         partition,
                         currentTimeMs
                     );

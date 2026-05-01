@@ -269,7 +269,7 @@
 
     <!-- group coordinator -->
     <suppress checks="CyclomaticComplexity"
-              files="(ConsumerGroupMember|GroupMetadataManager|GroupCoordinatorRecordSerde|GroupMetadataManagerTestContext).java"/>
+              files="(ConsumerGroupMember|GroupMetadataManager|GroupCoordinatorRecordSerde|GroupMetadataManagerTestContext|GroupConfigTest).java"/>
     <suppress checks="(NPathComplexity|MethodLength)"
               files="(GroupMetadataManager|GroupMetadataManagerTest|GroupMetadataManagerTestContext|GroupCoordinatorShard).java"/>
     <suppress checks="ClassFanOutComplexity"

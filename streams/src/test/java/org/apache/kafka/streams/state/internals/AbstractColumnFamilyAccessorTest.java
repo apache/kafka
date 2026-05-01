@@ -43,7 +43,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 abstract class AbstractColumnFamilyAccessorTest {
@@ -140,6 +144,23 @@ abstract class AbstractColumnFamilyAccessorTest {
         accessor.commit(dbAccessor, Map.of());
         assertNull(accessor.getCommittedOffset(dbAccessor, tp0));
         assertNull(accessor.getCommittedOffset(dbAccessor, tp1));
+    }
+
+    @Test
+    public void shouldSkipPersistingStateOnCloseWhenStoreIsAlreadyClosed() throws RocksDBException {
+        dbAccessor = new InMemoryRocksDBAccessor(mock(RocksDB.class));
+        // Open and close cleanly
+        accessor.open(dbAccessor, false);
+        accessor.close(dbAccessor);
+        assertArrayEquals(closedValue, dbAccessor.get(offsetsCF, toBytes("status")));
+
+        // Simulate unclean shutdown: overwrite status to open without going through accessor.open()
+        dbAccessor.put(offsetsCF, toBytes("status"), openValue);
+        assertThrowsExactly(ProcessorStateException.class, () -> accessor.open(dbAccessor, false));
+
+        dbAccessor = spy(dbAccessor);
+        accessor.close(dbAccessor);
+        verify(dbAccessor, never()).put(any(), any(), any());
     }
 
     private byte[] toBytes(final String s) {

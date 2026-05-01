@@ -240,6 +240,8 @@ public class ConsumerIntegrationTest {
                 @ClusterConfigProperty(id = 0, key = "broker.rack", value = "rack0"),
                 @ClusterConfigProperty(id = 1, key = "broker.rack", value = "rack1"),
                 @ClusterConfigProperty(id = 2, key = "broker.rack", value = "rack2"),
+                @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, value = "1000"),
+                @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, value = "1000"),
                 @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, value = "org.apache.kafka.clients.consumer.RackAwareAssignor"),
                 @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
             }
@@ -251,6 +253,8 @@ public class ConsumerIntegrationTest {
                 @ClusterConfigProperty(id = 0, key = "broker.rack", value = "rack0"),
                 @ClusterConfigProperty(id = 1, key = "broker.rack", value = "rack1"),
                 @ClusterConfigProperty(id = 2, key = "broker.rack", value = "rack2"),
+                @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, value = "1000"),
+                @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, value = "1000"),
                 @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, value = "org.apache.kafka.clients.consumer.RackAwareAssignor"),
                 @ClusterConfigProperty(key = GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
             }
@@ -263,16 +267,19 @@ public class ConsumerIntegrationTest {
              Consumer<byte[], byte[]> consumer0 = clusterInstance.consumer(Map.of(
                  ConsumerConfig.GROUP_ID_CONFIG, "group0",
                  ConsumerConfig.CLIENT_RACK_CONFIG, "rack0",
+                 ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
                  ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name()
              ));
              Consumer<byte[], byte[]> consumer1 = clusterInstance.consumer(Map.of(
                  ConsumerConfig.GROUP_ID_CONFIG, "group0",
                  ConsumerConfig.CLIENT_RACK_CONFIG, "rack1",
+                 ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
                  ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name()
              ));
              Consumer<byte[], byte[]> consumer2 = clusterInstance.consumer(Map.of(
                  ConsumerConfig.GROUP_ID_CONFIG, "group0",
                  ConsumerConfig.CLIENT_RACK_CONFIG, "rack2",
+                 ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
                  ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name()
              ))
         ) {
@@ -288,9 +295,9 @@ public class ConsumerIntegrationTest {
             consumer2.subscribe(List.of(topic));
 
             TestUtils.waitForCondition(() -> {
-                consumer0.poll(Duration.ofMillis(1000));
-                consumer1.poll(Duration.ofMillis(1000));
-                consumer2.poll(Duration.ofMillis(1000));
+                consumer0.poll(Duration.ofMillis(100));
+                consumer1.poll(Duration.ofMillis(100));
+                consumer2.poll(Duration.ofMillis(100));
                 return consumer0.assignment().equals(Set.of(new TopicPartition(topic, 0))) &&
                     consumer1.assignment().isEmpty() &&
                     consumer2.assignment().isEmpty();
@@ -305,9 +312,9 @@ public class ConsumerIntegrationTest {
             );
             clusterInstance.waitTopicCreation(topic, 3);
             TestUtils.waitForCondition(() -> {
-                consumer0.poll(Duration.ofMillis(1000));
-                consumer1.poll(Duration.ofMillis(1000));
-                consumer2.poll(Duration.ofMillis(1000));
+                consumer0.poll(Duration.ofMillis(100));
+                consumer1.poll(Duration.ofMillis(100));
+                consumer2.poll(Duration.ofMillis(100));
                 return consumer0.assignment().equals(Set.of(new TopicPartition(topic, 0))) &&
                     consumer1.assignment().equals(Set.of(new TopicPartition(topic, 1), new TopicPartition(topic, 2))) &&
                     consumer2.assignment().isEmpty();
@@ -322,9 +329,9 @@ public class ConsumerIntegrationTest {
             );
             clusterInstance.waitTopicCreation(topic, 6);
             TestUtils.waitForCondition(() -> {
-                consumer0.poll(Duration.ofMillis(1000));
-                consumer1.poll(Duration.ofMillis(1000));
-                consumer2.poll(Duration.ofMillis(1000));
+                consumer0.poll(Duration.ofMillis(100));
+                consumer1.poll(Duration.ofMillis(100));
+                consumer2.poll(Duration.ofMillis(100));
                 return consumer0.assignment().equals(Set.of(new TopicPartition(topic, 0))) &&
                     consumer1.assignment().equals(Set.of(new TopicPartition(topic, 1), new TopicPartition(topic, 2))) &&
                     consumer2.assignment().equals(Set.of(new TopicPartition(topic, 3), new TopicPartition(topic, 4), new TopicPartition(topic, 5)));
@@ -346,13 +353,13 @@ public class ConsumerIntegrationTest {
                 new TopicPartition(topic, 5), Optional.of(new NewPartitionReassignment(List.of(0)))
             )).all().get();
             TestUtils.waitForCondition(() -> {
-                consumer0.poll(Duration.ofMillis(1000));
-                consumer1.poll(Duration.ofMillis(1000));
-                consumer2.poll(Duration.ofMillis(1000));
+                consumer0.poll(Duration.ofMillis(100));
+                consumer1.poll(Duration.ofMillis(100));
+                consumer2.poll(Duration.ofMillis(100));
                 return consumer0.assignment().equals(Set.of(new TopicPartition(topic, 5))) &&
                     consumer1.assignment().equals(Set.of(new TopicPartition(topic, 3), new TopicPartition(topic, 4))) &&
                     consumer2.assignment().equals(Set.of(new TopicPartition(topic, 0), new TopicPartition(topic, 1), new TopicPartition(topic, 2)));
-            }, "Consumer with topic partition mapping should be 0 -> 5 | 1 -> 3, 4 | 2 -> 0, 1, 2");
+            }, 30000, "Consumer with topic partition mapping should be 0 -> 5 | 1 -> 3, 4 | 2 -> 0, 1, 2");
         }
     }
 

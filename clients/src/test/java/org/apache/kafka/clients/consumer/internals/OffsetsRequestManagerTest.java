@@ -258,6 +258,66 @@ public class OffsetsRequestManagerTest {
         verifySuccessfulPollAndResponseReceived(fetchOffsetsFuture, expectedOffsets);
     }
 
+    /**
+     * Test for KAFKA-20312: when regroupPartitionMapByNode sees a partition with null leader
+     * (e.g. metadata race), it should skip that partition and add it to remainingToSearch instead
+     * of throwing NullPointerException.
+     */
+    @Test
+    public void testFetchOffsetsRegroupSkipsNullLeaderPartitionNoNPE() throws ExecutionException,
+            InterruptedException {
+        Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
+        timestampsToSearch.put(TEST_PARTITION_1, ListOffsetsRequest.EARLIEST_TIMESTAMP);
+        timestampsToSearch.put(TEST_PARTITION_2, ListOffsetsRequest.EARLIEST_TIMESTAMP);
+
+        // currentLeader returns a leader for both partitions (so both enter partitionDataMap)
+        when(metadata.currentLeader(TEST_PARTITION_1)).thenReturn(testLeaderEpoch(LEADER_1, Optional.empty()));
+        when(metadata.currentLeader(TEST_PARTITION_2)).thenReturn(testLeaderEpoch(LEADER_2, Optional.empty()));
+        when(subscriptionState.isAssigned(any(TopicPartition.class))).thenReturn(true);
+
+        // metadata.fetch() returns a cluster where PARTITION_2 has null leader (e.g. race: leader lost)
+        List<PartitionInfo> partitions = new ArrayList<>();
+        partitions.add(new PartitionInfo(TEST_TOPIC, 1, LEADER_1, null, null));
+        partitions.add(new PartitionInfo(TEST_TOPIC, 2, null, null, null));
+        Cluster clusterWithNullLeader = new Cluster("clusterId", Collections.singletonList(LEADER_1),
+                partitions, Collections.emptySet(), Collections.emptySet());
+        when(metadata.fetch()).thenReturn(clusterWithNullLeader);
+
+        CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> fetchOffsetsFuture =
+                assertDoesNotThrow(
+                        () -> requestManager.fetchOffsets(timestampsToSearch, false),
+                        "Should not throw NPE; only PARTITION_1 has a leader in regroup, so one request for LEADER_1");
+        assertEquals(1, requestManager.requestsToSend());
+        // requestsToRetry is populated when the in-flight request completes and remainingToSearch is non-empty, not yet
+        assertEquals(0, requestManager.requestsToRetry());
+
+        // Complete request for PARTITION_1
+        NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
+        ClientResponse clientResponse = buildClientResponse(unsentRequest,
+                Collections.singletonMap(TEST_PARTITION_1, new OffsetAndTimestampInternal(5L, -1, Optional.empty())));
+        clientResponse.onComplete();
+        assertFalse(fetchOffsetsFuture.isDone());
+
+        // Metadata update: now both partitions have leaders; retry should send request for PARTITION_2
+        mockSuccessfulRequest(Map.of(TEST_PARTITION_1, LEADER_1, TEST_PARTITION_2, LEADER_2));
+        requestManager.onUpdate(new ClusterResource(""));
+        assertEquals(1, requestManager.requestsToSend());
+
+        // Complete the retry request (only PARTITION_2 in this batch)
+        NetworkClientDelegate.PollResult retryPoll = requestManager.poll(time.milliseconds());
+        assertEquals(1, retryPoll.unsentRequests.size());
+        ClientResponse retryResponse = buildClientResponse(retryPoll.unsentRequests.get(0),
+                Collections.singletonMap(TEST_PARTITION_2, new OffsetAndTimestampInternal(10L, -1, Optional.empty())));
+        retryResponse.onComplete();
+
+        Map<TopicPartition, OffsetAndTimestampInternal> expectedOffsets = new HashMap<>();
+        expectedOffsets.put(TEST_PARTITION_1, new OffsetAndTimestampInternal(5L, -1, Optional.empty()));
+        expectedOffsets.put(TEST_PARTITION_2, new OffsetAndTimestampInternal(10L, -1, Optional.empty()));
+        verifyRequestSuccessfullyCompleted(fetchOffsetsFuture, expectedOffsets);
+    }
+
     @ParameterizedTest
     @MethodSource("retriableErrors")
     public void testRequestFailsWithRetriableError_RetrySucceeds(Errors error) throws ExecutionException, InterruptedException {
