@@ -1439,8 +1439,9 @@ public class StoreChangelogReaderTest {
     public void shouldSeekByTimestampForWindowedStoreWithoutCheckpoint() {
         final long retentionMs = Duration.ofHours(2).toMillis();
         final long offsetForTimestamp = 42L;
+        final long latestRecordTimestamp = 10_000_000L;
+        final long endOffset = 100L;
 
-        // Use a MockConsumer subclass that supports offsetsForTimes
         final MockConsumer<byte[], byte[]> timestampConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(final Map<TopicPartition, Long> timestampsToSearch) {
@@ -1450,7 +1451,6 @@ public class StoreChangelogReaderTest {
             }
         };
 
-        // Set up mocks - storeMetadata returns null offset (no checkpoint) and positive retentionPeriod
         final StateStoreMetadata windowStoreMetadata = mock(StateStoreMetadata.class);
         final ProcessorStateManager windowStateManager = mock(ProcessorStateManager.class);
         final StateStore windowStore = mock(StateStore.class);
@@ -1466,15 +1466,15 @@ public class StoreChangelogReaderTest {
         when(windowStateManager.taskId()).thenReturn(taskId);
 
         timestampConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
-        adminClient.updateEndOffsets(Collections.singletonMap(tp, 100L));
+        timestampConsumer.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
 
-        // Temporarily assign, add a record near the end with an explicit stream-time
-        // timestamp, then clear the assignment (the reader will re-assign during restore)
-        timestampConsumer.assign(Collections.singletonList(tp));
-        timestampConsumer.addRecord(new ConsumerRecord<>(topicName, 0, 99, time.milliseconds(),
-            TimestampType.CREATE_TIME, 0, 0, new byte[0], new byte[0],
-            new RecordHeaders(), Optional.empty()));
-        timestampConsumer.assign(Collections.emptyList());
+        // schedule adding the record during poll, after the partition is assigned
+        timestampConsumer.schedulePollTask(() -> timestampConsumer.addRecord(new ConsumerRecord<>(
+            tp.topic(), tp.partition(), endOffset - 1,
+            latestRecordTimestamp, TimestampType.CREATE_TIME,
+            0, 0, new byte[0], new byte[0],
+            new RecordHeaders(), Optional.empty())));
 
         final StoreChangelogReader reader =
             new StoreChangelogReader(time, config, logContext, adminClient, timestampConsumer, callback, standbyListener);
@@ -1488,8 +1488,9 @@ public class StoreChangelogReaderTest {
     @Test
     public void shouldSeekToBeginningWhenBrokerReturnsNullForOffsetsForTimes() {
         final long retentionMs = Duration.ofHours(2).toMillis();
+        final long latestRecordTimestamp = 10_000_000L;
+        final long endOffset = 100L;
 
-        // Use a MockConsumer subclass that returns null for offsetsForTimes
         final MockConsumer<byte[], byte[]> timestampConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public synchronized Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(final Map<TopicPartition, Long> timestampsToSearch) {
@@ -1514,15 +1515,15 @@ public class StoreChangelogReaderTest {
         when(windowStateManager.taskId()).thenReturn(taskId);
 
         timestampConsumer.updateBeginningOffsets(Collections.singletonMap(tp, 0L));
-        adminClient.updateEndOffsets(Collections.singletonMap(tp, 100L));
+        timestampConsumer.updateEndOffsets(Collections.singletonMap(tp, endOffset));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, endOffset));
 
-        // Temporarily assign, add a record near the end with an explicit timestamp,
-        // then clear the assignment
-        timestampConsumer.assign(Collections.singletonList(tp));
-        timestampConsumer.addRecord(new ConsumerRecord<>(topicName, 0, 99, time.milliseconds(),
-            TimestampType.CREATE_TIME, 0, 0, new byte[0], new byte[0],
-            new RecordHeaders(), Optional.empty()));
-        timestampConsumer.assign(Collections.emptyList());
+        // schedule adding the record during poll, after the partition is assigned
+        timestampConsumer.schedulePollTask(() -> timestampConsumer.addRecord(new ConsumerRecord<>(
+            tp.topic(), tp.partition(), endOffset - 1,
+            latestRecordTimestamp, TimestampType.CREATE_TIME,
+            0, 0, new byte[0], new byte[0],
+            new RecordHeaders(), Optional.empty())));
 
         final StoreChangelogReader reader =
             new StoreChangelogReader(time, config, logContext, adminClient, timestampConsumer, callback, standbyListener);
