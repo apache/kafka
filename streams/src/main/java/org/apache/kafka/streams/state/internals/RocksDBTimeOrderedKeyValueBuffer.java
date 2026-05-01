@@ -59,7 +59,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
     private final boolean loggingEnabled;
     private int partition;
     private String changelogTopic;
-    private InternalProcessorContext<?, ?> iternalContext;
+    private InternalProcessorContext<?, ?> internalContext;
     private boolean minValid;
 
     public static class Builder<K, V> implements StoreBuilder<TimeOrderedKeyValueBuffer<K, V, V>> {
@@ -188,7 +188,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
     @Override
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         store.init(stateStoreContext, root);
-        iternalContext = ProcessorContextUtils.asInternalProcessorContext(stateStoreContext);
+        internalContext = ProcessorContextUtils.asInternalProcessorContext(stateStoreContext);
         partition = stateStoreContext.taskId().partition();
         if (loggingEnabled) {
             changelogTopic = ProcessorContextUtils.changelogFor(stateStoreContext, name(), Boolean.TRUE);
@@ -231,7 +231,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
 
                     final BufferValue bufferValue = BufferValue.deserialize(ByteBuffer.wrap(keyValue.value));
                     final K key = keySerde.deserializer().deserialize(topic,
-                        iternalContext.headers(),
+                        internalContext.headers(),
                         PrefixedWindowKeySchemas.TimeFirstWindowKeySchema.extractStoreKeyBytes(keyValue.key.get()));
 
                     if (bufferValue.context().timestamp() < minTimestamp && minValid) {
