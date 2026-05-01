@@ -131,9 +131,11 @@ public enum MetadataVersion {
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
 
-    // Add support for controller unregistration.
-    IBP_4_4_IV0(31, "4.4", "IV0", true),
+    // IBP_4_4_IV0 enables dead-letter queue support for share groups (KIP-1191). When this version
+    // is finalized, so will the DLQ support.
+    IBP_4_4_IV0(31, "4.4", "IV0", false),
 
+    // Add support for controller unregistration (KIP-1312).
     IBP_4_4_IV1(32, "4.4", "IV1", false);
 
 
@@ -252,7 +254,7 @@ public enum MetadataVersion {
     }
 
     public boolean isControllerUnregistrationSupported() {
-        return this.isAtLeast(MetadataVersion.IBP_4_4_IV0);
+        return this.isAtLeast(MetadataVersion.IBP_4_4_IV1);
     }
 
     public short partitionChangeRecordVersion() {

@@ -425,6 +425,17 @@ public class KafkaEventQueueTest {
         }
     }
 
+    /**
+     * Wait for the queue's event handler thread to enter cond.await(), ensuring
+     * that startIdleMs has been captured before the test advances MockTime.
+     */
+    private static void waitForQueueThreadToBeIdle(Thread queueThread) throws InterruptedException {
+        TestUtils.waitForCondition(
+                () -> queueThread.getState() == Thread.State.WAITING,
+                "Queue thread should be waiting"
+        );
+    }
+
     @Test
     public void testIdleTimeCallback() throws Exception {
         MockTime time = new MockTime();
@@ -440,6 +451,11 @@ public class KafkaEventQueueTest {
                     lastIdleTimeMs.set(idleDuration);
                     lastCurrentTimeMs.set(currentTime);
                 })) {
+            // Capture the queue's event handler thread so we can wait for it to be idle.
+            CompletableFuture<Thread> queueThreadFuture = new CompletableFuture<>();
+            queue.append(() -> queueThreadFuture.complete(Thread.currentThread()));
+            Thread queueThread = queueThreadFuture.get();
+
             time.sleep(2);
             assertEquals(0, lastIdleTimeMs.get(), "Last idle time should be 0ms");
 
@@ -450,6 +466,8 @@ public class KafkaEventQueueTest {
                 return "event1-processed";
             }));
             assertEquals("event1-processed", event1.get());
+
+            waitForQueueThreadToBeIdle(queueThread);
 
             long timeBeforeWait = time.milliseconds();
             long waitTime5Ms = 5;
@@ -464,6 +482,8 @@ public class KafkaEventQueueTest {
             assertEquals(timeBeforeWait + waitTime5Ms, lastCurrentTimeMs.get(), "Current time should be " + (timeBeforeWait + waitTime5Ms) + "ms, was: " + lastCurrentTimeMs.get());
 
             // Test 2: Deferred event
+            waitForQueueThreadToBeIdle(queueThread);
+
             long timeBeforeDeferred = time.milliseconds();
             long waitTime2Ms = 2;
             CompletableFuture<Void> deferredEvent2 = new CompletableFuture<>();

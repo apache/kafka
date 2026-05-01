@@ -33,20 +33,19 @@ public class RocksDbIndexedTimeOrderedWindowBytesStoreSupplier implements Window
         INDEXED_WINDOW_STORE_WITH_HEADERS
     }
 
-    private final String name;
-    private final long retentionPeriod;
-    private final long segmentInterval;
-    private final long windowSize;
-    private final boolean retainDuplicates;
-    private final WindowStoreTypes windowStoreType;
+    final String name;
+    final long retentionPeriod;
+    final long segmentInterval;
+    final long windowSize;
+    final boolean retainDuplicates;
+    final WindowStoreTypes windowStoreType;
 
     public static RocksDbIndexedTimeOrderedWindowBytesStoreSupplier create(
         final String name,
         final Duration retentionPeriod,
         final Duration windowSize,
         final boolean retainDuplicates,
-        final boolean hasIndex,
-        final boolean withHeaders
+        final boolean hasIndex
     ) {
         Objects.requireNonNull(name, "name cannot be null");
         final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
@@ -75,7 +74,7 @@ public class RocksDbIndexedTimeOrderedWindowBytesStoreSupplier implements Window
             windowSizeMs,
             retainDuplicates,
             hasIndex,
-            withHeaders
+            false
         );
     }
 
@@ -109,7 +108,7 @@ public class RocksDbIndexedTimeOrderedWindowBytesStoreSupplier implements Window
         }
     }
 
-    private RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(
+    RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(
         final String name,
         final long retentionPeriod,
         final long segmentInterval,

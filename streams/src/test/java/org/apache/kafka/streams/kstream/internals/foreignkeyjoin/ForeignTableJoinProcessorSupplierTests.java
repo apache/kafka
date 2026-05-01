@@ -203,14 +203,14 @@ public class ForeignTableJoinProcessorSupplierTests {
         );
         final ValueTimestampHeaders<SubscriptionWrapper<String>> oldValue = ValueTimestampHeaders.make(oldWrapper, 0, new RecordHeaders());
 
-        final Bytes key = COMBINED_KEY_SCHEMA.toBytes(fk, pk);
+        final Bytes key = COMBINED_KEY_SCHEMA.toBytes(fk, pk, new RecordHeaders());
         stateStore.put(key, oldValue);
     }
 
     private StoreBuilder<TimestampedKeyValueStoreWithHeaders<Bytes, SubscriptionWrapper<String>>> storeBuilder() {
         final Serde<SubscriptionWrapper<String>> subscriptionWrapperSerde = new SubscriptionWrapperSerde<>(
             PK_SERDE_TOPIC_SUPPLIER, Serdes.String());
-        return Stores.timestampedKeyValueStoreBuilderWithHeaders(
+        return Stores.timestampedKeyValueStoreWithHeadersBuilder(
             Stores.persistentTimestampedKeyValueStore(
                 "Store"
             ),

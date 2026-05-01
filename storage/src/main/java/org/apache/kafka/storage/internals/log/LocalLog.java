@@ -322,7 +322,7 @@ public class LocalLog {
      */
     public void close() {
         maybeHandleIOException(
-            () -> "Error while renaming dir for " + topicPartition + " in dir " + dir.getParent(),
+            () -> "Error while closing log segments for " + topicPartition + " in dir " + dir.getParent(),
             () -> {
                 checkIfMemoryMappedBufferClosed();
                 segments.close();

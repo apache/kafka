@@ -237,6 +237,7 @@ import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
 import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.UnregisterBrokerRequestData;
 import org.apache.kafka.common.message.UnregisterBrokerResponseData;
 import org.apache.kafka.common.message.UnregisterControllerRequestData;
@@ -471,7 +472,7 @@ public class RequestResponseTest {
                 new ProduceRequestData()
                         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(asList(
                                 createTopicProduceData(PRODUCE.latestVersion(), records0, tpId0),
-                                createTopicProduceData(PRODUCE.latestVersion(), records1, tpId1)).iterator()))
+                                createTopicProduceData(PRODUCE.latestVersion(), records1, tpId1))))
                         .setAcks((short) 1)
                         .setTimeoutMs(5000)
                         .setTransactionalId("transactionalId"),
@@ -1304,7 +1305,7 @@ public class RequestResponseTest {
                 Collections.singletonList(new AddRaftVoterRequestData.Listener().
                     setName("CONTROLLER").
                     setHost("localhost").
-                    setPort(8080)).iterator())
+                    setPort(8080)))
             ), version);
     }
 
@@ -1337,7 +1338,7 @@ public class RequestResponseTest {
                     Collections.singletonList(new UpdateRaftVoterRequestData.Listener().
                         setName("CONTROLLER").
                         setHost("localhost").
-                        setPort(8080)).iterator())),
+                        setPort(8080)))),
                 version);
     }
 
@@ -1478,7 +1479,7 @@ public class RequestResponseTest {
                 .setTopics(new ShareFetchRequestData.FetchTopicCollection(List.of(new ShareFetchRequestData.FetchTopic()
                         .setTopicId(Uuid.randomUuid())
                         .setPartitions(new ShareFetchRequestData.FetchPartitionCollection(List.of(new ShareFetchRequestData.FetchPartition()
-                                .setPartitionIndex(0)).iterator()))).iterator()));
+                                .setPartitionIndex(0)))))));
         return new ShareFetchRequest.Builder(data).build(version);
     }
 
@@ -1508,7 +1509,7 @@ public class RequestResponseTest {
                                 .setAcknowledgementBatches(singletonList(new ShareAcknowledgeRequestData.AcknowledgementBatch()
                                         .setFirstOffset(0)
                                         .setLastOffset(0)
-                                        .setAcknowledgeTypes(Collections.singletonList((byte) 0))))).iterator()))).iterator()));
+                                        .setAcknowledgeTypes(Collections.singletonList((byte) 0))))))))));
         return new ShareAcknowledgeRequest.Builder(data).build(version);
     }
 
@@ -1518,7 +1519,7 @@ public class RequestResponseTest {
                 .setTopicId(Uuid.randomUuid())
                 .setPartitions(singletonList(new ShareAcknowledgeResponseData.PartitionData()
                         .setPartitionIndex(0)
-                        .setErrorCode(Errors.NONE.code())))).iterator()));
+                        .setErrorCode(Errors.NONE.code()))))));
         data.setThrottleTimeMs(345);
         data.setErrorCode(Errors.NONE.code());
         return new ShareAcknowledgeResponse(data);
@@ -1535,7 +1536,7 @@ public class RequestResponseTest {
                                         setName("metadata.version").
                                         setMinSupportedVersion((short) 1).
                                         setMinSupportedVersion((short) 15)
-                        ).iterator()
+                        )
                 )).
                 setListeners(new ControllerRegistrationRequestData.ListenerCollection(
                         singletonList(
@@ -1544,7 +1545,7 @@ public class RequestResponseTest {
                                         setName("localhost").
                                         setPort(9012).
                                         setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-                        ).iterator()
+                        )
                 ));
         return new ControllerRegistrationRequest(data, version);
     }
@@ -1893,7 +1894,7 @@ public class RequestResponseTest {
                                         .setBrokerId(1)
                                         .setHost("localhost")
                                         .setPort(9092)
-                                        .setRack("rack1")).iterator()))
+                                        .setRack("rack1"))))
                         .setClusterId("clusterId")
                         .setControllerId(1)
                         .setClusterAuthorizedOperations(10));
@@ -2159,7 +2160,7 @@ public class RequestResponseTest {
                 Collections.singleton(
                         new JoinGroupRequestData.JoinGroupRequestProtocol()
                                 .setName("consumer-range")
-                                .setMetadata(new byte[0])).iterator()
+                                .setMetadata(new byte[0]))
         );
 
         JoinGroupRequestData data = new JoinGroupRequestData()
@@ -2539,7 +2540,7 @@ public class RequestResponseTest {
         return ProduceRequest.builder(
                 new ProduceRequestData()
                         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
-                                singletonList(createTopicProduceData(version, records, topicIdPartition)).iterator()
+                                singletonList(createTopicProduceData(version, records, topicIdPartition))
                         ))
                         .setAcks((short) 1)
                         .setTimeoutMs(5000)
@@ -2788,8 +2789,8 @@ public class RequestResponseTest {
                     .setTopics(new AddPartitionsToTxnTopicCollection(
                         singletonList(new AddPartitionsToTxnTopic()
                             .setName("topic")
-                            .setPartitions(Collections.singletonList(73))).iterator())))
-                    .iterator());
+                            .setPartitions(Collections.singletonList(73))))))
+                    );
             return AddPartitionsToTxnRequest.Builder.forBroker(transactions).build(version);
         }
     }
@@ -2803,7 +2804,7 @@ public class RequestResponseTest {
         if (version < 4) {
             data.setResultsByTopicV3AndBelow(result.topicResults());
         } else {
-            data.setResultsByTransaction(new AddPartitionsToTxnResponseData.AddPartitionsToTxnResultCollection(singletonList(result).iterator()));
+            data.setResultsByTransaction(new AddPartitionsToTxnResponseData.AddPartitionsToTxnResultCollection(singletonList(result)));
         }
         return new AddPartitionsToTxnResponse(data);
     }
@@ -2865,34 +2866,20 @@ public class RequestResponseTest {
         offsets.put(new TopicPartition("topic", 74),
                 new TxnOffsetCommitRequest.CommittedOffset(100, "blah", Optional.of(27)));
 
-        if (version < 3) {
-            return new TxnOffsetCommitRequest.Builder("transactionalId",
-                "groupId",
-                21L,
-                (short) 42,
-                offsets,
-                false).build();
-        } else if (version < 5) {
-            return new TxnOffsetCommitRequest.Builder("transactionalId",
-                "groupId",
-                21L,
-                (short) 42,
-                offsets,
-                "member",
-                2,
-                Optional.of("instance"),
-                false).build(version);
-        } else {
-            return new TxnOffsetCommitRequest.Builder("transactionalId",
-                "groupId",
-                21L,
-                (short) 42,
-                offsets,
-                "member",
-                2,
-                Optional.of("instance"),
-                true).build(version);
+        TxnOffsetCommitRequestData data = new TxnOffsetCommitRequestData()
+            .setTransactionalId("transactionalId")
+            .setGroupId("groupId")
+            .setProducerId(21L)
+            .setProducerEpoch((short) 42)
+            .setTopics(TxnOffsetCommitRequest.getTopics(offsets));
+
+        if (version >= 3) {
+            data.setMemberId("member")
+                .setGenerationId(2)
+                .setGroupInstanceId("instance");
         }
+
+        return TxnOffsetCommitRequest.Builder.forTopicNames(data, version >= 5).build(version);
     }
 
     private TxnOffsetCommitRequest createTxnOffsetCommitRequestWithAutoDowngrade() {
@@ -2902,15 +2889,16 @@ public class RequestResponseTest {
         offsets.put(new TopicPartition("topic", 74),
             new TxnOffsetCommitRequest.CommittedOffset(100, "blah", Optional.of(27)));
 
-        return new TxnOffsetCommitRequest.Builder("transactionalId",
-            "groupId",
-            21L,
-            (short) 42,
-            offsets,
-            "member",
-            2,
-            Optional.of("instance"),
-            false).build();
+        TxnOffsetCommitRequestData data = new TxnOffsetCommitRequestData()
+            .setTransactionalId("transactionalId")
+            .setGroupId("groupId")
+            .setProducerId(21L)
+            .setProducerEpoch((short) 42)
+            .setMemberId("member")
+            .setGenerationId(2)
+            .setGroupInstanceId("instance")
+            .setTopics(TxnOffsetCommitRequest.getTopics(offsets));
+        return TxnOffsetCommitRequest.Builder.forTopicNames(data, false).build();
     }
 
     private TxnOffsetCommitResponse createTxnOffsetCommitResponse() {
@@ -3452,7 +3440,7 @@ public class RequestResponseTest {
                                 new AlterReplicaLogDirTopic()
                                         .setPartitions(singletonList(0))
                                         .setName("topic")
-                        ).iterator())
+                        ))
                 )
         );
         return new AlterReplicaLogDirsRequest.Builder(data).build(version);
@@ -3562,9 +3550,9 @@ public class RequestResponseTest {
                 .setClusterId(Uuid.randomUuid().toString())
                 .setRack("1")
                 .setFeatures(new BrokerRegistrationRequestData.FeatureCollection(singletonList(
-                        new BrokerRegistrationRequestData.Feature()).iterator()))
+                        new BrokerRegistrationRequestData.Feature())))
                 .setListeners(new BrokerRegistrationRequestData.ListenerCollection(singletonList(
-                        new BrokerRegistrationRequestData.Listener()).iterator()))
+                        new BrokerRegistrationRequestData.Listener())))
                 .setIncarnationId(Uuid.randomUuid())
                 .setLogDirs(singletonList(Uuid.fromString("qaJjNJ05Q36kEgeTBDcj0Q")))
                 .setPreviousBrokerEpoch(123L);
@@ -3627,7 +3615,7 @@ public class RequestResponseTest {
                         new DescribeTransactionsResponseData.TopicData()
                             .setTopic("bar")
                             .setPartitions(asList(1, 3))
-                    ).iterator()
+                    )
                 )),
             new DescribeTransactionsResponseData.TransactionState()
                 .setErrorCode(Errors.NOT_COORDINATOR.code())
@@ -3883,7 +3871,7 @@ public class RequestResponseTest {
                         .setPartitionIndex(0)
                         .setErrorCode(Errors.NONE.code())))
                     .setTopicName("topic")
-                    .setTopicId(Uuid.randomUuid())).iterator()));
+                    .setTopicId(Uuid.randomUuid()))));
         return new AlterShareGroupOffsetsResponse(data);
     }
 

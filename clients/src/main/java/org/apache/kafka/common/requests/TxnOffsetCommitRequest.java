@@ -47,49 +47,20 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         public final TxnOffsetCommitRequestData data;
         public final boolean isTransactionV2Enabled;
 
-        public Builder(final String transactionalId,
-                       final String consumerGroupId,
-                       final long producerId,
-                       final short producerEpoch,
-                       final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits,
-                       final boolean isTransactionV2Enabled) {
-            this(transactionalId,
-                consumerGroupId,
-                producerId,
-                producerEpoch,
-                pendingTxnOffsetCommits,
-                JoinGroupRequest.UNKNOWN_MEMBER_ID,
-                JoinGroupRequest.UNKNOWN_GENERATION_ID,
-                Optional.empty(),
-                isTransactionV2Enabled);
-        }
-
-        public Builder(final String transactionalId,
-                       final String consumerGroupId,
-                       final long producerId,
-                       final short producerEpoch,
-                       final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits,
-                       final String memberId,
-                       final int generationId,
-                       final Optional<String> groupInstanceId,
-                       final boolean isTransactionV2Enabled) {
-            super(ApiKeys.TXN_OFFSET_COMMIT);
-            this.isTransactionV2Enabled = isTransactionV2Enabled;
-            this.data = new TxnOffsetCommitRequestData()
-                    .setTransactionalId(transactionalId)
-                    .setGroupId(consumerGroupId)
-                    .setProducerId(producerId)
-                    .setProducerEpoch(producerEpoch)
-                    .setTopics(getTopics(pendingTxnOffsetCommits))
-                    .setMemberId(memberId)
-                    .setGenerationId(generationId)
-                    .setGroupInstanceId(groupInstanceId.orElse(null));
-        }
-
-        public Builder(final TxnOffsetCommitRequestData data) {
+        private Builder(
+            final TxnOffsetCommitRequestData data,
+            final boolean isTransactionV2Enabled
+        ) {
             super(ApiKeys.TXN_OFFSET_COMMIT);
             this.data = data;
-            this.isTransactionV2Enabled = true;
+            this.isTransactionV2Enabled = isTransactionV2Enabled;
+        }
+
+        public static Builder forTopicNames(
+            final TxnOffsetCommitRequestData data,
+            final boolean isTransactionV2Enabled
+        ) {
+            return new Builder(data, isTransactionV2Enabled);
         }
 
         @Override
@@ -136,7 +107,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         return offsetMap;
     }
 
-    static List<TxnOffsetCommitRequestTopic> getTopics(Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits) {
+    public static List<TxnOffsetCommitRequestTopic> getTopics(Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits) {
         Map<String, List<TxnOffsetCommitRequestPartition>> topicPartitionMap = new HashMap<>();
         for (Map.Entry<TopicPartition, CommittedOffset> entry : pendingTxnOffsetCommits.entrySet()) {
             TopicPartition topicPartition = entry.getKey();

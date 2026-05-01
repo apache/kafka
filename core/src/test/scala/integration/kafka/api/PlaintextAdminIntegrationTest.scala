@@ -1154,7 +1154,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     assertFutureThrows(classOf[InvalidConfigurationException],
       alterResult.values.get(groupResource),
-      "consumer.session.timeout.ms must be greater than or equal to group.consumer.min.session.timeout.ms")
+      "consumer.session.timeout.ms must be in the range 45000 to 60000 inclusive.")
   }
 
   @Test
@@ -1176,7 +1176,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     var configs = describeResult.all.get(15, TimeUnit.SECONDS)
     assertEquals("55000", configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).value)
     // Before restart, 55000 is within [45000, 60000], so no adjustment needed
-    assertEquals(55000, brokerServers.head.groupConfigManager.groupConfig(groupId).get.consumerSessionTimeoutMs)
+    assertEquals(Optional.of(55000), brokerServers.head.groupConfigManager.groupConfig(groupId).get.consumerSessionTimeoutMs)
 
     // Kill all brokers
     client.close()
@@ -1200,7 +1200,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       configs.get(groupResource).get(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG).source)
 
     // Verify effective value is adjusted (55000 evaluated to new max 50000)
-    assertEquals(50000, brokerServers.head.groupConfigManager.groupConfig(groupId).get.consumerSessionTimeoutMs)
+    assertEquals(Optional.of(50000), brokerServers.head.groupConfigManager.groupConfig(groupId).get.consumerSessionTimeoutMs)
   }
 
   @Test
