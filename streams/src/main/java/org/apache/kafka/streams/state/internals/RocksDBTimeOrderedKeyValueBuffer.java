@@ -243,7 +243,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
                     minTimestamp = bufferValue.context().timestamp();
                     minValid = true;
 
-                    final V value = valueSerde.deserializer().deserialize(topic, iternalContext.headers(), bufferValue.newValue());
+                    final V value = valueSerde.deserializer().deserialize(topic, internalContext.headers(), bufferValue.newValue());
 
                     callback.accept(new Eviction<>(key, value, bufferValue.context()));
 
@@ -346,7 +346,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
     }
 
     private void logTombstone(final Bytes key) {
-        ((RecordCollector.Supplier) iternalContext).recordCollector().send(
+        ((RecordCollector.Supplier) internalContext).recordCollector().send(
             changelogTopic,
             key,
             null,
