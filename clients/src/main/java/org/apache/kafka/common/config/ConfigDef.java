@@ -1869,7 +1869,7 @@ public class ConfigDef {
     }
 
     public String toHtml() {
-        return toHtml(Collections.emptyMap());
+        return toHtml(Map.of());
     }
 
     /**
@@ -1878,7 +1878,7 @@ public class ConfigDef {
      * @param idGenerator A function for computing the HTML id attribute in the generated HTML from a given config name.
      */
     public String toHtml(int headerDepth, Function<String, String> idGenerator) {
-        return toHtml(headerDepth, idGenerator, Collections.emptyMap());
+        return toHtml(headerDepth, idGenerator, Map.of());
     }
 
     /**
