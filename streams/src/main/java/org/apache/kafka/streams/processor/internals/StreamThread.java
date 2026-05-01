@@ -442,7 +442,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
-        final boolean processingThreadsEnabled = InternalConfig.processingThreadsEnabled(config.originals());
+        final boolean proceessingThreadsEnabled = InternalConfig.processingThreadsEnabled(config.originals());
         final ActiveTaskCreator activeTaskCreator = new ActiveTaskCreator(
             topologyMetadata,
             config,
@@ -455,7 +455,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             threadIdx,
             processId,
             logContext,
-            processingThreadsEnabled
+            proceessingThreadsEnabled
         );
         final StandbyTaskCreator standbyTaskCreator = new StandbyTaskCreator(
             topologyMetadata,
