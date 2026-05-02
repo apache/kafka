@@ -148,7 +148,7 @@ The _type_ of a state store is defined by `QueryableStoreType`. Pass a built-in 
 
 ### Header-aware stores and interactive queries {#header-aware-stores-interactive-queries}
 
-The return type of `KafkaStreams#store(...)` follows the `QueryableStoreType` you pass in. For a [header-aware store](processor-api.html#headers-in-state-stores), use the matching **`*WithHeaders()`** entry from the list above when interactive query results must include headers.
+For a [header-aware store](processor-api.html#headers-in-state-stores), use the matching **`*WithHeaders()`** entry from the list above when interactive query results must include headers.
 
 You can also implement your own QueryableStoreType as described in section Querying local custom state stores.
 
