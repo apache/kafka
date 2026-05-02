@@ -585,7 +585,7 @@ public class StateDirectory implements AutoCloseable {
             if (hasPersistentStores && stateDir.exists() && !stateDir.delete()) {
                 final File[] remainingFiles = stateDir.listFiles();
                 if (remainingFiles == null) {
-                    log.warn("{} Failed to delete state store directory of {}. It is not a directory, or is inaccessible.",
+                    log.warn("{} Failed to delete state store directory {}. It is not a directory, or it is inaccessible.",
                             logPrefix(), stateDir.getAbsolutePath());
                     return;
                 }
