@@ -61,16 +61,16 @@ public class TimestampedToHeadersStoreAdapterTest {
     private KeyValueIterator<Bytes, byte[]> mockIterator;
 
     @SuppressWarnings("unchecked")
-    private KeyValueStore<Bytes, byte[]> timestampedMockStore;
+    private KeyValueStore<Bytes, byte[]> mockStore;
 
     private TimestampedToHeadersStoreAdapter adapter;
 
     @SuppressWarnings("unchecked")
     @BeforeEach
     public void setUp() {
-        timestampedMockStore = mock(KeyValueStore.class, withSettings().extraInterfaces(TimestampedBytesStore.class));
-        when(timestampedMockStore.persistent()).thenReturn(true);
-        adapter = new TimestampedToHeadersStoreAdapter(timestampedMockStore);
+        mockStore = mock(KeyValueStore.class, withSettings().extraInterfaces(TimestampedBytesStore.class));
+        when(mockStore.persistent()).thenReturn(true);
+        adapter = new TimestampedToHeadersStoreAdapter(mockStore);
     }
 
     @Test
@@ -111,7 +111,7 @@ public class TimestampedToHeadersStoreAdapterTest {
 
         adapter.put(key, valueWithHeaders);
 
-        verify(timestampedMockStore).put(eq(key), eq(rawTimestampedValue));
+        verify(mockStore).put(eq(key), eq(rawTimestampedValue));
     }
 
     @Test
@@ -119,7 +119,7 @@ public class TimestampedToHeadersStoreAdapterTest {
         final Bytes key = new Bytes("key".getBytes());
         final byte[] rawTimestampedValue =
             new byte[] {0, 0, 0, 0, 0, 0, 0, 42, 'v', 'a', 'l'};
-        when(timestampedMockStore.get(key)).thenReturn(rawTimestampedValue);
+        when(mockStore.get(key)).thenReturn(rawTimestampedValue);
 
         final byte[] result = adapter.get(key);
 
@@ -129,7 +129,7 @@ public class TimestampedToHeadersStoreAdapterTest {
     @Test
     public void shouldReturnNullWhenStoreReturnsNull() {
         final Bytes key = new Bytes("key".getBytes());
-        when(timestampedMockStore.get(key)).thenReturn(null);
+        when(mockStore.get(key)).thenReturn(null);
 
         assertNull(adapter.get(key));
     }
@@ -142,7 +142,7 @@ public class TimestampedToHeadersStoreAdapterTest {
         final byte[] valueWithHeaders = convertToHeaderFormat(rawTimestampedValue);
         final byte[] oldRawValue =
             new byte[] {0, 0, 0, 0, 0, 0, 0, 10, 'o', 'l', 'd'};
-        when(timestampedMockStore.putIfAbsent(eq(key), eq(rawTimestampedValue))).thenReturn(oldRawValue);
+        when(mockStore.putIfAbsent(eq(key), eq(rawTimestampedValue))).thenReturn(oldRawValue);
 
         final byte[] result = adapter.putIfAbsent(key, valueWithHeaders);
 
@@ -154,7 +154,7 @@ public class TimestampedToHeadersStoreAdapterTest {
         final Bytes key = new Bytes("key".getBytes());
         final byte[] oldRawValue =
             new byte[] {0, 0, 0, 0, 0, 0, 0, 10, 'o', 'l', 'd'};
-        when(timestampedMockStore.delete(key)).thenReturn(oldRawValue);
+        when(mockStore.delete(key)).thenReturn(oldRawValue);
 
         final byte[] result = adapter.delete(key);
 
@@ -177,15 +177,15 @@ public class TimestampedToHeadersStoreAdapterTest {
             KeyValue.pair(key2, value2)
         ));
 
-        verify(timestampedMockStore).put(eq(key1), eq(rawValue1));
-        verify(timestampedMockStore).put(eq(key2), eq(rawValue2));
+        verify(mockStore).put(eq(key1), eq(rawValue1));
+        verify(mockStore).put(eq(key2), eq(rawValue2));
     }
 
     @Test
     public void shouldWrapRangeIterator() {
         final Bytes from = new Bytes("a".getBytes());
         final Bytes to = new Bytes("z".getBytes());
-        when(timestampedMockStore.range(from, to)).thenReturn(mockIterator);
+        when(mockStore.range(from, to)).thenReturn(mockIterator);
 
         final KeyValueIterator<Bytes, byte[]> result = adapter.range(from, to);
 
@@ -197,7 +197,7 @@ public class TimestampedToHeadersStoreAdapterTest {
     public void shouldWrapReverseRangeIterator() {
         final Bytes from = new Bytes("a".getBytes());
         final Bytes to = new Bytes("z".getBytes());
-        when(timestampedMockStore.reverseRange(from, to)).thenReturn(mockIterator);
+        when(mockStore.reverseRange(from, to)).thenReturn(mockIterator);
 
         final KeyValueIterator<Bytes, byte[]> result = adapter.reverseRange(from, to);
 
@@ -207,7 +207,7 @@ public class TimestampedToHeadersStoreAdapterTest {
 
     @Test
     public void shouldWrapAllIterator() {
-        when(timestampedMockStore.all()).thenReturn(mockIterator);
+        when(mockStore.all()).thenReturn(mockIterator);
 
         final KeyValueIterator<Bytes, byte[]> result = adapter.all();
 
@@ -217,7 +217,7 @@ public class TimestampedToHeadersStoreAdapterTest {
 
     @Test
     public void shouldWrapReverseAllIterator() {
-        when(timestampedMockStore.reverseAll()).thenReturn(mockIterator);
+        when(mockStore.reverseAll()).thenReturn(mockIterator);
 
         final KeyValueIterator<Bytes, byte[]> result = adapter.reverseAll();
 
@@ -227,7 +227,7 @@ public class TimestampedToHeadersStoreAdapterTest {
 
     @Test
     public void shouldWrapPrefixScanIterator() {
-        when(timestampedMockStore.prefixScan(any(), any())).thenReturn(mockIterator);
+        when(mockStore.prefixScan(any(), any())).thenReturn(mockIterator);
 
         final KeyValueIterator<Bytes, byte[]> result =
             adapter.prefixScan("prefix", (topic, data) -> data.getBytes());
@@ -244,7 +244,7 @@ public class TimestampedToHeadersStoreAdapterTest {
         final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(key);
 
         final QueryResult<byte[]> mockResult = QueryResult.forResult(rawTimestampedValue);
-        when(timestampedMockStore.query(eq(query), any(PositionBound.class), any(QueryConfig.class)))
+        when(mockStore.query(eq(query), any(PositionBound.class), any(QueryConfig.class)))
             .thenReturn(mockResult);
 
         final QueryResult<byte[]> result =
@@ -260,7 +260,7 @@ public class TimestampedToHeadersStoreAdapterTest {
         final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(key);
 
         final QueryResult<byte[]> mockResult = QueryResult.forResult(null);
-        when(timestampedMockStore.query(eq(query), any(PositionBound.class), any(QueryConfig.class)))
+        when(mockStore.query(eq(query), any(PositionBound.class), any(QueryConfig.class)))
             .thenReturn(mockResult);
 
         final QueryResult<byte[]> result =
@@ -275,8 +275,8 @@ public class TimestampedToHeadersStoreAdapterTest {
         final Bytes key = new Bytes("test-key".getBytes());
         final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(key);
 
-        final QueryResult<byte[]> mockResult = QueryResult.forUnknownQueryType(query, timestampedMockStore);
-        when(timestampedMockStore.query(eq(query), any(PositionBound.class), any(QueryConfig.class)))
+        final QueryResult<byte[]> mockResult = QueryResult.forUnknownQueryType(query, mockStore);
+        when(mockStore.query(eq(query), any(PositionBound.class), any(QueryConfig.class)))
             .thenReturn(mockResult);
 
         final QueryResult<byte[]> result =
@@ -294,7 +294,7 @@ public class TimestampedToHeadersStoreAdapterTest {
 
         final QueryResult<KeyValueIterator<Bytes, byte[]>> mockResult =
             QueryResult.forResult(mockIterator);
-        when(timestampedMockStore.query(eq(query), any(PositionBound.class), any(QueryConfig.class)))
+        when(mockStore.query(eq(query), any(PositionBound.class), any(QueryConfig.class)))
             .thenReturn(mockResult);
 
         final QueryResult<KeyValueIterator<Bytes, byte[]>> result = adapter.query(
@@ -316,7 +316,7 @@ public class TimestampedToHeadersStoreAdapterTest {
         final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(key);
 
         final QueryResult<byte[]> mockResult = QueryResult.forResult(rawTimestampedValue);
-        when(timestampedMockStore.query(eq(query), any(PositionBound.class), any(QueryConfig.class)))
+        when(mockStore.query(eq(query), any(PositionBound.class), any(QueryConfig.class)))
             .thenReturn(mockResult);
 
         final QueryResult<byte[]> result =
@@ -332,7 +332,7 @@ public class TimestampedToHeadersStoreAdapterTest {
 
     @Test
     public void shouldDelegateName() {
-        when(timestampedMockStore.name()).thenReturn("test-store");
+        when(mockStore.name()).thenReturn("test-store");
 
         assertEquals("test-store", adapter.name());
     }
@@ -344,24 +344,24 @@ public class TimestampedToHeadersStoreAdapterTest {
 
     @Test
     public void shouldDelegateIsOpen() {
-        when(timestampedMockStore.isOpen()).thenReturn(true);
+        when(mockStore.isOpen()).thenReturn(true);
 
         assertTrue(adapter.isOpen());
     }
 
     @Test
     public void shouldDelegateApproximateNumEntries() {
-        when(timestampedMockStore.approximateNumEntries()).thenReturn(42L);
+        when(mockStore.approximateNumEntries()).thenReturn(42L);
 
         assertEquals(42L, adapter.approximateNumEntries());
     }
 
     @Test
     public void shouldDelegateGetPosition() {
-        when(timestampedMockStore.getPosition()).thenReturn(null);
+        when(mockStore.getPosition()).thenReturn(null);
 
         adapter.getPosition();
 
-        verify(timestampedMockStore).getPosition();
+        verify(mockStore).getPosition();
     }
 }
