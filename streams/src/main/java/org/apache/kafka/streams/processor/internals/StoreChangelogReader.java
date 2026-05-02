@@ -1057,12 +1057,6 @@ public class StoreChangelogReader implements ChangelogReader {
                 restoreConsumer.pause(allAssigned);
                 restoreConsumer.resume(windowedPartitionsRetention.keySet());
 
-                // Give windowed partitions a fallback position. The restore consumer uses
-                // auto.offset.reset=none, so poll() throws NoOffsetForPartitionException for
-                // any assigned partition without a position — even paused ones.
-                // seek(endOffset-1) below overrides this for non-empty partitions.
-                restoreConsumer.seekToBeginning(windowedPartitionsRetention.keySet());
-
                 final Map<TopicPartition, Long> endOffsets =
                     restoreConsumer.endOffsets(windowedPartitionsRetention.keySet());
 
@@ -1071,9 +1065,11 @@ public class StoreChangelogReader implements ChangelogReader {
                     if (endOffset != null && endOffset > 0) {
                         restoreConsumer.seek(partition, endOffset - 1);
                     } else {
+                        restoreConsumer.seekToBeginning(Collections.singleton(partition));
                         seekToBeginningPartitions.add(partition);
                     }
                 }
+                windowedPartitionsRetention.keySet().removeAll(seekToBeginningPartitions);
 
                 final ConsumerRecords<byte[], byte[]> polledRecords = restoreConsumer.poll(pollTime);
 
@@ -1109,9 +1105,6 @@ public class StoreChangelogReader implements ChangelogReader {
         final Map<TopicPartition, Long> seekTimestamps = new HashMap<>();
         for (final Map.Entry<TopicPartition, Long> entry : windowedPartitionsRetention.entrySet()) {
             final TopicPartition partition = entry.getKey();
-            if (seekToBeginningPartitions.contains(partition)) {
-                continue;
-            }
             final long retentionPeriod = entry.getValue();
             final List<ConsumerRecord<byte[], byte[]>> records = polledRecords.records(partition);
             if (!records.isEmpty()) {
