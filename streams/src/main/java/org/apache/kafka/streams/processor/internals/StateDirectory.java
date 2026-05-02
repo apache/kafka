@@ -591,7 +591,7 @@ public class StateDirectory implements AutoCloseable {
                 }
 
                 boolean hasProcessOrLockFiles = false;
-                boolean hasNonProcessOrLockFiles = false;
+                boolean hasUnexpectedFiles = false;
 
                 for (final File file : remainingFiles) {
                     final String name = file.getName();
