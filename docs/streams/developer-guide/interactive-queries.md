@@ -139,15 +139,16 @@ The _type_ of a state store is defined by `QueryableStoreType`. Pass a built-in 
 
   * **`QueryableStoreTypes#keyValueStore()`** — see [Querying local key-value stores](#querying-local-key-value-stores).
   * **`QueryableStoreTypes#timestampedKeyValueStore()`** — see [Querying local key-value stores](#querying-local-key-value-stores).
+  * **`QueryableStoreTypes#timestampedKeyValueStoreWithHeaders()`** — see [#header-aware-stores-interactive-queries](#header-aware-stores-interactive-queries).
   * **`QueryableStoreTypes#windowStore()`** — see [Querying local window stores](#querying-local-window-stores).
   * **`QueryableStoreTypes#timestampedWindowStore()`** — see [Querying local window stores](#querying-local-window-stores).
+  * **`QueryableStoreTypes#timestampedWindowStoreWithHeaders()`** — see [#header-aware-stores-interactive-queries](#header-aware-stores-interactive-queries).
   * **`QueryableStoreTypes#sessionStore()`** — see [Querying local window stores](#querying-local-window-stores).
+  * **`QueryableStoreTypes#sessionStoreWithHeaders()`** — see [#header-aware-stores-interactive-queries](#header-aware-stores-interactive-queries).
 
 ### Header-aware stores and interactive queries {#header-aware-stores-interactive-queries}
 
-Since Kafka 4.3, you can use [header-aware state stores](processor-api.html#headers-in-state-stores) ([KIP-1271](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1271%3A+Allow+to+Store+Record+Headers+in+State+Stores)). For interactive queries, they reuse the same [`QueryableStoreTypes`](/{version}/javadoc/org/apache/kafka/streams/state/QueryableStoreTypes.html) helpers as matching **headerless** stores. `timestampedKeyValueStore()` and `timestampedWindowStore()` also match `TimestampedKeyValueStoreWithHeaders` and `TimestampedWindowStoreWithHeaders`. `sessionStore()` matches `SessionStoreWithHeaders`.
-
-The return type of `KafkaStreams#store(...)` follows the `QueryableStoreType` you pass in. Built-in helpers yield read-only facades with plain values, or `ValueAndTimestamp` for timestamped key-value and window stores. They do not expose record headers. To include headers in IQ results, implement a custom `QueryableStoreType` (see [KIP-1271](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1271%3A+Allow+to+Store+Record+Headers+in+State+Stores)). For [`ValueTimestampHeaders`](/{version}/javadoc/org/apache/kafka/streams/state/ValueTimestampHeaders.html) and [`AggregationWithHeaders`](/{version}/javadoc/org/apache/kafka/streams/state/AggregationWithHeaders.html) in the Processor API, see [Headers in State Stores](processor-api.html#headers-in-state-stores).
+The return type of `KafkaStreams#store(...)` follows the `QueryableStoreType` you pass in. For a [header-aware store](processor-api.html#headers-in-state-stores), use the matching **`*WithHeaders()`** entry from the list above when interactive query results must include headers.
 
 You can also implement your own QueryableStoreType as described in section Querying local custom state stores.
 
