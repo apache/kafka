@@ -40,6 +40,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OffsetIndexTest {
 
@@ -48,7 +49,7 @@ public class OffsetIndexTest {
 
     @BeforeEach
     public void setup() throws IOException {
-        index = new OffsetIndex(nonExistentTempFile(), BASE_OFFSET, 30 * 8);
+        index = new OffsetIndex(nonExistentTempFile(), BASE_OFFSET, 30 * 12);
     }
 
     @AfterEach
@@ -180,7 +181,7 @@ public class OffsetIndexTest {
 
     @Test
     public void truncate() throws IOException {
-        try (OffsetIndex idx = new OffsetIndex(nonExistentTempFile(), 0L, 10 * 8)) {
+        try (OffsetIndex idx = new OffsetIndex(nonExistentTempFile(), 0L, 10 * 12)) {
             idx.truncate();
             IntStream.range(1, 10).forEach(i -> idx.append(i, i));
 
@@ -221,7 +222,7 @@ public class OffsetIndexTest {
 
     @Test
     public void forceUnmapTest() throws IOException {
-        OffsetIndex idx = new OffsetIndex(nonExistentTempFile(), 0L, 10 * 8);
+        OffsetIndex idx = new OffsetIndex(nonExistentTempFile(), 0L, 10 * 12);
         idx.forceUnmap();
         // mmap should be null after unmap causing lookup to throw a NPE
         assertThrows(NullPointerException.class, () -> idx.lookup(1));
@@ -231,7 +232,7 @@ public class OffsetIndexTest {
     public void testSanityLastOffsetEqualToBaseOffset() throws IOException {
         // Test index sanity for the case where the last offset appended to the index is equal to the base offset
         long baseOffset = 20L;
-        try (OffsetIndex idx = new OffsetIndex(nonExistentTempFile(), baseOffset, 10 * 8)) {
+        try (OffsetIndex idx = new OffsetIndex(nonExistentTempFile(), baseOffset, 10 * 12)) {
             idx.append(baseOffset, 0);
             idx.sanityCheck();
         }
@@ -316,12 +317,12 @@ public class OffsetIndexTest {
     }
 
     /**
-     * T1: Verify backward compatibility — an old 8-byte-entry index file cannot be read
-     * by the new 12-byte format code (sanity check detects the mismatch).
-     * This documents the current behavior: upgrading requires index rebuild.
+     * T1: Verify backward compatibility — an old 8-byte-entry index file is detected
+     * by sanityCheck and throws CorruptIndexException with a message indicating it uses
+     * the old format. This triggers the LogLoader recovery path which rebuilds the index.
      */
     @Test
-    public void testOldFormatIndexFailsSanityCheck() throws IOException {
+    public void testOldFormatIndexDetectedBySanityCheck() throws IOException {
         // Create a file that simulates an old 8-byte-entry format:
         // write raw bytes: 4-byte relative offset + 4-byte position (old format)
         File indexFile = nonExistentTempFile();
@@ -339,10 +340,59 @@ public class OffsetIndexTest {
         }
 
         // The 16-byte file is not a multiple of 12 (new ENTRY_SIZE), so sanityCheck should fail
+        // with a message indicating it uses the old 8-byte format
         OffsetIndex oldFormatIndex = new OffsetIndex(indexFile, 0L, 1024, false);
-        assertThrows(CorruptIndexException.class, oldFormatIndex::sanityCheck,
+        CorruptIndexException ex = assertThrows(CorruptIndexException.class,
+                oldFormatIndex::sanityCheck,
                 "Old 8-byte format index should fail sanity check with 12-byte entry size");
+        assertTrue(ex.getMessage().contains("old 8-byte entry format"),
+                "Error message should indicate old format detected, got: " + ex.getMessage());
         oldFormatIndex.close();
+        Files.deleteIfExists(indexFile.toPath());
+    }
+
+    /**
+     * T1 (continued): Verify that after reset(), the index can be rebuilt in the new 12-byte format.
+     * This simulates the recovery path: detect old format → reset → rebuild.
+     */
+    @Test
+    public void testOldFormatIndexRebuildAfterReset() throws IOException {
+        // Create an old-format file (8 bytes per entry, total 40 bytes = 5 entries)
+        // 40 is not a multiple of 12, so it will be detected as old format
+        File indexFile = nonExistentTempFile();
+        java.nio.file.Files.write(indexFile.toPath(), new byte[0]);
+        try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(indexFile, "rw")) {
+            java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocate(40); // 5 entries * 8 bytes
+            for (int i = 1; i <= 5; i++) {
+                buf.putInt(i);       // relative offset
+                buf.putInt(i * 100); // position
+            }
+            buf.flip();
+            raf.getChannel().write(buf);
+        }
+
+        // Open and verify sanity check fails
+        OffsetIndex idx = new OffsetIndex(indexFile, 0L, 10 * 12, true);
+        assertThrows(CorruptIndexException.class, idx::sanityCheck);
+
+        // Reset (this is what LogSegment.recover() does)
+        idx.reset();
+        assertEquals(0, idx.entries(), "After reset, index should have no entries");
+
+        // Now rebuild in new format with large positions
+        long posAbove2GB = 3_000_000_000L;
+        idx.append(1, posAbove2GB);
+        idx.append(2, posAbove2GB + 4096);
+
+        // Verify the rebuilt index works correctly in the new format
+        assertEquals(new OffsetPosition(1, posAbove2GB), idx.lookup(1));
+        assertEquals(new OffsetPosition(2, posAbove2GB + 4096), idx.lookup(2));
+        assertEquals(2, idx.entries());
+
+        // Sanity check should now pass
+        idx.sanityCheck();
+
+        idx.close();
         Files.deleteIfExists(indexFile.toPath());
     }
 

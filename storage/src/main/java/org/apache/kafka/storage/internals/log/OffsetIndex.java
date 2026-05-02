@@ -54,6 +54,7 @@ import java.util.Optional;
 public final class OffsetIndex extends AbstractIndex {
     private static final Logger log = LoggerFactory.getLogger(OffsetIndex.class);
     private static final int ENTRY_SIZE = 12;
+    private static final int OLD_ENTRY_SIZE = 8;
 
     /* the last offset in the index */
     private volatile long lastOffset;
@@ -80,9 +81,14 @@ public final class OffsetIndex extends AbstractIndex {
         if (entries() != 0 && lastOffset < baseOffset())
             throw new CorruptIndexException("Corrupt index found, index file " + file().getAbsolutePath() + " has non-zero size " +
                 "but the last offset is " + lastOffset + " which is less than the base offset " + baseOffset());
-        if (length() % entrySize() != 0)
+        if (length() % entrySize() != 0) {
+            if (length() > 0 && length() % OLD_ENTRY_SIZE == 0) {
+                throw new CorruptIndexException("Index file " + file().getAbsolutePath() + " uses the old 8-byte entry format " +
+                    "(size=" + length() + " bytes). It will be rebuilt automatically in the new 12-byte format.");
+            }
             throw new CorruptIndexException("Index file " + file().getAbsolutePath() + " is corrupt, found " + length() +
                 " bytes which is neither positive nor a multiple of " + ENTRY_SIZE);
+        }
     }
 
     /**
