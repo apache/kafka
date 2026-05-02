@@ -414,10 +414,22 @@ org.apache.kafka.image.AclsImageTest:
 - testImage1RoundTrip
 - testImage2RoundTrip
 org.apache.kafka.image.ClientQuotasImageTest:
+- client
+- ip
 - testApplyDelta1
+- testDescribeNonStrictEmptyRequest
+- testDescribeWithDefaultMatchNonNullMatch
+- testDescribeWithDuplicateEntityType
+- testDescribeWithEmptyEntityType
+- testDescribeWithExactMatchNullMatch
+- testDescribeWithNonStrictTypeMatch
+- testDescribeWithSpecifiedMatchNonNullMatch
+- testDescribeWithStrictMode
+- testDescribeWithUnknownMatchType
 - testEmptyImageRoundTrip
 - testImage1RoundTrip
 - testImage2RoundTrip
+- user
 org.apache.kafka.image.ClusterImageTest:
 - testApplyDelta1
 - testApplyDelta2
