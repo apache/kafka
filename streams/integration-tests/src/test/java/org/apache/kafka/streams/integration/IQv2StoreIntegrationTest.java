@@ -1823,7 +1823,7 @@ public class IQv2StoreIntegrationTest {
         final Integer key,
         final Instant timeFrom,
         final Instant timeTo,
-        final Function<V, Integer> valueExtactor,
+        final Function<V, Integer> valueExtractor,
         final Set<Integer> expectedValues) {
 
         final WindowKeyQuery<Integer, V> query = WindowKeyQuery.withKeyAndWindowStartRange(
@@ -1864,7 +1864,7 @@ public class IQv2StoreIntegrationTest {
 
                 try (final WindowStoreIterator<V> iterator = queryResult.get(partition).getResult()) {
                     while (iterator.hasNext()) {
-                        actualValues.add(valueExtactor.apply(iterator.next().value));
+                        actualValues.add(valueExtractor.apply(iterator.next().value));
                     }
                 }
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
@@ -1877,7 +1877,7 @@ public class IQv2StoreIntegrationTest {
     public <V> void shouldHandleWindowRangeQuery(
         final Instant timeFrom,
         final Instant timeTo,
-        final Function<V, Integer> valueExtactor,
+        final Function<V, Integer> valueExtractor,
         final Set<Integer> expectedValues) {
 
         final WindowRangeQuery<Integer, V> query = WindowRangeQuery.withWindowStartRange(timeFrom, timeTo);
@@ -1914,7 +1914,7 @@ public class IQv2StoreIntegrationTest {
 
                 try (final KeyValueIterator<Windowed<Integer>, V> iterator = queryResult.get(partition).getResult()) {
                     while (iterator.hasNext()) {
-                        actualValues.add(valueExtactor.apply(iterator.next().value));
+                        actualValues.add(valueExtractor.apply(iterator.next().value));
                     }
                 }
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));

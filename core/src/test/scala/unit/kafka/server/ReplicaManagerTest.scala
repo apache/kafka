@@ -50,7 +50,8 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.{LogContext, Time, Utils}
+import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.coordinator.transaction.{AddPartitionsToTxnConfig, TransactionLogConfig}
 import org.apache.kafka.image._
 import org.apache.kafka.metadata.KRaftMetadataCache

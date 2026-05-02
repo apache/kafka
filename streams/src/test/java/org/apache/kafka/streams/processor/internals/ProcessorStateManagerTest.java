@@ -20,9 +20,9 @@ import org.apache.kafka.base.test.TestUtils;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -635,7 +635,7 @@ public class ProcessorStateManagerTest {
             assertThat(checkpointedOffsets, is(singletonMap(new TopicPartition(persistentStoreTopicName, 1), -4L)));
 
             try {
-                // Reopen to verify null commited offset
+                // Reopen to verify null committed offset
                 stateMgr.registerStateStores(Arrays.asList(persistentStore, nonPersistentStore), context);
                 assertNull(stateMgr.storeMetadata(persistentStorePartition).offset());
             } finally {

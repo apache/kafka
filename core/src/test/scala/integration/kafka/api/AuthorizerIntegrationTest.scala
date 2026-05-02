@@ -4189,11 +4189,11 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   def removeAllClientAcls(): Unit = {
-    val authorizerForWrite = TestUtils.pickAuthorizerForWrite(brokers, controllerServers)
+    val authorizerForWrite = pickAuthorizerForWrite(brokers, controllerServers)
     val aclEntryFilter = new AccessControlEntryFilter(clientPrincipalString, null, AclOperation.ANY, AclPermissionType.ANY)
     val aclFilter = new AclBindingFilter(ResourcePatternFilter.ANY, aclEntryFilter)
 
-    authorizerForWrite.deleteAcls(TestUtils.anonymousAuthorizableContext, java.util.List.of(aclFilter)).asScala.
+    authorizerForWrite.deleteAcls(anonymousAuthorizableContext, java.util.List.of(aclFilter)).asScala.
       map(_.toCompletableFuture.get).flatMap { deletion =>
         deletion.aclBindingDeleteResults().asScala.map(_.aclBinding.pattern).toSet
       }.foreach { resource =>

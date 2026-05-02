@@ -1120,6 +1120,7 @@ project(':core') {
     implementation libs.slf4jApi
     implementation libs.re2j
 
+    testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':group-coordinator').sourceSets.test.output
     testImplementation project(':share-coordinator').sourceSets.test.output
     testImplementation project(':metadata').sourceSets.test.output
@@ -2965,6 +2966,7 @@ project(':streams:integration-tests') {
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':storage')
     testImplementation project(':streams').sourceSets.test.output
+    testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':streams:streams-scala')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-base')

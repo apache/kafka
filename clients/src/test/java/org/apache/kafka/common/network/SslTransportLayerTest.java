@@ -31,9 +31,9 @@ import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
 import org.apache.kafka.common.security.ssl.SslFactory;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;

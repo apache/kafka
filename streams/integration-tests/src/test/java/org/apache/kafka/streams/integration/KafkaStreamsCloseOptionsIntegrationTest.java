@@ -115,7 +115,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
         streamsConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         // In this test, we set the SESSION_TIMEOUT_MS_CONFIG high in order to show that the call to
-        // `close(CloseOptions)` can remove the application from the Consumder Groups successfully.
+        // `close(CloseOptions)` can remove the application from the Consumer Groups successfully.
         streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
         streamsConfig.putAll(commonClientConfig);
 

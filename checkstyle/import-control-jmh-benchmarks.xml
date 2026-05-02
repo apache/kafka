@@ -54,6 +54,7 @@
     <allow pkg="org.apache.kafka.coordinator.transaction"/>
     <allow pkg="org.apache.kafka.connect" />
     <allow pkg="org.apache.kafka.network" />
+    <allow pkg="org.apache.kafka.base.test" />
     <allow class="org.apache.kafka.raft.QuorumConfig"/>
     <allow class="org.apache.kafka.raft.KRaftConfigs"/>
     <allow class="org.apache.kafka.nase.test.TestUtils"/>

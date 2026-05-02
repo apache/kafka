@@ -21,7 +21,7 @@ import org.apache.kafka.common.metadata.DelegationTokenRecord;
 import org.apache.kafka.common.metadata.RemoveDelegationTokenRecord;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
-import org.apache.kafka.common.utils.SecurityUtils;
+import org.apache.kafka.common.utils.internals.SecurityUtils;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.DelegationTokenData;

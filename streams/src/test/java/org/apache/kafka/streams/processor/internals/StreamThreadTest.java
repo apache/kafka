@@ -59,9 +59,9 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.StreamsConfig;
@@ -946,13 +946,13 @@ public class StreamThreadTest {
         runOnce(false);
         assertThat(thread.currentNumIterations(), equalTo(2));
 
-        // system time based punctutation without processing any record, iteration stays as 2
+        // system time based punctuation without processing any record, iteration stays as 2
         mockTime.sleep(11L);
 
         runOnce(false);
         assertThat(thread.currentNumIterations(), equalTo(2));
 
-        // system time based punctutation after processing a record, half iteration to 1
+        // system time based punctuation after processing a record, half iteration to 1
         mockTime.sleep(11L);
         addRecord(mockConsumer, ++offset, 5L);
 
@@ -966,7 +966,7 @@ public class StreamThreadTest {
 
         assertThat(thread.currentNumIterations(), equalTo(3));
 
-        // stream time based punctutation halves to 1
+        // stream time based punctuation halves to 1
         addRecord(mockConsumer, ++offset, 11L);
         runOnce(false);
 
