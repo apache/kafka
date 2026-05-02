@@ -54,7 +54,6 @@
     <allow pkg="org.apache.kafka.server.config" />
 
     <subpackage name="queue">
-        <allow pkg="org.apache.kafka.test" />
         <allow pkg="org.apache.kafka.base.test" />
     </subpackage>
 
@@ -64,7 +63,6 @@
         <allow pkg="org.apache.kafka.common.protocol" />
         <allow pkg="org.apache.kafka.metadata.properties" />
         <allow pkg="org.apache.kafka.server.common" />
-        <allow pkg="org.apache.kafka.test" />
         <allow pkg="org.apache.kafka.base.test" />
     </subpackage>
 
@@ -113,7 +111,6 @@
           <subpackage name="persister">
             <allow pkg="org.apache.kafka.clients" />
             <allow pkg="org.apache.kafka.server.util" />
-            <allow pkg="org.apache.kafka.test" />
             <allow pkg="org.apache.kafka.base.test" />
           </subpackage>
         </subpackage>

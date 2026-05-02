@@ -1120,7 +1120,6 @@ project(':core') {
     implementation libs.slf4jApi
     implementation libs.re2j
 
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':group-coordinator').sourceSets.test.output
     testImplementation project(':share-coordinator').sourceSets.test.output
     testImplementation project(':metadata').sourceSets.test.output
@@ -2314,7 +2313,6 @@ project(':storage:storage-api') {
     implementation libs.slf4jApi
 
     testImplementation project(':clients')
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':test-common:test-common-base')
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
@@ -2714,7 +2712,6 @@ project(':shell') {
     implementation libs.jacksonJakartarsJsonProvider
 
     testImplementation project(':clients')
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
@@ -2910,7 +2907,6 @@ project(':streams:streams-scala') {
 
     api libs.scalaLibrary
     testImplementation project(':streams').sourceSets.test.output
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':streams:test-utils')
     testImplementation project(':test-common:test-common-base')
 
@@ -2963,7 +2959,6 @@ project(':streams:integration-tests') {
     implementation libs.slf4jApi
     implementation libs.scalaLibrary
 
-    testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':group-coordinator')
     testImplementation project(':server')
     testImplementation project(':server-common')

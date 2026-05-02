@@ -37,7 +37,6 @@
             <allow pkg="org.apache.kafka.coordinator.common.runtime" />
             <allow pkg="org.apache.kafka.coordinator.transaction" />
             <allow pkg="org.apache.kafka.common" />
-            <allow pkg="org.apache.kafka.test" />
             <allow pkg="org.apache.kafka.base.test" />
             <allow pkg="org.slf4j" />
             <allow pkg="kafka.coordinator.transaction" />
