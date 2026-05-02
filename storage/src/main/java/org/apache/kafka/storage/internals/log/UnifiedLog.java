@@ -2044,7 +2044,7 @@ public class UnifiedLog implements AutoCloseable {
         final AtomicLong diff = new AtomicLong(logSize - retentionSize);
 
         DeletionCondition shouldDelete = (segment, nextSegmentOpt) -> {
-            int segmentSize = segment.size();
+            long segmentSize = segment.sizeInBytesLong();
             boolean delete = diff.get() - segmentSize >= 0;
             logger.debug("{} retentionSize breached: {}, log size before delete segment={}, after delete segment={}",
                     segment, delete, diff.get(), diff.get() - segmentSize);
@@ -2056,7 +2056,7 @@ public class UnifiedLog implements AutoCloseable {
         return deleteOldSegments(shouldDelete, toDelete -> {
             long size = size();
             for (LogSegment segment : toDelete) {
-                size -= segment.size();
+                size -= segment.sizeInBytesLong();
                 if (remoteLogEnabledAndRemoteCopyEnabled()) {
                     logger.info("Deleting segment {} due to local log retention size {} breach. Local log size after deletion will be {}.",
                             segment, UnifiedLog.localRetentionSize(config(), true), size);

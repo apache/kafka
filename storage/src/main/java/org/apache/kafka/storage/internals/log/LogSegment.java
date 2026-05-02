@@ -412,7 +412,7 @@ public class LogSegment implements Closeable {
      * See {@link #read(long, int, Optional, boolean)} for details.
      */
     public FetchDataInfo read(long startOffset, int maxSize) throws IOException {
-        return read(startOffset, maxSize, size());
+        return read(startOffset, maxSize, sizeInBytesLong());
     }
 
     /**
@@ -564,7 +564,7 @@ public class LogSegment implements Closeable {
      * @param offset The offset to truncate to
      * @return The number of log bytes truncated
      */
-    public int truncateTo(long offset) throws IOException {
+    public long truncateTo(long offset) throws IOException {
         // Do offset translation before truncating the index to avoid needless scanning
         // in case we truncate the full index
         LogOffsetPosition mapping = translateOffset(offset);
@@ -579,11 +579,11 @@ public class LogSegment implements Closeable {
         offsetIndex.resize(offsetIndex.maxIndexSize());
         timeIndex.resize(timeIndex.maxIndexSize());
 
-        int bytesTruncated;
+        long bytesTruncated;
         if (mapping == null)
             bytesTruncated = 0;
         else
-            bytesTruncated = (int) log.truncateToLong(mapping.position);
+            bytesTruncated = log.truncateToLong(mapping.position);
 
         if (log.sizeInBytes() == 0) {
             created = time.milliseconds();
@@ -617,7 +617,7 @@ public class LogSegment implements Closeable {
      * This method is thread-safe.
      */
     public long readNextOffset() throws IOException {
-        FetchDataInfo fetchData = read(offsetIndex().lastOffset(), log.sizeInBytes());
+        FetchDataInfo fetchData = read(offsetIndex().lastOffset(), Integer.MAX_VALUE, sizeInBytesLong());
         if (fetchData == null)
             return baseOffset;
         else
