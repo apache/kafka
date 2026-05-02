@@ -608,7 +608,7 @@ public class StateDirectory implements AutoCloseable {
                     // processId stable across restarts. Removing it would cause a new processId to be
                     // generated and may lead to unnecessary task movements during rebalances.
                     log.debug(
-                            "{} State store directory {} was not deleted because it still contains only expected metadata files ({} and/or {}).",
+                            "{} State store directory {} was not deleted because it still contains expected metadata files ({} and/or {}).",
                             logPrefix(), stateDir.getAbsolutePath(), PROCESS_FILE_NAME, LOCK_FILE_NAME
                     );
                 } else {
