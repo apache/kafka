@@ -2322,12 +2322,6 @@ kafka.server.OffsetsForLeaderEpochRequestTest:
 - testOffsetsForLeaderEpochErrorCodes
 kafka.server.PermissiveControllerMutationQuotaTest:
 - testControllerMutationQuotaViolation
-kafka.server.ProduceRequestTest:
-- testCorruptLz4ProduceRequest
-- testProduceToNonReplica
-- testProduceWithInvalidTimestamp
-- testSimpleProduceRequest
-- testZSTDProduceRequest
 kafka.server.RaftClusterSnapshotTest:
 - testSnapshotsGenerated
 kafka.server.RemoteLeaderEndPointTest:

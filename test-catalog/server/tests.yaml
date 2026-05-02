@@ -371,6 +371,13 @@ org.apache.kafka.server.replica.ReplicaTest:
 - testResetReplicaStateWhenNewLeaderIsElectedAndReplicaIsInSync
 - testResetReplicaStateWhenNewLeaderIsElectedAndReplicaIsNotInSync
 - testUpdateFetchState
+org.apache.kafka.server.requests.ProduceRequestTest:
+- testCorruptLz4ProduceRequest
+- testProduceToNonReplica
+- testProduceWithTimestampTooNew
+- testProduceWithTimestampTooOld
+- testSimpleProduceRequest
+- testZSTDProduceRequest
 org.apache.kafka.server.share.CachedSharePartitionTest:
 - testCachedSharePartitionEqualsAndHashCode
 org.apache.kafka.server.share.fetch.DelayedShareFetchKeyTest:
