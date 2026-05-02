@@ -290,7 +290,7 @@ public class LogSegment implements Closeable {
             throw new LogSegmentOffsetOverflowException(this, offset);
     }
 
-    private int appendChunkFromFile(FileRecords records, int position, BufferSupplier bufferSupplier) throws IOException {
+    private int appendChunkFromFile(FileRecords records, long position, BufferSupplier bufferSupplier) throws IOException {
         int bytesToAppend = 0;
         long maxOffset = Long.MIN_VALUE;
         ByteBuffer readBuffer = bufferSupplier.get(1024 * 1024);
@@ -338,10 +338,10 @@ public class LogSegment implements Closeable {
      * @return the number of bytes appended to the log (may be less than the size of the input if an
      *         offset is encountered which would overflow this segment)
      */
-    public int appendFromFile(FileRecords records, int start) throws IOException {
-        int position = start;
+    public long appendFromFile(FileRecords records, long start) throws IOException {
+        long position = start;
         BufferSupplier bufferSupplier = new BufferSupplier.GrowableBufferSupplier();
-        while (position < start + records.sizeInBytes()) {
+        while (position < start + records.sizeInBytesLong()) {
             int bytesAppended = appendChunkFromFile(records, position, bufferSupplier);
             if (bytesAppended == 0)
                 return position - start;
@@ -401,7 +401,7 @@ public class LogSegment implements Closeable {
      * @return The base offset, position in the log, and size of the message batch that contains the requested offset,
      * or null if no such batch is found.
      */
-    LogOffsetPosition translateOffset(long offset, int startingFilePosition) throws IOException {
+    LogOffsetPosition translateOffset(long offset, long startingFilePosition) throws IOException {
         OffsetPosition mapping = offsetIndex().lookup(offset);
         return log.searchForOffsetFromPosition(offset, Math.max(mapping.position(), startingFilePosition));
     }
@@ -462,7 +462,7 @@ public class LogSegment implements Closeable {
             return new FetchDataInfo(offsetMetadata, MemoryRecords.EMPTY);
 
         // calculate the length of the message set to read based on whether or not they gave us a maxOffset
-        int fetchSize = Math.min((int) (maxPositionOpt.get() - startPosition), adjustedMaxSize);
+        int fetchSize = (int) Math.min(maxPositionOpt.get() - startPosition, (long) adjustedMaxSize);
 
         return new FetchDataInfo(offsetMetadata, log.sliceLong(startPosition, fetchSize),
             adjustedMaxSize < startOffsetAndSize.size, Optional.empty());

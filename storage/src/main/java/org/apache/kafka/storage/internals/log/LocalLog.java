@@ -919,13 +919,13 @@ public class LocalLog {
 
         List<LogSegment> newSegments = new ArrayList<>();
         try {
-            int position = 0;
+            long position = 0;
             FileRecords sourceRecords = segment.log();
-            while (position < sourceRecords.sizeInBytes()) {
+            while (position < sourceRecords.sizeInBytesLong()) {
                 FileLogInputStream.FileChannelRecordBatch firstBatch = sourceRecords.batchesFrom(position).iterator().next();
                 LogSegment newSegment = createNewCleanedSegment(dir, config, firstBatch.baseOffset());
                 newSegments.add(newSegment);
-                int bytesAppended = newSegment.appendFromFile(sourceRecords, position);
+                long bytesAppended = newSegment.appendFromFile(sourceRecords, position);
                 if (bytesAppended == 0) {
                     throw new IllegalStateException("Failed to append records from position " + position + " in " + segment);
                 }

@@ -468,8 +468,8 @@ public class Cleaner {
                 // the offset range to exceed Integer.MAX_VALUE.
                 // Always allow the first write to an empty segment to avoid an infinite loop where
                 // a single oversized batch can never make progress.
-                boolean sizeOverflow = dest.size() > 0 && retained.sizeInBytes() > maxCleanedSegmentSize - dest.size();
-                boolean offsetOverflow = dest.size() > 0 && result.maxOffset() - dest.baseOffset() > maxCleanedOffsetRange;
+                boolean sizeOverflow = dest.sizeInBytesLong() > 0 && retained.sizeInBytes() > maxCleanedSegmentSize - dest.sizeInBytesLong();
+                boolean offsetOverflow = dest.sizeInBytesLong() > 0 && result.maxOffset() - dest.baseOffset() > maxCleanedOffsetRange;
                 if (sizeOverflow || offsetOverflow) {
                     return Optional.of(position - result.bytesRead());
                 }
@@ -645,22 +645,22 @@ public class Cleaner {
             List<LogSegment> group = new ArrayList<>();
             group.add(segments.get(0));
 
-            long logSize = segments.get(0).size();
+            long logSize = segments.get(0).sizeInBytesLong();
             long indexSize = segments.get(0).offsetIndex().sizeInBytes();
             long timeIndexSize = segments.get(0).timeIndex().sizeInBytes();
 
             segments = segments.subList(1, segments.size());
 
             while (!segments.isEmpty() &&
-                    logSize + segments.get(0).size() <= maxSize &&
+                    logSize + segments.get(0).sizeInBytesLong() <= maxSize &&
                     indexSize + segments.get(0).offsetIndex().sizeInBytes() <= maxIndexSize &&
                     timeIndexSize + segments.get(0).timeIndex().sizeInBytes() <= maxIndexSize &&
                     //if first segment size is 0, we don't need to do the index offset range check.
                     //this will avoid empty log left every 2^31 message.
-                    (segments.get(0).size() == 0 ||
+                    (segments.get(0).sizeInBytesLong() == 0 ||
                             lastOffsetForFirstSegment(segments, firstUncleanableOffset) - group.get(group.size() - 1).baseOffset() <= Integer.MAX_VALUE)) {
                 group.add(0, segments.get(0));
-                logSize += segments.get(0).size();
+                logSize += segments.get(0).sizeInBytesLong();
                 indexSize += segments.get(0).offsetIndex().sizeInBytes();
                 timeIndexSize += segments.get(0).timeIndex().sizeInBytes();
                 segments = segments.subList(1, segments.size());

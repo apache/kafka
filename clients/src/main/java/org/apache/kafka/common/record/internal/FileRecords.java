@@ -289,6 +289,9 @@ public class FileRecords extends AbstractRecords implements Closeable {
         return originalSize - targetSize;
     }
 
+    // Note: offset and length are int due to the TransferableRecords interface contract,
+    // limiting individual transfers to ~2GB. This is acceptable since fetch responses
+    // are bounded by max.partition.fetch.bytes (int).
     @Override
     public int writeTo(TransferableChannel destChannel, int offset, int length) throws IOException {
         long newSize = Math.min(channel.size(), end) - start;
