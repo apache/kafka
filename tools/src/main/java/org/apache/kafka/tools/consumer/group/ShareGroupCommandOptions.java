@@ -48,14 +48,19 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
     private static final String COMMAND_CONFIG_DOC = "Property file containing configs to be passed to Admin Client.";
     private static final String RESET_OFFSETS_DOC = "Reset offsets of share group. Supports one share group at the time, and instances must be inactive." + NL +
         "Has 2 execution options: --dry-run to plan which offsets to reset, and --execute to reset the offsets. " + NL +
-        "You must choose one of the following reset specifications: --to-datetime, --to-earliest, --to-latest." + NL +
-        "To define the scope use --all-topics or --topic." + NL +
+        "Additionally, the --export option is used to export the offsets in CSV format." + NL +
+        "You must choose one of the following reset specifications: --to-datetime, --to-earliest, --to-latest, --from-file, --to-current, --to-offset." + NL +
+        "To define the scope use --all-topics or --topic. One scope must be specified unless you use '--from-file'." + NL +
         "Fails if neither '--dry-run' nor '--execute' is specified.";
     private static final String DRY_RUN_DOC = "Only show results without executing changes on share groups. Supported operations: reset-offsets.";
     private static final String EXECUTE_DOC = "Execute operation. Supported operations: reset-offsets.";
+    private static final String EXPORT_DOC = "Export offset information in CSV format. Supported operations: reset-offsets.";
+    private static final String RESET_TO_OFFSET_DOC = "Reset offsets to a specific offset.";
+    private static final String RESET_FROM_FILE_DOC = "Reset offsets to values defined in CSV file.";
     private static final String RESET_TO_DATETIME_DOC = "Reset offsets to offset from datetime. Format: 'YYYY-MM-DDThh:mm:ss.sss'";
     private static final String RESET_TO_EARLIEST_DOC = "Reset offsets to earliest offset.";
     private static final String RESET_TO_LATEST_DOC = "Reset offsets to latest offset.";
+    private static final String RESET_TO_CURRENT_DOC = "Reset offsets to current offset.";
     private static final String MEMBERS_DOC = "Describe members of the group. This option may be used with the '--describe' option only.";
     private static final String OFFSETS_DOC = "Describe the group and list all topic partitions in the group along with their offset information. " +
         "This is the default sub-action and may be used with the '--describe' option only.";
@@ -79,10 +84,14 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
     final OptionSpec<Void> resetOffsetsOpt;
     final OptionSpec<Void> deleteOffsetsOpt;
     final OptionSpec<Void> dryRunOpt;
+    final OptionSpec<Void> exportOpt;
+    final OptionSpec<Long> resetToOffsetOpt;
+    final OptionSpec<String> resetFromFileOpt;
     final OptionSpec<Void> executeOpt;
     final OptionSpec<String> resetToDatetimeOpt;
     final OptionSpec<Void> resetToEarliestOpt;
     final OptionSpec<Void> resetToLatestOpt;
+    final OptionSpec<Void> resetToCurrentOpt;
     final OptionSpec<Void> membersOpt;
     final OptionSpec<Void> offsetsOpt;
     final OptionSpec<String> stateOpt;
@@ -127,12 +136,22 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
         deleteOffsetsOpt = parser.accepts("delete-offsets", DELETE_OFFSETS_DOC);
         dryRunOpt = parser.accepts("dry-run", DRY_RUN_DOC);
         executeOpt = parser.accepts("execute", EXECUTE_DOC);
+        exportOpt = parser.accepts("export", EXPORT_DOC);
+        resetToOffsetOpt = parser.accepts("to-offset", RESET_TO_OFFSET_DOC)
+            .withRequiredArg()
+            .describedAs("offset")
+            .ofType(Long.class);
+        resetFromFileOpt = parser.accepts("from-file", RESET_FROM_FILE_DOC)
+            .withRequiredArg()
+            .describedAs("path to CSV file")
+            .ofType(String.class);
         resetToDatetimeOpt = parser.accepts("to-datetime", RESET_TO_DATETIME_DOC)
             .withRequiredArg()
             .describedAs("datetime")
             .ofType(String.class);
         resetToEarliestOpt = parser.accepts("to-earliest", RESET_TO_EARLIEST_DOC);
         resetToLatestOpt = parser.accepts("to-latest", RESET_TO_LATEST_DOC);
+        resetToCurrentOpt = parser.accepts("to-current", RESET_TO_CURRENT_DOC);
         membersOpt = parser.accepts("members", MEMBERS_DOC)
             .availableIf(describeOpt);
         offsetsOpt = parser.accepts("offsets", OFFSETS_DOC)
@@ -147,7 +166,8 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
         allGroupSelectionScopeOpts = Set.of(groupOpt, allGroupsOpt);
         allTopicSelectionScopeOpts = Set.of(topicOpt, allTopicsOpt);
         allShareGroupLevelOpts = Set.of(listOpt, describeOpt, deleteOpt, resetOffsetsOpt);
-        allResetOffsetScenarioOpts = Set.of(resetToDatetimeOpt, resetToEarliestOpt, resetToLatestOpt);
+        allResetOffsetScenarioOpts = Set.of(resetToOffsetOpt, resetToDatetimeOpt,
+            resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt);
         allDeleteOffsetsOpts = Set.of(groupOpt, topicOpt);
 
         options = parser.parse(args);
@@ -208,14 +228,17 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
                     "Option " + resetOffsetsOpt + " takes one of these options: " + allTopicSelectionScopeOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
             }
             
-            if (!options.has(resetToEarliestOpt) && !options.has(resetToLatestOpt) && !options.has(resetToDatetimeOpt)) {
+            if (!options.has(resetToOffsetOpt) && !options.has(resetToEarliestOpt) && !options.has(resetToLatestOpt) && !options.has(resetToDatetimeOpt) && !options.has(resetToCurrentOpt) && !options.has(resetFromFileOpt)) {
                 CommandLineUtils.printUsageAndExit(parser,
                     "Option " + resetOffsetsOpt + " takes one of these options: " + allResetOffsetScenarioOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
             }
 
+            CommandLineUtils.checkInvalidArgs(parser, options, resetToOffsetOpt, minus(allResetOffsetScenarioOpts, resetToOffsetOpt));
             CommandLineUtils.checkInvalidArgs(parser, options, resetToDatetimeOpt, minus(allResetOffsetScenarioOpts, resetToDatetimeOpt));
             CommandLineUtils.checkInvalidArgs(parser, options, resetToEarliestOpt, minus(allResetOffsetScenarioOpts, resetToEarliestOpt));
             CommandLineUtils.checkInvalidArgs(parser, options, resetToLatestOpt, minus(allResetOffsetScenarioOpts, resetToLatestOpt));
+            CommandLineUtils.checkInvalidArgs(parser, options, resetToCurrentOpt, minus(allResetOffsetScenarioOpts, resetToCurrentOpt));
+            CommandLineUtils.checkInvalidArgs(parser, options, resetFromFileOpt, minus(allResetOffsetScenarioOpts, resetFromFileOpt));
         }
 
         CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, minus(allGroupSelectionScopeOpts, groupOpt));

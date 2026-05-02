@@ -22,6 +22,7 @@ import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.admin.SharePartitionOffsetInfo;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -117,7 +118,6 @@ public class OffsetsUtils {
                 isOldCsvFormat = true;
             }
         } catch (IOException e) {
-            e.printStackTrace();
             // Ignore.
         }
 
@@ -159,14 +159,14 @@ public class OffsetsUtils {
             if (logEndOffset != null) {
                 if (logEndOffset instanceof LogOffset && offset > ((LogOffset) logEndOffset).value) {
                     long endOffset = ((LogOffset) logEndOffset).value;
-                    LOGGER.warn("New offset (" + offset + ") is higher than latest offset for topic partition " + topicPartition + ". Value will be set to " + endOffset);
+                    LOGGER.warn("New offset (" + offset + ") is higher than latest offset for topic partition " + topicPartition + ". Value will be set to " + endOffset + ".");
                     res.put(topicPartition, endOffset);
                 } else {
                     LogOffsetResult logStartOffset = logStartOffsets.get(topicPartition);
 
                     if (logStartOffset instanceof LogOffset && offset < ((LogOffset) logStartOffset).value) {
                         long startOffset = ((LogOffset) logStartOffset).value;
-                        LOGGER.warn("New offset (" + offset + ") is lower than earliest offset for topic partition " + topicPartition + ". Value will be set to " + startOffset);
+                        LOGGER.warn("New offset (" + offset + ") is lower than earliest offset for topic partition " + topicPartition + ". Value will be set to " + startOffset + ".");
                         res.put(topicPartition, startOffset);
                     } else
                         res.put(topicPartition, offset);
@@ -390,7 +390,7 @@ public class OffsetsUtils {
             Map<TopicPartition, OffsetAndMetadata> resetPlanForGroup = resetPlan.get(groupId);
 
             if (resetPlanForGroup == null) {
-                printError("No reset plan for group " + groupId + " found", Optional.empty());
+                printError("No reset plan for group " + groupId + " found.", Optional.empty());
                 return Map.<TopicPartition, OffsetAndMetadata>of();
             }
 
@@ -437,6 +437,42 @@ public class OffsetsUtils {
         preparedOffsetsForPartitionsWithCommittedOffset.putAll(preparedOffsetsForPartitionsWithoutCommittedOffset);
 
         return preparedOffsetsForPartitionsWithCommittedOffset;
+    }
+
+    public Map<TopicPartition, OffsetAndMetadata> resetToCurrentForShareGroup(Collection<TopicPartition> partitionsToReset, Map<TopicPartition, SharePartitionOffsetInfo> currentOffsetInfo) {
+        Collection<TopicPartition> partitionsToResetWithStartOffset = new ArrayList<>();
+        Collection<TopicPartition> partitionsToResetWithoutStartOffset = new ArrayList<>();
+
+        for (TopicPartition topicPartition : partitionsToReset) {
+            if (currentOffsetInfo.containsKey(topicPartition))
+                partitionsToResetWithStartOffset.add(topicPartition);
+            else
+                partitionsToResetWithoutStartOffset.add(topicPartition);
+        }
+
+        Map<TopicPartition, OffsetAndMetadata> preparedOffsetsForPartitionsWithStartOffset = partitionsToResetWithStartOffset.stream()
+            .collect(Collectors.toMap(Function.identity(), topicPartition -> {
+                SharePartitionOffsetInfo offsetInfo = currentOffsetInfo.get(topicPartition);
+
+                if (offsetInfo == null) {
+                    throw new IllegalStateException("Expected a valid start offset for topic partition: " + topicPartition);
+                }
+
+                return new OffsetAndMetadata(offsetInfo.startOffset());
+            }));
+
+        Map<TopicPartition, OffsetAndMetadata> preparedOffsetsForPartitionsWithoutStartOffset =
+            getLogEndOffsets(partitionsToResetWithoutStartOffset)
+                .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> {
+                    if (!(e.getValue() instanceof OffsetsUtils.LogOffset)) {
+                        CommandLineUtils.printUsageAndExit(parser, "Error getting ending offset of topic partition: " + e.getKey());
+                    }
+                    return new OffsetAndMetadata(((OffsetsUtils.LogOffset) e.getValue()).value);
+                }));
+
+        preparedOffsetsForPartitionsWithStartOffset.putAll(preparedOffsetsForPartitionsWithoutStartOffset);
+
+        return preparedOffsetsForPartitionsWithStartOffset;
     }
 
     public void checkAllTopicPartitionsValid(Collection<TopicPartition> partitionsToReset) {
@@ -537,10 +573,14 @@ public class OffsetsUtils {
 
         public OffsetsUtilsOptions(
             List<String> groupOpt,
+            List<Long> resetToOffsetOpt,
+            List<String> resetFromFileOpt,
             List<String> resetToDatetimeOpt,
             long timeoutMsOpt) {
 
             this.groupOpt = groupOpt;
+            this.resetToOffsetOpt = resetToOffsetOpt;
+            this.resetFromFileOpt = resetFromFileOpt;
             this.resetToDatetimeOpt = resetToDatetimeOpt;
             this.timeoutMsOpt = timeoutMsOpt;
         }
