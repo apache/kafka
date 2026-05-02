@@ -1055,6 +1055,10 @@ public class StoreChangelogReader implements ChangelogReader {
             }
         }
 
+        if (!partitionsWithoutStartOffset.isEmpty()) {
+            restoreConsumer.seekToBeginning(partitionsWithoutStartOffset);
+        }
+
         final ConsumerRecords<byte[], byte[]> polledRecords = restoreConsumer.poll(pollTime);
 
         final Map<TopicPartition, Long> seekTimestamps = new HashMap<>();
