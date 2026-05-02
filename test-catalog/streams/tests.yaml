@@ -3148,7 +3148,7 @@ org.apache.kafka.streams.processor.internals.TaskManagerTest:
 - shouldLockActiveOnHandleAssignmentWithProcessingThreads
 - shouldLockAffectedTasksOnHandleRevocation
 - shouldLockAllTasksOnCorruptionWithProcessingThreads
-- shouldLockCommitableTasksOnCorruptionWithProcessingThreads
+- shouldLockCommittableTasksOnCorruptionWithProcessingThreads
 - shouldLockTasksOnClose
 - shouldMaybeCommitAllActiveTasksThatNeedCommit
 - shouldMoveReassignedSuspendedActiveTaskToStateUpdater
