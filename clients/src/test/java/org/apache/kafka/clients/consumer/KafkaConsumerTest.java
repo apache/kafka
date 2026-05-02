@@ -2181,7 +2181,6 @@ public class KafkaConsumerTest {
 
     @Test
     public void testClassicConsumerCloseAttemptsLeaveGroupWhenInterrupted() {
-        // GIVEN
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
@@ -2195,14 +2194,12 @@ public class KafkaConsumerTest {
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
 
         try {
-            // WHEN
             Thread.currentThread().interrupt();
             assertThrows(InterruptException.class, () -> consumer.close(CloseOptions.timeout(Duration.ofMillis(Long.MAX_VALUE))));
         } finally {
             Thread.interrupted();
         }
 
-        //THEN
         assertTrue(requestGenerated(client, ApiKeys.LEAVE_GROUP));
     }
 
