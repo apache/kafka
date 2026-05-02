@@ -172,14 +172,14 @@ public class RemoteIndexCacheTest {
         OffsetIndex offsetIndex = cache.getIndexEntry(rlsMetadata).offsetIndex();
         OffsetPosition offsetPosition1 = offsetIndex.entry(1);
         // this call should have invoked fetchOffsetIndex, fetchTimestampIndex once
-        int resultPosition = cache.lookupOffset(rlsMetadata, offsetPosition1.offset());
+        long resultPosition = cache.lookupOffset(rlsMetadata, offsetPosition1.offset());
         assertEquals(offsetPosition1.position(), resultPosition);
         verifyFetchIndexInvocation(1, List.of(IndexType.OFFSET, IndexType.TIMESTAMP));
 
         // this should not cause fetching index from RemoteStorageManager as it is already fetched earlier
         reset(rsm);
         OffsetPosition offsetPosition2 = offsetIndex.entry(2);
-        int resultPosition2 = cache.lookupOffset(rlsMetadata, offsetPosition2.offset());
+        long resultPosition2 = cache.lookupOffset(rlsMetadata, offsetPosition2.offset());
         assertEquals(offsetPosition2.position(), resultPosition2);
         assertNotNull(cache.getIndexEntry(rlsMetadata));
         verifyNoInteractions(rsm);
@@ -212,7 +212,7 @@ public class RemoteIndexCacheTest {
     @Test
     public void testPositionForNonExistentEntry() {
         OffsetIndex offsetIndex = cache.getIndexEntry(rlsMetadata).offsetIndex();
-        int lastOffsetPosition = cache.lookupOffset(rlsMetadata, offsetIndex.lastOffset());
+        long lastOffsetPosition = cache.lookupOffset(rlsMetadata, offsetIndex.lastOffset());
         long greaterOffsetThanLastOffset = offsetIndex.lastOffset() + 1;
         assertEquals(lastOffsetPosition, cache.lookupOffset(rlsMetadata, greaterOffsetThanLastOffset));
 

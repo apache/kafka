@@ -613,7 +613,7 @@ public class LogSegmentTest {
                 // start corrupting somewhere in the middle of the chosen record all the way to the end
 
                 FileRecords.LogOffsetPosition recordPosition = seg.log().searchForOffsetFromPosition(offsetToBeginCorruption, 0);
-                int position = recordPosition.position + TestUtils.RANDOM.nextInt(15);
+                long position = recordPosition.position + TestUtils.RANDOM.nextInt(15);
                 writeNonsenseToFile(seg.log().file(), position, (int) (seg.log().file().length() - position));
                 seg.recover(newProducerStateManager(), mock(LeaderEpochFileCache.class));
 

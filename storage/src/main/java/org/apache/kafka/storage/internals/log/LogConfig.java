@@ -383,9 +383,9 @@ public class LogConfig extends AbstractConfig {
             return segmentMs;
     }
 
-    public int initFileSize() {
+    public long initFileSize() {
         if (preallocate)
-            return (int) Math.min(segmentSize(), Integer.MAX_VALUE);
+            return segmentSize();
         else
             return 0;
     }

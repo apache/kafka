@@ -499,7 +499,7 @@ public class LocalLog {
                         if (segment.baseOffset() < maxOffsetMetadata.segmentBaseOffset)
                             maxPositionOpt = Optional.of((long) segment.size());
                         else if (segment.baseOffset() == maxOffsetMetadata.segmentBaseOffset && !maxOffsetMetadata.messageOffsetOnly())
-                            maxPositionOpt = Optional.of((long) maxOffsetMetadata.relativePositionInSegment);
+                            maxPositionOpt = Optional.of(maxOffsetMetadata.relativePositionInSegment);
                         else
                             maxPositionOpt = Optional.empty();
 

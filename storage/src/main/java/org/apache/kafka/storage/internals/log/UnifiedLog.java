@@ -1392,7 +1392,7 @@ public class UnifiedLog implements AutoCloseable {
                                                                                   short transactionVersion) {
         Map<Long, ProducerAppendInfo> updatedProducers = new HashMap<>();
         List<CompletedTxn> completedTxns = new ArrayList<>();
-        int relativePositionInSegment = appendOffsetMetadata.relativePositionInSegment;
+        long relativePositionInSegment = appendOffsetMetadata.relativePositionInSegment;
 
         for (MutableRecordBatch batch : records.batches()) {
             if (batch.hasProducerId()) {
@@ -2590,10 +2590,10 @@ public class UnifiedLog implements AutoCloseable {
                     if (offsetsToSnapshot.contains(segment.baseOffset())) {
                         producerStateManager.takeSnapshot();
                     }
-                    int maxPosition = segment.size();
+                    long maxPosition = segment.sizeInBytesLong();
                     if (segmentOfLastOffset.isPresent() && segmentOfLastOffset.get() == segment) {
                         FileRecords.LogOffsetPosition lop = segment.translateOffset(lastOffset);
-                        maxPosition = lop != null ? lop.position : segment.size();
+                        maxPosition = lop != null ? lop.position : segment.sizeInBytesLong();
                     }
 
                     FetchDataInfo fetchDataInfo = segment.read(startOffset, Integer.MAX_VALUE, maxPosition);

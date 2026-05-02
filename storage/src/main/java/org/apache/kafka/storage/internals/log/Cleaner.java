@@ -506,7 +506,7 @@ public class Cleaner {
      * @param memoryRecords The memory records in read buffer
      */
     private void growBuffersOrFail(FileRecords sourceRecords,
-                                   int position,
+                                   long position,
                                    int maxLogMessageSize,
                                    MemoryRecords memoryRecords) throws IOException {
         int maxSize;
@@ -777,10 +777,10 @@ public class Cleaner {
                                              int maxLogMessageSize,
                                              CleanedTransactionMetadata transactionMetadata,
                                              CleanerStats stats) throws IOException, DigestException {
-        int position = segment.offsetIndex().lookup(startOffset).position();
+        long position = segment.offsetIndex().lookup(startOffset).position();
         int maxDesiredMapSize = (int) (map.slots() * dupBufferLoadFactor);
 
-        while (position < segment.log().sizeInBytes()) {
+        while (position < segment.log().sizeInBytesLong()) {
             checkDone.accept(topicPartition);
             readBuffer.clear();
             try {
@@ -792,7 +792,7 @@ public class Cleaner {
             MemoryRecords records = MemoryRecords.readableRecords(readBuffer);
             throttler.maybeThrottle(records.sizeInBytes());
 
-            int startPosition = position;
+            long startPosition = position;
             for (MutableRecordBatch batch : records.batches()) {
                 if (batch.isControlBatch()) {
                     transactionMetadata.onControlBatchRead(batch);

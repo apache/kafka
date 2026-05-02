@@ -667,7 +667,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         DefaultFileChannelRecordBatch(long offset,
                                       byte magic,
                                       FileRecords fileRecords,
-                                      int position,
+                                      long position,
                                       int batchSize) {
             super(offset, magic, fileRecords, position, batchSize);
         }

@@ -167,7 +167,7 @@ public class LogSegment implements Closeable {
 
     public boolean shouldRoll(RollParams rollParams) throws IOException {
         boolean reachedRollMs = timeWaitedForRoll(rollParams.now(), rollParams.maxTimestampInMessages()) > rollParams.maxSegmentMs() - rollJitterMs;
-        int size = size();
+        long size = sizeInBytesLong();
         return size > rollParams.maxSegmentBytes() - rollParams.messagesSize() ||
             (size > 0 && reachedRollMs) ||
             offsetIndex().isFull() || timeIndex().isFull() || !canConvertToRelativeOffset(rollParams.maxOffsetInMessages());
@@ -231,6 +231,11 @@ public class LogSegment implements Closeable {
         return log.sizeInBytes();
     }
 
+    /* Return the size in bytes of this log segment as a long */
+    public long sizeInBytesLong() {
+        return log.sizeInBytesLong();
+    }
+
     /**
      * checks that the argument offset can be represented as an integer offset relative to the baseOffset.
      */
@@ -252,8 +257,8 @@ public class LogSegment implements Closeable {
                        MemoryRecords records) throws IOException {
         if (records.sizeInBytes() > 0) {
             LOGGER.trace("Inserting {} bytes at end offset {} at position {}",
-                records.sizeInBytes(), largestOffset, log.sizeInBytes());
-            int physicalPosition = log.sizeInBytes();
+                records.sizeInBytes(), largestOffset, log.sizeInBytesLong());
+            long physicalPosition = log.sizeInBytesLong();
 
             ensureOffsetInRange(largestOffset);
 
@@ -443,7 +448,7 @@ public class LogSegment implements Closeable {
         if (startOffsetAndSize == null)
             return null;
 
-        int startPosition = startOffsetAndSize.position;
+        long startPosition = startOffsetAndSize.position;
         LogOffsetMetadata offsetMetadata = new LogOffsetMetadata(startOffsetAndSize.offset, this.baseOffset, startPosition);
 
         int adjustedMaxSize = maxSize;
@@ -459,7 +464,7 @@ public class LogSegment implements Closeable {
         // calculate the length of the message set to read based on whether or not they gave us a maxOffset
         int fetchSize = Math.min((int) (maxPositionOpt.get() - startPosition), adjustedMaxSize);
 
-        return new FetchDataInfo(offsetMetadata, log.slice(startPosition, fetchSize),
+        return new FetchDataInfo(offsetMetadata, log.sliceLong(startPosition, fetchSize),
             adjustedMaxSize < startOffsetAndSize.size, Optional.empty());
     }
 
@@ -480,12 +485,12 @@ public class LogSegment implements Closeable {
      * @return The number of bytes truncated from the log
      * @throws LogSegmentOffsetOverflowException if the log segment contains an offset that causes the index offset to overflow
      */
-    public int recover(ProducerStateManager producerStateManager, LeaderEpochFileCache leaderEpochCache) throws IOException {
+    public long recover(ProducerStateManager producerStateManager, LeaderEpochFileCache leaderEpochCache) throws IOException {
         offsetIndex().reset();
         timeIndex().reset();
         txnIndex.reset();
-        int validBytes = 0;
-        int lastIndexEntry = 0;
+        long validBytes = 0;
+        long lastIndexEntry = 0;
         maxTimestampAndOffsetSoFar = TimestampOffset.UNKNOWN;
         try {
             for (RecordBatch batch : log.batches()) {
@@ -516,11 +521,11 @@ public class LogSegment implements Closeable {
             LOGGER.warn("Found invalid messages in log segment {} at byte offset {}.", log.file().getAbsolutePath(),
                 validBytes, e);
         }
-        int truncated = log.sizeInBytes() - validBytes;
+        long truncated = log.sizeInBytesLong() - validBytes;
         if (truncated > 0)
             LOGGER.debug("Truncated {} invalid bytes at the end of segment {} during recovery", truncated, log.file().getAbsolutePath());
 
-        log.truncateTo(validBytes);
+        log.truncateToLong(validBytes);
         offsetIndex().trimToValidSize();
         // A normally closed segment always appends the biggest timestamp ever seen into log segment, we do this as well.
         timeIndex().maybeAppend(maxTimestampSoFar(), shallowOffsetOfMaxTimestampSoFar(), true);
@@ -578,7 +583,7 @@ public class LogSegment implements Closeable {
         if (mapping == null)
             bytesTruncated = 0;
         else
-            bytesTruncated = log.truncateTo(mapping.position);
+            bytesTruncated = (int) log.truncateToLong(mapping.position);
 
         if (log.sizeInBytes() == 0) {
             created = time.milliseconds();
@@ -755,7 +760,7 @@ public class LogSegment implements Closeable {
     public Optional<FileRecords.TimestampAndOffset> findOffsetByTimestamp(long timestampMs, long startingOffset) throws IOException {
         // Get the index entry with a timestamp less than or equal to the target timestamp
         TimestampOffset timestampOffset = timeIndex().lookup(timestampMs);
-        int position = offsetIndex().lookup(Math.max(timestampOffset.offset(), startingOffset)).position();
+        long position = offsetIndex().lookup(Math.max(timestampOffset.offset(), startingOffset)).position();
 
         // Search the timestamp
         return Optional.ofNullable(log.searchForTimestamp(timestampMs, position, startingOffset));
@@ -875,12 +880,12 @@ public class LogSegment implements Closeable {
         Files.setLastModifiedTime(timeIndexFile().toPath(), fileTime);
     }
 
-    public static LogSegment open(File dir, long baseOffset, LogConfig config, Time time, int initFileSize, boolean preallocate) throws IOException {
+    public static LogSegment open(File dir, long baseOffset, LogConfig config, Time time, long initFileSize, boolean preallocate) throws IOException {
         return open(dir, baseOffset, config, time, false, initFileSize, preallocate, "");
     }
 
     public static LogSegment open(File dir, long baseOffset, LogConfig config, Time time, boolean fileAlreadyExists,
-                                  int initFileSize, boolean preallocate, String fileSuffix) throws IOException {
+                                  long initFileSize, boolean preallocate, String fileSuffix) throws IOException {
         int maxIndexSize = config.maxIndexSize;
         return new LogSegment(
             FileRecords.open(LogFileUtils.logFile(dir, baseOffset, fileSuffix), fileAlreadyExists, initFileSize, preallocate),

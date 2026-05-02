@@ -26,13 +26,13 @@ import org.apache.kafka.common.KafkaException;
  */
 public final class LogOffsetMetadata {
 
-    private static final int UNKNOWN_FILE_POSITION = -1;
+    private static final long UNKNOWN_FILE_POSITION = -1;
 
     public static final LogOffsetMetadata UNKNOWN_OFFSET_METADATA = new LogOffsetMetadata(-1L, UnifiedLog.UNKNOWN_OFFSET, UNKNOWN_FILE_POSITION);
 
     public final long messageOffset;
     public final long segmentBaseOffset;
-    public final int relativePositionInSegment;
+    public final long relativePositionInSegment;
 
     public LogOffsetMetadata(long messageOffset) {
         this(messageOffset, UnifiedLog.UNKNOWN_OFFSET, UNKNOWN_FILE_POSITION);
@@ -40,7 +40,7 @@ public final class LogOffsetMetadata {
 
     public LogOffsetMetadata(long messageOffset,
                              long segmentBaseOffset,
-                             int relativePositionInSegment) {
+                             long relativePositionInSegment) {
         this.messageOffset = messageOffset;
         this.segmentBaseOffset = segmentBaseOffset;
         this.relativePositionInSegment = relativePositionInSegment;
@@ -62,7 +62,7 @@ public final class LogOffsetMetadata {
 
     // compute the number of bytes between this offset to the given offset
     // if they are on the same segment and this offset precedes the given offset
-    public int positionDiff(LogOffsetMetadata that) {
+    public long positionDiff(LogOffsetMetadata that) {
         if (messageOffsetOnly() || that.messageOffsetOnly())
             throw new KafkaException(this + " cannot compare its segment position with " + that + " since it only has message offset info");
         if (!onSameSegment(that))
@@ -95,7 +95,7 @@ public final class LogOffsetMetadata {
     public int hashCode() {
         int result = Long.hashCode(messageOffset);
         result = 31 * result + Long.hashCode(segmentBaseOffset);
-        result = 31 * result + Integer.hashCode(relativePositionInSegment);
+        result = 31 * result + Long.hashCode(relativePositionInSegment);
         return result;
     }
 }

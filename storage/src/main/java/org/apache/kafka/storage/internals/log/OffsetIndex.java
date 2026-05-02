@@ -41,7 +41,7 @@ import java.util.Optional;
  *
  * <p>No attempt is made to checksum the contents of this file, in the event of a crash it is rebuilt.
  *
- * <p>The file format is a series of entries. The physical format is a 4 byte "relative" offset and a 4 byte file location for the
+ * <p>The file format is a series of entries. The physical format is a 4 byte "relative" offset and an 8 byte file location for the
  * message with that offset. The offset stored is relative to the base offset of the index file. So, for example,
  * if the base offset was 50, then the offset 55 would be stored as 5. Using relative offsets in this way let's us use
  * only 4 bytes for the offset.
@@ -53,7 +53,7 @@ import java.util.Optional;
  */
 public final class OffsetIndex extends AbstractIndex {
     private static final Logger log = LoggerFactory.getLogger(OffsetIndex.class);
-    private static final int ENTRY_SIZE = 8;
+    private static final int ENTRY_SIZE = 12;
 
     /* the last offset in the index */
     private volatile long lastOffset;
@@ -127,7 +127,7 @@ public final class OffsetIndex extends AbstractIndex {
     public Optional<OffsetPosition> fetchUpperBoundOffset(OffsetPosition fetchOffset, int fetchSize) {
         return inRemapReadLock(() -> {
             ByteBuffer idx = mmap().duplicate();
-            int slot = smallestUpperBoundSlotFor(idx, fetchOffset.position() + fetchSize, IndexSearchType.VALUE);
+            int slot = smallestUpperBoundSlotFor(idx, fetchOffset.position() + (long) fetchSize, IndexSearchType.VALUE);
             if (slot == -1)
                 return Optional.empty();
             else
@@ -140,7 +140,7 @@ public final class OffsetIndex extends AbstractIndex {
      * @throws IndexOffsetOverflowException if the offset causes index offset to overflow
      * @throws InvalidOffsetException if provided offset is not larger than the last offset
      */
-    public void append(long offset, int position) {
+    public void append(long offset, long position) {
         inLock(() -> {
             if (isFull())
                 throw new IllegalArgumentException("Attempt to append to a full index (size = " + entries() + ").");
@@ -148,7 +148,7 @@ public final class OffsetIndex extends AbstractIndex {
             if (entries() == 0 || offset > lastOffset) {
                 log.trace("Adding index entry {} => {} to {}", offset, position, file().getAbsolutePath());
                 mmap().putInt(relativeOffset(offset));
-                mmap().putInt(position);
+                mmap().putLong(position);
                 incrementEntries();
                 lastOffset = offset;
                 if (entries() * ENTRY_SIZE != mmap().position())
@@ -204,8 +204,8 @@ public final class OffsetIndex extends AbstractIndex {
         return buffer.getInt(n * ENTRY_SIZE);
     }
 
-    private int physical(ByteBuffer buffer, int n) {
-        return buffer.getInt(n * ENTRY_SIZE + 4);
+    private long physical(ByteBuffer buffer, int n) {
+        return buffer.getLong(n * ENTRY_SIZE + 4);
     }
 
     /**

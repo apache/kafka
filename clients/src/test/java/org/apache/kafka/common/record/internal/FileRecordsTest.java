@@ -282,11 +282,11 @@ public class FileRecordsTest {
     @Test
     public void testIteratorWithLimits() {
         RecordBatch batch = batches(fileRecords).get(1);
-        int start = fileRecords.searchForOffsetFromPosition(1, 0).position;
+        long start = fileRecords.searchForOffsetFromPosition(1, 0).position;
         int size = batch.sizeInBytes();
-        Records slice = fileRecords.slice(start, size);
+        Records slice = fileRecords.sliceLong(start, size);
         assertEquals(Collections.singletonList(batch), batches(slice));
-        Records slice2 = fileRecords.slice(start, size - 1);
+        Records slice2 = fileRecords.sliceLong(start, size - 1);
         assertEquals(Collections.emptyList(), batches(slice2));
     }
 
@@ -296,8 +296,8 @@ public class FileRecordsTest {
     @Test
     public void testTruncate() throws IOException {
         RecordBatch batch = batches(fileRecords).get(0);
-        int end = fileRecords.searchForOffsetFromPosition(1, 0).position;
-        fileRecords.truncateTo(end);
+        long end = fileRecords.searchForOffsetFromPosition(1, 0).position;
+        fileRecords.truncateToLong(end);
         assertEquals(Collections.singletonList(batch), batches(fileRecords));
         assertEquals(batch.sizeInBytes(), fileRecords.sizeInBytes());
     }
