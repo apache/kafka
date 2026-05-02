@@ -1044,12 +1044,12 @@ public class StoreChangelogReader implements ChangelogReader {
     private Map<TopicPartition, Long> pollLatestTimestamps(final Map<TopicPartition, Long> partitionsWithRetentionPeriod,
                                                              final Set<TopicPartition> partitionsWithoutStartOffset) {
         final Set<TopicPartition> targetPartitions = partitionsWithRetentionPeriod.keySet();
-        restoreConsumer.seekToEnd(targetPartitions);
+        final Map<TopicPartition, Long> endOffsets = restoreConsumer.endOffsets(targetPartitions);
 
         for (final TopicPartition partition : targetPartitions) {
-            final long endPosition = restoreConsumer.position(partition);
-            if (endPosition > 0) {
-                restoreConsumer.seek(partition, endPosition - 1);
+            final Long endOffset = endOffsets.get(partition);
+            if (endOffset != null && endOffset > 0) {
+                restoreConsumer.seek(partition, endOffset - 1);
             } else {
                 partitionsWithoutStartOffset.add(partition);
             }
