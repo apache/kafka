@@ -473,12 +473,12 @@ class RequestQuotaTest extends BaseRequestTest {
           new WriteTxnMarkersRequest.Builder(java.util.List.of[WriteTxnMarkersRequest.TxnMarkerEntry])
 
         case ApiKeys.TXN_OFFSET_COMMIT =>
-          new TxnOffsetCommitRequest.Builder(
-            "test-transactional-id",
-            "test-txn-group",
-            2,
-            0,
-            util.Map.of[TopicPartition, TxnOffsetCommitRequest.CommittedOffset],
+          TxnOffsetCommitRequest.Builder.forTopicNames(
+            new TxnOffsetCommitRequestData()
+              .setTransactionalId("test-transactional-id")
+              .setGroupId("test-txn-group")
+              .setProducerId(2)
+              .setProducerEpoch(0),
             true
           )
 

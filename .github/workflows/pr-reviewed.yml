@@ -29,6 +29,7 @@ jobs:
   save-pr-number:
     name: Save PR Number
     runs-on: ubuntu-latest
+    if: github.event.pull_request.state == 'open'
     steps:
       - name: Env
         run: printenv

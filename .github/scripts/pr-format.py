@@ -107,86 +107,102 @@ def split_paragraphs(text: str):
 def resolve_reviewer(login: str) -> tuple:
     """Map a GitHub login to (name, email).
 
-    Tries three tiers in order: repo commit history, GitHub user profile,
-    and past `Reviewers:` trailers in git log (matched by name).
-    Noreply emails (@users.noreply.github.com) are treated as missing since
-    they are GitHub privacy placeholders that do not identify the reviewer.
-    Returns (name, None) when no usable email is found; the caller falls
-    back to the '(@login)' form in the Reviewers trailer.
+    Tries reviewer email sources in order: repo commit author email, past
+    `Reviewers:` trailers searched via GitHub commit search API (matched
+    by name and verified by PR review login), and GitHub user profile
+    public email. Noreply emails (@users.noreply.github.com) are treated
+    as missing since they are GitHub privacy placeholders that do not
+    identify the reviewer. Returns (name, None) when no usable email is
+    found; the caller falls back to the '(github:login)' form in the
+    Reviewers trailer.
     """
     def _usable_email(e):
         if not e or e.endswith("@users.noreply.github.com"):
             return None
         return e
 
-    name = None
-    email = None
+    def _run_json(cmd, source):
+        try:
+            p = subprocess.run(cmd, capture_output=True, text=True)
+            if p.returncode == 0:
+                return json.loads(p.stdout)
+            logger.debug(f"Failed to resolve {login} from {source}: {p.stderr}")
+        except Exception as e:
+            logger.debug(f"Failed to resolve {login} from {source}: {e}")
+        return None
 
-    # Tier 1: find from repo commit history. Misses when the reviewer has no
-    # merged commit in apache/kafka, or had "Keep my email private" enabled
-    # at commit time (GitHub rewrites the author to the noreply form).
-    try:
-        cmd = f"gh api repos/apache/kafka/commits?author={login}&per_page=1"
-        p = subprocess.run(shlex.split(cmd), capture_output=True, text=True)
-        if p.returncode == 0:
-            commits = json.loads(p.stdout)
-            if commits:
-                author = commits[0].get("commit", {}).get("author", {})
-                name = author.get("name")
-                email = _usable_email(author.get("email"))
-    except Exception as e:
-        logger.debug(f"Failed to resolve {login} from commit history: {e}")
+    def _has_pr_review_from_login(commit_sha):
+        pulls = _run_json(["gh", "api", f"repos/apache/kafka/commits/{commit_sha}/pulls"],
+                          f"associated PRs for commit {commit_sha}") or []
+        for pull in pulls:
+            pr_number = pull.get("number")
+            if not pr_number:
+                continue
+            reviews = _run_json(["gh", "api", f"repos/apache/kafka/pulls/{pr_number}/reviews?per_page=100"],
+                                f"reviews for PR {pr_number}") or []
+            if any((review.get("user") or {}).get("login", "").lower() == login.lower()
+                   for review in reviews):
+                return True
+        return False
 
-    # Tier 2: GitHub user profile. Only exposes an email when the reviewer
+    commits = _run_json(["gh", "api", f"repos/apache/kafka/commits?author={login}&per_page=1"],
+                        "commit history") or []
+    author = commits[0].get("commit", {}).get("author", {}) if commits else {}
+
+    # Tier 1: latest repo commit authored by this GitHub login. Misses
+    # when the reviewer has no merged commit in apache/kafka, or had
+    # "Keep my email private" enabled at commit time (GitHub rewrites
+    # the author to the noreply form).
+    email = _usable_email(author.get("email"))
+    if email:
+        return (author.get("name") or login, email)
+
+    user = _run_json(["gh", "api", f"users/{login}"], "GitHub profile") or {}
+
+    name_candidates = []
+    for candidate in (user.get("name"), author.get("name"), login):
+        if candidate and candidate not in name_candidates:
+            name_candidates.append(candidate)
+
+    name = name_candidates[0] if name_candidates else login
+
+    # Tier 2: past Reviewers: trailers in commit history, matched by name,
+    # via the GitHub commit search API. Catches pure reviewers (no commits
+    # in apache/kafka, no public profile email) who have been credited
+    # with a real email in an earlier merged PR. Sort by committer-date
+    # desc so the most recent email wins if a reviewer has changed it.
+    # Full-text search is tokenized (not strict substring), so we re-verify
+    # with a regex client-side. To avoid same-name matches, we only accept
+    # a trailer email when the matched commit's associated PR includes a
+    # review from this GitHub login.
+    for candidate in name_candidates:
+        results = _run_json(["gh", "search", "commits",
+                             "--repo", "apache/kafka",
+                             f'"{candidate} <"',
+                             "--limit", "10",
+                             "--sort", "committer-date",
+                             "--order", "desc",
+                             "--json", "sha,commit"],
+                            "commit search") or []
+        pattern = re.compile(rf"{re.escape(candidate)}\s*<([^>]+)>")
+        for result in results:
+            msg = result.get("commit", {}).get("message", "")
+            commit_sha = result.get("sha")
+            for match in pattern.finditer(msg):
+                candidate_email = _usable_email(match.group(1))
+                if candidate_email and commit_sha and _has_pr_review_from_login(commit_sha):
+                    return (candidate, candidate_email)
+
+    # Tier 3: GitHub user profile. Only exposes an email when the reviewer
     # has set a Public email in their profile settings.
-    if not name or not email:
-        try:
-            cmd = f"gh api users/{login}"
-            p = subprocess.run(shlex.split(cmd), capture_output=True, text=True)
-            if p.returncode == 0:
-                user = json.loads(p.stdout)
-                if not name:
-                    name = user.get("name")
-                if not email:
-                    email = _usable_email(user.get("email"))
-        except Exception as e:
-            logger.debug(f"Failed to resolve {login} from GitHub profile: {e}")
-
-    # Tier 3: past Reviewers: trailers in git log, matched by name. Catches
-    # pure reviewers (no commits in apache/kafka, no public profile email)
-    # who have been credited with a real email in an earlier merged PR.
-    # git log is newest-first, so the first usable match is the most recent.
-    if name and not email:
-        try:
-            p = subprocess.run(
-                ["git", "log",
-                 "--pretty=format:%(trailers:key=Reviewers,valueonly=true,unfold=true)"],
-                capture_output=True, text=True,
-            )
-            if p.returncode == 0:
-                pattern = re.compile(rf"{re.escape(name)}\s*<([^>]+)>")
-                for line in p.stdout.splitlines():
-                    for m in pattern.finditer(line):
-                        candidate = _usable_email(m.group(1))
-                        if candidate:
-                            email = candidate
-                            break
-                    if email:
-                        break
-        except Exception as e:
-            logger.debug(f"Failed to resolve {login} from past Reviewers trailers: {e}")
-
-    if not name:
-        name = login
-
-    return (name, email)
+    return (name, _usable_email(user.get("email")))
 
 
 def already_exists(identity: str, existing_reviewers: List[str]) -> bool:
     """Check if a reviewer identity is already in the existing reviewers list.
 
     identity is the delimited token that uniquely identifies a reviewer, either
-    '<email>' (for the email form) or '(@login)' (for the login fallback).
+    '<email>' (for the email form) or '(github:login)' (for the login fallback).
     """
     return identity.lower() in ", ".join(existing_reviewers).lower()
 
@@ -246,7 +262,8 @@ if __name__ == "__main__":
         if email:
             identity = f"<{email}>"
         else:
-            identity = f"(@{reviewer_login})"
+            # Tier 4: fall back to the GitHub handle without tagging the reviewer.
+            identity = f"(github:{reviewer_login})"
         resolved = f"{name} {identity}"
         existing_reviewers = parse_trailers(title, body).get("Reviewers", [])
         if not already_exists(identity, existing_reviewers):

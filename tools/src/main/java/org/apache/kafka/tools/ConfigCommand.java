@@ -92,21 +92,21 @@ import joptsimple.OptionSpec;
  * This script can be used to change configs for topics/clients/users/brokers/ips/client-metrics/groups dynamically
  * An entity described or altered by the command may be one of:
  * <ul>
- *     <li> topic: --topic <topic> OR --entity-type topics --entity-name <topic>
- *     <li> client: --client <client> OR --entity-type clients --entity-name <client-id>
- *     <li> user: --user <user-principal> OR --entity-type users --entity-name <user-principal>
- *     <li> <user, client>: --user <user-principal> --client <client-id> OR
- *                          --entity-type users --entity-name <user-principal> --entity-type clients --entity-name <client-id>
- *     <li> broker: --broker <broker-id> OR --entity-type brokers --entity-name <broker-id>
- *     <li> broker-logger: --broker-logger <broker-id> OR --entity-type broker-loggers --entity-name <broker-id>
- *     <li> ip: --ip <ip> OR --entity-type ips --entity-name <ip>
- *     <li> client-metrics: --client-metrics <name> OR --entity-type client-metrics --entity-name <name>
- *     <li> group: --group <group> OR --entity-type groups --entity-name <group>
+ *     <li> topic: {@code --topic <topic>} OR {@code --entity-type topics --entity-name <topic>}
+ *     <li> client: {@code --client <client>} OR {@code --entity-type clients --entity-name <client-id>}
+ *     <li> user: {@code --user <user-principal>} OR {@code --entity-type users --entity-name <user-principal>}
+ *     <li> {@code <user, client>}: {@code --user <user-principal> --client <client-id>} OR
+ *                          {@code --entity-type users --entity-name <user-principal> --entity-type clients --entity-name <client-id>}
+ *     <li> broker: {@code --broker <broker-id>} OR {@code --entity-type brokers --entity-name <broker-id>}
+ *     <li> broker-logger: {@code --broker-logger <broker-id>} OR {@code --entity-type broker-loggers --entity-name <broker-id>}
+ *     <li> ip: {@code --ip <ip>} OR {@code --entity-type ips --entity-name <ip>}
+ *     <li> client-metrics: {@code --client-metrics <name>} OR {@code --entity-type client-metrics --entity-name <name>}
+ *     <li> group: {@code --group <group>} OR {@code --entity-type groups --entity-name <group>}
  * </ul>
- * --entity-type <users|clients|brokers|ips> --entity-default may be specified in place of --entity-type <users|clients|brokers|ips> --entity-name <entityName>
+ * {@code --entity-type <users|clients|brokers|ips> --entity-default} may be specified in place of {@code --entity-type <users|clients|brokers|ips> --entity-name <entityName>}
  * when describing or altering default configuration for users, clients, brokers, or ips, respectively.
- * Alternatively, --user-defaults, --client-defaults, --broker-defaults, or --ip-defaults may be specified in place of
- * --entity-type <users|clients|brokers|ips> --entity-default, respectively.
+ * Alternatively, {@code --user-defaults}, {@code --client-defaults}, {@code --broker-defaults}, or {@code --ip-defaults} may be specified in place of
+ * {@code --entity-type <users|clients|brokers|ips> --entity-default}, respectively.
  */
 public class ConfigCommand {
 

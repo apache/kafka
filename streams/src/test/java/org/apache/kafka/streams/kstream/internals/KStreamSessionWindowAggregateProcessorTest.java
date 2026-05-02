@@ -105,8 +105,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
         return Stream.of(
             Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, true),
             Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, false),
-            Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, true),
-            Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_UPDATE, false)
+            Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_CLOSE, true),
+            Arguments.of(EmitStrategy.StrategyType.ON_WINDOW_CLOSE, false)
         );
     }
 
