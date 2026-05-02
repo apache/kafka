@@ -779,6 +779,46 @@ public class FileRecordsTest {
         return fileRecords;
     }
 
+    /**
+     * T2: Verify that sizeInBytesLong() returns the true size when it exceeds Integer.MAX_VALUE,
+     * while sizeInBytes() clamps at Integer.MAX_VALUE.
+     */
+    @Test
+    public void testSizeInBytesLongExceedsIntMax() throws Exception {
+        File fileMock = mock(File.class);
+        FileChannel fileChannelMock = mock(FileChannel.class);
+        long largeSize = Integer.MAX_VALUE + 1000L;
+        when(fileChannelMock.size()).thenReturn(largeSize);
+
+        FileRecords records = new FileRecords(fileMock, fileChannelMock, Long.MAX_VALUE);
+        assertEquals(largeSize, records.sizeInBytesLong(),
+                "sizeInBytesLong() should return the true size beyond Integer.MAX_VALUE");
+        assertEquals(Integer.MAX_VALUE, records.sizeInBytes(),
+                "sizeInBytes() should clamp at Integer.MAX_VALUE");
+    }
+
+    /**
+     * T5: Verify that truncateToLong() correctly handles truncation amounts exceeding Integer.MAX_VALUE.
+     */
+    @Test
+    public void testTruncateToLongLargeFile() throws Exception {
+        File fileMock = mock(File.class);
+        when(fileMock.getAbsolutePath()).thenReturn("/test/large-segment.log");
+        FileChannel fileChannelMock = mock(FileChannel.class);
+        long largeSize = 3_000_000_000L;
+        when(fileChannelMock.size()).thenReturn(largeSize);
+
+        FileRecords records = new FileRecords(fileMock, fileChannelMock, Long.MAX_VALUE);
+        assertEquals(largeSize, records.sizeInBytesLong());
+
+        long targetSize = 1_000_000_000L;
+        long truncated = records.truncateToLong(targetSize);
+        assertEquals(largeSize - targetSize, truncated,
+                "truncateToLong() should return the correct number of bytes truncated for >2GB truncation");
+        assertEquals(targetSize, records.sizeInBytesLong(),
+                "size should be updated to the target size after truncation");
+    }
+
     private void append(FileRecords fileRecords, byte[][] values) throws IOException {
         long offset = 0L;
         for (byte[] value : values) {

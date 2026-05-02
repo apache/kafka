@@ -262,6 +262,90 @@ public class OffsetIndexTest {
         return file;
     }
 
+    /**
+     * T4: Verify that OffsetIndex correctly stores and retrieves positions exceeding Integer.MAX_VALUE.
+     */
+    @Test
+    public void testAppendAndLookupWithLargePositions() throws IOException {
+        try (OffsetIndex idx = new OffsetIndex(nonExistentTempFile(), 0L, 10 * 12)) {
+            long posAbove2GB = Integer.MAX_VALUE + 1000L;
+            idx.append(1, posAbove2GB);
+            idx.append(2, posAbove2GB + 4096);
+            idx.append(3, posAbove2GB + 8192);
+
+            // Verify round-trip: lookup should return the exact large positions
+            OffsetPosition result1 = idx.lookup(1);
+            assertEquals(1, result1.offset());
+            assertEquals(posAbove2GB, result1.position(),
+                    "Position exceeding Integer.MAX_VALUE should be stored and retrieved correctly");
+
+            OffsetPosition result2 = idx.lookup(2);
+            assertEquals(2, result2.offset());
+            assertEquals(posAbove2GB + 4096, result2.position());
+
+            // Verify entry() accessor
+            OffsetPosition entry0 = idx.entry(0);
+            assertEquals(1, entry0.offset());
+            assertEquals(posAbove2GB, entry0.position());
+
+            OffsetPosition entry2 = idx.entry(2);
+            assertEquals(3, entry2.offset());
+            assertEquals(posAbove2GB + 8192, entry2.position());
+        }
+    }
+
+    /**
+     * T4 (continued): Verify reopen of index file with positions exceeding Integer.MAX_VALUE.
+     */
+    @Test
+    public void testReopenWithLargePositions() throws IOException {
+        long posAbove2GB = 3_000_000_000L;
+        OffsetPosition first = new OffsetPosition(51, posAbove2GB);
+        OffsetPosition second = new OffsetPosition(52, posAbove2GB + 100);
+        index.append(first.offset(), first.position());
+        index.append(second.offset(), second.position());
+        index.close();
+
+        OffsetIndex reopened = new OffsetIndex(index.file(), index.baseOffset());
+        assertEquals(first, reopened.lookup(first.offset()),
+                "Large position should survive close/reopen");
+        assertEquals(second, reopened.lookup(second.offset()));
+        assertEquals(second.offset(), reopened.lastOffset());
+        assertEquals(2, reopened.entries());
+        reopened.close();
+    }
+
+    /**
+     * T1: Verify backward compatibility — an old 8-byte-entry index file cannot be read
+     * by the new 12-byte format code (sanity check detects the mismatch).
+     * This documents the current behavior: upgrading requires index rebuild.
+     */
+    @Test
+    public void testOldFormatIndexFailsSanityCheck() throws IOException {
+        // Create a file that simulates an old 8-byte-entry format:
+        // write raw bytes: 4-byte relative offset + 4-byte position (old format)
+        File indexFile = nonExistentTempFile();
+        java.nio.file.Files.write(indexFile.toPath(), new byte[0]); // ensure file exists
+        try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(indexFile, "rw")) {
+            java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocate(16); // 2 entries * 8 bytes old format
+            // Entry 1: relativeOffset=1, position=100
+            buf.putInt(1);
+            buf.putInt(100);
+            // Entry 2: relativeOffset=2, position=200
+            buf.putInt(2);
+            buf.putInt(200);
+            buf.flip();
+            raf.getChannel().write(buf);
+        }
+
+        // The 16-byte file is not a multiple of 12 (new ENTRY_SIZE), so sanityCheck should fail
+        OffsetIndex oldFormatIndex = new OffsetIndex(indexFile, 0L, 1024, false);
+        assertThrows(CorruptIndexException.class, oldFormatIndex::sanityCheck,
+                "Old 8-byte format index should fail sanity check with 12-byte entry size");
+        oldFormatIndex.close();
+        Files.deleteIfExists(indexFile.toPath());
+    }
+
     private void assertWriteFails(String message, OffsetIndex idx, int offset) {
         Exception e = assertThrows(Exception.class, () -> idx.append(offset, 1), message);
         assertEquals(IllegalArgumentException.class, e.getClass(), "Got an unexpected exception.");
