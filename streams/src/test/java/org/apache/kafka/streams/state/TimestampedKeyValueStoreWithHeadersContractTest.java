@@ -42,12 +42,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Contract tests for {@link TimestampedKeyValueStoreWithHeaders}.
- * <p>
- * Exercises the public interface through the {@link Stores#timestampedKeyValueStoreWithHeadersBuilder}
- * factory paired with an in-memory bytes supplier. The goal is to verify that values, timestamps,
- * and headers round-trip through the public API methods — including range iteration and
- * {@code reverseRange} — so that regressions in the wrapped headers byte layout are caught
- * at the interface level rather than only through end-to-end integration tests.
  */
 public class TimestampedKeyValueStoreWithHeadersContractTest {
 

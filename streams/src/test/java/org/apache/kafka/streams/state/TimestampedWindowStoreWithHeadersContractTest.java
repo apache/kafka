@@ -43,12 +43,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Contract tests for {@link TimestampedWindowStoreWithHeaders}.
- * <p>
- * Exercises the public interface through the {@link Stores#timestampedWindowStoreWithHeadersBuilder}
- * factory paired with an in-memory window bytes supplier. The goal is to verify that values,
- * timestamps, and headers round-trip through the public API methods — including
- * {@code backwardFetch} and {@code fetchAll} — which were flagged in the KAFKA-20328
- * description as the class of method most likely to have missing overrides on wrappers.
  */
 public class TimestampedWindowStoreWithHeadersContractTest {
 

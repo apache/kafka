@@ -45,13 +45,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Contract tests for {@link SessionStoreWithHeaders}.
- * <p>
- * Exercises the public interface through the {@link Stores#sessionStoreWithHeadersBuilder}
- * factory paired with an in-memory session bytes supplier. The goal is to verify that
- * aggregations and headers round-trip through the public API methods — including
- * {@code findSessions} and {@code backwardFindSessions} — which were flagged in the
- * KAFKA-20328 description as the class of method most likely to have missing overrides
- * on wrappers.
  */
 public class SessionStoreWithHeadersContractTest {
 

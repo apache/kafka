@@ -42,10 +42,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests for {@link RocksDBMigratingWindowStoreWithHeaders}.
- * <p>
- * Verifies that the migrating window-store variant correctly opens in regular vs. upgrade
- * mode depending on whether the DEFAULT column family already has legacy (plain-value) data,
- * and that reads of legacy entries transparently convert to the headers-aware value format.
  */
 public class RocksDBMigratingWindowStoreWithHeadersTest extends RocksDBStoreTest {
 
@@ -77,14 +73,12 @@ public class RocksDBMigratingWindowStoreWithHeadersTest extends RocksDBStoreTest
     @Test
     public void shouldOpenExistingHeadersAwareStoreInRegularMode() throws Exception {
         final Bytes key = new Bytes("win-key".getBytes());
-        // Value with empty-headers prefix: [0x00][value]
         final byte[] value = new byte[] {0x00, 'v', 'a', 'l'};
 
         rocksDBStore.init(context, rocksDBStore);
         rocksDBStore.put(key, value);
         rocksDBStore.close();
 
-        // Re-open and expect regular mode (DEFAULT CF is empty, data is in headers CF)
         try (final LogCaptureAppender appender =
                  LogCaptureAppender.createAndRegister(RocksDBMigratingWindowStoreWithHeaders.class)) {
             rocksDBStore.init(context, rocksDBStore);
@@ -100,10 +94,8 @@ public class RocksDBMigratingWindowStoreWithHeadersTest extends RocksDBStoreTest
 
     @Test
     public void shouldMigrateFromDefaultColumnFamilyWhenLegacyDataExists() throws Exception {
-        // Simulate a pre-headers window store by writing plain values to the DEFAULT CF.
         seedDefaultColumnFamilyWithLegacyData();
 
-        // Re-open with the migrating window store and expect upgrade mode.
         try (final LogCaptureAppender appender =
                  LogCaptureAppender.createAndRegister(RocksDBMigratingWindowStoreWithHeaders.class)) {
             rocksDBStore.init(context, rocksDBStore);
@@ -112,16 +104,13 @@ public class RocksDBMigratingWindowStoreWithHeadersTest extends RocksDBStoreTest
                 "Expected upgrade-mode log, got: " + appender.getMessages());
         }
 
-        // Reading a legacy key should transparently return the value in headers-aware format.
         final byte[] legacyKey = "legacy".getBytes();
         final byte[] migrated = rocksDBStore.get(new Bytes(legacyKey));
-        // Expected: [headersSize=0x00][original-value]
         assertEquals(0x00, migrated[0], "Migrated value must begin with empty-headers prefix");
         final byte[] payload = new byte[migrated.length - 1];
         System.arraycopy(migrated, 1, payload, 0, payload.length);
-        assertArrayEquals("v1".getBytes(), payload, "Migrated payload should equal the original plain value");
+        assertArrayEquals("v1".getBytes(), payload);
 
-        // Unknown keys return null.
         assertNull(rocksDBStore.get(new Bytes("unknown".getBytes())));
 
         rocksDBStore.close();
