@@ -247,7 +247,7 @@ public class LogLoader {
         return new LoadedLogOffsets(
                 newLogStartOffset,
                 recoveryOffsets.newRecoveryPoint,
-                new LogOffsetMetadata(recoveryOffsets.nextOffset, activeSegment.baseOffset(), activeSegment.size()));
+                new LogOffsetMetadata(recoveryOffsets.nextOffset, activeSegment.baseOffset(), activeSegment.sizeInBytesLong()));
     }
 
     /**
