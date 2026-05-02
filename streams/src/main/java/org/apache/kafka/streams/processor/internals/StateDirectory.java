@@ -598,12 +598,12 @@ public class StateDirectory implements AutoCloseable {
                     if (PROCESS_FILE_NAME.equals(name) || LOCK_FILE_NAME.equals(name)) {
                         hasProcessOrLockFiles = true;
                     } else {
-                        hasNonProcessOrLockFiles = true;
+                        hasUnexpectedFiles = true;
                         break;
                     }
                 }
                 
-                if (hasProcessOrLockFiles && !hasNonProcessOrLockFiles) {
+                if (hasProcessOrLockFiles && !hasUnexpectedFiles) {
                     // KAFKA-10716: The processId file is persisted in the state directory to keep the
                     // processId stable across restarts. Removing it would cause a new processId to be
                     // generated and may lead to unnecessary task movements during rebalances.
