@@ -306,6 +306,11 @@
               files="(UnifiedLog|RemoteLogManager|RemoteLogManagerTest|UnifiedLogTest).java"/>
     <suppress checks="MethodLength" files="RemoteLogManagerConfig.java"/>
     <suppress checks="JavaNCSS" files="(RemoteLogManagerTest|UnifiedLogTest).java"/>
+    
+    <!-- storage test -->
+    <suppress checks="ImportControl" files="TransactionsExpirationTest.java"/>
+    <suppress checks="ImportControl" files="TransactionsTest.java"/>
+    <suppress checks="ImportControl" files="TransactionsWithMaxInFlightOneTest.java"/>
 
     <!-- benchmarks -->
     <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"

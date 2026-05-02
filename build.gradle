@@ -2080,7 +2080,6 @@ project(':clients:clients-integration-tests') {
     testImplementation project(':raft')
     testImplementation project(':server')
     testImplementation project(':storage')
-    testImplementation project(':storage').sourceSets.test.output
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':clients').sourceSets.test.output
     implementation project(':server-common')
