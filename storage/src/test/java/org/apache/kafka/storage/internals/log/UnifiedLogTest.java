@@ -3757,7 +3757,7 @@ public class UnifiedLogTest {
 
         log.truncateTo(0);
         assertEquals(1, log.numberOfSegments(), "There should be exactly 1 segment.");
-        assertEquals(log.config().maxIndexSize / 8, new ArrayList<>(log.logSegments()).get(0).offsetIndex().maxEntries(),
+        assertEquals(log.config().maxIndexSize / 12, new ArrayList<>(log.logSegments()).get(0).offsetIndex().maxEntries(),
             "The index of segment 1 should be resized to maxIndexSize");
         assertEquals(log.config().maxIndexSize / 12, new ArrayList<>(log.logSegments()).get(0).timeIndex().maxEntries(),
             "The time index of segment 1 should be resized to maxIndexSize");

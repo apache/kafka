@@ -30,7 +30,7 @@ import java.util.Optional;
  * An index that maps offsets to physical file locations for a particular log segment. This index may be sparse:
  * that is it may not hold an entry for all messages in the log.
  *
- * <p>The index is stored in a file that is pre-allocated to hold a fixed maximum number of 8-byte entries.
+ * <p>The index is stored in a file that is pre-allocated to hold a fixed maximum number of 12-byte entries.
  *
  * <p>The index supports lookups against a memory-map of this file. These lookups are done using a simple binary search variant
  * to locate the offset/location pair for the greatest offset less than or equal to the target offset.

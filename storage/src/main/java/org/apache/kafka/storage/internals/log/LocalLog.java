@@ -302,7 +302,7 @@ public class LocalLog {
      * @param endOffset the new end offset of the log
      */
     public void updateLogEndOffset(long endOffset) {
-        nextOffsetMetadata = new LogOffsetMetadata(endOffset, segments.activeSegment().baseOffset(), segments.activeSegment().size());
+        nextOffsetMetadata = new LogOffsetMetadata(endOffset, segments.activeSegment().baseOffset(), segments.activeSegment().sizeInBytesLong());
         if (recoveryPoint > endOffset) {
             updateRecoveryPoint(endOffset);
         }
@@ -497,7 +497,7 @@ public class LocalLog {
                         //    return maxPosition as empty to avoid reading beyond the max-offset
                         Optional<Long> maxPositionOpt;
                         if (segment.baseOffset() < maxOffsetMetadata.segmentBaseOffset)
-                            maxPositionOpt = Optional.of((long) segment.size());
+                            maxPositionOpt = Optional.of(segment.sizeInBytesLong());
                         else if (segment.baseOffset() == maxOffsetMetadata.segmentBaseOffset && !maxOffsetMetadata.messageOffsetOnly())
                             maxPositionOpt = Optional.of(maxOffsetMetadata.relativePositionInSegment);
                         else
@@ -932,16 +932,16 @@ public class LocalLog {
                 position += bytesAppended;
             }
             // prepare new segments
-            int totalSizeOfNewSegments = 0;
+            long totalSizeOfNewSegments = 0;
             for (LogSegment splitSegment : newSegments) {
                 splitSegment.onBecomeInactiveSegment();
                 splitSegment.flush();
                 splitSegment.setLastModified(segment.lastModified());
-                totalSizeOfNewSegments += splitSegment.log().sizeInBytes();
+                totalSizeOfNewSegments += splitSegment.log().sizeInBytesLong();
             }
             // size of all the new segments combined must equal size of the original segment
-            if (totalSizeOfNewSegments != segment.log().sizeInBytes()) {
-                throw new IllegalStateException("Inconsistent segment sizes after split before: " + segment.log().sizeInBytes() + " after: " + totalSizeOfNewSegments);
+            if (totalSizeOfNewSegments != segment.log().sizeInBytesLong()) {
+                throw new IllegalStateException("Inconsistent segment sizes after split before: " + segment.log().sizeInBytesLong() + " after: " + totalSizeOfNewSegments);
             }
             // replace old segment with new ones
             LOG.info("{}Replacing overflowed segment {} with split segments {}", logPrefix, segment, newSegments);

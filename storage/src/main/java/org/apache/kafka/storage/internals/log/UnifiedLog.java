@@ -1236,7 +1236,7 @@ public class UnifiedLog implements AutoCloseable {
                             LogOffsetMetadata logOffsetMetadata = new LogOffsetMetadata(
                                     appendInfo.firstOrLastOffsetOfFirstBatch(),
                                     segment.baseOffset(),
-                                    segment.size());
+                                    segment.sizeInBytesLong());
 
                             // now that we have valid records, offsets assigned, and timestamps updated, we need to
                             // validate the idempotent/transactional state of the producers and collect some metadata
@@ -2155,7 +2155,7 @@ public class UnifiedLog implements AutoCloseable {
                           "offset_index_size = {}/{}, " +
                           "time_index_size = {}/{}, " +
                           "inactive_time_ms = {}/{}).",
-                        segment.size(), config().segmentSize(),
+                        segment.sizeInBytesLong(), config().segmentSize(),
                         segment.offsetIndex().entries(), segment.offsetIndex().maxEntries(),
                         segment.timeIndex().entries(), segment.timeIndex().maxEntries(),
                         segment.timeWaitedForRoll(now, maxTimestampInMessages), config().segmentMs - segment.rollJitterMs());
