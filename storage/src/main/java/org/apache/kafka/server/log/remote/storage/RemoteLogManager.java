@@ -645,7 +645,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         InputStream remoteSegInputStream = null;
         try {
             // Search forward for the position of the last offset that is greater than or equal to the startingOffset
-            remoteSegInputStream = remoteStorageManagerPlugin.get().fetchLogSegment(rlsMetadata, (int) startPos);
+            remoteSegInputStream = remoteStorageManagerPlugin.get().fetchLogSegment(rlsMetadata, startPos);
             RemoteLogInputStream remoteLogInputStream = new RemoteLogInputStream(remoteSegInputStream);
 
             while (true) {
@@ -1815,7 +1815,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 remoteLogSegmentMetadata = rlsMetadataOptional.get();
                 // Search forward for the position of the last offset that is greater than or equal to the target offset
                 startPos = lookupPositionForOffset(remoteLogSegmentMetadata, offset);
-                remoteSegInputStream = remoteStorageManagerPlugin.get().fetchLogSegment(remoteLogSegmentMetadata, (int) startPos);
+                remoteSegInputStream = remoteStorageManagerPlugin.get().fetchLogSegment(remoteLogSegmentMetadata, startPos);
                 RemoteLogInputStream remoteLogInputStream = getRemoteLogInputStream(remoteSegInputStream);
                 enrichedRecordBatch = findFirstBatch(remoteLogInputStream, offset);
                 if (enrichedRecordBatch.batch == null) {

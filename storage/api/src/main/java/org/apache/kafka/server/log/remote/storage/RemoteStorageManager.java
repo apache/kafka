@@ -110,9 +110,35 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * @return input stream of the requested log segment data.
      * @throws RemoteStorageException          if there are any errors while fetching the desired segment.
      * @throws RemoteResourceNotFoundException the requested log segment is not found in the remote storage.
+     * @deprecated Use {@link #fetchLogSegment(RemoteLogSegmentMetadata, long)} instead.
      */
+    @Deprecated
     InputStream fetchLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
                                 int startPosition) throws RemoteStorageException;
+
+    /**
+     * Returns the remote log segment data file/object as InputStream for the given {@link RemoteLogSegmentMetadata}
+     * starting from the given startPosition. The stream will end at the end of the remote log segment data file/object.
+     * <p>
+     * This overload accepts a {@code long} start position to support segments larger than 2GB.
+     * The default implementation delegates to {@link #fetchLogSegment(RemoteLogSegmentMetadata, int)}.
+     * Implementations that support segments larger than 2GB should override this method.
+     *
+     * @param remoteLogSegmentMetadata metadata about the remote log segment.
+     * @param startPosition            start position of log segment to be read, inclusive.
+     * @return input stream of the requested log segment data.
+     * @throws RemoteStorageException          if there are any errors while fetching the desired segment.
+     * @throws RemoteResourceNotFoundException the requested log segment is not found in the remote storage.
+     */
+    default InputStream fetchLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
+                                        long startPosition) throws RemoteStorageException {
+        if (startPosition > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("Start position " + startPosition +
+                " exceeds Integer.MAX_VALUE. Override fetchLogSegment(RemoteLogSegmentMetadata, long) " +
+                "to support segments larger than 2GB.");
+        }
+        return fetchLogSegment(remoteLogSegmentMetadata, (int) startPosition);
+    }
 
     /**
      * Returns the remote log segment data file/object as InputStream for the given {@link RemoteLogSegmentMetadata}
@@ -125,10 +151,39 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * @return input stream of the requested log segment data.
      * @throws RemoteStorageException          if there are any errors while fetching the desired segment.
      * @throws RemoteResourceNotFoundException the requested log segment is not found in the remote storage.
+     * @deprecated Use {@link #fetchLogSegment(RemoteLogSegmentMetadata, long, long)} instead.
      */
+    @Deprecated
     InputStream fetchLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
                                 int startPosition,
                                 int endPosition) throws RemoteStorageException;
+
+    /**
+     * Returns the remote log segment data file/object as InputStream for the given {@link RemoteLogSegmentMetadata}
+     * starting from the given startPosition. The stream will end at the smaller of endPosition and the end of the
+     * remote log segment data file/object.
+     * <p>
+     * This overload accepts {@code long} positions to support segments larger than 2GB.
+     * The default implementation delegates to {@link #fetchLogSegment(RemoteLogSegmentMetadata, int, int)}.
+     * Implementations that support segments larger than 2GB should override this method.
+     *
+     * @param remoteLogSegmentMetadata metadata about the remote log segment.
+     * @param startPosition            start position of log segment to be read, inclusive.
+     * @param endPosition              end position of log segment to be read, inclusive.
+     * @return input stream of the requested log segment data.
+     * @throws RemoteStorageException          if there are any errors while fetching the desired segment.
+     * @throws RemoteResourceNotFoundException the requested log segment is not found in the remote storage.
+     */
+    default InputStream fetchLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
+                                        long startPosition,
+                                        long endPosition) throws RemoteStorageException {
+        if (startPosition > Integer.MAX_VALUE || endPosition > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("Positions (start=" + startPosition + ", end=" + endPosition +
+                ") exceed Integer.MAX_VALUE. Override fetchLogSegment(RemoteLogSegmentMetadata, long, long) " +
+                "to support segments larger than 2GB.");
+        }
+        return fetchLogSegment(remoteLogSegmentMetadata, (int) startPosition, (int) endPosition);
+    }
 
     /**
      * Returns the index for the respective log segment of {@link RemoteLogSegmentMetadata}.
