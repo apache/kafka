@@ -29,8 +29,10 @@ import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -45,6 +47,12 @@ import java.util.stream.Collectors;
 public class LogLoader {
 
     private static final String SNAPSHOT_DELETE_SUFFIX = ".checkpoint.deleted";
+
+    // Marker file to track the offset index format version.
+    // Version 1 = 12-byte entries (4-byte relative offset + 8-byte physical position).
+    // Absence of this file means old 8-byte entry format — indexes must be rebuilt.
+    static final String INDEX_VERSION_FILE = ".index_version";
+    private static final String CURRENT_INDEX_VERSION = "1";
 
     private final File dir;
     private final TopicPartition topicPartition;
@@ -355,6 +363,12 @@ public class LogLoader {
      * @throws LogSegmentOffsetOverflowException if the log directory contains a segment with messages that overflow the index offset
      */
     private void loadSegmentFiles() throws IOException {
+        boolean needsIndexRebuild = !hasCurrentIndexVersion(dir);
+        if (needsIndexRebuild) {
+            logger.info("{}Index version marker not found in {}. All offset indexes will be rebuilt " +
+                    "from log files to upgrade to the new 12-byte entry format.", logPrefix, dir.getAbsolutePath());
+        }
+
         // load segments in ascending order because transactional data from one segment may depend on the
         // segments that come before it
         File[] files = dir.listFiles();
@@ -374,20 +388,50 @@ public class LogLoader {
                 long baseOffset = LogFileUtils.offsetFromFile(file);
                 boolean timeIndexFileNewlyCreated = !LogFileUtils.timeIndexFile(dir, baseOffset).exists();
                 LogSegment segment = LogSegment.open(dir, baseOffset, config, time, true, 0, false, "");
-                try {
-                    segment.sanityCheck(timeIndexFileNewlyCreated);
-                } catch (NoSuchFileException nsfe) {
-                    if (hadCleanShutdown || segment.baseOffset() < recoveryPointCheckpoint) {
-                        logger.error("Could not find offset index file corresponding to log file {}, recovering segment and rebuilding index files...", segment.log().file().getAbsolutePath());
+
+                if (needsIndexRebuild) {
+                    // Force rebuild all indexes when upgrading from old 8-byte format
+                    logger.info("{}Rebuilding index for segment {} due to index format upgrade.",
+                            logPrefix, segment.baseOffset());
+                    recoverSegment(segment);
+                } else {
+                    try {
+                        segment.sanityCheck(timeIndexFileNewlyCreated);
+                    } catch (NoSuchFileException nsfe) {
+                        if (hadCleanShutdown || segment.baseOffset() < recoveryPointCheckpoint) {
+                            logger.error("Could not find offset index file corresponding to log file {}, recovering segment and rebuilding index files...", segment.log().file().getAbsolutePath());
+                        }
+                        recoverSegment(segment);
+                    } catch (CorruptIndexException cie) {
+                        logger.warn("Found a corrupted index file corresponding to log file {} due to {}, recovering segment and rebuilding index files...", segment.log().file().getAbsolutePath(), cie.getMessage());
+                        recoverSegment(segment);
                     }
-                    recoverSegment(segment);
-                } catch (CorruptIndexException cie) {
-                    logger.warn("Found a corrupted index file corresponding to log file {} due to {}, recovering segment and rebuilding index files...", segment.log().file().getAbsolutePath(), cie.getMessage());
-                    recoverSegment(segment);
                 }
                 segments.add(segment);
             }
         }
+
+        // Write the version marker after successful load
+        if (needsIndexRebuild) {
+            writeIndexVersion(dir);
+            logger.info("{}Index format upgrade complete. Wrote version marker to {}.", logPrefix, dir.getAbsolutePath());
+        }
+    }
+
+    static boolean hasCurrentIndexVersion(File dir) {
+        Path versionFile = dir.toPath().resolve(INDEX_VERSION_FILE);
+        if (!Files.exists(versionFile)) return false;
+        try {
+            String version = Files.readString(versionFile, StandardCharsets.UTF_8).trim();
+            return CURRENT_INDEX_VERSION.equals(version);
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    static void writeIndexVersion(File dir) throws IOException {
+        Path versionFile = dir.toPath().resolve(INDEX_VERSION_FILE);
+        Files.writeString(versionFile, CURRENT_INDEX_VERSION, StandardCharsets.UTF_8);
     }
 
     /**
