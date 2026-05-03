@@ -47,4 +47,13 @@ public interface MemberStateListener {
     default void onGroupAssignmentUpdated(Set<TopicPartition> partitions) {
 
     }
+
+    /**
+     * Called whenever the consumer group member transitions to a new state.
+     *
+     * @param memberState The new consumer group member state.
+     */
+    default void onConsumerMemberStateChange(MemberState memberState) {
+   
+    }
 }
