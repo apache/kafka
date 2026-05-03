@@ -19,34 +19,35 @@ package org.apache.kafka.clients.admin;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RaftVoterEndpointTest {
 
     @Test
     public void testListenerNullConstructor() {
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+        var ex = assertThrows(IllegalArgumentException.class,
                 () -> new RaftVoterEndpoint(null, "example.com", 8080));
         assertEquals("Null argument not allowed.", ex.getMessage());
     }
 
     @Test
     public void testListenerWhitespaceConstructor() {
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+        var ex = assertThrows(IllegalArgumentException.class,
                 () -> new RaftVoterEndpoint(" CONTROLLER", "example.com", 8080));
         assertEquals("Leading or trailing whitespace is not allowed.", ex.getMessage());
     }
 
     @Test
     public void testListenerEmptyConstructor() {
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+        var ex = assertThrows(IllegalArgumentException.class,
                 () -> new RaftVoterEndpoint("", "example.com", 8080));
         assertEquals("Empty string is not allowed.", ex.getMessage());
     }
 
     @Test
     public void testListenerNotUpperCaseConstructor() {
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+        var ex = assertThrows(IllegalArgumentException.class,
                 () -> new RaftVoterEndpoint("controller", "example.com", 8080));
         assertEquals("String must be UPPERCASE.", ex.getMessage());
     }
@@ -59,21 +60,69 @@ public class RaftVoterEndpointTest {
 
     @Test
     public void testAccessors() {
-        RaftVoterEndpoint endpoint = new RaftVoterEndpoint("CONTROLLER", "example.com", 8080);
+        var endpoint = new RaftVoterEndpoint("CONTROLLER", "example.com", 8080);
         assertEquals("CONTROLLER", endpoint.listener());
         assertEquals("example.com", endpoint.host());
         assertEquals(8080, endpoint.port());
     }
 
     @Test
+    public void testEquals() {
+        var a = new RaftVoterEndpoint("CONTROLLER", "example.com", 8080);
+        var b = new RaftVoterEndpoint("CONTROLLER", "example.com", 8080);
+        assertEquals(a, b);
+    }
+
+    @Test
+    public void testHashCode() {
+        var a = new RaftVoterEndpoint("CONTROLLER", "example.com", 8080);
+        var b = new RaftVoterEndpoint("CONTROLLER", "example.com", 8080);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    public void testNotEqualsWithDifferentListener() {
+        var listenerA = new RaftVoterEndpoint("CONTROLLER", "example.com", 8080);
+        var listenerB = new RaftVoterEndpoint("BROKER", "example.com", 8080);
+        assertNotEquals(listenerA, listenerB);
+    }
+
+    @Test
+    public void testNotEqualsWithDifferentHost() {
+        var hostA = new RaftVoterEndpoint("CONTROLLER", "example.com", 8080);
+        var hostB = new RaftVoterEndpoint("CONTROLLER", "other.com", 8080);
+        assertNotEquals(hostA, hostB);
+    }
+
+    @Test
+    public void testNotEqualsWithDifferentPort() {
+        var portA = new RaftVoterEndpoint("CONTROLLER", "example.com", 8080);
+        var portB = new RaftVoterEndpoint("CONTROLLER", "example.com", 9092);
+        assertNotEquals(portA, portB);
+    }
+
+    @Test
+    public void testNotEqualsWithNull() {
+        var endpoint = new RaftVoterEndpoint("CONTROLLER", "example.com", 8080);
+        assertNotEquals(null, endpoint);
+    }
+
+    @Test
+    public void testNotEqualsWithDifferentClass() {
+        var endpoint = new RaftVoterEndpoint("CONTROLLER", "example.com", 8080);
+        var string = "CONTROLLER://example.com:8080";
+        assertNotEquals(string, endpoint);
+    }
+
+    @Test
     public void testToString() {
-        RaftVoterEndpoint endpoint = new RaftVoterEndpoint("CONTROLLER", "example.com", 8080);
+        var endpoint = new RaftVoterEndpoint("CONTROLLER", "example.com", 8080);
         assertEquals("CONTROLLER://example.com:8080", endpoint.toString());
     }
 
     @Test
     public void testToStringWithIpv6Host() {
-        RaftVoterEndpoint endpoint = new RaftVoterEndpoint("CONTROLLER", "::1", 8080);
+        var endpoint = new RaftVoterEndpoint("CONTROLLER", "::1", 8080);
         assertEquals("CONTROLLER://[::1]:8080", endpoint.toString());
     }
 }
