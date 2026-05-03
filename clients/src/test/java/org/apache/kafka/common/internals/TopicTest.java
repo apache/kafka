@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.common.internals;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.test.base.TestUtils;
 
 import org.junit.jupiter.api.Test;
 

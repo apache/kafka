@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.raft.internals;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -32,6 +31,7 @@ import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.record.internal.SimpleRecord;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.Isolation;
 import org.apache.kafka.raft.KRaftConfigs;

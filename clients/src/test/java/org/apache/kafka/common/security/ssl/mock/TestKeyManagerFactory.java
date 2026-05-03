@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.common.security.ssl.mock;
 
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.test.base.TestSslUtils;
 import org.apache.kafka.common.test.base.TestSslUtils.CertificateBuilder;
 import org.apache.kafka.common.test.base.TestUtils;
-import org.apache.kafka.common.config.types.Password;
 
 import java.io.File;
 import java.io.IOException;

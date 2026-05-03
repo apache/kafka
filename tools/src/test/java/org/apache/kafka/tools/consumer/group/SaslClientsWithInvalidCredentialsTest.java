@@ -19,7 +19,6 @@ package org.apache.kafka.tools.consumer.group;
 import kafka.api.AbstractSaslTest;
 import kafka.security.JaasTestUtils;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -27,6 +26,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.metadata.storage.Formatter;
 
 import org.junit.jupiter.api.AfterEach;

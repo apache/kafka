@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.record.internal;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -25,6 +24,7 @@ import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.MemoryRecords.RecordFilter;
 import org.apache.kafka.common.record.internal.MemoryRecords.RecordFilter.BatchRetention;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.CloseableIterator;

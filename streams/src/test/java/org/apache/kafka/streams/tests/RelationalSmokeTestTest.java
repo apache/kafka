@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.streams.tests;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;

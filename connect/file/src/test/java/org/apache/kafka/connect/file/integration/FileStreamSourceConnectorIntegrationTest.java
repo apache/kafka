@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.connect.file.integration;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.connect.file.FileStreamSourceConnector;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 

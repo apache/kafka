@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.test.base.TestSslUtils;
 import org.apache.kafka.common.test.base.TestUtils;
-import org.apache.kafka.common.config.SslConfigs;
 
 import java.io.File;
 import java.net.InetAddress;

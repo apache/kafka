@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.connect.file.integration;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.connect.file.FileStreamSinkConnector;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 

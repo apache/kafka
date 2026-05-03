@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;

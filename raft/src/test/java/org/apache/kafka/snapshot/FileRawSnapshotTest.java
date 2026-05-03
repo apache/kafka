@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.snapshot;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.Record;
@@ -25,6 +24,7 @@ import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.record.internal.UnalignedFileRecords;
 import org.apache.kafka.common.record.internal.UnalignedMemoryRecords;
 import org.apache.kafka.common.requests.ByteBufferChannel;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier.GrowableBufferSupplier;
 import org.apache.kafka.server.common.OffsetAndEpoch;

@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer;
 
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.ClientsTestUtils;
 import org.apache.kafka.clients.ClientsTestUtils.TestConsumerReassignmentListener;
 import org.apache.kafka.clients.producer.Producer;
@@ -28,6 +27,7 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.BeforeEach;

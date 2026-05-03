@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.record.internal;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.compress.ZstdCompression;
@@ -24,6 +23,7 @@ import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.BufferSupplier;
 import org.apache.kafka.common.utils.internals.ChunkedBytesStream;

@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.test.wordcount;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;

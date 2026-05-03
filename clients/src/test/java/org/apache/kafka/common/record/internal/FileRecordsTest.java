@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.common.record.internal;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.test.base.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

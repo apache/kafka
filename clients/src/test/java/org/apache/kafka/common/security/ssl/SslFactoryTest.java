@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.security.ssl;
 
-import org.apache.kafka.common.test.base.TestSslUtils;
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SecurityConfig;
@@ -32,6 +30,8 @@ import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory.SecurityStor
 import org.apache.kafka.common.security.ssl.mock.TestKeyManagerFactory;
 import org.apache.kafka.common.security.ssl.mock.TestProviderCreator;
 import org.apache.kafka.common.security.ssl.mock.TestTrustManagerFactory;
+import org.apache.kafka.common.test.base.TestSslUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 
 import org.junit.jupiter.api.Test;
 

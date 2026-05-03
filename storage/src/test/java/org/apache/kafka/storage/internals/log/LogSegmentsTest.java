@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 

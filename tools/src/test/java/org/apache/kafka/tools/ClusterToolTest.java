@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.tools;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.common.test.base.TestUtils;
 
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 

@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.connect.integration;
 
-import org.apache.kafka.common.test.base.NoRetryException;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.ListGroupsOptions;
 import org.apache.kafka.common.test.api.Flaky;
+import org.apache.kafka.common.test.base.NoRetryException;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;

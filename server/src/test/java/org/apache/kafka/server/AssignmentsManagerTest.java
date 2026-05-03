@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.Uuid;
@@ -34,6 +33,7 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.AssignReplicasToDirsRequest;
 import org.apache.kafka.common.requests.AssignReplicasToDirsResponse;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.ExponentialBackoff;
 import org.apache.kafka.image.MetadataDelta;

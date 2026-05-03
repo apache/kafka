@@ -17,11 +17,11 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;

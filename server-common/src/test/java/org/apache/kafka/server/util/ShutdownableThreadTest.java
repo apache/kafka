@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.server.util;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.internals.FatalExitError;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.Exit;
 

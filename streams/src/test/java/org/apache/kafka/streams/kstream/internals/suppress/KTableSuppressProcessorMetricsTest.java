@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.streams.kstream.internals.suppress;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Suppressed;

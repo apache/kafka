@@ -17,10 +17,10 @@
 
 package org.apache.kafka.common.network;
 
-import org.apache.kafka.common.test.base.TestSslUtils;
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.test.api.Flaky;
+import org.apache.kafka.common.test.base.TestSslUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 
 import org.junit.jupiter.api.Test;
 

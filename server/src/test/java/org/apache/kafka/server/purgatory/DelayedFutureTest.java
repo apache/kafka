@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.server.purgatory;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.utils.Time;
 
 import org.junit.jupiter.api.Test;

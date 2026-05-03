@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.tests;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.internals.KafkaThread;
 import org.apache.kafka.streams.KafkaStreams;

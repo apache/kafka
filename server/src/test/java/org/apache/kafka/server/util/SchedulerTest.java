@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.server.util;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 import org.apache.kafka.storage.internals.log.LoadedLogOffsets;

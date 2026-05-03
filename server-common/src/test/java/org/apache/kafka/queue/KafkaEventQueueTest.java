@@ -17,8 +17,8 @@
 
 package org.apache.kafka.queue;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.internals.LogContext;

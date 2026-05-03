@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.protocol.MessageUtil;
+import org.apache.kafka.common.test.base.TestUtils;
 
 import org.junit.jupiter.api.Test;
 

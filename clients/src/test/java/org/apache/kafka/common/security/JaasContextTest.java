@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.common.security;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.test.base.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

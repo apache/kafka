@@ -18,12 +18,12 @@ package kafka.security;
 
 import kafka.utils.TestUtils;
 
-import org.apache.kafka.common.test.base.TestSslUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.test.base.TestSslUtils;
 import org.apache.kafka.common.utils.internals.Java;
 
 import java.io.BufferedWriter;

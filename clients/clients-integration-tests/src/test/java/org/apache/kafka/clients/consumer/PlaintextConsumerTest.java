@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer;
 
 import kafka.server.KafkaBroker;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.ClientsTestUtils.TestConsumerReassignmentListener;
 import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.producer.Producer;
@@ -49,6 +48,7 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.server.quota.QuotaType;
 import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.MockProducerInterceptor;

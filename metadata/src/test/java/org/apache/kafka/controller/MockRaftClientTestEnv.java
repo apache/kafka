@@ -17,8 +17,8 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.controller.MockRaftClient.LeaderChangeBatch;
