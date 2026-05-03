@@ -19,11 +19,13 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.header.ConnectHeaders;
@@ -36,6 +38,8 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -60,6 +64,11 @@ public class MirrorSourceTask extends SourceTask {
     private Semaphore consumerAccess;
     private OffsetSyncWriter offsetSyncWriter;
 
+    // Track expected offsets to detect log truncation and topic resets
+    private final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
+    // Store config reference for use in helper methods
+    private MirrorSourceTaskConfig config;
+
     public MirrorSourceTask() {}
 
     // for testing
@@ -76,10 +85,11 @@ public class MirrorSourceTask extends SourceTask {
 
     @Override
     public void start(Map<String, String> props) {
-        MirrorSourceTaskConfig config = new MirrorSourceTaskConfig(props);
+        this.config = new MirrorSourceTaskConfig(props);  // store for later use
         consumerAccess = new Semaphore(1);  // let one thread at a time access the consumer
         sourceClusterAlias = config.sourceClusterAlias();
         List<String> metricNamesFormats = config.metricNamesFormats();
+        // Keep original lines exactly — these are correct for v4.0.0
         legacyMetrics = metricNamesFormats.contains(METRIC_NAMES_LEGACY) ? config.legacyMetrics() : null;
         metrics = metricNamesFormats.contains(METRIC_NAMES_NEW) ? config.metrics(context.pluginMetrics()) : null;
         pollTimeout = config.consumerPollTimeout();
@@ -116,14 +126,15 @@ public class MirrorSourceTask extends SourceTask {
         try {
             consumerAccess.acquire();
         } catch (InterruptedException e) {
-            log.warn("Interrupted waiting for access to consumer. Will try closing anyway."); 
+            log.warn("Interrupted waiting for access to consumer. Will try closing anyway.");
         }
         Utils.closeQuietly(consumer, "source consumer");
         Utils.closeQuietly(offsetSyncWriter, "offset sync writer");
+        // NOTE: only legacyMetrics is AutoCloseable — do NOT call closeQuietly on metrics
         Utils.closeQuietly(legacyMetrics, "metrics");
         log.info("Stopping {} took {} ms.", Thread.currentThread().getName(), System.currentTimeMillis() - start);
     }
-   
+
     @Override
     public String version() {
         return new MirrorSourceConnector().version();
@@ -141,6 +152,50 @@ public class MirrorSourceTask extends SourceTask {
             ConsumerRecords<byte[], byte[]> records = consumer.poll(pollTimeout);
             List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
             for (ConsumerRecord<byte[], byte[]> record : records) {
+                TopicPartition tp = new TopicPartition(record.topic(), record.partition());
+
+                // ── TASK 2 & 3: Truncation and Reset Detection ───────────────────────────
+                if (expectedOffsets.containsKey(tp)) {
+                    long expected = expectedOffsets.get(tp);
+                    long incoming = record.offset();
+
+                    if (incoming > expected) {
+                        // Gap detected — messages were purged by retention before replication
+                       
+                        log.error("DATA LOSS DETECTED on {}! Expected offset {}, but got {}. " +
+                            "Data was likely purged by retention policy before replication.", tp, expected, incoming);
+                        
+                        throw new org.apache.kafka.connect.errors.ConnectException(
+                            "Fail-fast: DATA LOSS DETECTED on " + tp);
+
+                    } else if (incoming < expected) {
+                        // Offset went backward — topic was deleted and recreated
+                        
+                        log.error("TOPIC RESET DETECTED on {}! Expected offset {}, but got {}. " +
+                            "Timestamp: {}. Topic was likely deleted and recreated.",
+                            tp, expected, incoming, new java.util.Date());
+                        
+                        log.info("Automatically resubscribing {} from the beginning.", tp);
+                        // Unsubscribe to clear stale partition assignment, then reassign explicitly
+                        consumer.unsubscribe();
+                        consumer.assign(Collections.singletonList(tp));
+                        // Explicitly seek to beginning — do not rely on auto.offset.reset config
+                        consumer.seekToBeginning(Collections.singletonList(tp));
+                        expectedOffsets.put(tp, 0L);
+                        return null; // force re-poll from offset 0
+                    }
+                    // else: incoming == expected — normal flow, fall through
+
+                } else {
+                    // First time seeing this partition — baseline the tracker
+                    log.info("First record seen for {}. Baselining expected offset at {}",
+                        tp, record.offset());
+                }
+
+                // Always update tracker to the next expected offset
+                expectedOffsets.put(tp, record.offset() + 1L);
+                // ── END TASK 2 & 3 ───────────────────────────────────────────────────────
+
                 SourceRecord converted = convertRecord(record);
                 sourceRecords.add(converted);
                 TopicPartition topicPartition = new TopicPartition(converted.topic(), converted.kafkaPartition());
@@ -162,12 +217,38 @@ public class MirrorSourceTask extends SourceTask {
                 log.trace("Polled {} records from {}.", sourceRecords.size(), records.partitions());
                 return sourceRecords;
             }
+
+        } catch (OffsetOutOfRangeException e) {
+            // Second safety net: Kafka throws this when the consumer's stored offset
+            // no longer exists on the broker (already purged by retention)
+            Map<TopicPartition, Long> beginningOffsets = consumer.beginningOffsets(
+                e.offsetOutOfRangePartitions().keySet());
+            for (TopicPartition tp : e.offsetOutOfRangePartitions().keySet()) {
+                Long expected = expectedOffsets.get(tp);
+                Long beginning = beginningOffsets.get(tp);
+                if (expected != null && beginning != null && expected < beginning) {
+                    // Our expected offset is behind the earliest available — data was lost
+                    log.error("DATA LOSS DETECTED: Log truncation on {}. Expected: {}, Earliest available: {}",
+                        tp, expected, beginning);
+                    throw new org.apache.kafka.connect.errors.ConnectException(
+                        "Fail-fast: Log truncation detected on " + tp);
+                } else {
+                    // Offset out of range but not a data loss scenario — treat as topic reset
+                    log.warn("TOPIC RESET DETECTED (OffsetOutOfRange) on {}. " +
+                        "Expected offset {}. Resubscribing from beginning. Timestamp: {}",
+                        tp, expected, new java.util.Date());
+                    consumer.seekToBeginning(Collections.singletonList(tp));
+                    expectedOffsets.put(tp, 0L);
+                }
+            }
+            return null; // restart poll from new position
+
         } catch (WakeupException e) {
             return null;
         } catch (KafkaException e) {
             log.warn("Failure during poll.", e);
             return null;
-        } catch (Throwable e)  {
+        } catch (Throwable e) {
             log.error("Failure during poll.", e);
             // allow Connect to deal with the exception
             throw e;
@@ -175,7 +256,7 @@ public class MirrorSourceTask extends SourceTask {
             consumerAccess.release();
         }
     }
- 
+
     @Override
     public void commitRecord(SourceRecord record, RecordMetadata metadata) {
         if (stopping) {
@@ -209,7 +290,7 @@ public class MirrorSourceTask extends SourceTask {
             offsetSyncWriter.firePendingOffsetSyncs();
         }
     }
- 
+
     private Map<TopicPartition, Long> loadOffsets(Set<TopicPartition> topicPartitions) {
         return topicPartitions.stream().collect(Collectors.toMap(x -> x, this::loadOffset));
     }
@@ -236,10 +317,12 @@ public class MirrorSourceTask extends SourceTask {
             long nextOffsetToCommittedOffset = offset + 1L;
             log.trace("Seeking to offset {} for topicPartition: {}", nextOffsetToCommittedOffset, topicPartition);
             consumer.seek(topicPartition, nextOffsetToCommittedOffset);
+            // Seed the expected offset tracker so gap detection works correctly from first poll
+            expectedOffsets.put(topicPartition, nextOffsetToCommittedOffset);
         });
     }
 
-    // visible for testing 
+    // visible for testing
     SourceRecord convertRecord(ConsumerRecord<byte[], byte[]> record) {
         String targetTopic = formatRemoteTopic(record.topic());
         Headers headers = convertHeaders(record);
@@ -274,5 +357,15 @@ public class MirrorSourceTask extends SourceTask {
 
     private boolean isUncommitted(Long offset) {
         return offset == null || offset < 0;
+    }
+
+    // Returns true if incoming offset jumped forward — indicates data was purged before replication
+    private boolean isDataLoss(long current, long expected) {
+        return current > expected;
+    }
+
+    // Returns true if incoming offset went backward — indicates topic was deleted and recreated
+    private boolean isTopicReset(long current, long expected) {
+        return current < expected;
     }
 }
