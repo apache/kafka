@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -239,6 +240,7 @@ public class StreamsMetadataStateTest {
         final KeyQueryMetadata expected = new KeyQueryMetadata(hostThree, Set.of(hostTwo), 0);
         final KeyQueryMetadata actual = metadataState.keyQueryMetadataForKey("table-three",
                                                                     "the-key",
+                                                                    new RecordHeaders(),
                                                                     Serdes.String().serializer());
         assertEquals(expected, actual);
     }
@@ -255,6 +257,7 @@ public class StreamsMetadataStateTest {
 
         final KeyQueryMetadata actual = metadataState.keyQueryMetadataForKey("table-three",
                 "the-key",
+                new RecordHeaders(),
                 partitioner);
         assertEquals(expected, actual);
         assertEquals(1, actual.partition());
@@ -271,13 +274,14 @@ public class StreamsMetadataStateTest {
 
         assertThrows(IllegalArgumentException.class, () -> metadataState.keyQueryMetadataForKey("table-three",
                 "the-key",
+                new RecordHeaders(),
                 new MultiValuedPartitioner()));
     }
 
     @Test
     public void shouldReturnNotAvailableWhenClusterIsEmpty() {
         metadataState.onChange(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
-        final KeyQueryMetadata result = metadataState.keyQueryMetadataForKey("table-one", "a", Serdes.String().serializer());
+        final KeyQueryMetadata result = metadataState.keyQueryMetadataForKey("table-one", "a", new RecordHeaders(), Serdes.String().serializer());
         assertEquals(KeyQueryMetadata.NOT_AVAILABLE, result);
     }
 
@@ -291,7 +295,7 @@ public class StreamsMetadataStateTest {
 
         final KeyQueryMetadata expected = new KeyQueryMetadata(hostTwo, Set.of(hostOne), 2);
 
-        final KeyQueryMetadata actual = metadataState.keyQueryMetadataForKey("merged-table",  "the-key",
+        final KeyQueryMetadata actual = metadataState.keyQueryMetadataForKey("merged-table",  "the-key", new RecordHeaders(),
             (topic, key, value, numPartitions) -> Optional.of(Collections.singleton(2)));
 
         assertEquals(expected, actual);
@@ -301,29 +305,30 @@ public class StreamsMetadataStateTest {
     public void shouldReturnNullOnGetWithKeyWhenStoreDoesntExist() {
         final KeyQueryMetadata actual = metadataState.keyQueryMetadataForKey("not-a-store",
                 "key",
+                new RecordHeaders(),
                 Serdes.String().serializer());
         assertNull(actual);
     }
 
     @Test
     public void shouldThrowWhenKeyIsNull() {
-        assertThrows(NullPointerException.class, () -> metadataState.keyQueryMetadataForKey("table-three", null, Serdes.String().serializer()));
+        assertThrows(NullPointerException.class, () -> metadataState.keyQueryMetadataForKey("table-three", null, new RecordHeaders(), Serdes.String().serializer()));
     }
 
     @Test
     public void shouldThrowWhenSerializerIsNull() {
-        assertThrows(NullPointerException.class, () -> metadataState.keyQueryMetadataForKey("table-three", "key", (Serializer<Object>) null));
+        assertThrows(NullPointerException.class, () -> metadataState.keyQueryMetadataForKey("table-three", "key", new RecordHeaders(), (Serializer<Object>) null));
     }
 
     @Test
     public void shouldThrowIfStoreNameIsNull() {
-        assertThrows(NullPointerException.class, () -> metadataState.keyQueryMetadataForKey(null, "key", Serdes.String().serializer()));
+        assertThrows(NullPointerException.class, () -> metadataState.keyQueryMetadataForKey(null, "key", new RecordHeaders(), Serdes.String().serializer()));
     }
 
     @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowIfStreamPartitionerIsNull() {
-        assertThrows(NullPointerException.class, () -> metadataState.keyQueryMetadataForKey(null, "key", (StreamPartitioner) null));
+        assertThrows(NullPointerException.class, () -> metadataState.keyQueryMetadataForKey(null, "key", new RecordHeaders(), (StreamPartitioner) null));
     }
 
     @Test
@@ -347,7 +352,7 @@ public class StreamsMetadataStateTest {
 
     @Test
     public void shouldGetQueryMetadataForGlobalStoreWithKey() {
-        final KeyQueryMetadata metadata = metadataState.keyQueryMetadataForKey(globalTable, "key", Serdes.String().serializer());
+        final KeyQueryMetadata metadata = metadataState.keyQueryMetadataForKey(globalTable, "key", new RecordHeaders(), Serdes.String().serializer());
         assertEquals(hostOne, metadata.activeHost());
         assertTrue(metadata.standbyHosts().isEmpty());
     }
@@ -360,12 +365,12 @@ public class StreamsMetadataStateTest {
             logContext
         );
         streamsMetadataState.onChange(hostToActivePartitions, hostToStandbyPartitions, partitionInfos);
-        assertNotNull(streamsMetadataState.keyQueryMetadataForKey(globalTable, "key", Serdes.String().serializer()));
+        assertNotNull(streamsMetadataState.keyQueryMetadataForKey(globalTable, "key", new RecordHeaders(), Serdes.String().serializer()));
     }
 
     @Test
     public void shouldGetQueryMetadataForGlobalStoreWithKeyAndPartitioner() {
-        final KeyQueryMetadata metadata = metadataState.keyQueryMetadataForKey(globalTable, "key", partitioner);
+        final KeyQueryMetadata metadata = metadataState.keyQueryMetadataForKey(globalTable, "key", new RecordHeaders(), partitioner);
         assertEquals(hostOne, metadata.activeHost());
         assertTrue(metadata.standbyHosts().isEmpty());
     }
@@ -378,7 +383,7 @@ public class StreamsMetadataStateTest {
             logContext
         );
         streamsMetadataState.onChange(hostToActivePartitions, hostToStandbyPartitions, partitionInfos);
-        assertNotNull(streamsMetadataState.keyQueryMetadataForKey(globalTable, "key", partitioner));
+        assertNotNull(streamsMetadataState.keyQueryMetadataForKey(globalTable, "key", new RecordHeaders(), partitioner));
     }
 
     @Test

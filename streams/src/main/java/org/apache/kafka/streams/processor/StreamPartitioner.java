@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.annotation.InterfaceAudience;
 import org.apache.kafka.streams.Topology;
 
@@ -44,7 +45,7 @@ import java.util.Set;
  * for that topic.
  * <p>
  * All StreamPartitioner implementations should be stateless and a pure function so they can be shared across topic and sink nodes.
- * 
+ *
  * @param <K> the type of keys
  * @param <V> the type of values
  * @see Topology#addSink(String, String, org.apache.kafka.common.serialization.Serializer,
@@ -55,17 +56,23 @@ import java.util.Set;
 @InterfaceAudience.Public
 public interface StreamPartitioner<K, V> {
 
+    @Deprecated(since = "4.3", forRemoval = true)
+    Optional<Set<Integer>> partitions(String topic, K key, V value, int numPartitions);
+
     /**
-     * Determine the number(s) of the partition(s) to which a record with the given key and value should be sent, 
+     * Determine the number(s) of the partition(s) to which a record with the given key and value should be sent,
      * for the given topic and current partition count
      * @param topic the topic name this record is sent to
      * @param key the key of the record
      * @param value the value of the record
+     * @param headers the record headers
      * @param numPartitions the total number of partitions
      * @return an Optional of Set of integers between 0 and {@code numPartitions-1},
      * Empty optional means using default partitioner
      * Optional of an empty set means the record won't be sent to any partitions i.e drop it.
      * Optional of Set of integers means the partitions to which the record should be sent to.
      * */
-    Optional<Set<Integer>> partitions(String topic, K key, V value, int numPartitions);
+    default Optional<Set<Integer>> partitions(final String topic, final K key, final V value, final Headers headers, final int numPartitions) {
+        return partitions(topic, key, value, numPartitions);
+    }
 }

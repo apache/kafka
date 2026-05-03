@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.internals.LogContext;
@@ -418,7 +419,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     }
 
     /**
-     * See {@link KafkaStreams#queryMetadataForKey(String, Object, Serializer)}
+     * See {@link KafkaStreams#queryMetadataForKey(String, Object, Headers, Serializer)}
      */
     public <K> KeyQueryMetadata queryMetadataForKey(final String storeName,
                                                     final K key,
@@ -426,7 +427,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                                                     final String topologyName) {
         verifyTopologyStateStore(topologyName, storeName);
         validateIsRunningOrRebalancing();
-        return streamsMetadataState.keyQueryMetadataForKey(storeName, key, keySerializer, topologyName);
+        return streamsMetadataState.keyQueryMetadataForKey(storeName, key, new RecordHeaders(), keySerializer, topologyName);
     }
 
     /**
