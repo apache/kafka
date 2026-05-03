@@ -1887,7 +1887,7 @@ public class UnifiedLog implements AutoCloseable {
             while (segmentOpt.isPresent()) {
                 LogSegment segment = segmentOpt.get();
                 Optional<LogSegment> nextSegmentOpt = nextOption(segmentsIterator);
-                boolean isLastSegmentAndEmpty = nextSegmentOpt.isEmpty() && segment.size() == 0;
+                boolean isLastSegmentAndEmpty = nextSegmentOpt.isEmpty() && segment.sizeInBytesLong() == 0;
                 long upperBoundOffset = nextSegmentOpt.map(LogSegment::baseOffset).orElseGet(this::logEndOffset);
                 // We don't delete segments with offsets at or beyond the high watermark to ensure that the log start
                 // offset can never exceed it.
@@ -1895,7 +1895,7 @@ public class UnifiedLog implements AutoCloseable {
 
                 // Roll the active segment when it breaches the configured retention policy. The rolled segment will be
                 // eligible for deletion and gets removed in the next iteration.
-                if (predicateResult && remoteLogEnabled() && nextSegmentOpt.isEmpty() && segment.size() > 0) {
+                if (predicateResult && remoteLogEnabled() && nextSegmentOpt.isEmpty() && segment.sizeInBytesLong() > 0) {
                     shouldRoll = true;
                 }
                 if (predicateResult && !isLastSegmentAndEmpty && isSegmentEligibleForDeletion(nextSegmentOpt, upperBoundOffset)) {

@@ -74,7 +74,7 @@ public final class OffsetIndex extends AbstractIndex {
     }
 
     public OffsetIndex(File file, long baseOffset, int maxIndexSize, boolean writable) throws IOException {
-        this(file, baseOffset, maxIndexSize, writable, true);
+        this(file, baseOffset, maxIndexSize, writable, false);
     }
 
     /**

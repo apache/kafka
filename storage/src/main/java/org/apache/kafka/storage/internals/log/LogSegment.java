@@ -550,7 +550,7 @@ public class LogSegment implements Closeable {
     public String toString() {
         // We don't call `largestRecordTimestamp` below to avoid materializing the time index when `toString` is invoked
         return "LogSegment(baseOffset=" + baseOffset +
-            ", size=" + size() +
+            ", size=" + sizeInBytesLong() +
             ", lastModifiedTime=" + lastModified() +
             ", largestRecordTimestamp=" + maxTimestampAndOffsetSoFar.timestamp() +
             ")";
@@ -586,7 +586,7 @@ public class LogSegment implements Closeable {
         else
             bytesTruncated = log.truncateToLong(mapping.position);
 
-        if (log.sizeInBytes() == 0) {
+        if (log.sizeInBytesLong() == 0) {
             created = time.milliseconds();
             rollingBasedTimestamp = OptionalLong.empty();
         }

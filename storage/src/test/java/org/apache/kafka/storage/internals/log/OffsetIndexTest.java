@@ -48,7 +48,7 @@ public class OffsetIndexTest {
 
     @BeforeEach
     public void setup() throws IOException {
-        index = new OffsetIndex(nonExistentTempFile(), BASE_OFFSET, 30 * 12);
+        index = new OffsetIndex(nonExistentTempFile(), BASE_OFFSET, 30 * 8);
     }
 
     @AfterEach
@@ -180,7 +180,7 @@ public class OffsetIndexTest {
 
     @Test
     public void truncate() throws IOException {
-        try (OffsetIndex idx = new OffsetIndex(nonExistentTempFile(), 0L, 10 * 12)) {
+        try (OffsetIndex idx = new OffsetIndex(nonExistentTempFile(), 0L, 10 * 8)) {
             idx.truncate();
             IntStream.range(1, 10).forEach(i -> idx.append(i, i));
 
@@ -221,7 +221,7 @@ public class OffsetIndexTest {
 
     @Test
     public void forceUnmapTest() throws IOException {
-        OffsetIndex idx = new OffsetIndex(nonExistentTempFile(), 0L, 10 * 12);
+        OffsetIndex idx = new OffsetIndex(nonExistentTempFile(), 0L, 10 * 8);
         idx.forceUnmap();
         // mmap should be null after unmap causing lookup to throw a NPE
         assertThrows(NullPointerException.class, () -> idx.lookup(1));
@@ -231,7 +231,7 @@ public class OffsetIndexTest {
     public void testSanityLastOffsetEqualToBaseOffset() throws IOException {
         // Test index sanity for the case where the last offset appended to the index is equal to the base offset
         long baseOffset = 20L;
-        try (OffsetIndex idx = new OffsetIndex(nonExistentTempFile(), baseOffset, 10 * 12)) {
+        try (OffsetIndex idx = new OffsetIndex(nonExistentTempFile(), baseOffset, 10 * 8)) {
             idx.append(baseOffset, 0);
             idx.sanityCheck();
         }
@@ -267,7 +267,7 @@ public class OffsetIndexTest {
      */
     @Test
     public void testAppendAndLookupWithLargePositions() throws IOException {
-        try (OffsetIndex idx = new OffsetIndex(nonExistentTempFile(), 0L, 10 * 12)) {
+        try (OffsetIndex idx = new OffsetIndex(nonExistentTempFile(), 0L, 10 * OffsetIndex.LARGE_ENTRY_SIZE, true, true)) {
             long posAbove2GB = Integer.MAX_VALUE + 1000L;
             idx.append(1, posAbove2GB);
             idx.append(2, posAbove2GB + 4096);
@@ -299,14 +299,16 @@ public class OffsetIndexTest {
      */
     @Test
     public void testReopenWithLargePositions() throws IOException {
+        File indexFile = nonExistentTempFile();
+        OffsetIndex largeIndex = new OffsetIndex(indexFile, BASE_OFFSET, 30 * OffsetIndex.LARGE_ENTRY_SIZE, true, true);
         long posAbove2GB = 3_000_000_000L;
-        OffsetPosition first = new OffsetPosition(51, posAbove2GB);
-        OffsetPosition second = new OffsetPosition(52, posAbove2GB + 100);
-        index.append(first.offset(), first.position());
-        index.append(second.offset(), second.position());
-        index.close();
+        OffsetPosition first = new OffsetPosition(BASE_OFFSET + 6, posAbove2GB);
+        OffsetPosition second = new OffsetPosition(BASE_OFFSET + 7, posAbove2GB + 100);
+        largeIndex.append(first.offset(), first.position());
+        largeIndex.append(second.offset(), second.position());
+        largeIndex.close();
 
-        OffsetIndex reopened = new OffsetIndex(index.file(), index.baseOffset());
+        OffsetIndex reopened = new OffsetIndex(indexFile, BASE_OFFSET, 30 * OffsetIndex.LARGE_ENTRY_SIZE, false, true);
         assertEquals(first, reopened.lookup(first.offset()),
                 "Large position should survive close/reopen");
         assertEquals(second, reopened.lookup(second.offset()));

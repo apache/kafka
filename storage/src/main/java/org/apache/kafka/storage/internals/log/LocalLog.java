@@ -592,7 +592,7 @@ public class LocalLog {
                 LogSegment activeSegment = segments.activeSegment();
                 if (segments.contains(newOffset)) {
                     // segment with the same base offset already exists and loaded
-                    if (activeSegment.baseOffset() == newOffset && activeSegment.size() == 0) {
+                    if (activeSegment.baseOffset() == newOffset && activeSegment.sizeInBytesLong() == 0) {
                         // We have seen this happen (see KAFKA-6388) after shouldRoll() returns true for an
                         // active segment of size zero because of one of the indexes is "full" (due to _maxEntries == 0).
                         logger.warn("Trying to roll a new log segment with start offset {}=max(provided offset = {}, LEO = {}) " +
