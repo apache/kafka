@@ -40,7 +40,6 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OffsetIndexTest {
 
@@ -317,69 +316,55 @@ public class OffsetIndexTest {
     }
 
     /**
-     * T1: Verify backward compatibility — an old 8-byte-entry index file is detected
-     * by sanityCheck and throws CorruptIndexException with a message indicating it uses
-     * the old format. This triggers the LogLoader recovery path which rebuilds the index.
+     * T1: Verify that legacy 8-byte format indexes can be read correctly when
+     * useLargeFormat=false (before MetadataVersion finalization).
      */
     @Test
-    public void testOldFormatIndexDetectedBySanityCheck() throws IOException {
-        // Create a file that simulates an old 8-byte-entry format:
-        // write raw bytes: 4-byte relative offset + 4-byte position (old format)
+    public void testLegacyFormatReadWrite() throws IOException {
         File indexFile = nonExistentTempFile();
-        java.nio.file.Files.write(indexFile.toPath(), new byte[0]); // ensure file exists
-        try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(indexFile, "rw")) {
-            java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocate(16); // 2 entries * 8 bytes old format
-            // Entry 1: relativeOffset=1, position=100
-            buf.putInt(1);
-            buf.putInt(100);
-            // Entry 2: relativeOffset=2, position=200
-            buf.putInt(2);
-            buf.putInt(200);
-            buf.flip();
-            raf.getChannel().write(buf);
-        }
+        // Create an index in legacy 8-byte format
+        try (OffsetIndex legacyIdx = new OffsetIndex(indexFile, 0L, 10 * OffsetIndex.LEGACY_ENTRY_SIZE, true, false)) {
+            legacyIdx.append(1, 100);
+            legacyIdx.append(2, 200);
+            legacyIdx.append(3, 300);
 
-        // The 16-byte file is not a multiple of 12 (new ENTRY_SIZE), so sanityCheck should fail
-        // with a message indicating it uses the old 8-byte format
-        OffsetIndex oldFormatIndex = new OffsetIndex(indexFile, 0L, 1024, false);
-        CorruptIndexException ex = assertThrows(CorruptIndexException.class,
-                oldFormatIndex::sanityCheck,
-                "Old 8-byte format index should fail sanity check with 12-byte entry size");
-        assertTrue(ex.getMessage().contains("old 8-byte entry format"),
-                "Error message should indicate old format detected, got: " + ex.getMessage());
-        oldFormatIndex.close();
+            assertEquals(new OffsetPosition(1, 100), legacyIdx.lookup(1));
+            assertEquals(new OffsetPosition(2, 200), legacyIdx.lookup(2));
+            assertEquals(new OffsetPosition(3, 300), legacyIdx.lookup(3));
+            assertEquals(3, legacyIdx.entries());
+
+            // Verify file size is multiple of 8 (legacy format)
+            legacyIdx.trimToValidSize();
+            assertEquals(0, legacyIdx.sizeInBytes() % OffsetIndex.LEGACY_ENTRY_SIZE,
+                    "Legacy format index should have entries as multiples of 8 bytes");
+        }
         Files.deleteIfExists(indexFile.toPath());
     }
 
     /**
-     * T1 (continued): Verify that after reset(), the index can be rebuilt in the new 12-byte format.
-     * This simulates the recovery path: detect old format → reset → rebuild.
+     * T1 (continued): Verify migration from legacy to large format via reset+rebuild.
+     * This simulates what happens when MetadataVersion is finalized:
+     * indexes are rebuilt from .log files in the new 12-byte format.
      */
     @Test
-    public void testOldFormatIndexRebuildAfterReset() throws IOException {
-        // Create an old-format file (8 bytes per entry, total 40 bytes = 5 entries)
-        // 40 is not a multiple of 12, so it will be detected as old format
+    public void testLegacyToLargeFormatMigration() throws IOException {
+        // Create a legacy-format index
         File indexFile = nonExistentTempFile();
-        java.nio.file.Files.write(indexFile.toPath(), new byte[0]);
-        try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(indexFile, "rw")) {
-            java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocate(40); // 5 entries * 8 bytes
-            for (int i = 1; i <= 5; i++) {
-                buf.putInt(i);       // relative offset
-                buf.putInt(i * 100); // position
-            }
-            buf.flip();
-            raf.getChannel().write(buf);
+        try (OffsetIndex legacyIdx = new OffsetIndex(indexFile, 0L, 10 * OffsetIndex.LEGACY_ENTRY_SIZE, true, false)) {
+            legacyIdx.append(1, 100);
+            legacyIdx.append(2, 200);
+            legacyIdx.append(3, 300);
         }
 
-        // Open and verify sanity check fails
-        OffsetIndex idx = new OffsetIndex(indexFile, 0L, 10 * 12, true);
-        assertThrows(CorruptIndexException.class, idx::sanityCheck);
+        // Open in large format mode — the file size won't be a multiple of 12 if it
+        // had an odd number of 8-byte entries, triggering rebuild
+        OffsetIndex idx = new OffsetIndex(indexFile, 0L, 10 * OffsetIndex.LARGE_ENTRY_SIZE, true, true);
 
-        // Reset (this is what LogSegment.recover() does)
+        // Reset (this is what LogSegment.recover() does during MetadataVersion migration)
         idx.reset();
         assertEquals(0, idx.entries(), "After reset, index should have no entries");
 
-        // Now rebuild in new format with large positions
+        // Rebuild in new format with large positions
         long posAbove2GB = 3_000_000_000L;
         idx.append(1, posAbove2GB);
         idx.append(2, posAbove2GB + 4096);

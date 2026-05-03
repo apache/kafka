@@ -30,7 +30,8 @@ import java.util.Optional;
  * An index that maps offsets to physical file locations for a particular log segment. This index may be sparse:
  * that is it may not hold an entry for all messages in the log.
  *
- * <p>The index is stored in a file that is pre-allocated to hold a fixed maximum number of 12-byte entries.
+ * <p>The index is stored in a file that is pre-allocated to hold a fixed maximum number of entries (8 or 12 bytes each,
+ * depending on whether the large index format is enabled via MetadataVersion).
  *
  * <p>The index supports lookups against a memory-map of this file. These lookups are done using a simple binary search variant
  * to locate the offset/location pair for the greatest offset less than or equal to the target offset.
@@ -53,8 +54,13 @@ import java.util.Optional;
  */
 public final class OffsetIndex extends AbstractIndex {
     private static final Logger log = LoggerFactory.getLogger(OffsetIndex.class);
-    private static final int ENTRY_SIZE = 12;
-    private static final int OLD_ENTRY_SIZE = 8;
+
+    // 12-byte entries: 4-byte relative offset + 8-byte physical position (supports >2GB segments)
+    public static final int LARGE_ENTRY_SIZE = 12;
+    // 8-byte entries: 4-byte relative offset + 4-byte physical position (legacy, <=2GB segments)
+    public static final int LEGACY_ENTRY_SIZE = 8;
+
+    private final int indexEntrySize;
 
     /* the last offset in the index */
     private volatile long lastOffset;
@@ -68,12 +74,22 @@ public final class OffsetIndex extends AbstractIndex {
     }
 
     public OffsetIndex(File file, long baseOffset, int maxIndexSize, boolean writable) throws IOException {
-        super(file, baseOffset, maxIndexSize, writable);
+        this(file, baseOffset, maxIndexSize, writable, true);
+    }
+
+    /**
+     * @param useLargeFormat If true, use 12-byte entries (8-byte physical position).
+     *                       If false, use legacy 8-byte entries (4-byte physical position).
+     *                       Gated by MetadataVersion.isLargeIndexFormatSupported().
+     */
+    public OffsetIndex(File file, long baseOffset, int maxIndexSize, boolean writable, boolean useLargeFormat) throws IOException {
+        super(file, baseOffset, maxIndexSize, writable, useLargeFormat ? LARGE_ENTRY_SIZE : LEGACY_ENTRY_SIZE);
+        this.indexEntrySize = useLargeFormat ? LARGE_ENTRY_SIZE : LEGACY_ENTRY_SIZE;
 
         lastOffset = lastEntry().offset();
 
-        log.debug("Loaded index file {} with maxEntries = {}, maxIndexSize = {}, entries = {}, lastOffset = {}, file position = {}",
-            file.getAbsolutePath(), maxEntries(), maxIndexSize, entries(), lastOffset, mmap().position());
+        log.debug("Loaded index file {} with maxEntries = {}, maxIndexSize = {}, entries = {}, lastOffset = {}, file position = {}, entrySize = {}",
+            file.getAbsolutePath(), maxEntries(), maxIndexSize, entries(), lastOffset, mmap().position(), indexEntrySize);
     }
 
     @Override
@@ -81,14 +97,9 @@ public final class OffsetIndex extends AbstractIndex {
         if (entries() != 0 && lastOffset < baseOffset())
             throw new CorruptIndexException("Corrupt index found, index file " + file().getAbsolutePath() + " has non-zero size " +
                 "but the last offset is " + lastOffset + " which is less than the base offset " + baseOffset());
-        if (length() % entrySize() != 0) {
-            if (length() > 0 && length() % OLD_ENTRY_SIZE == 0) {
-                throw new CorruptIndexException("Index file " + file().getAbsolutePath() + " uses the old 8-byte entry format " +
-                    "(size=" + length() + " bytes). It will be rebuilt automatically in the new 12-byte format.");
-            }
+        if (length() % entrySize() != 0)
             throw new CorruptIndexException("Index file " + file().getAbsolutePath() + " is corrupt, found " + length() +
-                " bytes which is neither positive nor a multiple of " + ENTRY_SIZE);
-        }
+                " bytes which is neither positive nor a multiple of " + entrySize());
     }
 
     /**
@@ -154,10 +165,14 @@ public final class OffsetIndex extends AbstractIndex {
             if (entries() == 0 || offset > lastOffset) {
                 log.trace("Adding index entry {} => {} to {}", offset, position, file().getAbsolutePath());
                 mmap().putInt(relativeOffset(offset));
-                mmap().putLong(position);
+                if (indexEntrySize == LARGE_ENTRY_SIZE) {
+                    mmap().putLong(position);
+                } else {
+                    mmap().putInt((int) position);
+                }
                 incrementEntries();
                 lastOffset = offset;
-                if (entries() * ENTRY_SIZE != mmap().position())
+                if (entries() * indexEntrySize != mmap().position())
                     throw new IllegalStateException(entries() + " entries but file position in index is " + mmap().position());
             } else
                 throw new InvalidOffsetException("Attempt to append an offset " + offset + " to position " + entries() +
@@ -198,7 +213,7 @@ public final class OffsetIndex extends AbstractIndex {
 
     @Override
     protected int entrySize() {
-        return ENTRY_SIZE;
+        return indexEntrySize;
     }
 
     @Override
@@ -207,11 +222,15 @@ public final class OffsetIndex extends AbstractIndex {
     }
 
     private int relativeOffset(ByteBuffer buffer, int n) {
-        return buffer.getInt(n * ENTRY_SIZE);
+        return buffer.getInt(n * indexEntrySize);
     }
 
     private long physical(ByteBuffer buffer, int n) {
-        return buffer.getLong(n * ENTRY_SIZE + 4);
+        if (indexEntrySize == LARGE_ENTRY_SIZE) {
+            return buffer.getLong(n * indexEntrySize + 4);
+        } else {
+            return buffer.getInt(n * indexEntrySize + 4);
+        }
     }
 
     /**

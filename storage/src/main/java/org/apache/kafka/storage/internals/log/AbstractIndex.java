@@ -63,6 +63,7 @@ public abstract class AbstractIndex implements Closeable {
     private final long baseOffset;
     private final int maxIndexSize;
     private final boolean writable;
+    private final int entrySize;
 
     private volatile File file;
 
@@ -86,15 +87,34 @@ public abstract class AbstractIndex implements Closeable {
      */
     @SuppressWarnings("this-escape")
     public AbstractIndex(File file, long baseOffset, int maxIndexSize, boolean writable) throws IOException {
+        this(file, baseOffset, maxIndexSize, writable, -1);
+    }
+
+    /**
+     * @param entrySizeOverride The size of each index entry in bytes. If -1, uses entrySize()
+     *                          (for subclasses with a fixed entry size like TimeIndex).
+     */
+    @SuppressWarnings("this-escape")
+    public AbstractIndex(File file, long baseOffset, int maxIndexSize, boolean writable, int entrySizeOverride) throws IOException {
         Objects.requireNonNull(file);
         this.file = file;
         this.baseOffset = baseOffset;
         this.maxIndexSize = maxIndexSize;
         this.writable = writable;
+        // Store the override; if -1, entrySize() will be used by subclasses
+        this.entrySize = entrySizeOverride;
 
         createAndAssignMmap();
-        this.maxEntries = mmap.limit() / entrySize();
-        this.entries = mmap.position() / entrySize();
+        int es = effectiveEntrySize();
+        this.maxEntries = mmap.limit() / es;
+        this.entries = mmap.position() / es;
+    }
+
+    /**
+     * Returns the effective entry size: the override if set, or the subclass-provided value.
+     */
+    private int effectiveEntrySize() {
+        return entrySize > 0 ? entrySize : entrySize();
     }
 
     private void createAndAssignMmap() throws IOException {
@@ -108,13 +128,14 @@ public abstract class AbstractIndex implements Closeable {
         try {
             /* pre-allocate the file if necessary */
             if (newlyCreated) {
-                if (maxIndexSize < entrySize())
+                int es = effectiveEntrySize();
+                if (maxIndexSize < es)
                     throw new IllegalArgumentException("Invalid max index size: " + maxIndexSize);
-                raf.setLength(roundDownToExactMultiple(maxIndexSize, entrySize()));
+                raf.setLength(roundDownToExactMultiple(maxIndexSize, es));
             }
 
             long length = raf.length();
-            MappedByteBuffer mmap = createMappedBuffer(raf, newlyCreated, length, writable, entrySize());
+            MappedByteBuffer mmap = createMappedBuffer(raf, newlyCreated, length, writable, effectiveEntrySize());
 
             this.length = length;
             this.mmap = mmap;
@@ -200,7 +221,7 @@ public abstract class AbstractIndex implements Closeable {
     public boolean resize(int newSize) throws IOException {
         return inLock(() ->
                 inRemapWriteLock(() -> {
-                    int roundedNewSize = roundDownToExactMultiple(newSize, entrySize());
+                    int roundedNewSize = roundDownToExactMultiple(newSize, effectiveEntrySize());
 
                     if (length == roundedNewSize) {
                         log.debug("Index {} was not resized because it already has size {}", file.getAbsolutePath(), roundedNewSize);
@@ -214,7 +235,7 @@ public abstract class AbstractIndex implements Closeable {
                             raf.setLength(roundedNewSize);
                             this.length = roundedNewSize;
                             mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize);
-                            this.maxEntries = mmap.limit() / entrySize();
+                            this.maxEntries = mmap.limit() / effectiveEntrySize();
                             mmap.position(position);
                             log.debug("Resized {} to {}, position is {} and limit is {}", file.getAbsolutePath(), roundedNewSize,
                                     mmap.position(), mmap.limit());
@@ -267,7 +288,7 @@ public abstract class AbstractIndex implements Closeable {
     public void trimToValidSize() throws IOException {
         inLock(() -> {
             if (mmap != null) {
-                resize(entrySize() * entries);
+                resize(effectiveEntrySize() * entries);
             }
         });
     }
@@ -276,7 +297,7 @@ public abstract class AbstractIndex implements Closeable {
      * The number of bytes actually used by this index
      */
     public int sizeInBytes() {
-        return entrySize() * entries;
+        return effectiveEntrySize() * entries;
     }
 
     public void close() throws IOException {
@@ -385,7 +406,7 @@ public abstract class AbstractIndex implements Closeable {
      * 2) make sure the warm section of low QPS topic-partitions are really warm.
      */
     protected final int warmEntries() {
-        return 8192 / entrySize();
+        return 8192 / effectiveEntrySize();
     }
 
     protected void safeForceUnmap() {
@@ -417,7 +438,7 @@ public abstract class AbstractIndex implements Closeable {
 
     protected void truncateToEntries0(int entries) {
         this.entries = entries;
-        mmap.position(entries * entrySize());
+        mmap.position(entries * effectiveEntrySize());
     }
 
     protected final <T, E extends Exception> T inLock(LockUtils.ThrowingSupplier<T, E> action) throws E {
