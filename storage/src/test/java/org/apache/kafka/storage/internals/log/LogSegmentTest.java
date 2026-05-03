@@ -68,6 +68,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -973,5 +974,32 @@ public class LogSegmentTest {
         assertEquals(seg.size(), (int) seg.sizeInBytesLong(),
                 "For small segments, size() and sizeInBytesLong() should agree");
         assertTrue(seg.sizeInBytesLong() > 0);
+    }
+
+    /**
+     * Simulate upgrade scenario: create a segment, write data, recover it,
+     * verify all records survive recovery (simulates index rebuild on upgrade).
+     */
+    @Test
+    public void testRecoveryPreservesAllRecordsOnUpgrade() throws Exception {
+        try (LogSegment seg = createSegment(0)) {
+            // Append records
+            for (int i = 0; i < 50; i++) {
+                seg.append(i, v2Records(i, "record-" + i));
+            }
+            long sizeBeforeRecovery = seg.sizeInBytesLong();
+
+            // Recover (simulates what happens when indexes are rebuilt on upgrade)
+            seg.recover(newProducerStateManager(), mock(LeaderEpochFileCache.class));
+
+            // Verify all records survive recovery
+            assertEquals(sizeBeforeRecovery, seg.sizeInBytesLong(),
+                    "Segment size should not change after recovery");
+            for (int i = 0; i < 50; i++) {
+                FetchDataInfo fetchData = seg.read(i, 1, Optional.of(seg.sizeInBytesLong()), true);
+                assertNotNull(fetchData, "Should be able to read offset " + i + " after recovery");
+                assertEquals(i, fetchData.records.batches().iterator().next().lastOffset());
+            }
+        }
     }
 }

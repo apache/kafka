@@ -381,6 +381,105 @@ public class OffsetIndexTest {
         Files.deleteIfExists(indexFile.toPath());
     }
 
+    /**
+     * Simulate upgrade: write entries in legacy format, then read them with legacy format
+     * (before MetadataVersion finalization). Verify data integrity is preserved.
+     */
+    @Test
+    public void testUpgradeReadLegacyFormatWithNewCode() throws IOException {
+        File indexFile = nonExistentTempFile();
+
+        // Write entries using legacy format (simulates old broker)
+        try (OffsetIndex legacyIdx = new OffsetIndex(indexFile, 0L, 20 * OffsetIndex.LEGACY_ENTRY_SIZE, true, false)) {
+            for (int i = 0; i < 10; i++) {
+                legacyIdx.append(i, i * 1000);
+            }
+        }
+
+        // Read with new code but still in legacy mode (MetadataVersion not finalized)
+        try (OffsetIndex reopened = new OffsetIndex(indexFile, 0L, 20 * OffsetIndex.LEGACY_ENTRY_SIZE, false, false)) {
+            assertEquals(10, reopened.entries());
+            for (int i = 0; i < 10; i++) {
+                OffsetPosition pos = reopened.entry(i);
+                assertEquals(i, pos.offset());
+                assertEquals(i * 1000, pos.position());
+            }
+            // Sanity check should pass since format matches
+            reopened.sanityCheck();
+        }
+        Files.deleteIfExists(indexFile.toPath());
+    }
+
+    /**
+     * Simulate downgrade: write entries in legacy format with new code,
+     * then verify they can be read by old code (also legacy format).
+     * This proves the new broker doesn't break existing indexes when
+     * MetadataVersion is not finalized.
+     */
+    @Test
+    public void testDowngradeCompatibility() throws IOException {
+        File indexFile = nonExistentTempFile();
+
+        // Write with new code in legacy mode
+        try (OffsetIndex newCodeLegacy = new OffsetIndex(indexFile, 0L, 20 * OffsetIndex.LEGACY_ENTRY_SIZE, true, false)) {
+            newCodeLegacy.append(1, 100);
+            newCodeLegacy.append(2, 200);
+            newCodeLegacy.append(3, 300);
+        }
+
+        // Verify file is in old 8-byte format
+        long fileSize = indexFile.length();
+        assertEquals(0, fileSize % OffsetIndex.LEGACY_ENTRY_SIZE,
+                "File should be a multiple of 8 bytes (legacy format)");
+
+        // Read with legacy format (simulates old broker reading)
+        try (OffsetIndex oldBrokerRead = new OffsetIndex(indexFile, 0L, 20 * OffsetIndex.LEGACY_ENTRY_SIZE, false, false)) {
+            assertEquals(3, oldBrokerRead.entries());
+            assertEquals(new OffsetPosition(1, 100), oldBrokerRead.entry(0));
+            assertEquals(new OffsetPosition(2, 200), oldBrokerRead.entry(1));
+            assertEquals(new OffsetPosition(3, 300), oldBrokerRead.entry(2));
+            oldBrokerRead.sanityCheck();
+        }
+        Files.deleteIfExists(indexFile.toPath());
+    }
+
+    /**
+     * Simulate full migration: legacy → large format via reset + rebuild.
+     * This is what happens when MetadataVersion is finalized and indexes
+     * are rebuilt from .log files.
+     */
+    @Test
+    public void testFormatMigrationViaReset() throws IOException {
+        File indexFile = nonExistentTempFile();
+
+        // Phase 1: Create legacy index with positions < 2GB
+        try (OffsetIndex legacyIdx = new OffsetIndex(indexFile, 0L, 20 * OffsetIndex.LEGACY_ENTRY_SIZE, true, false)) {
+            legacyIdx.append(1, 1000);
+            legacyIdx.append(2, 2000);
+            legacyIdx.append(3, 3000);
+        }
+
+        // Phase 2: Open in large format mode and reset (simulates MetadataVersion finalization)
+        try (OffsetIndex largeIdx = new OffsetIndex(indexFile, 0L, 20 * OffsetIndex.LARGE_ENTRY_SIZE, true, true)) {
+            // Reset clears the old data
+            largeIdx.reset();
+            assertEquals(0, largeIdx.entries());
+
+            // Rebuild with positions > 2GB (the whole point of the format change)
+            long posAbove2GB = 3_000_000_000L;
+            largeIdx.append(1, posAbove2GB);
+            largeIdx.append(2, posAbove2GB + 4096);
+            largeIdx.append(3, posAbove2GB + 8192);
+
+            // Verify round-trip
+            assertEquals(new OffsetPosition(1, posAbove2GB), largeIdx.lookup(1));
+            assertEquals(new OffsetPosition(3, posAbove2GB + 8192), largeIdx.entry(2));
+            assertEquals(3, largeIdx.entries());
+            largeIdx.sanityCheck();
+        }
+        Files.deleteIfExists(indexFile.toPath());
+    }
+
     private void assertWriteFails(String message, OffsetIndex idx, int offset) {
         Exception e = assertThrows(Exception.class, () -> idx.append(offset, 1), message);
         assertEquals(IllegalArgumentException.class, e.getClass(), "Got an unexpected exception.");
