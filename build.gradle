@@ -1588,7 +1588,11 @@ project(':test-common:test-common-base') {
   }
 
   dependencies {
-    implementation project(':clients')
+    // `client` tests depend on this module so `implementation project(':clients')` would cause a circular dependency
+    // and trigger `createVersionFile`, breaking AppInfoParserTest's expectations.
+    // The tradeoff is that transitive dependencies from `clients` are dropped.
+    implementation project(':clients').sourceSets.main.output
+
     implementation libs.bcpkix
     implementation libs.junitJupiter
     implementation testLog4j2Libs
