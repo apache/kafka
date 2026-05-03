@@ -57,7 +57,6 @@
     <allow pkg="org.apache.kafka.base.test" />
     <allow class="org.apache.kafka.raft.QuorumConfig"/>
     <allow class="org.apache.kafka.raft.KRaftConfigs"/>
-    <allow class="org.apache.kafka.nase.test.TestUtils"/>
     <allow class="org.apache.kafka.jmh.util.BenchmarkConfigUtils"/>
     <allow pkg="joptsimple"/>
 
