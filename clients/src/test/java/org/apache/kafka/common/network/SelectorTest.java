@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.network;
 
-import org.apache.kafka.common.test.base.ReflectionUtils;
+import org.apache.kafka.common.test.base.TestReflectionUtils;
 import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.memory.MemoryPool;
@@ -965,7 +965,7 @@ public class SelectorTest {
     @Test
     public void testChannelCloseWhileProcessingReceives() throws Exception {
         int numChannels = 4;
-        Map<String, KafkaChannel> channels = ReflectionUtils.fieldValue(selector, Selector.class, "channels");
+        Map<String, KafkaChannel> channels = TestReflectionUtils.fieldValue(selector, Selector.class, "channels");
         Set<SelectionKey> selectionKeys = new HashSet<>();
         for (int i = 0; i < numChannels; i++) {
             String id = String.valueOf(i);
@@ -1161,9 +1161,9 @@ public class SelectorTest {
      */
     private void injectNetworkReceive(KafkaChannel channel, int size) throws Exception {
         NetworkReceive receive = new NetworkReceive();
-        ReflectionUtils.setFieldValue(channel, "receive", receive);
-        ByteBuffer sizeBuffer = ReflectionUtils.fieldValue(receive, NetworkReceive.class, "size");
+        TestReflectionUtils.setFieldValue(channel, "receive", receive);
+        ByteBuffer sizeBuffer = TestReflectionUtils.fieldValue(receive, NetworkReceive.class, "size");
         sizeBuffer.putInt(size);
-        ReflectionUtils.setFieldValue(receive, "buffer", ByteBuffer.allocate(size));
+        TestReflectionUtils.setFieldValue(receive, "buffer", ByteBuffer.allocate(size));
     }
 }

@@ -18,7 +18,7 @@ package org.apache.kafka.common.test.base;
 
 import java.lang.reflect.Field;
 
-public class ReflectionUtils {
+public class TestReflectionUtils {
 
     @SuppressWarnings("unchecked")
     public static <T> T fieldValue(Object o, Class<?> clazz, String fieldName)  {

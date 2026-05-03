@@ -429,7 +429,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <Class name="org.apache.kafka.common.test.base.ReflectionUtils"/>
+        <Class name="org.apache.kafka.common.test.base.TestReflectionUtils"/>
         <Bug pattern="REFLF_REFLECTION_MAY_INCREASE_ACCESSIBILITY_OF_FIELD"/>
     </Match>
 

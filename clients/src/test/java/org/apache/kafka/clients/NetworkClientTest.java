@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients;
 
-import org.apache.kafka.common.test.base.ReflectionUtils;
+import org.apache.kafka.common.test.base.TestReflectionUtils;
 import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -262,7 +262,7 @@ public class NetworkClientTest {
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, time, false, new ApiVersions(), new LogContext(),
                 rebootstrapTriggerMs,
                 MetadataRecoveryStrategy.REBOOTSTRAP);
-        MetadataUpdater metadataUpdater = ReflectionUtils.fieldValue(client, NetworkClient.class, "metadataUpdater");
+        MetadataUpdater metadataUpdater = TestReflectionUtils.fieldValue(client, NetworkClient.class, "metadataUpdater");
         metadata.bootstrap(Collections.singletonList(new InetSocketAddress("localhost", 9999)));
 
         metadata.requestUpdate(true);

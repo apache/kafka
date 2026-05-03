@@ -46,7 +46,7 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.network.ConnectionDisconnectListener
 import org.apache.kafka.server.quota.{ThrottleCallback, ThrottledChannel}
 import org.apache.kafka.server.util.ServerTestUtils
-import org.apache.kafka.common.test.base.{ReflectionUtils, TestSslUtils}
+import org.apache.kafka.common.test.base.{TestReflectionUtils, TestSslUtils}
 import org.apache.logging.log4j.{Level, LogManager}
 import org.apache.logging.log4j.core.config.Configurator
 import org.junit.jupiter.api.Assertions._
@@ -558,15 +558,15 @@ class SocketServerTest {
 
     val connectionId = request1.context.connectionId
     val channel = server.dataPlaneAcceptor(listener).get.processors(0).channel(connectionId).getOrElse(throw new IllegalStateException("Channel not found"))
-    val transportLayer: SslTransportLayer = ReflectionUtils.fieldValue(channel, classOf[KafkaChannel], "transportLayer")
-    val netReadBuffer: ByteBuffer = ReflectionUtils.fieldValue(transportLayer, classOf[SslTransportLayer], "netReadBuffer")
+    val transportLayer: SslTransportLayer = TestReflectionUtils.fieldValue(channel, classOf[KafkaChannel], "transportLayer")
+    val netReadBuffer: ByteBuffer = TestReflectionUtils.fieldValue(transportLayer, classOf[SslTransportLayer], "netReadBuffer")
 
     proxyServer.enableBuffering(netReadBuffer)
     (1 to numBufferedRequests).foreach { _ => sendRequest(socket, requestBytes) }
 
-    val keysWithBufferedRead: util.Set[SelectionKey] = ReflectionUtils.fieldValue(serverSelector, classOf[Selector], "keysWithBufferedRead")
+    val keysWithBufferedRead: util.Set[SelectionKey] = TestReflectionUtils.fieldValue(serverSelector, classOf[Selector], "keysWithBufferedRead")
     keysWithBufferedRead.add(channel.selectionKey)
-    ReflectionUtils.setFieldValue(transportLayer, "hasBytesBuffered", true)
+    TestReflectionUtils.setFieldValue(transportLayer, "hasBytesBuffered", true)
 
     (socket, request1)
   }
@@ -1459,9 +1459,9 @@ class SocketServerTest {
 
     // Truncates the last request in the SSL buffers by directly updating the buffers to simulate partial buffered request
     def truncateBufferedRequest(channel: KafkaChannel): Unit = {
-      val transportLayer: SslTransportLayer = ReflectionUtils.fieldValue(channel, classOf[KafkaChannel], "transportLayer")
-      val netReadBuffer: ByteBuffer = ReflectionUtils.fieldValue(transportLayer, classOf[SslTransportLayer], "netReadBuffer")
-      val appReadBuffer: ByteBuffer = ReflectionUtils.fieldValue(transportLayer, classOf[SslTransportLayer], "appReadBuffer")
+      val transportLayer: SslTransportLayer = TestReflectionUtils.fieldValue(channel, classOf[KafkaChannel], "transportLayer")
+      val netReadBuffer: ByteBuffer = TestReflectionUtils.fieldValue(transportLayer, classOf[SslTransportLayer], "netReadBuffer")
+      val appReadBuffer: ByteBuffer = TestReflectionUtils.fieldValue(transportLayer, classOf[SslTransportLayer], "appReadBuffer")
       if (appReadBuffer.position() > 4) {
         appReadBuffer.position(4)
         netReadBuffer.position(0)
@@ -1583,7 +1583,7 @@ class SocketServerTest {
       val (socket, request) = makeSocketWithBufferedRequests(testableServer, testableSelector, proxyServer)
       testableSelector.operationCounts.clear()
       testableSelector.waitForOperations(SelectorOperation.Poll, 1)
-      val keysWithBufferedRead: util.Set[SelectionKey] = ReflectionUtils.fieldValue(testableSelector, classOf[Selector], "keysWithBufferedRead")
+      val keysWithBufferedRead: util.Set[SelectionKey] = TestReflectionUtils.fieldValue(testableSelector, classOf[Selector], "keysWithBufferedRead")
       assertEquals(Set.empty, keysWithBufferedRead.asScala)
       processRequest(testableServer.dataPlaneRequestChannel, request)
       // buffered requests should be processed after channel is unmuted
@@ -2207,7 +2207,7 @@ class SocketServerTest {
     }
 
     class CompletedReceivesPollData(selector: TestableSelector) extends PollData[NetworkReceive] {
-      val completedReceivesMap: util.Map[String, NetworkReceive] = ReflectionUtils.fieldValue(selector, classOf[Selector], "completedReceives")
+      val completedReceivesMap: util.Map[String, NetworkReceive] = TestReflectionUtils.fieldValue(selector, classOf[Selector], "completedReceives")
 
       override def updateResults(): Unit = {
         val currentReceives = update(selector.completedReceives.asScala.toBuffer)
@@ -2360,8 +2360,8 @@ class SocketServerTest {
     }
 
     private def makeClosing(channel: KafkaChannel): Unit = {
-      val channels: util.Map[String, KafkaChannel] = ReflectionUtils.fieldValue(this, classOf[Selector], "channels")
-      val closingChannels: util.Map[String, KafkaChannel] = ReflectionUtils.fieldValue(this, classOf[Selector], "closingChannels")
+      val channels: util.Map[String, KafkaChannel] = TestReflectionUtils.fieldValue(this, classOf[Selector], "channels")
+      val closingChannels: util.Map[String, KafkaChannel] = TestReflectionUtils.fieldValue(this, classOf[Selector], "closingChannels")
       closingChannels.put(channel.id, channel)
       channels.remove(channel.id)
     }

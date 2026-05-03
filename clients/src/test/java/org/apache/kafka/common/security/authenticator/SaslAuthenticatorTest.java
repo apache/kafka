@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
-import org.apache.kafka.common.test.base.ReflectionUtils;
+import org.apache.kafka.common.test.base.TestReflectionUtils;
 import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.KafkaException;
@@ -1936,7 +1936,7 @@ public class SaslAuthenticatorTest {
             // Set the client's channel `send` to null to allow setting a new send on the server's selector.
             // Without this, NioEchoServer will throw an error while processing the client request,
             // since we're manually setting a server side send to simulate the issue.
-            ReflectionUtils.setFieldValue(selector.channel(node), "send", null);
+            TestReflectionUtils.setFieldValue(selector.channel(node), "send", null);
 
             // extract the channel id from the server's selector and directly set a send on it.
             String channelId = server.selector().channels().get(0).id();
