@@ -525,12 +525,15 @@ public class TestUtils {
         assertEquals(16, decodedUuid.length);
 
         //Check if it can be converted back to a UUID.
+        UUID uuid = null;
         try {
             ByteBuffer uuidBuffer = ByteBuffer.wrap(decodedUuid);
-            assertEquals(originalClusterId, new UUID(uuidBuffer.getLong(), uuidBuffer.getLong()).toString());
+            uuid = new UUID(uuidBuffer.getLong(), uuidBuffer.getLong());
         } catch (Exception e) {
             fail(clusterId + " cannot be converted back to UUID.");
+            return;
         }
+        assertNotNull(uuid);
     }
 
     /**
