@@ -1726,7 +1726,7 @@ public class RemoteLogManagerTest {
         // startOffset   , ts-1
         // startOffset+1 , ts+1
         // startOffset+2 , ts+2
-        when(remoteStorageManager.fetchLogSegment(segmentMetadata, 0))
+        when(remoteStorageManager.fetchLogSegment(segmentMetadata, 0L))
                 .thenAnswer(a -> new ByteArrayInputStream(records(ts, startOffset, targetLeaderEpoch).buffer().array()));
 
         when(mockLog.logEndOffset()).thenReturn(600L);
@@ -3497,7 +3497,7 @@ public class RemoteLogManagerTest {
         LeaderEpochFileCache cache = mock(LeaderEpochFileCache.class);
         when(cache.epochForOffset(anyLong())).thenReturn(OptionalInt.of(1));
 
-        when(remoteStorageManager.fetchLogSegment(any(RemoteLogSegmentMetadata.class), anyInt()))
+        when(remoteStorageManager.fetchLogSegment(any(RemoteLogSegmentMetadata.class), anyLong()))
                 .thenAnswer(a -> fileInputStream);
         when(mockLog.leaderEpochCache()).thenReturn(cache);
 
@@ -3574,7 +3574,7 @@ public class RemoteLogManagerTest {
         LeaderEpochFileCache cache = mock(LeaderEpochFileCache.class);
         when(cache.epochForOffset(anyLong())).thenReturn(OptionalInt.of(1));
 
-        when(remoteStorageManager.fetchLogSegment(any(RemoteLogSegmentMetadata.class), anyInt()))
+        when(remoteStorageManager.fetchLogSegment(any(RemoteLogSegmentMetadata.class), anyLong()))
                 .thenAnswer(a -> fileInputStream);
         when(mockLog.leaderEpochCache()).thenReturn(cache);
 
@@ -3665,7 +3665,7 @@ public class RemoteLogManagerTest {
                 Uuid.randomUuid(), fetchOffset, 0, fetchMaxBytes, Optional.empty()
         );
 
-        when(rsmManager.fetchLogSegment(any(), anyInt())).thenReturn(fileInputStream);
+        when(rsmManager.fetchLogSegment(any(), anyLong())).thenReturn(fileInputStream);
         when(segmentMetadata.topicIdPartition()).thenReturn(new TopicIdPartition(Uuid.randomUuid(), tp));
         // Fetching first time  FirstBatch return null because of log compaction.
         // Fetching second time  FirstBatch return data.
@@ -4103,7 +4103,7 @@ public class RemoteLogManagerTest {
         File segmentFile = tempFile();
         appendRecordsToFile(segmentFile, 100, 3);
         FileInputStream fileInputStream = new FileInputStream(segmentFile);
-        when(remoteStorageManager.fetchLogSegment(any(RemoteLogSegmentMetadata.class), anyInt()))
+        when(remoteStorageManager.fetchLogSegment(any(RemoteLogSegmentMetadata.class), anyLong()))
                 .thenReturn(fileInputStream);
 
         RemoteLogManager remoteLogManager = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
