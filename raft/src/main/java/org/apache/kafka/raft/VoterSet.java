@@ -47,9 +47,13 @@ import java.util.stream.Stream;
  */
 public final class VoterSet {
     private final Map<Integer, VoterNode> voters;
+    private final Set<ReplicaKey> voterKeys;
 
     private VoterSet(Map<Integer, VoterNode> voters) {
         this.voters = voters;
+        this.voterKeys = voters.values().stream()
+            .map(VoterNode::voterKey)
+            .collect(Collectors.toUnmodifiableSet());
     }
 
     /**
@@ -144,11 +148,7 @@ public final class VoterSet {
      * Returns all of the voters.
      */
     public Set<ReplicaKey> voterKeys() {
-        return voters
-            .values()
-            .stream()
-            .map(VoterNode::voterKey)
-            .collect(Collectors.toSet());
+        return voterKeys;
     }
 
     /**
