@@ -253,7 +253,9 @@ public class Cleaner {
                 // Note that it is important to collect aborted transactions from the full log segment
                 // range since we need to rebuild the full transaction index for the new segment.
                 long startOffset = currentSegment.baseOffset();
-                long upperBoundOffset = nextSegmentOpt.map(LogSegment::baseOffset).orElse(currentSegment.readNextOffset());
+                long upperBoundOffset = nextSegmentOpt.isPresent()
+                        ? nextSegmentOpt.get().baseOffset()
+                        : currentSegment.readNextOffset();
                 List<AbortedTxn> abortedTransactions = log.collectAbortedTransactions(startOffset, upperBoundOffset);
                 transactionMetadata.addAbortedTransactions(abortedTransactions);
 
