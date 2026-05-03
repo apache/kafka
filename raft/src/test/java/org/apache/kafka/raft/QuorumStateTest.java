@@ -550,8 +550,25 @@ public class QuorumStateTest {
         int node2 = 2;
         int epoch = 5;
         VoterSet voters = localWithRemoteVoterSet(IntStream.of(node1, node2), kraftVersion);
-        ElectionState election = ElectionState.withElectedLeader(epoch, localId, Optional.empty(), voters.voterIds());
+        ElectionState election = ElectionState.withElectedLeader(
+            epoch,
+            localId,
+            Optional.of(localVoterKey),
+            voters.voterIds()
+        );
         store.writeElectionState(election, kraftVersion);
+        ElectionState persistedElection = ElectionState.withElectedLeader(
+            epoch,
+            localId,
+            Optional.of(persistedVotedKey(localVoterKey, kraftVersion)),
+            persistedVoters(voters.voterIds(), kraftVersion)
+        );
+        ElectionState resignedElection = ElectionState.withElectedLeader(
+            epoch,
+            localId,
+            Optional.of(persistedVotedKey(localVoterKey, kraftVersion)),
+            voters.voterIds()
+        );
 
         // If we were previously a leader, we will start as resigned in order to ensure
         // a new leader gets elected. This ensures that records are always uniquely
@@ -568,7 +585,8 @@ public class QuorumStateTest {
 
         ResignedState resignedState = state.resignedStateOrThrow();
         assertEquals(epoch, resignedState.epoch());
-        assertEquals(election, resignedState.election());
+        assertEquals(resignedElection, resignedState.election());
+        assertEquals(persistedElection, store.readElectionState().get());
         assertEquals(Set.of(node1, node2), resignedState.unackedVoters());
         assertEquals(
             electionTimeoutMs + jitterMs,
@@ -2240,6 +2258,15 @@ public class QuorumStateTest {
         assertTrue(state.isLeader());
         assertEquals(1, leaderState.epoch());
         assertEquals(Optional.empty(), leaderState.highWatermark());
+        assertEquals(
+            ElectionState.withElectedLeader(
+                1,
+                localId,
+                Optional.of(persistedVotedKey(localVoterKey, kraftVersion)),
+                persistedVoters(voters.voterIds(), kraftVersion)
+            ),
+            store.readElectionState().get()
+        );
     }
 
     @ParameterizedTest
@@ -2463,7 +2490,7 @@ public class QuorumStateTest {
         assertTrue(state.isResigned());
         ResignedState resignedState = state.resignedStateOrThrow();
         assertEquals(
-            ElectionState.withElectedLeader(1, localId, Optional.empty(), voters.voterIds()),
+            ElectionState.withElectedLeader(1, localId, Optional.of(localVoterKey), voters.voterIds()),
             resignedState.election()
         );
         assertEquals(1, resignedState.epoch());
@@ -2496,7 +2523,7 @@ public class QuorumStateTest {
             ElectionState.withElectedLeader(
                 6,
                 localId,
-                Optional.empty(),
+                Optional.of(persistedVotedKey(localVoterKey, kraftVersion)),
                 persistedVoters(voters.voterIds(), kraftVersion)
             ),
             store.readElectionState().get()
@@ -2514,14 +2541,31 @@ public class QuorumStateTest {
         int node2 = 2;
         int epoch = 5;
         VoterSet voters = localWithRemoteVoterSet(IntStream.of(node1, node2), kraftVersion);
-        ElectionState election = ElectionState.withElectedLeader(epoch, localId, Optional.empty(), voters.voterIds());
+        ElectionState election = ElectionState.withElectedLeader(
+            epoch,
+            localId,
+            Optional.of(localVoterKey),
+            voters.voterIds()
+        );
         store.writeElectionState(election, kraftVersion);
         QuorumState state = buildQuorumState(OptionalInt.of(localId), voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         assertTrue(state.isResigned());
-        assertThrows(IllegalStateException.class, () -> state.transitionToFollower(epoch, localId, voters.listeners(localId)));
+        assertThrows(
+            IllegalStateException.class,
+            () -> state.transitionToFollower(epoch, localId, voters.listeners(localId))
+        );
         // KAFKA-18379 will fix this
         state.transitionToFollower(epoch, node1, voters.listeners(node1));
+        assertEquals(
+            ElectionState.withElectedLeader(
+                epoch,
+                node1,
+                Optional.of(persistedVotedKey(localVoterKey, kraftVersion)),
+                persistedVoters(voters.voterIds(), kraftVersion)
+            ),
+            store.readElectionState().get()
+        );
     }
 
     @ParameterizedTest
