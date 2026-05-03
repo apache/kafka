@@ -247,7 +247,7 @@ public class LogSegmentsTest {
         try (LogSegment logSegment = mock(LogSegment.class)) {
             long largeSize = (long) Integer.MAX_VALUE * 2;
 
-            when(logSegment.size()).thenReturn(Integer.MAX_VALUE);
+            when(logSegment.sizeInBytesLong()).thenReturn((long) Integer.MAX_VALUE);
 
             assertEquals(Integer.MAX_VALUE, LogSegments.sizeInBytes(List.of(logSegment)));
             assertEquals(largeSize, LogSegments.sizeInBytes(List.of(logSegment, logSegment)));
