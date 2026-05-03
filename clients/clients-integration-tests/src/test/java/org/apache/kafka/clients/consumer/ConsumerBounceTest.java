@@ -18,7 +18,7 @@ package org.apache.kafka.clients.consumer;
 
 import kafka.server.KafkaBroker;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.ClientsTestUtils;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -66,7 +66,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
-import static  org.apache.kafka.base.test.TestUtils.SEEDED_RANDOM;
+import static  org.apache.kafka.common.test.base.TestUtils.SEEDED_RANDOM;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

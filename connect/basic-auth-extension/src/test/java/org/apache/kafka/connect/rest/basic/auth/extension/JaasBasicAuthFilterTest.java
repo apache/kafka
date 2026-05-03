@@ -17,7 +17,7 @@
 
 package org.apache.kafka.connect.rest.basic.auth.extension;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.security.authenticator.TestJaasConfig;
 import org.apache.kafka.connect.errors.ConnectException;
 

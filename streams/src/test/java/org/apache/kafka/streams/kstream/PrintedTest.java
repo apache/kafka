@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.internals.PrintedInternal;
 import org.apache.kafka.streams.processor.api.Processor;

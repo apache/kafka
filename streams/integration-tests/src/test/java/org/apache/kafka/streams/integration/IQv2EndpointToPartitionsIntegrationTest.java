@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
@@ -51,7 +51,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.base.test.TestUtils.waitForCondition;
+import static org.apache.kafka.common.test.base.TestUtils.waitForCondition;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;

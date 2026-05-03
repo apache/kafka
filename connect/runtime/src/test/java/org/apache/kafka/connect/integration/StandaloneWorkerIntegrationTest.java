@@ -40,7 +40,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import jakarta.ws.rs.core.Response;
 
-import static org.apache.kafka.base.test.TestUtils.waitForCondition;
+import static org.apache.kafka.common.test.base.TestUtils.waitForCondition;
 import static org.apache.kafka.connect.integration.BlockingConnectorTest.Block.BLOCK_CONFIG;
 import static org.apache.kafka.connect.integration.BlockingConnectorTest.CONNECTOR_START;
 import static org.apache.kafka.connect.integration.BlockingConnectorTest.CONNECTOR_TASK_CONFIGS;

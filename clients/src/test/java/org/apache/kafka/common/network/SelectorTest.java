@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.common.network;
 
-import org.apache.kafka.base.test.ReflectionUtils;
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.ReflectionUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
@@ -59,7 +59,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.base.test.TestUtils.waitForCondition;
+import static org.apache.kafka.common.test.base.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;

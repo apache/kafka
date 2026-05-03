@@ -67,7 +67,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.base.test.TestUtils.assertFutureThrows;
+import static org.apache.kafka.common.test.base.TestUtils.assertFutureThrows;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.CoordinatorState.ACTIVE;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.CoordinatorState.CLOSED;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.CoordinatorState.FAILED;

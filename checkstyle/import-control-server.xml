@@ -69,7 +69,7 @@
 
   <!-- utilities for testing -->
   <allow pkg="org.apache.kafka.test" />
-  <allow pkg="org.apache.kafka.base.test" />
+  <allow pkg="org.apache.kafka.common.test.base" />
   <allow class="org.apache.kafka.controller.QuorumController" />
 
   <!-- persistent collection factories/non-library-specific wrappers -->

@@ -17,7 +17,7 @@
 
 package org.apache.kafka.storage.internals.checkpoint;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InconsistentTopicIdException;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;

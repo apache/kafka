@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.base.test.ReflectionUtils;
+import org.apache.kafka.common.test.base.ReflectionUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.DefaultHostResolver;
 import org.apache.kafka.clients.NetworkClient;

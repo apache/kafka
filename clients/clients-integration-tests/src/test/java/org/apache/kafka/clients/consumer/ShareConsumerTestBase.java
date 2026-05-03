@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
@@ -78,9 +78,9 @@ import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 import java.util.stream.IntStream;
 
-import static org.apache.kafka.base.test.TestUtils.DEFAULT_MAX_WAIT_MS;
-import static org.apache.kafka.base.test.TestUtils.DEFAULT_POLL_INTERVAL_MS;
-import static org.apache.kafka.base.test.TestUtils.waitForCondition;
+import static org.apache.kafka.common.test.base.TestUtils.DEFAULT_MAX_WAIT_MS;
+import static org.apache.kafka.common.test.base.TestUtils.DEFAULT_POLL_INTERVAL_MS;
+import static org.apache.kafka.common.test.base.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

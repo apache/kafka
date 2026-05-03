@@ -17,7 +17,7 @@
 
 package org.apache.kafka.common.network;
 
-import org.apache.kafka.base.test.TestSslUtils;
+import org.apache.kafka.common.test.base.TestSslUtils;
 import org.apache.kafka.common.config.SslConfigs;
 
 import org.junit.jupiter.api.Test;

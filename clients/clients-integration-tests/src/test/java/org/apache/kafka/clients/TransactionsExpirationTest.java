@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ProducerState;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -137,7 +137,7 @@ public class TransactionsExpirationTest {
             Future<RecordMetadata> failedFuture = producer.send(
                 new ProducerRecord<>(TOPIC1, 3, "1".getBytes(), "1".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, ABORTED_VALUE))));
             TestUtils.waitForCondition(failedFuture::isDone, "Producer future never completed.");
-            org.apache.kafka.base.test.TestUtils.assertFutureThrows(InvalidPidMappingException.class, failedFuture);
+            TestUtils.assertFutureThrows(InvalidPidMappingException.class, failedFuture);
 
             // Assert that aborting the transaction throws a KafkaException due to the fatal error.
             assertThrows(KafkaException.class, producer::abortTransaction);

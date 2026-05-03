@@ -65,7 +65,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.base.test.TestUtils.assertFutureThrows;
+import static org.apache.kafka.common.test.base.TestUtils.assertFutureThrows;
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;

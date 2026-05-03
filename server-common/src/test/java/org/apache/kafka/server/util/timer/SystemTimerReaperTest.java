@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.server.util.timer;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.errors.TimeoutException;
 
 import org.junit.jupiter.api.Test;

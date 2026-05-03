@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.tiered.storage.actions;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageSnapshot;
 import org.apache.kafka.tiered.storage.TieredStorageTestAction;

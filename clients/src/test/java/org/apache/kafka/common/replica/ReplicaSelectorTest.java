@@ -30,7 +30,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.base.test.TestUtils.assertOptional;
+import static org.apache.kafka.common.test.base.TestUtils.assertOptional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ReplicaSelectorTest {

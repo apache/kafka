@@ -26,7 +26,7 @@ import java.io.File;
 import java.util.Collections;
 import java.util.Map;
 
-import static org.apache.kafka.base.test.TestUtils.tempFile;
+import static org.apache.kafka.common.test.base.TestUtils.tempFile;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;

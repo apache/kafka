@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.record.internal;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.header.Header;
@@ -46,7 +46,7 @@ import java.util.concurrent.Future;
 import java.util.stream.IntStream;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.base.test.TestUtils.tempFile;
+import static org.apache.kafka.common.test.base.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;

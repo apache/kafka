@@ -18,7 +18,7 @@ package org.apache.kafka.clients.consumer;
 
 import kafka.server.KafkaBroker;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.ClientsTestUtils.TestConsumerReassignmentListener;
 import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.producer.Producer;

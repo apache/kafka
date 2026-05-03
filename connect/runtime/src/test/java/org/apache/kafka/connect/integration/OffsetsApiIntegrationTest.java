@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.connect.integration;
 
-import org.apache.kafka.base.test.NoRetryException;
+import org.apache.kafka.common.test.base.NoRetryException;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.GroupListing;
@@ -58,7 +58,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import jakarta.ws.rs.core.Response;
 
 import static jakarta.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
-import static org.apache.kafka.base.test.TestUtils.waitForCondition;
+import static org.apache.kafka.common.test.base.TestUtils.waitForCondition;
 import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;

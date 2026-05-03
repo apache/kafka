@@ -42,7 +42,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.base.test.TestUtils.retryOnExceptionWithTimeout;
+import static org.apache.kafka.common.test.base.TestUtils.retryOnExceptionWithTimeout;
 import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.hamcrest.MatcherAssert.assertThat;

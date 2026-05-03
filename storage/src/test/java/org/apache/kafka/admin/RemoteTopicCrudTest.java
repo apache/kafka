@@ -17,8 +17,8 @@
 
 package org.apache.kafka.admin;
 
-import org.apache.kafka.base.test.TestCondition;
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestCondition;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -59,7 +59,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.apache.kafka.base.test.TestUtils.assertFutureThrows;
+import static org.apache.kafka.common.test.base.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;

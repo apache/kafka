@@ -17,7 +17,7 @@
 
 package org.apache.kafka.metadata.bootstrap;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.NoOpRecord;
 import org.apache.kafka.common.utils.Utils;

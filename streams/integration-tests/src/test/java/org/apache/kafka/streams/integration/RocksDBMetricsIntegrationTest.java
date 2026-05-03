@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.IntegerSerializer;

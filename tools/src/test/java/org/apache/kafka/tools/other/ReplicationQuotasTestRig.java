@@ -77,7 +77,7 @@ import scala.Option;
 
 import static java.nio.file.StandardOpenOption.APPEND;
 import static java.nio.file.StandardOpenOption.CREATE;
-import static org.apache.kafka.base.test.TestUtils.DEFAULT_MAX_WAIT_MS;
+import static org.apache.kafka.common.test.base.TestUtils.DEFAULT_MAX_WAIT_MS;
 
 /**
  * Test rig for measuring throttling performance. Configure the parameters for a set of experiments, then execute them

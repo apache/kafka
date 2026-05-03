@@ -48,6 +48,7 @@ import org.apache.kafka.common.test.MockController
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{ElectionType, Uuid}
 import org.apache.kafka.common.requests.RequestHeader
+import org.apache.kafka.common.test.base.TestUtils
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.apache.kafka.controller.{Controller, ControllerRequestContext, ResultOrError}
 import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
@@ -61,7 +62,6 @@ import org.apache.kafka.server.common.{ApiMessageAndVersion, FinalizedFeatures, 
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.quota.{ClientQuotaManager, ControllerMutationQuota, ControllerMutationQuotaManager, ReplicationQuotaManager}
 import org.apache.kafka.storage.internals.log.CleanerConfig
-import org.apache.kafka.base.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest

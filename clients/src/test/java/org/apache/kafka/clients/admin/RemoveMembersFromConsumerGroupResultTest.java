@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;

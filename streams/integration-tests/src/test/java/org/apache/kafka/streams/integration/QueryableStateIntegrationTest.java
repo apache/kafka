@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.base.test.NoRetryException;
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.NoRetryException;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -99,7 +99,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static java.time.Duration.ofMillis;
 import static java.time.Duration.ofSeconds;
 import static java.time.Instant.ofEpochMilli;
-import static org.apache.kafka.base.test.TestUtils.retryOnExceptionWithTimeout;
+import static org.apache.kafka.common.test.base.TestUtils.retryOnExceptionWithTimeout;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;

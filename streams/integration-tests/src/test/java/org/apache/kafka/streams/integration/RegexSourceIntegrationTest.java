@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.base.test.TestCondition;
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestCondition;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;

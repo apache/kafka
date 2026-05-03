@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.{ConcurrentTransactionsException, InvalidProducerEpochException, ProducerFencedException, TimeoutException}
+import org.apache.kafka.common.test.base
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
@@ -850,7 +851,7 @@ class TransactionsTest extends IntegrationTestHarness {
       Thread.sleep(6000) // Wait for the record to time out
       restartDeadBrokers()
 
-      org.apache.kafka.base.test.TestUtils.assertFutureThrows(classOf[TimeoutException], failedFuture)
+      base.TestUtils.assertFutureThrows(classOf[TimeoutException], failedFuture)
       // Ensure the producer transitions to abortable_error state.
       TestUtils.waitUntilTrue(() => {
         var failed = false
@@ -935,7 +936,7 @@ class TransactionsTest extends IntegrationTestHarness {
       Thread.sleep(6000) // Wait for the record to time out
       restartDeadBrokers()
 
-      org.apache.kafka.base.test.TestUtils.assertFutureThrows(classOf[TimeoutException], failedFuture)
+      base.TestUtils.assertFutureThrows(classOf[TimeoutException], failedFuture)
       producer.abortTransaction()
 
       // Third transaction: commit

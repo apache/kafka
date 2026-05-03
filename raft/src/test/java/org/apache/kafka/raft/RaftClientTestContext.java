@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.base.test.TestCondition;
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestCondition;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;

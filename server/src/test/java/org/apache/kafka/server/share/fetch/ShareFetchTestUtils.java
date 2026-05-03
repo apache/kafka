@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.server.share.fetch;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
@@ -31,7 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import static org.apache.kafka.base.test.TestUtils.tempFile;
+import static org.apache.kafka.common.test.base.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 /**

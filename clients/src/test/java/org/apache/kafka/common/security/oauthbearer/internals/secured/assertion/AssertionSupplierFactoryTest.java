@@ -31,7 +31,7 @@ import java.io.File;
 import java.io.IOException;
 import java.security.KeyPair;
 
-import static org.apache.kafka.base.test.TestUtils.tempFile;
+import static org.apache.kafka.common.test.base.TestUtils.tempFile;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_ALGORITHM;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_SECONDS;

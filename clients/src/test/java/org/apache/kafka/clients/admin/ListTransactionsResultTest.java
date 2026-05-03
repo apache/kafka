@@ -31,7 +31,7 @@ import java.util.Set;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.base.test.TestUtils.assertFutureThrows;
+import static org.apache.kafka.common.test.base.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ListTransactionsResultTest {

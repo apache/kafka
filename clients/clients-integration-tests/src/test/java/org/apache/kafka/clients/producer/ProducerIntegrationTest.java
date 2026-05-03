@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.producer;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TransactionState;
 import org.apache.kafka.clients.consumer.Consumer;

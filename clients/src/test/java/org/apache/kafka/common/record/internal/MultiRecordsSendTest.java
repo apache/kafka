@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.record.internal;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.network.ByteBufferSend;
 import org.apache.kafka.common.network.Send;
 

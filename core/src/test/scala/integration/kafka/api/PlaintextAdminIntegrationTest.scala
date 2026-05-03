@@ -57,7 +57,7 @@ import org.apache.kafka.server.common.{EligibleLeaderReplicasVersion, MetadataVe
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogFileUtils}
-import org.apache.kafka.base.test.TestUtils.{DEFAULT_MAX_WAIT_MS, assertFutureThrows}
+import org.apache.kafka.common.test.base.TestUtils.{DEFAULT_MAX_WAIT_MS, assertFutureThrows}
 import org.apache.logging.log4j.core.config.Configurator
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo, Timeout}

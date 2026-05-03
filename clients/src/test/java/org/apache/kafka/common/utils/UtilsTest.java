@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.config.ConfigException;
 
 import org.junit.jupiter.api.Test;

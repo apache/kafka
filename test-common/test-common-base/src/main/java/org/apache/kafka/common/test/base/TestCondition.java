@@ -14,26 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.base.test;
+package org.apache.kafka.common.test.base;
 
-import java.lang.reflect.Field;
+/**
+ * Interface to wrap actions that are required to wait until a condition is met
+ * for testing purposes.  Note that this is not intended to do any assertions.
+ */
+@FunctionalInterface
+public interface TestCondition {
 
-public class ReflectionUtils {
-
-    @SuppressWarnings("unchecked")
-    public static <T> T fieldValue(Object o, Class<?> clazz, String fieldName)  {
-        try {
-            Field field = clazz.getDeclaredField(fieldName);
-            field.setAccessible(true);
-            return (T) field.get(o);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public static void setFieldValue(Object obj, String fieldName, Object value) throws Exception {
-        Field field = obj.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(obj, value);
-    }
+    boolean conditionMet() throws Exception;
 }

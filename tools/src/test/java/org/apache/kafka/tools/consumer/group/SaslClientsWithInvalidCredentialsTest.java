@@ -19,7 +19,7 @@ package org.apache.kafka.tools.consumer.group;
 import kafka.api.AbstractSaslTest;
 import kafka.security.JaasTestUtils;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;

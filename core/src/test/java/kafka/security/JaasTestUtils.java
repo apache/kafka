@@ -18,7 +18,7 @@ package kafka.security;
 
 import kafka.utils.TestUtils;
 
-import org.apache.kafka.base.test.TestSslUtils;
+import org.apache.kafka.common.test.base.TestSslUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.common.config.SaslConfigs;

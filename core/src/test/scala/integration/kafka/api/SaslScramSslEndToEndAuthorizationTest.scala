@@ -22,8 +22,8 @@ import java.util.Properties
 import kafka.utils._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
+import org.apache.kafka.common.test.base.TestSslUtils
 import org.apache.kafka.metadata.storage.Formatter
-import org.apache.kafka.base.test.TestSslUtils
 
 import scala.jdk.CollectionConverters._
 import org.junit.jupiter.api.Assertions._

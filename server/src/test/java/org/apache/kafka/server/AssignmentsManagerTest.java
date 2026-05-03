@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.server;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.Uuid;

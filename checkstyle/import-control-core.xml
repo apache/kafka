@@ -71,7 +71,7 @@
     <allow pkg="org.apache.directory" />
     <allow pkg="org.apache.mina.core.service" />
     <allow pkg="org.apache.kafka.test" />
-    <allow pkg="org.apache.kafka.base.test" />
+    <allow pkg="org.apache.kafka.common.test.base" />
   </subpackage>
 
 </import-control>

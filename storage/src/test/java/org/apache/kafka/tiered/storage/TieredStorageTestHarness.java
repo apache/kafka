@@ -19,7 +19,7 @@ package org.apache.kafka.tiered.storage;
 import kafka.api.IntegrationTestHarness;
 import kafka.server.KafkaBroker;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.replica.ReplicaSelector;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.config.ReplicationConfigs;

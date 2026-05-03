@@ -17,7 +17,7 @@
 
 package org.apache.kafka.trogdor.basic;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.trogdor.common.Platform;
 
 import org.junit.jupiter.api.Test;

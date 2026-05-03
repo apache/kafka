@@ -54,7 +54,7 @@
     <allow pkg="org.apache.kafka.server.config" />
 
     <subpackage name="queue">
-        <allow pkg="org.apache.kafka.base.test" />
+        <allow pkg="org.apache.kafka.common.test.base" />
     </subpackage>
 
     <subpackage name="metadata">
@@ -63,7 +63,7 @@
         <allow pkg="org.apache.kafka.common.protocol" />
         <allow pkg="org.apache.kafka.metadata.properties" />
         <allow pkg="org.apache.kafka.server.common" />
-        <allow pkg="org.apache.kafka.base.test" />
+        <allow pkg="org.apache.kafka.common.test.base" />
     </subpackage>
 
     <subpackage name="security">
@@ -111,7 +111,7 @@
           <subpackage name="persister">
             <allow pkg="org.apache.kafka.clients" />
             <allow pkg="org.apache.kafka.server.util" />
-            <allow pkg="org.apache.kafka.base.test" />
+            <allow pkg="org.apache.kafka.common.test.base" />
           </subpackage>
         </subpackage>
 
@@ -128,7 +128,7 @@
             <allow pkg="org.apache.kafka.server.util.json" />
 
             <allow class="org.apache.kafka.server.util.TopicFilter.IncludeList" />
-            <allow class="org.apache.kafka.base.test.TestUtils" />
+            <allow class="org.apache.kafka.common.test.base.TestUtils" />
             <!-- ServerTestUtils uses yammer metrics for test cleanup -->
             <allow pkg="org.apache.kafka.server.metrics" />
             <allow pkg="com.yammer.metrics.core" />

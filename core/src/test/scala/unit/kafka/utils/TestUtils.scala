@@ -38,6 +38,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization._
+import org.apache.kafka.common.test.base.{TestUtils => JTestUtils}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.utils.Utils.formatAddress
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
@@ -51,7 +52,6 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log._
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
-import org.apache.kafka.base.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
 import org.mockito.ArgumentMatchers.{any, anyBoolean}
 import org.mockito.Mockito

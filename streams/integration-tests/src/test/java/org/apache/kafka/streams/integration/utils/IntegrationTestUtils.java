@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
-import org.apache.kafka.base.test.TestCondition;
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestCondition;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -91,7 +91,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.base.test.TestUtils.retryOnExceptionWithTimeout;
+import static org.apache.kafka.common.test.base.TestUtils.retryOnExceptionWithTimeout;
 import static org.apache.kafka.common.utils.Utils.sleep;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;

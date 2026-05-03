@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.tools.consumer.group;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.GroupProtocol;
@@ -62,7 +62,7 @@ import joptsimple.OptionException;
 
 import static java.time.LocalDateTime.now;
 import static java.util.stream.Collectors.toMap;
-import static org.apache.kafka.base.test.TestUtils.DEFAULT_MAX_WAIT_MS;
+import static org.apache.kafka.common.test.base.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.admin.AdminClientConfig.RETRIES_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG;

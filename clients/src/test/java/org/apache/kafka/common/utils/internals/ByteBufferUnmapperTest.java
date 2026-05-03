@@ -17,7 +17,7 @@
 
 package org.apache.kafka.common.utils.internals;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 
 import org.junit.jupiter.api.Test;
 

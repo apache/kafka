@@ -19,7 +19,7 @@ package org.apache.kafka.tiered.storage.integration;
 import kafka.api.TransactionsTest;
 import kafka.server.KafkaBroker;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.server.HostedPartition;
 import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;

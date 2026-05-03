@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
 
 import jakarta.ws.rs.core.Response;
 
-import static org.apache.kafka.base.test.TestUtils.waitForCondition;
+import static org.apache.kafka.common.test.base.TestUtils.waitForCondition;
 
 /**
  * A set of common assertions that can be applied to a Connect cluster during integration testing

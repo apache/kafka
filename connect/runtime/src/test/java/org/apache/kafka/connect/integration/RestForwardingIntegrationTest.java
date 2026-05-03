@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.connect.integration;
 
-import org.apache.kafka.base.test.TestSslUtils;
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestSslUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ConnectionMode;

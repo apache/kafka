@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.tools.consumer.group;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.AlterShareGroupOffsetsOptions;

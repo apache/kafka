@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
-import org.apache.kafka.base.test.ReflectionUtils;
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.ReflectionUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;

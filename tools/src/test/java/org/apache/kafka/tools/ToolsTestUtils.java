@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.utils.internals.Exit;
 import org.apache.kafka.server.config.QuotaConfig;
 
@@ -166,7 +167,7 @@ public class ToolsTestUtils {
         for (Entry<String, String> entry : properties.entrySet()) {
             sb.append(entry.getKey() + "=" + entry.getValue() + System.lineSeparator());
         }
-        return org.apache.kafka.base.test.TestUtils.tempFile(sb.toString());
+        return TestUtils.tempFile(sb.toString());
     }
 
     /**

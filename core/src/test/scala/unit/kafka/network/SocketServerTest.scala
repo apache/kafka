@@ -46,8 +46,7 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.network.ConnectionDisconnectListener
 import org.apache.kafka.server.quota.{ThrottleCallback, ThrottledChannel}
 import org.apache.kafka.server.util.ServerTestUtils
-import org.apache.kafka.base.test.TestSslUtils
-import org.apache.kafka.base.test.ReflectionUtils
+import org.apache.kafka.common.test.base.{ReflectionUtils, TestSslUtils}
 import org.apache.logging.log4j.{Level, LogManager}
 import org.apache.logging.log4j.core.config.Configurator
 import org.junit.jupiter.api.Assertions._

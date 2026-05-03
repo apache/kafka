@@ -18,7 +18,7 @@ package org.apache.kafka.tools;
 
 import kafka.server.KafkaBroker;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
@@ -746,7 +746,7 @@ public class ConfigCommandIntegrationTest {
                         .map(KafkaBroker::config)
                         .allMatch(config -> config.getInt("log.cleaner.threads") == 2),
                     () -> "Timeout waiting for topic config propagating to broker",
-                    org.apache.kafka.base.test.TestUtils.DEFAULT_MAX_WAIT_MS,
+                    TestUtils.DEFAULT_MAX_WAIT_MS,
                     100L);
         }
     }

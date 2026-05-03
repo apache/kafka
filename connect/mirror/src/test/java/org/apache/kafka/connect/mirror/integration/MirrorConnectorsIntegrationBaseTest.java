@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.connect.mirror.integration;
 
-import org.apache.kafka.base.test.TestCondition;
+import org.apache.kafka.common.test.base.TestCondition;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -95,7 +95,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.kafka.base.test.TestUtils.waitForCondition;
+import static org.apache.kafka.common.test.base.TestUtils.waitForCondition;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.METRIC_NAMES_LEGACY;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.METRIC_NAMES_NEW;

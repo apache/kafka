@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.IsolationLevel;
@@ -297,7 +297,6 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.protocol.ApiKeys.API_VERSIONS;
-import static org.apache.kafka.common.protocol.ApiKeys.CREATE_DELEGATION_TOKEN;
 import static org.apache.kafka.common.protocol.ApiKeys.CREATE_PARTITIONS;
 import static org.apache.kafka.common.protocol.ApiKeys.CREATE_TOPICS;
 import static org.apache.kafka.common.protocol.ApiKeys.DELETE_ACLS;

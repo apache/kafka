@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.coordinator.transaction;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;

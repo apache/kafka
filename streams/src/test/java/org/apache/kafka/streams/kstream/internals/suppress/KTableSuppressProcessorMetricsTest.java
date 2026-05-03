@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.suppress;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.Serdes;

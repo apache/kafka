@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.tools;
 
-import org.apache.kafka.base.test.TestSslUtils;
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestSslUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;

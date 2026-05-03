@@ -17,7 +17,7 @@
 
 package org.apache.kafka.clients;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.MockTime;

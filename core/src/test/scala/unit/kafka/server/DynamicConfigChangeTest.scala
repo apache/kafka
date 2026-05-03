@@ -40,7 +40,7 @@ import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager
 import org.apache.kafka.server.quota.ReplicationQuotaManager
 import org.apache.kafka.storage.internals.log.{LogConfig, UnifiedLog}
-import org.apache.kafka.base.test.TestUtils.assertFutureThrows
+import org.apache.kafka.common.test.base.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Test, Timeout}
 import org.mockito.ArgumentCaptor

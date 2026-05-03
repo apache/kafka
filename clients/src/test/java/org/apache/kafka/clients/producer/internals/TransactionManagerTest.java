@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.MockClient;

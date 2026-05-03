@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.base.test.{TestUtils => JTestUtils}
 import kafka.utils.TestUtils
 import kafka.server.BaseRequestTest
 import org.junit.jupiter.api.Assertions._
@@ -33,6 +32,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.errors.WakeupException
+import org.apache.kafka.common.test.base.{TestUtils => JTestUtils}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.util.ShutdownableThread

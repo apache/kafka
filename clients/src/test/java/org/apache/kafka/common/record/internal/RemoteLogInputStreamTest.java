@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.record.internal;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -36,7 +36,7 @@ import java.util.List;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.base.test.TestUtils.tempFile;
+import static org.apache.kafka.common.test.base.TestUtils.tempFile;
 import static org.apache.kafka.common.record.TimestampType.CREATE_TIME;
 import static org.apache.kafka.common.record.TimestampType.NO_TIMESTAMP_TYPE;
 import static org.apache.kafka.common.record.internal.RecordBatch.MAGIC_VALUE_V0;

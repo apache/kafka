@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.common.security.ssl;
 
-import org.apache.kafka.base.test.TestSslUtils;
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestSslUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SecurityConfig;

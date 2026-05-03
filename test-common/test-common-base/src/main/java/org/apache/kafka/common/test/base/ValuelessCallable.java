@@ -14,22 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.base.test;
+package org.apache.kafka.common.test.base;
 
 /**
- * This class can be used in the callback given to {@link TestUtils#retryOnExceptionWithTimeout(long, long, ValuelessCallable)}
- * to indicate that a particular exception should not be retried. Instead the retry operation will
- * be aborted immediately and the exception will be rethrown.
+ * Like a {@link Runnable} that allows exceptions to be thrown or a {@link java.util.concurrent.Callable}
+ * that does not return a value.
  */
-public class NoRetryException extends RuntimeException {
-    private final Throwable cause;
-
-    public NoRetryException(Throwable cause) {
-        this.cause = cause;
-    }
-
-    @Override
-    public Throwable getCause() {
-        return this.cause;
-    }
+public interface ValuelessCallable {
+    void call() throws Exception;
 }

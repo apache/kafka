@@ -21,7 +21,7 @@ import kafka.server.share.SharePartition.GapWindow;
 import kafka.server.share.SharePartition.SharePartitionState;
 import kafka.server.share.SharePartitionManager.SharePartitionListener;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.internals.ShareAcquireMode;
 import org.apache.kafka.common.TopicIdPartition;
@@ -99,7 +99,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static kafka.server.share.SharePartition.EMPTY_MEMBER_ID;
-import static org.apache.kafka.base.test.TestUtils.assertFutureThrows;
+import static org.apache.kafka.common.test.base.TestUtils.assertFutureThrows;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.memoryRecordsBuilder;
 import static org.apache.kafka.server.util.ServerTestUtils.clearYammerMetrics;
 import static org.apache.kafka.server.util.ServerTestUtils.yammerMetricValue;

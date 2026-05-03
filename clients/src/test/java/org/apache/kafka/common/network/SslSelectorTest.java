@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.common.network;
 
-import org.apache.kafka.base.test.TestSslUtils;
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestSslUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;

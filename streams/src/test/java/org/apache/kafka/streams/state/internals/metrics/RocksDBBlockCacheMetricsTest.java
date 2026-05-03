@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals.metrics;
 
-import org.apache.kafka.base.test.TestUtils;
+import org.apache.kafka.common.test.base.TestUtils;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.utils.Utils;
