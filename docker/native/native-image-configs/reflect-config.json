@@ -1054,11 +1054,11 @@
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
-  "name":"org.apache.kafka.common.utils.AppInfoParser$AppInfo",
+  "name":"org.apache.kafka.common.utils.internals.AppInfoParser$AppInfo",
   "queryAllPublicConstructors":true
 },
 {
-  "name":"org.apache.kafka.common.utils.AppInfoParser$AppInfoMBean",
+  "name":"org.apache.kafka.common.utils.internals.AppInfoParser$AppInfoMBean",
   "queryAllPublicMethods":true
 },
 {

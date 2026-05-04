@@ -5278,7 +5278,7 @@ public class SharePartitionTest {
         // Ack subset of records by "member-2".
         sharePartition.acknowledge("member-2",
                 List.of(new ShareAcknowledgementBatch(5, 5, List.of(AcknowledgeType.ACCEPT.id))));
-        // After the acknowledgements, the startOffset will be upadated to 6, since offset 5 is Terminal. Hence
+        // After the acknowledgements, the startOffset will be updated to 6, since offset 5 is Terminal. Hence
         // deliveryCompleteCount will remain 9.
         assertEquals(9, sharePartition.deliveryCompleteCount());
 
@@ -5465,7 +5465,7 @@ public class SharePartitionTest {
         )));
 
         // After acknowledgements, since offsets 10 -> 12 are at the start of the caches state and are in Terminal state,
-        // the start offset will be updated to 13. From the remaining offstes in flight, only records (17 -> 19) are in Terminal state.
+        // the start offset will be updated to 13. From the remaining offsets in flight, only records (17 -> 19) are in Terminal state.
         assertEquals(3, sharePartition.deliveryCompleteCount());
 
         // Send next batch from offset 13, only 2 records should be acquired.
@@ -9709,7 +9709,7 @@ public class SharePartitionTest {
         TimerTask timerTask2 = sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask();
 
         // Acknowledge 1 offset in first batch as Accept to create offset tracking, accept complete
-        // sencond batch. And mark offset 0 as release so cached state do not move ahead.
+        // second batch. And mark offset 0 as release so cached state do not move ahead.
         sharePartition.acknowledge(MEMBER_ID, List.of(
             new ShareAcknowledgementBatch(0, 0, List.of(AcknowledgeType.RELEASE.id)),
             new ShareAcknowledgementBatch(1, 1, List.of(AcknowledgeType.ACCEPT.id)),
