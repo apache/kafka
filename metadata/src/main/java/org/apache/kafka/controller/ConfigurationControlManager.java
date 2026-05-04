@@ -454,7 +454,7 @@ public class ConfigurationControlManager {
      */
     boolean isCordonedLogDirsInvalid(ConfigRecord configRecord, String currentValue, boolean forwarded) {
         if (!configRecord.name().equals(CORDONED_LOG_DIRS_CONFIG) || configRecord.resourceType() != BROKER.id() ||
-                forwarded || configRecord.value() == null || configRecord.value().isEmpty()) {
+                forwarded || configRecord.value() == null || configRecord.value().trim().isEmpty()) {
             return false;
         }
         List<String> currentDirs = currentValue == null

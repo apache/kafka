@@ -704,7 +704,7 @@ public class ConfigurationControlManagerTest {
                 setName(CORDONED_LOG_DIRS_CONFIG);
 
         // If the new value is null or empty string, the update is always allowed
-        for (String value : Arrays.asList("", null)) {
+        for (String value : Arrays.asList("", "   ", null)) {
             cr.setValue(value);
             assertFalse(manager.isCordonedLogDirsInvalid(cr, null, false));
             assertFalse(manager.isCordonedLogDirsInvalid(cr, null, true));
