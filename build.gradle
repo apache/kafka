@@ -314,10 +314,13 @@ subprojects {
 
   apply plugin: 'java-library'
 
-  // Resolve conflict between testFixtures and shadow in :clients
-  configurations.configureEach {
-    resolutionStrategy.capabilitiesResolution.withCapability('org.apache.kafka:clients') {
-      select(candidates.find { it.variantName.toLowerCase().contains('shadow') })
+  // Resolve conflict between testFixtures and shadow in :clients.
+  // Skip for :clients itself - it should use its own source sets, not its shadow JAR.
+  if (project.name != 'clients') {
+    configurations.configureEach {
+      resolutionStrategy.capabilitiesResolution.withCapability('org.apache.kafka:clients') {
+        select(candidates.find { it.variantName.toLowerCase().contains('shadow') })
+      }
     }
   }
   apply plugin: 'checkstyle'
@@ -1898,6 +1901,27 @@ project(':clients') {
   configurations {
     generator
     shadowed
+  }
+
+  // java-test-fixtures creates dependencies testImplementation -> testFixturesApi -> (main artifact)
+  // It prefers the main artifact over the raw main classpath so that dependents on fixtures get the same
+  // packaged artifact as production consumers. In this module the main artifact is the shadow JAR,
+  // so this creates a test dependency on createVersionFile breaking AppInfoParserTest, and worse:
+  // test code is compiled against the original packages, but the shadow JAR contains relocated bytecode,
+  // causing runtime errors for various tests. To fix this, we rewire the test fixtures dependency to the raw
+  // source set output, so tests continue to use compiled classes and original dependencies instead of the shadow JAR.
+  // https://github.com/gradle/gradle/blob/v9.4.1/platforms/jvm/plugins-jvm-test-fixtures/src/main/java/org/gradle/api/plugins/JavaTestFixturesPlugin.java#L89-L90
+  afterEvaluate {
+    configurations.testFixturesApi.dependencies.removeIf { dep ->
+      dep instanceof ProjectDependency && dep.name == project.name
+    }
+    dependencies {
+      testFixturesApi files(sourceSets.main.output.classesDirs)
+      testFixturesApi files(sourceSets.main.output.resourcesDir)
+    }
+    tasks.named('compileTestFixturesJava') {
+      dependsOn tasks.named('classes')
+    }
   }
 
   dependencies {
