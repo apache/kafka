@@ -451,7 +451,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     } else {
       Seq.empty
     }
-    val controllerQuorumVotersAddress = QuorumConfig.parseVoterConnections(quorumConfig.voters).asScala.get(nodeId())
     val controllerListenersValue = controllerListeners
 
     controllerListenerNames.asScala.flatMap { name =>
@@ -466,7 +465,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
                 // if controller.quorum.voters defines an endpoint for this node, use that as the advertised listener
                 if (name == controllerListenerNames.asScala.head &&
                   (endpoint.host == null || endpoint.host == "0.0.0.0")) {
-                  controllerQuorumVotersAddress.map { socketAddress =>
+                  val votersAddress = QuorumConfig.parseVoterConnections(quorumConfig.voters).asScala.get(nodeId())
+                  votersAddress.map { socketAddress =>
                     new Endpoint(
                       endpoint.listener,
                       endpoint.securityProtocol,
