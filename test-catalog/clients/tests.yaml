@@ -492,6 +492,22 @@ org.apache.kafka.clients.admin.NewTopicTest:
 - testEqualsAndHashCode
 - testToString
 - testUnmodifiableReplicasAssignments
+org.apache.kafka.clients.admin.RaftVoterEndpointTest:
+- testAccessors
+- testEquals
+- testHashCode
+- testHostNullConstructor
+- testListenerEmptyConstructor
+- testListenerNotUpperCaseConstructor
+- testListenerNullConstructor
+- testListenerWhitespaceConstructor
+- testNotEqualsWithDifferentClass
+- testNotEqualsWithDifferentHost
+- testNotEqualsWithDifferentListener
+- testNotEqualsWithDifferentPort
+- testNotEqualsWithNull
+- testToString
+- testToStringWithIpv6Host
 org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptionsTest:
 - testConstructor
 org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupResultTest:
