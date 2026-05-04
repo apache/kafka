@@ -16,9 +16,8 @@
  */
 package org.apache.kafka.tiered.storage.integration;
 
-import kafka.server.KafkaBroker;
-
 import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.test.ClusterInstance;
@@ -26,7 +25,6 @@ import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.common.test.api.TestKitDefaults;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.server.HostedPartition;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
@@ -39,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.STORAGE_WAIT_TIMEOUT_SEC;
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createPropsForRemoteStorage;
@@ -299,8 +298,13 @@ public class TransactionsWithTieredStoreTest {
         TransactionsTestHelper.testFailureToFenceEpoch(clusterInstance, true, topicConfig());
     }
 
+    @ClusterTemplate("tieredStorageClusterConfigTV1")
+    public void testEmptyAbortAfterCommitWithTV1(ClusterInstance clusterInstance) throws Exception {
+        TransactionsTestHelper.testEmptyAbortAfterCommit(clusterInstance, topicConfig());
+    }
+
     @ClusterTemplate("tieredStorageClusterConfigTV2")
-    public void testEmptyAbortAfterCommit(ClusterInstance clusterInstance) throws Exception {
+    public void testEmptyAbortAfterCommitWithTV2(ClusterInstance clusterInstance) throws Exception {
         TransactionsTestHelper.testEmptyAbortAfterCommit(clusterInstance, topicConfig());
     }
 
@@ -341,8 +345,9 @@ public class TransactionsWithTieredStoreTest {
                             .map(b -> new BrokerLocalStorage(b.config().brokerId(),
                                     Set.copyOf(b.config().logDirs()), STORAGE_WAIT_TIMEOUT_SEC))
                             .toList();
+                    Set<Integer> assignedReplicas = getAssignedReplicaIds(clusterInstance, topicPartition);
                     localStorages.stream()
-                            .filter(s -> isAssignedReplica(clusterInstance, topicPartition, s.getBrokerId()))
+                            .filter(s -> assignedReplicas.contains(s.getBrokerId()))
                             .filter(s -> isAlive(clusterInstance, s.getBrokerId()))
                             .forEach(localStorage ->
                                     localStorage.waitForAtLeastEarliestLocalOffset(topicPartition, 1L));
@@ -351,16 +356,19 @@ public class TransactionsWithTieredStoreTest {
         };
     }
 
-    private static boolean isAssignedReplica(
-            ClusterInstance clusterInstance,
-            TopicPartition topicPartition,
-            int replicaId
-    ) {
-        KafkaBroker broker = clusterInstance.brokers().get(replicaId);
-        if (broker != null) {
-            return broker.replicaManager().getPartition(topicPartition) instanceof HostedPartition.Online;
+    private static Set<Integer> getAssignedReplicaIds(ClusterInstance clusterInstance, TopicPartition topicPartition) {
+        try (var admin = clusterInstance.admin()) {
+            return admin.describeTopics(List.of(topicPartition.topic()))
+                    .allTopicNames().get()
+                    .get(topicPartition.topic())
+                    .partitions().stream()
+                    .filter(p -> p.partition() == topicPartition.partition())
+                    .flatMap(p -> p.replicas().stream())
+                    .map(Node::id)
+                    .collect(Collectors.toSet());
+        } catch (Exception e) {
+            return Set.of();
         }
-        return false;
     }
 
     private static boolean isAlive(ClusterInstance clusterInstance, int brokerId) {
