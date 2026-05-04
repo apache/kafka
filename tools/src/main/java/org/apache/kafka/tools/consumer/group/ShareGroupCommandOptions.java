@@ -50,7 +50,7 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
         "Has 2 execution options: --dry-run to plan which offsets to reset, and --execute to reset the offsets. " + NL +
         "Additionally, the --export option is used to export the offsets in CSV format." + NL +
         "You must choose one of the following reset specifications: --to-datetime, --to-earliest, --to-latest, --from-file, --to-current, --to-offset." + NL +
-        "To define the scope use --all-topics or --topic. One scope must be specified unless you use '--from-file'." + NL +
+        "To define the scope, use --all-topics, --topic or --from-file." + NL +
         "Fails if neither '--dry-run' nor '--execute' is specified.";
     private static final String DRY_RUN_DOC = "Only show results without executing changes on share groups. Supported operations: reset-offsets.";
     private static final String EXECUTE_DOC = "Execute operation. Supported operations: reset-offsets.";
@@ -100,7 +100,8 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
     final Set<OptionSpec<?>> allGroupSelectionScopeOpts;
     final Set<OptionSpec<?>> allTopicSelectionScopeOpts;
     final Set<OptionSpec<?>> allShareGroupLevelOpts;
-    final Set<OptionSpec<?>> allResetOffsetScenarioOpts;
+    final Set<OptionSpec<?>> allResetOffsetsScopeOpts;
+    final Set<OptionSpec<?>> allResetOffsetsScenarioOpts;
     final Set<OptionSpec<?>> allDeleteOffsetsOpts;
 
     public ShareGroupCommandOptions(String[] args) {
@@ -166,7 +167,8 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
         allGroupSelectionScopeOpts = Set.of(groupOpt, allGroupsOpt);
         allTopicSelectionScopeOpts = Set.of(topicOpt, allTopicsOpt);
         allShareGroupLevelOpts = Set.of(listOpt, describeOpt, deleteOpt, resetOffsetsOpt);
-        allResetOffsetScenarioOpts = Set.of(resetToOffsetOpt, resetToDatetimeOpt,
+        allResetOffsetsScopeOpts = Set.of(topicOpt, allTopicsOpt, resetFromFileOpt);
+        allResetOffsetsScenarioOpts = Set.of(resetToOffsetOpt, resetToDatetimeOpt,
             resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt);
         allDeleteOffsetsOpts = Set.of(groupOpt, topicOpt);
 
@@ -196,13 +198,13 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
         if (options.has(deleteOpt)) {
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
                 CommandLineUtils.printUsageAndExit(parser,
-                    String.format("Option %s takes the options %s or %s", deleteOpt, groupOpt, allGroupsOpt));
+                    String.format("Option %s takes the options %s or %s.", deleteOpt, groupOpt, allGroupsOpt));
             if (options.has(allGroupsOpt) && options.has(groupOpt))
                 CommandLineUtils.printUsageAndExit(parser,
                     String.format("Option %s takes either %s or %s, not both.", deleteOpt, groupOpt, allGroupsOpt));
-            if (options.has(topicOpt))
+            if (options.has(allTopicsOpt) || options.has(topicOpt))
                 CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + deleteOpt + " does not take the option: " + topicOpt);
+                    String.format("Option %s does not take the options %s or %s.", deleteOpt, topicOpt, allTopicsOpt));
         }
 
         if (options.has(deleteOffsetsOpt)) {
@@ -223,26 +225,30 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
                 CommandLineUtils.printUsageAndExit(parser,
                     "Option " + resetOffsetsOpt + " takes the option: " + groupOpt);
 
-            if (!options.has(topicOpt) && !options.has(allTopicsOpt)) {
+            if (!options.has(topicOpt) && !options.has(allTopicsOpt) && !options.has(resetFromFileOpt)) {
                 CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + resetOffsetsOpt + " takes one of these options: " + allTopicSelectionScopeOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
-            }
-            
-            if (!options.has(resetToOffsetOpt) && !options.has(resetToEarliestOpt) && !options.has(resetToLatestOpt) && !options.has(resetToDatetimeOpt) && !options.has(resetToCurrentOpt) && !options.has(resetFromFileOpt)) {
-                CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + resetOffsetsOpt + " takes one of these options: " + allResetOffsetScenarioOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
+                    "Option " + resetOffsetsOpt + " takes one of these options: " + allResetOffsetsScopeOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
             }
 
-            CommandLineUtils.checkInvalidArgs(parser, options, resetToOffsetOpt, minus(allResetOffsetScenarioOpts, resetToOffsetOpt));
-            CommandLineUtils.checkInvalidArgs(parser, options, resetToDatetimeOpt, minus(allResetOffsetScenarioOpts, resetToDatetimeOpt));
-            CommandLineUtils.checkInvalidArgs(parser, options, resetToEarliestOpt, minus(allResetOffsetScenarioOpts, resetToEarliestOpt));
-            CommandLineUtils.checkInvalidArgs(parser, options, resetToLatestOpt, minus(allResetOffsetScenarioOpts, resetToLatestOpt));
-            CommandLineUtils.checkInvalidArgs(parser, options, resetToCurrentOpt, minus(allResetOffsetScenarioOpts, resetToCurrentOpt));
-            CommandLineUtils.checkInvalidArgs(parser, options, resetFromFileOpt, minus(allResetOffsetScenarioOpts, resetFromFileOpt));
+            CommandLineUtils.checkInvalidArgs(parser, options, topicOpt, minus(allResetOffsetsScopeOpts, topicOpt));
+            CommandLineUtils.checkInvalidArgs(parser, options, allTopicsOpt, minus(allResetOffsetsScopeOpts, allTopicsOpt));
+            CommandLineUtils.checkInvalidArgs(parser, options, resetFromFileOpt, minus(allResetOffsetsScopeOpts, resetFromFileOpt));
+
+            if (!options.has(resetToOffsetOpt) && !options.has(resetToEarliestOpt) && !options.has(resetToLatestOpt) && !options.has(resetToDatetimeOpt) && !options.has(resetToCurrentOpt) && !options.has(resetFromFileOpt)) {
+                CommandLineUtils.printUsageAndExit(parser,
+                    "Option " + resetOffsetsOpt + " takes one of these options: " + allResetOffsetsScenarioOpts.stream().map(Object::toString).sorted().collect(Collectors.joining(", ")));
+            }
+
+            CommandLineUtils.checkInvalidArgs(parser, options, resetToOffsetOpt, minus(allResetOffsetsScenarioOpts, resetToOffsetOpt));
+            CommandLineUtils.checkInvalidArgs(parser, options, resetToDatetimeOpt, minus(allResetOffsetsScenarioOpts, resetToDatetimeOpt));
+            CommandLineUtils.checkInvalidArgs(parser, options, resetToEarliestOpt, minus(allResetOffsetsScenarioOpts, resetToEarliestOpt));
+            CommandLineUtils.checkInvalidArgs(parser, options, resetToLatestOpt, minus(allResetOffsetsScenarioOpts, resetToLatestOpt));
+            CommandLineUtils.checkInvalidArgs(parser, options, resetToCurrentOpt, minus(allResetOffsetsScenarioOpts, resetToCurrentOpt));
+            CommandLineUtils.checkInvalidArgs(parser, options, resetFromFileOpt, minus(allResetOffsetsScenarioOpts, resetFromFileOpt));
         }
 
         CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, minus(allGroupSelectionScopeOpts, groupOpt));
-        CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, minus(allShareGroupLevelOpts, describeOpt, deleteOpt, resetOffsetsOpt));
-        CommandLineUtils.checkInvalidArgs(parser, options, topicOpt, minus(allShareGroupLevelOpts, deleteOpt, resetOffsetsOpt));
+        CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, minus(allShareGroupLevelOpts, deleteOpt, deleteOffsetsOpt, describeOpt, resetOffsetsOpt));
+        CommandLineUtils.checkInvalidArgs(parser, options, topicOpt, minus(allShareGroupLevelOpts, deleteOffsetsOpt, resetOffsetsOpt));
     }
 }

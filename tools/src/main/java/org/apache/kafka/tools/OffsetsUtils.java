@@ -404,73 +404,37 @@ public class OffsetsUtils {
     }
 
     public Map<TopicPartition, OffsetAndMetadata> resetToCurrent(Collection<TopicPartition> partitionsToReset, Map<TopicPartition, OffsetAndMetadata> currentCommittedOffsets) {
-        Collection<TopicPartition> partitionsToResetWithCommittedOffset = new ArrayList<>();
-        Collection<TopicPartition> partitionsToResetWithoutCommittedOffset = new ArrayList<>();
+        Map<Boolean, List<TopicPartition>> partitioned = partitionsToReset.stream().collect(Collectors.partitioningBy(currentCommittedOffsets::containsKey));
+        List<TopicPartition> partitionsToResetWithStartOffset = partitioned.get(true);
+        List<TopicPartition> partitionsToResetWithoutStartOffset = partitioned.get(false);
 
-        for (TopicPartition topicPartition : partitionsToReset) {
-            if (currentCommittedOffsets.containsKey(topicPartition))
-                partitionsToResetWithCommittedOffset.add(topicPartition);
-            else
-                partitionsToResetWithoutCommittedOffset.add(topicPartition);
-        }
+        Map<TopicPartition, OffsetAndMetadata> preparedOffsetsForPartitionsWithStartOffset = partitionsToResetWithStartOffset.stream()
+            .collect(Collectors.toMap(Function.identity(), topicPartition -> new OffsetAndMetadata(currentCommittedOffsets.get(topicPartition).offset())));
 
-        Map<TopicPartition, OffsetAndMetadata> preparedOffsetsForPartitionsWithCommittedOffset = partitionsToResetWithCommittedOffset.stream()
-            .collect(Collectors.toMap(Function.identity(), topicPartition -> {
-                OffsetAndMetadata committedOffset = currentCommittedOffsets.get(topicPartition);
+        getLogEndOffsets(partitionsToResetWithoutStartOffset).forEach((tp, logOffsetResult) -> {
+            if (!(logOffsetResult instanceof OffsetsUtils.LogOffset logOffset)) {
+                throw new IllegalStateException("Error getting ending offset of topic partition: " + tp);
+            }
+            preparedOffsetsForPartitionsWithStartOffset.put(tp, new OffsetAndMetadata(logOffset.value));
+        });
 
-                if (committedOffset == null) {
-                    throw new IllegalStateException("Expected a valid current offset for topic partition: " + topicPartition);
-                }
-
-                return new OffsetAndMetadata(committedOffset.offset());
-            }));
-
-        Map<TopicPartition, OffsetAndMetadata> preparedOffsetsForPartitionsWithoutCommittedOffset =
-            getLogEndOffsets(partitionsToResetWithoutCommittedOffset)
-                .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> {
-                    if (!(e.getValue() instanceof OffsetsUtils.LogOffset)) {
-                        CommandLineUtils.printUsageAndExit(parser, "Error getting ending offset of topic partition: " + e.getKey());
-                    }
-                    return new OffsetAndMetadata(((OffsetsUtils.LogOffset) e.getValue()).value);
-                }));
-
-        preparedOffsetsForPartitionsWithCommittedOffset.putAll(preparedOffsetsForPartitionsWithoutCommittedOffset);
-
-        return preparedOffsetsForPartitionsWithCommittedOffset;
+        return preparedOffsetsForPartitionsWithStartOffset;
     }
 
     public Map<TopicPartition, OffsetAndMetadata> resetToCurrentForShareGroup(Collection<TopicPartition> partitionsToReset, Map<TopicPartition, SharePartitionOffsetInfo> currentOffsetInfo) {
-        Collection<TopicPartition> partitionsToResetWithStartOffset = new ArrayList<>();
-        Collection<TopicPartition> partitionsToResetWithoutStartOffset = new ArrayList<>();
-
-        for (TopicPartition topicPartition : partitionsToReset) {
-            if (currentOffsetInfo.containsKey(topicPartition))
-                partitionsToResetWithStartOffset.add(topicPartition);
-            else
-                partitionsToResetWithoutStartOffset.add(topicPartition);
-        }
+        Map<Boolean, List<TopicPartition>> partitioned = partitionsToReset.stream().collect(Collectors.partitioningBy(currentOffsetInfo::containsKey));
+        List<TopicPartition> partitionsToResetWithStartOffset = partitioned.get(true);
+        List<TopicPartition> partitionsToResetWithoutStartOffset = partitioned.get(false);
 
         Map<TopicPartition, OffsetAndMetadata> preparedOffsetsForPartitionsWithStartOffset = partitionsToResetWithStartOffset.stream()
-            .collect(Collectors.toMap(Function.identity(), topicPartition -> {
-                SharePartitionOffsetInfo offsetInfo = currentOffsetInfo.get(topicPartition);
+            .collect(Collectors.toMap(Function.identity(), topicPartition -> new OffsetAndMetadata(currentOffsetInfo.get(topicPartition).startOffset())));
 
-                if (offsetInfo == null) {
-                    throw new IllegalStateException("Expected a valid start offset for topic partition: " + topicPartition);
-                }
-
-                return new OffsetAndMetadata(offsetInfo.startOffset());
-            }));
-
-        Map<TopicPartition, OffsetAndMetadata> preparedOffsetsForPartitionsWithoutStartOffset =
-            getLogEndOffsets(partitionsToResetWithoutStartOffset)
-                .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> {
-                    if (!(e.getValue() instanceof OffsetsUtils.LogOffset)) {
-                        CommandLineUtils.printUsageAndExit(parser, "Error getting ending offset of topic partition: " + e.getKey());
-                    }
-                    return new OffsetAndMetadata(((OffsetsUtils.LogOffset) e.getValue()).value);
-                }));
-
-        preparedOffsetsForPartitionsWithStartOffset.putAll(preparedOffsetsForPartitionsWithoutStartOffset);
+        getLogEndOffsets(partitionsToResetWithoutStartOffset).forEach((tp, logOffsetResult) -> {
+            if (!(logOffsetResult instanceof OffsetsUtils.LogOffset logOffset)) {
+                throw new IllegalStateException("Error getting ending offset of topic partition: " + tp);
+            }
+            preparedOffsetsForPartitionsWithStartOffset.put(tp, new OffsetAndMetadata(logOffset.value));
+        });
 
         return preparedOffsetsForPartitionsWithStartOffset;
     }

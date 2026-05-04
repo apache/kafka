@@ -1408,7 +1408,7 @@ public class ShareGroupCommandTest {
         AtomicBoolean exited = new AtomicBoolean(false);
         Exit.setExitProcedure(((statusCode, message) -> {
             assertNotEquals(0, statusCode);
-            assertTrue(message.contains("Option [reset-offsets] takes one of these options: [all-topics], [topic]"));
+            assertTrue(message.contains("Option [reset-offsets] takes one of these options: [all-topics], [from-file], [topic]"));
             exited.set(true);
         }));
         try {

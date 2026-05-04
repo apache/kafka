@@ -184,8 +184,15 @@ public class ShareGroupCommand {
                     .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue()));
                 Collection<GroupListing> listings = result.all().get();
                 return listings.stream().map(GroupListing::groupId).collect(Collectors.toList());
-            } catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException(e);
+            } catch (InterruptedException ie) {
+                throw new RuntimeException(ie);
+            } catch (ExecutionException ee) {
+                Throwable cause = ee.getCause();
+                if (cause instanceof KafkaException) {
+                    throw (KafkaException) cause;
+                } else {
+                    throw new RuntimeException(cause);
+                }
             }
         }
 
@@ -195,8 +202,15 @@ public class ShareGroupCommand {
                     .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue()));
                 Collection<GroupListing> listings = result.all().get();
                 return listings.stream().toList();
-            } catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException(e);
+            } catch (InterruptedException ie) {
+                throw new RuntimeException(ie);
+            } catch (ExecutionException ee) {
+                Throwable cause = ee.getCause();
+                if (cause instanceof KafkaException) {
+                    throw (KafkaException) cause;
+                } else {
+                    throw new RuntimeException(cause);
+                }
             }
         }
 
@@ -489,8 +503,15 @@ public class ShareGroupCommand {
                     Map.of(groupId, new ListShareGroupOffsetsSpec()),
                     withTimeoutMs(new ListShareGroupOffsetsOptions())
                 ).partitionsToOffsetInfo(groupId).get();
-            } catch (InterruptedException | ExecutionException e) {
-                throw new RuntimeException(e);
+            } catch (InterruptedException ie) {
+                throw new RuntimeException(ie);
+            } catch (ExecutionException ee) {
+                Throwable cause = ee.getCause();
+                if (cause instanceof KafkaException) {
+                    throw (KafkaException) cause;
+                } else {
+                    throw new RuntimeException(cause);
+                }
             }
         }
 
@@ -504,14 +525,14 @@ public class ShareGroupCommand {
                 return offsetsUtils.resetToLatest(partitionsToReset);
             } else if (opts.options.has(opts.resetToDatetimeOpt)) {
                 return offsetsUtils.resetToDateTime(partitionsToReset);
-            } else if (offsetsUtils.resetPlanFromFile().isPresent()) {
+            } else if (opts.options.has(opts.resetFromFileOpt)) {
                 return offsetsUtils.resetFromFile(groupId);
             } else if (opts.options.has(opts.resetToCurrentOpt)) {
                 Map<TopicPartition, SharePartitionOffsetInfo> currentOffsets = getOffsetInfo(groupId);
                 return offsetsUtils.resetToCurrentForShareGroup(partitionsToReset, currentOffsets);
             }
             CommandLineUtils
-                .printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts));
+                .printUsageAndExit(opts.parser, String.format("Option '%s' requires one of the following scenarios: %s", opts.resetOffsetsOpt, opts.allResetOffsetsScenarioOpts));
             return null;
         }
 
@@ -555,8 +576,15 @@ public class ShareGroupCommand {
                     Set<SharePartitionOffsetInformation> partitionOffsets = mapOffsetInfoToSharePartitionInformation(groupId, offsetInfoMap);
 
                     groupOffsets.put(groupId, new SimpleImmutableEntry<>(shareGroup, partitionOffsets));
-                } catch (InterruptedException | ExecutionException e) {
-                    throw new RuntimeException(e);
+                } catch (InterruptedException ie) {
+                    throw new RuntimeException(ie);
+                } catch (ExecutionException ee) {
+                    Throwable cause = ee.getCause();
+                    if (cause instanceof KafkaException) {
+                        throw (KafkaException) cause;
+                    } else {
+                        throw new RuntimeException(cause);
+                    }
                 }
             });
 
