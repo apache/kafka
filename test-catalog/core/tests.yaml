@@ -1391,13 +1391,12 @@ kafka.server.AutoTopicCreationManagerTest:
 - testTopicsInBackoffAreNotRetried
 - testTopicsOutOfBackoffCanBeRetried
 kafka.server.BrokerLifecycleManagerTest:
-- testAlwaysSendsAccumulatedCordonedDirs
 - testAlwaysSendsAccumulatedOfflineDirs
 - testControlledShutdown
+- testCordonedLogDirs
 - testCreateAndClose
 - testCreateStartAndClose
 - testKraftJBODMetadataVersionUpdateEvent
-- testRegistrationIncludesCordonedDirs
 - testRegistrationIncludesDirs
 - testRegistrationTimeout
 - testSuccessfulRegistration

@@ -93,6 +93,8 @@ org.apache.kafka.controller.ConfigurationControlManagerTest:
 - testIncrementalAlterConfigsWithPolicy
 - testIncrementalAlterConfigsWithoutExistence
 - testIncrementalAlterMultipleConfigValues
+- testIsCordonedLogDirsDisabled
+- testIsCordonedLogDirsInvalid
 - testLegacyAlterConfigs
 - testMaybeGenerateElrSafetyRecords
 - testRejectMinIsrChangeWhenElrEnabled
@@ -669,6 +671,9 @@ org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChangeTest:
 - testValueRoundTrip
 - testValues
 org.apache.kafka.metadata.BrokerRegistrationTest:
+- testCordonedDirChanged
+- testCordonedDirectories
+- testCordonedLogDirsRoundTrip
 - testDirectoriesAreSorted
 - testEquals
 - testFromRecordAndToRecord
