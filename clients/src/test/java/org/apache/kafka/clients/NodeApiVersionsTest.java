@@ -65,7 +65,7 @@ public class NodeApiVersionsTest {
     @Test
     public void testVersionsToString() {
         List<ApiVersion> versionList = new ArrayList<>();
-        for (ApiKeys apiKey : ApiKeys.apisForListener(ApiMessageType.ListenerType.BROKER)) {
+        for (ApiKeys apiKey : ApiKeys.values()) {
             if (apiKey == ApiKeys.DELETE_TOPICS) {
                 versionList.add(new ApiVersion()
                         .setApiKey(apiKey.id)
@@ -76,7 +76,7 @@ public class NodeApiVersionsTest {
         NodeApiVersions versions = new NodeApiVersions(versionList, Collections.emptyList());
         StringBuilder bld = new StringBuilder();
         String prefix = "(";
-        for (ApiKeys apiKey : ApiKeys.apisForListener(ApiMessageType.ListenerType.BROKER)) {
+        for (ApiKeys apiKey : ApiKeys.values()) {
             bld.append(prefix);
             if (apiKey == ApiKeys.DELETE_TOPICS) {
                 bld.append("DeleteTopics(20): 10000 to 10001 [unusable: node too new]");
