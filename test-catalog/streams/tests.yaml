@@ -2684,6 +2684,9 @@ org.apache.kafka.streams.processor.internals.StoreChangelogReaderTest:
 - shouldRestoreFromPositionAndCheckForCompletion
 - shouldRestoreMultipleChangelogs
 - shouldRestoreToLimitInStandbyState
+- shouldSeekByTimestampForWindowedStoreWithoutCheckpoint
+- shouldSeekToBeginningForNonWindowedStoreWithoutCheckpoint
+- shouldSeekToBeginningWhenBrokerReturnsNullForOffsetsForTimes
 - shouldSupportUnregisterChangelogAfterCompletion
 - shouldSupportUnregisterChangelogBeforeCompletion
 - shouldSupportUnregisterChangelogBeforeInitialization
