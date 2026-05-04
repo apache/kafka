@@ -162,7 +162,7 @@ public class ClientMetricsManager implements AutoCloseable {
         long now = time.milliseconds();
         Uuid clientInstanceId = Optional.ofNullable(request.data().clientInstanceId())
             .filter(id -> !id.equals(Uuid.ZERO_UUID))
-            .orElse(generateNewClientId());
+            .orElseGet(this::generateNewClientId);
 
         /*
          Get the client instance from the cache or create a new one. If subscription has changed
