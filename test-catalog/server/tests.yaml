@@ -124,6 +124,11 @@ org.apache.kafka.server.CordonedLogDirsIntegrationTest:
 - testFeatureNotEnabledStaticConfig
 - testReassignWithCordonedLogDirs
 - testStaticCordonUncordonLogDirs
+org.apache.kafka.server.DefaultApiVersionManagerTest:
+- testApiScope
+- testControllerApiIntersection
+- testDisabledApis
+- testEnvelopeDisabledForKRaftBroker
 org.apache.kafka.server.EligibleLeaderReplicasIntegrationTest:
 - testElrMemberCanBeElected
 - testElrMemberShouldBeKickOutWhenUncleanShutdown
