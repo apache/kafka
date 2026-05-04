@@ -205,18 +205,12 @@ public class LogOffsetTest {
         TopicPartition topicPartition = new TopicPartition(topic, 0);
         clusterInstance.createTopic(topic, 1, (short) 1);
 
-        boolean offsetChanged = false;
-        for (int i = 1; i <= 14; i++) {
-            ListOffsetsRequest request = ListOffsetsRequest.Builder
-                .forReplica((short) 1, 1)
-                .setTargetTimes(buildTargetTimes(topicPartition, ListOffsetsRequest.EARLIEST_TIMESTAMP))
-                .build();
-            long consumerOffset = findPartition(sendListOffsetsRequest(request).topics(), topicPartition).offset();
-            if (consumerOffset == 1) {
-                offsetChanged = true;
-            }
-        }
-        assertFalse(offsetChanged);
+        ListOffsetsRequest request = ListOffsetsRequest.Builder
+            .forReplica((short) 1, 1)
+            .setTargetTimes(buildTargetTimes(topicPartition, ListOffsetsRequest.EARLIEST_TIMESTAMP))
+            .build();
+        long consumerOffset = findPartition(sendListOffsetsRequest(request).topics(), topicPartition).offset();
+        assertEquals(0L, consumerOffset);
     }
 
     @ClusterTest
