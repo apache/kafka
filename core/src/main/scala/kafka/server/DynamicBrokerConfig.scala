@@ -32,9 +32,10 @@ import org.apache.kafka.common.metadata.{ConfigRecord, MetadataRecordType}
 import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
-import org.apache.kafka.common.utils.LogContext
+import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.common.utils.internals.BufferSupplier
-import org.apache.kafka.common.utils.{ConfigUtils, Utils}
+import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.internals.ConfigUtils
 import org.apache.kafka.config
 import org.apache.kafka.network.SocketServer
 import org.apache.kafka.raft.KafkaRaftClient

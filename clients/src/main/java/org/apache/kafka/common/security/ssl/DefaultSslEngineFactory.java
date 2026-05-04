@@ -24,8 +24,8 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
-import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.SecurityUtils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
