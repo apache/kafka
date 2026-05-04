@@ -31,22 +31,22 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionRatioEstimator;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.DefaultRecord;
-import org.apache.kafka.common.record.DefaultRecordBatch;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.MutableRecordBatch;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.CompressionRatioEstimator;
+import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.DefaultRecord;
+import org.apache.kafka.common.record.internal.DefaultRecordBatch;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.MutableRecordBatch;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -405,7 +405,7 @@ public class RecordAccumulatorTest {
                 for (ProducerBatch batch : batches) {
                     for (@SuppressWarnings("UnusedLocalVariable") Record ignored : batch.records().records())
                         read++;
-                    accum.deallocate(batch);
+                    accum.completeAndDeallocateBatch(batch);
                 }
             }
         }
@@ -669,7 +669,7 @@ public class RecordAccumulatorTest {
 
         for (List<ProducerBatch> batches: results.values())
             for (ProducerBatch batch: batches)
-                accum.deallocate(batch);
+                accum.completeAndDeallocateBatch(batch);
 
         // should be complete with no unsent records.
         accum.awaitFlushCompletion();
@@ -1303,7 +1303,7 @@ public class RecordAccumulatorTest {
         mockRandom = new AtomicInteger();
 
         // Create accumulator with partitioner config to enable adaptive partitioning.
-        RecordAccumulator.PartitionerConfig config = new RecordAccumulator.PartitionerConfig(true, 100);
+        RecordAccumulator.PartitionerConfig config = new RecordAccumulator.PartitionerConfig(true, 100, false, "");
         long totalSize = 1024 * 1024;
         int batchSize = 128;
         RecordAccumulator accum = new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
@@ -1311,8 +1311,8 @@ public class RecordAccumulatorTest {
                 new BufferPool(totalSize, batchSize, metrics, time, "producer-internal-metrics")) {
             @Override
             BuiltInPartitioner createBuiltInPartitioner(LogContext logContext, String topic,
-                                                                  int stickyBatchSize) {
-                return new SequentialPartitioner(logContext, topic, stickyBatchSize);
+                                                        int stickyBatchSize, boolean rackAware, String rack) {
+                return new SequentialPartitioner(logContext, topic, stickyBatchSize, rackAware, rack);
             }
         };
 
@@ -1575,7 +1575,7 @@ public class RecordAccumulatorTest {
         assertEquals(1, batches.values().iterator().next().size());
         ProducerBatch batch = batches.values().iterator().next().get(0);
         int numSplitBatches = accum.splitAndReenqueue(batch);
-        accum.deallocate(batch);
+        accum.completeAndDeallocateBatch(batch);
 
         return numSplitBatches;
     }
@@ -1599,7 +1599,7 @@ public class RecordAccumulatorTest {
                     } else {
                         batch.complete(0L, 0L);
                     }
-                    accum.deallocate(batch);
+                    accum.completeAndDeallocateBatch(batch);
                 }
             }
         } while (batchDrained);
@@ -1690,16 +1690,16 @@ public class RecordAccumulatorTest {
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName)) {
             @Override
             BuiltInPartitioner createBuiltInPartitioner(LogContext logContext, String topic,
-                                                        int stickyBatchSize) {
-                return new SequentialPartitioner(logContext, topic, stickyBatchSize);
+                                                        int stickyBatchSize, boolean rackAware, String rack) {
+                return new SequentialPartitioner(logContext, topic, stickyBatchSize, rackAware, rack);
             }
         };
     }
 
     private class SequentialPartitioner extends BuiltInPartitioner {
 
-        public SequentialPartitioner(LogContext logContext, String topic, int stickyBatchSize) {
-            super(logContext, topic, stickyBatchSize);
+        public SequentialPartitioner(LogContext logContext, String topic, int stickyBatchSize, boolean rackAware, String rack) {
+            super(logContext, topic, stickyBatchSize, rackAware, rack);
         }
 
         @Override

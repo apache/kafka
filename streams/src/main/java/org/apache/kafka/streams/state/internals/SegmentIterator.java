@@ -27,7 +27,7 @@ import java.util.NoSuchElementException;
 /**
  * Iterate over multiple KeyValueSegments
  */
-class SegmentIterator<S extends Segment> implements KeyValueIterator<Bytes, byte[]> {
+public class SegmentIterator<S extends Segment> implements KeyValueIterator<Bytes, byte[]> {
 
     private final Bytes from;
     private final Bytes to;

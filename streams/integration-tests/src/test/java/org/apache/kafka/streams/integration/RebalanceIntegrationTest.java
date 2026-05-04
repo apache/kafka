@@ -20,7 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -35,8 +35,7 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -44,7 +43,6 @@ import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -56,8 +54,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -69,24 +65,24 @@ public class RebalanceIntegrationTest {
     private static final int NUM_BROKERS = 3;
     private static final int MAX_POLL_INTERVAL_MS = 30_000;
 
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
-        NUM_BROKERS,
-        Utils.mkProperties(mkMap(
-            mkEntry("auto.create.topics.enable", "true"),
-            mkEntry("transaction.max.timeout.ms", "" + Integer.MAX_VALUE)
-        ))
-    );
+    public EmbeddedKafkaCluster cluster;
 
-    @BeforeAll
-    public static void startCluster() throws IOException {
-        CLUSTER.start();
+    protected Properties brokerConfig() {
+        final Properties props = new Properties();
+        props.put("auto.create.topics.enable", "true");
+        props.put("transaction.max.timeout.ms", "" + Integer.MAX_VALUE);
+        return props;
     }
 
-    @AfterAll
-    public static void closeCluster() {
-        CLUSTER.stop();
+    public static class WithAssignmentBatchingDisabledTest extends RebalanceIntegrationTest {
+        @Override
+        protected Properties brokerConfig() {
+            final Properties props = new Properties();
+            props.putAll(super.brokerConfig());
+            props.put(GroupCoordinatorConfig.STREAMS_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, "0");
+            return props;
+        }
     }
-
 
     private String applicationId;
     private static final int NUM_TOPIC_PARTITIONS = 2;
@@ -96,12 +92,18 @@ public class RebalanceIntegrationTest {
     private static final AtomicInteger TEST_NUMBER = new AtomicInteger(0);
 
     @BeforeEach
-    public void createTopics() throws Exception {
+    public void setup() throws Exception {
+        cluster = new EmbeddedKafkaCluster(NUM_BROKERS, brokerConfig());
+        cluster.start();
         applicationId = "appId-" + TEST_NUMBER.getAndIncrement();
-        CLUSTER.deleteTopics(MULTI_PARTITION_INPUT_TOPIC, SINGLE_PARTITION_OUTPUT_TOPIC);
+        cluster.createTopics(SINGLE_PARTITION_OUTPUT_TOPIC);
+        cluster.createTopic(MULTI_PARTITION_INPUT_TOPIC, NUM_TOPIC_PARTITIONS, 1);
+    }
 
-        CLUSTER.createTopics(SINGLE_PARTITION_OUTPUT_TOPIC);
-        CLUSTER.createTopic(MULTI_PARTITION_INPUT_TOPIC, NUM_TOPIC_PARTITIONS, 1);
+    @AfterEach
+    public void tearDown() {
+        cluster.stop();
+        cluster = null;
     }
 
     private void checkResultPerKey(final List<KeyValue<Long, Long>> result,
@@ -184,7 +186,7 @@ public class RebalanceIntegrationTest {
 
         final Properties config = StreamsTestUtils.getStreamsConfig(
             applicationId,
-            CLUSTER.bootstrapServers(),
+            cluster.bootstrapServers(),
             Serdes.LongSerde.class.getName(),
             Serdes.LongSerde.class.getName(),
             properties
@@ -198,7 +200,7 @@ public class RebalanceIntegrationTest {
             // StreamThread-1 now has a task with progress, and one task w/o progress
             final List<KeyValue<Long, Long>> expectedUncommittedResultBeforeRebalance = Arrays.asList(KeyValue.pair(100L, -1L), KeyValue.pair(200L, -2L));
             final List<KeyValue<Long, Long>> uncommittedRecordsBeforeRebalance = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                TestUtils.consumerConfig(CLUSTER.bootstrapServers(), LongDeserializer.class, LongDeserializer.class),
+                TestUtils.consumerConfig(cluster.bootstrapServers(), LongDeserializer.class, LongDeserializer.class),
                 SINGLE_PARTITION_OUTPUT_TOPIC,
                 expectedUncommittedResultBeforeRebalance.size()
             );
@@ -211,7 +213,7 @@ public class RebalanceIntegrationTest {
 
             final List<KeyValue<Long, Long>> expectedUncommittedResultAfterRebalance = Arrays.asList(KeyValue.pair(100L, -1L), KeyValue.pair(200L, -2L));
             final List<KeyValue<Long, Long>> uncommittedRecordsAfterRebalance = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                TestUtils.consumerConfig(CLUSTER.bootstrapServers(), LongDeserializer.class, LongDeserializer.class),
+                TestUtils.consumerConfig(cluster.bootstrapServers(), LongDeserializer.class, LongDeserializer.class),
                 SINGLE_PARTITION_OUTPUT_TOPIC,
                 expectedUncommittedResultAfterRebalance.size()
             );

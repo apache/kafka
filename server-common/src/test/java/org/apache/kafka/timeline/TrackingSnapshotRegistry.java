@@ -17,7 +17,7 @@
 
 package org.apache.kafka.timeline;
 
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import java.util.ArrayList;
 import java.util.List;

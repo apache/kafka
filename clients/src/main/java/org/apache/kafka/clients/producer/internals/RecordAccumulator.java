@@ -28,18 +28,19 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.record.AbstractRecords;
-import org.apache.kafka.common.record.CompressionRatioEstimator;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.utils.CopyOnWriteMap;
-import org.apache.kafka.common.utils.ExponentialBackoff;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.record.internal.AbstractRecords;
+import org.apache.kafka.common.record.internal.CompressionRatioEstimator;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.CopyOnWriteMap;
+import org.apache.kafka.common.utils.internals.ExponentialBackoff;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -78,6 +79,8 @@ public class RecordAccumulator {
     private final ExponentialBackoff retryBackoff;
     private final int deliveryTimeoutMs;
     private final long partitionAvailabilityTimeoutMs;  // latency threshold for marking partition temporary unavailable
+    private final boolean partitionerRackAware;
+    private final String rack;
     private final boolean enableAdaptivePartitioning;
     private final BufferPool free;
     private final Time time;
@@ -139,6 +142,8 @@ public class RecordAccumulator {
         this.deliveryTimeoutMs = deliveryTimeoutMs;
         this.enableAdaptivePartitioning = partitionerConfig.enableAdaptivePartitioning;
         this.partitionAvailabilityTimeoutMs = partitionerConfig.partitionAvailabilityTimeoutMs;
+        this.partitionerRackAware = partitionerConfig.rackAware;
+        this.rack = partitionerConfig.rack;
         this.free = bufferPool;
         this.incomplete = new IncompleteBatches();
         this.muted = new HashSet<>();
@@ -282,7 +287,7 @@ public class RecordAccumulator {
                                      long maxTimeToBlock,
                                      long nowMs,
                                      Cluster cluster) throws InterruptedException {
-        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(topic, k -> new TopicInfo(createBuiltInPartitioner(logContext, k, batchSize)));
+        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(topic, k -> new TopicInfo(createBuiltInPartitioner(logContext, k, batchSize, partitionerRackAware, rack)));
 
         // We keep track of the number of appending thread to make sure we do not miss batches in
         // abortIncompleteBatches().
@@ -652,6 +657,7 @@ public class RecordAccumulator {
         // Collect the queue sizes for available partitions to be used in adaptive partitioning.
         int[] queueSizes = null;
         int[] partitionIds = null;
+        String[] partitionLeaderRacks = null;
         if (enableAdaptivePartitioning && batches.size() >= metadataSnapshot.cluster().partitionsForTopic(topic).size()) {
             // We don't do adaptive partitioning until we scheduled at least a batch for all
             // partitions (i.e. we have the corresponding entries in the batches map), we just
@@ -660,6 +666,7 @@ public class RecordAccumulator {
             // won't know about it and won't switch to it.
             queueSizes = new int[batches.size()];
             partitionIds = new int[queueSizes.length];
+            partitionLeaderRacks = new String[queueSizes.length];
         }
 
         int queueSizesIndex = -1;
@@ -674,6 +681,7 @@ public class RecordAccumulator {
                 ++queueSizesIndex;
                 assert queueSizesIndex < queueSizes.length;
                 partitionIds[queueSizesIndex] = part.partition();
+                partitionLeaderRacks[queueSizesIndex] = leader.rack();
             }
 
             Deque<ProducerBatch> deque = entry.getValue();
@@ -740,7 +748,7 @@ public class RecordAccumulator {
         // We've collected the queue sizes for partitions of this topic, now we can calculate
         // load stats.  NOTE: the stats are calculated in place, modifying the
         // queueSizes array.
-        topicInfo.builtInPartitioner.updatePartitionLoadStats(queueSizes, partitionIds, queueSizesIndex + 1);
+        topicInfo.builtInPartitioner.updatePartitionLoadStats(queueSizes, partitionIds, partitionLeaderRacks, queueSizesIndex + 1);
         return nextReadyCheckDelayMs;
     }
 
@@ -1018,23 +1026,48 @@ public class RecordAccumulator {
      */
     private Deque<ProducerBatch> getOrCreateDeque(TopicPartition tp) {
         TopicInfo topicInfo = topicInfoMap.computeIfAbsent(tp.topic(),
-                k -> new TopicInfo(createBuiltInPartitioner(logContext, k, batchSize)));
+                k -> new TopicInfo(createBuiltInPartitioner(logContext, k, batchSize, partitionerRackAware, rack)));
         return topicInfo.batches.computeIfAbsent(tp.partition(), k -> new ArrayDeque<>());
     }
 
-    BuiltInPartitioner createBuiltInPartitioner(LogContext logContext, String topic, int stickyBatchSize) {
-        return new BuiltInPartitioner(logContext, topic, stickyBatchSize);
+    BuiltInPartitioner createBuiltInPartitioner(LogContext logContext, String topic, int stickyBatchSize, boolean rackAware, String rack) {
+        return new BuiltInPartitioner(logContext, topic, stickyBatchSize, rackAware, rack);
     }
 
     /**
-     * Deallocate the record batch
+     * Complete and deallocate the record batch
+     */
+    public void completeAndDeallocateBatch(ProducerBatch batch) {
+        completeBatch(batch);
+        deallocate(batch);
+    }
+
+    /**
+     * Only perform deallocation (and not removal from the incomplete set)
      */
     public void deallocate(ProducerBatch batch) {
-        incomplete.remove(batch);
         // Only deallocate the batch if it is not a split batch because split batch are allocated outside the
         // buffer pool.
-        if (!batch.isSplitBatch())
-            free.deallocate(batch.buffer(), batch.initialCapacity());
+        if (!batch.isSplitBatch()) {
+            if (batch.isBufferDeallocated()) {
+                log.warn("Skipping deallocating a batch that has already been deallocated. Batch is {}, created time is {}", batch, batch.createdMs);
+            } else {
+                batch.markBufferDeallocated();
+                if (batch.isInflight()) {
+                    // Create a fresh ByteBuffer to give to BufferPool to reuse since we can't safely call deallocate with the ProduceBatch's buffer
+                    free.deallocate(ByteBuffer.allocate(batch.initialCapacity()));
+                    throw new IllegalStateException("Attempting to deallocate a batch that is inflight. Batch is " + batch);
+                }
+                free.deallocate(batch.buffer(), batch.initialCapacity());
+            }
+        }
+    }
+
+    /**
+     * Remove from the incomplete list but do not free memory yet
+     */
+    public void completeBatch(ProducerBatch batch) {
+        incomplete.remove(batch);
     }
 
     /**
@@ -1132,7 +1165,14 @@ public class RecordAccumulator {
                 dq.remove(batch);
             }
             batch.abort(reason);
-            deallocate(batch);
+            if (batch.isInflight()) {
+                // KAFKA-19012: if the batch has been sent it might still be in use by the network client so we cannot allow it to be reused yet.
+                // We skip deallocating it now. When the request in network client completes with a response, either Sender.completeBatch() or
+                // Sender.failBatch() will be called with deallocateBatch=true. The buffer associated with the batch will be deallocated then.
+                completeBatch(batch);
+            } else {
+                completeAndDeallocateBatch(batch);
+            }
         }
     }
 
@@ -1152,7 +1192,7 @@ public class RecordAccumulator {
             }
             if (aborted) {
                 batch.abort(reason);
-                deallocate(batch);
+                completeAndDeallocateBatch(batch);
             }
         }
     }
@@ -1179,6 +1219,8 @@ public class RecordAccumulator {
     public static final class PartitionerConfig {
         private final boolean enableAdaptivePartitioning;
         private final long partitionAvailabilityTimeoutMs;
+        private final boolean rackAware;
+        private final String rack;
 
         /**
          * Partitioner config
@@ -1188,14 +1230,22 @@ public class RecordAccumulator {
          * @param partitionAvailabilityTimeoutMs If a broker cannot process produce requests from a partition
          *        for the specified time, the partition is treated by the partitioner as not available.
          *        If the timeout is 0, this logic is disabled.
+         * @param rackAware Whether the built-in partitioner is configured to be rack-aware.
+         * @param rack The producer rack.
          */
-        public PartitionerConfig(boolean enableAdaptivePartitioning, long partitionAvailabilityTimeoutMs) {
+        public PartitionerConfig(boolean enableAdaptivePartitioning, long partitionAvailabilityTimeoutMs, boolean rackAware, String rack) {
             this.enableAdaptivePartitioning = enableAdaptivePartitioning;
             this.partitionAvailabilityTimeoutMs = partitionAvailabilityTimeoutMs;
+            this.rackAware = rackAware;
+            this.rack = rack;
+
+            if (rackAware && Utils.isBlank(rack)) {
+                throw new IllegalArgumentException("client.rack must be provided if partitioner.rack.aware is enabled");
+            }
         }
 
         public PartitionerConfig() {
-            this(false, 0);
+            this(false, 0, false, "");
         }
     }
 

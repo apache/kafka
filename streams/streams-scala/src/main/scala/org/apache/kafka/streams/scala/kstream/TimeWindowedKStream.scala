@@ -35,6 +35,7 @@ import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
  * @param inner The underlying Java abstraction for TimeWindowedKStream
  * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream`
  */
+@deprecated("Use `org.apache.kafka.streams.kstream.TimeWindowedKStream` instead", "4.3.0")
 class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
 
   /**

@@ -23,7 +23,7 @@ import java.util
 import java.util.{Locale, Optional, OptionalInt, Properties, stream}
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import javax.security.auth.login.Configuration
-import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
+import kafka.utils.{Logging, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.AdminClientUnitTestEnv
 import org.apache.kafka.clients.consumer.GroupProtocol
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator
@@ -31,7 +31,8 @@ import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.{Exit, Time}
+import org.apache.kafka.common.utils.internals.Exit
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{DirectoryId, Uuid}
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.{REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion}
@@ -43,6 +44,7 @@ import org.apache.kafka.server.{ClientMetricsManager, ServerSocketFactory}
 import org.apache.kafka.server.common.{MetadataVersion, TransactionVersion}
 import org.apache.kafka.server.config.{ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
+import org.apache.kafka.server.util.ServerTestUtils
 import org.apache.kafka.server.util.timer.SystemTimer
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach, Tag, TestInfo}
@@ -119,15 +121,15 @@ class KRaftQuorumImplementation(
       broker
     } catch {
       case e: Throwable => {
-        if (broker != null) CoreUtils.swallow(broker.shutdown(), log)
-        CoreUtils.swallow(sharedServer.stopForBroker(), log)
+        if (broker != null) Utils.swallow(() => broker.shutdown())
+        Utils.swallow(() => sharedServer.stopForBroker())
         throw e
       }
     }
   }
 
   override def shutdown(): Unit = {
-    CoreUtils.swallow(controllerServer.shutdown(), log)
+    Utils.swallow(() => controllerServer.shutdown())
   }
 }
 
@@ -229,7 +231,7 @@ abstract class QuorumTestHarness extends Logging {
   def shutdownKRaftController(): Unit = {
     // Note that the RaftManager instance is left running; it will be shut down in tearDown()
     val kRaftQuorumImplementation = asKRaft()
-    CoreUtils.swallow(kRaftQuorumImplementation.controllerServer.shutdown(), kRaftQuorumImplementation.log)
+    Utils.swallow(this.logger.underlying, () => kRaftQuorumImplementation.controllerServer.shutdown())
   }
 
   def addFormatterSettings(formatter: Formatter): Unit = {}
@@ -327,8 +329,8 @@ abstract class QuorumTestHarness extends Logging {
       controllerServer.startup()
     } catch {
       case e: Throwable =>
-        if (controllerServer != null) CoreUtils.swallow(controllerServer.shutdown(), this)
-        CoreUtils.swallow(sharedServer.stopForController(), this)
+        if (controllerServer != null) Utils.swallow(this.logger.underlying, () => controllerServer.shutdown())
+        Utils.swallow(this.logger.underlying, () => sharedServer.stopForController())
         throw e
     }
     new KRaftQuorumImplementation(
@@ -349,7 +351,7 @@ abstract class QuorumTestHarness extends Logging {
     }
     Exit.resetExitProcedure()
     Exit.resetHaltProcedure()
-    TestUtils.clearYammerMetrics()
+    ServerTestUtils.clearYammerMetrics()
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     Configuration.setConfiguration(null)
     faultHandler.maybeRethrowFirstException()

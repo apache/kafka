@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.junit.jupiter.api.Test;
 
@@ -38,7 +38,7 @@ public class TaskExecutorTest {
         final TaskExecutor taskExecutor = new TaskExecutor(tasks, taskManager, metadata, new LogContext());
 
         taskExecutor.punctuate();
-        verify(tasks).activeTasks();
+        verify(tasks).activeInitializedTasks();
     }
 
     @Test

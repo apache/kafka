@@ -17,8 +17,8 @@
 
 package org.apache.kafka.server.fault;
 
-import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.common.utils.Exit.Procedure;
+import org.apache.kafka.common.utils.internals.Exit;
+import org.apache.kafka.common.utils.internals.Exit.Procedure;
 
 import org.junit.jupiter.api.Test;
 

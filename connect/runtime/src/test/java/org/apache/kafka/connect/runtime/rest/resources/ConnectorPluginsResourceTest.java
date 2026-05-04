@@ -23,7 +23,7 @@ import org.apache.kafka.common.config.ConfigDef.Recommender;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigValue;
-import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.internals.AppInfoParser;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.converters.LongConverter;
@@ -398,6 +398,22 @@ public class ConnectorPluginsResourceTest {
             ConnectorType.UNKNOWN,
             objectMapper.readValue(serializedUnknown, ConnectorType.class)
         );
+    }
+
+    @Test
+    public void testConnectorPluginsEndpointReturnsLowercaseTypeInJson() throws Exception {
+        // Call the actual endpoint method
+        List<PluginInfo> plugins = connectorPluginsResource.listConnectorPlugins(true);
+
+        // Serialize the response to JSON (simulating what the REST API does)
+        final ObjectMapper objectMapper = new ObjectMapper();
+        String json = objectMapper.writeValueAsString(plugins);
+
+        // Verify the JSON contains lowercase type fields
+        assertTrue(json.contains("\"type\":\"sink\""),
+            "Expected JSON to contain '\"type\":\"sink\"' but got: " + json);
+        assertTrue(json.contains("\"type\":\"source\""),
+            "Expected JSON to contain '\"type\":\"source\"' but got: " + json);
     }
 
     @Test

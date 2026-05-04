@@ -21,13 +21,16 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.server.{ControllerInformation, NodeToControllerQueueItem}
 
 import java.util.Optional
+import java.util.function.Supplier
+import scala.jdk.OptionConverters._
 
 class MockNodeToControllerChannelManager(
   val client: MockClient,
   time: MockTime,
-  controllerNodeProvider: ControllerNodeProvider,
+  controllerNodeProvider: Supplier[ControllerInformation],
   controllerApiVersions: NodeApiVersions = NodeApiVersions.create(),
   val retryTimeoutMs: Int = 60000,
   val requestTimeoutMs: Int = 30000
@@ -44,10 +47,10 @@ class MockNodeToControllerChannelManager(
     request: AbstractRequest.Builder[_ <: AbstractRequest],
     callback: ControllerRequestCompletionHandler
   ): Unit = {
-    unsentQueue.add(NodeToControllerQueueItem(
-      createdTimeMs = time.milliseconds(),
-      request = request,
-      callback = callback
+    unsentQueue.add(new NodeToControllerQueueItem(
+      time.milliseconds(),
+      request,
+      callback
     ))
   }
 
@@ -78,7 +81,7 @@ class MockNodeToControllerChannelManager(
         queueItem.callback.onTimeout()
         unsentIterator.remove()
       } else {
-        controllerNodeProvider.getControllerInfo().node match {
+        controllerNodeProvider.get().node.toScala match {
           case Some(controller) if client.ready(controller, time.milliseconds()) =>
             val clientRequest = client.newClientRequest(
               controller.idString,
@@ -86,7 +89,7 @@ class MockNodeToControllerChannelManager(
               queueItem.createdTimeMs,
               true, // we expect response,
               requestTimeoutMs,
-              handleResponse(queueItem)
+              handleResponse(queueItem) _
             )
             client.send(clientRequest, time.milliseconds())
             unsentIterator.remove()

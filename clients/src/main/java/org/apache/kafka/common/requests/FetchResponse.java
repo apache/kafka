@@ -25,11 +25,10 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.Records;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -140,7 +139,7 @@ public class FetchResponse extends AbstractResponse {
     /**
      * Creates a {@link org.apache.kafka.common.requests.FetchResponse} from the given byte buffer.
      * Unlike {@link org.apache.kafka.common.requests.FetchResponse#of(FetchResponseData)}, this method doesn't convert
-     * null records to {@link org.apache.kafka.common.record.MemoryRecords#EMPTY}.
+     * null records to {@link org.apache.kafka.common.record.internal.MemoryRecords#EMPTY}.
      *
      * <p><strong>This method should only be used in client-side.</strong></p>
      */
@@ -166,7 +165,7 @@ public class FetchResponse extends AbstractResponse {
                              FetchResponseData.PartitionData>> partIterator) {
         // Since the throttleTimeMs and metadata field sizes are constant and fixed, we can
         // use arbitrary values here without affecting the result.
-        FetchResponseData data = toMessage(Errors.NONE, 0, INVALID_SESSION_ID, partIterator, Collections.emptyList());
+        FetchResponseData data = toMessage(Errors.NONE, 0, INVALID_SESSION_ID, partIterator, List.of());
         ObjectSerializationCache cache = new ObjectSerializationCache();
         return 4 + data.size(cache, version);
     }
@@ -228,7 +227,7 @@ public class FetchResponse extends AbstractResponse {
 
     /**
      * Creates a {@link org.apache.kafka.common.requests.FetchResponse} from the given data.
-     * This method converts null records to {@link org.apache.kafka.common.record.MemoryRecords#EMPTY}
+     * This method converts null records to {@link org.apache.kafka.common.record.internal.MemoryRecords#EMPTY}
      * to ensure consistent record representation in the response.
      *
      * <p><strong>This method should only be used in server-side.</strong></p>

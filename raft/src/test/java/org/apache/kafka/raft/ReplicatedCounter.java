@@ -17,7 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -77,7 +77,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
 
     @Override
     public synchronized void handleCommit(BatchReader<Integer> reader) {
-        try {
+        try (reader) {
             int initialCommitted = committed;
             long lastCommittedOffset = -1;
             int lastCommittedEpoch = 0;
@@ -90,7 +90,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                     batch.records(),
                     batch.baseOffset()
                 );
-                for (Integer nextCommitted: batch.records()) {
+                for (Integer nextCommitted : batch.records()) {
                     if (nextCommitted != committed + 1) {
                         throw new AssertionError(
                             String.format(
@@ -132,14 +132,12 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
                     lastOffsetSnapshotted = lastCommittedOffset;
                 }
             }
-        } finally {
-            reader.close();
         }
     }
 
     @Override
     public synchronized void handleLoadSnapshot(SnapshotReader<Integer> reader) {
-        try {
+        try (reader) {
             log.debug("Loading snapshot {}", reader.snapshotId());
             // Since the state machine is only one value, expect only one data record
             boolean foundDataRecord = false;
@@ -176,9 +174,13 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
             lastOffsetSnapshotted = reader.lastContainedLogOffset();
             handleLoadSnapshotCalls += 1;
             log.debug("Finished loading snapshot. Set value: {}", committed);
-        } finally {
-            reader.close();
         }
+    }
+
+    @Override
+    public synchronized void handleLoadBootstrap(SnapshotReader<Integer> reader) {
+        // ReplicatedCounter does not process bootstrap snapshots.
+        reader.close();
     }
 
     @Override

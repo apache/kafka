@@ -28,7 +28,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.PartitionStates;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import org.slf4j.Logger;
 
@@ -667,6 +667,17 @@ public class SubscriptionState {
         return topicPartitionState.endOffsetRequested();
     }
 
+    public synchronized boolean maybeClearPartitionEndOffsetRequested(TopicPartition tp) {
+        TopicPartitionState topicPartitionState = assignedStateOrNull(tp);
+
+        if (topicPartitionState != null && topicPartitionState.endOffsetRequested()) {
+            topicPartitionState.clearEndOffset();
+            return true;
+        } else {
+            return false;
+        }
+    }
+
     synchronized Long partitionLead(TopicPartition tp) {
         TopicPartitionState topicPartitionState = assignedState(tp);
         return topicPartitionState.logStartOffset == null ? null : topicPartitionState.position.offset - topicPartitionState.logStartOffset;
@@ -1035,6 +1046,10 @@ public class SubscriptionState {
 
         public void requestEndOffset() {
             endOffsetRequested = true;
+        }
+
+        public void clearEndOffset() {
+            endOffsetRequested = false;
         }
 
         private void transitionState(FetchState newState, Runnable runIfTransitioned) {

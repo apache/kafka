@@ -30,8 +30,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -1041,6 +1041,12 @@ public class StoreChangelogReader implements ChangelogReader {
 
     @Override
     public void unregister(final Collection<TopicPartition> revokedChangelogs) {
+        unregister(revokedChangelogs, StandbyUpdateListener.SuspendReason.MIGRATED);
+    }
+
+    @Override
+    public void unregister(final Collection<TopicPartition> revokedChangelogs,
+                           final StandbyUpdateListener.SuspendReason reason) {
         // Only changelogs that are initialized have been added to the restore consumer's assignment
         final List<TopicPartition> revokedInitializedChangelogs = new ArrayList<>();
 
@@ -1068,13 +1074,8 @@ public class StoreChangelogReader implements ChangelogReader {
                             // endOffset and storeOffset may be unknown at this point
                             final long storeOffset = storeMetadata.offset() != null ? storeMetadata.offset() : -1;
                             final long endOffset = storeMetadata.endOffset() != null ? storeMetadata.endOffset() : -1;
-                            // Unregistering running standby tasks means the task has been promoted to active.
-                            final StandbyUpdateListener.SuspendReason suspendReason = 
-                                changelogMetadata.stateManager.taskState() == Task.State.RUNNING 
-                                    ? StandbyUpdateListener.SuspendReason.PROMOTED
-                                    : StandbyUpdateListener.SuspendReason.MIGRATED;
                             try {
-                                standbyUpdateListener.onUpdateSuspended(partition, storeName, storeOffset, endOffset, suspendReason);
+                                standbyUpdateListener.onUpdateSuspended(partition, storeName, storeOffset, endOffset, reason);
                             } catch (final Exception e) {
                                 throw new StreamsException("Standby updater listener failed on update suspended", e);
                             }

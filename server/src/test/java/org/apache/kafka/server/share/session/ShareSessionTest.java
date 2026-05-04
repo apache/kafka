@@ -39,7 +39,7 @@ public class ShareSessionTest {
         assertEquals("2 partition(s)", response);
 
         response = ShareSession.partitionsToLogString(partitions, true);
-        assertEquals(String.format("( [%s:foo-0, %s:bar-1] )", uuid1, uuid2), response);
+        assertEquals(String.format("[%s:foo-0, %s:bar-1]", uuid1, uuid2), response);
     }
 
     @Test
@@ -48,6 +48,6 @@ public class ShareSessionTest {
         assertEquals("0 partition(s)", response);
 
         response = ShareSession.partitionsToLogString(List.of(), true);
-        assertEquals("( [] )", response);
+        assertEquals("[]", response);
     }
 }

@@ -19,7 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.util.ShutdownableThread;
 

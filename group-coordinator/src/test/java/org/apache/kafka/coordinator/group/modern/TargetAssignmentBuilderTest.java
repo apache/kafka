@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
@@ -41,7 +42,7 @@ import static org.apache.kafka.coordinator.group.Assertions.assertRecordsEquals;
 import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedRecordsEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -56,6 +57,7 @@ public class TargetAssignmentBuilderTest {
     public static class TargetAssignmentBuilderTestContext {
         private final String groupId;
         private final int groupEpoch;
+        private final long assignmentTimestamp;
         private final PartitionAssignor assignor = mock(PartitionAssignor.class);
         private final Map<String, ConsumerGroupMember> members = new HashMap<>();
         private final Map<String, ConsumerGroupMember> updatedMembers = new HashMap<>();
@@ -67,10 +69,12 @@ public class TargetAssignmentBuilderTest {
 
         public TargetAssignmentBuilderTestContext(
             String groupId,
-            int groupEpoch
+            int groupEpoch,
+            long assignmentTimestamp
         ) {
             this.groupId = groupId;
             this.groupEpoch = groupEpoch;
+            this.assignmentTimestamp = assignmentTimestamp;
         }
 
         public void addGroupMember(
@@ -213,8 +217,8 @@ public class TargetAssignmentBuilderTest {
         }
 
         public TargetAssignmentBuilder.TargetAssignmentResult build() {
-            CoordinatorMetadataImage cooridnatorMetadataImage = new KRaftCoordinatorMetadataImage(metadataImageBuilder.build());
-            TopicIds.TopicResolver topicResolver = new TopicIds.CachedTopicResolver(cooridnatorMetadataImage);
+            CoordinatorMetadataImage coordinatorMetadataImage = new KRaftCoordinatorMetadataImage(metadataImageBuilder.build());
+            TopicIds.TopicResolver topicResolver = new TopicIds.CachedTopicResolver(coordinatorMetadataImage);
             // Prepare expected member specs.
             Map<String, MemberSubscriptionAndAssignmentImpl> memberSubscriptions = new HashMap<>();
 
@@ -252,7 +256,7 @@ public class TargetAssignmentBuilderTest {
             });
 
             // Prepare the expected subscription topic metadata.
-            SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(cooridnatorMetadataImage);
+            SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(coordinatorMetadataImage);
             SubscriptionType subscriptionType = HOMOGENEOUS;
 
             // Prepare the member assignments per topic partition.
@@ -274,12 +278,13 @@ public class TargetAssignmentBuilderTest {
             // Create and populate the assignment builder.
             TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder builder =
                 new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(groupId, groupEpoch, assignor)
+                    .withTime(new MockTime(0, assignmentTimestamp, assignmentTimestamp))
                     .withMembers(members)
                     .withStaticMembers(staticMembers)
                     .withSubscriptionType(subscriptionType)
                     .withTargetAssignment(targetAssignment)
                     .withInvertedTargetAssignment(invertedTargetAssignment)
-                    .withMetadataImage(cooridnatorMetadataImage)
+                    .withMetadataImage(coordinatorMetadataImage)
                     .withResolvedRegularExpressions(resolvedRegularExpressions);
 
             // Add the updated members or delete the deleted members.
@@ -307,13 +312,15 @@ public class TargetAssignmentBuilderTest {
     public void testEmpty() {
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
-            20
+            20,
+            12345L
         );
 
         TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
-        assertEquals(List.of(newConsumerGroupTargetAssignmentEpochRecord(
+        assertEquals(List.of(newConsumerGroupTargetAssignmentMetadataRecord(
             "my-group",
-            20
+            20,
+            12345L
         )), result.records());
         assertEquals(Map.of(), result.targetAssignment());
     }
@@ -322,7 +329,8 @@ public class TargetAssignmentBuilderTest {
     public void testAssignmentHasNotChanged() {
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
-            20
+            20,
+            12345L
         );
 
         Uuid fooTopicId = context.addTopicMetadata("foo", 6);
@@ -350,9 +358,10 @@ public class TargetAssignmentBuilderTest {
 
         TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
 
-        assertEquals(List.of(newConsumerGroupTargetAssignmentEpochRecord(
+        assertEquals(List.of(newConsumerGroupTargetAssignmentMetadataRecord(
             "my-group",
-            20
+            20,
+            12345L
         )), result.records());
 
         Map<String, MemberAssignment> expectedAssignment = new HashMap<>();
@@ -372,7 +381,8 @@ public class TargetAssignmentBuilderTest {
     public void testAssignmentSwapped() {
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
-            20
+            20,
+            12345L
         );
 
         Uuid fooTopicId = context.addTopicMetadata("foo", 6);
@@ -413,9 +423,10 @@ public class TargetAssignmentBuilderTest {
                     ))
                 ),
                 List.of(
-                    newConsumerGroupTargetAssignmentEpochRecord(
+                    newConsumerGroupTargetAssignmentMetadataRecord(
                         "my-group",
-                        20
+                        20,
+                        12345L
                     )
                 )
             ),
@@ -439,7 +450,8 @@ public class TargetAssignmentBuilderTest {
     public void testNewMember() {
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
-            20
+            20,
+            12345L
         );
 
         Uuid fooTopicId = context.addTopicMetadata("foo", 6);
@@ -491,9 +503,10 @@ public class TargetAssignmentBuilderTest {
                     ))
                 ),
                 List.of(
-                    newConsumerGroupTargetAssignmentEpochRecord(
+                    newConsumerGroupTargetAssignmentMetadataRecord(
                         "my-group",
-                        20
+                        20,
+                        12345L
                     )
                 )
             ),
@@ -521,7 +534,8 @@ public class TargetAssignmentBuilderTest {
     public void testUpdateMember() {
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
-            20
+            20,
+            12345L
         );
 
         Uuid fooTopicId = context.addTopicMetadata("foo", 6);
@@ -582,9 +596,10 @@ public class TargetAssignmentBuilderTest {
                     ))
                 ),
                 List.of(
-                    newConsumerGroupTargetAssignmentEpochRecord(
+                    newConsumerGroupTargetAssignmentMetadataRecord(
                         "my-group",
-                        20
+                        20,
+                        12345L
                     )
                 )
             ),
@@ -612,7 +627,8 @@ public class TargetAssignmentBuilderTest {
     public void testPartialAssignmentUpdate() {
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
-            20
+            20,
+            12345L
         );
 
         Uuid fooTopicId = context.addTopicMetadata("foo", 6);
@@ -664,9 +680,10 @@ public class TargetAssignmentBuilderTest {
                     ))
                 ),
                 List.of(
-                    newConsumerGroupTargetAssignmentEpochRecord(
+                    newConsumerGroupTargetAssignmentMetadataRecord(
                         "my-group",
-                        20
+                        20,
+                        12345L
                     )
                 )
             ),
@@ -694,7 +711,8 @@ public class TargetAssignmentBuilderTest {
     public void testDeleteMember() {
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
-            20
+            20,
+            12345L
         );
 
         Uuid fooTopicId = context.addTopicMetadata("foo", 6);
@@ -742,9 +760,10 @@ public class TargetAssignmentBuilderTest {
                     ))
                 ),
                 List.of(
-                    newConsumerGroupTargetAssignmentEpochRecord(
+                    newConsumerGroupTargetAssignmentMetadataRecord(
                         "my-group",
-                        20
+                        20,
+                        12345L
                     )
                 )
             ),
@@ -768,7 +787,8 @@ public class TargetAssignmentBuilderTest {
     public void testReplaceStaticMember() {
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
-            20
+            20,
+            12345L
         );
 
         Uuid fooTopicId = context.addTopicMetadata("foo", 6);
@@ -818,9 +838,10 @@ public class TargetAssignmentBuilderTest {
                     mkTopicAssignment(fooTopicId, 5, 6),
                     mkTopicAssignment(barTopicId, 5, 6)
                 )),
-                newConsumerGroupTargetAssignmentEpochRecord(
+                newConsumerGroupTargetAssignmentMetadataRecord(
                     "my-group",
-                    20
+                    20,
+                    12345L
                 )
             ),
             result.records()
@@ -848,7 +869,8 @@ public class TargetAssignmentBuilderTest {
     public void testRegularExpressions() {
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
-            20
+            20,
+            12345L
         );
 
         Uuid fooTopicId = context.addTopicMetadata("foo", 6);
@@ -898,9 +920,10 @@ public class TargetAssignmentBuilderTest {
                     ))
                 ),
                 List.of(
-                    newConsumerGroupTargetAssignmentEpochRecord(
+                    newConsumerGroupTargetAssignmentMetadataRecord(
                         "my-group",
-                        20
+                        20,
+                        12345L
                     )
                 )
             ),

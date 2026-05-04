@@ -33,7 +33,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer.Eviction;
 import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
@@ -47,6 +47,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Random;
@@ -305,13 +306,13 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         context.setRecordContext(recordContext);
         buffer.put(1L, new Record<>("A", new Change<>("new-value", "old-value"), 0L), recordContext);
         buffer.put(1L, new Record<>("B", new Change<>("new-value", null), 0L), recordContext);
-        assertThat(buffer.priorValueForBuffered("A"), is(Maybe.defined(ValueAndTimestamp.make("old-value", -1))));
+        assertThat(buffer.priorValueForBuffered("A"), is(Maybe.defined(ValueTimestampHeaders.make("old-value", -1, new RecordHeaders()))));
         assertThat(buffer.priorValueForBuffered("B"), is(Maybe.defined(null)));
     }
 
     @ParameterizedTest
     @MethodSource("parameters")
-    public void shouldFlush(final String testName, final Function<String, B> bufferSupplier) {
+    public void shouldCommit(final String testName, final Function<String, B> bufferSupplier) {
         setup(testName, bufferSupplier);
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext<?, ?> context = makeContext();
@@ -323,8 +324,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         // replace "deleteme" with a tombstone
         buffer.evictWhile(() -> buffer.minTimestamp() < 1, kv -> { });
 
-        // flush everything to the changelog
-        buffer.flush();
+        // commit everything to the changelog
+        buffer.commit(Map.of());
 
         // the buffer should serialize the buffer time and the value as byte[],
         // which we can't compare for equality using ProducerRecord.
@@ -474,7 +475,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         assertThat(buffer.priorValueForBuffered("todelete"), is(Maybe.undefined()));
         assertThat(buffer.priorValueForBuffered("asdf"), is(Maybe.defined(null)));
-        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueAndTimestamp.make("previous", -1))));
+        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueTimestampHeaders.make("previous", -1, new RecordHeaders()))));
 
         // flush the buffer into a list in buffer order so we can make assertions about the contents.
 
@@ -597,7 +598,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         assertThat(buffer.priorValueForBuffered("todelete"), is(Maybe.undefined()));
         assertThat(buffer.priorValueForBuffered("asdf"), is(Maybe.defined(null)));
-        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueAndTimestamp.make("previous", -1))));
+        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueTimestampHeaders.make("previous", -1, new RecordHeaders()))));
 
         // flush the buffer into a list in buffer order so we can make assertions about the contents.
 
@@ -721,7 +722,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         assertThat(buffer.priorValueForBuffered("todelete"), is(Maybe.undefined()));
         assertThat(buffer.priorValueForBuffered("asdf"), is(Maybe.defined(null)));
-        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueAndTimestamp.make("previous", -1))));
+        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueTimestampHeaders.make("previous", -1, new RecordHeaders()))));
 
         // flush the buffer into a list in buffer order so we can make assertions about the contents.
 
@@ -847,7 +848,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         assertThat(buffer.priorValueForBuffered("todelete"), is(Maybe.undefined()));
         assertThat(buffer.priorValueForBuffered("asdf"), is(Maybe.defined(null)));
-        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueAndTimestamp.make("previous", -1))));
+        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueTimestampHeaders.make("previous", -1, new RecordHeaders()))));
 
         // flush the buffer into a list in buffer order so we can make assertions about the contents.
 
@@ -970,7 +971,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         assertThat(buffer.priorValueForBuffered("todelete"), is(Maybe.undefined()));
         assertThat(buffer.priorValueForBuffered("asdf"), is(Maybe.defined(null)));
-        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueAndTimestamp.make("previous", -1))));
+        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueTimestampHeaders.make("previous", -1, new RecordHeaders()))));
 
         // flush the buffer into a list in buffer order so we can make assertions about the contents.
 

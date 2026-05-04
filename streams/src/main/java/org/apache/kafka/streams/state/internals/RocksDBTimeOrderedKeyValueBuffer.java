@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -31,7 +32,7 @@ import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -58,7 +59,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
     private final boolean loggingEnabled;
     private int partition;
     private String changelogTopic;
-    private InternalProcessorContext<?, ?> iternalContext;
+    private InternalProcessorContext<?, ?> internalContext;
     private boolean minValid;
 
     public static class Builder<K, V> implements StoreBuilder<TimeOrderedKeyValueBuffer<K, V, V>> {
@@ -187,7 +188,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
     @Override
     public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         store.init(stateStoreContext, root);
-        iternalContext = ProcessorContextUtils.asInternalProcessorContext(stateStoreContext);
+        internalContext = ProcessorContextUtils.asInternalProcessorContext(stateStoreContext);
         partition = stateStoreContext.taskId().partition();
         if (loggingEnabled) {
             changelogTopic = ProcessorContextUtils.changelogFor(stateStoreContext, name(), Boolean.TRUE);
@@ -195,8 +196,8 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
     }
 
     @Override
-    public void flush() {
-        store.flush();
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        store.commit(changelogOffsets);
     }
 
     @Override
@@ -230,6 +231,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
 
                     final BufferValue bufferValue = BufferValue.deserialize(ByteBuffer.wrap(keyValue.value));
                     final K key = keySerde.deserializer().deserialize(topic,
+                        internalContext.headers(),
                         PrefixedWindowKeySchemas.TimeFirstWindowKeySchema.extractStoreKeyBytes(keyValue.key.get()));
 
                     if (bufferValue.context().timestamp() < minTimestamp && minValid) {
@@ -241,7 +243,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
                     minTimestamp = bufferValue.context().timestamp();
                     minValid = true;
 
-                    final V value = valueSerde.deserializer().deserialize(topic, bufferValue.newValue());
+                    final V value = valueSerde.deserializer().deserialize(topic, internalContext.headers(), bufferValue.newValue());
 
                     callback.accept(new Eviction<>(key, value, bufferValue.context()));
 
@@ -265,7 +267,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
 
 
     @Override
-    public Maybe<ValueAndTimestamp<V>> priorValueForBuffered(final K key) {
+    public Maybe<ValueTimestampHeaders<V>> priorValueForBuffered(final K key) {
         return Maybe.undefined();
     }
 
@@ -279,10 +281,10 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
         }
         maybeUpdateSeqnumForDups();
         final Bytes serializedKey = Bytes.wrap(
-            PrefixedWindowKeySchemas.TimeFirstWindowKeySchema.toStoreKeyBinary(keySerde.serializer().serialize(topic, record.key()),
+            PrefixedWindowKeySchemas.TimeFirstWindowKeySchema.toStoreKeyBinary(keySerde.serializer().serialize(topic, record.headers(), record.key()),
                 record.timestamp(),
                 seqnum).get());
-        final byte[] valueBytes = valueSerde.serializer().serialize(topic, record.value());
+        final byte[] valueBytes = valueSerde.serializer().serialize(topic, record.headers(), record.value());
         final BufferValue buffered = new BufferValue(null, null, valueBytes, recordContext);
         store.put(serializedKey, buffered.serialize(0).array());
 
@@ -330,7 +332,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
         final ByteBuffer buffer = value.serialize(sizeOfBufferTime);
         buffer.putLong(bufferKey.time());
         final byte[] array = buffer.array();
-        ((RecordCollector.Supplier) iternalContext).recordCollector().send(
+        ((RecordCollector.Supplier) internalContext).recordCollector().send(
             changelogTopic,
             key,
             array,
@@ -344,7 +346,7 @@ public class RocksDBTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyVal
     }
 
     private void logTombstone(final Bytes key) {
-        ((RecordCollector.Supplier) iternalContext).recordCollector().send(
+        ((RecordCollector.Supplier) internalContext).recordCollector().send(
             changelogTopic,
             key,
             null,

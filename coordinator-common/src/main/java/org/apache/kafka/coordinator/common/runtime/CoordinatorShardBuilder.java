@@ -17,8 +17,8 @@
 package org.apache.kafka.coordinator.common.runtime;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 
@@ -72,7 +72,7 @@ public interface CoordinatorShardBuilder<S extends CoordinatorShard<U>, U> {
      * @return The builder.
      */
     CoordinatorShardBuilder<S, U> withTimer(
-        CoordinatorTimer<Void, U> timer
+        CoordinatorTimer<U> timer
     );
 
     /**

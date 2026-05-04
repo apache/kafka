@@ -21,13 +21,11 @@ import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.server.AutoTopicCreationManager;
 import kafka.server.ClientRequestQuotaManager;
-import kafka.server.FetchManager;
 import kafka.server.ForwardingManager;
 import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
-import kafka.server.ReplicationQuotaManager;
 import kafka.server.builders.KafkaApisBuilder;
 import kafka.server.share.SharePartitionManager;
 
@@ -59,12 +57,14 @@ import org.apache.kafka.network.metrics.RequestChannelMetrics;
 import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.ClientMetricsManager;
+import org.apache.kafka.server.FetchManager;
 import org.apache.kafka.server.SimpleApiVersionManager;
 import org.apache.kafka.server.common.FinalizedFeatures;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.quota.ClientQuotaManager;
 import org.apache.kafka.server.quota.ControllerMutationQuotaManager;
+import org.apache.kafka.server.quota.ReplicationQuotaManager;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import org.mockito.Mockito;
@@ -138,7 +138,9 @@ public class KRaftMetadataRequestBenchmark {
     }
 
     private void initializeMetadataCache() {
-        MetadataDelta buildupMetadataDelta = new MetadataDelta(MetadataImage.EMPTY);
+        MetadataDelta buildupMetadataDelta = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
         IntStream.range(0, 5).forEach(brokerId -> {
             RegisterBrokerRecord.BrokerEndpointCollection endpoints = new RegisterBrokerRecord.BrokerEndpointCollection();
             endpoints.addAll(endpoints(brokerId));

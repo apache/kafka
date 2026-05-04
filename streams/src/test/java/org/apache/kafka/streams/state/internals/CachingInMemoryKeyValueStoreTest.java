@@ -22,7 +22,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -48,6 +48,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -84,7 +85,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         final String storeName = "store";
         underlyingStore = new InMemoryKeyValueStore(storeName);
         cacheFlushListener = new CacheFlushListenerStub<>(new StringDeserializer(), new StringDeserializer());
-        store = new CachingKeyValueStore(underlyingStore, false);
+        store = new CachingKeyValueStore(underlyingStore, CachingKeyValueStore.CacheType.KEY_VALUE_STORE);
         store.setFlushListener(cacheFlushListener, false);
         cache = new ThreadCache(new LogContext("testCache "), maxCacheSizeBytes, new MockStreamsMetrics(new Metrics()));
         context = new InternalMockProcessorContext<>(null, null, null, null, cache);
@@ -109,7 +110,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     @Test
     public void shouldDelegateInit() {
         final KeyValueStore<Bytes, byte[]> inner = mock(InMemoryKeyValueStore.class);
-        final CachingKeyValueStore outer = new CachingKeyValueStore(inner, false);
+        final CachingKeyValueStore outer = new CachingKeyValueStore(inner, CachingKeyValueStore.CacheType.KEY_VALUE_STORE);
         when(inner.name()).thenReturn("store");
         outer.init(context, outer);
         verify(inner).init(context, outer);
@@ -124,7 +125,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     @Test
     public void shouldAvoidFlushingDeletionsWithoutDirtyKeys() {
         final int added = addItemsToCache();
-        // all dirty entries should have been flushed
+        // all dirty entries should have been committed
         assertEquals(added, underlyingStore.approximateNumEntries());
         assertEquals(added, cacheFlushListener.forwarded.size());
 
@@ -133,7 +134,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         assertEquals(added, cacheFlushListener.forwarded.size());
 
         store.put(bytesKey("key"), null);
-        store.flush();
+        store.commit(Map.of());
         assertEquals(added, underlyingStore.approximateNumEntries());
         assertEquals(added, cacheFlushListener.forwarded.size());
     }
@@ -178,7 +179,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     private void setUpCloseTests() {
         underlyingStore = mock(KeyValueStore.class);
         when(underlyingStore.name()).thenReturn("store-name");
-        store = new CachingKeyValueStore(underlyingStore, false);
+        store = new CachingKeyValueStore(underlyingStore, CachingKeyValueStore.CacheType.TIMESTAMPED_KEY_VALUE_STORE);
         cache = mock(ThreadCache.class);
         context = new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, new RecordHeaders()));
@@ -225,7 +226,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         );
         assertEquals(Position.emptyPosition(), underlyingStore.getPosition());
 
-        store.flush();
+        store.commit(Map.of());
 
         assertEquals(
             Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
@@ -263,7 +264,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     @Test
     public void shouldForwardDirtyItemsWhenFlushCalled() {
         store.put(bytesKey("1"), bytesValue("a"));
-        store.flush();
+        store.commit(Map.of());
         assertEquals("a", cacheFlushListener.forwarded.get("1").newValue);
         assertNull(cacheFlushListener.forwarded.get("1").oldValue);
     }
@@ -272,23 +273,23 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     public void shouldForwardOldValuesWhenEnabled() {
         store.setFlushListener(cacheFlushListener, true);
         store.put(bytesKey("1"), bytesValue("a"));
-        store.flush();
+        store.commit(Map.of());
         assertEquals("a", cacheFlushListener.forwarded.get("1").newValue);
         assertNull(cacheFlushListener.forwarded.get("1").oldValue);
         store.put(bytesKey("1"), bytesValue("b"));
         store.put(bytesKey("1"), bytesValue("c"));
-        store.flush();
+        store.commit(Map.of());
         assertEquals("c", cacheFlushListener.forwarded.get("1").newValue);
         assertEquals("a", cacheFlushListener.forwarded.get("1").oldValue);
         store.put(bytesKey("1"), null);
-        store.flush();
+        store.commit(Map.of());
         assertNull(cacheFlushListener.forwarded.get("1").newValue);
         assertEquals("c", cacheFlushListener.forwarded.get("1").oldValue);
         cacheFlushListener.forwarded.clear();
         store.put(bytesKey("1"), bytesValue("a"));
         store.put(bytesKey("1"), bytesValue("b"));
         store.put(bytesKey("1"), null);
-        store.flush();
+        store.commit(Map.of());
         assertNull(cacheFlushListener.forwarded.get("1"));
         cacheFlushListener.forwarded.clear();
     }
@@ -296,22 +297,22 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     @Test
     public void shouldNotForwardOldValuesWhenDisabled() {
         store.put(bytesKey("1"), bytesValue("a"));
-        store.flush();
+        store.commit(Map.of());
         assertEquals("a", cacheFlushListener.forwarded.get("1").newValue);
         assertNull(cacheFlushListener.forwarded.get("1").oldValue);
         store.put(bytesKey("1"), bytesValue("b"));
-        store.flush();
+        store.commit(Map.of());
         assertEquals("b", cacheFlushListener.forwarded.get("1").newValue);
         assertNull(cacheFlushListener.forwarded.get("1").oldValue);
         store.put(bytesKey("1"), null);
-        store.flush();
+        store.commit(Map.of());
         assertNull(cacheFlushListener.forwarded.get("1").newValue);
         assertNull(cacheFlushListener.forwarded.get("1").oldValue);
         cacheFlushListener.forwarded.clear();
         store.put(bytesKey("1"), bytesValue("a"));
         store.put(bytesKey("1"), bytesValue("b"));
         store.put(bytesKey("1"), null);
-        store.flush();
+        store.commit(Map.of());
         assertNull(cacheFlushListener.forwarded.get("1"));
         cacheFlushListener.forwarded.clear();
     }
@@ -477,7 +478,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     @Test
     public void shouldNotShowItemsDeletedFromCacheButFlushedToStoreBeforeDelete() {
         store.put(bytesKey("a"), bytesValue("a"));
-        store.flush();
+        store.commit(Map.of());
         store.delete(bytesKey("a"));
         assertNull(store.get(bytesKey("a")));
         try (final KeyValueIterator<Bytes, byte[]> iterator = store.range(bytesKey("a"), bytesKey("b"))) {

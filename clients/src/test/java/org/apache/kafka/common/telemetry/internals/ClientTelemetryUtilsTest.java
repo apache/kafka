@@ -18,7 +18,7 @@ package org.apache.kafka.common.telemetry.internals;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.Test;

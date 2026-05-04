@@ -18,8 +18,8 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.metadata.placement.UsableBroker;
 
 import org.slf4j.Logger;
@@ -328,21 +328,24 @@ public class BrokerHeartbeatManager {
     }
 
     Iterator<UsableBroker> usableBrokers(
-        Function<Integer, Optional<String>> idToRack
+        Function<Integer, Optional<String>> idToRack,
+        Function<Integer, Boolean> hasUncordonedDirs
     ) {
-        return new UsableBrokerIterator(brokers.values().iterator(),
-            idToRack);
+        return new UsableBrokerIterator(brokers.values().iterator(), idToRack, hasUncordonedDirs);
     }
 
     static class UsableBrokerIterator implements Iterator<UsableBroker> {
         private final Iterator<BrokerHeartbeatState> iterator;
         private final Function<Integer, Optional<String>> idToRack;
+        private final Function<Integer, Boolean> hasUncordonedDirs;
         private UsableBroker next;
 
         UsableBrokerIterator(Iterator<BrokerHeartbeatState> iterator,
-                             Function<Integer, Optional<String>> idToRack) {
+                             Function<Integer, Optional<String>> idToRack,
+                             Function<Integer, Boolean> hasUncordonedDirs) {
             this.iterator = iterator;
             this.idToRack = idToRack;
+            this.hasUncordonedDirs = hasUncordonedDirs;
             this.next = null;
         }
 
@@ -357,7 +360,7 @@ public class BrokerHeartbeatManager {
                     return false;
                 }
                 result = iterator.next();
-            } while (result.shuttingDown());
+            } while (result.shuttingDown() || !hasUncordonedDirs.apply(result.id()));
             Optional<String> rack = idToRack.apply(result.id());
             next = new UsableBroker(result.id(), rack, result.fenced());
             return true;

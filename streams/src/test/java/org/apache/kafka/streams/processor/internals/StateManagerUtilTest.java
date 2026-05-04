@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateStore;
@@ -110,7 +110,7 @@ public class StateManagerUtilTest {
             topology, stateManager, stateDirectory, processorContext);
 
         inOrder.verify(stateManager).registerStateStores(stateStores, processorContext);
-        inOrder.verify(stateManager).initializeStoreOffsetsFromCheckpoint(true);
+        inOrder.verify(stateManager).initializeStoreOffsets(true);
         verifyNoMoreInteractions(stateManager);
     }
 
@@ -171,6 +171,7 @@ public class StateManagerUtilTest {
             "logPrefix:", false, true, stateManager, stateDirectory, TaskType.ACTIVE);
 
         inOrder.verify(stateManager).close();
+        inOrder.verify(stateDirectory).removeTaskOffsets(taskId);
         inOrder.verify(stateDirectory).unlock(taskId);
         verifyNoMoreInteractions(stateManager, stateDirectory);
     }
@@ -211,6 +212,7 @@ public class StateManagerUtilTest {
         }
 
         inOrder.verify(stateManager).close();
+        inOrder.verify(stateDirectory).removeTaskOffsets(taskId);
         inOrder.verify(stateDirectory).unlock(taskId);
         verifyNoMoreInteractions(stateManager, stateDirectory);
     }

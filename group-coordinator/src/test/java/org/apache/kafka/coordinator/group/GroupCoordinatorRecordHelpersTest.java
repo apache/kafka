@@ -19,9 +19,9 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
@@ -69,6 +69,7 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.coordinator.group.Assertions.assertRecordEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkOrderedAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkOrderedTopicAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
@@ -79,12 +80,13 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentMetadataTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupEpochRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord;
+import static org.apache.kafka.coordinator.group.Utils.toAssignmentWithEpochs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -306,31 +308,33 @@ public class GroupCoordinatorRecordHelpersTest {
     }
 
     @Test
-    public void testNewConsumerGroupTargetAssignmentEpochRecord() {
+    public void testNewConsumerGroupTargetAssignmentMetadataRecord() {
         CoordinatorRecord expectedRecord = CoordinatorRecord.record(
             new ConsumerGroupTargetAssignmentMetadataKey()
                 .setGroupId("group-id"),
             new ApiMessageAndVersion(
                 new ConsumerGroupTargetAssignmentMetadataValue()
-                    .setAssignmentEpoch(10),
+                    .setAssignmentEpoch(10)
+                    .setAssignmentTimestamp(12345L),
                 (short) 0
             )
         );
 
-        assertEquals(expectedRecord, newConsumerGroupTargetAssignmentEpochRecord(
+        assertEquals(expectedRecord, newConsumerGroupTargetAssignmentMetadataRecord(
             "group-id",
-            10
+            10,
+            12345L
         ));
     }
 
     @Test
-    public void testNewConsumerGroupTargetAssignmentEpochTombstoneRecord() {
+    public void testNewConsumerGroupTargetAssignmentMetadataTombstoneRecord() {
         CoordinatorRecord expectedRecord = CoordinatorRecord.tombstone(
             new ConsumerGroupTargetAssignmentMetadataKey()
                 .setGroupId("group-id")
         );
 
-        assertEquals(expectedRecord, newConsumerGroupTargetAssignmentEpochTombstoneRecord(
+        assertEquals(expectedRecord, newConsumerGroupTargetAssignmentMetadataTombstoneRecord(
             "group-id"
         ));
     }
@@ -362,29 +366,33 @@ public class GroupCoordinatorRecordHelpersTest {
                     .setAssignedPartitions(Arrays.asList(
                         new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                             .setTopicId(topicId1)
-                            .setPartitions(Arrays.asList(11, 12, 13)),
+                            .setPartitions(Arrays.asList(11, 12, 13))
+                            .setAssignmentEpochs(Arrays.asList(22, 22, 22)),
                         new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                             .setTopicId(topicId2)
-                            .setPartitions(Arrays.asList(21, 22, 23))))
+                            .setPartitions(Arrays.asList(21, 22, 23))
+                            .setAssignmentEpochs(Arrays.asList(22, 22, 22))))
                     .setPartitionsPendingRevocation(Arrays.asList(
                         new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                             .setTopicId(topicId1)
-                            .setPartitions(Arrays.asList(14, 15, 16)),
+                            .setPartitions(Arrays.asList(14, 15, 16))
+                            .setAssignmentEpochs(Arrays.asList(22, 22, 22)),
                         new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                             .setTopicId(topicId2)
-                            .setPartitions(Arrays.asList(24, 25, 26)))),
+                            .setPartitions(Arrays.asList(24, 25, 26))
+                            .setAssignmentEpochs(Arrays.asList(22, 22, 22)))),
                 (short) 0
             )
         );
 
-        assertEquals(expectedRecord, newConsumerGroupCurrentAssignmentRecord(
+        assertRecordEquals(expectedRecord, newConsumerGroupCurrentAssignmentRecord(
             "group-id",
             new ConsumerGroupMember.Builder("member-id")
                 .setState(MemberState.UNREVOKED_PARTITIONS)
                 .setMemberEpoch(22)
                 .setPreviousMemberEpoch(21)
-                .setAssignedPartitions(assigned)
-                .setPartitionsPendingRevocation(revoking)
+                .setAssignedPartitions(toAssignmentWithEpochs(assigned, 22))
+                .setPartitionsPendingRevocation(toAssignmentWithEpochs(revoking, 22))
                 .build()
         ));
     }

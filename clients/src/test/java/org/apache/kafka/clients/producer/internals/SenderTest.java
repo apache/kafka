@@ -63,12 +63,12 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionRatioEstimator;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MutableRecordBatch;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.CompressionRatioEstimator;
+import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MutableRecordBatch;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AddPartitionsToTxnResponse;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
@@ -84,10 +84,10 @@ import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.TransactionResult;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.internals.LogContext;
 import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestUtils;
@@ -126,6 +126,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -550,7 +551,7 @@ public class SenderTest {
         try (Metrics m = new Metrics()) {
             // Create a new record accumulator with non-0 partitionAvailabilityTimeoutMs
             // otherwise it wouldn't update the stats.
-            RecordAccumulator.PartitionerConfig config = new RecordAccumulator.PartitionerConfig(false, 42);
+            RecordAccumulator.PartitionerConfig config = new RecordAccumulator.PartitionerConfig(false, 42, false, "");
             long totalSize = 1024 * 1024;
             accumulator = new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
                 DELIVERY_TIMEOUT_MS, config, m, "producer-metrics", time, null,
@@ -2183,7 +2184,10 @@ public class SenderTest {
     public void testCancelInFlightRequestAfterFatalError() throws Exception {
         final long producerId = 343434L;
         TransactionManager transactionManager = createTransactionManager();
-        setupWithTransactionState(transactionManager);
+        long totalSize = 1024 * 1024;
+        String metricGrpName = "producer-custom-metrics";
+        MatchingBufferPool pool = new MatchingBufferPool(totalSize, batchSize, metrics, time, metricGrpName);
+        setupWithTransactionState(transactionManager, false, pool);
 
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -2195,6 +2199,8 @@ public class SenderTest {
         Future<RecordMetadata> future2 = appendToAccumulator(tp1);
         sender.runOnce();
 
+        assertFalse(pool.allMatch());
+
         client.respond(
             body -> body instanceof ProduceRequest && RequestTestUtils.hasIdempotentRecords((ProduceRequest) body),
             produceResponse(tp0, -1, Errors.CLUSTER_AUTHORIZATION_FAILED, 0));
@@ -2205,12 +2211,14 @@ public class SenderTest {
 
         sender.runOnce();
         assertFutureFailure(future2, ClusterAuthorizationException.class);
+        assertFalse(pool.allMatch(), "Batch should not be deallocated before the response is received");
 
         // Should be fine if the second response eventually returns
         client.respond(
             body -> body instanceof ProduceRequest && RequestTestUtils.hasIdempotentRecords((ProduceRequest) body),
             produceResponse(tp1, 0, Errors.NONE, 0));
         sender.runOnce();
+        assertTrue(pool.allMatch(), "The batch should have been de-allocated");
     }
 
     @Test
@@ -2436,12 +2444,15 @@ public class SenderTest {
             assertEquals(ApiKeys.PRODUCE, client.requests().peek().requestBuilder().apiKey());
             Node node = new Node(Integer.parseInt(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
+            ProducerBatch inflightBatch = sender.inFlightBatches(tpId.topicPartition()).get(0);
+            assertTrue(inflightBatch.isInflight(), "Batch should be marked inflight after being sent");
             assertTrue(client.isReady(node, time.milliseconds()), "Client ready status should be true");
 
             Map<TopicIdPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<>();
             responseMap.put(tpId, new ProduceResponse.PartitionResponse(Errors.MESSAGE_TOO_LARGE));
             client.respond(new ProduceResponse(responseMap));
             sender.runOnce(); // split and reenqueue
+            assertFalse(inflightBatch.isInflight(), "Batch should be marked as not inflight after being split and re-enqueued");
             assertEquals(2, txnManager.sequenceNumber(tpId.topicPartition()), "The next sequence should be 2");
             // The compression ratio should have been improved once.
             assertEquals(CompressionType.GZIP.rate - CompressionRatioEstimator.COMPRESSION_RATIO_IMPROVING_STEP,
@@ -2499,14 +2510,16 @@ public class SenderTest {
         sender.runOnce();  // send request
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertFalse(sender.inFlightBatches(tp0).get(0).isBufferDeallocated(), "Buffer not deallocated yet");
+        ProducerBatch inflightBatch = sender.inFlightBatches(tp0).get(0);
 
         time.sleep(REQUEST_TIMEOUT);
         assertFalse(pool.allMatch());
 
-        sender.runOnce();  // expire the batch
+        sender.runOnce();  // times out the request
         assertTrue(request1.isDone());
+        assertTrue(inflightBatch.isBufferDeallocated(), "Buffer should be deallocated after request timeout");
         assertTrue(pool.allMatch(), "The batch should have been de-allocated");
-        assertTrue(pool.allMatch());
 
         sender.runOnce();
         assertTrue(pool.allMatch(), "The batch should have been de-allocated");
@@ -3588,6 +3601,38 @@ public class SenderTest {
             assertTrue(client.hasInFlightRequests());
         } finally {
             m.close();
+        }
+    }
+
+    @Test
+    public void testNoBufferReuseWhenBatchExpires() throws Exception {
+        long totalSize = 1024 * 1024;
+        try (Metrics m = new Metrics()) {
+            BufferPool pool = new BufferPool(totalSize, batchSize, m, time, "producer-internal-metrics");
+
+            // Allocate and store a poolable buffer, then return it to the pool so the Sender can pick it up
+            ByteBuffer buffer = pool.allocate(batchSize, 0);
+            pool.deallocate(buffer);
+
+            setupWithTransactionState(null, false, pool);
+            appendToAccumulator(tp0, 0L, "key", "value");
+            sender.runOnce();  // connect
+            sender.runOnce();  // send produce request
+
+            assertEquals(1, client.inFlightRequestCount());
+            assertEquals(1, sender.inFlightBatches(tp0).size());
+
+            ProducerBatch batch = sender.inFlightBatches(tp0).get(0);
+            // Validate the backing array of the buffer is the same as the pooled one from the start
+            assertSame(buffer.array(), batch.records().buffer().array(), "Sender should have allocated the same buffer we created");
+
+            time.sleep(DELIVERY_TIMEOUT_MS + 100);
+            sender.runOnce();
+
+            ByteBuffer newBuffer = pool.allocate(batchSize, 0);
+
+            // TEST buffer should not be reused
+            assertNotSame(buffer.array(), newBuffer.array(), "Buffer should not be reused");
         }
     }
 

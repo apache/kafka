@@ -34,7 +34,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -45,6 +45,7 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.quota.QuotaType;
@@ -101,12 +102,14 @@ import static org.apache.kafka.clients.producer.ProducerConfig.COMPRESSION_TYPE_
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.LINGER_MS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -360,7 +363,14 @@ public class PlaintextConsumerTest {
         ));
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testAsyncConsumerGroupConsumption() throws Exception {
         testGroupConsumption(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT)
@@ -375,6 +385,69 @@ public class PlaintextConsumerTest {
             sendRecords(producer, TP, 10, startingTimestamp);
             consumer.subscribe(List.of(TOPIC));
             consumeAndVerifyRecords(consumer, TP, 1, 0, 0, startingTimestamp);
+        }
+    }
+
+    @ClusterTest
+    public void testClassicConsumerGroupConsumptionWithTwoMembers() throws InterruptedException {
+        testGroupConsumptionWithTwoMembers(Map.of(
+            GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT)
+        ));
+    }
+
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
+    public void testAsyncConsumerGroupConsumptionWithTwoMembers() throws InterruptedException {
+        testGroupConsumptionWithTwoMembers(Map.of(
+            GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT)
+        ));
+    }
+
+    private void testGroupConsumptionWithTwoMembers(Map<String, Object> consumerConfig) throws InterruptedException {
+        var fooTopic = "foo";
+        var foo0 = new TopicPartition(fooTopic, 0);
+        var foo1 = new TopicPartition(fooTopic, 1);
+        cluster.createTopic(fooTopic, 2, (short) BROKER_COUNT);
+
+        consumerConfig = new HashMap<>(consumerConfig);
+        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "group_two_members");
+
+        try (Producer<byte[], byte[]> producer = cluster.producer();
+             Consumer<byte[], byte[]> consumer1 = cluster.consumer(consumerConfig);
+             Consumer<byte[], byte[]> consumer2 = cluster.consumer(consumerConfig)
+        ) {
+            var startingTimestamp = System.currentTimeMillis();
+
+            consumer1.subscribe(List.of(fooTopic));
+            awaitAssignment(consumer1, Set.of(foo0, foo1));
+
+            sendRecords(producer, foo0, 10, startingTimestamp);
+            consumeAndVerifyRecords(consumer1, foo0, 10, 0, 0, startingTimestamp);
+
+            sendRecords(producer, foo1, 10, startingTimestamp);
+            consumeAndVerifyRecords(consumer1, foo1, 10, 0, 0, startingTimestamp);
+
+            consumer2.subscribe(List.of(fooTopic));
+            TestUtils.waitForCondition(() -> {
+                consumer1.poll(Duration.ofMillis(100));
+                consumer2.poll(Duration.ofMillis(100));
+                return consumer1.assignment().size() == 1 && consumer2.assignment().size() == 1;
+            }, "Timed out waiting for rebalance to complete");
+
+            assertTrue(consumer1.assignment().contains(foo0) || consumer1.assignment().contains(foo1));
+            assertTrue(consumer2.assignment().contains(foo0) || consumer2.assignment().contains(foo1));
+            assertNotEquals(consumer1.assignment(), consumer2.assignment());
+
+            sendRecords(producer, foo0, 10, startingTimestamp);
+            sendRecords(producer, foo1, 10, startingTimestamp);
+            consumeAndVerifyRecords(consumer1, consumer1.assignment().iterator().next(), 10, 10, 0, startingTimestamp);
+            consumeAndVerifyRecords(consumer2, consumer2.assignment().iterator().next(), 10, 10, 0, startingTimestamp);
         }
     }
 
@@ -889,13 +962,9 @@ public class PlaintextConsumerTest {
             assertNotNull(fetchLead0);
             assertEquals((double) records.count(), fetchLead0.metricValue(), "The lead should be " + records.count());
 
-            // Remove topic from subscription
+            // Remove topic from subscription and wait for metrics cleanup.
             consumer.subscribe(List.of(topic2), listener);
-            awaitRebalance(consumer, listener);
-
-            // Verify the metric has gone
-            assertNull(consumer.metrics().get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags1)));
-            assertNull(consumer.metrics().get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags2)));
+            awaitMetricsCleanup(consumer, "records-lead", tags1, tags2);
         }
     }
 
@@ -957,13 +1026,9 @@ public class PlaintextConsumerTest {
             var expectedLag = numMessages - records.count();
             assertEquals(expectedLag, (double) fetchLag0.metricValue(), EPSILON, "The lag should be " + expectedLag);
 
-            // Remove topic from subscription
+            // Remove topic from subscription and wait for metrics cleanup.
             consumer.subscribe(List.of(topic2), listener);
-            awaitRebalance(consumer, listener);
-
-            // Verify the metric has gone
-            assertNull(consumer.metrics().get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags1)));
-            assertNull(consumer.metrics().get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags2)));
+            awaitMetricsCleanup(consumer, "records-lag", tags1, tags2);
         }
     }
 
@@ -1330,7 +1395,14 @@ public class PlaintextConsumerTest {
         ));
     }
 
-    @ClusterTest
+    @ClusterTests({
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "0")
+        }),
+        @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = CONSUMER_GROUP_ASSIGNMENT_INTERVAL_MS_CONFIG, value = "1000")
+        })
+    })
     public void testAsyncConsumerStaticConsumerDetectsNewPartitionCreatedAfterRestart() throws Exception {
         testStaticConsumerDetectsNewPartitionCreatedAfterRestart(Map.of(
             GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT),
@@ -1749,6 +1821,109 @@ public class PlaintextConsumerTest {
         }, "Timed out waiting for non-empty records from topic " + tp.topic() + " partition " + tp.partition());
 
         return result.get();
+    }
+
+    @ClusterTest
+    public void testClassicConsumerUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled() throws Exception {
+        testUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled(GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled() throws Exception {
+        testUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled(GroupProtocol.CONSUMER);
+    }
+
+    /**
+     * Verify that {@link Consumer#unsubscribe()} does not commit offsets even when
+     * {@code enable.auto.commit} is enabled. A second consumer using the same group ID
+     * should see no committed offsets after the first consumer unsubscribes.
+     */
+    private void testUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled(GroupProtocol groupProtocol) throws Exception {
+        var numRecords = 10;
+        var groupId = "unsubscribe-no-commit-test";
+        sendRecords(cluster, TP, numRecords);
+
+        // Consumer 1: subscribe, consume records, then unsubscribe (without explicit commit)
+        Map<String, Object> config = new HashMap<>();
+        config.put(GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT));
+        config.put(GROUP_ID_CONFIG, groupId);
+        config.put(ENABLE_AUTO_COMMIT_CONFIG, true);
+
+        try (Consumer<byte[], byte[]> consumer1 = cluster.consumer(config)) {
+            consumer1.subscribe(List.of(TOPIC));
+            consumeRecords(consumer1, numRecords);
+
+            // Unsubscribe - this should NOT commit offsets even though auto-commit is enabled
+            consumer1.unsubscribe();
+        }
+
+        // Consumer 2: use the same group ID to check committed offsets
+        try (Consumer<byte[], byte[]> consumer2 = cluster.consumer(config)) {
+            consumer2.subscribe(List.of(TOPIC));
+            OffsetAndMetadata committed = consumer2.committed(Set.of(TP)).get(TP);
+            assertNull(committed,
+                    "unsubscribe() should not commit offsets even when auto-commit is enabled");
+        }
+    }
+
+    private void awaitMetricsCleanup(
+        Consumer<?, ?> consumer,
+        String metricName,
+        Map<String, String> tags1,
+        Map<String, String> tags2
+    ) throws InterruptedException {
+        var metric1 = new MetricName(metricName, "consumer-fetch-manager-metrics", "", tags1);
+        var metric2 = new MetricName(metricName, "consumer-fetch-manager-metrics", "", tags2);
+        TestUtils.waitForCondition(() -> {
+            consumer.poll(Duration.ofMillis(100));
+            return consumer.metrics().get(metric1) == null && consumer.metrics().get(metric2) == null;
+        }, "Metrics for removed partitions should be cleaned up");
+    }
+
+    /**
+     * Tests that when a static member closes with {@link CloseOptions.GroupMembershipOperation#LEAVE_GROUP},
+     * the other members in the group receive a rebalance callback. This is in contrast to the default
+     * behavior where static members remain in the group on close (no rebalance triggered).
+     */
+    @ClusterTest
+    public void testAsyncStaticMemberCloseWithLeaveGroupTriggersRebalance() throws Exception {
+        var topicName = "test-static-member-leave-group";
+        var groupId = "test-group-" + UUID.randomUUID();
+        cluster.createTopic(topicName, 2, (short) 1);
+
+        Map<String, Object> consumer1Config = new HashMap<>();
+        consumer1Config.put(GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
+        consumer1Config.put(GROUP_ID_CONFIG, groupId);
+        consumer1Config.put(GROUP_INSTANCE_ID_CONFIG, "instance-1");
+
+        Map<String, Object> consumer2Config = new HashMap<>();
+        consumer2Config.put(GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
+        consumer2Config.put(GROUP_ID_CONFIG, groupId);
+        consumer2Config.put(GROUP_INSTANCE_ID_CONFIG, "instance-2");
+
+        var listener1 = new TestConsumerReassignmentListener();
+        var listener2 = new TestConsumerReassignmentListener();
+
+        try (Consumer<byte[], byte[]> consumer1 = cluster.consumer(consumer1Config);
+             Consumer<byte[], byte[]> consumer2 = cluster.consumer(consumer2Config)) {
+
+            consumer1.subscribe(List.of(topicName), listener1);
+            consumer2.subscribe(List.of(topicName), listener2);
+
+            awaitRebalance(consumer1, listener1);
+            awaitRebalance(consumer2, listener2);
+
+            var initialAssignedCalls = listener2.callsToAssigned;
+
+            // Consumer 1 closes with LEAVE_GROUP - this should trigger a rebalance
+            consumer1.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
+            awaitRebalance(consumer2, listener2);
+
+            // Consumer 2 should have received another assignment callback due to the rebalance
+            assertTrue(listener2.callsToAssigned > initialAssignedCalls,
+                "Consumer 2 should have received a rebalance after static consumer 1 left the group permanently. " +
+                "Initial assigned calls: " + initialAssignedCalls + ", current: " + listener2.callsToAssigned);
+        }
     }
 
     public static class SerializerImpl implements Serializer<byte[]> {

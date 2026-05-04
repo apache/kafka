@@ -34,9 +34,9 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.internals.LogContext;
 
 import java.time.Duration;
 import java.util.Collection;
@@ -177,21 +177,22 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * This example demonstrates a simple usage of Kafka's consumer api that relies on automatic offset committing.
  * <p>
  * <pre>
+ * {@code
  *     Properties props = new Properties();
- *     props.setProperty(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
- *     props.setProperty(&quot;group.id&quot;, &quot;test&quot;);
- *     props.setProperty(&quot;enable.auto.commit&quot;, &quot;true&quot;);
- *     props.setProperty(&quot;auto.commit.interval.ms&quot;, &quot;1000&quot;);
- *     props.setProperty(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
- *     props.setProperty(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
- *     KafkaConsumer&lt;String, String&gt; consumer = new KafkaConsumer&lt;&gt;(props);
- *     consumer.subscribe(Arrays.asList(&quot;foo&quot;, &quot;bar&quot;));
+ *     props.setProperty("bootstrap.servers", "localhost:9092");
+ *     props.setProperty("group.id", "test");
+ *     props.setProperty("enable.auto.commit", "true");
+ *     props.setProperty("auto.commit.interval.ms", "1000");
+ *     props.setProperty("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+ *     props.setProperty("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+ *     KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
+ *     consumer.subscribe(Arrays.asList("foo", "bar"));
  *     while (true) {
- *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(100));
- *         for (ConsumerRecord&lt;String, String&gt; record : records)
- *             System.out.printf(&quot;offset = %d, key = %s, value = %s%n&quot;, record.offset(), record.key(), record.value());
+ *         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
+ *         for (ConsumerRecord<String, String> record : records)
+ *             System.out.printf("offset = %d, key = %s, value = %s%n", record.offset(), record.key(), record.value());
  *     }
- * </pre>
+ * }</pre>
  *
  * The connection to the cluster is bootstrapped by specifying a list of one or more brokers to contact using the
  * configuration {@code bootstrap.servers}. This list is just used to discover the rest of the brokers in the
@@ -215,28 +216,29 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
 
  * <p>
  * <pre>
+ * {@code
  *     Properties props = new Properties();
- *     props.setProperty(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
- *     props.setProperty(&quot;group.id&quot;, &quot;test&quot;);
- *     props.setProperty(&quot;enable.auto.commit&quot;, &quot;false&quot;);
- *     props.setProperty(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
- *     props.setProperty(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
- *     KafkaConsumer&lt;String, String&gt; consumer = new KafkaConsumer&lt;&gt;(props);
- *     consumer.subscribe(Arrays.asList(&quot;foo&quot;, &quot;bar&quot;));
+ *     props.setProperty("bootstrap.servers", "localhost:9092");
+ *     props.setProperty("group.id", "test");
+ *     props.setProperty("enable.auto.commit", "false");
+ *     props.setProperty("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+ *     props.setProperty("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+ *     KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
+ *     consumer.subscribe(Arrays.asList("foo", "bar"));
  *     final int minBatchSize = 200;
- *     List&lt;ConsumerRecord&lt;String, String&gt;&gt; buffer = new ArrayList&lt;&gt;();
+ *     List<ConsumerRecord<String, String>> buffer = new ArrayList<>();
  *     while (true) {
- *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(100));
- *         for (ConsumerRecord&lt;String, String&gt; record : records) {
+ *         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
+ *         for (ConsumerRecord<String, String> record : records) {
  *             buffer.add(record);
  *         }
- *         if (buffer.size() &gt;= minBatchSize) {
+ *         if (buffer.size() >= minBatchSize) {
  *             insertIntoDb(buffer);
  *             consumer.commitSync();
  *             buffer.clear();
  *         }
  *     }
- * </pre>
+ * }</pre>
  *
  * In this example we will consume a batch of records and batch them up in memory. When we have enough records
  * batched, we will insert them into a database. If we allowed offsets to auto commit as in the previous example, records
@@ -263,13 +265,14 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * In the example below we commit offset after we finish handling the records in each partition.
  * <p>
  * <pre>
+ * {@code
  *     try {
  *         while(running) {
- *             ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
+ *             ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
  *             for (TopicPartition partition : records.partitions()) {
- *                 List&lt;ConsumerRecord&lt;String, String&gt;&gt; partitionRecords = records.records(partition);
- *                 for (ConsumerRecord&lt;String, String&gt; record : partitionRecords) {
- *                     System.out.println(record.offset() + &quot;: &quot; + record.value());
+ *                 List<ConsumerRecord<String, String>> partitionRecords = records.records(partition);
+ *                 for (ConsumerRecord<String, String> record : partitionRecords) {
+ *                     System.out.println(record.offset() + ": " + record.value());
  *                 }
  *                 consumer.commitSync(Collections.singletonMap(partition, records.nextOffsets().get(partition)));
  *             }
@@ -277,7 +280,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *     } finally {
  *       consumer.close();
  *     }
- * </pre>
+ * }</pre>
  *
  * <b>Note: The committed offset should always be the offset of the next message that your application will read.</b>
  * Thus, when calling {@link #commitSync(Map) commitSync(offsets)} you should use {@code nextRecordToBeProcessed.offset()}
@@ -304,11 +307,12 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * {@link #assign(Collection)} with the full list of partitions that you want to consume.
  *
  * <pre>
- *     String topic = &quot;foo&quot;;
+ * {@code
+ *     String topic = "foo";
  *     TopicPartition partition0 = new TopicPartition(topic, 0);
  *     TopicPartition partition1 = new TopicPartition(topic, 1);
  *     consumer.assign(Arrays.asList(partition0, partition1));
- * </pre>
+ * }</pre>
  *
  * Once assigned, you can call {@link #poll(Duration) poll} in a loop, just as in the preceding examples to consume
  * records. The group that the consumer specifies is still used for committing offsets, but now the set of partitions
@@ -444,6 +448,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * The following snippet shows the typical pattern:
  *
  * <pre>
+ * {@code
  * public class KafkaConsumerRunner implements Runnable {
  *     private final AtomicBoolean closed = new AtomicBoolean(false);
  *     private final KafkaConsumer consumer;
@@ -452,7 +457,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *       this.consumer = consumer;
  *     }
  *
- *     {@literal @Override}
+ *     @Override
  *     public void run() {
  *         try {
  *             consumer.subscribe(Arrays.asList("topic"));
@@ -474,15 +479,16 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *         consumer.wakeup();
  *     }
  * }
- * </pre>
+ * }</pre>
  *
  * Then in a separate thread, the consumer can be shutdown by setting the closed flag and waking up the consumer.
  *
  * <p>
  * <pre>
+ * {@code
  *     closed.set(true);
  *     consumer.wakeup();
- * </pre>
+ * }</pre>
  *
  * <p>
  * Note that while it is possible to use thread interrupts instead of {@link #wakeup()} to abort a blocking operation
@@ -637,7 +643,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * were assigned. If topic subscription was used, then this will give the set of topic partitions currently assigned
      * to the consumer (which may be none if the assignment hasn't happened yet, or the partitions are in the
      * process of getting reassigned).
-     * @return The set of partitions currently assigned to this consumer
+     *
+     * <p>The returned set is a snapshot of the current assignment at the time of the call. It will not be updated
+     * if the assignment changes afterward.
+     *
+     * @return An immutable snapshot of the set of partitions currently assigned to this consumer
      */
     public Set<TopicPartition> assignment() {
         return delegate.assignment();
@@ -646,7 +656,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Get the current subscription. Will return the same topics used in the most recent call to
      * {@link #subscribe(Collection, ConsumerRebalanceListener)}, or an empty set if no such call has been made.
-     * @return The set of topics currently subscribed to
+     *
+     * <p>The returned set is a snapshot of the current subscription at the time of the call. It will not be updated
+     * if the subscription changes afterward.
+     *
+     * @return An immutable snapshot of the set of topics currently subscribed to
      */
     public Set<String> subscription() {
         return delegate.subscription();
@@ -818,6 +832,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Unsubscribe from topics currently subscribed with {@link #subscribe(Collection)} or {@link #subscribe(Pattern)}.
      * This also clears any partitions directly assigned through {@link #assign(Collection)}.
+     * <p>
+     * <b>Note:</b> Unlike {@link #close()}, this method does not commit the pending offsets before
+     * unsubscribing, even if {@code enable.auto.commit} is enabled. To avoid duplicate processing upon re-joining,
+     * it is recommended to explicitly call {@link #commitSync()} before invoking this method.
      *
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. rebalance callback errors)
      */
@@ -1392,8 +1410,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         return delegate.clientInstanceId(timeout);
     }
 
-  /**
+    /**
      * Get the metrics kept by the consumer
+     *
+     * <p>The returned map is an unmodifiable live view of the metrics. Changes to the underlying
+     * metrics will be reflected in the returned map.
+     *
+     * @return An unmodifiable live view of the map of metrics currently maintained by the consumer
      */
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
@@ -1406,7 +1429,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @param topic The topic to get partition metadata for
      *
-     * @return The list of partitions, which will be empty when the given topic is not found
+     * @return The list of partitions, which will be empty when the given topic is not found.
+     *         Note: when both the broker config {@code auto.create.topics.enable} and the consumer
+     *         config {@code allow.auto.create.topics} are {@code true}, this method may return an
+     *         empty list even though the topic is being auto-created in the background. Callers
+     *         should not assume the topic does not exist based solely on an empty result.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
@@ -1429,7 +1456,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param topic The topic to get partition metadata for
      * @param timeout The maximum of time to await topic metadata
      *
-     * @return The list of partitions, which will be empty when the given topic is not found
+     * @return The list of partitions, which will be empty when the given topic is not found.
+     *         Note: when both the broker config {@code auto.create.topics.enable} and the consumer
+     *         config {@code allow.auto.create.topics} are {@code true}, this method may return an
+     *         empty list even though the topic is being auto-created in the background. Callers
+     *         should not assume the topic does not exist based solely on an empty result.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
