@@ -45,13 +45,13 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -60,15 +60,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MetadataCacheTest {
 
-    protected final long brokerEpoch = 0L;
+    protected static final long BROKER_EPOCH = 0L;
 
     public static Stream<MetadataCache> cacheProvider() {
         return Stream.of(new KRaftMetadataCache(1, () -> KRaftVersion.KRAFT_VERSION_0));
     }
 
     public static void updateCache(MetadataCache cache, List<ApiMessage> records) {
-        if (cache instanceof KRaftMetadataCache) {
-            KRaftMetadataCache c = (KRaftMetadataCache) cache;
+        if (cache instanceof KRaftMetadataCache c) {
             MetadataImage image = c.currentImage();
             MetadataImage partialImage = new MetadataImage(
                 new MetadataProvenance(100L, 10, 1000L, true),
@@ -107,9 +106,10 @@ public class MetadataCacheTest {
         String topic0 = "topic-0";
         String topic1 = "topic-1";
 
-        Map<String, Uuid> topicIds = new HashMap<>();
-        topicIds.put(topic0, Uuid.randomUuid());
-        topicIds.put(topic1, Uuid.randomUuid());
+        Map<String, Uuid> topicIds = Map.of(
+            topic0, Uuid.randomUuid(),
+            topic1, Uuid.randomUuid()
+        );
 
         List<PartitionRecord> partitionStates = List.of(
             new PartitionRecord()
@@ -149,7 +149,7 @@ public class MetadataCacheTest {
                     .setPort(9093)
                     .setSecurityProtocol(SecurityProtocol.SSL.id)
                     .setName(ListenerName.forSecurityProtocol(SecurityProtocol.SSL).value())
-            ).iterator());
+            ));
             records.add(new RegisterBrokerRecord()
                 .setBrokerId(brokerId)
                 .setEndPoints(endpoints)
@@ -182,7 +182,7 @@ public class MetadataCacheTest {
 
                 List<MetadataResponseData.MetadataResponsePartition> partitionMetadatas =
                     new ArrayList<>(topicMetadata.partitions());
-                partitionMetadatas.sort((a, b) -> Integer.compare(a.partitionIndex(), b.partitionIndex()));
+                partitionMetadatas.sort(Comparator.comparingInt(MetadataResponseData.MetadataResponsePartition::partitionIndex));
                 assertEquals(topicPartitionStates.size(), partitionMetadatas.size(),
                     "Unexpected partition count for topic " + topic);
 
@@ -209,17 +209,17 @@ public class MetadataCacheTest {
     public void getTopicMetadataPartitionLeaderNotAvailable(MetadataCache cache) {
         SecurityProtocol securityProtocol = SecurityProtocol.PLAINTEXT;
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
-        List<RegisterBrokerRecord> brokers = Collections.singletonList(
+        List<RegisterBrokerRecord> brokers = List.of(
             new RegisterBrokerRecord()
                 .setBrokerId(0)
                 .setFenced(false)
-                .setEndPoints(new BrokerEndpointCollection(Collections.singletonList(
+                .setEndPoints(new BrokerEndpointCollection(List.of(
                     new BrokerEndpoint()
                         .setHost("foo")
                         .setPort(9092)
                         .setSecurityProtocol(securityProtocol.id)
                         .setName(listenerName.value())
-                ).iterator()))
+                )))
         );
 
         // leader is not available. expect LEADER_NOT_AVAILABLE for any metadata version.
@@ -247,15 +247,15 @@ public class MetadataCacheTest {
                 .setPort(9093)
                 .setSecurityProtocol(SecurityProtocol.SSL.id)
                 .setName(sslListenerName.value())
-        ).iterator());
+        ));
 
-        BrokerEndpointCollection broker1Endpoints = new BrokerEndpointCollection(Collections.singletonList(
+        BrokerEndpointCollection broker1Endpoints = new BrokerEndpointCollection(List.of(
             new BrokerEndpoint()
                 .setHost("host1")
                 .setPort(9092)
                 .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
                 .setName(plaintextListenerName.value())
-        ).iterator());
+        ));
 
         List<RegisterBrokerRecord> brokers = List.of(
             new RegisterBrokerRecord()
@@ -327,20 +327,13 @@ public class MetadataCacheTest {
         int partitionEpoch = 3;
         SecurityProtocol securityProtocol = SecurityProtocol.PLAINTEXT;
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
-        BrokerEndpointCollection endPoints = new BrokerEndpointCollection(Collections.singletonList(
+        BrokerEndpointCollection endPoints = new BrokerEndpointCollection(List.of(
             new BrokerEndpoint()
                 .setHost("foo")
                 .setPort(9092)
                 .setSecurityProtocol(securityProtocol.id)
                 .setName(listenerName.value())
-        ).iterator());
-
-        List<ApiMessage> records = new ArrayList<>();
-        records.add(new RegisterBrokerRecord()
-            .setBrokerId(0)
-            .setFenced(false)
-            .setEndPoints(endPoints));
-        records.add(new TopicRecord().setName(topic).setTopicId(topicId));
+        ));
 
         // replica 1 is not available
         int leader = 0;
@@ -348,14 +341,21 @@ public class MetadataCacheTest {
         List<Integer> replicas = List.of(0, 1);
         List<Integer> isr = List.of(0);
 
-        records.add(new PartitionRecord()
-            .setTopicId(topicId)
-            .setPartitionId(0)
-            .setLeader(leader)
-            .setLeaderEpoch(leaderEpoch)
-            .setIsr(isr)
-            .setPartitionEpoch(partitionEpoch)
-            .setReplicas(replicas));
+        List<ApiMessage> records = List.of(
+            new RegisterBrokerRecord()
+                .setBrokerId(0)
+                .setFenced(false)
+                .setEndPoints(endPoints),
+            new TopicRecord().setName(topic).setTopicId(topicId),
+            new PartitionRecord()
+                .setTopicId(topicId)
+                .setPartitionId(0)
+                .setLeader(leader)
+                .setLeaderEpoch(leaderEpoch)
+                .setIsr(isr)
+                .setPartitionEpoch(partitionEpoch)
+                .setReplicas(replicas)
+        );
         updateCache(cache, records);
 
         // Validate errorUnavailableEndpoints = false
@@ -372,8 +372,8 @@ public class MetadataCacheTest {
         MetadataResponseData.MetadataResponsePartition partitionMetadata = partitionMetadatas.get(0);
         assertEquals(0, partitionMetadata.partitionIndex());
         assertEquals(Errors.NONE.code(), partitionMetadata.errorCode());
-        assertEquals(new HashSet<>(List.of(0, 1)), new HashSet<>(partitionMetadata.replicaNodes()));
-        assertEquals(new HashSet<>(List.of(0)), new HashSet<>(partitionMetadata.isrNodes()));
+        assertEquals(List.of(0, 1), partitionMetadata.replicaNodes());
+        assertEquals(List.of(0), partitionMetadata.isrNodes());
 
         // Validate errorUnavailableEndpoints = true
         List<MetadataResponseData.MetadataResponseTopic> topicMetadatasWithError =
@@ -389,8 +389,8 @@ public class MetadataCacheTest {
         MetadataResponseData.MetadataResponsePartition partitionMetadataWithError = partitionMetadatasWithError.get(0);
         assertEquals(0, partitionMetadataWithError.partitionIndex());
         assertEquals(Errors.REPLICA_NOT_AVAILABLE.code(), partitionMetadataWithError.errorCode());
-        assertEquals(new HashSet<>(List.of(0)), new HashSet<>(partitionMetadataWithError.replicaNodes()));
-        assertEquals(new HashSet<>(List.of(0)), new HashSet<>(partitionMetadataWithError.isrNodes()));
+        assertEquals(List.of(0), partitionMetadataWithError.replicaNodes());
+        assertEquals(List.of(0), partitionMetadataWithError.isrNodes());
     }
 
     @ParameterizedTest
@@ -402,35 +402,34 @@ public class MetadataCacheTest {
         SecurityProtocol securityProtocol = SecurityProtocol.PLAINTEXT;
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
 
-        BrokerEndpointCollection endpoints = new BrokerEndpointCollection(Collections.singletonList(
+        BrokerEndpointCollection endpoints = new BrokerEndpointCollection(List.of(
             new BrokerEndpoint()
                 .setHost("foo")
                 .setPort(9092)
                 .setSecurityProtocol(securityProtocol.id)
                 .setName(listenerName.value())
-        ).iterator());
-
-        List<ApiMessage> records = new ArrayList<>();
-        records.add(new RegisterBrokerRecord()
-            .setBrokerId(0)
-            .setRack("rack1")
-            .setFenced(false)
-            .setEndPoints(endpoints));
-        records.add(new TopicRecord().setName(topic).setTopicId(topicId));
+        ));
 
         // isr member 1 is not a registered broker
         int leader = 0;
         int leaderEpoch = 0;
         List<Integer> replicas = List.of(0);
         List<Integer> isr = List.of(0, 1);
-
-        records.add(new PartitionRecord()
-            .setTopicId(topicId)
-            .setPartitionId(0)
-            .setLeader(leader)
-            .setLeaderEpoch(leaderEpoch)
-            .setIsr(isr)
-            .setReplicas(replicas));
+        List<ApiMessage> records = List.of(
+            new RegisterBrokerRecord()
+                .setBrokerId(0)
+                .setRack("rack1")
+                .setFenced(false)
+                .setEndPoints(endpoints),
+            new TopicRecord().setName(topic).setTopicId(topicId),
+            new PartitionRecord()
+                .setTopicId(topicId)
+                .setPartitionId(0)
+                .setLeader(leader)
+                .setLeaderEpoch(leaderEpoch)
+                .setIsr(isr)
+                .setReplicas(replicas)
+        );
         updateCache(cache, records);
 
         // Validate errorUnavailableEndpoints = false
@@ -447,8 +446,8 @@ public class MetadataCacheTest {
         MetadataResponseData.MetadataResponsePartition partitionMetadata = partitionMetadatas.get(0);
         assertEquals(0, partitionMetadata.partitionIndex());
         assertEquals(Errors.NONE.code(), partitionMetadata.errorCode());
-        assertEquals(new HashSet<>(List.of(0)), new HashSet<>(partitionMetadata.replicaNodes()));
-        assertEquals(new HashSet<>(List.of(0, 1)), new HashSet<>(partitionMetadata.isrNodes()));
+        assertEquals(List.of(0), partitionMetadata.replicaNodes());
+        assertEquals(List.of(0, 1), partitionMetadata.isrNodes());
 
         // Validate errorUnavailableEndpoints = true
         List<MetadataResponseData.MetadataResponseTopic> topicMetadatasWithError =
@@ -464,8 +463,8 @@ public class MetadataCacheTest {
         MetadataResponseData.MetadataResponsePartition partitionMetadataWithError = partitionMetadatasWithError.get(0);
         assertEquals(0, partitionMetadataWithError.partitionIndex());
         assertEquals(Errors.REPLICA_NOT_AVAILABLE.code(), partitionMetadataWithError.errorCode());
-        assertEquals(new HashSet<>(List.of(0)), new HashSet<>(partitionMetadataWithError.replicaNodes()));
-        assertEquals(new HashSet<>(List.of(0)), new HashSet<>(partitionMetadataWithError.isrNodes()));
+        assertEquals(List.of(0), partitionMetadataWithError.replicaNodes());
+        assertEquals(List.of(0), partitionMetadataWithError.isrNodes());
     }
 
     @ParameterizedTest
@@ -478,13 +477,13 @@ public class MetadataCacheTest {
         RegisterBrokerRecord broker = new RegisterBrokerRecord()
             .setBrokerId(0)
             .setRack("")
-            .setEndPoints(new BrokerEndpointCollection(Collections.singletonList(
+            .setEndPoints(new BrokerEndpointCollection(List.of(
                 new BrokerEndpoint()
                     .setHost("foo")
                     .setPort(9092)
                     .setSecurityProtocol(securityProtocol.id)
                     .setName(ListenerName.forSecurityProtocol(securityProtocol).value())
-            ).iterator()));
+            )));
 
         TopicRecord topicRecord = new TopicRecord().setName(topic).setTopicId(topicId);
 
@@ -493,16 +492,17 @@ public class MetadataCacheTest {
         List<Integer> replicas = List.of(0);
         List<Integer> isr = List.of(0, 1);
 
-        List<ApiMessage> records = new ArrayList<>();
-        records.add(broker);
-        records.add(topicRecord);
-        records.add(new PartitionRecord()
-            .setTopicId(topicId)
-            .setPartitionId(0)
-            .setLeader(leader)
-            .setLeaderEpoch(leaderEpoch)
-            .setIsr(isr)
-            .setReplicas(replicas));
+        List<ApiMessage> records = List.of(
+            broker,
+            topicRecord,
+            new PartitionRecord()
+                .setTopicId(topicId)
+                .setPartitionId(0)
+                .setLeader(leader)
+                .setLeaderEpoch(leaderEpoch)
+                .setIsr(isr)
+                .setReplicas(replicas)
+        );
         updateCache(cache, records);
 
         List<MetadataResponseData.MetadataResponseTopic> topicMetadata =
@@ -517,7 +517,7 @@ public class MetadataCacheTest {
     public void getAliveBrokersShouldNotBeMutatedByUpdateCache(MetadataCache cache) {
         String topic = "topic";
         Uuid topicId = Uuid.randomUuid();
-        List<ApiMessage> topicRecords = Collections.singletonList(
+        List<ApiMessage> topicRecords = List.of(
             new TopicRecord().setName(topic).setTopicId(topicId));
 
         List<Integer> initialBrokerIds = List.of(0, 1, 2);
@@ -538,14 +538,14 @@ public class MetadataCacheTest {
                 .setBrokerId(brokerId)
                 .setRack("")
                 .setFenced(false)
-                .setBrokerEpoch(brokerEpoch)
-                .setEndPoints(new BrokerEndpointCollection(Collections.singletonList(
+                .setBrokerEpoch(BROKER_EPOCH)
+                .setEndPoints(new BrokerEndpointCollection(List.of(
                     new BrokerEndpoint()
                         .setHost("foo")
                         .setPort(9092)
                         .setSecurityProtocol(securityProtocol.id)
                         .setName(ListenerName.forSecurityProtocol(securityProtocol).value())
-                ).iterator())));
+                ))));
         }
         records.addAll(topicRecords);
         records.add(new PartitionRecord()
@@ -573,13 +573,13 @@ public class MetadataCacheTest {
                 .setBrokerId(brokerId)
                 .setFenced(brokerId == fencedBrokerId)
                 .setRack("rack" + (brokerId % 3))
-                .setEndPoints(new BrokerEndpointCollection(Collections.singletonList(
+                .setEndPoints(new BrokerEndpointCollection(List.of(
                     new BrokerEndpoint()
                         .setHost("foo" + brokerId)
                         .setPort(9092)
                         .setSecurityProtocol(securityProtocol.id)
                         .setName(listenerName.value())
-                ).iterator())));
+                ))));
         }
 
         // Set up a single topic (with many partitions) for the metadata cache
@@ -746,146 +746,148 @@ public class MetadataCacheTest {
         String topic0 = "test0";
         String topic1 = "test1";
 
-        Map<String, Uuid> topicIds = new HashMap<>();
-        topicIds.put(topic0, Uuid.randomUuid());
-        topicIds.put(topic1, Uuid.randomUuid());
+        Map<String, Uuid> topicIds = Map.of(
+            topic0, Uuid.randomUuid(),
+            topic1, Uuid.randomUuid()
+        );
 
         // partitionMap key: "topicName:partitionId"
-        Map<String, PartitionRecord> partitionMap = new HashMap<>();
-        partitionMap.put(topic0 + ":0", new PartitionRecord()
-            .setTopicId(topicIds.get(topic0))
-            .setPartitionId(0)
-            .setReplicas(List.of(0, 1, 2))
-            .setLeader(0)
-            .setIsr(List.of(0))
-            .setEligibleLeaderReplicas(List.of(1))
-            .setLastKnownElr(List.of(2))
-            .setLeaderEpoch(0)
-            .setPartitionEpoch(1)
-            .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()));
-        partitionMap.put(topic0 + ":2", new PartitionRecord()
-            .setTopicId(topicIds.get(topic0))
-            .setPartitionId(2)
-            .setReplicas(List.of(0, 2, 3))
-            .setLeader(3)
-            .setIsr(List.of(3))
-            .setEligibleLeaderReplicas(List.of(2))
-            .setLastKnownElr(List.of(0))
-            .setLeaderEpoch(1)
-            .setPartitionEpoch(2)
-            .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()));
-        partitionMap.put(topic0 + ":1", new PartitionRecord()
-            .setTopicId(topicIds.get(topic0))
-            .setPartitionId(1)
-            .setReplicas(List.of(0, 1, 3))
-            .setLeader(0)
-            .setIsr(List.of(0))
-            .setEligibleLeaderReplicas(List.of(1))
-            .setLastKnownElr(List.of(3))
-            .setLeaderEpoch(0)
-            .setPartitionEpoch(2)
-            .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()));
-        partitionMap.put(topic1 + ":0", new PartitionRecord()
-            .setTopicId(topicIds.get(topic1))
-            .setPartitionId(0)
-            .setReplicas(List.of(0, 1, 2))
-            .setLeader(2)
-            .setIsr(List.of(2))
-            .setEligibleLeaderReplicas(List.of(1))
-            .setLastKnownElr(List.of(0))
-            .setLeaderEpoch(10)
-            .setPartitionEpoch(11)
-            .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()));
+        Map<String, PartitionRecord> partitionMap = Map.of(
+            topic0 + ":0", new PartitionRecord()
+                .setTopicId(topicIds.get(topic0))
+                .setPartitionId(0)
+                .setReplicas(List.of(0, 1, 2))
+                .setLeader(0)
+                .setIsr(List.of(0))
+                .setEligibleLeaderReplicas(List.of(1))
+                .setLastKnownElr(List.of(2))
+                .setLeaderEpoch(0)
+                .setPartitionEpoch(1)
+                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
+            topic0 + ":2", new PartitionRecord()
+                .setTopicId(topicIds.get(topic0))
+                .setPartitionId(2)
+                .setReplicas(List.of(0, 2, 3))
+                .setLeader(3)
+                .setIsr(List.of(3))
+                .setEligibleLeaderReplicas(List.of(2))
+                .setLastKnownElr(List.of(0))
+                .setLeaderEpoch(1)
+                .setPartitionEpoch(2)
+                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
+            topic0 + ":1", new PartitionRecord()
+                .setTopicId(topicIds.get(topic0))
+                .setPartitionId(1)
+                .setReplicas(List.of(0, 1, 3))
+                .setLeader(0)
+                .setIsr(List.of(0))
+                .setEligibleLeaderReplicas(List.of(1))
+                .setLastKnownElr(List.of(3))
+                .setLeaderEpoch(0)
+                .setPartitionEpoch(2)
+                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
+            topic1 + ":0", new PartitionRecord()
+                .setTopicId(topicIds.get(topic1))
+                .setPartitionId(0)
+                .setReplicas(List.of(0, 1, 2))
+                .setLeader(2)
+                .setIsr(List.of(2))
+                .setEligibleLeaderReplicas(List.of(1))
+                .setLastKnownElr(List.of(0))
+                .setLeaderEpoch(10)
+                .setPartitionEpoch(11)
+                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
+        );
 
         List<ApiMessage> records = new ArrayList<>();
-        records.add(new RegisterBrokerRecord().setBrokerEpoch(brokerEpoch).setFenced(false).setBrokerId(0)
-            .setEndPoints(new BrokerEndpointCollection(Collections.singletonList(
+        records.add(new RegisterBrokerRecord().setBrokerEpoch(BROKER_EPOCH).setFenced(false).setBrokerId(0)
+            .setEndPoints(new BrokerEndpointCollection(List.of(
                 new BrokerEndpoint().setHost("foo0").setPort(9092)
                     .setSecurityProtocol(securityProtocol.id).setName(listenerName.value())
-            ).iterator())));
-        records.add(new RegisterBrokerRecord().setBrokerEpoch(brokerEpoch).setFenced(false).setBrokerId(1)
-            .setEndPoints(new BrokerEndpointCollection(Collections.singletonList(
+            ))));
+        records.add(new RegisterBrokerRecord().setBrokerEpoch(BROKER_EPOCH).setFenced(false).setBrokerId(1)
+            .setEndPoints(new BrokerEndpointCollection(List.of(
                 new BrokerEndpoint().setHost("foo1").setPort(9093)
                     .setSecurityProtocol(securityProtocol.id).setName(listenerName.value())
-            ).iterator())));
-        records.add(new RegisterBrokerRecord().setBrokerEpoch(brokerEpoch).setFenced(false).setBrokerId(2)
-            .setEndPoints(new BrokerEndpointCollection(Collections.singletonList(
+            ))));
+        records.add(new RegisterBrokerRecord().setBrokerEpoch(BROKER_EPOCH).setFenced(false).setBrokerId(2)
+            .setEndPoints(new BrokerEndpointCollection(List.of(
                 new BrokerEndpoint().setHost("foo2").setPort(9094)
                     .setSecurityProtocol(securityProtocol.id).setName(listenerName.value())
-            ).iterator())));
-        records.add(new RegisterBrokerRecord().setBrokerEpoch(brokerEpoch).setFenced(false).setBrokerId(3)
-            .setEndPoints(new BrokerEndpointCollection(Collections.singletonList(
+            ))));
+        records.add(new RegisterBrokerRecord().setBrokerEpoch(BROKER_EPOCH).setFenced(false).setBrokerId(3)
+            .setEndPoints(new BrokerEndpointCollection(List.of(
                 new BrokerEndpoint().setHost("foo3").setPort(9095)
                     .setSecurityProtocol(securityProtocol.id).setName(listenerName.value())
-            ).iterator())));
+            ))));
         records.add(new TopicRecord().setName(topic0).setTopicId(topicIds.get(topic0)));
         records.add(new TopicRecord().setName(topic1).setTopicId(topicIds.get(topic1)));
         records.addAll(partitionMap.values());
         updateCache(metadataCache, records);
 
         // Basic test
-        List<DescribeTopicPartitionsResponseTopic> result = new ArrayList<>(metadataCache
+        List<DescribeTopicPartitionsResponseTopic> result = metadataCache
             .describeTopicResponse(List.of(topic0, topic1).iterator(), listenerName, t -> 0, 10, false)
-            .topics());
+            .topics().stream().toList();
         assertEquals(2, result.size());
         DescribeTopicPartitionsResponseTopic resultTopic = result.get(0);
         assertEquals(topic0, resultTopic.name());
         assertEquals(0, resultTopic.errorCode());
         assertEquals(topicIds.get(topic0), resultTopic.topicId());
         assertEquals(3, resultTopic.partitions().size());
-        checkTopicMetadata(topic0, new HashSet<>(List.of(0, 1, 2)), resultTopic.partitions(), partitionMap);
+        checkTopicMetadata(topic0, Set.of(0, 1, 2), resultTopic.partitions(), partitionMap);
 
         resultTopic = result.get(1);
         assertEquals(topic1, resultTopic.name());
         assertEquals(0, resultTopic.errorCode());
         assertEquals(topicIds.get(topic1), resultTopic.topicId());
         assertEquals(1, resultTopic.partitions().size());
-        checkTopicMetadata(topic1, new HashSet<>(List.of(0)), resultTopic.partitions(), partitionMap);
+        checkTopicMetadata(topic1, Set.of(0), resultTopic.partitions(), partitionMap);
 
         // Quota reached
         DescribeTopicPartitionsResponseData response = metadataCache
             .describeTopicResponse(List.of(topic0, topic1).iterator(), listenerName, t -> 0, 2, false);
-        result = new ArrayList<>(response.topics());
+        result = response.topics().stream().toList();
         assertEquals(1, result.size());
         resultTopic = result.get(0);
         assertEquals(topic0, resultTopic.name());
         assertEquals(0, resultTopic.errorCode());
         assertEquals(topicIds.get(topic0), resultTopic.topicId());
         assertEquals(2, resultTopic.partitions().size());
-        checkTopicMetadata(topic0, new HashSet<>(List.of(0, 1)), resultTopic.partitions(), partitionMap);
+        checkTopicMetadata(topic0, Set.of(0, 1), resultTopic.partitions(), partitionMap);
         assertEquals(topic0, response.nextCursor().topicName());
         assertEquals(2, response.nextCursor().partitionIndex());
 
         // With start index
-        result = new ArrayList<>(metadataCache
+        result = metadataCache
             .describeTopicResponse(List.of(topic0).iterator(), listenerName,
                 t -> t.equals(topic0) ? 1 : 0, 10, false)
-            .topics());
+            .topics().stream().toList();
         assertEquals(1, result.size());
         resultTopic = result.get(0);
         assertEquals(topic0, resultTopic.name());
         assertEquals(0, resultTopic.errorCode());
         assertEquals(topicIds.get(topic0), resultTopic.topicId());
         assertEquals(2, resultTopic.partitions().size());
-        checkTopicMetadata(topic0, new HashSet<>(List.of(1, 2)), resultTopic.partitions(), partitionMap);
+        checkTopicMetadata(topic0, Set.of(1, 2), resultTopic.partitions(), partitionMap);
 
         // With start index and quota reached
         response = metadataCache.describeTopicResponse(List.of(topic0, topic1).iterator(), listenerName,
             t -> t.equals(topic0) ? 2 : 0, 1, false);
-        result = new ArrayList<>(response.topics());
+        result = response.topics().stream().toList();
         assertEquals(1, result.size());
         resultTopic = result.get(0);
         assertEquals(topic0, resultTopic.name());
         assertEquals(0, resultTopic.errorCode());
         assertEquals(topicIds.get(topic0), resultTopic.topicId());
         assertEquals(1, resultTopic.partitions().size());
-        checkTopicMetadata(topic0, new HashSet<>(List.of(2)), resultTopic.partitions(), partitionMap);
+        checkTopicMetadata(topic0, Set.of(2), resultTopic.partitions(), partitionMap);
         assertEquals(topic1, response.nextCursor().topicName());
         assertEquals(0, response.nextCursor().partitionIndex());
 
         // When the first topic does not exist
-        result = new ArrayList<>(metadataCache.describeTopicResponse(List.of("Non-exist", topic0).iterator(), listenerName,
-            t -> t.equals("Non-exist") ? 1 : 0, 1, false).topics());
+        result = metadataCache.describeTopicResponse(List.of("Non-exist", topic0).iterator(), listenerName,
+            t -> t.equals("Non-exist") ? 1 : 0, 1, false).topics().stream().toList();
         assertEquals(2, result.size());
         resultTopic = result.get(0);
         assertEquals("Non-exist", resultTopic.name());
@@ -896,7 +898,7 @@ public class MetadataCacheTest {
         assertEquals(0, resultTopic.errorCode());
         assertEquals(topicIds.get(topic0), resultTopic.topicId());
         assertEquals(1, resultTopic.partitions().size());
-        checkTopicMetadata(topic0, new HashSet<>(List.of(0)), resultTopic.partitions(), partitionMap);
+        checkTopicMetadata(topic0, Set.of(0), resultTopic.partitions(), partitionMap);
     }
 
     private void checkTopicMetadata(
@@ -933,32 +935,33 @@ public class MetadataCacheTest {
         SecurityProtocol securityProtocol = SecurityProtocol.PLAINTEXT;
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
 
-        List<ApiMessage> records = new ArrayList<>();
-        records.add(new RegisterBrokerRecord()
-            .setBrokerId(0)
-            .setBrokerEpoch(brokerEpoch)
-            .setRack("rack1")
-            .setEndPoints(new BrokerEndpointCollection(Collections.singletonList(
-                new BrokerEndpoint()
-                    .setHost("foo")
-                    .setPort(9092)
-                    .setSecurityProtocol(securityProtocol.id)
-                    .setName(listenerName.value())
-            ).iterator())));
-        records.add(new TopicRecord().setName(topic).setTopicId(topicId));
-        records.add(new PartitionRecord()
-            .setTopicId(topicId)
-            .setPartitionId(partitionIndex)
-            .setLeader(leader)
-            .setLeaderEpoch(leaderEpoch)
-            .setIsr(isr)
-            .setReplicas(replicas));
+        List<ApiMessage> records = List.of(
+            new RegisterBrokerRecord()
+                .setBrokerId(0)
+                .setBrokerEpoch(BROKER_EPOCH)
+                .setRack("rack1")
+                .setEndPoints(new BrokerEndpointCollection(List.of(
+                    new BrokerEndpoint()
+                        .setHost("foo")
+                        .setPort(9092)
+                        .setSecurityProtocol(securityProtocol.id)
+                        .setName(listenerName.value())
+                ))),
+            new TopicRecord().setName(topic).setTopicId(topicId),
+            new PartitionRecord()
+                .setTopicId(topicId)
+                .setPartitionId(partitionIndex)
+                .setLeader(leader)
+                .setLeaderEpoch(leaderEpoch)
+                .setIsr(isr)
+                .setReplicas(replicas)
+        );
         updateCache(cache, records);
 
         Optional<LeaderAndIsr> leaderAndIsr = cache.getLeaderAndIsr(topic, partitionIndex);
         assertEquals(Optional.of(leader), leaderAndIsr.map(LeaderAndIsr::leader));
         assertEquals(Optional.of(leaderEpoch), leaderAndIsr.map(LeaderAndIsr::leaderEpoch));
-        assertEquals(Optional.of(new HashSet<>(isr)), leaderAndIsr.map(lai -> new HashSet<>(lai.isr())));
+        assertEquals(Optional.of(Set.of(2, 3, 0)), leaderAndIsr.map(LeaderAndIsr::isr));
         assertEquals(Optional.of(-1), leaderAndIsr.map(LeaderAndIsr::partitionEpoch));
         assertEquals(Optional.of(LeaderRecoveryState.RECOVERED), leaderAndIsr.map(LeaderAndIsr::leaderRecoveryState));
     }
@@ -967,69 +970,54 @@ public class MetadataCacheTest {
     public void testGetOfflineReplicasConsidersDirAssignment() {
         Map<Integer, List<Integer>> result = offlinePartitions(
             List.of(
-                new BrokerInfo(0, List.of(Uuid.fromString("broker1logdirjEo71BG0w"))),
-                new BrokerInfo(1, List.of(Uuid.fromString("broker2logdirRmQQgLxgw")))
+                new Broker(0, List.of(Uuid.fromString("broker1logdirjEo71BG0w"))),
+                new Broker(1, List.of(Uuid.fromString("broker2logdirRmQQgLxgw")))
             ),
             List.of(
-                new PartitionInfo2(0, List.of(0, 1),
+                new Partition(0, List.of(0, 1),
                     List.of(Uuid.fromString("broker1logdirjEo71BG0w"), DirectoryId.LOST)),
-                new PartitionInfo2(1, List.of(0, 1),
+                new Partition(1, List.of(0, 1),
                     List.of(Uuid.fromString("unknownlogdirjEo71BG0w"), DirectoryId.UNASSIGNED)),
-                new PartitionInfo2(2, List.of(0, 1),
+                new Partition(2, List.of(0, 1),
                     List.of(DirectoryId.MIGRATING, Uuid.fromString("broker2logdirRmQQgLxgw")))
             )
         );
 
-        Map<Integer, List<Integer>> expected = new HashMap<>();
-        expected.put(0, List.of(1));
-        expected.put(1, List.of(0));
-        expected.put(2, Collections.emptyList());
+        Map<Integer, List<Integer>> expected = Map.of(
+            0, List.of(1),
+            1, List.of(0),
+            2, List.of()
+        );
         assertEquals(expected, result);
     }
 
-    private static class BrokerInfo {
-        final int id;
-        final List<Uuid> dirs;
-
-        BrokerInfo(int id, List<Uuid> dirs) {
-            this.id = id;
-            this.dirs = dirs;
-        }
+    private record Broker(int id, List<Uuid> dirs) {
     }
 
-    private static class PartitionInfo2 {
-        final int id;
-        final List<Integer> replicas;
-        final List<Uuid> dirs;
-
-        PartitionInfo2(int id, List<Integer> replicas, List<Uuid> dirs) {
-            this.id = id;
-            this.replicas = replicas;
-            this.dirs = dirs;
-        }
+    private record Partition(int id, List<Integer> replicas, List<Uuid> dirs) {
     }
 
     private static Map<Integer, List<Integer>> offlinePartitions(
-        List<BrokerInfo> brokers,
-        List<PartitionInfo2> partitions
+        List<Broker> brokers,
+        List<Partition> partitions
     ) {
         MetadataDelta delta = new MetadataDelta.Builder().build();
-        for (BrokerInfo broker : brokers) {
+        for (Broker broker : brokers) {
             delta.replay(new RegisterBrokerRecord()
                 .setFenced(false)
                 .setBrokerId(broker.id)
                 .setLogDirs(broker.dirs)
-                .setEndPoints(new BrokerEndpointCollection(Collections.singleton(
+                .setEndPoints(new BrokerEndpointCollection(List.of(
                     new BrokerEndpoint()
                         .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
                         .setPort((short) 9093)
                         .setName("PLAINTEXT")
                         .setHost("broker-" + broker.id)
-                ).iterator())));
+                ))));
         }
         Uuid topicId = Uuid.fromString("95OVr1IPRYGrcNCLlpImCA");
         delta.replay(new TopicRecord().setTopicId(topicId).setName("foo"));
-        for (PartitionInfo2 partition : partitions) {
+        for (Partition partition : partitions) {
             delta.replay(new PartitionRecord()
                 .setTopicId(topicId)
                 .setPartitionId(partition.id)
@@ -1042,10 +1030,10 @@ public class MetadataCacheTest {
         cache.setImage(delta.apply(MetadataProvenance.EMPTY));
         List<MetadataResponseData.MetadataResponseTopic> topicMetadata =
             cache.getTopicMetadata(Set.of("foo"), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), false, false);
-        Map<Integer, List<Integer>> result = new HashMap<>();
-        for (MetadataResponseData.MetadataResponsePartition p : topicMetadata.get(0).partitions()) {
-            result.put(p.partitionIndex(), p.offlineReplicas());
-        }
-        return result;
+        return topicMetadata.get(0).partitions().stream()
+            .collect(Collectors.toMap(
+                MetadataResponseData.MetadataResponsePartition::partitionIndex,
+                MetadataResponseData.MetadataResponsePartition::offlineReplicas
+            ));
     }
 }
