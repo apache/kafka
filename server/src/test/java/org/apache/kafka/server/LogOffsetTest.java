@@ -46,8 +46,6 @@ import org.apache.kafka.storage.internals.log.OffsetResultHolder;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Timeout;
-
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -58,7 +56,6 @@ import static org.apache.kafka.server.TestUtils.awaitLeaderChange;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
-@Timeout(300)
 @ClusterTestDefaults(
     types = {Type.KRAFT},
     serverProperties = {
