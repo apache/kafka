@@ -20962,21 +20962,21 @@ public class GroupMetadataManagerTest {
             .setStandbyPartitions(List.of());
 
         assertResponseEquals(
-                new StreamsGroupHeartbeatResponseData()
-                        .setMemberId(memberId)
-                        .setMemberEpoch(2)
-                        .setHeartbeatIntervalMs(5000)
-                        .setActiveTasks(List.of(
-                                new StreamsGroupHeartbeatResponseData.TaskIds()
-                                        .setSubtopologyId(subtopology1)
-                                        .setPartitions(List.of(0, 1))))
-                        .setStandbyTasks(List.of())
-                        .setWarmupTasks(List.of())
-                        .setPartitionsByUserEndpoint(List.of(expectedEndpointToPartitions))
-                        .setStatus(List.of())
-                        .setTaskOffsetIntervalMs(60_000)
+            new StreamsGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(2)
+                .setHeartbeatIntervalMs(5000)
+                .setActiveTasks(List.of(
+                        new StreamsGroupHeartbeatResponseData.TaskIds()
+                                .setSubtopologyId(subtopology1)
+                                .setPartitions(List.of(0, 1))))
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+                .setPartitionsByUserEndpoint(List.of(expectedEndpointToPartitions))
+                .setStatus(List.of())
+                .setTaskOffsetIntervalMs(60_000)
                 .setAcceptableRecoveryLag(10_000),
-                result.response().data()
+            result.response().data()
         );
 
         result = context.streamsGroupHeartbeat(
