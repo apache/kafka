@@ -25,8 +25,7 @@ import kafka.network.DataPlaneAcceptor
 import kafka.raft.KafkaRaftManager
 import kafka.server.DynamicBrokerConfig._
 import kafka.utils.Logging
-import org.apache.kafka.common.Reconfigurable
-import org.apache.kafka.common.Endpoint
+import org.apache.kafka.common.{Endpoint, Reconfigurable, Uuid}
 import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource, SslConfigs}
 import org.apache.kafka.common.metadata.{ConfigRecord, MetadataRecordType}
 import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
@@ -612,23 +611,13 @@ class DynamicLogConfig(logManager: LogManager, directoryEventHandler: DirectoryE
 
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
     val newBrokerDefaults = new util.HashMap[String, Object](newConfig.extractLogConfigMap)
+    logManager.reconfigureDefaultLogConfig(new LogConfig(newBrokerDefaults))
+    updateLogsConfig(newBrokerDefaults.asScala)
 
     logManager.updateCordonedLogDirs(util.Set.copyOf(newConfig.cordonedLogDirs))
-    val newCordoned = new util.HashSet[String](newConfig.cordonedLogDirs)
-    newCordoned.removeAll(oldConfig.cordonedLogDirs)
-
-    val newUncordoned = new util.HashSet[String](oldConfig.cordonedLogDirs)
-    newUncordoned.removeAll(newConfig.cordonedLogDirs)
-    if (!newCordoned.isEmpty) {
-      directoryEventHandler.handleCordoned(newCordoned.stream.map(dir => logManager.directoryId(dir).get).collect(Collectors.toSet()))
-    }
-    if (!newUncordoned.isEmpty) {
-      directoryEventHandler.handleUncordoned(newUncordoned.stream.map(dir => logManager.directoryId(dir).get).collect(Collectors.toSet()))
-    }
-
-    logManager.reconfigureDefaultLogConfig(new LogConfig(newBrokerDefaults))
-
-    updateLogsConfig(newBrokerDefaults.asScala)
+    directoryEventHandler.handleCordoned(newConfig.cordonedLogDirs.stream
+      .flatMap[Uuid](dir => logManager.directoryId(dir).stream)
+      .collect(Collectors.toSet[Uuid]))
   }
 }
 
