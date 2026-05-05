@@ -39,10 +39,6 @@ public class ApplicationServerConfigValidator implements ConfigDef.Validator {
 
         final String endPoint = (String) value;
 
-        if (endPoint.isEmpty()) {
-            return;
-        }
-
         if (Utils.isBlank(endPoint)) {
             return;
         }
