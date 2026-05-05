@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic;
@@ -80,10 +81,10 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
             return this;
         }
 
-        public <P> Builder addPartitions(
+        public Builder addPartitions(
             String topicName,
-            List<P> partitions,
-            Function<P, Integer> partitionIndex,
+            List<TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition> partitions,
+            Function<TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition, Integer> partitionIndex,
             Errors error
         ) {
             final TxnOffsetCommitResponseTopic topicResponse = getOrCreate(topicName);
