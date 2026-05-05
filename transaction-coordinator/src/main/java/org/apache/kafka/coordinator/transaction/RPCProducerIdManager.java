@@ -102,7 +102,7 @@ public class RPCProducerIdManager implements ProducerIdManager {
                     throw Errors.COORDINATOR_LOAD_IN_PROGRESS.exception("Producer ID block is full. Waiting for next block");
                 } else {
                     currentProducerIdBlock.set(block);
-                    requestInFlight.set(false);
+                    clearRequestInFlight(NO_RETRY);
                     iteration++;
                 }
             }
@@ -150,8 +150,7 @@ public class RPCProducerIdManager implements ProducerIdManager {
             @Override
             public void onTimeout() {
                 log.warn("{} Timed out when requesting AllocateProducerIds from the controller.", logPrefix);
-                backoffDeadlineMs.set(NO_RETRY);
-                requestInFlight.set(false);
+                clearRequestInFlight(NO_RETRY);
             }
         });
     }
@@ -159,11 +158,7 @@ public class RPCProducerIdManager implements ProducerIdManager {
     private void handleUnsuccessfulResponse() {
         // There is no need to compare and set because only one thread
         // handles the AllocateProducerIds response.
-
-        // KAFKA-20114 - Update the backoff before clearing requestInFlight. maybeRequestNextBlock
-        // relies on this ordering when it acquires requestInFlight before reading the deadline.
-        backoffDeadlineMs.set(time.milliseconds() + RETRY_BACKOFF_MS);
-        requestInFlight.set(false);
+        clearRequestInFlight(time.milliseconds() + RETRY_BACKOFF_MS);
     }
 
     protected void handleAllocateProducerIdsResponse(ClientResponse clientResponse) {
@@ -217,5 +212,12 @@ public class RPCProducerIdManager implements ProducerIdManager {
             return true;
         }
         return false;
+    }
+    
+    private void clearRequestInFlight(long newBackoffDeadlineMs) {
+        // KAFKA-20114 - Update the backoff before clearing requestInFlight. maybeRequestNextBlock
+        // relies on this ordering when it acquires requestInFlight before reading the deadline.
+        backoffDeadlineMs.set(newBackoffDeadlineMs);
+        requestInFlight.set(false);
     }
 }
