@@ -3797,6 +3797,7 @@ org.apache.kafka.streams.query.PositionTest:
 org.apache.kafka.streams.query.StateQueryResultTest:
 - getOnlyPartitionResultMultipleResults
 - getOnlyPartitionResultNoResultsTest
+- getOnlyPartitionResultWithSingleFailureResultTest
 - getOnlyPartitionResultWithSingleResultTest
 org.apache.kafka.streams.query.VersionedKeyQueryTest:
 - shouldThrowNPEWithNullAsOftimestamp

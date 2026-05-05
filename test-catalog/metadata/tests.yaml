@@ -741,6 +741,22 @@ org.apache.kafka.metadata.ListenerInfoTest:
 - testToControllerRegistrationRequestFailsOnNullHost
 - testToControllerRegistrationRequestFailsOnZeroPort
 - testToString
+org.apache.kafka.metadata.MetadataCacheTest:
+- getAliveBrokersShouldNotBeMutatedByUpdateCache
+- getTopicMetadata
+- getTopicMetadataIsrNotAvailable
+- getTopicMetadataNonExistingTopics
+- getTopicMetadataPartitionLeaderNotAvailable
+- getTopicMetadataPartitionListenerNotAvailableOnLeader
+- getTopicMetadataReplicaNotAvailable
+- getTopicMetadataWithNonSupportedSecurityProtocol
+- testDescribeTopicResponse
+- testGetLeaderAndIsr
+- testGetLiveBrokerEpoch
+- testGetOfflineReplicasConsidersDirAssignment
+- testGetPartitionReplicaEndpoints
+- testIsBrokerFenced
+- testIsBrokerInControlledShutdown
 org.apache.kafka.metadata.MetadataRecordSerdeTest:
 - testDeserializeWithUnhandledFrameVersion
 - testParsingMalformedFrameVersionVarint
