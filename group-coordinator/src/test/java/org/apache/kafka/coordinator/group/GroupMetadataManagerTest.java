@@ -1176,7 +1176,7 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 100, computeGroupHash(Map.of(
             fooTopicName, fooTopicHash
-        )), 1, Map.of("num.standby.replicas", "0")));
+        )), 1, getDefaultAssignmentConfigs()));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
             TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                 TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)
@@ -17789,9 +17789,7 @@ public class GroupMetadataManagerTest {
                 2,
                 groupMetadataHash,
                 0,
-                new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
-                ))
+                getDefaultAssignmentConfigs()
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
                 TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
@@ -17974,9 +17972,7 @@ public class GroupMetadataManagerTest {
                 2,
                 computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
                 -1,
-                new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
-                ))
+                getDefaultAssignmentConfigs()
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId, TasksTuple.EMPTY),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
@@ -18067,9 +18063,7 @@ public class GroupMetadataManagerTest {
                 2,
                 computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
                 -1,
-                new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
-                ))
+                getDefaultAssignmentConfigs()
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId, TasksTuple.EMPTY),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
@@ -18160,9 +18154,7 @@ public class GroupMetadataManagerTest {
                     barTopicName, computeTopicHash(barTopicName, metadataImage)
                 )),
                 -1,
-                new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
-                ))
+                getDefaultAssignmentConfigs()
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId, TasksTuple.EMPTY),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 2, context.time.milliseconds()),
@@ -18266,9 +18258,7 @@ public class GroupMetadataManagerTest {
                     barTopicName, computeTopicHash(barTopicName, metadataImage)
                 )),
                 1,
-                new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
-                ))
+                getDefaultAssignmentConfigs()
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId, TasksTuple.EMPTY),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(groupId, 11, context.time.milliseconds()),
@@ -18577,9 +18567,7 @@ public class GroupMetadataManagerTest {
                 11,
                 groupMetadataHash,
                 0,
-                new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
-                ))
+                getDefaultAssignmentConfigs()
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
                 TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
@@ -18709,9 +18697,7 @@ public class GroupMetadataManagerTest {
                     barTopicName, computeTopicHash(barTopicName, newMetadataImage)
                 )),
                 0,
-                new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
-                ))
+                getDefaultAssignmentConfigs()
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
                 TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
@@ -19877,9 +19863,7 @@ public class GroupMetadataManagerTest {
                 11,
                 computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
                 0,
-                new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
-                ))
+                getDefaultAssignmentConfigs()
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
                 TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
@@ -20006,9 +19990,7 @@ public class GroupMetadataManagerTest {
                 11,
                 computeGroupHash(Map.of(fooTopicName, computeTopicHash(fooTopicName, metadataImage))),
                 0,
-                new TreeMap<>(Map.of(
-                    "num.standby.replicas", "0"
-                ))
+                getDefaultAssignmentConfigs()
             ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
                 TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
@@ -20165,9 +20147,7 @@ public class GroupMetadataManagerTest {
                             3,
                             groupMetadataHash,
                             0,
-                            new TreeMap<>(Map.of(
-                                "num.standby.replicas", "0"
-                            ))
+                            getDefaultAssignmentConfigs()
                         ),
                         StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(
                             groupId, 3, 0L)
@@ -20491,9 +20471,7 @@ public class GroupMetadataManagerTest {
                             4,
                             groupMetadataHash,
                             0,
-                            new TreeMap<>(Map.of(
-                                "num.standby.replicas", "0"
-                            ))
+                            getDefaultAssignmentConfigs()
                         )
                     )
                 )
@@ -20971,9 +20949,7 @@ public class GroupMetadataManagerTest {
                     2,
                     0,
                     -1,
-                    new TreeMap<>(Map.of(
-                        "num.standby.replicas", "0"
-                    ))
+                    getDefaultAssignmentConfigs()
                 ),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(classicGroupId, memberId, TasksTuple.EMPTY),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentMetadataRecord(classicGroupId, 2, context.time.milliseconds()),
@@ -21295,7 +21271,7 @@ public class GroupMetadataManagerTest {
                     .setWarmupTasks(List.of()));
         assertEquals(2, result.response().data().memberEpoch());
         assertEquals(
-            Map.of("num.standby.replicas", "0"),
+            getDefaultAssignmentConfigs(),
             assignor.lastPassedAssignmentConfigs()
         );
 
@@ -21333,8 +21309,11 @@ public class GroupMetadataManagerTest {
         context.assertSessionTimeout(groupId, memberId, 50000);
 
         // Verify that the new number of standby replicas is used
+        Map<String, String> expectedConfigs = new TreeMap<>();
+        expectedConfigs.put("num.standby.replicas", "2");
+        expectedConfigs.put("rack.aware.assignment.tags", "");
         assertEquals(
-            Map.of("num.standby.replicas", "2"),
+            expectedConfigs,
             assignor.lastPassedAssignmentConfigs()
         );
 
@@ -21682,9 +21661,7 @@ public class GroupMetadataManagerTest {
         context.assertSessionTimeout(groupId, memberId,
             GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT);
         assertEquals(
-            Map.of(
-                "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)
-            ),
+            getDefaultAssignmentConfigs(),
             assignor.lastPassedAssignmentConfigs());
         // Advance time.
         assertEquals(
@@ -21721,10 +21698,11 @@ public class GroupMetadataManagerTest {
 
         // Verify that the number of standby replicas is evaluated to max,
         // and task offset interval is evaluated to min
+        Map<String, String> expectedEvaluatedConfigs = new TreeMap<>();
+        expectedEvaluatedConfigs.put("num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT));
+        expectedEvaluatedConfigs.put("rack.aware.assignment.tags", "");
         assertEquals(
-            Map.of(
-                "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT)
-            ),
+            expectedEvaluatedConfigs,
             assignor.lastPassedAssignmentConfigs());
     }
 
@@ -22019,7 +21997,7 @@ public class GroupMetadataManagerTest {
 
         // The group still exists but the member is already gone. Replaying the
         // StreamsGroupMemberMetadata tombstone should be a no-op.
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, Map.of("num.standby.replicas", "0")));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, getDefaultAssignmentConfigs()));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("foo", "m1"));
         assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.streamsGroup("foo").getMemberOrThrow("m1"));
 
@@ -22075,7 +22053,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         // The group is created if it does not exist.
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, Map.of("num.standby.replicas", "0")));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, getDefaultAssignmentConfigs()));
         assertEquals(10, context.groupMetadataManager.streamsGroup("foo").groupEpoch());
     }
 
@@ -22272,7 +22250,7 @@ public class GroupMetadataManagerTest {
 
         // The group still exists, but the member is already gone. Replaying the
         // StreamsGroupCurrentMemberAssignment tombstone should be a no-op.
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, Map.of("num.standby.replicas", "0")));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, getDefaultAssignmentConfigs()));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord("foo", "m1"));
         assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.streamsGroup("foo").getMemberOrThrow("m1"));
 
@@ -22348,7 +22326,7 @@ public class GroupMetadataManagerTest {
 
         // The group still exists, but the member is already gone. Replaying the
         // StreamsGroupTopology tombstone should be a no-op.
-        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, Map.of("num.standby.replicas", "0")));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord("foo", 10, 0, 0, getDefaultAssignmentConfigs()));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone("foo"));
         assertTrue(context.groupMetadataManager.streamsGroup("foo").topology().isEmpty());
 
@@ -27635,7 +27613,7 @@ public class GroupMetadataManagerTest {
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 2, computeGroupHash(Map.of(
                     fooTopicName, computeTopicHash(fooTopicName, metadataImage)
-                )), 0, Map.of("num.standby.replicas", "0")),
+                )), 0, getDefaultAssignmentConfigs()),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId1,
                     TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
                         TaskAssignmentTestUtil.mkTasks(subtopology, 0, 1, 2, 3, 4, 5)
@@ -27697,7 +27675,7 @@ public class GroupMetadataManagerTest {
                 StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, expectedMember2),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 3, computeGroupHash(Map.of(
                     fooTopicName, computeTopicHash(fooTopicName, metadataImage)
-                )), 0, Map.of("num.standby.replicas", "0")),
+                )), 0, getDefaultAssignmentConfigs()),
                 StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, expectedMember2)
             ),
             result2.records()
@@ -27867,9 +27845,9 @@ public class GroupMetadataManagerTest {
      * This matches what streamsGroupAssignmentConfigs() would return.
      */
     private Map<String, String> getDefaultAssignmentConfigs() {
-        // Use the same default value as GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT
-        return new TreeMap<>(Map.of(
-            "num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT)
-        ));
+        Map<String, String> configs = new TreeMap<>();
+        configs.put("num.standby.replicas", String.valueOf(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT));
+        configs.put("rack.aware.assignment.tags", String.join(",", GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT));
+        return configs;
     }
 }

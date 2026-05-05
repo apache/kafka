@@ -30,6 +30,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -132,6 +133,8 @@ public class GroupConfigTest {
                 assertPropertyInvalid(name, "not_a_number", "1.0");
             } else if (GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_boolean");
+            } else if (GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG.equals(name)) {
+                // LIST type accepts any string value; no invalid cases.
             } else if (!GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "-0.1");
             }
@@ -509,6 +512,7 @@ public class GroupConfigTest {
         assertEquals(Optional.empty(), config.streamsAssignmentIntervalMs());
         assertEquals(Optional.empty(), config.streamsAssignorOffloadEnable());
         assertEquals(Optional.empty(), config.streamsTaskOffsetIntervalMs());
+        assertEquals(Optional.empty(), config.streamsRackAwareAssignmentTags());
 
         // DLQ configs - have defaults from CONFIG_DEF
         assertEquals("", config.errorsDLQTopicName());
@@ -540,6 +544,7 @@ public class GroupConfigTest {
         props.put(GroupConfig.STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, "1250");
         props.put(GroupConfig.STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, "false");
         props.put(GroupConfig.STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, "30000");
+        props.put(GroupConfig.STREAMS_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,cluster");
         props.put(GroupConfig.ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, "my-dlq-topic");
         props.put(GroupConfig.ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG, "true");
 
@@ -571,6 +576,7 @@ public class GroupConfigTest {
         assertEquals(Optional.of(1250), config.streamsAssignmentIntervalMs());
         assertEquals(Optional.of(false), config.streamsAssignorOffloadEnable());
         assertEquals(Optional.of(30000), config.streamsTaskOffsetIntervalMs());
+        assertEquals(Optional.of(List.of("zone", "cluster")), config.streamsRackAwareAssignmentTags());
 
         // DLQ configs
         assertEquals("my-dlq-topic", config.errorsDLQTopicName());

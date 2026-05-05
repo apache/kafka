@@ -533,6 +533,18 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         streamsRebalanceData.setHeartbeatIntervalMs(data.heartbeatIntervalMs());
         streamsRebalanceData.setTaskOffsetIntervalMs(data.taskOffsetIntervalMs());
 
+        if (data.rackAwareAssignmentTags() != null) {
+            Set<String> clientTagKeys = streamsRebalanceData.clientTags().keySet();
+            for (String requiredTag : data.rackAwareAssignmentTags()) {
+                if (!clientTagKeys.contains(requiredTag)) {
+                    logger.warn("Broker requires client tag '{}' for rack-aware standby assignment, " +
+                        "but this client does not have it configured. " +
+                        "Configure it via 'client.tag.{}' in your Streams config.",
+                        requiredTag, requiredTag);
+                }
+            }
+        }
+
         if (data.partitionsByUserEndpoint() != null) {
             streamsRebalanceData.setPartitionsByHost(convertHostInfoMap(data));
         }

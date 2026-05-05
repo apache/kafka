@@ -598,6 +598,20 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG, -1);
         assertEquals("Invalid value -1 for configuration group.streams.max.warmup.replicas: Value must be at least 0",
             assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+
+
+        // group.streams.rack.aware.assignment.tags
+
+        // default is empty list
+        configs.clear();
+        GroupCoordinatorConfig defaultTagsConfig = createConfig(configs);
+        assertEquals(List.of(), defaultTagsConfig.streamsGroupRackAwareAssignmentTags());
+
+        // can parse a non-empty value
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "zone,cluster");
+        GroupCoordinatorConfig nonEmptyTagsConfig = createConfig(configs);
+        assertEquals(List.of("zone", "cluster"), nonEmptyTagsConfig.streamsGroupRackAwareAssignmentTags());
     }
 
     @Test

@@ -380,6 +380,10 @@ public class GroupCoordinatorConfig {
     public static final String STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DOC = "The maximum interval between assignment updates for a streams group.";
     public static final int STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_DEFAULT = 15000;
 
+    public static final String STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG = "group.streams.rack.aware.assignment.tags";
+    public static final String STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT = "";
+    public static final String STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DOC = "List of client tag keys used to distribute standby replicas across Kafka Streams instances. When configured, the broker-side assignor will make a best-effort to distribute standby tasks over each client tag dimension.";
+
     public static final String STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_CONFIG = "group.streams.assignor.offload.enable";
     public static final String STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DOC = "Whether to offload streams group assignment to a group coordinator background thread.";
     public static final boolean STREAMS_GROUP_ASSIGNOR_OFFLOAD_ENABLE_DEFAULT = true;
@@ -492,7 +496,8 @@ public class GroupCoordinatorConfig {
         .define(STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_TASK_OFFSET_INTERVAL_MS_DOC)
         .define(STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_CONFIG, INT, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, STREAMS_GROUP_MIN_TASK_OFFSET_INTERVAL_MS_DOC)
         .define(STREAMS_GROUP_NUM_WARMUP_REPLICAS_CONFIG, INT, STREAMS_GROUP_NUM_WARMUP_REPLICAS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_NUM_WARMUP_REPLICAS_DOC)
-        .define(STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG, INT, STREAMS_GROUP_MAX_WARMUP_REPLICAS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MAX_WARMUP_REPLICAS_DOC);
+        .define(STREAMS_GROUP_MAX_WARMUP_REPLICAS_CONFIG, INT, STREAMS_GROUP_MAX_WARMUP_REPLICAS_DEFAULT, atLeast(0), MEDIUM, STREAMS_GROUP_MAX_WARMUP_REPLICAS_DOC)
+        .define(STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, LIST, STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DEFAULT, MEDIUM, STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_DOC);
 
 
     /**
@@ -553,6 +558,7 @@ public class GroupCoordinatorConfig {
     private final int streamsGroupMaxSize;
     private final int streamsGroupNumStandbyReplicas;
     private final int streamsGroupMaxStandbyReplicas;
+    private final List<String> streamsGroupRackAwareAssignmentTags;
     private final int streamsGroupInitialRebalanceDelayMs;
     private final int streamsGroupMinAssignmentIntervalMs;
     private final int streamsGroupMaxAssignmentIntervalMs;
@@ -622,6 +628,7 @@ public class GroupCoordinatorConfig {
         this.streamsGroupMaxSize = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_SIZE_CONFIG);
         this.streamsGroupNumStandbyReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG);
         this.streamsGroupMaxStandbyReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_CONFIG);
+        this.streamsGroupRackAwareAssignmentTags = config.getList(GroupCoordinatorConfig.STREAMS_GROUP_RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
         this.streamsGroupInitialRebalanceDelayMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG);
         this.streamsGroupMinAssignmentIntervalMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MIN_ASSIGNMENT_INTERVAL_MS_CONFIG);
         this.streamsGroupMaxAssignmentIntervalMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_ASSIGNMENT_INTERVAL_MS_CONFIG);
@@ -1299,6 +1306,13 @@ public class GroupCoordinatorConfig {
      */
     public int streamsGroupMaxNumStandbyReplicas() {
         return streamsGroupMaxStandbyReplicas;
+    }
+
+    /**
+     * The list of client tag keys used for rack-aware standby task assignment.
+     */
+    public List<String> streamsGroupRackAwareAssignmentTags() {
+        return streamsGroupRackAwareAssignmentTags;
     }
 
     /**

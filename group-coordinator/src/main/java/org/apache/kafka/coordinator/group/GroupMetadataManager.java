@@ -179,6 +179,7 @@ import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -2140,11 +2141,16 @@ public class GroupMetadataManager {
         }
 
         // Prepare the response.
+        String rackAwareTagsValue = currentAssignmentConfigs.getOrDefault("rack.aware.assignment.tags", "");
+        List<String> rackAwareAssignmentTags = rackAwareTagsValue.isEmpty()
+            ? Collections.emptyList()
+            : Arrays.asList(rackAwareTagsValue.split(",", -1));
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
             .setMemberId(updatedMember.memberId())
             .setMemberEpoch(updatedMember.memberEpoch())
             .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId))
-            .setTaskOffsetIntervalMs(streamsGroupTaskOffsetIntervalMs(groupId));
+            .setTaskOffsetIntervalMs(streamsGroupTaskOffsetIntervalMs(groupId))
+            .setRackAwareAssignmentTags(rackAwareAssignmentTags);
         // The assignment is only provided in the following cases:
         // 1. The member is joining.
         // 2. The member's assignment has been updated.
@@ -8961,9 +8967,12 @@ public class GroupMetadataManager {
         Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
         final Integer numStandbyReplicas = groupConfig.flatMap(GroupConfig::streamsNumStandbyReplicas)
             .orElse(config.streamsGroupNumStandbyReplicas());
-        return new TreeMap<>(Map.of(
-            "num.standby.replicas", numStandbyReplicas.toString()
-        ));
+        final List<String> rackAwareAssignmentTags = groupConfig.flatMap(GroupConfig::streamsRackAwareAssignmentTags)
+            .orElse(config.streamsGroupRackAwareAssignmentTags());
+        Map<String, String> configs = new TreeMap<>();
+        configs.put("num.standby.replicas", numStandbyReplicas.toString());
+        configs.put("rack.aware.assignment.tags", String.join(",", rackAwareAssignmentTags));
+        return configs;
     }
 
     /**
