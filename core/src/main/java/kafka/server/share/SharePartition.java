@@ -3346,17 +3346,11 @@ public class SharePartition {
             PersisterStateBatch stateBatch;
             lock.writeLock().lock();
             try {
-                InFlightState updateResult = updatedState.tryUpdateState(RecordState.ARCHIVED, DeliveryCountOps.NO_OP, maxDeliveryCount(), EMPTY_MEMBER_ID, shareGroupDlqEnableSupplier.get());
-                if (updateResult == null) {
-                    log.error("Unable to transition ARCHIVING → ARCHIVED - group: {}, topicIdPartition: {}, offset: {}-{}",
-                        this.groupId, this.topicIdPartition, firstOffset, lastOffset);
-                    return;
-                }
-                stateBatch = new PersisterStateBatch(
-                    firstOffset, lastOffset,
-                    updateResult.state().id(), (short) updateResult.deliveryCount());
-                deliveryCompleteCount.addAndGet(
-                    numInFlightRecordsInBatch(firstOffset, lastOffset));
+                // At this point ARCHIVED is imminent. If we rollback here or tryUpdateState fails,
+                // we risk stalling. So just move to ARCHIVED.
+                updatedState.archive();
+                stateBatch = new PersisterStateBatch(firstOffset, lastOffset, RecordState.ARCHIVED.id, deliveryCount);
+                deliveryCompleteCount.addAndGet(numInFlightRecordsInBatch(firstOffset, lastOffset));
             } finally {
                 lock.writeLock().unlock();
             }
