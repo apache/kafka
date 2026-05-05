@@ -953,8 +953,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
             long copyLagMs = logConfig.remoteCopyLagMs();
             long copyLagBytes = logConfig.remoteCopyLagBytes();
-            if (logger.isDebugEnabled()) {
-                logger.debug("delayCopy check for segment {}: copyLagMs={}, copyLagBytes={}, currentTimeMs={}, totalLogSize={}, cumulativeSize={}, sizeLagBytes={}",
+            if (logger.isTraceEnabled()) {
+                logger.trace("delayCopy check for segment {}: copyLagMs={}, copyLagBytes={}, currentTimeMs={}, totalLogSize={}, cumulativeSize={}, sizeLagBytes={}",
                         previousSeg, copyLagMs, copyLagBytes, currentTimeMs, totalLogSize, cumulativeSize, totalLogSize - cumulativeSize);
             }
 
@@ -981,8 +981,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             try {
                 long segmentAgeMs = currentTimeMs - segment.largestTimestamp();
                 boolean exceeded = segmentAgeMs >= copyLagMs;
-                if (logger.isDebugEnabled()) {
-                    logger.debug("{} eligible for upload by time? {} (segment age {} ms, copy lag {} ms)",
+                if (logger.isTraceEnabled()) {
+                    logger.trace("{} eligible for upload by time? {} (segment age {} ms, copy lag {} ms)",
                             segment, exceeded, segmentAgeMs, copyLagMs);
                 }
                 return !exceeded;
@@ -995,8 +995,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         private boolean notExceededCopyLagSize(LogSegment segment, long totalLogSize, long cumulativeSize, long copyLagBytes) {
             long sizeLagBytes = totalLogSize - cumulativeSize;
             boolean exceeded = sizeLagBytes >= copyLagBytes;
-            if (logger.isDebugEnabled()) {
-                logger.debug("{} eligible for upload by size? {} (size lag {} bytes, copy lag {} bytes, totalLogSize={}, cumulativeSize={})",
+            if (logger.isTraceEnabled()) {
+                logger.trace("{} eligible for upload by size? {} (size lag {} bytes, copy lag {} bytes, totalLogSize={}, cumulativeSize={})",
                         segment, exceeded, sizeLagBytes, copyLagBytes, totalLogSize, cumulativeSize);
             }
             return !exceeded;
