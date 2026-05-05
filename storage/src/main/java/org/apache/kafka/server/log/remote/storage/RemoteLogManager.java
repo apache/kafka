@@ -953,8 +953,10 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
             long copyLagMs = logConfig.remoteCopyLagMs();
             long copyLagBytes = logConfig.remoteCopyLagBytes();
-            logger.debug("delayCopy check for segment {}: copyLagMs={}, copyLagBytes={}, currentTimeMs={}, totalLogSize={}, cumulativeSize={}, sizeLagBytes={}",
-                    previousSeg, copyLagMs, copyLagBytes, currentTimeMs, totalLogSize, cumulativeSize, totalLogSize - cumulativeSize);
+            if (logger.isDebugEnabled()) {
+                logger.debug("delayCopy check for segment {}: copyLagMs={}, copyLagBytes={}, currentTimeMs={}, totalLogSize={}, cumulativeSize={}, sizeLagBytes={}",
+                        previousSeg, copyLagMs, copyLagBytes, currentTimeMs, totalLogSize, cumulativeSize, totalLogSize - cumulativeSize);
+            }
 
             if (copyLagMs == 0 || copyLagBytes == 0) {
                 return false;
@@ -979,8 +981,10 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             try {
                 long segmentAgeMs = currentTimeMs - segment.largestTimestamp();
                 boolean exceeded = segmentAgeMs >= copyLagMs;
-                logger.debug("{} eligible for upload by time? {} (segment age {} ms, copy lag {} ms)",
-                        segment, exceeded, segmentAgeMs, copyLagMs);
+                if (logger.isDebugEnabled()) {
+                    logger.debug("{} eligible for upload by time? {} (segment age {} ms, copy lag {} ms)",
+                            segment, exceeded, segmentAgeMs, copyLagMs);
+                }
                 return !exceeded;
             } catch (IOException e) {
                 logger.warn("Failed to get largest timestamp for segment {}, take it as eligible for upload based on time", segment, e);
@@ -991,8 +995,10 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         private boolean notExceededCopyLagSize(LogSegment segment, long totalLogSize, long cumulativeSize, long copyLagBytes) {
             long sizeLagBytes = totalLogSize - cumulativeSize;
             boolean exceeded = sizeLagBytes >= copyLagBytes;
-            logger.debug("{} eligible for upload by size? {} (size lag {} bytes, copy lag {} bytes, totalLogSize={}, cumulativeSize={})",
-                    segment, exceeded, sizeLagBytes, copyLagBytes, totalLogSize, cumulativeSize);
+            if (logger.isDebugEnabled()) {
+                logger.debug("{} eligible for upload by size? {} (size lag {} bytes, copy lag {} bytes, totalLogSize={}, cumulativeSize={})",
+                        segment, exceeded, sizeLagBytes, copyLagBytes, totalLogSize, cumulativeSize);
+            }
             return !exceeded;
         }
         
