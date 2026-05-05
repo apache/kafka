@@ -191,10 +191,6 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         }
     }
 
-    public int defaultReplicationFactor() {
-        return getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG).shortValue();
-    }
-
     public static Map<String, String> getMap(String propName, String propValue) {
         try {
             return Csv.parseCsvMap(propValue);
@@ -490,6 +486,11 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
     public long connectionSetupTimeoutMaxMs() {
         return getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG);
+    }
+
+    // ********* Replication configuration ***********
+    public int defaultReplicationFactor() {
+        return getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG).shortValue();
     }
 
     // ********* Log Configuration **********
