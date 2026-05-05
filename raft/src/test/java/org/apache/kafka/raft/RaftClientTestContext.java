@@ -2430,10 +2430,6 @@ public final class RaftClientTestContext {
                 throw new IllegalStateException("Reconfiguration must be enabled by calling withRaftProtocol(KIP_853_PROTOCOL)");
             }
         }
-      
-        boolean isAutoJoinSupported() {
-            return isAtLeast(KIP_1186_PROTOCOL);
-        }
 
         private boolean isAtLeast(RaftProtocol otherRpc) {
             return this.compareTo(otherRpc) >= 0;
