@@ -26,7 +26,7 @@ import java.util.concurrent.CompletableFuture;
  * The default share group DLQ manager responsible for processing
  * incoming messages and writing them to the appropriate dlq topic.
  */
-public class DefaultShareGroupDLQManager implements ShareGroupDLQ {
+public class DefaultShareGroupDLQManager implements ShareGroupDLQManager {
     /**
      * Reference to state manager responsible for actually sending
      * the relevant RPCs and writing records.
@@ -35,8 +35,17 @@ public class DefaultShareGroupDLQManager implements ShareGroupDLQ {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultShareGroupDLQManager.class);
 
-    public DefaultShareGroupDLQManager(ShareGroupDLQStateManager stateManager) {
+    public DefaultShareGroupDLQManager instance(ShareGroupDLQStateManager stateManager) {
+        DefaultShareGroupDLQManager instance = new DefaultShareGroupDLQManager(stateManager);
+        instance.start();
+        return instance;
+    }
+
+    private DefaultShareGroupDLQManager(ShareGroupDLQStateManager stateManager) {
         this.stateManager = stateManager;
+    }
+
+    private void start() {
         this.stateManager.start();
     }
 

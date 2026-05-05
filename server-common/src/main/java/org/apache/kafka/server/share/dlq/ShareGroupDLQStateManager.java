@@ -98,7 +98,11 @@ public class ShareGroupDLQStateManager {
     }
 
     /**
-     * The main method which enqueues a method to be DLQ'ed.
+     * Enqueues a {@link ShareGroupDLQRecordParameter} based on which records will be DLQ'ed.
+     * The actual record written to the DLQ topic will be built by fetching information from this argument.
+     *
+     * @param param Reference comprising offset information
+     * @return A future completing normally on successful DLQ, exceptionally otherwise.
      */
     public CompletableFuture<Void> dlq(ShareGroupDLQRecordParameter param) {
         ProduceRequestHandler requestHandler = new ProduceRequestHandler(param);

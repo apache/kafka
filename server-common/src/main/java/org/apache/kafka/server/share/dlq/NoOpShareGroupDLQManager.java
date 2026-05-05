@@ -23,11 +23,11 @@ import org.slf4j.LoggerFactory;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * A no op implementation of {@link ShareGroupDLQ}. This will be useful
+ * A no op implementation of {@link ShareGroupDLQManager}. This will be useful
  * in development cycle and testing. All methods return immediately with
  * a successfully completed future.
  */
-public class NoOpShareGroupDLQManager implements ShareGroupDLQ {
+public class NoOpShareGroupDLQManager implements ShareGroupDLQManager {
     private static final Logger log = LoggerFactory.getLogger(NoOpShareGroupDLQManager.class);
 
     @Override

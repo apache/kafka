@@ -22,7 +22,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * The main interface to identify implementations of dead letter queues for share groups.
  */
-public interface ShareGroupDLQ {
+public interface ShareGroupDLQManager {
     class ShareGroupDLQThrowable extends Throwable {
         ShareGroupDLQThrowable(String message) {
             // We don't want the stack trace to be filled.
@@ -34,7 +34,7 @@ public interface ShareGroupDLQ {
     Throwable DELIVERY_COUNT_EXCEEDED = new ShareGroupDLQThrowable("Offset delivery count exceeded the threshold.");
 
     /**
-     * Main method exposed to the world to enqueuing a record to the share groups dead letter queue.
+     * Main method exposed to the world to enqueue a record to the share groups dead letter queue.
      *
      * @param param A java record encapsulating required and optional information about the kafka record
      *              being dead letter queued.

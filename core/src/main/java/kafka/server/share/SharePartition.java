@@ -43,7 +43,7 @@ import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.dlq.NoOpShareGroupDLQManager;
-import org.apache.kafka.server.share.dlq.ShareGroupDLQ;
+import org.apache.kafka.server.share.dlq.ShareGroupDLQManager;
 import org.apache.kafka.server.share.dlq.ShareGroupDLQRecordParameter;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimeoutHandler;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimerTask;
@@ -332,7 +332,7 @@ public class SharePartition {
     /**
      * Reference to the dlq manager implementation.
      */
-    private final ShareGroupDLQ shareGroupDLQ = new NoOpShareGroupDLQManager();
+    private final ShareGroupDLQManager shareGroupDLQ = new NoOpShareGroupDLQManager();
 
     /**
      * Supplier to toggle dlq support.
@@ -2335,7 +2335,7 @@ public class SharePartition {
                     // mapping between bytes and record state type. All ack types have been added except for RENEW which
                     // has been handled above.
                     RecordState recordState = recordStateWithDlq(ackType);
-                    Throwable dlqCause = recordState == RecordState.ARCHIVING ? ShareGroupDLQ.CLIENT_REJECT : null;
+                    Throwable dlqCause = recordState == RecordState.ARCHIVING ? ShareGroupDLQManager.CLIENT_REJECT : null;
                     if (recordState == null) {
                         return Optional.of(new IllegalArgumentException("Unknown acknowledge type id: " + ackType));
                     }
@@ -2416,7 +2416,7 @@ public class SharePartition {
             // either released or moved to a state where member id existence is not important. The member id
             // is only important when the batch is acquired.
             RecordState recordState = recordStateWithDlq(ackType);
-            Throwable dlqCause = recordState == RecordState.ARCHIVING ? ShareGroupDLQ.CLIENT_REJECT : null;
+            Throwable dlqCause = recordState == RecordState.ARCHIVING ? ShareGroupDLQManager.CLIENT_REJECT : null;
             if (recordState == null) {
                 return Optional.of(new IllegalArgumentException("Unknown acknowledge type id: " + ackType));
             }
