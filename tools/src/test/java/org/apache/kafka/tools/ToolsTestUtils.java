@@ -116,7 +116,7 @@ public class ToolsTestUtils {
     public static void assignThrottledPartitionReplicas(Admin adminClient, Map<TopicPartition, List<Integer>> allReplicasByPartition) throws InterruptedException, ExecutionException {
         Map<ConfigResource, List<Entry<TopicPartition, List<Integer>>>> configResourceToPartitionReplicas =
             allReplicasByPartition.entrySet().stream()
-            .collect(Collectors.groupingBy(
+                .collect(Collectors.groupingBy(
                 topicPartitionListEntry -> new ConfigResource(ConfigResource.Type.TOPIC, topicPartitionListEntry.getKey().topic()))
             );
 

@@ -40,6 +40,7 @@ public interface ReplicaSelector extends Configurable, Closeable {
     Optional<ReplicaView> select(TopicPartition topicPartition,
                                  ClientMetadata clientMetadata,
                                  PartitionView partitionView);
+
     @Override
     default void close() throws IOException {
         // No-op by default

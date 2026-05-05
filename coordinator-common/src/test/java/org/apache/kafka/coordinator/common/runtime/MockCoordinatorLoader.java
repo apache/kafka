@@ -54,5 +54,5 @@ public class MockCoordinatorLoader implements CoordinatorLoader<String> {
     }
 
     @Override
-    public void close() {}
+    public void close() { }
 }

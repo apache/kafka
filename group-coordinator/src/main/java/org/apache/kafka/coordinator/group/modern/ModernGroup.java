@@ -50,6 +50,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         static final DeadlineAndEpoch EMPTY = new DeadlineAndEpoch(0L, 0);
 
         public final long deadlineMs;
+
         public final int epoch;
 
         DeadlineAndEpoch(long deadlineMs, int epoch) {

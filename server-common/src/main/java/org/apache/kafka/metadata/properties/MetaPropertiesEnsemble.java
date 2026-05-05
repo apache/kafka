@@ -115,7 +115,7 @@ public final class MetaPropertiesEnsemble {
             return this;
         }
 
-        public MetaPropertiesEnsemble load() throws IOException  {
+        public MetaPropertiesEnsemble load() throws IOException {
             if (logDirs.isEmpty()) {
                 throw new RuntimeException("You must specify at least one log directory.");
             }

@@ -200,9 +200,11 @@ public class DescribeConfigsResponse extends AbstractResponse {
         public String name() {
             return name;
         }
+
         public String value() {
             return value;
         }
+
         public ConfigSource source() {
             return source;
         }

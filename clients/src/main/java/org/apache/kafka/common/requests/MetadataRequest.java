@@ -76,7 +76,7 @@ public class MetadataRequest extends AbstractRequest {
         }
 
         public Builder(List<String> topics, boolean allowAutoTopicCreation) {
-            this(topics, allowAutoTopicCreation, ApiKeys.METADATA.oldestVersion(),  ApiKeys.METADATA.latestVersion());
+            this(topics, allowAutoTopicCreation, ApiKeys.METADATA.oldestVersion(), ApiKeys.METADATA.latestVersion());
         }
 
         public static Builder allTopics() {

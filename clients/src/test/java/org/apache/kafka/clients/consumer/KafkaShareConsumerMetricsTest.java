@@ -73,7 +73,7 @@ public class KafkaShareConsumerMetricsTest {
     private final String topic = "test";
     private final Uuid topicId = Uuid.randomUuid();
     private final Map<String, Uuid> topicIds = Stream.of(
-                    new AbstractMap.SimpleEntry<>(topic, topicId))
+        new AbstractMap.SimpleEntry<>(topic, topicId))
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     private final Time time = new MockTime();
     private final SubscriptionState subscription = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
@@ -372,6 +372,7 @@ public class KafkaShareConsumerMetricsTest {
 
         return new ShareConsumerConfig(configs);
     }
+
     private void initMetadata(MockClient mockClient, Map<String, Integer> partitionCounts) {
         Map<String, Uuid> metadataIds = new HashMap<>();
         for (String name : partitionCounts.keySet()) {

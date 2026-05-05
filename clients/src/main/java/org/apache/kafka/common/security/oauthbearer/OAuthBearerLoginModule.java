@@ -343,7 +343,7 @@ public class OAuthBearerLoginModule implements LoginModule {
             extensionsRequiringCommit = EMPTY_EXTENSIONS;
             log.debug("CallbackHandler {} does not support SASL extensions. No extensions will be added", callbackHandler.getClass().getName());
         }
-        if (extensionsRequiringCommit ==  null) {
+        if (extensionsRequiringCommit == null) {
             log.error("SASL Extensions cannot be null. Check whether your callback handler is explicitly setting them as null.");
             throw new LoginException("Extensions cannot be null.");
         }
@@ -360,7 +360,7 @@ public class OAuthBearerLoginModule implements LoginModule {
         }
         if (myCommittedToken != null) {
             log.trace("Logging out my token; current committed token count = {}", committedTokenCount());
-            for (Iterator<Object> iterator = subject.getPrivateCredentials().iterator(); iterator.hasNext(); ) {
+            for (Iterator<Object> iterator = subject.getPrivateCredentials().iterator(); iterator.hasNext();) {
                 Object privateCredential = iterator.next();
                 if (privateCredential == myCommittedToken) {
                     iterator.remove();

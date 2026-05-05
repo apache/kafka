@@ -28,6 +28,7 @@ import java.nio.channels.ServerSocketChannel;
 
 public interface ServerSocketFactory {
     ServerSocketFactory INSTANCE = new KafkaServerSocketFactory();
+
     ServerSocketChannel openServerSocket(
         String listenerName,
         InetSocketAddress socketAddress,

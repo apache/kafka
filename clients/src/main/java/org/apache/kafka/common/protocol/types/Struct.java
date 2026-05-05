@@ -265,7 +265,7 @@ public class Struct {
             if (f.def.type.isArray()) {
                 if (this.get(f) != null) {
                     Object[] arrayObject = (Object[]) this.get(f);
-                    for (Object arrayItem: arrayObject)
+                    for (Object arrayItem : arrayObject)
                         result = prime * result + arrayItem.hashCode();
                 }
             } else {

@@ -38,7 +38,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addRateOfSumAndSumMetricsToSensor;
 
 public class ProcessorNodeMetrics {
-    private ProcessorNodeMetrics() {}
+    private ProcessorNodeMetrics() { }
 
     private static final String RATE_DESCRIPTION_PREFIX = "The average number of ";
     private static final String RATE_DESCRIPTION_SUFFIX = " per second";

@@ -90,7 +90,7 @@ public class MemoryStatusBackingStore implements StatusBackingStore {
     @Override
     public void put(final TopicStatus status) {
         topics.computeIfAbsent(status.connector(), k -> new ConcurrentHashMap<>())
-                .put(status.topic(), status);
+              .put(status.topic(), status);
     }
 
     @Override

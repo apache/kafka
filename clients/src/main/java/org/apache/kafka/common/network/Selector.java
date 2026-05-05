@@ -846,7 +846,7 @@ public class Selector implements Selectable, AutoCloseable {
         this.disconnected.clear();
 
         // Remove closed channels after all their buffered receives have been processed or if a send was requested
-        for (Iterator<Map.Entry<String, KafkaChannel>> it = closingChannels.entrySet().iterator(); it.hasNext(); ) {
+        for (Iterator<Map.Entry<String, KafkaChannel>> it = closingChannels.entrySet().iterator(); it.hasNext();) {
             KafkaChannel channel = it.next().getValue();
             boolean sendFailed = failedSends.remove(channel.id());
             boolean hasPending = false;
@@ -1156,7 +1156,7 @@ public class Selector implements Selectable, AutoCloseable {
             this.perConnectionMetricGrpName = metricGrpPrefix + "-node-metrics";
             StringBuilder tagsSuffix = new StringBuilder();
 
-            for (Map.Entry<String, String> tag: metricTags.entrySet()) {
+            for (Map.Entry<String, String> tag : metricTags.entrySet()) {
                 tagsSuffix.append(tag.getKey());
                 tagsSuffix.append("-");
                 tagsSuffix.append(tag.getValue());
@@ -1274,12 +1274,12 @@ public class Selector implements Selectable, AutoCloseable {
                 return new Meter(stat, rateMetricName, totalMetricName);
         }
 
-        private Meter createMeter(Metrics metrics, String groupName,  Map<String, String> metricTags,
+        private Meter createMeter(Metrics metrics, String groupName, Map<String, String> metricTags,
                 String baseName, String descriptiveName) {
             return createMeter(metrics, groupName, metricTags, null, baseName, descriptiveName);
         }
 
-        private Meter createIOThreadRatioMeter(Metrics metrics, String groupName,  Map<String, String> metricTags,
+        private Meter createIOThreadRatioMeter(Metrics metrics, String groupName, Map<String, String> metricTags,
                                                String baseName, String action) {
             MetricName rateMetricName = metrics.metricName(baseName + "-ratio", groupName,
                 String.format("The fraction of time the I/O thread spent %s", action), metricTags);

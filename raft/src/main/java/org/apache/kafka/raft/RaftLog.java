@@ -323,5 +323,5 @@ public interface RaftLog extends AutoCloseable {
      */
     void onSnapshotFrozen(OffsetAndEpoch snapshotId);
 
-    default void close() {}
+    default void close() { }
 }

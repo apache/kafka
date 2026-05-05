@@ -47,7 +47,7 @@ public class DslKeyValueParams {
      * @param dslStoreFormat the format of the state store, see ({@link DslStoreFormat}
      */
     public DslKeyValueParams(final String name, final DslStoreFormat dslStoreFormat) {
-        this.name =  Objects.requireNonNull(name);
+        this.name = Objects.requireNonNull(name);
         this.dslStoreFormat = Objects.requireNonNull(dslStoreFormat);
     }
 

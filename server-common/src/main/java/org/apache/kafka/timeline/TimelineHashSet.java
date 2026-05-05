@@ -247,7 +247,7 @@ public class TimelineHashSet<T>
             return false;
         try {
             return containsAll(c);
-        } catch (ClassCastException unused)   {
+        } catch (ClassCastException unused) {
             return false;
         }
     }

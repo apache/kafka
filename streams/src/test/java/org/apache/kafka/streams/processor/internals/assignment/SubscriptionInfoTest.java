@@ -394,7 +394,7 @@ public class SubscriptionInfoTest {
                 ACTIVE_TASKS,
                 STANDBY_TASKS,
                 "localhost:80")
-            .encode());
+                .encode());
 
         assertThat(info.taskOffsetSums(), is(expectedOffsetSumsMap));
     }
@@ -489,7 +489,7 @@ public class SubscriptionInfoTest {
 
     private static ByteBuffer encodeFutureVersion() {
         final ByteBuffer buf = ByteBuffer.allocate(4 /* used version */
-                                                       + 4 /* supported version */);
+            + 4 /* supported version */);
         buf.putInt(LATEST_SUPPORTED_VERSION + 1);
         buf.putInt(LATEST_SUPPORTED_VERSION + 1);
         buf.rewind();

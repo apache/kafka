@@ -33,7 +33,7 @@ public final class SinkUtils {
     public static final String KAFKA_PARTITION_KEY = "kafka_partition";
     public static final String KAFKA_OFFSET_KEY = "kafka_offset";
 
-    private SinkUtils() {}
+    private SinkUtils() { }
 
     public static String consumerGroupId(String connector) {
         return "connect-" + connector;
@@ -47,7 +47,7 @@ public final class SinkUtils {
             partition.put(KAFKA_TOPIC_KEY, topicPartitionOffset.getKey().topic());
             partition.put(KAFKA_PARTITION_KEY, topicPartitionOffset.getKey().partition());
             connectorOffsets.add(new ConnectorOffset(partition,
-                   Map.of(KAFKA_OFFSET_KEY, topicPartitionOffset.getValue().offset())));
+                Map.of(KAFKA_OFFSET_KEY, topicPartitionOffset.getValue().offset())));
         }
 
         return new ConnectorOffsets(connectorOffsets);

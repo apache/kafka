@@ -1514,6 +1514,7 @@ public interface Admin extends AutoCloseable {
      */
     AlterUserScramCredentialsResult alterUserScramCredentials(List<UserScramCredentialAlteration> alterations,
                                                               AlterUserScramCredentialsOptions options);
+
     /**
      * Describes finalized as well as supported features.
      * <p>

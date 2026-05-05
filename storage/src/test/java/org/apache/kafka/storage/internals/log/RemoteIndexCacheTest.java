@@ -1298,7 +1298,7 @@ public class RemoteIndexCacheTest {
             return Files.walk(cache.cacheDir().toPath())
                     .filter(Files::isRegularFile)
                     .filter(path -> path.getFileName().toString().endsWith(suffix))
-            .findAny();
+                    .findAny();
         } catch (IOException exc) {
             return Optional.empty();
         }

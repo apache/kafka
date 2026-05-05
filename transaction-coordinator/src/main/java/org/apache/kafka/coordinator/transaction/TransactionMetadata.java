@@ -512,6 +512,7 @@ public class TransactionMetadata {
     public void setProducerId(long producerId) {
         this.producerId = producerId;
     }
+
     public long producerId() {
         return producerId;
     }
@@ -520,6 +521,7 @@ public class TransactionMetadata {
     public void setPrevProducerId(long prevProducerId) {
         this.prevProducerId = prevProducerId;
     }
+
     public long prevProducerId() {
         return prevProducerId;
     }

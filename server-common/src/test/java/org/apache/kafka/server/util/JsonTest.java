@@ -208,6 +208,7 @@ public class JsonTest {
         assertTo(Optional.of(1234), decodeJson, jsonObject -> jsonObject.get("int").get());
         assertToFails(DecodeJson.decodeOptional(new DecodeJson.DecodeString()), jsonObject -> jsonObject.get("int").get());
     }
+
     private <T> void assertTo(T expected, DecodeJson<T> decodeJson, Function<JsonObject, JsonValue> jsonValue) throws JsonMappingException {
         JsonValue parsed = jsonValue.apply(parse(JSON).asJsonObject());
         assertEquals(expected, parsed.to(decodeJson));

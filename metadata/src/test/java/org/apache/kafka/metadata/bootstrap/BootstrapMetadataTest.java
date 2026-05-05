@@ -51,7 +51,7 @@ public class BootstrapMetadataTest {
             new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(FEATURE_NAME).
                 setFeatureLevel((short) 7), (short) 0)),
-                    IBP_3_3_IV3.featureLevel(), "foo"),
+            IBP_3_3_IV3.featureLevel(), "foo"),
             BootstrapMetadata.fromVersion(IBP_3_3_IV3, "foo"));
     }
 

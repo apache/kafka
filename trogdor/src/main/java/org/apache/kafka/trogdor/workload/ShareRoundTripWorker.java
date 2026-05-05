@@ -46,6 +46,7 @@ import java.util.concurrent.TimeUnit;
 public class ShareRoundTripWorker extends RoundTripWorkerBase {
     private static final Logger log = LoggerFactory.getLogger(ShareRoundTripWorker.class);
     KafkaShareConsumer<byte[], byte[]> consumer;
+
     ShareRoundTripWorker(String id, RoundTripWorkloadSpec spec) {
         this.id = id;
         this.spec = spec;

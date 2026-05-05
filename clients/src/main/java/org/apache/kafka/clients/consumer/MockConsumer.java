@@ -204,7 +204,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         committed.clear();
         this.subscriptions.subscribe(pattern, listener);
         Set<String> topicsToSubscribe = new HashSet<>();
-        for (String topic: partitions.keySet()) {
+        for (String topic : partitions.keySet()) {
             if (pattern.matcher(topic).matches() &&
                 !subscriptions.subscription().contains(topic))
                 topicsToSubscribe.add(topic);

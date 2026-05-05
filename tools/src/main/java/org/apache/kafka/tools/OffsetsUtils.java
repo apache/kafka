@@ -465,7 +465,7 @@ public class OffsetsUtils {
                 .flatMap(entry -> entry.getValue().partitions().stream()
                     .filter(partitionInfo -> partitionInfo.leader() == null)
                     .map(partitionInfo -> new TopicPartition(entry.getKey(), partitionInfo.partition())))
-                    .filter(topicPartitions::contains)
+                .filter(topicPartitions::contains)
                 .toList();
         } catch (Exception e) {
             throw new RuntimeException(e);

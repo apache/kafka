@@ -450,6 +450,7 @@ public class SslFactory implements Reconfigurable, Closeable {
         void beginHandshake() throws SSLException {
             sslEngine.beginHandshake();
         }
+
         void handshake(SslEngineValidator peerValidator) throws SSLException {
             SSLEngineResult.HandshakeStatus handshakeStatus = sslEngine.getHandshakeStatus();
             while (true) {

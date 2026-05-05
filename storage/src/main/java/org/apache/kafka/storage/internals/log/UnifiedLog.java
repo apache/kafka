@@ -623,7 +623,7 @@ public class UnifiedLog implements AutoCloseable {
             throw new IllegalArgumentException("High watermark offset should be non-negative");
         }
 
-        synchronized (lock)  {
+        synchronized (lock) {
             if (newHighWatermark.messageOffset < highWatermarkMetadata.messageOffset) {
                 logger.warn("Non-monotonic update of high watermark from {} to {}", highWatermarkMetadata, newHighWatermark);
             }
@@ -1134,7 +1134,7 @@ public class UnifiedLog implements AutoCloseable {
             // trim any invalid bytes or partial messages before appending it to the on-disk log
             final MemoryRecords trimmedRecords = trimInvalidBytes(records, appendInfo);
             // they are valid, insert them in the log
-            synchronized (lock)  {
+            synchronized (lock) {
                 return maybeHandleIOException(
                         () -> "Error while appending records to " + topicPartition() + " in dir " + dir().getParent(),
                         () -> {
@@ -1354,7 +1354,7 @@ public class UnifiedLog implements AutoCloseable {
         return maybeHandleIOException(
                 () -> "Exception while increasing log start offset for " + topicPartition() + " to " + newLogStartOffset + " in dir " + dir().getParent(),
                 () -> {
-                    synchronized (lock)  {
+                    synchronized (lock) {
                         if (newLogStartOffset > highWatermark()) {
                             throw new OffsetOutOfRangeException("Cannot increment the log start offset to " + newLogStartOffset + " of partition " + topicPartition() +
                                     " since it is larger than the high watermark " + highWatermark());
@@ -1756,7 +1756,7 @@ public class UnifiedLog implements AutoCloseable {
 
                             AsyncOffsetReadFutureHolder<OffsetResultHolder.FileRecordsOrError> asyncOffsetReadFutureHolder =
                                     remoteOffsetReader.get().asyncOffsetRead(topicPartition(), targetTimestamp,
-                                    logStartOffset, leaderEpochCache, () -> searchOffsetInLocalLog(targetTimestamp, localLogStartOffset()));
+                                        logStartOffset, leaderEpochCache, () -> searchOffsetInLocalLog(targetTimestamp, localLogStartOffset()));
                             return new OffsetResultHolder(Optional.empty(), Optional.of(asyncOffsetReadFutureHolder));
                         } else {
                             return new OffsetResultHolder(searchOffsetInLocalLog(targetTimestamp, logStartOffset));
@@ -1837,7 +1837,7 @@ public class UnifiedLog implements AutoCloseable {
      * @return The number of segments deleted
      */
     private int deleteOldSegments(DeletionCondition predicate, SegmentDeletionReason reason) throws IOException {
-        synchronized (lock)  {
+        synchronized (lock) {
             List<LogSegment> deletable = deletableSegments(predicate);
             if (!deletable.isEmpty()) {
                 return deleteSegments(deletable, reason);
@@ -2389,7 +2389,7 @@ public class UnifiedLog implements AutoCloseable {
                 () -> "Error while truncating the entire log for " + topicPartition() + " in dir " + dir().getParent(),
                 () -> {
                     logger.debug("Truncate and start at offset {}, logStartOffset: {}", newOffset, logStartOffsetOpt.orElse(newOffset));
-                    synchronized (lock)  {
+                    synchronized (lock) {
                         localLog.truncateFullyAndStartAt(newOffset);
                         leaderEpochCache.clearAndFlush();
                         producerStateManager.truncateFullyAndStartAt(newOffset);

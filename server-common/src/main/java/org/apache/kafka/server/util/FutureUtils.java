@@ -59,12 +59,12 @@ public class FutureUtils {
             T result = time.waitForFuture(future, deadline.nanoseconds());
             log.info("{}Finished waiting for {}", prefix, action);
             return result;
-        } catch (TimeoutException t)  {
+        } catch (TimeoutException t) {
             log.error("{}Timed out while waiting for {}", prefix, action, t);
             TimeoutException timeout = new TimeoutException("Timed out while waiting for " + action);
             timeout.setStackTrace(t.getStackTrace());
             throw timeout;
-        } catch (Throwable t)  {
+        } catch (Throwable t) {
             if (t instanceof ExecutionException executionException) {
                 t = executionException.getCause();
             }

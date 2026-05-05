@@ -302,7 +302,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         private final DeleteShareGroupStateParameters deleteStateRequestParameters;
 
         DeleteShareGroupOffsetsResultHolder(short topLevelErrorCode, String topLevelErrorMessage) {
-            this(topLevelErrorCode, topLevelErrorMessage, null,  null);
+            this(topLevelErrorCode, topLevelErrorMessage, null, null);
         }
 
         DeleteShareGroupOffsetsResultHolder(

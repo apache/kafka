@@ -70,11 +70,11 @@ public class CheckpointStore implements AutoCloseable {
         this.consumerGroups = null; //ignored by tests
         this.checkpointsPerConsumerGroup = checkpointsPerConsumerGroup;
         isInitialized = true;
-        loadSuccess =  true;
+        loadSuccess = true;
     }
 
     // potentially long running
-    public boolean start()  {
+    public boolean start() {
         checkpointsPerConsumerGroup = readCheckpoints();
         isInitialized = true;
         if (log.isTraceEnabled()) {

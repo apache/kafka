@@ -298,7 +298,7 @@ public class FetchSessionHandler {
             List<TopicIdPartition> altered = new ArrayList<>();
             List<TopicIdPartition> replaced = new ArrayList<>();
             for (Iterator<Entry<TopicPartition, PartitionData>> iter =
-                 sessionPartitions.entrySet().iterator(); iter.hasNext(); ) {
+                 sessionPartitions.entrySet().iterator(); iter.hasNext();) {
                 Entry<TopicPartition, PartitionData> entry = iter.next();
                 TopicPartition topicPartition = entry.getKey();
                 PartitionData prevData = entry.getValue();
@@ -412,7 +412,7 @@ public class FetchSessionHandler {
      */
     static <T> Set<T> findMissing(Set<T> toFind, Set<T> toSearch) {
         Set<T> ret = new LinkedHashSet<>();
-        for (T toFindItem: toFind) {
+        for (T toFindItem : toFind) {
             if (!toSearch.contains(toFindItem)) {
                 ret.add(toFindItem);
             }

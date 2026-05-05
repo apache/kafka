@@ -65,7 +65,7 @@ public class KerberosClientCallbackHandler implements AuthenticateCallbackHandle
                 ac.setAuthorized(authId.equals(authzId));
                 if (ac.isAuthorized())
                     ac.setAuthorizedID(authzId);
-            }  else {
+            } else {
                 throw new UnsupportedCallbackException(callback, "Unrecognized SASL ClientCallback");
             }
         }

@@ -181,7 +181,7 @@ public class RepartitionOptimizingTest {
             .join(countStream, (v1, v2) -> v1 + ":" + v2.toString(),
                   JoinWindows.of(ofMillis(5000)),
                   StreamJoined.<String, String, Long>with(Stores.inMemoryWindowStore("join-store", ofDays(1), ofMillis(10000), true),
-                                       Stores.inMemoryWindowStore("other-join-store", ofDays(1), ofMillis(10000), true))
+                      Stores.inMemoryWindowStore("other-join-store", ofDays(1), ofMillis(10000), true))
                           .withName("join")
                           .withKeySerde(Serdes.String())
                           .withValueSerde(Serdes.String())
@@ -373,7 +373,6 @@ public class RepartitionOptimizingTest {
                                                                   + "      <-- join-merge\n"
                                                                   + "    Sink: reduce-to (topic: outputTopic_1)\n"
                                                                   + "      <-- aggregate-toStream\n\n";
-
 
 
 

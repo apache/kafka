@@ -52,6 +52,7 @@ import java.util.Optional;
 public final class MetadataDelta {
     public static class Builder {
         private MetadataImage image = MetadataImage.EMPTY;
+
         private SupportedConfigChecker supportedConfigChecker = SupportedConfigChecker.TRUE;
 
         public Builder setImage(MetadataImage image) {

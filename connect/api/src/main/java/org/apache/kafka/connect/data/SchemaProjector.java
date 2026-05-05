@@ -105,7 +105,7 @@ public class SchemaProjector {
             } else if (targetField.schema().defaultValue() != null) {
                 targetStruct.put(fieldName, targetField.schema().defaultValue());
             } else {
-                throw new SchemaProjectorException("Required field `" +  fieldName + "` is missing from source schema: " + source);
+                throw new SchemaProjectorException("Required field `" + fieldName + "` is missing from source schema: " + source);
             }
         }
         return targetStruct;

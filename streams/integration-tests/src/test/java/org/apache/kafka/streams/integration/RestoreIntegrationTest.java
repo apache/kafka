@@ -227,7 +227,7 @@ public class RestoreIntegrationTest {
 
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
         builder.table(inputTopic, Materialized.<Integer, Bytes>as(
-                        Stores.persistentTimestampedKeyValueStore(stateStoreName))
+            Stores.persistentTimestampedKeyValueStore(stateStoreName))
                 .withKeySerde(Serdes.Integer())
                 .withValueSerde(Serdes.Bytes())
                 .withCachingDisabled()).toStream().to(outputTopic);

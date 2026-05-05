@@ -311,7 +311,7 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
 
             context().forward(
                     thisRecord.withValue(joiner.apply(thisRecord.key(), thisRecord.value(), otherRecord.value))
-                            .withTimestamp(Math.max(inputRecordTimestamp, otherRecord.key)));
+                              .withTimestamp(Math.max(inputRecordTimestamp, otherRecord.key)));
         }
 
         private void putInOuterJoinStore(final Record<K, VThis> thisRecord) {

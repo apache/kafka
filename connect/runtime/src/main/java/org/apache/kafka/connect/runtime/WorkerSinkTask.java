@@ -664,7 +664,7 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
         if (offsets.isEmpty()) {
             return;
         }
-        for (Map.Entry<TopicPartition, Long> entry: offsets.entrySet()) {
+        for (Map.Entry<TopicPartition, Long> entry : offsets.entrySet()) {
             TopicPartition tp = entry.getKey();
             Long offset = entry.getValue();
             if (offset != null) {

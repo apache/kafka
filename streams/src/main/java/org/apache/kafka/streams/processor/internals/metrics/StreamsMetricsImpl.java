@@ -261,6 +261,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                 final Gauge<T> valueProvider) {
         addThreadLevelMutableMetric(name, description, threadId, Collections.emptyMap(), valueProvider);
     }
+
     public <T> void addThreadLevelMutableMetric(final String name,
                                                 final String description,
                                                 final String threadId,

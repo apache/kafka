@@ -240,7 +240,7 @@ public class StreamsProducer {
      * @throws TaskMigratedException
      */
     public void commitTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                     final ConsumerGroupMetadata consumerGroupMetadata) {
+                                  final ConsumerGroupMetadata consumerGroupMetadata) {
         if (!eosEnabled()) {
             throw new IllegalStateException(formatException("Exactly-once is not enabled"));
         }

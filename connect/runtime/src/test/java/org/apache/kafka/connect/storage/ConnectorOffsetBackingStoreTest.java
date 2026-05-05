@@ -451,7 +451,7 @@ public class ConnectorOffsetBackingStoreTest {
 
     private Map<ByteBuffer, ByteBuffer> getSerialisedOffsets(Map<byte[], byte[]> offsets) {
         Map<ByteBuffer, ByteBuffer> serialisedOffsets = new HashMap<>();
-        for (Map.Entry<byte[], byte[]> offsetEntry: offsets.entrySet()) {
+        for (Map.Entry<byte[], byte[]> offsetEntry : offsets.entrySet()) {
             serialisedOffsets.put(ByteBuffer.wrap(offsetEntry.getKey()),
                 offsetEntry.getValue() == null ? null : ByteBuffer.wrap(offsetEntry.getValue()));
         }

@@ -32,6 +32,7 @@ public final class TxnMetadata {
         this.firstOffset = firstOffset;
         this.lastOffset = lastOffset;
     }
+
     public TxnMetadata(long producerId, long firstOffset) {
         this(producerId, new LogOffsetMetadata(firstOffset));
     }

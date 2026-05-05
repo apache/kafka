@@ -36,7 +36,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addSumMetricToSensor;
 
 public class ClientMetrics {
-    private ClientMetrics() {}
+    private ClientMetrics() { }
 
     private static final Logger log = LoggerFactory.getLogger(ClientMetrics.class);
     private static final String VERSION = "version";

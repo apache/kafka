@@ -99,6 +99,7 @@ public abstract class AbstractWindowBytesStoreTest {
                                                        final boolean retainDuplicates,
                                                        final Serde<K> keySerde,
                                                        final Serde<V> valueSerde);
+
     @BeforeEach
     protected void setup() {
         

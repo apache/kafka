@@ -50,6 +50,7 @@ import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.STORAGE_WAIT_TIMEOUT_SEC;
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createPropsForRemoteStorage;
+
 /**
  * Base class for integration tests exercising the tiered storage functionality in Apache Kafka.
  * This uses a {@link LocalTieredStorage} instance as the second-tier storage system and

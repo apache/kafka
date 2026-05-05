@@ -382,6 +382,7 @@ public final class NioEchoServer extends Thread {
         public AcceptorThread() {
             setName("acceptor");
         }
+
         @Override
         public void run() {
             java.nio.channels.Selector acceptSelector = null;

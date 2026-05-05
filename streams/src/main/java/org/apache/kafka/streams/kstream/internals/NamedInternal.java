@@ -88,7 +88,7 @@ public class NamedInternal extends Named {
         if (name != null) {
             provider.newProcessorName(prefix);
             return name;
-        }  else {
+        } else {
             return provider.newProcessorName(prefix);
         }
     }

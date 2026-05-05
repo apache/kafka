@@ -42,7 +42,7 @@ class TransactionLogConfigTest {
                 .peek(field -> field.setAccessible(true))
                 .map(field -> assertDoesNotThrow(() -> (String) field.get(null)))
                 .collect(Collectors.toSet());
-        assertEquals(declaredConfigs,  TransactionLogConfig.CONFIG_DEF.names());
+        assertEquals(declaredConfigs, TransactionLogConfig.CONFIG_DEF.names());
     }
 
     @SuppressWarnings("ResultOfMethodCallIgnored")

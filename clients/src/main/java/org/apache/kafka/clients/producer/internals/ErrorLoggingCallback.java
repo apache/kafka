@@ -31,6 +31,7 @@ public class ErrorLoggingCallback implements Callback {
     private final int valueLength;
     private final boolean logAsString;
     private byte[] value;
+
     public ErrorLoggingCallback(String topic, byte[] key, byte[] value, boolean logAsString) {
         this.topic = topic;
         this.key = key;

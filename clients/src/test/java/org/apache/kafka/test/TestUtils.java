@@ -642,7 +642,7 @@ public class TestUtils {
     }
 
     @SuppressWarnings("unchecked")
-    public static <T> T fieldValue(Object o, Class<?> clazz, String fieldName)  {
+    public static <T> T fieldValue(Object o, Class<?> clazz, String fieldName) {
         try {
             Field field = clazz.getDeclaredField(fieldName);
             field.setAccessible(true);

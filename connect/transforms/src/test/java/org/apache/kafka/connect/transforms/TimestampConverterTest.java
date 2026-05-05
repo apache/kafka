@@ -298,16 +298,19 @@ public class TimestampConverterTest {
         testSchemalessNullValueConversion("string");
         testSchemalessNullFieldConversion("string");
     }
+
     @Test
     public void testSchemalessNullValueToDate() {
         testSchemalessNullValueConversion("Date");
         testSchemalessNullFieldConversion("Date");
     }
+
     @Test
     public void testSchemalessNullValueToTimestamp() {
         testSchemalessNullValueConversion("Timestamp");
         testSchemalessNullFieldConversion("Timestamp");
     }
+
     @Test
     public void testSchemalessNullValueToUnix() {
         testSchemalessNullValueConversion("unix");

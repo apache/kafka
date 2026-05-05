@@ -115,8 +115,8 @@ public class DeleteConsumerGroupsTest {
             String topicName = composeTopicName(groupProtocol);
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", groupId};
             try (
-                    AutoCloseable consumerGroupCloseable = consumerGroupClosable(cluster, groupProtocol, groupId, topicName);
-                    ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)
+                AutoCloseable consumerGroupCloseable = consumerGroupClosable(cluster, groupProtocol, groupId, topicName);
+                ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)
             ) {
                 TestUtils.waitForCondition(
                         () -> service.collectGroupMembers(groupId).getValue().get().size() == 1,
@@ -148,8 +148,8 @@ public class DeleteConsumerGroupsTest {
             String topicName = composeTopicName(groupProtocol);
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", groupId};
             try (
-                    AutoCloseable consumerGroupCloseable = consumerGroupClosable(cluster, groupProtocol, groupId, topicName);
-                    ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)
+                AutoCloseable consumerGroupCloseable = consumerGroupClosable(cluster, groupProtocol, groupId, topicName);
+                ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)
             ) {
                 TestUtils.waitForCondition(
                         () -> service.listConsumerGroups().contains(groupId) && checkGroupState(service, groupId, STABLE),
@@ -221,8 +221,8 @@ public class DeleteConsumerGroupsTest {
             String missingGroupId = composeMissingGroupId(groupProtocol);
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", groupId};
             try (
-                    AutoCloseable consumerGroupClosable = consumerGroupClosable(cluster, groupProtocol, groupId, topicName);
-                    ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)
+                AutoCloseable consumerGroupClosable = consumerGroupClosable(cluster, groupProtocol, groupId, topicName);
+                ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)
             ) {
                 TestUtils.waitForCondition(
                         () -> service.listConsumerGroups().contains(groupId) && checkGroupState(service, groupId, STABLE),
@@ -254,8 +254,8 @@ public class DeleteConsumerGroupsTest {
             String missingGroupId = composeMissingGroupId(groupProtocol);
             String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", groupId};
             try (
-                    AutoCloseable executor = consumerGroupClosable(cluster, groupProtocol, groupId, topicName);
-                    ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)
+                AutoCloseable executor = consumerGroupClosable(cluster, groupProtocol, groupId, topicName);
+                ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)
             ) {
                 TestUtils.waitForCondition(
                         () -> service.listConsumerGroups().contains(groupId) && checkGroupState(service, groupId, STABLE),

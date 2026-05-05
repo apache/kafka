@@ -211,7 +211,7 @@ public abstract class SslSelectorTest extends SelectorTest {
         // Truncate the read buffers to ensure that there is buffered data, but not enough to make progress.
         int largeRequestSize = 100 * 1024;
         connect(node1, new InetSocketAddress("localhost", server.port));
-        selector.send(createSend(node1,  TestUtils.randomString(largeRequestSize)));
+        selector.send(createSend(node1, TestUtils.randomString(largeRequestSize)));
         waitForBytesBuffered(selector, node1);
         TestSslChannelBuilder.TestSslTransportLayer.transportLayers.get(node1).truncateReadBuffer();
         disableRead.accept(selector.channel(node1).selectionKey());

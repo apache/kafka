@@ -965,7 +965,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         List<ConfigInfo> configInfoList = new LinkedList<>();
 
         Map<String, ConfigValue> configValueMap = new HashMap<>();
-        for (ConfigValue configValue: configValues) {
+        for (ConfigValue configValue : configValues) {
             String configName = configValue.name();
             configValueMap.put(configName, configValue);
             if (!configKeys.containsKey(configName)) {
@@ -1021,7 +1021,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         List<String> recommendedValues = new LinkedList<>();
 
         if (type == Type.LIST) {
-            for (Object object: configValue.recommendedValues()) {
+            for (Object object : configValue.recommendedValues()) {
                 recommendedValues.add(ConfigDef.convertToString(object, Type.STRING));
             }
         } else {

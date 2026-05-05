@@ -128,7 +128,7 @@ public class ProducerInterceptors<K, V> implements Closeable {
                         interceptTopicPartition = extractTopicPartition(record);
                     }
                     interceptorPlugin.get().onAcknowledgement(new RecordMetadata(interceptTopicPartition, -1, -1,
-                                    RecordBatch.NO_TIMESTAMP, -1, -1), exception, headers);
+                        RecordBatch.NO_TIMESTAMP, -1, -1), exception, headers);
                 }
             } catch (Exception e) {
                 // do not propagate interceptor exceptions, just log

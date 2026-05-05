@@ -128,7 +128,7 @@ public class InternalTopologyBuilderTest {
 
         builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.none()), "source0", null, null, null, Pattern.compile(noneTopicPattern));
         builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.earliest()), "source1", null, null, null, Pattern.compile(earliestTopicPattern));
-        builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.latest()), "source2", null, null, null,  Pattern.compile(latestTopicPattern));
+        builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.latest()), "source2", null, null, null, Pattern.compile(latestTopicPattern));
         builder.addSource(new AutoOffsetResetInternal(AutoOffsetReset.byDuration(Duration.ofSeconds(42))), "source3", null, null, null, Pattern.compile(durationTopicPattern));
 
         builder.initializeSubscription();

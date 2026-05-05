@@ -317,6 +317,7 @@ public class AbstractConfigTest {
             public RestrictedClassLoader() {
                 super(null);
             }
+
             @Override
             protected Class<?> findClass(String name) throws ClassNotFoundException {
                 if (name.equals(ClassTestConfig.DEFAULT_CLASS.getName()) || name.equals(ClassTestConfig.RESTRICTED_CLASS.getName()))
@@ -620,7 +621,7 @@ public class AbstractConfigTest {
 
         assertEquals(
                 TestIndirectConfigResolution.INDIRECT_CONFIGS_DOC,
-                    config.documentationOf(TestIndirectConfigResolution.INDIRECT_CONFIGS)
+            config.documentationOf(TestIndirectConfigResolution.INDIRECT_CONFIGS)
         );
     }
 
@@ -739,6 +740,7 @@ public class AbstractConfigTest {
 
     public static class ConfiguredFakeMetricsReporter extends FakeMetricsReporter {
         public static final String EXTRA_CONFIG = "metric.extra_config";
+
         @Override
         public void configure(Map<String, ?> configs) {
             // Calling get() should have the side effect of marking that config as used.

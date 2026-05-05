@@ -329,7 +329,7 @@ public class FeatureControlManager {
         numControllersChecked++;
         for (Iterator<Entry<Integer, Map<String, VersionRange>>> iter =
             clusterSupportDescriber.brokerSupported();
-                iter.hasNext(); ) {
+                iter.hasNext();) {
             Entry<Integer, Map<String, VersionRange>> entry = iter.next();
             reason = QuorumFeatures.reasonNotSupported(newVersion,
                     "Broker " + entry.getKey(),
@@ -343,7 +343,7 @@ public class FeatureControlManager {
         if (metadataVersionOrThrow().isControllerRegistrationSupported()) {
             for (Iterator<Entry<Integer, Map<String, VersionRange>>> iter =
                  clusterSupportDescriber.controllerSupported();
-                 iter.hasNext(); ) {
+                 iter.hasNext();) {
                 Entry<Integer, Map<String, VersionRange>> entry = iter.next();
                 if (entry.getKey() == quorumFeatures.nodeId()) {
                     // No need to re-check the features supported by this controller, since we

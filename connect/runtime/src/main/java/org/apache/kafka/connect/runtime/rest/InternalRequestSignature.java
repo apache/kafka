@@ -56,7 +56,7 @@ public class InternalRequestSignature {
         Mac mac;
         try {
             mac = crypto.mac(signatureAlgorithm);
-        }  catch (NoSuchAlgorithmException e) {
+        } catch (NoSuchAlgorithmException e) {
             throw new ConnectException(e);
         }
         byte[] requestSignature = sign(mac, key, requestBody);

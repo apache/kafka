@@ -33,7 +33,7 @@ import java.nio.ByteBuffer;
 
 public class SnappyCompression implements Compression {
 
-    private SnappyCompression() {}
+    private SnappyCompression() { }
 
     @Override
     public CompressionType type() {

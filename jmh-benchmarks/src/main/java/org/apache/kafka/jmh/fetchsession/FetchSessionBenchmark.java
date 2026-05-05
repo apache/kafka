@@ -97,7 +97,7 @@ public class FetchSessionBenchmark {
         handler.handleResponse(FetchResponse.of(Errors.NONE, 0, 1, respMap, List.of()), ApiKeys.FETCH.latestVersion());
 
         int counter = 0;
-        for (TopicPartition topicPartition: new ArrayList<>(fetches.keySet())) {
+        for (TopicPartition topicPartition : new ArrayList<>(fetches.keySet())) {
             if (updatedPercentage != 0 && counter % (100 / updatedPercentage) == 0) {
                 // reorder in fetch session, and update log start offset
                 fetches.remove(topicPartition);
@@ -117,7 +117,7 @@ public class FetchSessionBenchmark {
         else
             builder = handler.newBuilder();
 
-        for (Map.Entry<TopicPartition, FetchRequest.PartitionData> entry: fetches.entrySet()) {
+        for (Map.Entry<TopicPartition, FetchRequest.PartitionData> entry : fetches.entrySet()) {
             TopicPartition topicPartition = entry.getKey();
             builder.add(topicPartition, entry.getValue());
         }

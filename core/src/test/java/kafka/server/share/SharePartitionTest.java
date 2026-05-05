@@ -4434,7 +4434,7 @@ public class SharePartitionTest {
 
         // Acknowledging over subset of both batch with subset of gap offsets.
         sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(
-                        6, 18, List.of(
+            6, 18, List.of(
                         AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id,
                         AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id, AcknowledgeType.ACCEPT.id,
                         ACKNOWLEDGE_TYPE_GAP_ID, ACKNOWLEDGE_TYPE_GAP_ID, AcknowledgeType.ACCEPT.id,
@@ -8035,7 +8035,7 @@ public class SharePartitionTest {
         assertEquals(249, sharePartition.endOffset());
 
         sharePartition.acknowledge(MEMBER_ID, List.of(
-                        new ShareAcknowledgementBatch(0, 89, List.of(AcknowledgeType.ACCEPT.id))));
+            new ShareAcknowledgementBatch(0, 89, List.of(AcknowledgeType.ACCEPT.id))));
 
         // The SPSO should only move when the initial records in cached state are acknowledged with type ACKNOWLEDGE or ARCHIVED.
         assertEquals(90, sharePartition.startOffset());
@@ -9989,7 +9989,7 @@ public class SharePartitionTest {
         // is run successfully post write state RPC failure.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS);
         TestUtils.waitForCondition(
-            () -> sharePartition.cachedState().get(2L).offsetState().get(3L).state() == RecordState.AVAILABLE  &&
+            () -> sharePartition.cachedState().get(2L).offsetState().get(3L).state() == RecordState.AVAILABLE &&
                 sharePartition.cachedState().get(7L).batchState() == RecordState.AVAILABLE &&
                 sharePartition.cachedState().get(2L).offsetState().get(3L).deliveryCount() == 1 &&
                 sharePartition.cachedState().get(7L).batchDeliveryCount() == 1 &&
@@ -10018,8 +10018,8 @@ public class SharePartitionTest {
         // but the acquisition lock timeout task should be just expired for acknowledged offsets, though
         // the state should not be archived.
         TestUtils.waitForCondition(
-            () -> sharePartition.cachedState().get(2L).offsetState().get(2L).state() == RecordState.ARCHIVED  &&
-                sharePartition.cachedState().get(2L).offsetState().get(3L).state() == RecordState.ACKNOWLEDGED  &&
+            () -> sharePartition.cachedState().get(2L).offsetState().get(2L).state() == RecordState.ARCHIVED &&
+                sharePartition.cachedState().get(2L).offsetState().get(3L).state() == RecordState.ACKNOWLEDGED &&
                 sharePartition.cachedState().get(2L).offsetState().get(3L).acquisitionLockTimeoutTask().hasExpired() &&
                 sharePartition.cachedState().get(7L).batchState() == RecordState.ACKNOWLEDGED &&
                 sharePartition.cachedState().get(7L).batchAcquisitionLockTimeoutTask().hasExpired(),

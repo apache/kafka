@@ -142,7 +142,7 @@ public class KeyValueTimestampedHeaderStoreToKeyValueTimestampStoreAdapter<K, V>
                 keyValuePair.key,
                 ValueAndTimestamp.make(keyValuePair.value.value(), keyValuePair.value.timestamp()))
             )
-            .collect(Collectors.toList())
+                .collect(Collectors.toList())
         );
     }
 

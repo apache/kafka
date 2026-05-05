@@ -236,7 +236,7 @@ public class SuppressTopologyTest {
                 "input",
                 Materialized.as(Stores.persistentVersionedKeyValueStore("store", Duration.ZERO))
         ).filter((k, v) -> true)
-        .suppress(Suppressed.untilTimeLimit(Duration.ZERO, Suppressed.BufferConfig.unbounded()));
+            .suppress(Suppressed.untilTimeLimit(Duration.ZERO, Suppressed.BufferConfig.unbounded()));
 
         assertThrows(
             TopologyException.class,

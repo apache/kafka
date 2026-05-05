@@ -223,7 +223,7 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
             SaslConfigs.SASL_JAAS_CONFIG
         };
         Arrays.stream(sensitiveConfigKeys)
-                .forEach(config -> assertTrue(configString.contains(config + "=(redacted)")));
+              .forEach(config -> assertTrue(configString.contains(config + "=(redacted)")));
     }
 
     @Test

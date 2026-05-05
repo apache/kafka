@@ -58,7 +58,7 @@ public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
     }
 
     @Override
-    public void init(final StateStoreContext stateStoreContext, final StateStore root) {}
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) { }
 
     @Override
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {

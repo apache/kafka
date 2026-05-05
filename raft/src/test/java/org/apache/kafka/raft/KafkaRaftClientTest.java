@@ -2814,7 +2814,7 @@ class KafkaRaftClientTest {
         assertEquals(0, context.channel.drainSendQueue().size());
 
         // Append some records that can fulfill the Fetch request
-        String[] appendRecords = new String[]{"a", "b", "c"};
+        String[] appendRecords = new String[]{ "a", "b", "c" };
         context.client.prepareAppend(epoch, List.of(appendRecords));
         context.client.schedulePreparedAppend();
         context.client.poll();
@@ -3989,7 +3989,7 @@ class KafkaRaftClientTest {
         // We still write the leader change message
         assertEquals(OptionalLong.of(1L), context.client.highWatermark());
 
-        String[] appendRecords = new String[]{"a", "b", "c"};
+        String[] appendRecords = new String[]{ "a", "b", "c" };
 
         // First poll has no high watermark advance
         context.client.poll();

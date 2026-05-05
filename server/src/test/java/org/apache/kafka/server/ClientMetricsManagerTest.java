@@ -356,8 +356,8 @@ public class ClientMetricsManagerTest {
         // last request information but request should succeed as subscription id should match
         // the one with new client instance.
         try (
-                Metrics kafkaMetrics = new Metrics();
-                ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientTelemetryExporterPlugin, 100, time, kafkaMetrics)
+            Metrics kafkaMetrics = new Metrics();
+            ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientTelemetryExporterPlugin, 100, time, kafkaMetrics)
         ) {
 
             PushTelemetryRequest pushRequest = new Builder(
@@ -596,8 +596,8 @@ public class ClientMetricsManagerTest {
         // client instance information but request should succeed as subscription id should match
         // the one with new client instance.
         try (
-                Metrics kafkaMetrics = new Metrics();
-                ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientTelemetryExporterPlugin, 100, time, kafkaMetrics)
+            Metrics kafkaMetrics = new Metrics();
+            ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientTelemetryExporterPlugin, 100, time, kafkaMetrics)
         ) {
 
             PushTelemetryRequest request = new PushTelemetryRequest.Builder(
@@ -888,8 +888,8 @@ public class ClientMetricsManagerTest {
     @Test
     public void testPushTelemetryMetricsTooLarge() throws Exception {
         try (
-                Metrics kafkaMetrics = new Metrics();
-                ClientMetricsManager clientMetricsManager = new ClientMetricsManager(clientTelemetryExporterPlugin, 1, time, kafkaMetrics)
+            Metrics kafkaMetrics = new Metrics();
+            ClientMetricsManager clientMetricsManager = new ClientMetricsManager(clientTelemetryExporterPlugin, 1, time, kafkaMetrics)
         ) {
 
             GetTelemetrySubscriptionsRequest subscriptionsRequest = new GetTelemetrySubscriptionsRequest.Builder(
@@ -943,8 +943,8 @@ public class ClientMetricsManagerTest {
         List<PushTelemetryResponse> responses = Collections.synchronizedList(new ArrayList<>());
 
         try (
-                Metrics kafkaMetrics = new Metrics();
-                ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientTelemetryExporterPlugin, 100, time, kafkaMetrics)
+            Metrics kafkaMetrics = new Metrics();
+            ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientTelemetryExporterPlugin, 100, time, kafkaMetrics)
         ) {
 
             Thread thread = new Thread(() -> {
@@ -1082,8 +1082,8 @@ public class ClientMetricsManagerTest {
         Mockito.doThrow(new RuntimeException("test exception")).when(receiverPlugin).exportMetrics(Mockito.any(), Mockito.any(), Mockito.anyInt());
 
         try (
-                Metrics kafkaMetrics = new Metrics();
-                ClientMetricsManager clientMetricsManager = new ClientMetricsManager(receiverPlugin, 100, time, 100, kafkaMetrics)
+            Metrics kafkaMetrics = new Metrics();
+            ClientMetricsManager clientMetricsManager = new ClientMetricsManager(receiverPlugin, 100, time, 100, kafkaMetrics)
         ) {
 
             clientMetricsManager.updateSubscription("sub-1", ClientMetricsTestUtils.defaultTestProperties());

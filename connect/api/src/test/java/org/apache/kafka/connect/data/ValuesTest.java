@@ -345,7 +345,7 @@ public class ValuesTest {
 
     @Test
     public void shouldConvertSimpleString() {
-        assertRoundTrip(Schema.STRING_SCHEMA,  "simple");
+        assertRoundTrip(Schema.STRING_SCHEMA, "simple");
     }
 
     @Test

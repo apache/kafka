@@ -856,7 +856,7 @@ public abstract class AbstractStickyAssignorTest {
             Map<String, List<TopicPartition>> assign = assignor.assignPartitions(partitionsPerTopic, subscriptions);
             assertEquals(assign.values().stream().mapToInt(List::size).sum(),
                     assign.values().stream().flatMap(List::stream).collect(Collectors.toSet()).size());
-            for (List<TopicPartition> list: assign.values()) {
+            for (List<TopicPartition> list : assign.values()) {
                 assertTrue(list.size() >= 1 && list.size() <= 2);
             }
         }
@@ -976,7 +976,7 @@ public abstract class AbstractStickyAssignorTest {
         Map<String, TopicPartition> partitionsAssigned = new HashMap<>();
 
         Set<Map.Entry<String, List<TopicPartition>>> assignments = assignment.entrySet();
-        for (Map.Entry<String, List<TopicPartition>> entry: assignments) {
+        for (Map.Entry<String, List<TopicPartition>> entry : assignments) {
             String consumer = entry.getKey();
             List<TopicPartition> topicPartitions = entry.getValue();
             int size = topicPartitions.size();
@@ -1000,7 +1000,7 @@ public abstract class AbstractStickyAssignorTest {
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
 
         assignments = assignment.entrySet();
-        for (Map.Entry<String, List<TopicPartition>> entry: assignments) {
+        for (Map.Entry<String, List<TopicPartition>> entry : assignments) {
             String consumer = entry.getKey();
             List<TopicPartition> topicPartitions = entry.getValue();
             assertEquals(1, topicPartitions.size(), "Consumer " + consumer + " is assigned more topic partitions than expected.");
@@ -1451,7 +1451,7 @@ public abstract class AbstractStickyAssignorTest {
     protected static boolean isFullyBalanced(Map<String, List<TopicPartition>> assignment) {
         int min = Integer.MAX_VALUE;
         int max = Integer.MIN_VALUE;
-        for (List<TopicPartition> topicPartitions: assignment.values()) {
+        for (List<TopicPartition> topicPartitions : assignment.values()) {
             int size = topicPartitions.size();
             if (size < min)
                 min = size;
@@ -1497,7 +1497,7 @@ public abstract class AbstractStickyAssignorTest {
         for (int i = 0; i < size; ++i) {
             String consumer = consumers.get(i);
             List<TopicPartition> partitions = assignments.get(consumer);
-            for (TopicPartition partition: partitions)
+            for (TopicPartition partition : partitions)
                 assertTrue(subscriptions.get(consumer).topics().contains(partition.topic()),
                     "Error: Partition " + partition + "is assigned to c" + i + ", but it is not subscribed to Topic t" +
                     partition.topic() + "\nSubscriptions: " + subscriptions + "\nAssignments: " + assignments);

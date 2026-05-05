@@ -243,7 +243,7 @@ public final class ClientUtils {
     public static ClusterResourceListeners configureClusterResourceListeners(List<?>... candidateLists) {
         ClusterResourceListeners clusterResourceListeners = new ClusterResourceListeners();
 
-        for (List<?> candidateList: candidateLists)
+        for (List<?> candidateList : candidateLists)
             clusterResourceListeners.maybeAddAll(candidateList);
 
         return clusterResourceListeners;

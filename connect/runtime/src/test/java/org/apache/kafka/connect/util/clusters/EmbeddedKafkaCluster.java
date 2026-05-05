@@ -474,7 +474,7 @@ public class EmbeddedKafkaCluster {
                     allowedDuration = maxDuration - (System.currentTimeMillis() - startMillis);
                     continue;
                 }
-                for (TopicPartition partition: rec.partitions()) {
+                for (TopicPartition partition : rec.partitions()) {
                     final List<ConsumerRecord<byte[], byte[]>> r = rec.records(partition);
                     records.computeIfAbsent(partition, t -> new ArrayList<>()).addAll(r);
                     final ConsumerRecord<byte[], byte[]> lastRecord = r.get(r.size() - 1);

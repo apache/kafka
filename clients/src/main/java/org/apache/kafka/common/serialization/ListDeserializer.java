@@ -56,7 +56,7 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
     private Class<?> listClass;
     private Integer primitiveSize;
 
-    public ListDeserializer() {}
+    public ListDeserializer() { }
 
     public <L extends List<Inner>> ListDeserializer(Class<L> listClass, Deserializer<Inner> inner) {
         if (listClass == null || inner == null) {

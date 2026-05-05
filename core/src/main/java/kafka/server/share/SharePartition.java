@@ -1780,7 +1780,7 @@ public class SharePartition {
             // Create batches of acquired records.
             List<AcquiredRecords> acquiredRecords = createBatches(memberId, batches, isRecordLimitMode, maxFetchRecords, firstAcquiredOffset, lastAcquiredOffset, batchSize);
             // if the cachedState was empty before acquiring the new batches then startOffset needs to be updated
-            if (cachedState.firstKey() == firstAcquiredOffset)  {
+            if (cachedState.firstKey() == firstAcquiredOffset) {
                 startOffset = firstAcquiredOffset;
             }
 
@@ -2865,7 +2865,7 @@ public class SharePartition {
         RecordBatch previousBatch = null;
         for (RecordBatch batch : batches) {
             if (offset >= batch.baseOffset()) {
-                previousBatch =  batch;
+                previousBatch = batch;
                 continue;
             }
             break;
@@ -2879,7 +2879,7 @@ public class SharePartition {
     CompletableFuture<Void> writeShareGroupState(List<PersisterStateBatch> stateBatches) {
         CompletableFuture<Void> future = new CompletableFuture<>();
         persister.writeState(new WriteShareGroupStateParameters.Builder()
-            .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionStateBatchData>()
+                .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionStateBatchData>()
                 .setGroupId(this.groupId)
                 .setTopicsData(List.of(new TopicData<>(topicIdPartition.topicId(),
                     List.of(PartitionFactory.newPartitionStateBatchData(
@@ -3459,6 +3459,7 @@ public class SharePartition {
     // Visible for Testing
     static class GapWindow {
         private final long endOffset;
+
         private long gapStartOffset;
 
         GapWindow(long endOffset, long gapStartOffset) {
@@ -3485,6 +3486,7 @@ public class SharePartition {
     static final class OffsetMetadata {
         // This offset could be different from offsetMetadata.messageOffset if it's in the middle of a batch.
         private long offset;
+
         private LogOffsetMetadata offsetMetadata;
 
         OffsetMetadata() {

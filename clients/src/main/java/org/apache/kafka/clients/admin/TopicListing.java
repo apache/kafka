@@ -64,6 +64,6 @@ public class TopicListing {
 
     @Override
     public String toString() {
-        return "(name=" + name + ", topicId=" + topicId +  ", internal=" + internal + ")";
+        return "(name=" + name + ", topicId=" + topicId + ", internal=" + internal + ")";
     }
 }

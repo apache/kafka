@@ -168,7 +168,7 @@ public final class TopicsDelta {
         ImmutableMap<Uuid, TopicImage> newTopicsById = image.topicsById();
         ImmutableMap<String, TopicImage> newTopicsByName = image.topicsByName();
         // apply all the deletes
-        for (Uuid topicId: deletedTopicIds) {
+        for (Uuid topicId : deletedTopicIds) {
             // it was deleted, so we have to remove it from the maps
             TopicImage originalTopicToBeDeleted = image.topicsById().get(topicId);
             if (originalTopicToBeDeleted == null) {
@@ -179,7 +179,7 @@ public final class TopicsDelta {
             }
         }
         // apply all the updates/additions
-        for (Map.Entry<Uuid, TopicDelta> entry: changedTopics.entrySet()) {
+        for (Map.Entry<Uuid, TopicDelta> entry : changedTopics.entrySet()) {
             Uuid topicId = entry.getKey();
             TopicImage newTopicToBeAddedOrUpdated = entry.getValue().apply();
             // put new information into the maps

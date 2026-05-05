@@ -50,7 +50,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class Utils {
-    private Utils() {}
+    private Utils() { }
 
     /**
      * @return An OptionalInt containing the value iff the value is different from

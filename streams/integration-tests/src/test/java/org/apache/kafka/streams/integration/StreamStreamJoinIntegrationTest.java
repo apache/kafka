@@ -304,7 +304,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         leftStream.map(MockMapper.noOpKeyValueMapper())
             .leftJoin(
                 rightStream.flatMap(MockMapper.noOpFlatKeyValueMapper())
-                     .selectKey(MockMapper.selectKeyKeyValueMapper()),
+                    .selectKey(MockMapper.selectKeyKeyValueMapper()),
                 valueJoiner,
                 JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
             ).to(OUTPUT_TOPIC);

@@ -3334,7 +3334,7 @@ public class SenderTest {
                     tp -> {
                         if (tp0.equals(tp)) {
                             return epoch;
-                        }  else if (tp1.equals(tp)) {
+                        } else if (tp1.equals(tp)) {
                             return 0;
                         } else {
                             throw new RuntimeException("unexpected tp " + tp);
@@ -3450,7 +3450,7 @@ public class SenderTest {
                     tp -> {
                         if (tp0.equals(tp)) {
                             return tp0LeaderEpoch;
-                        }  else if (tp1.equals(tp)) {
+                        } else if (tp1.equals(tp)) {
                             return tp1LeaderEpoch;
                         } else if (tp2.equals(tp)) {
                             return tp2LeaderEpoch;
@@ -3530,7 +3530,7 @@ public class SenderTest {
                     tp -> {
                         if (tp0.equals(tp)) {
                             return tp0LeaderEpoch;
-                        }  else if (tp1.equals(tp)) {
+                        } else if (tp1.equals(tp)) {
                             return tp1LeaderEpoch;
                         } else if (tp2.equals(tp)) {
                             return tp2LeaderEpoch;
@@ -3959,6 +3959,7 @@ public class SenderTest {
     private void createMockClientWithMaxFlightOneMetadataPending() {
         client = new MockClient(time, metadata) {
             volatile boolean canSendMore = true;
+
             @Override
             public LeastLoadedNode leastLoadedNode(long now) {
                 for (Node node : metadata.fetch().nodes()) {

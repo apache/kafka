@@ -131,6 +131,7 @@ public class Formatter {
      * The initial KIP-853 voters.
      */
     private Optional<DynamicVoters> initialControllers = Optional.empty();
+
     private boolean hasDynamicQuorum = false;
 
     public Formatter setPrintStream(PrintStream printStream) {

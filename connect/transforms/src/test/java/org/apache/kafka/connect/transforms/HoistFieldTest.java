@@ -57,7 +57,7 @@ public class HoistFieldTest {
         final SinkRecord transformedRecord = xform.apply(record);
 
         assertEquals(Schema.Type.STRUCT, transformedRecord.keySchema().type());
-        assertEquals(record.keySchema(),  transformedRecord.keySchema().field("magic").schema());
+        assertEquals(record.keySchema(), transformedRecord.keySchema().field("magic").schema());
         assertEquals(42, ((Struct) transformedRecord.key()).get("magic"));
     }
 

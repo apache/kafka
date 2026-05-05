@@ -169,7 +169,7 @@ public class CurrentAssignmentBuilderTest {
                 .setMemberEpoch(memberEpoch + 1)
                 .setPreviousMemberEpoch(memberEpoch)
                 .setAssignedTasks(mkTasksTupleWithEpochs(taskRole,
-                    mkTasksWithEpochs(SUBTOPOLOGY_ID1,  Map.of(1, 9, 2, 8, 4, memberEpoch + 1)),
+                    mkTasksWithEpochs(SUBTOPOLOGY_ID1, Map.of(1, 9, 2, 8, 4, memberEpoch + 1)),
                     mkTasksWithEpochs(SUBTOPOLOGY_ID2, Map.of(3, 9, 4, 8, 7, memberEpoch + 1))))
                 .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
                 .build(),

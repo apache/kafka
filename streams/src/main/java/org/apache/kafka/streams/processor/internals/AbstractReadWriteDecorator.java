@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 
 abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends WrappedStateStore<T, K, V> {
+
     static final String ERROR_MESSAGE = "This method may only be called by Kafka Streams";
 
     private AbstractReadWriteDecorator(final T inner) {

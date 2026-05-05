@@ -57,7 +57,7 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
 
 public final class StreamsTestUtils {
-    private StreamsTestUtils() {}
+    private StreamsTestUtils() { }
 
     public static Properties getStreamsConfig(final String applicationId,
                                               final String bootstrapServers,

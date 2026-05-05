@@ -1731,7 +1731,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private void leaveGroupOnClose(final Timer timer, final CloseOptions.GroupMembershipOperation membershipOperation) {
-        if (groupMetadata.get().isEmpty() ||  applicationEventHandler == null)
+        if (groupMetadata.get().isEmpty() || applicationEventHandler == null)
             return;
 
         log.debug("Leaving the consumer group during consumer close");

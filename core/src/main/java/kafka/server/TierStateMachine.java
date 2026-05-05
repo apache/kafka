@@ -74,6 +74,7 @@ public class TierStateMachine {
     private final LeaderEndPoint leader;
     private final ReplicaManager replicaMgr;
     private final boolean useFutureLog;
+
     public TierStateMachine(LeaderEndPoint leader,
                             ReplicaManager replicaMgr,
                             boolean useFutureLog) {

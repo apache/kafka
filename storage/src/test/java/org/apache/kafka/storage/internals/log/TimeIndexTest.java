@@ -120,6 +120,7 @@ public class TimeIndexTest {
                 long timestamp = shouldCorruptTimestamp ? firstEntry.timestamp() - 1 : superLastEntry.timestamp();
                 return new TimestampOffset(timestamp, offset);
             }
+
             @Override
             public long length() {
                 long superLength = super.length();

@@ -1247,7 +1247,7 @@ public class StreamsConfig extends AbstractConfig {
                     Type.STRING,
                     CommonClientConfigs.DEFAULT_METADATA_RECOVERY_STRATEGY,
                     ConfigDef.CaseInsensitiveValidString
-                    .in(Utils.enumOptions(MetadataRecoveryStrategy.class)),
+                        .in(Utils.enumOptions(MetadataRecoveryStrategy.class)),
                     Importance.LOW,
                     CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC)
             .define(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG,
@@ -1644,7 +1644,7 @@ public class StreamsConfig extends AbstractConfig {
     private Boolean maybeMetricsPushEnabled(final String prefix) {
         Boolean configSetValue = null;
         if (originalsWithPrefix(prefix).containsKey(ENABLE_METRICS_PUSH_CONFIG)) {
-            configSetValue =  (Boolean) originalsWithPrefix(prefix).get(ENABLE_METRICS_PUSH_CONFIG);
+            configSetValue = (Boolean) originalsWithPrefix(prefix).get(ENABLE_METRICS_PUSH_CONFIG);
         }
         return configSetValue;
     }
@@ -1761,7 +1761,7 @@ public class StreamsConfig extends AbstractConfig {
         final String nonConfigurableConfigMessage = "Unexpected user-specified {} config '{}' found. {} setting ({}) will be ignored and the Streams default setting ({}) will be used.";
         final String eosMessage = "'" + PROCESSING_GUARANTEE_CONFIG + "' is set to \"" + getString(PROCESSING_GUARANTEE_CONFIG) + "\". Hence, user";
 
-        for (final String config: nonConfigurableConfigs) {
+        for (final String config : nonConfigurableConfigs) {
             if (clientProvidedProps.containsKey(config)) {
 
                 if (CONSUMER_DEFAULT_OVERRIDES.containsKey(config)) {
@@ -2081,7 +2081,7 @@ public class StreamsConfig extends AbstractConfig {
                 throw new ConfigException("\"" + config + "\" is not a valid optimization config. " + CONFIG_ERROR_MSG);
             }
         }
-        for (final String conf: configs) {
+        for (final String conf : configs) {
             if (!TOPOLOGY_OPTIMIZATION_CONFIGS.contains(conf)) {
                 throw new ConfigException("Unrecognized config. " + CONFIG_ERROR_MSG);
             }
@@ -2222,7 +2222,7 @@ public class StreamsConfig extends AbstractConfig {
         // iterate all client config names, filter out non-client configs from the original
         // property map and use the overridden values when they are not specified by users
         final Map<String, Object> parsed = new HashMap<>();
-        for (final String configName: configNames) {
+        for (final String configName : configNames) {
             if (originals.containsKey(configName)) {
                 parsed.put(configName, originals.get(configName));
             }

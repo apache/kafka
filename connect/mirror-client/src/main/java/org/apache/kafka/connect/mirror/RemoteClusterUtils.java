@@ -43,7 +43,7 @@ import java.util.regex.Pattern;
 public final class RemoteClusterUtils {
 
     // utility class
-    private RemoteClusterUtils() {}
+    private RemoteClusterUtils() { }
 
     /**
      * Finds the shortest number of hops from an upstream cluster.

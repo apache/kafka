@@ -56,6 +56,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 public abstract class AbstractKeyValueStoreTest {
 
     protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(final StateStoreContext context);
+
     protected InternalMockProcessorContext<?, ?> context;
     protected KeyValueStore<Integer, String> store;
     protected KeyValueStoreTestDriver<Integer, String> driver;

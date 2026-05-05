@@ -368,7 +368,7 @@ public class SslTransportLayer implements TransportLayer {
                     throw new EOFException();
                 }
                 log.trace("SSLHandshake NEED_WRAP channelId {}, handshakeResult {}, appReadBuffer pos {}, netReadBuffer pos {}, netWriteBuffer pos {}",
-                       channelId, handshakeResult, appReadBuffer.position(), netReadBuffer.position(), netWriteBuffer.position());
+                    channelId, handshakeResult, appReadBuffer.position(), netReadBuffer.position(), netWriteBuffer.position());
                 //if handshake status is not NEED_UNWRAP or unable to flush netWriteBuffer contents
                 //we will break here otherwise we can do need_unwrap in the same call.
                 if (handshakeStatus != HandshakeStatus.NEED_UNWRAP || !flush(netWriteBuffer)) {

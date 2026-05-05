@@ -176,6 +176,7 @@ public class AbstractProcessorContextTest {
             equalTo("user-supplied-value")
         );
     }
+
     @Test
     public void shouldThrowErrorIfSerdeDefaultNotSet() {
         final Properties config = getStreamsConfig();
@@ -231,19 +232,19 @@ public class AbstractProcessorContextTest {
         }
 
         @Override
-        public <K, V> void forward(final Record<K, V> record) {}
+        public <K, V> void forward(final Record<K, V> record) { }
 
         @Override
-        public <K, V> void forward(final Record<K, V> record, final String childName) {}
+        public <K, V> void forward(final Record<K, V> record, final String childName) { }
 
         @Override
-        public <K, V> void forward(final K key, final V value) {}
+        public <K, V> void forward(final K key, final V value) { }
 
         @Override
-        public <K, V> void forward(final K key, final V value, final To to) {}
+        public <K, V> void forward(final K key, final V value, final To to) { }
 
         @Override
-        public void commit() {}
+        public void commit() { }
 
         @Override
         public long currentStreamTimeMs() {

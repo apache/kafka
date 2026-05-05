@@ -297,7 +297,7 @@ public class ClientCompatibilityTest {
                         throw e.getCause();
                     }
                 },
-                () ->  createTopicsResultTest(client, Set.of("newtopic"))
+                () -> createTopicsResultTest(client, Set.of("newtopic"))
             );
 
             while (true) {

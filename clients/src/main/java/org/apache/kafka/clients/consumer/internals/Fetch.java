@@ -71,6 +71,7 @@ public class Fetch<K, V> {
         this.nextOffsetAndMetadata = new HashMap<>();
         this.nextOffsetAndMetadata.put(partition, offsetAndMetadata);
     }
+
     /**
      * Add another {@link Fetch} to this one; all of its records will be added to this fetch's
      * {@link #records() records}, and if the other fetch

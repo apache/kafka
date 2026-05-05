@@ -50,7 +50,7 @@ public class SaslClientCallbackHandler implements AuthenticateCallbackHandler {
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        this.mechanism  = saslMechanism;
+        this.mechanism = saslMechanism;
     }
 
     @Override
@@ -94,7 +94,7 @@ public class SaslClientCallbackHandler implements AuthenticateCallbackHandler {
                     SaslExtensions extensions = subject.getPublicCredentials(SaslExtensions.class).iterator().next();
                     ((SaslExtensionsCallback) callback).extensions(extensions);
                 }
-            }  else {
+            } else {
                 throw new UnsupportedCallbackException(callback, "Unrecognized SASL ClientCallback");
             }
         }

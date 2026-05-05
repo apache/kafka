@@ -31,11 +31,11 @@ public sealed interface LogCleaningState {
     }
 
     final class LogCleaningInProgress implements LogCleaningState {
-        private LogCleaningInProgress() {}
+        private LogCleaningInProgress() { }
     }
 
     final class LogCleaningAborted implements LogCleaningState {
-        private LogCleaningAborted() {}
+        private LogCleaningAborted() { }
     }
 
     final class LogCleaningPaused implements LogCleaningState {

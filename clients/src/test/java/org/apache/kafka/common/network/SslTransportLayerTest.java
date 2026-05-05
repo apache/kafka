@@ -1388,6 +1388,7 @@ public class SslTransportLayerTest {
         FailureAction THROW_IO_EXCEPTION = () -> {
             throw new IOException("Test IO exception");
         };
+
         void run() throws IOException;
     }
 
@@ -1509,9 +1510,11 @@ public class SslTransportLayerTest {
 
         static class ResizeableBufferSize {
             private Integer bufSizeOverride;
+
             ResizeableBufferSize(Integer bufSizeOverride) {
                 this.bufSizeOverride = bufSizeOverride;
             }
+
             int updateAndGet(int actualSize, boolean update) {
                 int size = actualSize;
                 if (bufSizeOverride != null) {

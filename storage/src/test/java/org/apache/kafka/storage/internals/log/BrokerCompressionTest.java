@@ -106,6 +106,6 @@ public class BrokerCompressionTest {
     private static Stream<Arguments> allCompressionParameters() {
         return Arrays.stream(BrokerCompressionType.values())
                 .flatMap(brokerCompression -> Arrays.stream(CompressionType.values())
-                .map(messageCompression -> Arguments.of(messageCompression, brokerCompression)));
+                    .map(messageCompression -> Arguments.of(messageCompression, brokerCompression)));
     }
 }

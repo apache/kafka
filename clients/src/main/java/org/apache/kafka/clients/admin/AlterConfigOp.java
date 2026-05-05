@@ -90,7 +90,7 @@ public class AlterConfigOp {
 
     public AlterConfigOp(ConfigEntry configEntry, OpType operationType) {
         this.configEntry = configEntry;
-        this.opType =  operationType;
+        this.opType = operationType;
     }
 
     public ConfigEntry configEntry() {

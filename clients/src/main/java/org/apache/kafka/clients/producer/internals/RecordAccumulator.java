@@ -454,7 +454,7 @@ public class RecordAccumulator {
     }
 
     public void maybeUpdateNextBatchExpiryTime(ProducerBatch batch) {
-        if (batch.createdMs + deliveryTimeoutMs  > 0) {
+        if (batch.createdMs + deliveryTimeoutMs > 0) {
             // the non-negative check is to guard us against potential overflow due to setting
             // a large value for deliveryTimeoutMs
             nextBatchExpiryTimeMs = Math.min(nextBatchExpiryTimeMs, batch.createdMs + deliveryTimeoutMs);

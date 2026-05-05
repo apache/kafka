@@ -66,7 +66,7 @@ public class ScramMessagesTest {
 
     @BeforeEach
     public void setUp() throws Exception {
-        formatter  = new ScramFormatter(ScramMechanism.SCRAM_SHA_256);
+        formatter = new ScramFormatter(ScramMechanism.SCRAM_SHA_256);
     }
 
     @Test

@@ -536,6 +536,7 @@ public class KafkaConsumerTest {
         int recordIndex = recordNumber - 1;
         return new StringDeserializer() {
             int i = 0;
+
             @Override
             public String deserialize(String topic, byte[] data) {
                 if (i == recordIndex) {
@@ -1773,7 +1774,7 @@ public class KafkaConsumerTest {
         assertEquals(Set.of(tp0), consumer.assignment());
 
         // the auto commit is disabled, so no offset commit request should be sent
-        for (ClientRequest req: client.requests())
+        for (ClientRequest req : client.requests())
             assertNotSame(ApiKeys.OFFSET_COMMIT, req.requestBuilder().apiKey());
 
         // subscription change
@@ -1784,7 +1785,7 @@ public class KafkaConsumerTest {
         assertEquals(Collections.emptySet(), consumer.assignment());
 
         // the auto commit is disabled, so no offset commit request should be sent
-        for (ClientRequest req: client.requests())
+        for (ClientRequest req : client.requests())
             assertNotSame(ApiKeys.OFFSET_COMMIT, req.requestBuilder().apiKey());
 
         client.requests().clear();

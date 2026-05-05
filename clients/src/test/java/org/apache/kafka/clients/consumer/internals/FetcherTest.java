@@ -870,6 +870,7 @@ public class FetcherTest {
         // so that we can verify that our position does not advance after raising
         ByteArrayDeserializer deserializer = new ByteArrayDeserializer() {
             int i = 0;
+
             @Override
             public byte[] deserialize(String topic, byte[] data) {
                 if (i++ % 2 == 1) {

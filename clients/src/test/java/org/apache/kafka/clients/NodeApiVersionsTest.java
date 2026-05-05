@@ -155,7 +155,7 @@ public class NodeApiVersionsTest {
                 .setMinVersion((short) 0)
                 .setMaxVersion((short) 1));
         NodeApiVersions versions = new NodeApiVersions(versionList, Collections.emptyList());
-        for (ApiKeys apiKey: ApiKeys.apisForListener(scope)) {
+        for (ApiKeys apiKey : ApiKeys.apisForListener(scope)) {
             assertEquals(apiKey.latestVersion(), versions.latestUsableVersion(apiKey));
         }
     }

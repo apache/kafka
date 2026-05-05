@@ -765,7 +765,7 @@ public class WorkerTest {
                 Set.of()
         );
 
-        assertTrue(worker.startExactlyOnceSourceTask(TASK_ID, configState,  connectorConfigs, origProps, taskStatusListener, TargetState.STARTED, preProducer, postProducer));
+        assertTrue(worker.startExactlyOnceSourceTask(TASK_ID, configState, connectorConfigs, origProps, taskStatusListener, TargetState.STARTED, preProducer, postProducer));
         assertStatistics(worker, 0, 1);
         assertEquals(Set.of(TASK_ID), worker.taskIds());
         worker.stopAndAwaitTask(TASK_ID);

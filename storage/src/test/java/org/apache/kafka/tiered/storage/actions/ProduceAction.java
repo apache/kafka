@@ -109,7 +109,7 @@ public final class ProduceAction implements TieredStorageTestAction {
         TopicSpec topicSpec = context.topicSpec(topicPartition.topic());
         long earliestLocalOffset = expectedEarliestLocalOffset != -1L ? expectedEarliestLocalOffset
                 : startOffset + recordsToProduce.size()
-                - (recordsToProduce.size() % topicSpec.maxBatchCountPerSegment()) - 1;
+                    - (recordsToProduce.size() % topicSpec.maxBatchCountPerSegment()) - 1;
 
         for (BrokerLocalStorage localStorage : localStorages) {
             // Select brokers which are assigned a replica of the topic-partition

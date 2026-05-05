@@ -879,7 +879,7 @@ public class InternalTopicManager {
                     String.format("Could not cleanup internal topics within %d milliseconds. This can happen if the " +
                                 "Kafka cluster is temporarily not available or the broker did not complete topic creation " +
                                 "before the cleanup. The following internal topics could not be cleaned up: %s",
-                                retryTimeoutMs, topicsStillToCleanup),
+                                  retryTimeoutMs, topicsStillToCleanup),
                     null
                 ));
 

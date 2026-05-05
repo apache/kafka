@@ -74,6 +74,7 @@ public class ConsumeBenchWorker implements TaskWorker {
     private Future<?> statusUpdaterFuture;
     private KafkaFutureImpl<String> doneFuture;
     private ThreadSafeConsumer consumer;
+
     public ConsumeBenchWorker(String id, ConsumeBenchSpec spec) {
         this.id = id;
         this.spec = spec;
@@ -172,7 +173,7 @@ public class ConsumeBenchWorker implements TaskWorker {
         }
 
         private Map<String, List<TopicPartition>> populatePartitionsByTopic(KafkaConsumer<byte[], byte[]> consumer,
-                                                                         Map<String, List<TopicPartition>> materializedTopics) {
+                                                                            Map<String, List<TopicPartition>> materializedTopics) {
             // fetch partitions for topics who do not have any listed
             for (Map.Entry<String, List<TopicPartition>> entry : materializedTopics.entrySet()) {
                 String topicName = entry.getKey();
@@ -226,6 +227,7 @@ public class ConsumeBenchWorker implements TaskWorker {
             log.info("Will consume from topics {} via dynamic group assignment.", topics);
             this.consumer.subscribe(topics);
         }
+
         ConsumeMessages(ThreadSafeConsumer consumer,
                         Optional<RecordProcessor> recordProcessor,
                         List<TopicPartition> partitions) {
@@ -405,6 +407,7 @@ public class ConsumeBenchWorker implements TaskWorker {
          * These should match up with the p50LatencyMs, p95LatencyMs, etc. fields.
          */
         static final float[] PERCENTILES = {0.5f, 0.95f, 0.99f};
+
         @JsonCreator
         StatusData(@JsonProperty("assignedPartitions") List<String> assignedPartitions,
                    @JsonProperty("totalMessagesReceived") long totalMessagesReceived,

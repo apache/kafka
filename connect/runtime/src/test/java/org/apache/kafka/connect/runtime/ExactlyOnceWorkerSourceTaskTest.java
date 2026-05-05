@@ -277,8 +277,8 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
-        Plugin<Converter> keyConverterPlugin = metrics.wrap(keyConverter, taskId,  true);
-        Plugin<Converter> valueConverterPlugin = metrics.wrap(valueConverter, taskId,  false);
+        Plugin<Converter> keyConverterPlugin = metrics.wrap(keyConverter, taskId, true);
+        Plugin<Converter> valueConverterPlugin = metrics.wrap(valueConverter, taskId, false);
         Plugin<HeaderConverter> headerConverterPlugin = metrics.wrap(headerConverter, taskId);
         workerTask = new ExactlyOnceWorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin,
                 transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig), offsetReader, offsetWriter, offsetStore,

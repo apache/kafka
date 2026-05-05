@@ -2435,7 +2435,7 @@ public final class KafkaRaftClientSnapshotTest {
         }
 
         @Override
-        public void close() {}
+        public void close() { }
 
         public ByteBuffer buffer() {
             return data;

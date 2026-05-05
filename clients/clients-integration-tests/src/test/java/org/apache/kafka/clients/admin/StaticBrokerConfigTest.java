@@ -123,8 +123,8 @@ public class StaticBrokerConfigTest {
     @ClusterTest(types = {Type.KRAFT})
     public void testInternalConfigsDoNotReturnForDescribeConfigs(ClusterInstance cluster) throws Exception {
         try (
-                Admin admin = cluster.admin();
-                Admin controllerAdmin = cluster.admin(Map.of(), true)
+            Admin admin = cluster.admin();
+            Admin controllerAdmin = cluster.admin(Map.of(), true)
         ) {
             ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "0");
             ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, TOPIC);

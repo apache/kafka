@@ -379,7 +379,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     }
 
     @Override
-    public void init(final StateStoreContext stateStoreContext, final StateStore root) {}
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) { }
 
     @Override
     public void commit(final Map<TopicPartition, Long> changelogOffsets) {

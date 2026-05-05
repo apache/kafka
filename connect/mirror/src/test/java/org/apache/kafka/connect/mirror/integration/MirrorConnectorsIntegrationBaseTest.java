@@ -1177,7 +1177,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         }
     }
 
-    protected static void restartMirrorMakerConnectors(EmbeddedConnectCluster connectCluster, List<Class<? extends Connector>> connectorClasses)  {
+    protected static void restartMirrorMakerConnectors(EmbeddedConnectCluster connectCluster, List<Class<? extends Connector>> connectorClasses) {
         for (Class<? extends Connector> connector : connectorClasses) {
             connectCluster.restartConnectorAndTasks(connector.getSimpleName(), false, true, false);
         }
@@ -1459,7 +1459,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         // After a full sync, there should be at most offset.lag.max records per partition consumed by both upstream and downstream consumers.
         for (TopicPartition tp : records.partitions()) {
             int count = records.records(tp).size();
-            assertTrue(count < offsetLagMax,  "downstream consumer is re-reading more than " + offsetLagMax + " records from" + tp);
+            assertTrue(count < offsetLagMax, "downstream consumer is re-reading more than " + offsetLagMax + " records from" + tp);
         }
     }
 

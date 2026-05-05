@@ -149,7 +149,7 @@ public class RemoteIndexCache implements Closeable {
      * @param ticker               custom ticker for testing time-based eviction (null for system ticker)
      */
     public RemoteIndexCache(long maxSize, long ttlMs, boolean recordStats, RemoteStorageManager remoteStorageManager, String logDir,
-                           Ticker ticker) throws IOException {
+                            Ticker ticker) throws IOException {
         this.remoteStorageManager = remoteStorageManager;
         cacheDir = new File(logDir, DIR_NAME);
 

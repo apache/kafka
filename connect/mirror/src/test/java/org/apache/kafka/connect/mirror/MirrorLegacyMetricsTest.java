@@ -111,12 +111,12 @@ public class MirrorLegacyMetricsTest {
         }
 
         @Override
-        public void metricRemoval(KafkaMetric metric) {}
+        public void metricRemoval(KafkaMetric metric) { }
 
         @Override
-        public void close() {}
+        public void close() { }
 
         @Override
-        public void configure(Map<String, ?> configs) {}
+        public void configure(Map<String, ?> configs) { }
     }
 }

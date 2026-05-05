@@ -2225,7 +2225,7 @@ public class QuorumStateTest {
 
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
-    public void testCandidateToLeader(KRaftVersion kraftVersion)  {
+    public void testCandidateToLeader(KRaftVersion kraftVersion) {
         VoterSet voters = localStandaloneVoterSet();
         assertEquals(Optional.empty(), store.readElectionState());
 

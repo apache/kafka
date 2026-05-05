@@ -62,7 +62,7 @@ public interface ProcessorWrapper extends Configurable {
      * To convert a {@link FixedKeyProcessorSupplier} instance into a {@link WrappedFixedKeyProcessorSupplier},
      * use the {@link ProcessorWrapper#asWrappedFixedKey(FixedKeyProcessorSupplier)} method
      */
-    <KIn, VIn,  VOut> WrappedFixedKeyProcessorSupplier<KIn, VIn,  VOut> wrapFixedKeyProcessorSupplier(final String processorName,
+    <KIn, VIn,  VOut> WrappedFixedKeyProcessorSupplier<KIn, VIn, VOut> wrapFixedKeyProcessorSupplier(final String processorName,
                                                                                                       final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier);
 
     /**
@@ -77,7 +77,7 @@ public interface ProcessorWrapper extends Configurable {
     /**
      * Use to convert a {@link FixedKeyProcessorSupplier} instance into a {@link WrappedFixedKeyProcessorSupplier}
      */
-    static <KIn, VIn,  VOut> WrappedFixedKeyProcessorSupplier<KIn, VIn,  VOut> asWrappedFixedKey(
+    static <KIn, VIn,  VOut> WrappedFixedKeyProcessorSupplier<KIn, VIn, VOut> asWrappedFixedKey(
         final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier
     ) {
         return new WrappedFixedKeyProcessorSupplierImpl<>(processorSupplier);

@@ -161,7 +161,7 @@ public class MirrorClient implements AutoCloseable {
      * @throws IllegalArgumentException If any of the arguments are null
      */
     public Map<String, Map<TopicPartition, OffsetAndMetadata>> remoteConsumerOffsets(Pattern consumerGroupPattern,
-             String remoteClusterAlias, Duration timeout) {
+        String remoteClusterAlias, Duration timeout) {
         if (consumerGroupPattern == null) {
             throw new IllegalArgumentException("`consumerGroupPattern` must not be null");
         }
@@ -189,7 +189,7 @@ public class MirrorClient implements AutoCloseable {
                         String consumerGroupId = checkpoint.consumerGroupId();
                         if (consumerGroupPattern.matcher(consumerGroupId).matches()) {
                             offsets.computeIfAbsent(consumerGroupId, k -> new HashMap<>())
-                                    .put(checkpoint.topicPartition(), checkpoint.offsetAndMetadata());
+                                   .put(checkpoint.topicPartition(), checkpoint.offsetAndMetadata());
                         }
                     } catch (SchemaException e) {
                         log.info("Could not deserialize record. Skipping.", e);

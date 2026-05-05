@@ -1051,7 +1051,7 @@ public class KafkaAdminClient extends AdminClient {
          */
         int handleTimeouts(Collection<Call> calls, String msg) {
             int numTimedOut = 0;
-            for (Iterator<Call> iter = calls.iterator(); iter.hasNext(); ) {
+            for (Iterator<Call> iter = calls.iterator(); iter.hasNext();) {
                 Call call = iter.next();
                 int remainingMs = calcTimeoutMsRemainingAsInt(now, call.deadlineMs);
                 if (remainingMs < 0) {
@@ -1246,7 +1246,7 @@ public class KafkaAdminClient extends AdminClient {
          */
         private long sendEligibleCalls(long now) {
             long pollTimeout = Long.MAX_VALUE;
-            for (Iterator<Map.Entry<Node, List<Call>>> iter = callsToSend.entrySet().iterator(); iter.hasNext(); ) {
+            for (Iterator<Map.Entry<Node, List<Call>>> iter = callsToSend.entrySet().iterator(); iter.hasNext();) {
                 Map.Entry<Node, List<Call>> entry = iter.next();
                 List<Call> calls = entry.getValue();
                 if (calls.isEmpty()) {
@@ -1407,7 +1407,7 @@ public class KafkaAdminClient extends AdminClient {
          *                       be put back in the pendingCalls collection and they will be reassigned
          */
         private void unassignUnsentCalls(Predicate<Node> shouldUnassign) {
-            for (Iterator<Map.Entry<Node, List<Call>>> iter = callsToSend.entrySet().iterator(); iter.hasNext(); ) {
+            for (Iterator<Map.Entry<Node, List<Call>>> iter = callsToSend.entrySet().iterator(); iter.hasNext();) {
                 Map.Entry<Node, List<Call>> entry = iter.next();
                 Node node = entry.getKey();
                 List<Call> awaitingCalls = entry.getValue();

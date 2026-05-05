@@ -37,7 +37,7 @@ public class SlidingWindowsTest {
 
     @Test
     public void timeDifferenceMustNotBeNegative() {
-        assertThrows(IllegalArgumentException.class, () ->  SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(-1), ofMillis(5)));
+        assertThrows(IllegalArgumentException.class, () -> SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(-1), ofMillis(5)));
     }
 
     @Test
@@ -47,7 +47,7 @@ public class SlidingWindowsTest {
 
     @Test
     public void gracePeriodMustNotBeNegative() {
-        assertThrows(IllegalArgumentException.class, () ->  SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(-1)));
+        assertThrows(IllegalArgumentException.class, () -> SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(-1)));
     }
 
     @Test

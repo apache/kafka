@@ -449,11 +449,11 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     futures.add(executorService.submit(() -> formatNode(broker.sharedServer().metaPropsEnsemble())));
                 }
             }
-            for (Future<?> future: futures) {
+            for (Future<?> future : futures) {
                 future.get();
             }
         } catch (Exception e) {
-            for (Future<?> future: futures) {
+            for (Future<?> future : futures) {
                 future.cancel(true);
             }
             throw e;
@@ -532,11 +532,11 @@ public class KafkaClusterTestKit implements AutoCloseable {
             for (BrokerServer broker : brokers.values()) {
                 futures.add(executorService.submit(broker::startup));
             }
-            for (Future<?> future: futures) {
+            for (Future<?> future : futures) {
                 future.get();
             }
         } catch (Exception e) {
-            for (Future<?> future: futures) {
+            for (Future<?> future : futures) {
                 future.cancel(true);
             }
             throw e;

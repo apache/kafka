@@ -94,6 +94,7 @@ public class KStreamProcessorApiTest {
     
     private static class TransformerSupplier implements FixedKeyProcessorSupplier<String, String, String> {
         private final StoreBuilder<?> storeBuilder;
+
         public TransformerSupplier(final StoreBuilder<?> storeBuilder) {
             this.storeBuilder = storeBuilder;
         }
@@ -121,6 +122,7 @@ public class KStreamProcessorApiTest {
 
             };
         }
+
         @Override
         public Set<StoreBuilder<?>> stores() {
             if (storeBuilder != null) {

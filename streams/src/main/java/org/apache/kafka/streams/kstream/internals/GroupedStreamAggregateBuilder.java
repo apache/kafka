@@ -117,7 +117,7 @@ class GroupedStreamAggregateBuilder<K, V> {
                                           final Serde<VR> valueSerde) {
         if (!(queryableStoreName == null || queryableStoreName.equals(storeName))) {
             throw new IllegalStateException(String.format("queryableStoreName should be null or equal to storeName"
-                                                              + " but got storeName='%s' and queryableStoreName='%s'",
+                + " but got storeName='%s' and queryableStoreName='%s'",
                                                           storeName, queryableStoreName));
         }
 

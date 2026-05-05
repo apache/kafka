@@ -117,7 +117,7 @@ public class UncleanLeaderElectionTest {
 
     private void disableEligibleLeaderReplicas() throws Exception {
         admin.updateFeatures(
-                    Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, new FeatureUpdate((short) 0, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE))
+            Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, new FeatureUpdate((short) 0, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE))
         ).all().get();
     }
 

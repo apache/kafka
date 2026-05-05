@@ -111,6 +111,7 @@ public class DefaultTaskManagerTest {
     private class AwaitingRunnable implements Runnable {
         private final CountDownLatch awaitDone = new CountDownLatch(1);
         private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
+
         @Override
         public void run() {
             while (!shutdownRequested.get()) {

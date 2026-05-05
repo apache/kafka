@@ -275,7 +275,7 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
                 final ProcessorNode<?, ?, ?, ?> child = currentNode().child(childName);
                 if (child == null) {
                     throw new StreamsException("Unknown downstream node: " + childName
-                                                   + " either does not exist or is not connected to this processor.");
+                        + " either does not exist or is not connected to this processor.");
                 }
                 forwardInternal((ProcessorNode<K, V, ?, ?>) child, record);
             }
@@ -313,7 +313,7 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
         if (intervalMs < 1) {
             throw new IllegalArgumentException("The minimum supported scheduling interval is 1 millisecond.");
         }
-        return streamTask.schedule(intervalMs, type, callback);    }
+        return streamTask.schedule(intervalMs, type, callback); }
 
     @Override
     public Cancellable schedule(

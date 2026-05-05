@@ -576,6 +576,7 @@ public class GroupCoordinatorServiceTest {
             future.get(5, TimeUnit.SECONDS)
         );
     }
+
     @Test
     public void testStreamsGroupHeartbeatFailsForUnsupportedFeatures() throws Exception {
 

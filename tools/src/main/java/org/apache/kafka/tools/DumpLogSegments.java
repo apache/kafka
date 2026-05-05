@@ -631,6 +631,7 @@ public class DumpLogSegments {
         }
 
         protected abstract JsonNode keyAsJson(ApiMessage message);
+
         protected abstract JsonNode valueAsJson(ApiMessage message, short version);
     }
 

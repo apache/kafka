@@ -426,6 +426,7 @@ public class FineGrainedAutoResetIntegrationTest {
 
     private static final class TestingUncaughtExceptionHandler implements StreamsUncaughtExceptionHandler {
         boolean correctExceptionThrown = false;
+
         @Override
         public StreamThreadExceptionResponse handle(final Throwable throwable) {
             assertThat(throwable.getClass().getSimpleName(), is("StreamsException"));

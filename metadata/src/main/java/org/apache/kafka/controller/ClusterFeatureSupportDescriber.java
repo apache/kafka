@@ -26,5 +26,6 @@ import java.util.Map.Entry;
 
 public interface ClusterFeatureSupportDescriber {
     Iterator<Entry<Integer, Map<String, VersionRange>>> brokerSupported();
+
     Iterator<Entry<Integer, Map<String, VersionRange>>> controllerSupported();
 }

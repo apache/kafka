@@ -291,14 +291,14 @@ public class KStreamAggregationIntegrationTest {
         assertThat(windowedOutput, is(expectResult));
 
         final Set<String> expectResultString = new HashSet<>(expectResult.size());
-        for (final KeyValueTimestamp<Windowed<String>, String> eachRecord: expectResult) {
+        for (final KeyValueTimestamp<Windowed<String>, String> eachRecord : expectResult) {
             expectResultString.add("CreateTime:" + eachRecord.timestamp() + ", "
                 + eachRecord.key() + ", " + eachRecord.value());
         }
 
         // check every message is contained in the expect result
         final String[] allRecords = resultFromConsoleConsumer.split("\n");
-        for (final String record: allRecords) {
+        for (final String record : allRecords) {
             assertTrue(expectResultString.contains(record));
         }
     }
@@ -416,13 +416,13 @@ public class KStreamAggregationIntegrationTest {
         assertThat(windowedMessages, is(expectResult));
 
         final Set<String> expectResultString = new HashSet<>(expectResult.size());
-        for (final KeyValueTimestamp<Windowed<String>, Integer> eachRecord: expectResult) {
+        for (final KeyValueTimestamp<Windowed<String>, Integer> eachRecord : expectResult) {
             expectResultString.add("CreateTime:" + eachRecord.timestamp() + ", " + eachRecord.key() + ", " + eachRecord.value());
         }
 
         // check every message is contained in the expect result
         final String[] allRecords = resultFromConsoleConsumer.split("\n");
-        for (final String record: allRecords) {
+        for (final String record : allRecords) {
             assertTrue(expectResultString.contains(record));
         }
     }
@@ -625,14 +625,14 @@ public class KStreamAggregationIntegrationTest {
         assertThat(windowedOutput, is(expectResult));
 
         final Set<String> expectResultString = new HashSet<>(expectResult.size());
-        for (final KeyValueTimestamp<Windowed<String>, String> eachRecord: expectResult) {
+        for (final KeyValueTimestamp<Windowed<String>, String> eachRecord : expectResult) {
             expectResultString.add("CreateTime:" + eachRecord.timestamp() + ", "
                     + eachRecord.key() + ", " + eachRecord.value());
         }
 
         // check every message is contained in the expect result
         final String[] allRecords = resultFromConsoleConsumer.split("\n");
-        for (final String record: allRecords) {
+        for (final String record : allRecords) {
             assertTrue(expectResultString.contains(record));
         }
     }
@@ -740,13 +740,13 @@ public class KStreamAggregationIntegrationTest {
         assertThat(windowedMessages, is(expectResult));
 
         final Set<String> expectResultString = new HashSet<>(expectResult.size());
-        for (final KeyValueTimestamp<Windowed<String>, Integer> eachRecord: expectResult) {
+        for (final KeyValueTimestamp<Windowed<String>, Integer> eachRecord : expectResult) {
             expectResultString.add("CreateTime:" + eachRecord.timestamp() + ", " + eachRecord.key() + ", " + eachRecord.value());
         }
 
         // check every message is contained in the expect result
         final String[] allRecords = resultFromConsoleConsumer.split("\n");
-        for (final String record: allRecords) {
+        for (final String record : allRecords) {
             assertTrue(expectResultString.contains(record));
         }
     }

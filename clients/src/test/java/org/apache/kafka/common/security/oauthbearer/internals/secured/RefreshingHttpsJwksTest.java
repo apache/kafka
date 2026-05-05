@@ -67,10 +67,10 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
        // we use mocktime here to ensure that scheduled refresh _doesn't_ run and update the invocation count
        // we expect httpsJwks.refresh() to be invoked twice, once from init() and maybeExpediteRefresh() each
         try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(time, httpsJwks)) {
-            refreshingHttpsJwks.init();
-            verify(httpsJwks, times(1)).refresh();
-            assertTrue(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
-            verify(httpsJwks, times(2)).refresh();
+           refreshingHttpsJwks.init();
+           verify(httpsJwks, times(1)).refresh();
+           assertTrue(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
+           verify(httpsJwks, times(2)).refresh();
         }
     }
 

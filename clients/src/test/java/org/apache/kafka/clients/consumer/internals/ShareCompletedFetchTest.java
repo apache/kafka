@@ -374,7 +374,7 @@ public class ShareCompletedFetchTest {
         acquiredRecords.add(acquiredRecords(10L, 5).get(0));
 
         ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
-            .setRecords(newRecords(startingOffset,  10))
+            .setRecords(newRecords(startingOffset, 10))
             .setAcquiredRecords(acquiredRecords); // Acquire only records 0-4 and 10-14
 
         Deserializers<String, String> deserializers = newStringDeserializers();

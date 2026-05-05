@@ -259,7 +259,8 @@ public class Schema extends DocumentedType {
      * Override one or more of the visit methods with the desired logic.
      */
     public abstract static class Visitor {
-        public void visit(Schema schema) {}
-        public void visit(Type field) {}
+        public void visit(Schema schema) { }
+
+        public void visit(Type field) { }
     }
 }

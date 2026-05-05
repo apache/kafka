@@ -104,7 +104,7 @@ public class EndToEndClusterIdTest {
 
             String id = (String) configs.get(ServerConfigs.BROKER_ID_CONFIG);
             controllerId = roles.contains("controller") ? id : null;
-            brokerId    = roles.contains("broker")    ? id : null;
+            brokerId = roles.contains("broker")    ? id : null;
         }
 
         @Override

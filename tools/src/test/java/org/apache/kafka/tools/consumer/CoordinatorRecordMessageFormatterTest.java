@@ -39,6 +39,7 @@ public abstract class CoordinatorRecordMessageFormatterTest {
     private static final String TOPIC = "TOPIC";
 
     protected abstract CoordinatorRecordMessageFormatter formatter();
+
     protected abstract Stream<Arguments> parameters();
 
     @ParameterizedTest

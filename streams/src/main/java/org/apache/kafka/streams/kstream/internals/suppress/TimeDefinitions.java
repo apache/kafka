@@ -20,7 +20,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.RecordContext;
 
 final class TimeDefinitions {
-    private TimeDefinitions() {}
+    private TimeDefinitions() { }
 
     /**
      * This interface should never be instantiated outside of this class.
@@ -32,7 +32,7 @@ final class TimeDefinitions {
     static class RecordTimeDefinition<K> implements TimeDefinition<K> {
         private static final RecordTimeDefinition<?> INSTANCE = new RecordTimeDefinition<>();
 
-        private RecordTimeDefinition() {}
+        private RecordTimeDefinition() { }
 
         @SuppressWarnings("unchecked")
         static <K> RecordTimeDefinition<K> instance() {
@@ -48,7 +48,7 @@ final class TimeDefinitions {
     static class WindowEndTimeDefinition<K extends Windowed<?>> implements TimeDefinition<K> {
         private static final WindowEndTimeDefinition<?> INSTANCE = new WindowEndTimeDefinition<>();
 
-        private WindowEndTimeDefinition() {}
+        private WindowEndTimeDefinition() { }
 
         @SuppressWarnings("unchecked")
         static <K extends Windowed<?>> WindowEndTimeDefinition<K> instance() {

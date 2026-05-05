@@ -43,7 +43,7 @@ public class SessionWindowedSerializer<T> implements WindowedSerializer<T> {
     private Serializer<T> inner;
 
     // Default constructor needed by Kafka
-    public SessionWindowedSerializer() {}
+    public SessionWindowedSerializer() { }
 
     public SessionWindowedSerializer(final Serializer<T> inner) {
         this.inner = inner;

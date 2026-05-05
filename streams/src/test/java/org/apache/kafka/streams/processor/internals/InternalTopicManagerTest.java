@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 package org.apache.kafka.streams.processor.internals;
+
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -788,7 +789,7 @@ public class InternalTopicManagerTest {
                 )));
 
         when(admin.createTopics(Collections.singleton(new NewTopic(topic2, Optional.of(1), Optional.of((short) 1))
-            .configs(mkMap(mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT),
+                .configs(mkMap(mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT),
                                  mkEntry(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime"))))))
             .thenAnswer(answer -> new MockCreateTopicsResult(Collections.singletonMap(topic2, topicCreationFuture)));
         when(admin.describeTopics(Set.of(topic2)))
@@ -869,6 +870,7 @@ public class InternalTopicManagerTest {
                     "This can happen if the Kafka cluster is temporarily not available."));
         }
     }
+
     @Test
     public void shouldLogWhenTopicNotFoundAndNotThrowException() {
         mockAdminClient.addTopic(
@@ -925,7 +927,7 @@ public class InternalTopicManagerTest {
                 Collections.singletonMap(topic1, topicDescriptionUnknownTopicFuture)));
         when(admin.createTopics(Collections.singleton(
                 new NewTopic(topic1, Optional.of(1), Optional.of((short) 1))
-            .configs(mkMap(mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE),
+                    .configs(mkMap(mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE),
                 mkEntry(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime"),
                 mkEntry(TopicConfig.SEGMENT_BYTES_CONFIG, "52428800"),
                 mkEntry(TopicConfig.RETENTION_MS_CONFIG, "-1"))))))

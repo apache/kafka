@@ -57,7 +57,7 @@ public class GenericReadOnlyKeyValueStoreFacade<K, InV, OutV> implements ReadOnl
 
     @Override
     public <PS extends Serializer<P>, P> KeyValueIterator<K, OutV> prefixScan(final P prefix,
-                                                                               final PS prefixKeySerializer) {
+                                                                              final PS prefixKeySerializer) {
         return new GenericKeyValueIteratorFacade<>(inner.prefixScan(prefix, prefixKeySerializer), valueConverter);
     }
 

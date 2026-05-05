@@ -1042,7 +1042,7 @@ public class ShareConsumerDeliveryTest extends ShareConsumerTestBase {
                 records.forEach(record -> {
                     if (!offsetToDeliveryCountMap.containsKey(record.offset())) {
                         offsetToDeliveryCountMap.put(record.offset(), 1);
-                    } else  {
+                    } else {
                         offsetToDeliveryCountMap.put(record.offset(), offsetToDeliveryCountMap.get(record.offset()) + 1);
                     }
                 });
@@ -1060,7 +1060,7 @@ public class ShareConsumerDeliveryTest extends ShareConsumerTestBase {
                         records.forEach(record -> {
                             if (!offsetToDeliveryCountMap.containsKey(record.offset())) {
                                 offsetToDeliveryCountMap.put(record.offset(), 1);
-                            } else  {
+                            } else {
                                 offsetToDeliveryCountMap.put(record.offset(), offsetToDeliveryCountMap.get(record.offset()) + 1);
                             }
                         });

@@ -19,7 +19,7 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.streams.errors.TopologyException;
 
 public final class GraphGraceSearchUtil {
-    private GraphGraceSearchUtil() {}
+    private GraphGraceSearchUtil() { }
 
     public static long findAndVerifyWindowGrace(final GraphNode graphNode) {
         return findAndVerifyWindowGrace(graphNode, "");

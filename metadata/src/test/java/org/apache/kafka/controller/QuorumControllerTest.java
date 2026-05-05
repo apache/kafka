@@ -617,8 +617,8 @@ public class QuorumControllerTest {
         long sessionTimeoutMillis = 300;
 
         try (
-                MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).build();
-                QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).build();
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis)).
                 setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_0_IV1, "test-provided bootstrap ELR enabled")).
                 build()
@@ -1267,8 +1267,8 @@ public class QuorumControllerTest {
     @Test
     public void testTimeouts() throws Throwable {
         try (
-                MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).build();
-                QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(1).build();
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 build()
         ) {
             QuorumController controller = controlEnv.activeController();
@@ -1566,7 +1566,7 @@ public class QuorumControllerTest {
         }
     }
 
-    static class TestAppender implements Function<List<ApiMessageAndVersion>, Long>  {
+    static class TestAppender implements Function<List<ApiMessageAndVersion>, Long> {
         private long offset = 0;
 
         @Override

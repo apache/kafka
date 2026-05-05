@@ -369,17 +369,17 @@ public final class DefaultTaskManager implements TaskManager {
     }
 
     public void startTaskExecutors() {
-        for (final TaskExecutor t: taskExecutors) {
+        for (final TaskExecutor t : taskExecutors) {
             t.start();
         }
     }
 
     public void shutdown(final Duration duration) {
-        for (final TaskExecutor t: taskExecutors) {
+        for (final TaskExecutor t : taskExecutors) {
             t.requestShutdown();
         }
         signalTaskExecutors();
-        for (final TaskExecutor t: taskExecutors) {
+        for (final TaskExecutor t : taskExecutors) {
             t.awaitShutdown(duration);
         }
     }

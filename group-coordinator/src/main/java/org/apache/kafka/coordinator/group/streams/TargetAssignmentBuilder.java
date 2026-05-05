@@ -56,6 +56,7 @@ public class TargetAssignmentBuilder {
      * The group ID.
      */
     private final String groupId;
+
     /**
      * The group epoch.
      */

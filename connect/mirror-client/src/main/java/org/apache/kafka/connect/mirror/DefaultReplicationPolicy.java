@@ -90,6 +90,7 @@ public class DefaultReplicationPolicy implements ReplicationPolicy, Configurable
     private String internalSeparator() {
         return isInternalTopicSeparatorEnabled ? separator : ".";
     }
+
     private String internalSuffix() {
         return internalSeparator() + "internal";
     }

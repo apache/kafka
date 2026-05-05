@@ -58,7 +58,7 @@ public class BasicNode implements Node {
                             "array of strings.");
                 }
                 tags = new HashSet<>();
-                for (Iterator<JsonNode> tagIter = node.elements(); tagIter.hasNext(); ) {
+                for (Iterator<JsonNode> tagIter = node.elements(); tagIter.hasNext();) {
                     JsonNode tag = tagIter.next();
                     tags.add(tag.asText());
                 }

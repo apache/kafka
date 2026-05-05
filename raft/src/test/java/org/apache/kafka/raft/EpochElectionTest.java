@@ -35,6 +35,7 @@ public class EpochElectionTest {
         ReplicaKey.of(voter1 + 1, Uuid.randomUuid()),
         ReplicaKey.of(voter1 + 2, Uuid.randomUuid())
     );
+
     @Test
     public void testStateOnInitialization() {
         EpochElection epochElection = new EpochElection(voters);

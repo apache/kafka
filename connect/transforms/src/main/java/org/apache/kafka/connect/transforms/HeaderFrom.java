@@ -187,7 +187,9 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
     }
 
     protected abstract Object operatingValue(R record);
+
     protected abstract Schema operatingSchema(R record);
+
     protected abstract R newRecord(R record, Schema updatedSchema, Object updatedValue, Iterable<Header> updatedHeaders);
 
     public static class Key<R extends ConnectRecord<R>> extends HeaderFrom<R> {

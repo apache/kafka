@@ -461,7 +461,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public void unregisterMetricFromSubscription(KafkaMetric metric) {
         if (!metrics().containsKey(metric.metricName())) {
             clientTelemetryReporter.ifPresent(reporter -> reporter.metricRemoval(metric));
-        }  else {
+        } else {
             log.debug("Skipping unregistration for metric {}. Existing consumer metrics cannot be removed.", metric.metricName());
         }
     }
@@ -980,7 +980,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             log.debug("Pausing partitions {}", partitions);
-            for (TopicPartition partition: partitions) {
+            for (TopicPartition partition : partitions) {
                 subscriptions.pause(partition);
             }
         } finally {
@@ -993,7 +993,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             log.debug("Resuming partitions {}", partitions);
-            for (TopicPartition partition: partitions) {
+            for (TopicPartition partition : partitions) {
                 subscriptions.resume(partition);
             }
         } finally {

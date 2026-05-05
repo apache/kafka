@@ -418,8 +418,8 @@ public class PlaintextConsumerSubscriptionTest {
 
         Map<String, Object> config = Map.of(GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
         try (
-                Producer<byte[], byte[]> producer = cluster.producer();
-                Consumer<byte[], byte[]> consumer = cluster.consumer(config)
+            Producer<byte[], byte[]> producer = cluster.producer();
+            Consumer<byte[], byte[]> consumer = cluster.consumer(config)
         ) {
             assertEquals(0, consumer.assignment().size());
 

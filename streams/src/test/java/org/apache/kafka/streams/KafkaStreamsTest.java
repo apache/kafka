@@ -877,6 +877,7 @@ public class KafkaStreamsTest {
         }
 
     }
+
     @Test
     public void shouldThrowNullPointerExceptionSettingStreamsUncaughtExceptionHandlerIfNull() {
         prepareStreams();
@@ -1729,7 +1730,7 @@ public class KafkaStreamsTest {
             final ClientInstanceIds clientInstanceIds = streams.clientInstanceIds(Duration.ZERO);
             assertThat(clientInstanceIds.consumerInstanceIds().size(), equalTo(1));
             assertThat(clientInstanceIds.consumerInstanceIds().get("main-consumer"), equalTo(mainConsumerInstanceId));
-            assertThat(clientInstanceIds.producerInstanceIds().size(),  equalTo(1));
+            assertThat(clientInstanceIds.producerInstanceIds().size(), equalTo(1));
             assertThat(clientInstanceIds.producerInstanceIds().get("some-thread-producer"), equalTo(producerInstanceId));
             assertThat(clientInstanceIds.adminInstanceId(), equalTo(adminInstanceId));
         }

@@ -184,7 +184,7 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer, Monitorabl
     }
 
     // VisibleForTesting
-    Set<String> superUsers()  {
+    Set<String> superUsers() {
         return new HashSet<>(data.superUsers());
     }
 

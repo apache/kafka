@@ -74,9 +74,9 @@ public class AuthorizerUtilsTest {
             }
         }
         assertNotNull(metricName);
-        assertEquals(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG,  metricName.tags().get("config"));
-        assertEquals(MonitorableAuthorizer.class.getSimpleName(),  metricName.tags().get("class"));
-        assertEquals(role.toString(),  metricName.tags().get("role"));
+        assertEquals(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, metricName.tags().get("config"));
+        assertEquals(MonitorableAuthorizer.class.getSimpleName(), metricName.tags().get("class"));
+        assertEquals(role.toString(), metricName.tags().get("role"));
         assertTrue(metricName.tags().entrySet().containsAll(MonitorableAuthorizer.EXTRA_TAGS.entrySet()));
         assertEquals(0, metrics.metric(metricName).metricValue());
         monitorableAuthorizer.authorize(null, null);

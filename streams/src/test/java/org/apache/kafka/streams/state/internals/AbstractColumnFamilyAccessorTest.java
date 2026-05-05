@@ -57,6 +57,7 @@ abstract class AbstractColumnFamilyAccessorTest {
     protected AbstractColumnFamilyAccessor accessor;
 
     abstract AbstractColumnFamilyAccessor createColumnFamilyAccessor();
+
     private final LongSerializer offsetSerializer = new LongSerializer();
     private final StringSerializer keySerializer = new StringSerializer();
     private final byte[] openValue = toBytes(1L);

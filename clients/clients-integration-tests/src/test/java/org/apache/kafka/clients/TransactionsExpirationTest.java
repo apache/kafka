@@ -145,7 +145,7 @@ public class TransactionsExpirationTest {
 
         // Reinitialize to recover from the fatal error.
         try (Producer<byte[], byte[]> producer = clusterInstance.producer(Map.of(
-                 ProducerConfig.TRANSACTIONAL_ID_CONFIG, TRANSACTION_ID
+            ProducerConfig.TRANSACTIONAL_ID_CONFIG, TRANSACTION_ID
              ))
         ) {
             producer.initTransactions();

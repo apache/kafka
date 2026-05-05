@@ -572,7 +572,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             loader.load(tp, coordinator).whenComplete((summary, exception) -> {
                 scheduleInternalOperation("CompleteLoad(tp=" + tp + ", epoch=" + epoch + ")", tp, () -> {
                     CoordinatorContext context = coordinators.get(tp);
-                    if (context != null)  {
+                    if (context != null) {
                         if (context.state != CoordinatorState.LOADING) {
                             log.info("Ignored load completion from {} because context is in {} state.",
                                 context.tp, context.state);

@@ -681,7 +681,7 @@ public abstract class ConsumerCoordinatorTest {
         consumerClient.send(coordinator.checkAndGetCoordinator(), OffsetCommitRequest.Builder.forTopicNames(offsetCommitRequestData))
                 .compose(new RequestFutureAdapter<>() {
                     @Override
-                    public void onSuccess(ClientResponse value, RequestFuture<Object> future) {}
+                    public void onSuccess(ClientResponse value, RequestFuture<Object> future) { }
 
                     @Override
                     public void onFailure(RuntimeException e, RequestFuture<Object> future) {

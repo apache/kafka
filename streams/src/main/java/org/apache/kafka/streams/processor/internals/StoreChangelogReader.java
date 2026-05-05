@@ -1029,7 +1029,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 final long recordsToRestore = Math.max(changelogMetadata.restoreEndOffset - startOffset, 0L);
                 task.recordRestoration(time, recordsToRestore, true);
                 changelogMetadata.restoreStartTimeNs = time.nanoseconds();
-            }  else if (changelogMetadata.stateManager.taskType() == TaskType.STANDBY) {
+            } else if (changelogMetadata.stateManager.taskType() == TaskType.STANDBY) {
                 try {
                     standbyUpdateListener.onUpdateStart(partition, storeName, startOffset);
                 } catch (final Exception e) {

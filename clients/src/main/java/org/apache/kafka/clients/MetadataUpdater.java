@@ -100,7 +100,7 @@ public interface MetadataUpdater extends Closeable {
      *
      * @param now Current time in milliseconds
      */
-    default void rebootstrap(long now) {}
+    default void rebootstrap(long now) { }
 
     /**
      * Close this updater.

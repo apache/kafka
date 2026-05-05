@@ -44,7 +44,7 @@ public class TimeWindowedSerializer<T> implements WindowedSerializer<T> {
 
     // Default constructor needed by Kafka
     @SuppressWarnings("WeakerAccess")
-    public TimeWindowedSerializer() {}
+    public TimeWindowedSerializer() { }
 
     public TimeWindowedSerializer(final Serializer<T> inner) {
         this.inner = inner;

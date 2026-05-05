@@ -92,5 +92,5 @@ public class MockTimer implements Timer {
     }
 
     @Override
-    public void close() throws Exception {}
+    public void close() throws Exception { }
 }

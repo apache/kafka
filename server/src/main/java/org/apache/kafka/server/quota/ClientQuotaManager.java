@@ -119,10 +119,12 @@ public class ClientQuotaManager {
         public ClientQuotaEntity.ConfigEntityType entityType() {
             return ClientQuotaEntity.ConfigEntityType.DEFAULT_CLIENT_ID;
         }
+
         @Override
         public String name() {
             return DEFAULT_NAME;
         }
+
         @Override
         public String toString() {
             return "default client-id";
@@ -262,6 +264,7 @@ public class ClientQuotaManager {
     protected Metrics metrics() {
         return metrics;
     }
+
     protected Time time() {
         return time;
     }
@@ -699,10 +702,10 @@ public class ClientQuotaManager {
         // improve shutdown time by waking up any ShutdownThread(s) blocked on poll by sending a no-op
         delayQueue.add(new ThrottledChannel(time, 0, new ThrottleCallback() {
             @Override
-            public void startThrottling() {}
+            public void startThrottling() { }
 
             @Override
-            public void endThrottling() {}
+            public void endThrottling() { }
         }));
     }
 
@@ -887,6 +890,6 @@ public class ClientQuotaManager {
         }
 
         @Override
-        public void close() {}
+        public void close() { }
     }
 }

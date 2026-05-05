@@ -35,7 +35,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateToSensor;
 
 public class StateStoreMetrics {
-    private StateStoreMetrics() {}
+    private StateStoreMetrics() { }
 
     private static final String AVG_DESCRIPTION_PREFIX = "The average ";
     private static final String MAX_DESCRIPTION_PREFIX = "The maximum ";

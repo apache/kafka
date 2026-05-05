@@ -171,7 +171,7 @@ public class RecordCollectorImpl implements RecordCollector {
                                 + "topic=[{}]", topic);
                         droppedRecordsSensor.record();
                     } else {
-                        for (final int multicastPartition: multicastPartitions) {
+                        for (final int multicastPartition : multicastPartitions) {
                             send(topic, key, value, headers, multicastPartition, timestamp, keySerializer, valueSerializer, processorNodeId, context);
                         }
                     }

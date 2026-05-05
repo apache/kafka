@@ -151,6 +151,6 @@ public class CommonClientConfigsTest {
     }
 
     public static class MyJmxReporter extends JmxReporter {
-        public MyJmxReporter() {}
+        public MyJmxReporter() { }
     }
 }

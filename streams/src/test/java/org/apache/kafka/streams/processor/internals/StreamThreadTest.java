@@ -1646,6 +1646,7 @@ public class StreamThreadTest {
     public void shouldNotCloseTaskAndRemoveFromTaskManagerIfProducerGotFencedInCommitTransactionWhenSuspendingTasks(final boolean processingThreadsEnabled) throws Exception {
         testThrowingDuringCommitTransactionException(new ProducerFencedException("Producer is fenced"), processingThreadsEnabled);
     }
+
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void shouldNotCloseTaskAndRemoveFromTaskManagerIfInvalidPidMappingOccurredInCommitTransactionWhenSuspendingTasks(final boolean processingThreadsEnabled) throws Exception {
@@ -2050,7 +2051,7 @@ public class StreamThreadTest {
                 }
 
                 @Override
-                public void process(final Record<Object, Object> record) {}
+                public void process(final Record<Object, Object> record) { }
             };
 
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed).process(punctuateProcessor);
@@ -2122,7 +2123,7 @@ public class StreamThreadTest {
             }
 
             @Override
-            public void process(final Record<Object, Object> record) {}
+            public void process(final Record<Object, Object> record) { }
         };
 
         final List<Long> peekedContextTime = new ArrayList<>();
@@ -2485,6 +2486,7 @@ public class StreamThreadTest {
                 setState(State.PENDING_SHUTDOWN);
                 throw new TaskCorruptedException(corruptedTasks);
             }
+
             @Override
             void runOnceWithoutProcessingThreads() {
                 setState(State.PENDING_SHUTDOWN);
@@ -2547,6 +2549,7 @@ public class StreamThreadTest {
                 setState(State.PENDING_SHUTDOWN);
                 throw new TaskCorruptedException(corruptedTasks);
             }
+
             @Override
             void runOnceWithoutProcessingThreads() {
                 setState(State.PENDING_SHUTDOWN);
@@ -2617,6 +2620,7 @@ public class StreamThreadTest {
                 setState(State.PENDING_SHUTDOWN);
                 throw new TaskCorruptedException(corruptedTasks);
             }
+
             @Override
             void runOnceWithoutProcessingThreads() {
                 setState(State.PENDING_SHUTDOWN);
@@ -2684,6 +2688,7 @@ public class StreamThreadTest {
                 setState(State.PENDING_SHUTDOWN);
                 throw new TaskCorruptedException(corruptedTasks);
             }
+
             @Override
             void runOnceWithoutProcessingThreads() {
                 setState(State.PENDING_SHUTDOWN);
@@ -2748,6 +2753,7 @@ public class StreamThreadTest {
                 setState(State.PENDING_SHUTDOWN);
                 throw new TaskCorruptedException(corruptedTasks);
             }
+
             @Override
             void runOnceWithoutProcessingThreads() {
                 setState(State.PENDING_SHUTDOWN);
@@ -3043,6 +3049,7 @@ public class StreamThreadTest {
                     throw new StreamsException(Thread.currentThread().getName());
                 }
             }
+
             @Override
             void runOnceWithoutProcessingThreads() {
                 setState(StreamThread.State.PENDING_SHUTDOWN);

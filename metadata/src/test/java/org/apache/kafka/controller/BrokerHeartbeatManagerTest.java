@@ -55,7 +55,7 @@ public class BrokerHeartbeatManagerTest {
     @Test
     public void testHasValidSession() {
         BrokerHeartbeatManager manager = newBrokerHeartbeatManager();
-        MockTime time = (MockTime)  manager.time();
+        MockTime time = (MockTime) manager.time();
         assertFalse(manager.hasValidSession(0, 100L));
         for (int brokerId = 0; brokerId < 3; brokerId++) {
             manager.register(brokerId, true);
@@ -112,7 +112,7 @@ public class BrokerHeartbeatManagerTest {
             manager.brokers().iterator(),
             id -> id % 2 == 0 ? Optional.of("rack1") : Optional.of("rack2"),
             id -> id % 3 != 0);
-             iterator.hasNext(); ) {
+             iterator.hasNext();) {
             brokers.add(iterator.next());
         }
         return brokers;

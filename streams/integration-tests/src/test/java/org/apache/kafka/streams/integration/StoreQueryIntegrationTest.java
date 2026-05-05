@@ -233,7 +233,7 @@ public class StoreQueryIntegrationTest {
 
             final StoreQueryParameters<ReadOnlyKeyValueStore<Integer, Integer>> storeQueryParam2 =
                 StoreQueryParameters.<ReadOnlyKeyValueStore<Integer, Integer>>fromNameAndType(TABLE_NAME, keyValueStore())
-                .withPartition(keyDontBelongPartition);
+                    .withPartition(keyDontBelongPartition);
 
             try {
                 // Assert that key is not served when wrong specific partition is requested

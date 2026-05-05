@@ -125,7 +125,7 @@ public class InternalStreamsBuilderTest {
         final KStream<String, String> source3 = builder.stream(Collections.singleton(topic3), consumed);
         final KStream<String, String> processedSource1 =
                 source1.mapValues(v -> v)
-                .filter((k, v) -> true);
+                    .filter((k, v) -> true);
         final KStream<String, String> processedSource2 = source2.filter((k, v) -> true);
 
         final KStream<String, String> merged = processedSource1.merge(processedSource2).merge(source3);
@@ -1358,7 +1358,7 @@ public class InternalStreamsBuilderTest {
         if (clazz.isAssignableFrom(currentNode.getClass())) {
             return currentNode;
         }
-        for (final GraphNode child: currentNode.children()) {
+        for (final GraphNode child : currentNode.children()) {
             visited.add(child);
             final GraphNode result = getNodeByType(child, clazz, visited);
             if (result != null) {
@@ -1377,7 +1377,7 @@ public class InternalStreamsBuilderTest {
         if (clazz.isAssignableFrom(currentNode.getClass())) {
             result.add(currentNode);
         }
-        for (final GraphNode child: currentNode.children()) {
+        for (final GraphNode child : currentNode.children()) {
             if (!visited.contains(child)) {
                 visited.add(child);
                 getNodesByType(child, clazz, visited, result);
@@ -1394,7 +1394,7 @@ public class InternalStreamsBuilderTest {
             count.incrementAndGet();
         }
 
-        for (final GraphNode child: currentNode.children()) {
+        for (final GraphNode child : currentNode.children()) {
             if (!visited.contains(child)) {
                 visited.add(child);
                 countJoinWindowNodes(count, child, visited);

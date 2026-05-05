@@ -190,7 +190,7 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
         }
 
         public Void get() throws InterruptedException, ExecutionException {
-            for (Future<RecordMetadata> future: futures) {
+            for (Future<RecordMetadata> future : futures) {
                 future.get();
             }
             return null;
@@ -198,7 +198,7 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
 
         public Void get(long timeout, TimeUnit unit)
             throws InterruptedException, ExecutionException, TimeoutException {
-            for (Future<RecordMetadata> future: futures) {
+            for (Future<RecordMetadata> future : futures) {
                 future.get(timeout, unit);
             }
             return null;

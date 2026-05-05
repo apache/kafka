@@ -99,7 +99,7 @@ public class RemoveNamedTopologyResult {
                 resetOffsets.run();
             } catch (final Throwable e) {
                 log.error("Failed to reset offsets, you should do so manually if you want to add new topologies"
-                              + "in the future that consume from the same input topics");
+                    + "in the future that consume from the same input topics");
                 firstError.compareAndSet(e, null);
             }
 

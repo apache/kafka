@@ -50,7 +50,7 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
         final String sourceTopic = config.getProperty("source.topic", "source");
         final String sinkTopic = config.getProperty("sink.topic", "sink");
         final int reportInterval = Integer.parseInt(config.getProperty("report.interval", "100"));
-        final String upgradePhase = config.getProperty("upgrade.phase",  "");
+        final String upgradePhase = config.getProperty("upgrade.phase", "");
 
         final KStreamBuilder builder = new KStreamBuilder();
 

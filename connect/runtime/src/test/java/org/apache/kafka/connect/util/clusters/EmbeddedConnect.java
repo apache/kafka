@@ -507,6 +507,7 @@ abstract class EmbeddedConnect {
             throw new ConnectException("Could not parse connector state", e);
         }
     }
+
     /**
      * Get the connector names of the connectors currently running on this cluster.
      *

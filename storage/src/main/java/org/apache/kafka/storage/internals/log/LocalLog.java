@@ -198,7 +198,7 @@ public class LocalLog {
      */
     public boolean renameDir(String name) {
         return maybeHandleIOException(
-            () -> "Error while renaming dir for " + topicPartition + " in log dir " +  dir.getParent(),
+            () -> "Error while renaming dir for " + topicPartition + " in log dir " + dir.getParent(),
             () -> {
                 File renamedDir = new File(dir.getParent(), name);
                 Utils.atomicMoveWithFallback(dir.toPath(), renamedDir.toPath());

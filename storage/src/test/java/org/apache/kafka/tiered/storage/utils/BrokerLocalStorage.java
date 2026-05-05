@@ -139,7 +139,7 @@ public final class BrokerLocalStorage {
      */
     private boolean isOffsetPresentInFirstLocalSegment(TopicPartition topicPartition,
                                                        Long firstLogFileBaseOffset,
-                                                       Long offsetToSearch)  {
+                                                       Long offsetToSearch) {
         if (offsetToSearch < firstLogFileBaseOffset) {
             return false;
         }

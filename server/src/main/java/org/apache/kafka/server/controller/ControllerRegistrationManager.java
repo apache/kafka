@@ -118,7 +118,7 @@ public class ControllerRegistrationManager implements MetadataPublisher {
             Uuid incarnationId,
             ListenerInfo listenerInfo,
             ExponentialBackoff resendExponentialBackoff
-    )  {
+    ) {
         this.nodeId = nodeId;
         this.time = time;
         this.supportedFeatures = supportedFeatures;

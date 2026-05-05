@@ -98,6 +98,7 @@ public class SuppressionIntegrationTest {
     public static void closeCluster() {
         CLUSTER.stop();
     }
+
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
     private static final Serde<String> STRING_SERDE = Serdes.String();
     private static final int COMMIT_INTERVAL = 100;

@@ -70,6 +70,7 @@ public class TestKitNodes {
         public Builder(BootstrapMetadata bootstrapMetadata) {
             this.bootstrapMetadata = bootstrapMetadata;
         }
+
         // The broker and controller listener name and SecurityProtocol configurations must
         // be kept in sync with the default values in ClusterTest.
         private ListenerName brokerListenerName = ListenerName.normalised(TestKitDefaults.DEFAULT_BROKER_LISTENER_NAME);

@@ -112,7 +112,7 @@ public final class MessageTest {
 
         AddPartitionsToTxnRequestData data = new AddPartitionsToTxnRequestData().
                 setTransactions(new AddPartitionsToTxnTransactionCollection(singletonList(
-                       new AddPartitionsToTxnRequestData.AddPartitionsToTxnTransaction().
+                    new AddPartitionsToTxnRequestData.AddPartitionsToTxnTransaction().
                               setTransactionalId("blah").
                               setProducerId(0xbadcafebadcafeL).
                               setProducerEpoch((short) 30000).
@@ -530,7 +530,7 @@ public final class MessageTest {
         testAllMessageRoundTrips(
             new TxnOffsetCommitResponseData()
                 .setTopics(
-                   singletonList(
+                    singletonList(
                        new TxnOffsetCommitResponseTopic()
                            .setName("topic")
                            .setPartitions(singletonList(
@@ -540,7 +540,7 @@ public final class MessageTest {
                            ))
                    )
                )
-               .setThrottleTimeMs(20));
+                .setThrottleTimeMs(20));
     }
 
     @ParameterizedTest
@@ -652,7 +652,7 @@ public final class MessageTest {
                 .setResponses(new ProduceResponseData.TopicProduceResponseCollection(singletonList(
                     new ProduceResponseData.TopicProduceResponse()
                         .setPartitionResponses(singletonList(
-                             new ProduceResponseData.PartitionProduceResponse()
+                            new ProduceResponseData.PartitionProduceResponse()
                                  .setIndex(partitionIndex)
                                  .setErrorCode(errorCode)
                                  .setBaseOffset(baseOffset)

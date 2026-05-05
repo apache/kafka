@@ -140,7 +140,7 @@ public class LeaderState<T> implements EpochState {
         this.epoch = epoch;
         this.epochStartOffset = epochStartOffset;
 
-        for (VoterSet.VoterNode voterNode: voterSetAtEpochStart.voterNodes()) {
+        for (VoterSet.VoterNode voterNode : voterSetAtEpochStart.voterNodes()) {
             boolean hasAcknowledgedLeader = voterNode.isVoter(localVoterNode.voterKey());
             this.voterStates.put(
                 voterNode.voterKey().id(),
@@ -155,7 +155,7 @@ public class LeaderState<T> implements EpochState {
         this.checkQuorumTimer = time.timer(checkQuorumTimeoutMs);
         this.beginQuorumEpochTimeoutMs = fetchTimeoutMs / 2;
         this.beginQuorumEpochTimer = time.timer(0);
-        this.voterSetAtEpochStart =  voterSetAtEpochStart;
+        this.voterSetAtEpochStart = voterSetAtEpochStart;
         this.offsetOfVotersAtEpochStart = offsetOfVotersAtEpochStart;
         this.kraftVersionAtEpochStart = kraftVersionAtEpochStart;
 

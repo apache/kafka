@@ -83,7 +83,7 @@ public class RawTaggedFieldWriterTest {
         List<RawTaggedField> tags = Arrays.asList(
             new RawTaggedField(5, new byte[] {0x4, 0x5, 0x6}),
             new RawTaggedField(2, new byte[] {0x1, 0x2, 0x3}),
-            new RawTaggedField(7, new byte[] {0x0 })
+            new RawTaggedField(7, new byte[] {0x0})
         );
         RawTaggedFieldWriter writer = RawTaggedFieldWriter.forFields(tags);
         assertEquals(3, writer.numFields());

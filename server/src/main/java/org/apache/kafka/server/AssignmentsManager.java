@@ -281,6 +281,7 @@ public final class AssignmentsManager {
      */
     private class HandleResponseEvent implements EventQueue.Event {
         private final Map<TopicIdPartition, Assignment> sent;
+
         private final Optional<ClientResponse> response;
 
         HandleResponseEvent(

@@ -143,7 +143,7 @@ class PartitionGroup extends AbstractPartitionGroup {
                     idlePartitionDeadlines.remove(partition);
                     appendLog(logMessageBuilder,
                         String.format("Partition %s has current lag %d, but no data is buffered locally. Waiting to buffer some records.",
-                        partition, fetchedLag));
+                            partition, fetchedLag));
 
                     return new ReadyToProcessResult(false, Optional.of(logMessageBuilder.toString()));
                 } else {

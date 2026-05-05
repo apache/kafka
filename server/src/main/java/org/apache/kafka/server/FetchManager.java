@@ -97,7 +97,7 @@ public class FetchManager {
                                 reqMetadata.sessionId(), session.epoch(), reqMetadata.epoch());
 
                             return new SessionErrorContext(Errors.INVALID_FETCH_SESSION_EPOCH);
-                        } else if (session.usesTopicIds() && reqVersion < 13 || !session.usesTopicIds() && reqVersion >= 13)  {
+                        } else if (session.usesTopicIds() && reqVersion < 13 || !session.usesTopicIds() && reqVersion >= 13) {
                             LOGGER.debug("Session error for {}: expected  {}, but request version {} means that we can not.",
                                 reqMetadata.sessionId(), session.usesTopicIds() ? "to use topic IDs" : "to not use topic IDs", reqVersion);
 

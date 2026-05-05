@@ -586,7 +586,7 @@ public class KTableTransformValuesTest {
         }
 
         @Override
-        public void close() {}
+        public void close() { }
     }
 
     private static class NullSupplier implements ValueTransformerWithKeySupplier<String, String, String> {
@@ -607,7 +607,7 @@ public class KTableTransformValuesTest {
         private int counter;
 
         @Override
-        public void init(final ProcessorContext context) {}
+        public void init(final ProcessorContext context) { }
 
         @Override
         public Integer transform(final String readOnlyKey, final String value) {
@@ -615,7 +615,7 @@ public class KTableTransformValuesTest {
         }
 
         @Override
-        public void close() {}
+        public void close() { }
     }
 
     private static class StatelessTransformerSupplier implements ValueTransformerWithKeySupplier<String, String, Integer> {
@@ -627,7 +627,7 @@ public class KTableTransformValuesTest {
 
     private static class StatelessTransformer implements ValueTransformerWithKey<String, String, Integer> {
         @Override
-        public void init(final ProcessorContext context) {}
+        public void init(final ProcessorContext context) { }
 
         @Override
         public Integer transform(final String readOnlyKey, final String value) {
@@ -635,6 +635,6 @@ public class KTableTransformValuesTest {
         }
 
         @Override
-        public void close() {}
+        public void close() { }
     }
 }

@@ -243,18 +243,22 @@ public class RemoteLogManagerTest {
             public RemoteStorageManager createRemoteStorageManager() {
                 return remoteStorageManager;
             }
+
             @Override
             public RemoteLogMetadataManager createRemoteLogMetadataManager() {
                 return remoteLogMetadataManager;
             }
+
             @Override
             public RLMQuotaManager createRLMCopyQuotaManager() {
                 return rlmCopyQuotaManager;
             }
+
             @Override
             public Duration quotaTimeout() {
                 return Duration.ofMillis(100);
             }
+
             @Override
             long findLogStartOffset(TopicIdPartition topicIdPartition, UnifiedLog log) {
                 return 0L;
@@ -416,6 +420,7 @@ public class RemoteLogManagerTest {
             public RemoteStorageManager createRemoteStorageManager() {
                 return remoteStorageManager;
             }
+
             @Override
             public RemoteLogMetadataManager createRemoteLogMetadataManager() {
                 return remoteLogMetadataManager;
@@ -1808,6 +1813,7 @@ public class RemoteLogManagerTest {
             public RemoteLogMetadataManager createRemoteLogMetadataManager() {
                 return remoteLogMetadataManager;
             }
+
             @Override
             Optional<FileRecords.TimestampAndOffset> lookupTimestamp(RemoteLogSegmentMetadata rlsMetadata, long timestamp, long startingOffset) {
                 return Optional.of(expectedRemoteResult);
@@ -1864,6 +1870,7 @@ public class RemoteLogManagerTest {
                 public RemoteStorageManager createRemoteStorageManager() {
                     return remoteStorageManager;
                 }
+
                 @Override
                 public RemoteLogMetadataManager createRemoteLogMetadataManager() {
                     return remoteLogMetadataManager;
@@ -2562,7 +2569,7 @@ public class RemoteLogManagerTest {
         AtomicLong logStartOffset = new AtomicLong(0);
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
-                (topicPartition, offset) ->  logStartOffset.set(offset),
+                (topicPartition, offset) -> logStartOffset.set(offset),
                 brokerTopicStats, metrics, endPoint) {
             @Override
             public RemoteLogMetadataManager createRemoteLogMetadataManager() {
@@ -2623,18 +2630,22 @@ public class RemoteLogManagerTest {
             public RemoteStorageManager createRemoteStorageManager() {
                 return remoteStorageManager;
             }
+
             @Override
             public RemoteLogMetadataManager createRemoteLogMetadataManager() {
                 return remoteLogMetadataManager;
             }
+
             @Override
             public RLMQuotaManager createRLMCopyQuotaManager() {
                 return rlmCopyQuotaManager;
             }
+
             @Override
             public Duration quotaTimeout() {
                 return Duration.ofMillis(100);
             }
+
             @Override
             long findLogStartOffset(TopicIdPartition topicIdPartition, UnifiedLog log) {
                 return 0L;
@@ -3356,6 +3367,7 @@ public class RemoteLogManagerTest {
             public RemoteStorageManager createRemoteStorageManager() {
                 return remoteStorageManager;
             }
+
             @Override
             public RemoteLogMetadataManager createRemoteLogMetadataManager() {
                 return remoteLogMetadataManager;
@@ -3527,6 +3539,7 @@ public class RemoteLogManagerTest {
             public RemoteStorageManager createRemoteStorageManager() {
                 return rsmManager;
             }
+
             @Override
             public RemoteLogMetadataManager createRemoteLogMetadataManager() {
                 return remoteLogMetadataManager;
@@ -3607,18 +3620,22 @@ public class RemoteLogManagerTest {
             public RemoteStorageManager createRemoteStorageManager() {
                 return rsmManager;
             }
+
             @Override
             public RemoteLogMetadataManager createRemoteLogMetadataManager() {
                 return remoteLogMetadataManager;
             }
+
             @Override
             public Optional<RemoteLogSegmentMetadata> fetchRemoteLogSegmentMetadata(TopicPartition topicPartition, int epochForOffset, long offset) {
                 return Optional.of(segmentMetadata);
             }
+
             @Override
             int lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
                 return 1;
             }
+
             @Override
             EnrichedRecordBatch findFirstBatch(RemoteLogInputStream remoteLogInputStream, long offset) {
                 when(firstBatch.sizeInBytes()).thenReturn(recordBatchSizeInBytes);
@@ -3695,18 +3712,22 @@ public class RemoteLogManagerTest {
             public RemoteStorageManager createRemoteStorageManager() {
                 return rsmManager;
             }
+
             @Override
             public RemoteLogMetadataManager createRemoteLogMetadataManager() {
                 return remoteLogMetadataManager;
             }
+
             @Override
             public Optional<RemoteLogSegmentMetadata> fetchRemoteLogSegmentMetadata(TopicPartition topicPartition, int epochForOffset, long offset) {
                 return Optional.of(segmentMetadata);
             }
+
             @Override
             public RemoteLogInputStream getRemoteLogInputStream(InputStream in) {
                 return remoteLogInputStream;
             }
+
             @Override
             int lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
                 return 1;
@@ -4114,10 +4135,12 @@ public class RemoteLogManagerTest {
             public RemoteStorageManager createRemoteStorageManager() {
                 return remoteStorageManager;
             }
+
             @Override
             public RemoteLogMetadataManager createRemoteLogMetadataManager() {
                 return remoteLogMetadataManager;
             }
+
             @Override
             int lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
                 return 0;
@@ -4159,18 +4182,22 @@ public class RemoteLogManagerTest {
             public RemoteStorageManager createRemoteStorageManager() {
                 return remoteStorageManager;
             }
+
             @Override
             public RemoteLogMetadataManager createRemoteLogMetadataManager() {
                 return remoteLogMetadataManager;
             }
+
             @Override
             public RLMQuotaManager createRLMCopyQuotaManager() {
                 return rlmCopyQuotaManager;
             }
+
             @Override
             public Duration quotaTimeout() {
                 return Duration.ofMillis(100);
             }
+
             @Override
             long findLogStartOffset(TopicIdPartition topicIdPartition, UnifiedLog log) {
                 return 0L;

@@ -26,7 +26,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxToSensor;
 
 public class RebalanceListenerMetrics {
-    private RebalanceListenerMetrics() {}
+    private RebalanceListenerMetrics() { }
 
     private static final String TASKS_REVOKED = "tasks-revoked";
     private static final String TASKS_ASSIGNED = "tasks-assigned";

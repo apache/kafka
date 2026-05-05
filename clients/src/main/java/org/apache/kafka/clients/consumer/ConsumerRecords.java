@@ -111,7 +111,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
      */
     public int count() {
         int count = 0;
-        for (List<ConsumerRecord<K, V>> recs: this.records.values())
+        for (List<ConsumerRecord<K, V>> recs : this.records.values())
             count += recs.size();
         return count;
     }

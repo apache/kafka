@@ -88,7 +88,7 @@ public class StateTracker {
             this.unassignedTotalTimeMs = unassignedTotalTimeMs;
             this.runningTotalTimeMs = runningTotalTimeMs;
             this.pausedTotalTimeMs = pausedTotalTimeMs;
-            this.stoppedTotalTimeMs  = stoppedTotalTimeMs;
+            this.stoppedTotalTimeMs = stoppedTotalTimeMs;
             this.failedTotalTimeMs = failedTotalTimeMs;
             this.destroyedTotalTimeMs = destroyedTotalTimeMs;
             this.restartingTotalTimeMs = restartingTotalTimeMs;

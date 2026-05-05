@@ -41,5 +41,5 @@ public interface KTableValueGetter<K, V> {
      */
     boolean isVersioned();
 
-    default void close() {}
+    default void close() { }
 }

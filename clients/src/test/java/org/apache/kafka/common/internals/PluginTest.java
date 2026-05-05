@@ -55,7 +55,7 @@ public class PluginTest {
         }
     }
 
-    static class SomeMonitorablePlugin extends SomePlugin implements Monitorable  {
+    static class SomeMonitorablePlugin extends SomePlugin implements Monitorable {
 
         @Override
         public void withPluginMetrics(PluginMetrics metrics) {

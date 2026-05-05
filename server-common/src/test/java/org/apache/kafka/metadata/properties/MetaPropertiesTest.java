@@ -33,7 +33,7 @@ public final class MetaPropertiesTest {
     public void testV0SerializationWithNothing() {
         testV0Serialization(Optional.empty(),
             OptionalInt.empty(),
-             Optional.empty(),
+            Optional.empty(),
             "MetaProperties(version=0)");
     }
 

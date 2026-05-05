@@ -616,20 +616,24 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask<SourceRecord, 
             counter = batchSize;
             this.metricsGroup = metricsGroup;
         }
+
         public void skipRecord() {
             skipped += 1;
             if (counter > 0 && --counter == 0) {
                 finishedAllWrites();
             }
         }
+
         public void completeRecord() {
             if (counter > 0 && --counter == 0) {
                 finishedAllWrites();
             }
         }
+
         public void retryRemaining() {
             finishedAllWrites();
         }
+
         private void finishedAllWrites() {
             if (!completed) {
                 metricsGroup.recordWrite(batchSize - counter, skipped);

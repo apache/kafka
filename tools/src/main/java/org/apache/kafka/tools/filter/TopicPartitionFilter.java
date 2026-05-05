@@ -35,6 +35,7 @@ public interface TopicPartitionFilter {
     class TopicFilterAndPartitionFilter implements TopicPartitionFilter {
         private final IncludeList topicFilter;
         private final PartitionFilter partitionFilter;
+
         public TopicFilterAndPartitionFilter(IncludeList topicFilter, PartitionFilter partitionFilter) {
             this.topicFilter = topicFilter;
             this.partitionFilter = partitionFilter;

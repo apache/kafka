@@ -552,7 +552,7 @@ class AdminApiDriverTest {
         TestContext context,
         String key,
         Integer expectedBrokerId
-    )  {
+    ) {
         OptionalInt brokerIdOpt = context.driver.keyToBrokerId(key);
         assertEquals(OptionalInt.of(expectedBrokerId), brokerIdOpt);
     }

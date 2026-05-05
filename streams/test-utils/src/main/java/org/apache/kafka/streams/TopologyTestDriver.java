@@ -255,13 +255,13 @@ public class TopologyTestDriver implements Closeable {
 
     private final StateRestoreListener stateRestoreListener = new StateRestoreListener() {
         @Override
-        public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {}
+        public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) { }
 
         @Override
-        public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {}
+        public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) { }
 
         @Override
-        public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {}
+        public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) { }
     };
 
     /**
@@ -525,7 +525,7 @@ public class TopologyTestDriver implements Closeable {
                 );
             task.initializeIfNeeded();
             task.completeRestoration(noOpResetter -> { });
-            for (final TopicPartition tp: task.inputPartitions()) {
+            for (final TopicPartition tp : task.inputPartitions()) {
                 task.updateNextOffsets(tp, new OffsetAndMetadata(0, Optional.empty(), ""));
             }
         } else {

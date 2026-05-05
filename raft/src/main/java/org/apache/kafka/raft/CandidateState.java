@@ -178,5 +178,5 @@ public class CandidateState implements NomineeState {
     }
 
     @Override
-    public void close() {}
+    public void close() { }
 }

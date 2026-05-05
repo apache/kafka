@@ -86,7 +86,7 @@ class RemoteLogLeaderEpochStateTest {
         List<RemoteLogSegmentId> expectedList = List.of(segmentId1, segmentId2, segmentId4, segmentId3);
         List<RemoteLogSegmentId> actualList = new ArrayList<>();
         epochState.listAllRemoteLogSegments(segmentIdToMetadataMap)
-                .forEachRemaining(metadata -> actualList.add(metadata.remoteLogSegmentId()));
+                  .forEachRemaining(metadata -> actualList.add(metadata.remoteLogSegmentId()));
         assertEquals(expectedList, actualList);
     }
 

@@ -118,7 +118,7 @@ public class KStreamSplitTest {
                         .defaultBranch();
         assertEquals(4, branches.size());
         // direct the branched streams into different topics named with branch name
-        for (final Map.Entry<String, KStream<Integer, String>> branch: branches.entrySet()) {
+        for (final Map.Entry<String, KStream<Integer, String>> branch : branches.entrySet()) {
             branch.getValue().to(branch.getKey());
         }
         builder.build();

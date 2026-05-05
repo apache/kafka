@@ -122,7 +122,7 @@ public class TimeOrderedCachingWindowStore
             stateStoreContext.applicationId()
         );
         internalContext = asInternalProcessorContext(stateStoreContext);
-        final String topic = ProcessorStateManager.storeChangelogTopic(prefix, name(),  stateStoreContext.taskId().topologyName());
+        final String topic = ProcessorStateManager.storeChangelogTopic(prefix, name(), stateStoreContext.taskId().topologyName());
 
         bytesSerdes = new StateSerdes<>(
             topic,

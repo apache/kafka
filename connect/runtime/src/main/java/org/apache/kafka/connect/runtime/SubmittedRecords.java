@@ -72,7 +72,7 @@ class SubmittedRecords {
     SubmittedRecord submit(Map<String, Object> partition, Map<String, Object> offset) {
         SubmittedRecord result = new SubmittedRecord(partition, offset);
         records.computeIfAbsent(result.partition(), p -> new LinkedList<>())
-                .add(result);
+               .add(result);
         synchronized (this) {
             numUnackedMessages++;
         }

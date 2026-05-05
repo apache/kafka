@@ -116,6 +116,7 @@ public final class IntGaugeSuite<K> implements AutoCloseable {
      */
     private static class StoredIntGauge implements Gauge<Integer> {
         private final MetricName metricName;
+
         private int value;
 
         StoredIntGauge(MetricName metricName) {
@@ -261,7 +262,7 @@ public final class IntGaugeSuite<K> implements AutoCloseable {
         }
         closed = true;
         int prevSize = 0;
-        for (Iterator<StoredIntGauge> iter = gauges.values().iterator(); iter.hasNext(); ) {
+        for (Iterator<StoredIntGauge> iter = gauges.values().iterator(); iter.hasNext();) {
             pending.push(new PendingMetricsChange(iter.next().metricName, null));
             prevSize++;
             iter.remove();

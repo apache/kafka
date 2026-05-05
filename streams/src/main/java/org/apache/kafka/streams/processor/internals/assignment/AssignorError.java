@@ -42,6 +42,7 @@ public enum AssignorError {
     public String codeName() {
         return codeName;
     }
+
     public String description() {
         return description;
     }

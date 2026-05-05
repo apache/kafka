@@ -1942,7 +1942,7 @@ public class WorkerSinkTaskTest {
         return expectConsumerPoll(numMessages, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, new RecordHeaders());
     }
 
-    private Answer<ConsumerRecords<byte[], byte[]>> expectConsumerPoll(final int numMessages,  Headers headers) {
+    private Answer<ConsumerRecords<byte[], byte[]>> expectConsumerPoll(final int numMessages, Headers headers) {
         return expectConsumerPoll(numMessages, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, headers);
     }
 

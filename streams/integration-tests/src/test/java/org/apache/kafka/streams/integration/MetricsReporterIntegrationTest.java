@@ -118,7 +118,7 @@ public class MetricsReporterIntegrationTest {
         // no need to create the topics, because we don't start the stream - just need to create the KafkaStreams object
         // to check all initial values from the metrics are not null
         builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()))
-                .to(STREAM_OUTPUT, Produced.with(Serdes.Integer(), Serdes.String()));
+               .to(STREAM_OUTPUT, Produced.with(Serdes.Integer(), Serdes.String()));
         final Topology topology = builder.build();
         try (KafkaStreams kafkaStreams = new KafkaStreams(topology, streamsConfiguration)) {
             kafkaStreams.metrics().keySet().forEach(metricName -> {

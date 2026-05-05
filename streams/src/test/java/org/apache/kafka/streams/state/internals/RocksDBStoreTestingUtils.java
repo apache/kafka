@@ -197,7 +197,7 @@ public final class RocksDBStoreTestingUtils {
     }
 
     private static List<ColumnFamilyDescriptor> listCfDescriptors(final File dbDir,
-                                                                   final ColumnFamilyOptions cfOptions) throws RocksDBException {
+                                                                  final ColumnFamilyOptions cfOptions) throws RocksDBException {
         return RocksDB.listColumnFamilies(new Options(), dbDir.getAbsolutePath())
             .stream()
             .map(name -> new ColumnFamilyDescriptor(name, cfOptions))
@@ -205,7 +205,7 @@ public final class RocksDBStoreTestingUtils {
     }
 
     private static ColumnFamilyHandle findOffsetsCf(final List<ColumnFamilyHandle> handles,
-                                                     final List<ColumnFamilyDescriptor> descriptors) {
+                                                    final List<ColumnFamilyDescriptor> descriptors) {
         for (int i = 0; i < descriptors.size(); i++) {
             if (Arrays.equals(descriptors.get(i).getName(), OFFSETS_COLUMN_FAMILY_NAME)) {
                 return handles.get(i);

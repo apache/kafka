@@ -38,10 +38,10 @@ public abstract class BufferSupplier implements AutoCloseable {
         }
 
         @Override
-        public void release(ByteBuffer buffer) {}
+        public void release(ByteBuffer buffer) { }
 
         @Override
-        public void close() {}
+        public void close() { }
     };
 
     public static BufferSupplier create() {

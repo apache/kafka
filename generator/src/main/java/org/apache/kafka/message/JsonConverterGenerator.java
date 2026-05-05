@@ -54,7 +54,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
         generateConverters(message.dataClassName(), message.struct(),
             message.validVersions());
         for (Iterator<StructRegistry.StructInfo> iter = structRegistry.structs();
-                iter.hasNext(); ) {
+                iter.hasNext();) {
             StructRegistry.StructInfo info = iter.next();
             buffer.printf("%n");
             buffer.printf("public static class %s {%n",
@@ -159,7 +159,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
         } else if (target.field().type() instanceof FieldType.Uint32FieldType) {
             headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
             buffer.printf("%s;%n", target.assignmentStatement(
-                 String.format("MessageUtil.jsonNodeToUnsignedInt(%s, \"%s\")",
+                String.format("MessageUtil.jsonNodeToUnsignedInt(%s, \"%s\")",
                      target.sourceVariable(), target.humanReadableName())));
         } else if (target.field().type() instanceof FieldType.Int32FieldType) {
             headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);

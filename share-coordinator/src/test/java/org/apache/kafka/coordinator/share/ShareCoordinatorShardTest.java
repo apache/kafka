@@ -1831,6 +1831,7 @@ class ShareCoordinatorShardTest {
     private void initSharePartition(ShareCoordinatorShard shard, SharePartitionKey key) {
         initSharePartition(shard, key, 0);
     }
+
     private void initSharePartition(ShareCoordinatorShard shard, SharePartitionKey key, int stateEpoch) {
         shard.replay(0L, 0L, (short) 0, CoordinatorRecord.record(
             new ShareSnapshotKey()

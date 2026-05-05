@@ -148,7 +148,7 @@ public class MetricsTest {
             "s2 reflects the constant value");
         assertEquals(4.5, metricValueFunc.apply(metrics.metric(metrics.metricName("test.avg", "grp1"))), EPS,
             "Avg(0...9) = 4.5");
-        assertEquals(count - 1,  metricValueFunc.apply(metrics.metric(metrics.metricName("test.max", "grp1"))), EPS,
+        assertEquals(count - 1, metricValueFunc.apply(metrics.metric(metrics.metricName("test.max", "grp1"))), EPS,
             "Max(0...9) = 9");
         assertEquals(0.0, metricValueFunc.apply(metrics.metric(metrics.metricName("test.min", "grp1"))), EPS,
             "Min(0...9) = 0");
@@ -742,6 +742,7 @@ public class MetricsTest {
 
         class LockingReporter implements MetricsReporter {
             final Map<MetricName, KafkaMetric> activeMetrics = new HashMap<>();
+
             @Override
             public synchronized void init(List<KafkaMetric> metrics) {
             }
@@ -808,11 +809,13 @@ public class MetricsTest {
         private final AtomicBoolean alive;
         private final String opName;
         private final Runnable op;
+
         ConcurrentMetricOperation(AtomicBoolean alive, String opName, Runnable op) {
             this.alive = alive;
             this.opName = opName;
             this.op = op;
         }
+
         @Override
         public void run() {
             try {
@@ -839,6 +842,7 @@ public class MetricsTest {
         METER(10);
 
         final int id;
+
         StatType(int id) {
             this.id = id;
         }
@@ -899,7 +903,7 @@ public class MetricsTest {
                     break;
                 case METER:
                     sensor.add(new Meter(metrics.metricName("test.metric.meter.rate", "meter", tags),
-                               metrics.metricName("test.metric.meter.total", "meter", tags)));
+                        metrics.metricName("test.metric.meter.total", "meter", tags)));
                     break;
                 default:
                     throw new IllegalStateException("Invalid stat type " + statType);

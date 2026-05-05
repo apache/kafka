@@ -224,7 +224,7 @@ public class MockClient implements KafkaClient {
 
         // Check if the request is directed to a node with a pending authentication error.
         for (Iterator<Map.Entry<Node, Long>> authErrorIter =
-             pendingAuthenticationErrors.entrySet().iterator(); authErrorIter.hasNext(); ) {
+             pendingAuthenticationErrors.entrySet().iterator(); authErrorIter.hasNext();) {
             Map.Entry<Node, Long> entry = authErrorIter.next();
             Node node = entry.getKey();
             long backoffMs = entry.getValue();
@@ -657,9 +657,9 @@ public class MockClient implements KafkaClient {
 
         void update(Time time, MetadataUpdate update);
 
-        default void updateWithCurrentMetadata(Time time) {}
+        default void updateWithCurrentMetadata(Time time) { }
 
-        default void close() {}
+        default void close() { }
     }
 
     private static class NoOpMetadataUpdater implements MockMetadataUpdater {
@@ -681,6 +681,7 @@ public class MockClient implements KafkaClient {
 
     private static class StaticMetadataUpdater extends NoOpMetadataUpdater {
         private final List<Node> nodes;
+
         public StaticMetadataUpdater(List<Node> nodes) {
             this.nodes = nodes;
         }

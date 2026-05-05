@@ -235,7 +235,7 @@ public class PluginUtils {
     private static List<Path> pluginLocations(Path pluginPathElement) throws IOException {
         List<Path> locations = new ArrayList<>();
         try (
-                DirectoryStream<Path> listing = Files.newDirectoryStream(
+            DirectoryStream<Path> listing = Files.newDirectoryStream(
                         pluginPathElement,
                         PLUGIN_PATH_FILTER
                 )

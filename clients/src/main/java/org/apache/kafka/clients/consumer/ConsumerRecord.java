@@ -265,7 +265,7 @@ public class ConsumerRecord<K, V> {
                + ", offset = " + offset
                + ", " + timestampType + " = " + timestamp
                + ", deliveryCount = " + deliveryCount.orElse(null)
-               + ", serialized key size = "  + serializedKeySize
+               + ", serialized key size = " + serializedKeySize
                + ", serialized value size = " + serializedValueSize
                + ", headers = " + headers
                + ", key = " + key

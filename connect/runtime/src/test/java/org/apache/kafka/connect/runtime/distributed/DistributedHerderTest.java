@@ -1289,7 +1289,7 @@ public class DistributedHerderTest {
         FutureCallback<ConnectorStateInfo> callback = new FutureCallback<>();
         herder.restartConnectorAndTasks(restartRequest, callback);
         herder.tick();
-        assertEquals(connectorStateInfo,  callback.get(1000L, TimeUnit.MILLISECONDS));
+        assertEquals(connectorStateInfo, callback.get(1000L, TimeUnit.MILLISECONDS));
 
         verifyNoMoreInteractions(restartPlan, worker, member, configBackingStore, statusBackingStore);
     }
@@ -4153,6 +4153,7 @@ public class DistributedHerderTest {
                                  final List<ConnectorTaskId> assignedTasks) {
         expectRebalance(revokedConnectors, revokedTasks, error, offset, assignedConnectors, assignedTasks, 0);
     }
+
     // Handles common initial part of rebalance callback. Does not handle instantiation of connectors and tasks.
     private void expectRebalance(final Collection<String> revokedConnectors,
                                  final List<ConnectorTaskId> revokedTasks,

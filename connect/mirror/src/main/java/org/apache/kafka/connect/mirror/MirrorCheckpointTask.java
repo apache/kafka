@@ -73,7 +73,7 @@ public class MirrorCheckpointTask extends SourceTask {
     private Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset;
     private CheckpointStore checkpointStore;
 
-    public MirrorCheckpointTask() {}
+    public MirrorCheckpointTask() { }
 
     // for testing
     MirrorCheckpointTask(String sourceClusterAlias, String targetClusterAlias,
@@ -189,7 +189,7 @@ public class MirrorCheckpointTask extends SourceTask {
                 .map(x -> checkpointRecord(x, timestamp))
                 .collect(Collectors.toList());
         } catch (ExecutionException e) {
-            log.error("Error querying offsets for consumer group {} on cluster {}.",  group, sourceClusterAlias, e);
+            log.error("Error querying offsets for consumer group {} on cluster {}.", group, sourceClusterAlias, e);
             return List.of();
         }
     }

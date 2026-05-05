@@ -130,7 +130,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      */
     private class ShareAcknowledgementEventProcessor implements EventProcessor<ShareAcknowledgementEvent> {
 
-        public ShareAcknowledgementEventProcessor() {}
+        public ShareAcknowledgementEventProcessor() { }
 
         @Override
         public void process(final ShareAcknowledgementEvent event) {
@@ -151,7 +151,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      */
     private class BackgroundEventProcessor implements EventProcessor<BackgroundEvent> {
 
-        public BackgroundEventProcessor() {}
+        public BackgroundEventProcessor() { }
 
         @Override
         public void process(final BackgroundEvent event) {

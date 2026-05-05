@@ -219,7 +219,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         // 3. assign any remaining unassigned tasks
         final PriorityQueue<ProcessState> processByLoad = new PriorityQueue<>(Comparator.comparingDouble(ProcessState::load));
         processByLoad.addAll(localState.processIdToState.values());
-        for (final TaskId task: activeTasks) {
+        for (final TaskId task : activeTasks) {
             final ProcessState processWithLeastLoad = processByLoad.poll();
             if (processWithLeastLoad == null) {
                 throw new TaskAssignorException(String.format("No process available to assign active task %s.", task));

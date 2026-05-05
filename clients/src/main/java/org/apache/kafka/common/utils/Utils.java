@@ -100,7 +100,7 @@ import javax.management.ObjectName;
 
 public final class Utils {
 
-    private Utils() {}
+    private Utils() { }
 
     // This matches URIs of formats: host:port and protocol://host:port
     // IPv6 is supported with [ip] pattern

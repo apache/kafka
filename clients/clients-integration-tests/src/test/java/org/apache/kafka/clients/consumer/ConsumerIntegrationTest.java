@@ -118,6 +118,7 @@ public class ConsumerIntegrationTest {
                 ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name()))) {
             consumer.subscribe(List.of(topic), new ConsumerRebalanceListener() {
                 private int count = 0;
+
                 @Override
                 public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
                 }

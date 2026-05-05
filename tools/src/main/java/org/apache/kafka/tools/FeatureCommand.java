@@ -450,7 +450,7 @@ public class FeatureCommand {
         });
 
         int numFailures = 0;
-        for (Map.Entry<String, Optional<Throwable>> feature: errors.entrySet()) {
+        for (Map.Entry<String, Optional<Throwable>> feature : errors.entrySet()) {
             short level = updates.get(feature.getKey()).maxVersionLevel();
             Optional<Throwable> maybeThrowable = feature.getValue();
             if (maybeThrowable != null && maybeThrowable.isPresent()) {

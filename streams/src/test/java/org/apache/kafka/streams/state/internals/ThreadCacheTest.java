@@ -534,6 +534,7 @@ public class ThreadCacheTest {
         cache.put(namespace, Bytes.wrap(new byte[]{1}), cleanEntry(new byte[]{0}));
         assertEquals(0, received.size());
     }
+
     @Test
     public void shouldPutIfAbsent() {
         final ThreadCache cache = new ThreadCache(logContext, 100000, new MockStreamsMetrics(new Metrics()));

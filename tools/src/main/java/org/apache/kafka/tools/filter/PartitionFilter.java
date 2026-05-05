@@ -27,9 +27,11 @@ public interface PartitionFilter {
 
     class PartitionsSetFilter implements PartitionFilter {
         private final Set<Integer> partitionIds;
+
         public PartitionsSetFilter(Set<Integer> partitionIds) {
             this.partitionIds = partitionIds;
         }
+
         @Override
         public boolean isPartitionAllowed(int partition) {
             return partitionIds.isEmpty() || partitionIds.contains(partition);

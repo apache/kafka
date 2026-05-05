@@ -222,7 +222,7 @@ public class OffsetSyncStoreTest {
         long iterations = 100;
         long maxStep = Long.MAX_VALUE / iterations;
         // Test a variety of steps (corresponding to the offset.lag.max configuration)
-        for (long step = 1; step < maxStep; step = (step * 2) + 1)  {
+        for (long step = 1; step < maxStep; step = (step * 2) + 1) {
             for (long firstOffset = 0; firstOffset < 30; firstOffset++) {
                 long finalStep = step;
                 // Generate a stream of consistently spaced syncs

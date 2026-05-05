@@ -323,7 +323,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 image.provenance(),
                 time.nanoseconds() - startNs);
         for (Iterator<MetadataPublisher> iter = uninitializedPublishers.values().iterator();
-                iter.hasNext(); ) {
+                iter.hasNext();) {
             MetadataPublisher publisher = iter.next();
             iter.remove();
             try {
@@ -604,12 +604,12 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         @Override
         public void run() throws Exception {
             for (Iterator<MetadataPublisher> iter = uninitializedPublishers.values().iterator();
-                 iter.hasNext(); ) {
+                 iter.hasNext();) {
                 closePublisher(iter.next());
                 iter.remove();
             }
             for (Iterator<MetadataPublisher> iter = publishers.values().iterator();
-                 iter.hasNext(); ) {
+                 iter.hasNext();) {
                 closePublisher(iter.next());
                 iter.remove();
             }

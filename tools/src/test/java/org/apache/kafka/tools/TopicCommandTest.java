@@ -921,7 +921,7 @@ public class TopicCommandTest {
             topicService.deleteTopic(deleteOpts);
             TestUtils.waitForCondition(
                     () -> adminClient.listTopics().listings().get().stream().noneMatch(topic -> topic.name().equals(topicWithCollidingChar)),
-                        CLUSTER_WAIT_MS, String.format("Delete topic fail in %s ms", CLUSTER_WAIT_MS)
+                CLUSTER_WAIT_MS, String.format("Delete topic fail in %s ms", CLUSTER_WAIT_MS)
             );
 
             clusterInstance.waitTopicDeletion(topicWithCollidingChar);
@@ -1186,7 +1186,7 @@ public class TopicCommandTest {
             // let's wait until the LAIR is propagated
             TestUtils.waitForCondition(
                     () -> !adminClient.listPartitionReassignments(Set.of(tp)).reassignments().get()
-                                    .get(tp).addingReplicas().isEmpty(), CLUSTER_WAIT_MS, "Reassignment didn't add the second node"
+                                      .get(tp).addingReplicas().isEmpty(), CLUSTER_WAIT_MS, "Reassignment didn't add the second node"
             );
 
             // describe the topic and test if it's under-replicated
@@ -1220,7 +1220,7 @@ public class TopicCommandTest {
             ToolsTestUtils.removeReplicationThrottleForPartitions(adminClient, brokerIds, Set.of(tp));
             TestUtils.waitForCondition(
                     () -> adminClient.listPartitionReassignments().reassignments().get().isEmpty(),
-                    CLUSTER_WAIT_MS,  String.format("reassignmet not finished after %s ms", CLUSTER_WAIT_MS)
+                    CLUSTER_WAIT_MS, String.format("reassignmet not finished after %s ms", CLUSTER_WAIT_MS)
             );
         }
     }
@@ -1293,7 +1293,7 @@ public class TopicCommandTest {
             newTopics.add(new NewTopic(fullyReplicatedTopic, fullyReplicatedReplicaAssignmentMap));
 
             adminClient.createTopics(newTopics);
-            for (NewTopic topioc: newTopics) {
+            for (NewTopic topioc : newTopics) {
                 clusterInstance.waitTopicCreation(topioc.name(), partitions);
             }
 
@@ -1309,7 +1309,7 @@ public class TopicCommandTest {
 
             TestUtils.waitForCondition(
                     () -> adminClient.listPartitionReassignments().reassignments().get().isEmpty(),
-                    CLUSTER_WAIT_MS,  String.format("reassignmet not finished after %s ms", CLUSTER_WAIT_MS)
+                    CLUSTER_WAIT_MS, String.format("reassignmet not finished after %s ms", CLUSTER_WAIT_MS)
             );
 
             String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--under-min-isr-partitions", "--exclude-internal"));

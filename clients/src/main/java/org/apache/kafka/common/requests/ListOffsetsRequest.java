@@ -151,7 +151,7 @@ public class ListOffsetsRequest extends AbstractRequest {
                         .setErrorCode(errorCode)
                         .setPartitionIndex(partition.partitionIndex());
                 partitionResponse.setOffset(ListOffsetsResponse.UNKNOWN_OFFSET)
-                         .setTimestamp(ListOffsetsResponse.UNKNOWN_TIMESTAMP);
+                    .setTimestamp(ListOffsetsResponse.UNKNOWN_TIMESTAMP);
                 partitions.add(partitionResponse);
             }
             topicResponse.setPartitions(partitions);

@@ -36,6 +36,7 @@ public class AbstractIndexTest {
     private static class TestIndex extends AbstractIndex {
         private boolean unmapInvoked = false;
         private MappedByteBuffer unmappedBuffer = null;
+
         public TestIndex(File file, long baseOffset, int maxIndexSize, boolean writable) throws IOException {
             super(file, baseOffset, maxIndexSize, writable);
         }

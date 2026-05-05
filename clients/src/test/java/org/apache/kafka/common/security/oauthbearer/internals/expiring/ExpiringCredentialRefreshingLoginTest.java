@@ -244,6 +244,7 @@ public class ExpiringCredentialRefreshingLoginTest {
         public LoginContext createLoginContext(ExpiringCredentialRefreshingLogin expiringCredentialRefreshingLogin) throws LoginException {
             return new LoginContext("", null, null, EMPTY_WILDCARD_CONFIGURATION) {
                 private boolean loginSuccess = false;
+
                 @Override
                 public void login() throws LoginException {
                     testLoginContext.login();

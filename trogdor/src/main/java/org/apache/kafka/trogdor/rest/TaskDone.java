@@ -16,6 +16,7 @@
  */
 
 package org.apache.kafka.trogdor.rest;
+
 import org.apache.kafka.trogdor.task.TaskSpec;
 
 import com.fasterxml.jackson.annotation.JsonCreator;

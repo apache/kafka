@@ -127,7 +127,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         }
         generateSubclasses(className, struct, parentVersions, isSetElement);
         if (isTopLevel) {
-            for (Iterator<StructSpec> iter = structRegistry.commonStructs(); iter.hasNext(); ) {
+            for (Iterator<StructSpec> iter = structRegistry.commonStructs(); iter.hasNext();) {
                 StructSpec commonStruct = iter.next();
                 generateClass(Optional.empty(),
                         commonStruct.name(),

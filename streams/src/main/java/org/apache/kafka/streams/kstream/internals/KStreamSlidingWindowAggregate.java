@@ -145,7 +145,7 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                         reverseIteratorPossible = true;
                         log.debug("Sliding Windows aggregate using a reverse iterator");
                     }
-                } catch (final UnsupportedOperationException e)  {
+                } catch (final UnsupportedOperationException e) {
                     reverseIteratorPossible = false;
                     log.debug("Sliding Windows aggregate using a forward iterator");
                 }

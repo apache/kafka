@@ -427,8 +427,8 @@ public class ErrorHandlingTaskTest {
         TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> sinkTransforms =
                 new TransformationChain<>(List.of(new TransformationStage<>(transformationPlugin, "test", null, TestPlugins.noOpLoaderSwap())), retryWithToleranceOperator);
 
-        Plugin<Converter> keyConverterPlugin = metrics.wrap(converter, taskId,  true);
-        Plugin<Converter> valueConverterPlugin = metrics.wrap(converter, taskId,  false);
+        Plugin<Converter> keyConverterPlugin = metrics.wrap(converter, taskId, true);
+        Plugin<Converter> valueConverterPlugin = metrics.wrap(converter, taskId, false);
         Plugin<HeaderConverter> headerConverterPlugin = metrics.wrap(headerConverter, taskId);
         workerSinkTask = new WorkerSinkTask(
             taskId, sinkTask, statusListener, initialState, workerConfig,
@@ -463,8 +463,8 @@ public class ErrorHandlingTaskTest {
         TransformationChain<SourceRecord, SourceRecord> sourceTransforms = new TransformationChain<>(List.of(
                 new TransformationStage<>(transformationPlugin, "test", null, TestPlugins.noOpLoaderSwap())), retryWithToleranceOperator);
 
-        Plugin<Converter> keyConverterPlugin = metrics.wrap(converter, taskId,  true);
-        Plugin<Converter> valueConverterPlugin = metrics.wrap(converter, taskId,  false);
+        Plugin<Converter> keyConverterPlugin = metrics.wrap(converter, taskId, true);
+        Plugin<Converter> valueConverterPlugin = metrics.wrap(converter, taskId, false);
         Plugin<HeaderConverter> headerConverterPlugin = metrics.wrap(headerConverter, taskId);
         workerSourceTask = spy(new WorkerSourceTask(
             taskId, sourceTask, statusListener, initialState, keyConverterPlugin,

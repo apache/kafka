@@ -358,7 +358,7 @@ public class ConfigurationControlManagerTest {
                     "type=TOPIC, name='mytopic'), configs={}). Got: " +
                     "AlterConfigPolicy.RequestMetadata(resource=ConfigResource(" +
                     "type=TOPIC, name='mytopic'), configs={foo.bar=123})")),
-                entry(BROKER0, ApiError.NONE))),
+                    entry(BROKER0, ApiError.NONE))),
             manager.incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(
                 entry("foo.bar", entry(SET, "123")))),
                 entry(BROKER0, toMap(

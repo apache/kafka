@@ -1173,6 +1173,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             );
         }));
     }
+
     @Override
     public void stopConnector(final String connName, final Callback<Void> callback) {
         log.trace("Submitting request to transition connector {} to STOPPED state", connName);
@@ -2610,6 +2611,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     // Rebalances are triggered internally from the group member, so these are always executed in the work thread.
     public class RebalanceListener implements WorkerRebalanceListener {
         private final Time time;
+
         RebalanceListener(Time time) {
             this.time = time;
         }

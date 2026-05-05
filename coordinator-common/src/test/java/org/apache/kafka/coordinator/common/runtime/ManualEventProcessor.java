@@ -55,5 +55,5 @@ public class ManualEventProcessor implements CoordinatorEventProcessor {
     }
 
     @Override
-    public void close() {}
+    public void close() { }
 }

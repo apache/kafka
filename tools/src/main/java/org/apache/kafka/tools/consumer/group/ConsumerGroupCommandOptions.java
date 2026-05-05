@@ -217,7 +217,7 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
         if (options.has(describeOpt)) {
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
                 CommandLineUtils.printUsageAndExit(parser,
-            "Option " + describeOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
+                    "Option " + describeOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
             List<OptionSpec<?>> mutuallyExclusiveOpts = List.of(membersOpt, offsetsOpt, stateOpt);
             if (mutuallyExclusiveOpts.stream().mapToInt(o -> options.has(o) ? 1 : 0).sum() > 1) {
                 CommandLineUtils.printUsageAndExit(parser,
@@ -231,7 +231,7 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
         if (options.has(deleteOpt)) {
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
                 CommandLineUtils.printUsageAndExit(parser,
-            "Option " + deleteOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
+                    "Option " + deleteOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
             if (options.has(topicOpt))
                 CommandLineUtils.printUsageAndExit(parser, "The consumer does not support topic-specific offset " +
                     "deletion from a consumer group.");
@@ -240,7 +240,7 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
         if (options.has(deleteOffsetsOpt)) {
             if (!options.has(groupOpt) || !options.has(topicOpt))
                 CommandLineUtils.printUsageAndExit(parser,
-            "Option " + deleteOffsetsOpt + " takes the following options: " + allDeleteOffsetsOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
+                    "Option " + deleteOffsetsOpt + " takes the following options: " + allDeleteOffsetsOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
         }
 
         if (options.has(resetOffsetsOpt)) {

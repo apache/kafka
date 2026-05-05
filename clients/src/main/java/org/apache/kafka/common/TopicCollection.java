@@ -25,7 +25,7 @@ import java.util.Collections;
  */
 public abstract class TopicCollection {
 
-    private TopicCollection() {}
+    private TopicCollection() { }
 
     /**
      * @return a collection of topics defined by topic ID

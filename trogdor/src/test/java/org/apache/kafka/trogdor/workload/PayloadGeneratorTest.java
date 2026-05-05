@@ -87,7 +87,7 @@ public class PayloadGeneratorTest {
         PayloadIterator iter = new PayloadIterator(
             new UniformRandomPayloadGenerator(1234, 456, 0));
         byte[] prev = iter.next();
-        for (int uniques = 0; uniques < 1000; ) {
+        for (int uniques = 0; uniques < 1000;) {
             byte[] cur = iter.next();
             assertEquals(prev.length, cur.length);
             if (!Arrays.equals(prev, cur)) {
@@ -201,7 +201,7 @@ public class PayloadGeneratorTest {
         
         List<RandomComponent> components1 = List.of(nullConfig, uniformConfig);
         List<RandomComponent> components2 = List.of(
-             nullConfig, constantConfig, uniformConfig, nullConfig, uniformConfig, uniformConfig);
+            nullConfig, constantConfig, uniformConfig, nullConfig, uniformConfig, uniformConfig);
      
         assertThrows(IllegalArgumentException.class, () ->
             new PayloadIterator(new RandomComponentPayloadGenerator(1, List.of())));

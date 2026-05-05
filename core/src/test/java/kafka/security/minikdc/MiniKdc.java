@@ -265,7 +265,7 @@ public class MiniKdc {
                 System.clearProperty(SUN_SECURITY_KRB5_DEBUG);
 
                 // Close kdc acceptors and wait for them to terminate, ensuring that sockets are closed before returning.
-                for (Transport transport: kdc.getTransports()) {
+                for (Transport transport : kdc.getTransports()) {
                     IoAcceptor acceptor = transport.getAcceptor();
                     if (acceptor != null) acceptor.dispose(true);
                 }

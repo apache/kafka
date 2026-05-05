@@ -1321,6 +1321,7 @@ public class UtilsTest {
 
     private static class TestException extends Exception {
         final String key;
+
         TestException(String key) {
             this.key = key;
         }

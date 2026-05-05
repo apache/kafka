@@ -345,7 +345,7 @@ public class RangeAssignorTest {
         int replicationFactor = 2;
         int numBrokerRacks = 3;
         partitionsPerTopic.put(topic1, AbstractPartitionAssignorTest.partitionInfos(topic1, 5, replicationFactor, numBrokerRacks, 0));
-        partitionsPerTopic.put(topic2,  AbstractPartitionAssignorTest.partitionInfos(topic2, 5, replicationFactor, numBrokerRacks, 0));
+        partitionsPerTopic.put(topic2, AbstractPartitionAssignorTest.partitionInfos(topic2, 5, replicationFactor, numBrokerRacks, 0));
         List<MemberInfo> staticMemberInfos = new ArrayList<>();
         staticMemberInfos.add(new MemberInfo(consumer1, Optional.of(instance1), Optional.of(ALL_RACKS[0])));
         staticMemberInfos.add(new MemberInfo(consumer2, Optional.of(instance2), Optional.of(ALL_RACKS[1])));

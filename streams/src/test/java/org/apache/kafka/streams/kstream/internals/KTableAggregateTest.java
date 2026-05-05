@@ -82,7 +82,7 @@ public class KTableAggregateTest {
     private StreamsBuilder createStreamBuilderInMemory(final boolean withHeaders) {
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
         props.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG,
-                    BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class.getName());
+                  BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class.getName());
         StreamsTestUtils.maybeSetDslStoreFormatHeaders(props, withHeaders);
         return new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
     }

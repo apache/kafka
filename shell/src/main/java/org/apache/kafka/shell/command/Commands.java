@@ -85,10 +85,15 @@ public final class Commands {
      */
     public interface Type {
         String name();
+
         String description();
+
         boolean shellOnly();
+
         void addArguments(ArgumentParser parser);
+
         Handler createHandler(Namespace namespace);
+
         void completeNext(
             MetadataShellState nodeManager,
             List<String> nextWords,

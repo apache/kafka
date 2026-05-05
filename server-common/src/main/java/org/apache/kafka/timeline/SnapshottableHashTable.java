@@ -96,6 +96,7 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
 
     interface ElementWithStartEpoch {
         void setStartEpoch(long startEpoch);
+
         long startEpoch();
     }
 

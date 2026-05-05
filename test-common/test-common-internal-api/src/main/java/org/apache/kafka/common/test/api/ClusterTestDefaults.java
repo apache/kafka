@@ -35,10 +35,15 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 @Retention(RUNTIME)
 public @interface ClusterTestDefaults {
     Type[] types() default {Type.KRAFT, Type.CO_KRAFT};
+
     int brokers() default 1;
+
     int controllers() default 1;
+
     int disksPerBroker() default 1;
+
     boolean autoStart() default true;
+
     // Set default server properties for all @ClusterTest(s)
     ClusterConfigProperty[] serverProperties() default {};
 }

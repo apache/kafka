@@ -176,6 +176,7 @@ public interface AdminApiHandler<K, V> {
      */
     abstract class Unbatched<K, V> implements AdminApiHandler<K, V> {
         abstract AbstractRequest.Builder<?> buildSingleRequest(int brokerId, K key);
+
         abstract ApiResult<K, V> handleSingleResponse(Node broker, K key, AbstractResponse response);
 
         @Override

@@ -83,7 +83,7 @@ public class ClusterToolTest {
         List<Integer> brokerIds = clusterInstance.brokerIds().stream().toList();
         clusterInstance.shutdownBroker(brokerIds.get(0));
 
-        List<String> ports = Arrays.stream(clusterInstance.bootstrapServers().split(",")).map(b ->  b.split(":")[1]).toList();
+        List<String> ports = Arrays.stream(clusterInstance.bootstrapServers().split(",")).map(b -> b.split(":")[1]).toList();
         String format = "%-10s %-9s %-10s %-10s %-10s %-15s%n%-10s %-9s %-10s %-10s %-10s %-15s%n%-10s %-9s %-10s %-10s %-10s %-6s";
         String expected = String.format(format,
                 "ID", "HOST", "PORT", "RACK", "STATE", "ENDPOINT_TYPE",

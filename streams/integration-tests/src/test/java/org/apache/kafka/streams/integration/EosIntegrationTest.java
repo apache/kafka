@@ -885,7 +885,7 @@ public class EosIntegrationTest {
             public void onRestoreStart(final TopicPartition topicPartition,
                                        final String storeName,
                                        final long startingOffset,
-                                       final long endingOffset) {}
+                                       final long endingOffset) { }
 
             @Override
             public void onBatchRestored(final TopicPartition topicPartition,
@@ -903,7 +903,7 @@ public class EosIntegrationTest {
             @Override
             public void onRestoreEnd(final TopicPartition topicPartition,
                                      final String storeName,
-                                     final long totalRestored) {}
+                                     final long totalRestored) { }
         });
         startApplicationAndWaitUntilRunning(Collections.singletonList(kafkaStreams), Duration.ofSeconds(60));
         ensureCommittedRecordsInTopicPartition(
@@ -1394,7 +1394,7 @@ public class EosIntegrationTest {
         final StateQueryResult<KeyValueIterator<Long, Long>> result =
                 IntegrationTestUtils.iqv2WaitForResult(streams, request);
 
-        for (final QueryResult<KeyValueIterator<Long, Long>> partitionResult: result.getPartitionResults().values()) {
+        for (final QueryResult<KeyValueIterator<Long, Long>> partitionResult : result.getPartitionResults().values()) {
             try (final KeyValueIterator<Long, Long> it = partitionResult.getResult()) {
                 while (it.hasNext()) {
                     assertTrue(expectedStoreContent.remove(it.next()), reason);

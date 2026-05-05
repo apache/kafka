@@ -147,7 +147,7 @@ public class ReplicationConfigs {
     public static final String AUTO_LEADER_REBALANCE_ENABLE_CONFIG = "auto.leader.rebalance.enable";
     public static final boolean AUTO_LEADER_REBALANCE_ENABLE_DEFAULT = true;
     public static final String AUTO_LEADER_REBALANCE_ENABLE_DOC = String.format("Enables auto leader balancing. A background thread checks the distribution of partition leaders at regular intervals, configurable by %s. If the leader is imbalanced, leader rebalance to the preferred leader for partitions is triggered.",
-           LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG);
+        LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG);
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()
             .define(CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG, INT, CONTROLLER_SOCKET_TIMEOUT_MS_DEFAULT, MEDIUM, CONTROLLER_SOCKET_TIMEOUT_MS_DOC)
             .define(DEFAULT_REPLICATION_FACTOR_CONFIG, INT, REPLICATION_FACTOR_DEFAULT, MEDIUM, DEFAULT_REPLICATION_FACTOR_DOC)

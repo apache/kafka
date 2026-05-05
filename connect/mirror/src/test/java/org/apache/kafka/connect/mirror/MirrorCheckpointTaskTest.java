@@ -102,7 +102,7 @@ public class MirrorCheckpointTaskTest {
         assertEquals(t2DownstreamOffset + 1, checkpoint2.downstreamOffset(),
                 "checkpoint group11 downstreamOffset failed");
         assertEquals(234L, sourceRecord2.timestamp().longValue(),
-                    "checkpoint group11 timestamp failed");
+                     "checkpoint group11 timestamp failed");
         Optional<Checkpoint> optionalCheckpoint3 = mirrorCheckpointTask.checkpoint("group13", new TopicPartition("target2.topic5", 6),
                 new OffsetAndMetadata(7, null));
         assertTrue(optionalCheckpoint3.isPresent());

@@ -44,7 +44,7 @@ public class MetricsBench {
                         iters,
                         BucketSizing.CONSTANT,
                         new Percentile(metrics.metricName(sensor.name() + ".median", "grp1"), 50.0),
-                        new Percentile(metrics.metricName(sensor.name() +  ".p_99", "grp1"), 99.0)));
+                        new Percentile(metrics.metricName(sensor.name() + ".p_99", "grp1"), 99.0)));
             }
             long start = System.nanoTime();
             for (int i = 0; i < iters; i++)

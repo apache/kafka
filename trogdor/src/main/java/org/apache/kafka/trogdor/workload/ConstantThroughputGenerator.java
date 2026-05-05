@@ -16,6 +16,7 @@
  */
 
 package org.apache.kafka.trogdor.workload;
+
 import org.apache.kafka.common.utils.Time;
 
 import com.fasterxml.jackson.annotation.JsonCreator;

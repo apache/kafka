@@ -610,7 +610,7 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                     (key, value) -> new KeyValue<>(value.getArticleId(), (short) 1),
                     Grouped.with(Serdes.Integer(), Serdes.Short())
                 )
-                .count();
+                    .count();
 
             articles
                 .leftJoin(

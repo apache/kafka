@@ -36,6 +36,7 @@ public class ApiVersions {
     public static class FinalizedFeaturesInfo {
         public final long finalizedFeaturesEpoch;
         public final Map<String, Short> finalizedFeatures;
+
         FinalizedFeaturesInfo(long finalizedFeaturesEpoch, Map<String, Short> finalizedFeatures) {
             this.finalizedFeaturesEpoch = finalizedFeaturesEpoch;
             this.finalizedFeatures = finalizedFeatures;

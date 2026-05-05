@@ -78,10 +78,10 @@ public interface TaskAssignor extends Configurable {
      * @param error        the corresponding error type if one was detected while processing the returned assignment,
      *                     or AssignmentError.NONE if the returned assignment was valid
      */
-    default void onAssignmentComputed(final GroupAssignment assignment, final GroupSubscription subscription, final AssignmentError error) {}
+    default void onAssignmentComputed(final GroupAssignment assignment, final GroupSubscription subscription, final AssignmentError error) { }
 
     @Override
-    default void configure(final Map<String, ?> configs) {}
+    default void configure(final Map<String, ?> configs) { }
 
     /**
      * Wrapper class for the final assignment of active and standbys tasks to individual

@@ -1312,7 +1312,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         final long timeSinceLastLog = now - lastLogSummaryMs;
         if (logSummaryIntervalMs > 0 && timeSinceLastLog > logSummaryIntervalMs) {
             log.info("Processed {} total records, ran {} punctuators, polled {} times and committed {} total tasks since the last update {}ms ago",
-                 totalRecordsProcessedSinceLastSummary, totalPunctuatorsSinceLastSummary, totalPolledSinceLastSummary, totalCommittedSinceLastSummary, timeSinceLastLog);
+                totalRecordsProcessedSinceLastSummary, totalPunctuatorsSinceLastSummary, totalPolledSinceLastSummary, totalCommittedSinceLastSummary, timeSinceLastLog);
 
             totalRecordsProcessedSinceLastSummary = 0L;
             totalPunctuatorsSinceLastSummary = 0L;
@@ -1454,7 +1454,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         final int numRecords = records.count();
 
-        for (final TopicPartition topicPartition: records.partitions()) {
+        for (final TopicPartition topicPartition : records.partitions()) {
             records
                 .records(topicPartition)
                 .stream()

@@ -362,11 +362,11 @@ public interface ClusterInstance {
         ensureConsistentMetadata(brokers, controllers().values());
     }
 
-    default void ensureConsistentMetadata() throws InterruptedException  {
+    default void ensureConsistentMetadata() throws InterruptedException {
         ensureConsistentMetadata(aliveBrokers().values(), controllers().values());
     }
 
-    default void ensureConsistentMetadata(Collection<KafkaBroker> brokers, Collection<ControllerServer> controllers) throws InterruptedException  {
+    default void ensureConsistentMetadata(Collection<KafkaBroker> brokers, Collection<ControllerServer> controllers) throws InterruptedException {
         for (ControllerServer controller : controllers) {
             long controllerOffset = controller.raftManager().raftLog().endOffset().offset() - 1;
             TestUtils.waitForCondition(

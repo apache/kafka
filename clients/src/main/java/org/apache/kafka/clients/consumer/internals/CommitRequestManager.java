@@ -1061,7 +1061,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         private final Map<TopicPartition, Errors> retriablePartitionErrors;
 
         public OffsetFetchResult(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                  Map<TopicPartition, Errors> retriablePartitionErrors) {
+                                 Map<TopicPartition, Errors> retriablePartitionErrors) {
             this.offsets = offsets;
             this.retriablePartitionErrors = retriablePartitionErrors;
         }

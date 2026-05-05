@@ -21,5 +21,6 @@ import org.apache.kafka.common.utils.Bytes;
 
 interface CacheFunction {
     Bytes key(Bytes cacheKey);
+
     Bytes cacheKey(Bytes cacheKey);
 }

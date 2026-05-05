@@ -27,7 +27,7 @@ import org.apache.kafka.common.errors.InvalidMetadataException;
 public class StaleMetadataException extends InvalidMetadataException {
     private static final long serialVersionUID = 1L;
 
-    public StaleMetadataException() {}
+    public StaleMetadataException() { }
 
     public StaleMetadataException(String message) {
         super(message);

@@ -62,7 +62,7 @@ public class DescribeConfigsRequest extends AbstractRequest {
                             .setErrorMessage(error.message())
                             .setResourceName(result.resourceName())
                             .setResourceType(result.resourceType()))
-                .collect(Collectors.toList())
+                    .collect(Collectors.toList())
         ));
     }
 

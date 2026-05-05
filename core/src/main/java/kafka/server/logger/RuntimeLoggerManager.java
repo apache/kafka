@@ -49,7 +49,7 @@ public class RuntimeLoggerManager {
     private final int nodeId;
     private final Logger log;
 
-    public RuntimeLoggerManager(int nodeId,  Logger log) {
+    public RuntimeLoggerManager(int nodeId, Logger log) {
         this.nodeId = nodeId;
         this.log = log;
     }

@@ -453,7 +453,7 @@ public class ReplicationControlManager {
             updatePartitionInfo(record.topicId(), record.partitionId(), null, newPartInfo);
             updatePartitionDirectories(record.topicId(), record.partitionId(), null, newPartInfo.directories);
             updateReassigningTopicsIfNeeded(record.topicId(), record.partitionId(),
-                    false,  isReassignmentInProgress(newPartInfo));
+                    false, isReassignmentInProgress(newPartInfo));
         } else if (!newPartInfo.equals(prevPartInfo)) {
             log.info("Replayed PartitionRecord for existing partition {} and {}.", description,
                     newPartInfo);
@@ -1220,7 +1220,7 @@ public class ReplicationControlManager {
      */
     static void validateTotalNumberOfPartitions(CreateTopicsRequestData request, int defaultNumPartitions) {
         int totalPartitions = 0;
-        for (CreatableTopic topic: request.topics()) {
+        for (CreatableTopic topic : request.topics()) {
             if (topic.assignments().isEmpty()) {
                 if (topic.numPartitions() == -1) {
                     totalPartitions += defaultNumPartitions;
@@ -2117,7 +2117,7 @@ public class ReplicationControlManager {
                 StringBuilder bld = new StringBuilder();
                 String prefix = "";
                 for (ListIterator<ApiMessageAndVersion> iter = records.listIterator(oldSize);
-                     iter.hasNext(); ) {
+                     iter.hasNext();) {
                     ApiMessageAndVersion apiMessageAndVersion = iter.next();
                     PartitionChangeRecord record = (PartitionChangeRecord) apiMessageAndVersion.message();
                     bld.append(prefix).append(topics.get(record.topicId()).name).append("-").

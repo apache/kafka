@@ -153,6 +153,7 @@ class AcknowledgementCommitCallbackHandlerTest {
     private static class TopicPartitionAndOffset {
         TopicIdPartition topicIdPartition;
         Long offset;
+
         TopicPartitionAndOffset(TopicIdPartition topicIdPartition, Long offset) {
             this.topicIdPartition = topicIdPartition;
             this.offset = offset;

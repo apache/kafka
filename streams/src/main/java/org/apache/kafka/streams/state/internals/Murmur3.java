@@ -236,7 +236,7 @@ public class Murmur3 {
         long hash = DEFAULT_SEED;
         long k1 = 0;
         k1 ^= ((long) data & 0xff) << 8;
-        k1 ^= ((long)((data & 0xFF00) >> 8) & 0xff);
+        k1 ^= ((long) ((data & 0xFF00) >> 8) & 0xff);
         k1 *= C1;
         k1 = Long.rotateLeft(k1, R1);
         k1 *= C2;

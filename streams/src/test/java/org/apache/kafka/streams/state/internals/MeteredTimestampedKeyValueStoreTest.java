@@ -218,6 +218,7 @@ public class MeteredTimestampedKeyValueStoreTest {
             STORE_NAME
         )));
     }
+
     @Test
     public void shouldWriteBytesToInnerStoreAndRecordPutMetric() {
         setUp();

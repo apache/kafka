@@ -2217,7 +2217,7 @@ public class StreamsPartitionAssignorTest {
         //  especially whether it could build the repartition topic counts (step zero) with a complex topology.
         //  The traversal path 0 -> 1 -> 2 -> 3 hits the case where sub-topology 2 will be initialized while its
         //  parent 3 hasn't been initialized yet.
-        builder.addSource(null, "KSTREAM-SOURCE-0000000000",  null, null, null, "input-stream");
+        builder.addSource(null, "KSTREAM-SOURCE-0000000000", null, null, null, "input-stream");
         builder.addProcessor("KSTREAM-FLATMAPVALUES-0000000001", new MockApiProcessorSupplier<>(), "KSTREAM-SOURCE-0000000000");
         builder.addProcessor("KSTREAM-BRANCH-0000000002", new MockApiProcessorSupplier<>(), "KSTREAM-FLATMAPVALUES-0000000001");
         builder.addProcessor("KSTREAM-BRANCHCHILD-0000000003", new MockApiProcessorSupplier<>(), "KSTREAM-BRANCH-0000000002");

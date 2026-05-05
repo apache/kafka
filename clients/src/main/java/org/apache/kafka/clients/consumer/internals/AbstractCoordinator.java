@@ -260,7 +260,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * note it is triggered by the consumer's API caller thread (i.e. background heartbeat thread would
      * not trigger it even if it tries to force leaving group upon heartbeat session expiration)
      */
-    protected void onLeavePrepare() {}
+    protected void onLeavePrepare() { }
 
     /**
      * Ensure that the coordinator is ready to receive requests.
@@ -701,7 +701,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 // re-discover the coordinator and retry with backoff
                 markCoordinatorUnknown(error);
                 log.info("JoinGroup failed: {} Marking coordinator unknown. Sent generation was {}",
-                          error.message(), sentGeneration);
+                         error.message(), sentGeneration);
                 future.raise(error);
             } else if (error == Errors.FENCED_INSTANCE_ID) {
                 // for join-group request, even if the generation has changed we would not expect the instance id

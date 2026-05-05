@@ -412,7 +412,7 @@ public class RackAwarenessStreamsPartitionAssignorTest {
 
     private void verifyIdealTaskDistributionReached(final Map<TaskId, ClientTagDistribution> taskClientTags,
                                                     final List<String> tagsToCheck) {
-        for (final Map.Entry<TaskId, ClientTagDistribution> entry: taskClientTags.entrySet()) {
+        for (final Map.Entry<TaskId, ClientTagDistribution> entry : taskClientTags.entrySet()) {
             if (!tagsAmongStandbysAreDifferent(entry.getValue(), tagsToCheck))
                 throw new AssertionError("task " + entry.getKey() + "'s tag-distribution for " + tagsToCheck +
                     " among standbys is not ideal: " + entry.getValue());
@@ -425,7 +425,7 @@ public class RackAwarenessStreamsPartitionAssignorTest {
 
     private void verifyPartialTaskDistributionReached(final Map<TaskId, ClientTagDistribution> taskClientTags,
                                                       final List<String> tagsToCheck) {
-        for (final Map.Entry<TaskId, ClientTagDistribution> entry: taskClientTags.entrySet()) {
+        for (final Map.Entry<TaskId, ClientTagDistribution> entry : taskClientTags.entrySet()) {
             if (!tagsAmongActiveAndAtLeastOneStandbyIsDifferent(entry.getValue(), tagsToCheck))
                 throw new AssertionError("task " + entry.getKey() + "'s tag-distribution for " + tagsToCheck +
                     "between active and standbys is not partially ideal: " + entry.getValue());
