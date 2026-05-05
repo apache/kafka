@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.cluster.Partition
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.network.RequestChannel
@@ -75,7 +76,8 @@ import org.apache.kafka.common.requests.{FetchMetadata => JFetchMetadata, _}
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
-import org.apache.kafka.common.utils.{ProducerIdAndEpoch, SecurityUtils, Utils}
+import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Utils}
+import org.apache.kafka.common.utils.internals.SecurityUtils
 import org.apache.kafka.common.utils.internals.ImplicitLinkedHashCollection
 import org.apache.kafka.coordinator.group.GroupConfig.{CONSUMER_ASSIGNMENT_INTERVAL_MS_CONFIG, CONSUMER_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_SESSION_TIMEOUT_MS_CONFIG, SHARE_ASSIGNMENT_INTERVAL_MS_CONFIG, SHARE_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, SHARE_AUTO_OFFSET_RESET_CONFIG, SHARE_DELIVERY_COUNT_LIMIT_CONFIG, SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_ISOLATION_LEVEL_CONFIG, SHARE_PARTITION_MAX_RECORD_LOCKS_CONFIG, SHARE_RECORD_LOCK_DURATION_MS_CONFIG, SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG, SHARE_SESSION_TIMEOUT_MS_CONFIG, STREAMS_ASSIGNMENT_INTERVAL_MS_CONFIG, STREAMS_ASSIGNOR_OFFLOAD_ENABLE_CONFIG, STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, STREAMS_NUM_STANDBY_REPLICAS_CONFIG, STREAMS_SESSION_TIMEOUT_MS_CONFIG, STREAMS_TASK_OFFSET_INTERVAL_MS_CONFIG, STREAMS_NUM_WARMUP_REPLICAS_CONFIG, ERRORS_DEADLETTERQUEUE_TOPIC_NAME_CONFIG, ERRORS_DEADLETTERQUEUE_COPY_RECORD_ENABLE_CONFIG}
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
@@ -95,7 +97,7 @@ import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authoriz
 import org.apache.kafka.server.common.{FeatureVersion, FinalizedFeatures, GroupVersion, KRaftVersion, MetadataVersion, RequestLocal, ShareVersion, StreamsVersion, TransactionVersion}
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.logger.LoggingController
-import org.apache.kafka.server.metrics.ClientMetricsTestUtils
+import org.apache.kafka.server.metrics.{ClientMetricsTestUtils, KafkaYammerMetrics}
 import org.apache.kafka.server.share.{CachedSharePartition, ErroneousAndValidPartitionData, SharePartitionKey}
 import org.apache.kafka.server.quota.{ClientQuotaManager, ControllerMutationQuota, ControllerMutationQuotaManager, ReplicaQuota, ReplicationQuotaManager, ThrottleCallback}
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch
@@ -2261,10 +2263,20 @@ class KafkaApisTest extends Logging {
       assertEquals(expectedError, error)
 
       val metricName = if (version < 4) ApiKeys.ADD_PARTITIONS_TO_TXN.name else RequestMetrics.VERIFY_PARTITIONS_IN_TXN_METRIC_NAME
-      assertEquals(8, TestUtils.metersCount(metricName))
+      assertEquals(8, metersCount(metricName))
     } finally {
       requestMetrics.close()
     }
+  }
+
+  private def metersCount(metricName: String): Long = {
+    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+      .filter { case (k, _) => k.getMBeanName.endsWith(metricName) }
+      .values.map {
+        case histogram: Histogram => histogram.count()
+        case meter: Meter => meter.count()
+        case _ => 0
+      }.sum
   }
 
   @ParameterizedTest

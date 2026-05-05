@@ -23,7 +23,9 @@ import kafka.server.Server.MetricsPrefix
 import kafka.utils.{Logging, VerifiableProperties}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
+import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.internals.AppInfoParser
+import org.apache.kafka.common.utils.internals.LogContext
 import org.apache.kafka.controller.metrics.ControllerMetadataMetrics
 import org.apache.kafka.image.MetadataProvenance
 import org.apache.kafka.image.loader.MetadataLoader
