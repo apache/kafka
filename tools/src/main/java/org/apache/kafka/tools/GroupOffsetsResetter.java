@@ -58,14 +58,14 @@ import java.util.stream.Stream;
 import joptsimple.OptionParser;
 
 
-public class OffsetsUtils {
-    public static final Logger LOGGER = LoggerFactory.getLogger(OffsetsUtils.class);
+public class GroupOffsetsResetter {
+    public static final Logger LOGGER = LoggerFactory.getLogger(GroupOffsetsResetter.class);
     private static final String TOPIC_PARTITION_SEPARATOR = ":";
     private final Admin adminClient;
-    private final OffsetsUtilsOptions opts;
+    private final GroupOffsetsResetterOptions opts;
     private final OptionParser parser;
 
-    public OffsetsUtils(Admin adminClient, OptionParser parser, OffsetsUtilsOptions opts) {
+    public GroupOffsetsResetter(Admin adminClient, OptionParser parser, GroupOffsetsResetterOptions opts) {
         this.adminClient = adminClient;
         this.opts = opts;
         this.parser = parser;
@@ -372,16 +372,16 @@ public class OffsetsUtils {
         Instant now = Instant.now();
         durationParsed.negated().addTo(now);
         long timestamp = now.minus(durationParsed).toEpochMilli();
-        Map<TopicPartition, OffsetsUtils.LogOffsetResult> logTimestampOffsets =
+        Map<TopicPartition, GroupOffsetsResetter.LogOffsetResult> logTimestampOffsets =
             getLogTimestampOffsets(partitionsToReset, timestamp);
         return partitionsToReset.stream().collect(Collectors.toMap(Function.identity(), topicPartition -> {
-            OffsetsUtils.LogOffsetResult logTimestampOffset = logTimestampOffsets.get(topicPartition);
+            GroupOffsetsResetter.LogOffsetResult logTimestampOffset = logTimestampOffsets.get(topicPartition);
 
-            if (!(logTimestampOffset instanceof OffsetsUtils.LogOffset)) {
+            if (!(logTimestampOffset instanceof GroupOffsetsResetter.LogOffset)) {
                 CommandLineUtils.printUsageAndExit(parser, "Error getting offset by timestamp of topic partition: " + topicPartition);
             }
 
-            return new OffsetAndMetadata(((OffsetsUtils.LogOffset) logTimestampOffset).value);
+            return new OffsetAndMetadata(((GroupOffsetsResetter.LogOffset) logTimestampOffset).value);
         }));
     }
 
@@ -428,10 +428,10 @@ public class OffsetsUtils {
         Map<TopicPartition, OffsetAndMetadata> preparedOffsetsForPartitionsWithoutCommittedOffset =
             getLogEndOffsets(partitionsToResetWithoutCommittedOffset)
                 .entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> {
-                    if (!(e.getValue() instanceof OffsetsUtils.LogOffset)) {
+                    if (!(e.getValue() instanceof GroupOffsetsResetter.LogOffset)) {
                         CommandLineUtils.printUsageAndExit(parser, "Error getting ending offset of topic partition: " + e.getKey());
                     }
-                    return new OffsetAndMetadata(((OffsetsUtils.LogOffset) e.getValue()).value);
+                    return new OffsetAndMetadata(((GroupOffsetsResetter.LogOffset) e.getValue()).value);
                 }));
 
         preparedOffsetsForPartitionsWithCommittedOffset.putAll(preparedOffsetsForPartitionsWithoutCommittedOffset);
@@ -508,7 +508,7 @@ public class OffsetsUtils {
     public static class Ignore implements LogOffsetResult { }
 
 
-    public static class OffsetsUtilsOptions {
+    public static class GroupOffsetsResetterOptions {
         List<String> groupOpt;
         List<Long> resetToOffsetOpt;
         List<String> resetFromFileOpt;
@@ -517,7 +517,7 @@ public class OffsetsUtils {
         Long resetShiftByOpt;
         long timeoutMsOpt;
 
-        public OffsetsUtilsOptions(
+        public GroupOffsetsResetterOptions(
             List<String> groupOpt,
             List<Long> resetToOffsetOpt,
             List<String> resetFromFileOpt,
@@ -535,7 +535,7 @@ public class OffsetsUtils {
             this.timeoutMsOpt = timeoutMsOpt;
         }
 
-        public OffsetsUtilsOptions(
+        public GroupOffsetsResetterOptions(
             List<String> groupOpt,
             List<String> resetToDatetimeOpt,
             long timeoutMsOpt) {
